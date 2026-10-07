@@ -113,7 +113,8 @@ def test_near_duplicate_detection_uses_similarity_and_human_review():
     duplicate=r.json()['item']
     assert duplicate['duplicate_of']==original['id']
     r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':duplicate['id']},headers=h); assert r.status_code==200
-    match=r.json()['duplicate_match']
+    body=r.json(); assert isinstance(body['related'],list); assert isinstance(body['files'],list); assert isinstance(body['events'],list)
+    match=body['duplicate_match']; assert isinstance(match['basis'],list)
     assert match['score']>=0.78
     assert 'Same source / publisher' in match['basis']
     assert r.json()['comparison']['id']==original['id']

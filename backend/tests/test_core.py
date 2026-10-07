@@ -295,3 +295,23 @@ def test_generic_social_shell_titles_are_rejected_as_headlines():
     assert _generic_social_title('TikTok','TikTok') is True
     assert _generic_social_title('Actual election monitoring update from Bawaslu','TikTok') is False
     assert _generic_social_title('Login • Instagram','Instagram') is True
+
+
+def test_tiktok_oembed_autofills_caption_and_identity():
+    from app.source_retrieval import _apply_tiktok_oembed
+    class Response:
+        status_code=200
+        content=b'{}'
+        def json(self):
+            return {'title':'Bawaslu mengawasi proses pemilu dan meminta masyarakat melaporkan dugaan pelanggaran. #Bawaslu #Pemilu','author_name':'Langkah Bobby'}
+    class Client:
+        def get(self,*args,**kwargs): return Response()
+    result={'title':'','original_content':'','source_name':'tiktok.com','platform':'TikTok','author':'','original_language_code':''}
+    out=_apply_tiktok_oembed(Client(),'https://www.tiktok.com/@langkahbobbynst/video/7691197405810674964',result)
+    assert out['title'].startswith('Bawaslu mengawasi proses pemilu')
+    assert out['original_content']==out['title']
+    assert out['source_name']=='@langkahbobbynst'
+    assert out['author']=='Langkah Bobby'
+    assert out['platform']=='TikTok'
+    assert out['original_language_code']=='id'
+    assert out['oembed_used'] is True

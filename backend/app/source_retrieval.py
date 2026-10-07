@@ -12,6 +12,18 @@ MAX_REDIRECTS=3
 USER_AGENT='BAWASLU-Intelligence/0.1 source-retrieval'
 ARTICLE_TYPES={'article','newsarticle','reportagenewsarticle','analysisnewsarticle','blogposting','report'}
 
+def _social_handle(url):
+    p=urlparse(str(url or ''))
+    host=(p.hostname or '').lower().removeprefix('www.')
+    parts=[x for x in p.path.split('/') if x]
+    if ('tiktok.com' in host or host in ('x.com','twitter.com','threads.net','instagram.com')) and parts:
+        value=parts[0]
+        if value and value not in ('p','reel','reels','stories','explore','status'):
+            return '@'+value.lstrip('@')
+    if ('youtube.com' in host or host=='youtu.be') and parts and parts[0].startswith('@'):
+        return parts[0]
+    return ''
+
 def _social_platform(url):
     host=(urlparse(str(url or '')).hostname or '').lower().removeprefix('www.')
     if 'tiktok.com' in host: return 'TikTok'
@@ -36,6 +48,36 @@ def _generic_social_title(title,platform=''):
       'linkedin':('linkedin','linkedin: log in or sign up'),
     }
     return value in generic.get(str(platform or '').lower(),())
+
+def _apply_tiktok_oembed(client,url,result):
+    if _social_platform(url)!='TikTok':
+        return result
+    try:
+        res=client.get('https://www.tiktok.com/oembed',params={'url':url},headers={'Accept':'application/json'})
+        if res.status_code>=400:
+            return result
+        data=res.json() if res.content else {}
+        caption=str(data.get('title') or '').strip()
+        if caption:
+            if not result.get('title') or _generic_social_title(result.get('title'),'TikTok'):
+                result['title']=caption[:3000]
+            if not result.get('original_content'):
+                result['original_content']=caption[:20000]
+            if not result.get('original_language_code'):
+                result['original_language_code']=_detect_language(caption,'')
+        handle=_social_handle(url)
+        if handle:
+            result['source_name']=handle
+        author=str(data.get('author_name') or '').strip()
+        if author:
+            result['author']=author[:255]
+        elif handle and not result.get('author'):
+            result['author']=handle
+        result['platform']='TikTok'
+        result['oembed_used']=True
+    except Exception:
+        pass
+    return result
 
 def _validate_public_url(url):
     p=urlparse(str(url or '').strip())
@@ -359,6 +401,13 @@ def fetch_public_source(url):
                     result['platform']=social_platform
                     if _generic_social_title(result.get('title'),social_platform):
                         result['title']=''
+                result=_apply_tiktok_oembed(client,original,result)
+                if social_platform:
+                    handle=_social_handle(original)
+                    if handle:
+                        result['source_name']=handle
+                    if not result.get('author') and handle:
+                        result['author']=handle
                 ready=bool(result.get('title') and result.get('original_content'))
                 result['submission_ready']=ready
                 partial=bool(result.get('title') or result.get('original_content'))

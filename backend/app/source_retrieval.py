@@ -12,6 +12,18 @@ MAX_REDIRECTS=3
 USER_AGENT='BAWASLU-Intelligence/0.1 source-retrieval'
 ARTICLE_TYPES={'article','newsarticle','reportagenewsarticle','analysisnewsarticle','blogposting','report'}
 
+def _social_platform(url):
+    host=(urlparse(str(url or '')).hostname or '').lower().removeprefix('www.')
+    if 'tiktok.com' in host: return 'TikTok'
+    if 'instagram.com' in host: return 'Instagram'
+    if 'youtube.com' in host or 'youtu.be' in host: return 'YouTube'
+    if 'facebook.com' in host: return 'Facebook'
+    if host=='x.com' or host.endswith('.x.com') or 'twitter.com' in host: return 'X'
+    if 'threads.net' in host: return 'Threads'
+    if 'reddit.com' in host: return 'Reddit'
+    if 'linkedin.com' in host: return 'LinkedIn'
+    return ''
+
 def _validate_public_url(url):
     p=urlparse(str(url or '').strip())
     if p.scheme not in ('http','https') or not p.hostname:
@@ -281,6 +293,7 @@ def _extract_html(html,url):
 
     return {
       'available':bool(title or content),
+      'submission_ready':bool(title and content),
       'title':title[:3000],
       'original_content':content,
       'author':author[:255],
@@ -328,12 +341,31 @@ def fetch_public_source(url):
                 except LookupError:
                     html=raw.decode('utf-8',errors='replace')
                 result=_extract_html(html,current)
+                social_platform=_social_platform(original) or _social_platform(current)
+                if social_platform:
+                    result['platform']=social_platform
+                ready=bool(result.get('title') and result.get('original_content'))
+                result['submission_ready']=ready
+                partial=bool(result.get('title') or result.get('original_content'))
+                if ready:
+                    status='CONTENT_RETRIEVED'
+                elif partial:
+                    status='PARTIAL_CONTENT_RETRIEVED'
+                else:
+                    status='HTML_RETRIEVED_NO_ARTICLE_CONTENT'
                 result.update({
                   'source_url':original,
                   'retrieved_url':current,
-                  'retrieval_status':'CONTENT_RETRIEVED' if result['available'] else 'HTML_RETRIEVED_NO_ARTICLE_CONTENT',
-                  'requires_manual_content':not result['available'],
+                  'retrieval_status':status,
+                  'requires_manual_content':not ready,
                   'retrieval_method':'PUBLIC_HTML_JSONLD',
+                  'source_kind':'SOCIAL' if social_platform else 'WEB',
+                  'manual_completion_reason':(
+                    'Dynamic social post content was not fully available from the public page. Paste the original post caption/content before submitting.'
+                    if social_platform and not ready else
+                    'The public page did not expose enough source content. Paste the missing original headline/content before submitting.'
+                    if not ready else ''
+                  ),
                 })
                 return result
     raise ValueError('Source retrieval failed')

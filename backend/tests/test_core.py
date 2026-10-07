@@ -271,3 +271,19 @@ def test_multi_region_create_normalizes_names_and_requires_two_distinct_areas():
       'confirm_jurisdiction':True
     }},headers=h)
     assert r.status_code==400
+
+
+def test_social_page_partial_retrieval_is_not_submission_ready():
+    from app.source_retrieval import _extract_html, _social_platform
+    html='''<html><head><title>TikTok - Make Your Day</title><meta property="og:title" content="TikTok"></head><body><div>Log in to TikTok</div></body></html>'''
+    r=_extract_html(html,'https://www.tiktok.com/@example/video/123')
+    assert r['available'] is True
+    assert r['submission_ready'] is False
+    assert _social_platform('https://www.tiktok.com/@example/video/123')=='TikTok'
+
+def test_social_platform_detection_covers_supported_manual_urls():
+    from app.source_retrieval import _social_platform
+    assert _social_platform('https://www.instagram.com/p/abc')=='Instagram'
+    assert _social_platform('https://youtu.be/abc')=='YouTube'
+    assert _social_platform('https://x.com/example/status/1')=='X'
+    assert _social_platform('https://www.reddit.com/r/test/comments/1')=='Reddit'

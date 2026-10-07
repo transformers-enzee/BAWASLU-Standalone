@@ -91,3 +91,11 @@ def test_source_items_metadata_fallbacks_are_preserved():
     assert x['engagement']['views']==9000
     assert x['engagement']['engagement_rate']==0.105
     db.close()
+
+
+def test_value_supports_list_indices_for_universal_search_source_items():
+    from app.socialcrawl import _value
+    row={'source_items':[{'published_at':'2026-10-07T05:30:00Z','metadata':{'language':'id'},'engagement':{'views':9000}}]}
+    assert _value(row,'source_items.0.published_at')=='2026-10-07T05:30:00Z'
+    assert _value(row,'source_items.0.metadata.language')=='id'
+    assert _value(row,'source_items.0.engagement.views')==9000

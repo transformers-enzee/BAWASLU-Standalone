@@ -93,8 +93,14 @@ def _value(item,*paths,default=''):
         cur=item
         ok=True
         for part in p.split('.'):
-            if isinstance(cur,dict) and part in cur: cur=cur[part]
-            else: ok=False; break
+            if isinstance(cur,dict) and part in cur:
+                cur=cur[part]
+            elif isinstance(cur,list) and part.isdigit():
+                idx=int(part)
+                if 0 <= idx < len(cur): cur=cur[idx]
+                else: ok=False; break
+            else:
+                ok=False; break
         if ok and cur not in (None,''): return cur
     return default
 

@@ -9,8 +9,8 @@ from .domain import source_identity, create_intelligence
 
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
-DEFAULT_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin']
-SUPPORTED_EVERYWHERE_SOURCES=set(DEFAULT_PLATFORMS + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
+DEFAULT_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news']
+SUPPORTED_EVERYWHERE_SOURCES=set([x for x in DEFAULT_PLATFORMS if x!='online_news'] + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
 
 ALLOWED_FILTERS={
  'query','exact_phrase','include_terms','exclude_terms','hashtags','accounts','watchlist_ids','issue_category','topics','locations',
@@ -37,8 +37,7 @@ def _provider_source_name(name):
         raise ValueError(f'Unsupported SocialCrawl source for Universal Search: {name}')
     return n
 
-def _provider_params(filters):
-    f=_normalize_filters(filters)
+def _query_text(f):
     parts=[]
     if f.get('query'): parts.append(str(f['query']))
     if f.get('exact_phrase'): parts.append('"'+str(f['exact_phrase'])+'"')
@@ -46,11 +45,15 @@ def _provider_params(filters):
     for x in f.get('exclude_terms',[]): parts.append('-'+str(x))
     for x in f.get('hashtags',[]): parts.append('#'+str(x).lstrip('#'))
     query=' '.join(parts).strip()
-    if not query:
-        raise ValueError('A SocialCrawl search query is required')
-    params={'query':query}
-    if f.get('platforms'):
-        params['sources']=','.join(_provider_source_name(x) for x in f['platforms'])
+    if not query: raise ValueError('A SocialCrawl search query is required')
+    return query
+
+def _provider_params(filters):
+    f=_normalize_filters(filters)
+    params={'query':_query_text(f)}
+    social_sources=[x for x in f.get('platforms',[]) if x!='online_news']
+    if social_sources:
+        params['sources']=','.join(_provider_source_name(x) for x in social_sources)
     if f.get('exclude_sources'):
         if params.get('sources'):
             raise ValueError('SocialCrawl sources and exclude cannot be used together')
@@ -65,6 +68,17 @@ def _provider_params(filters):
     if f.get('minimum_relevance') not in (None,''):
         params['relevance']='filter'
         params['relevance_threshold']=f['minimum_relevance']
+    return params
+
+def _news_params(filters):
+    f=_normalize_filters(filters)
+    params={'keyword':_query_text(f),'depth':min(max(int(f.get('limit') or 50),10),100)}
+    if f.get('language'): params['language_code']=f['language']
+    if f.get('date_from'): params['from']=f['date_from']
+    if f.get('date_to'): params['to']=f['date_to']
+    if not f.get('date_from') and not f.get('date_to') and f.get('lookback_days'):
+        days=int(f['lookback_days'])
+        params['time_range']='day' if days<=1 else 'week' if days<=7 else 'month' if days<=31 else 'year'
     return params
 
 def _extract_items(envelope):
@@ -108,9 +122,11 @@ def _matches_local_filters(r, filters):
 
 def _map_result(db,item):
     url=str(_value(item,'url','canonical_url','permalink','post.url',default=''))
-    author=str(_value(item,'author.name','author.display_name','username','owner.name',default=''))
+    author=str(_value(item,'author.name','author.display_name','username','owner.name','source',default=''))
     handle=str(_value(item,'author.handle','handle','username','owner.username',default=''))
-    text=str(_value(item,'text','content','caption','title','description',default=''))
+    title=str(_value(item,'title',default=''))
+    snippet=str(_value(item,'snippet',default=''))
+    text=str(_value(item,'text','content','caption','description',default='')) or (' — '.join(x for x in [title,snippet] if x))
     platform=str(_value(item,'platform','source','network',default=''))
     rid=str(_value(item,'id','post_id','video_id','shortcode',default=''))
     language=str(_value(item,'language','computed.language',default=''))
@@ -161,20 +177,46 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
         else:
             if not SOCIALCRAWL_API_KEY: raise ValueError('SOCIALCRAWL_API_KEY is not configured in Render')
             headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json'}
-            with httpx.Client(timeout=75) as client:
-                res=client.get(SOCIALCRAWL_BASE_URL+endpoint,params=_provider_params(f),headers=headers)
-                try:
-                    envelope=res.json()
-                except Exception:
-                    envelope={}
-                if res.status_code >= 400:
-                    detail=(envelope.get('error') or envelope.get('message') or res.text or f'HTTP {res.status_code}')
-                    if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
-                    raise ValueError(f'SocialCrawl request failed ({res.status_code}): {detail}')
-                if envelope.get('success') is False:
-                    detail=envelope.get('error') or envelope.get('message') or 'SocialCrawl returned success=false'
-                    if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
-                    raise ValueError(f'SocialCrawl request failed: {detail}')
+            selected=f.get('platforms') or DEFAULT_PLATFORMS
+            wants_news='online_news' in selected
+            social_sources=[x for x in selected if x!='online_news']
+            envelopes=[]
+            def call_provider(path,params):
+                with httpx.Client(timeout=75) as client:
+                    res=client.get(SOCIALCRAWL_BASE_URL+path,params=params,headers=headers)
+                    try: env=res.json()
+                    except Exception: env={}
+                    if res.status_code >= 400:
+                        detail=(env.get('error') or env.get('message') or res.text or f'HTTP {res.status_code}')
+                        if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
+                        raise ValueError(f'SocialCrawl request failed ({res.status_code}): {detail}')
+                    if env.get('success') is False:
+                        detail=env.get('error') or env.get('message') or 'SocialCrawl returned success=false'
+                        if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
+                        raise ValueError(f'SocialCrawl request failed: {detail}')
+                    return env
+            if social_sources:
+                sf=dict(f); sf['platforms']=social_sources
+                envelopes.append(call_provider('/v1/search/everywhere',_provider_params(sf)))
+            if wants_news:
+                news_env=call_provider('/v1/google_news/search',_news_params(f))
+                news_items=_extract_items(news_env)
+                for item in news_items:
+                    if isinstance(item,dict): item['platform']='online_news'
+                if isinstance(news_env.get('data'),dict):
+                    news_env['data']['items']=news_items
+                else:
+                    news_env['data']={'items':news_items}
+                envelopes.append(news_env)
+            if not envelopes: raise ValueError('Select at least one platform or Online News')
+            envelope={
+              'success':True,
+              'request_id':','.join(str(x.get('request_id') or '') for x in envelopes if x.get('request_id')),
+              'credits_used':sum(int(x.get('credits_used') or 0) for x in envelopes),
+              'credits_remaining':next((int(x.get('credits_remaining')) for x in reversed(envelopes) if x.get('credits_remaining') is not None),0),
+              'cached':all(bool(x.get('cached')) for x in envelopes),
+              'data':{'items':[item for x in envelopes for item in _extract_items(x)]}
+            }
         items=_extract_items(envelope)
         mapped=[]
         for raw in items:

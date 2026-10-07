@@ -344,10 +344,15 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')
         return execute_search(db,p,json.loads(rule.filters_json or '{}'),rule_id=rule.id,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
     if action=='queue':
-        rows=db.query(SocialListeningResult).order_by(SocialListeningResult.collected_at.desc()).limit(500).all()
-        state=data.get('state')
-        if state: rows=[x for x in rows if x.review_state==state]
-        return {'results':[serialize_result(x) for x in rows]}
+        if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+        all_rows=db.query(SocialListeningResult).order_by(SocialListeningResult.collected_at.desc()).limit(500).all()
+        counts={'ALL':len(all_rows)}
+        for key in ('DISCOVERED','RELEVANT','MONITOR','NOT_RELEVANT','PROMOTED'):
+            counts[key]=sum(1 for x in all_rows if x.review_state==key)
+        state=str(data.get('state') or '')
+        if state and state not in counts: raise ValueError('Invalid social review queue state')
+        rows=[x for x in all_rows if not state or x.review_state==state]
+        return {'results':[serialize_result(x) for x in rows],'counts':counts}
     if action=='usage':
         return usage_summary(db,p)
     row=db.get(SocialListeningResult,int(id)) if str(id or '').isdigit() else None

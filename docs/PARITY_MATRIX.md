@@ -34,5 +34,5 @@
 | Social listening filters | New requirement | Implemented | Provider-native + stable BAWASLU filter contract |
 | Saved monitoring searches | New requirement | Implemented | Manual run in v0.1; scheduler later |
 | Provider usage / credits | New requirement | Implemented | Live config-based credit estimate, balance-after-search projection, pre-search confirmation, repeat-search warning and recent usage audit |
-| Social result review queue | New requirement | Implemented foundation | Human review states |
+| Social result review queue | New requirement | Implemented | Persistent no-credit review queue with state counts/filters, human review actions and Intelligence promotion |
 | Promote social result to Intelligence | New requirement | Implemented | Creates UNVERIFIED/Pending Review record |

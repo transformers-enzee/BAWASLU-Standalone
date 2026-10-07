@@ -143,3 +143,27 @@ def test_usage_action_returns_summary_without_result_id():
     assert usage['usage'][0]['credits_used']==20
     assert usage['usage'][0]['user_name']=='Admin'
     db.close()
+
+
+def test_review_queue_filters_states_and_never_calls_provider():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'election','platforms':['tiktok']}},provider_client=fake_provider)
+    first=r['results'][0]['id']
+    social_listening_action(db,p,'review',{'decision':'MONITOR'},id=first)
+
+    all_queue=social_listening_action(db,p,'queue',{})
+    assert all_queue['counts']['ALL']==2
+    assert all_queue['counts']['MONITOR']==1
+    assert all_queue['counts']['DISCOVERED']==1
+
+    monitor=social_listening_action(db,p,'queue',{'state':'MONITOR'})
+    assert len(monitor['results'])==1
+    assert monitor['results'][0]['review_state']=='MONITOR'
+    assert db.query(SocialListeningProviderUsage).count()==1
+
+    try:
+        social_listening_action(db,p,'queue',{'state':'INVALID'})
+        assert False, 'Expected invalid queue state to fail'
+    except ValueError:
+        pass
+    db.close()

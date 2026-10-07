@@ -1,0 +1,61 @@
+{
+  "name": "AccessGrant",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "access_role": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "regency_city": {
+      "type": "string"
+    },
+    "geographic_scope": {
+      "type": "string",
+      "enum": [
+        "Nationwide",
+        "Province",
+        "Regency/City"
+      ]
+    },
+    "permissions": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Active",
+        "Inactive"
+      ],
+      "default": "Active"
+    }
+  },
+  "required": [
+    "user_id",
+    "access_role"
+  ],
+  "rls": {
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+import { useEffect, useState } from 'react';
+import { base44 } from '@/api/base44Client';
+export const intel=(action,data={},id)=>base44.functions.invoke('intelligence',{action,data,id}).then(r=>r.data);
+export const registry=(action,data={},id)=>base44.functions.invoke('registry',{action,data,id}).then(r=>r.data);
+export function useIntel(){const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');const refresh=()=>{setLoading(true);setError('');return intel('list').then(r=>{setItems(r.items);setError('')}).catch(e=>{setItems([]);setError(e.response?.data?.error||e.message)}).finally(()=>setLoading(false))};useEffect(()=>{refresh()},[]);return {items,loading,error,refresh}}
+export function useRegistry(){const [data,setData]=useState({items:[],accounts:[],relationships:[],sources:[],categories:[]}),[loading,setLoading]=useState(true),[error,setError]=useState('');const refresh=()=>{setLoading(true);return registry('list').then(setData).catch(e=>setError(e.response?.data?.error||e.message)).finally(()=>setLoading(false))};useEffect(()=>{refresh()},[]);return {...data,loading,error,refresh}}

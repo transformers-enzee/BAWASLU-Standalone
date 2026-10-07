@@ -1,0 +1,38 @@
+# BAWASLU Standalone Parity Matrix
+
+| Capability | Legacy BAWASLU | v0.1 status | Notes |
+|---|---|---|---|
+| Intelligence create/list/get | Yes | Implemented | Standalone DB/API |
+| `INT-YYYY-######` sequence | Yes | Implemented | Database-backed sequence |
+| Jurisdiction confirmation | Yes | Implemented | Human-governed |
+| Province / Regency-City ACL | Yes | Implemented | Enforced server-side |
+| Multi-region data fields | Yes | Preserved in schema/import | Expanded enforcement is a v0.2 gate |
+| Geographic mismatch review | Yes | Implemented foundation | Human keep/change decisions |
+| Source identity states | Yes | Implemented | Registered/known/unresolved |
+| Observed publisher provenance | Yes | Implemented | Kept distinct from registered identity |
+| Watchlists | Yes | Implemented | First-class table/API |
+| Source accounts | Yes | Implemented | Used for identity matching |
+| Actor/entity relationships | Yes | Implemented | First-class registry + intelligence JSON contract retained |
+| V3 triage provenance | Yes | Implemented foundation | Generation/fingerprint/version table |
+| Production AI triage | Yes | Pending v0.2 | Deterministic placeholder only |
+| Human triage decisions | Yes | Implemented foundation | Stored in `_decisions`; review remains human controlled |
+| Evidence verification | Yes | Implemented | Independent human action |
+| Duplicate detection/review | Yes | Implemented foundation | Exact URL/title candidate detection in v0.1; richer legacy scoring to port |
+| Evidence attachments | Yes | Implemented local | Object storage/signed URL pending |
+| Audit events | Yes | Implemented | First-class audit table |
+| User/access administration | Yes | Implemented | Standalone account + access grant |
+| Issue categories | Yes | Implemented | Included in importer |
+| Data sources | Yes | Implemented | Included in importer |
+| External connector registry | Yes | Implemented schema/import | Provider execution pending |
+| Public URL retrieval | Yes | Partial | URL preserved; hardened fetch pending |
+| Intelligence Assistant | Yes | Implemented foundation | Evidence-search assistant, no generative provider yet |
+| Google OAuth | Yes | Pending | Email/password available |
+| OTP/password reset delivery | Yes | Pending | Requires delivery provider |
+| Base44 data migration | N/A | Implemented importer foundation | Requires real export reconciliation |
+
+| Social listening search | New requirement | Implemented foundation | SocialCrawl Universal Search adapter |
+| Social listening filters | New requirement | Implemented | Provider-native + stable BAWASLU filter contract |
+| Saved monitoring searches | New requirement | Implemented | Manual run in v0.1; scheduler later |
+| Provider usage / credits | New requirement | Implemented | Request/credit/cache audit |
+| Social result review queue | New requirement | Implemented foundation | Human review states |
+| Promote social result to Intelligence | New requirement | Implemented | Creates UNVERIFIED/Pending Review record |

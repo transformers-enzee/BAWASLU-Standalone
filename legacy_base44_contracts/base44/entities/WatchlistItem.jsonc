@@ -1,0 +1,68 @@
+{
+  "name": "WatchlistItem",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "regency_city": {
+      "type": "string"
+    },
+    "related_election": {
+      "type": "string"
+    },
+    "related_entity": {
+      "type": "string"
+    },
+    "related_topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "priority": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

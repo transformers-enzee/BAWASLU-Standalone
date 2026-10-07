@@ -1,0 +1,6 @@
+import { Link } from 'react-router-dom';
+import Status from './Status';
+export default function AssistantRecords({records}){
+  if(!records?.length)return null;
+  return <div className="mt-5 border-t border-[#e4e9ef] pt-4 space-y-3"><p className="text-xs font-bold uppercase tracking-wider text-[#53657b]">Supporting Intelligence Records</p>{records.map(r=><div key={r.id} className="rounded-lg border border-[#e4e9ef] bg-white p-3 text-sm"><Link to={`/intelligence/${r.id}`} className="font-semibold text-[#126d91] hover:underline">{r.intelligence_id} · {r.title}</Link><p className="text-xs text-[#617789] mt-1">{r.date ? `${new Date(r.date).toLocaleDateString('en-GB')} · ` : ''}Confirmed jurisdiction: {r.jurisdiction}</p>{r.candidate&&<p className="text-xs text-[#53657b] mt-1">Registered owned channel · {r.candidate} · {r.owned_platform}</p>}<div className="flex flex-wrap gap-1.5 mt-2"><Status value={r.priority}/><Status value={r.review_status}/><Status value={r.evidence_type}/><Status value={r.verification_status}/></div></div>)}</div>;
+}

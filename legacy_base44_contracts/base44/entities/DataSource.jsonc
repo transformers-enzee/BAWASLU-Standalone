@@ -1,0 +1,47 @@
+{
+  "name": "DataSource",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "regency_city": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

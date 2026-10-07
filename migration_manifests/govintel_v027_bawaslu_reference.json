@@ -1,0 +1,22 @@
+{
+  "product_id": "bawaslu",
+  "source_system": "Base44 export",
+  "strategy": "preserve jurisdiction, identity and triage semantics; map source observations into shared Evidence envelopes",
+  "shared_mappings": {
+    "intelligence items": "Evidence:evidence_type=intelligence_item",
+    "evidence files": "Evidence:evidence_type=evidence_file",
+    "source provenance": "Evidence:source_provider+provenance_json"
+  },
+  "specialist_preserve": [
+    "intelligence sequences",
+    "source accounts/identity resolution",
+    "actors/entity relationships",
+    "watchlists",
+    "jurisdiction/geography mismatch rules",
+    "triage generations/approval",
+    "access grants/audit events"
+  ],
+  "import_status": "staging_contract_ready",
+  "migration_mode": "dry_run_first",
+  "operational_write_gate": "explicit clean-batch commit only"
+}

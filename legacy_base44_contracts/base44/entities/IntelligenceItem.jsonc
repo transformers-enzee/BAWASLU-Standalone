@@ -1,0 +1,593 @@
+{
+  "name": "IntelligenceItem",
+  "type": "object",
+  "properties": {
+    "intelligence_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "original_content": {
+      "type": "string"
+    },
+    "original_language": {
+      "type": "string"
+    },
+    "original_language_code": {
+      "type": "string"
+    },
+    "english_translation": {
+      "type": "string"
+    },
+    "future_indonesian_translation": {
+      "type": "string"
+    },
+    "ai_summary": {
+      "type": "string"
+    },
+    "ai_analysis": {
+      "type": "string"
+    },
+    "ai_suggestions": {
+      "type": "object"
+    },
+    "ai_geography": {
+      "type": "object"
+    },
+    "proposed_geography": {
+      "type": "object"
+    },
+    "geographic_mismatch_review": {
+      "type": "object"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "ingestion_method": {
+      "type": "string",
+      "enum": [
+        "MANUAL_URL",
+        "MANUAL_ENTRY",
+        "FILE_UPLOAD",
+        "SOCIAL_LISTENING_FEED",
+        "API_FEED"
+      ]
+    },
+    "observed_publisher_handle": {
+      "type": "string"
+    },
+    "provider_source_metadata": {
+      "type": "object"
+    },
+    "source_identity": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "REGISTERED_ACCOUNT_CONFIRMED",
+            "KNOWN_EXTERNAL_ACCOUNT",
+            "UNRESOLVED"
+          ]
+        },
+        "matched_registered_account_id": {
+          "type": "string"
+        },
+        "match_basis": {
+          "type": "string"
+        },
+        "verification_status": {
+          "type": "string",
+          "enum": [
+            "CONFIRMED",
+            "NOT_VERIFIED"
+          ]
+        },
+        "verified_by": {
+          "type": "string"
+        },
+        "verified_at": {
+          "type": "string"
+        }
+      }
+    },
+    "entity_relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "PUBLISHER",
+              "MENTIONS",
+              "FEATURES",
+              "OTHER_REQUIRES_REVIEW"
+            ]
+          },
+          "evidence_basis": {
+            "type": "string"
+          },
+          "review_status": {
+            "type": "string",
+            "enum": [
+              "REQUIRES_REVIEW",
+              "HUMAN_CONFIRMED"
+            ]
+          },
+          "confirmed_by": {
+            "type": "string"
+          },
+          "confirmed_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "source_name": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "publication_datetime": {
+      "type": "string"
+    },
+    "publication_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "publication_time_precision": {
+      "type": "string",
+      "enum": [
+        "EXACT",
+        "TIME_UNKNOWN",
+        "UNKNOWN"
+      ]
+    },
+    "collection_datetime": {
+      "type": "string"
+    },
+    "owned_channel": {
+      "type": "object",
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "candidate_name": {
+          "type": "string"
+        },
+        "account_id": {
+          "type": "string"
+        },
+        "account_url": {
+          "type": "string"
+        },
+        "account_handle": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        }
+      }
+    },
+    "related_entities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "jurisdiction_type": {
+      "type": "string",
+      "enum": [
+        "National",
+        "Province",
+        "Regency / City",
+        "Multi-Region",
+        "Unresolved"
+      ]
+    },
+    "jurisdiction_confirmed": {
+      "type": "boolean"
+    },
+    "jurisdiction_confirmed_by": {
+      "type": "string"
+    },
+    "jurisdiction_confirmed_at": {
+      "type": "string"
+    },
+    "jurisdiction_source": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "regency_city": {
+      "type": "string"
+    },
+    "province_code": {
+      "type": "string"
+    },
+    "regency_city_code": {
+      "type": "string"
+    },
+    "geographic_assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "province_code": {
+            "type": "string"
+          },
+          "province": {
+            "type": "string"
+          },
+          "regency_city_code": {
+            "type": "string"
+          },
+          "regency_city": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "location_text": {
+      "type": "string"
+    },
+    "potential_issue_category": {
+      "type": "string"
+    },
+    "analyst_notes": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "evidence_state": {
+      "type": "string",
+      "enum": [
+        "OBSERVED",
+        "UNVERIFIED",
+        "VERIFIED",
+        "INFERRED"
+      ]
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "OBSERVED",
+        "INFERRED"
+      ]
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "UNVERIFIED",
+        "HUMAN_VERIFIED"
+      ]
+    },
+    "intelligence_extraction": {
+      "type": "object",
+      "properties": {
+        "activity": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "evidence_basis": {
+                  "type": "string"
+                },
+                "evidence_type": {
+                  "type": "string",
+                  "enum": [
+                    "OBSERVED",
+                    "INFERRED"
+                  ]
+                },
+                "confidence": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "actors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity_id": {
+                "type": "string"
+              },
+              "entity_name": {
+                "type": "string"
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "relationship_to_content": {
+                "type": "string"
+              },
+              "evidence_basis": {
+                "type": "string"
+              },
+              "evidence_type": {
+                "type": "string",
+                "enum": [
+                  "OBSERVED",
+                  "INFERRED"
+                ]
+              },
+              "confidence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "location_signal": {
+          "type": "object",
+          "properties": {
+            "location_text": {
+              "type": "string"
+            },
+            "evidence_basis": {
+              "type": "string"
+            },
+            "evidence_type": {
+              "type": "string",
+              "enum": [
+                "OBSERVED",
+                "INFERRED"
+              ]
+            },
+            "confidence": {
+              "type": "string"
+            }
+          }
+        },
+        "narrative": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "evidence_basis": {
+                  "type": "string"
+                },
+                "evidence_type": {
+                  "type": "string",
+                  "enum": [
+                    "OBSERVED",
+                    "INFERRED"
+                  ]
+                },
+                "confidence": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "relationships": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "subject_entity_id": {
+                    "type": "string"
+                  },
+                  "subject_entity_name": {
+                    "type": "string"
+                  },
+                  "relationship_type": {
+                    "type": "string"
+                  },
+                  "object_entity_id": {
+                    "type": "string"
+                  },
+                  "object_entity_name": {
+                    "type": "string"
+                  },
+                  "observed_account": {
+                    "type": "string"
+                  },
+                  "evidence_basis": {
+                    "type": "string"
+                  },
+                  "evidence_type": {
+                    "type": "string",
+                    "enum": [
+                      "OBSERVED",
+                      "INFERRED"
+                    ]
+                  },
+                  "confidence": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence_gaps": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "inferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "actor_evidence": {
+          "type": "string"
+        },
+        "content_type": {
+          "type": "string"
+        },
+        "inference": {
+          "type": "string"
+        },
+        "evidence_type": {
+          "type": "string",
+          "enum": [
+            "OBSERVED",
+            "INFERRED"
+          ]
+        }
+      }
+    },
+    "supervision_screening": {
+      "type": "object",
+      "properties": {
+        "supervision_signal": {
+          "type": "string",
+          "enum": [
+            "NO SIGNAL IDENTIFIED",
+            "MONITOR",
+            "REVIEW RECOMMENDED",
+            "POTENTIAL REGULATORY ISSUE"
+          ]
+        },
+        "signal_reason": {
+          "type": "string"
+        },
+        "check_next": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "evidence_basis": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confidence": {
+          "type": "string"
+        }
+      }
+    },
+    "review_status": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string"
+    },
+    "assigned_reviewer": {
+      "type": "string"
+    },
+    "review_notes": {
+      "type": "string"
+    },
+    "validated_at": {
+      "type": "string"
+    },
+    "duplicate_of": {
+      "type": "string"
+    },
+    "duplicate_resolution": {
+      "type": "string"
+    },
+    "merged_into": {
+      "type": "string"
+    },
+    "watchlist_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "intelligence_id",
+    "title",
+    "evidence_state"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

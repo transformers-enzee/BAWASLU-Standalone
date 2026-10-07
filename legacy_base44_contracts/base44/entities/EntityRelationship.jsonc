@@ -1,0 +1,41 @@
+{
+  "name": "EntityRelationship",
+  "type": "object",
+  "properties": {
+    "from_id": {
+      "type": "string"
+    },
+    "to_id": {
+      "type": "string"
+    },
+    "relationship_type": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

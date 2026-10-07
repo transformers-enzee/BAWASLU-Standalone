@@ -1,0 +1,57 @@
+{
+  "name": "ExternalDataConnector",
+  "type": "object",
+  "properties": {
+    "connector_id": {
+      "type": "string"
+    },
+    "provider_name": {
+      "type": "string"
+    },
+    "connector_type": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "default": "DISABLED"
+    },
+    "supported_sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configuration": {
+      "type": "object"
+    },
+    "last_sync": {
+      "type": "string"
+    },
+    "health_status": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

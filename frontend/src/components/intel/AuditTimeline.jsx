@@ -1,0 +1,22 @@
+import { useState } from 'react';
+import { auditTitle, suggestionTypes as types } from './auditLabels';
+const names={original_content:'Source text',publication_datetime:'Publication date',original_language:'Original language',author:'Author',title:'Headline',source_name:'Publisher'};
+const stamp=ev=>new Date(ev.occurred_at||ev.created_date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'});
+const short=v=>{const s=typeof v==='object'?JSON.stringify(v):String(v??'None');return s.length>140?s.slice(0,140)+'…':s};
+const safeKey=k=>!(/(^|_)id$|^to$|^merged_into$|^duplicate_of$/.test(k));
+function AuditEntry({ev,field,change}){
+ const [open,setOpen]=useState(false),ai=!!field,source=ev.action==='SOURCE_RECOVERED',watch=ev.action==='WATCHLIST_MATCH_REVIEWED';
+ const status=watch?(ev.changes?.decision?.new==='Link'?'Human Accepted':'Human Rejected'):change?.status;
+ const title=auditTitle(ev,field,change);
+ const proposed=watch?ev.changes?.name?.previous:change?.previous,final=watch?ev.changes?.name?.new:change?.new;
+ const generic=Object.entries(ev.changes||{}).filter(([k])=>safeKey(k));
+ const mismatch=ev.action==='GEOGRAPHIC_MISMATCH_REVIEWED';
+ return <div className="pl-4 border-l-2 border-[#c7dbe2] pb-5 last:pb-0 space-y-1">
+  <p className="text-sm font-semibold">{title}</p><p className="text-xs text-[#8092a3]">{stamp(ev)} · Actor: {ev.actor_name||'Unknown'}{ev.source_record&&` · ${ev.source_record}`}</p>
+  {(ai||watch)?<><p className="text-xs text-[#617789]">Decision: {status}{change?.prior_decision&&` · Changed from ${change.prior_decision}`}{status==='Human Rejected'&&(change?.reason||ev.changes?.reason?.new)&&` · Reason: ${change?.reason||ev.changes?.reason?.new}`}{status!=='Human Rejected'&&final&&` · Final: ${short(final)}`}</p><button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?'Hide changes':'View changes'}</button>{open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#405669] space-y-2 break-words max-h-80 overflow-auto"><p>Suggestion type: {types[field]|| (watch?'WATCHLIST MATCH':field)}</p><p>AI Proposed{typeof proposed==='string'&&proposed.endsWith('…')?' (historical excerpt)':''}: <span className="whitespace-pre-wrap">{proposed??'Not recorded'}</span></p><p>Human Decision: {status?.replace('Human ','')||'Not recorded'}{change?.prior_decision&&` (changed from ${change.prior_decision})`}</p>{status==='Human Rejected'&&<p>Rejection reason: {change?.reason||ev.changes?.reason?.new||'Not recorded (legacy decision)'}</p>}{(change?.confidence||ev.changes?.confidence?.new)&&<p>AI confidence: {change?.confidence||ev.changes?.confidence?.new}</p>}<p>{status==='Human Modified'?'Human Final':'Final Value'}{typeof final==='string'&&final.endsWith('…')?' (historical excerpt)':''}: {status==='Human Rejected'?'None':<span className="whitespace-pre-wrap">{final??'Not recorded'}</span>}</p><p>Actor: {ev.actor_name||'Unknown'} · Timestamp: {stamp(ev)}</p></div>}</>:<>{mismatch&&<p className="text-xs text-[#617789]">{ev.changes?.decision?.new} · Reviewer: {ev.changes?.reviewer?.new} · Reason: {ev.changes?.reason?.new}</p>}{source&&<p className="text-xs text-[#617789]">Recovered: {generic.filter(([k])=>k!=='method').map(([k])=>names[k]||k.replaceAll('_',' ')).join(' · ')}</p>}<button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?'Hide changes':'View changes'}</button>{open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#617789] space-y-2">{generic.map(([k,v])=><p key={k} className="break-words">{names[k]||k.replaceAll('_',' ')}: {mismatch?<span className="whitespace-pre-wrap">{typeof v?.new==='object'?JSON.stringify(v.new):String(v?.new??'None')}</span>:k==='original_content'?'Source text recovered (see Original Source)':`${short(v?.previous)} → ${short(v?.new)}`}</p>)}</div>}</>}
+ </div>;
+}
+export default function AuditTimeline({events}){
+ const rows=events.flatMap(ev=>ev.action==='AI_SUGGESTION_DECIDED'||ev.action==='AI_SUGGESTIONS_REVIEWED'?Object.entries(ev.changes||{}).filter(([k])=>types[k]).map(([field,change])=>({ev,field,change,id:`${ev.id}-${field}`})):[{ev,id:ev.id}]);
+ return <section className="intel-card p-6"><h2 className="font-semibold text-lg mb-4">Activity Timeline</h2>{rows.map(row=><AuditEntry key={row.id} {...row}/>)}{!rows.length&&<p className="text-sm text-[#8293a4]">No activity recorded.</p>}</section>;
+}

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bawaslu
+      POSTGRES_USER: bawaslu
+      POSTGRES_PASSWORD: bawaslu_local
+    volumes:
+      - bawaslu_pg:/var/lib/postgresql/data
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://bawaslu:bawaslu_local@db:5432/bawaslu
+      BAWASLU_BOOTSTRAP_ADMIN_EMAIL: admin@bawaslu.local
+      BAWASLU_BOOTSTRAP_ADMIN_PASSWORD: ChangeMeNow!
+      CORS_ORIGINS: http://localhost:8000
+    depends_on:
+      - db
+volumes:
+  bawaslu_pg:

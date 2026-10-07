@@ -1,0 +1,1094 @@
+{
+  "release": "BAWASLU-Standalone-v0.1",
+  "date": "2026-10-07",
+  "architecture_baseline": "GovIntel-Standalone-v0.27 / NK Intelligence",
+  "requirements_added": [
+    "Social Listening via SocialCrawl",
+    "Saved monitoring searches",
+    "Human review queue",
+    "Provider usage/credit logging"
+  ],
+  "file_count": 216,
+  "files": [
+    {
+      "path": ".env.example",
+      "size": 313,
+      "sha256": "534270015a62b148bbba7d5759a6969387bac797bbba8ee60597b149d54ef486"
+    },
+    {
+      "path": "Dockerfile",
+      "size": 551,
+      "sha256": "d90f9507d932442f5c8397821a7dace8b1bc78752859e64e78b32b441c747885"
+    },
+    {
+      "path": "README.md",
+      "size": 3608,
+      "sha256": "7198354374731f6176f3902ad8870dc26c3a9f710e66bc3d3fb129dec132332e"
+    },
+    {
+      "path": "RELEASE_V01.md",
+      "size": 3997,
+      "sha256": "3f7c859ddc7cb2680c4d2fcf0c497760e46acebf45f300d601acee4523570db5"
+    },
+    {
+      "path": "STATUS_V01.txt",
+      "size": 743,
+      "sha256": "a0a7658a73475ca1b37a4c2cca04d7d11702437d8250844941d37ee8946c24dd"
+    },
+    {
+      "path": "backend/alembic/env.py",
+      "size": 1118,
+      "sha256": "ac8d4fa8f4d69c78e3b0da2a044ce70139fcb23cb6a2ca485c6fde28892d54c2"
+    },
+    {
+      "path": "backend/alembic/script.py.mako",
+      "size": 492,
+      "sha256": "8f38ffd7c20b29e26e0f7bc371e7d5c74a3d8a46c42c231decb1f04f3f6a4f2a"
+    },
+    {
+      "path": "backend/alembic/versions/20260930_01_bawaslu_standalone_baseline.py",
+      "size": 390,
+      "sha256": "34824c157eb075a02dad140a559ce2a531d6cb5e3ebfa3043aa4b825c0d5dff0"
+    },
+    {
+      "path": "backend/alembic.ini",
+      "size": 549,
+      "sha256": "e418b4ce229719bcc9899fa68a85fd4ec3bb9b4173803309f151a3780b620cd7"
+    },
+    {
+      "path": "backend/app/__init__.py",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "backend/app/access.py",
+      "size": 3247,
+      "sha256": "35ee02142005324aed539d20e0ccb0f8b21b2d1e2b173e6e8e080518586568d7"
+    },
+    {
+      "path": "backend/app/auth.py",
+      "size": 1270,
+      "sha256": "07ae60ff6d3f1c4a21561adbde656ddbc189e49cdeda8384083dac0f2f9a8c06"
+    },
+    {
+      "path": "backend/app/db.py",
+      "size": 742,
+      "sha256": "63a5c157c1f2029f1afc78d3d458afcb3d6fa2d779bb06c554a2008ed4c48297"
+    },
+    {
+      "path": "backend/app/domain.py",
+      "size": 21496,
+      "sha256": "1c1091d0ebb23d2c39d26677c2b956cfdf8fc023fa817955c5f3f732cbcd9183"
+    },
+    {
+      "path": "backend/app/main.py",
+      "size": 8875,
+      "sha256": "7bfd5bc9e819668b0402e418a446b6fa1b38ba7008e26795653391d30ffeec7f"
+    },
+    {
+      "path": "backend/app/migration_importer.py",
+      "size": 13017,
+      "sha256": "51443e8f6b3af18ffa49b78cb18415d30eaf1dffba1f44b0f7bec2c9beed1d7d"
+    },
+    {
+      "path": "backend/app/models.py",
+      "size": 20197,
+      "sha256": "a9879e14a20c4d6ec2adf1a2331395c560693670fb718a4b975032c6f4e56784"
+    },
+    {
+      "path": "backend/app/regions.json",
+      "size": 36974,
+      "sha256": "a0982be5472f81ad503bdac94bf1361b343cf8268e45740c09b5e5a85dba965a"
+    },
+    {
+      "path": "backend/app/registry.py",
+      "size": 8361,
+      "sha256": "d9c91b192f86f09ccac06b62a7fe479e1f267243a0d9e0924205f98adeb7adcb"
+    },
+    {
+      "path": "backend/app/seed.py",
+      "size": 1029,
+      "sha256": "0825e26869eb91af433b674c75f577f45f43b190ea0bd52e06193d134e3a99d6"
+    },
+    {
+      "path": "backend/app/serializers.py",
+      "size": 4243,
+      "sha256": "21c7fc0ce181924eb1f789aa45cc20deb40860481f6afc20ea79542bfee5f1a1"
+    },
+    {
+      "path": "backend/app/socialcrawl.py",
+      "size": 14960,
+      "sha256": "c3f5022d2abdb8400a6a0b223a31293c6e7a0adc05fd9b0720561045f46b5d2c"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "size": 152,
+      "sha256": "d4af8a03fe6d1c5e6158a6617a2a584f9a3b2ce047463d993677eddcef12ab0a"
+    },
+    {
+      "path": "backend/tests/test_core.py",
+      "size": 4298,
+      "sha256": "e155c6e8949907ffd3c366b983ec34c4f4582dbe9bf089904c984a4a8dc14519"
+    },
+    {
+      "path": "backend/tests/test_migration.py",
+      "size": 1965,
+      "sha256": "c30e1ab52702b7fc1f135d48110f5b156264e8d105ea47c42556d9ce20188521"
+    },
+    {
+      "path": "backend/tests/test_social_listening.py",
+      "size": 3483,
+      "sha256": "69235ba5ad7e424b0591386f70553151d6855cb5ce66b96fbc74048aeeeaba48"
+    },
+    {
+      "path": "docker-compose.yml",
+      "size": 557,
+      "sha256": "61659280d0b079ccd369785dac81f875d6e43c58bb5e003784d9785219313437"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "size": 3567,
+      "sha256": "ff09c28ebe455eb27e6551237b750075da2aece8e407579dbec05e0270d065d4"
+    },
+    {
+      "path": "docs/AUDIT_V01.md",
+      "size": 1134,
+      "sha256": "3c5eb0c4a8361edb2e6421ff826a933d17e283920d6c5a71049f223c1bfb2aba"
+    },
+    {
+      "path": "docs/BASE44_MIGRATION.md",
+      "size": 1172,
+      "sha256": "e11d5e5fc57d324bb86be54c13af468aff1658a8896c93acf66ae63d22cd15a0"
+    },
+    {
+      "path": "docs/PARITY_MATRIX.md",
+      "size": 3027,
+      "sha256": "14fd50f3a0a2921bfc4398402c1bc7e141d661251e7b2e20acaf82e86bf6e80b"
+    },
+    {
+      "path": "docs/SHARED_PLATFORM_COMPATIBILITY.md",
+      "size": 4666,
+      "sha256": "c60fe86e55400f92b0ff9fbb4537c31d7bf5545965b12053b49bd0b377b1d7a7"
+    },
+    {
+      "path": "docs/SOCIAL_LISTENING_SOCIALCRAWL.md",
+      "size": 2645,
+      "sha256": "cf31e9e90e40d64e6c5f2bb20e3152f468e53ba13dde51722ccf72c93a444124"
+    },
+    {
+      "path": "frontend/components.json",
+      "size": 444,
+      "sha256": "73e1334afce0f20f01500532e3b63a7cc36238d8a05addef40c476fadf9dc349"
+    },
+    {
+      "path": "frontend/eslint.config.js",
+      "size": 1578,
+      "sha256": "b0ac68c36cb81cba5bbdd537620b03762164ba276e338fdba73981318f011e60"
+    },
+    {
+      "path": "frontend/index.html",
+      "size": 430,
+      "sha256": "93b3b0fc202164d5e2acb0ac9bb761a6fb4cf5ada024aa872c1801087c5b254b"
+    },
+    {
+      "path": "frontend/jsconfig.json",
+      "size": 583,
+      "sha256": "e73e9adf0fcd9194c496670efb5251825685314475c9548c3ec4d74056ccc75b"
+    },
+    {
+      "path": "frontend/package.json",
+      "size": 3221,
+      "sha256": "ffaac176852f563c1c48c106e163c80f755a0956ae6878bf5a0479b92cb9b7da"
+    },
+    {
+      "path": "frontend/postcss.config.js",
+      "size": 80,
+      "sha256": "190c877db466995bf1482f4a16abd06e04a89ede3119341e2a86ff96e1737b27"
+    },
+    {
+      "path": "frontend/src/App.jsx",
+      "size": 4050,
+      "sha256": "66124383bd0c1636372ab6b4e902404a7c80f5f22e23a42a47b4594572bdfdbd"
+    },
+    {
+      "path": "frontend/src/api/base44Client.js",
+      "size": 3005,
+      "sha256": "4f1990c0e3c48e281f3cf227d707e8b841491167af51f8f9e1537253f41b9483"
+    },
+    {
+      "path": "frontend/src/components/AuthLayout.jsx",
+      "size": 955,
+      "sha256": "27191e5279ab7a6d30609f7954c64edf586ce11817ca50ca63ed03bd432629ce"
+    },
+    {
+      "path": "frontend/src/components/GoogleIcon.jsx",
+      "size": 833,
+      "sha256": "4d5d7b5c6a368f8246fe088eaa158b2cd0872bfafa8e5c495ec39ebb697c4f6b"
+    },
+    {
+      "path": "frontend/src/components/ProtectedRoute.jsx",
+      "size": 1069,
+      "sha256": "f1121449bc7f8f31b2ed2d4a6e0211c8d300319efd58919efdd313dc7b586068"
+    },
+    {
+      "path": "frontend/src/components/ScrollToTop.jsx",
+      "size": 805,
+      "sha256": "56f6ecc5d3f0bd692e7d4bb6d89f73ddac4148150718388ef8cf996a985f6138"
+    },
+    {
+      "path": "frontend/src/components/UserNotRegisteredError.jsx",
+      "size": 1592,
+      "sha256": "5cecb11fe2fb3a03a73e5845b5ee9d26c9255e80feda689b3dfc70822ba288f1"
+    },
+    {
+      "path": "frontend/src/components/intel/AccessAssignmentForm.jsx",
+      "size": 3346,
+      "sha256": "6f528ff04cb40c2eaa5274b743210ee120a7d3570d6ab107fe572d89870f6c54"
+    },
+    {
+      "path": "frontend/src/components/intel/AccessGate.jsx",
+      "size": 389,
+      "sha256": "23bde07c28e256d4f9a54c7237f43d010bf383663875c59ac72bfe17c0724914"
+    },
+    {
+      "path": "frontend/src/components/intel/AccessJurisdiction.jsx",
+      "size": 2155,
+      "sha256": "bc562c62e6ddf1aed94dd83dc2a688e63d4fa052eb96e0b52278f1df0b986d9d"
+    },
+    {
+      "path": "frontend/src/components/intel/AccessNavigation.jsx",
+      "size": 2566,
+      "sha256": "e34cea2bdae54611ac6caf2c97c1d7f09cb9507a098f8091e5237d592acdee53"
+    },
+    {
+      "path": "frontend/src/components/intel/AccessPermissions.jsx",
+      "size": 693,
+      "sha256": "81f62d69dccffc0c4253cbe25c0e71c0d3d7b1d5b52b0d0b07620f052e13a749"
+    },
+    {
+      "path": "frontend/src/components/intel/ActorIntelligence.jsx",
+      "size": 3869,
+      "sha256": "62e2636c2faf187c855d75f5a96d0820920a1f29109d22cb8a3d6c8b42552d2b"
+    },
+    {
+      "path": "frontend/src/components/intel/AssistantAnswer.jsx",
+      "size": 680,
+      "sha256": "1e0947b23c38c9af9c564b2b7f5c1b2ef69b817b2123b53ba3abea08f1caec85"
+    },
+    {
+      "path": "frontend/src/components/intel/AssistantRecords.jsx",
+      "size": 1053,
+      "sha256": "75c9a909aa0c5d51697d3377885e32293273ec00b7d358c53b3be55a2a0177aa"
+    },
+    {
+      "path": "frontend/src/components/intel/AuditTimeline.jsx",
+      "size": 4421,
+      "sha256": "3b68b257525920613e1f6863736f4246b044591ca10532b522ff8f0a9cba51d9"
+    },
+    {
+      "path": "frontend/src/components/intel/CategoryManager.jsx",
+      "size": 2370,
+      "sha256": "4ab21ba1a4e0a81abe1dc58a43287570a91c2e0d2cf36ea50df1e2bf609c0044"
+    },
+    {
+      "path": "frontend/src/components/intel/DuplicatePanel.jsx",
+      "size": 1991,
+      "sha256": "ff54cc19a068c470595084ee55a9aeb4733c72aded17b0323aba58365509f539"
+    },
+    {
+      "path": "frontend/src/components/intel/Fields.jsx",
+      "size": 1695,
+      "sha256": "838da554700e4e70bb80e6c216e70796228668db3791d0c52a9744094fd68290"
+    },
+    {
+      "path": "frontend/src/components/intel/GeographicMismatch.jsx",
+      "size": 3769,
+      "sha256": "c14d97b378b1ec6b971bedc63acbf6704f8f1e4aa0818955e88eab617a55c360"
+    },
+    {
+      "path": "frontend/src/components/intel/IntelligenceSummary.jsx",
+      "size": 2474,
+      "sha256": "7de7f797775becf5942e23f514220f27c903eef8939ea837fff71c8f2048bb50"
+    },
+    {
+      "path": "frontend/src/components/intel/IntelligenceTable.jsx",
+      "size": 1991,
+      "sha256": "41dac811943425022b147256a3adb10131fd080548d50024535ca371f3b4aae3"
+    },
+    {
+      "path": "frontend/src/components/intel/JurisdictionConfirmation.jsx",
+      "size": 2926,
+      "sha256": "acbd1df730fac9900e6adac6cba1632a323656d2a6e6f59e7f2634ff44c7bb96"
+    },
+    {
+      "path": "frontend/src/components/intel/JurisdictionFields.jsx",
+      "size": 2743,
+      "sha256": "0c2f6dce42fbe9b9298b7b0e51729a386387de552e14eb42751917b04f8fe413"
+    },
+    {
+      "path": "frontend/src/components/intel/LanguagePicker.jsx",
+      "size": 2763,
+      "sha256": "01d1756335a08f3e47ca3bba5982b4a62f94038170a1d3f79f4852879cb23342"
+    },
+    {
+      "path": "frontend/src/components/intel/OwnedChannelProvenance.jsx",
+      "size": 1630,
+      "sha256": "cbdb8fe85ffdca516c904d7a5164285a8b0a2a90782fd5073f56bc1a2f333851"
+    },
+    {
+      "path": "frontend/src/components/intel/OwnedChannelSource.jsx",
+      "size": 2316,
+      "sha256": "113d974b58d5aeedcf484a808f3c87a7388685aa0d5b922a63e9ad07da8253fd"
+    },
+    {
+      "path": "frontend/src/components/intel/PendingSuggestionRow.jsx",
+      "size": 3751,
+      "sha256": "ad8c7307b014ae54fae38522279f96e7057e717db8171180b482270e7816454d"
+    },
+    {
+      "path": "frontend/src/components/intel/PendingTriage.jsx",
+      "size": 4216,
+      "sha256": "b2e9e87755f82a77bb3c6a62ff8956e214353d9785c931012740a7dbf55391ad"
+    },
+    {
+      "path": "frontend/src/components/intel/PublicationFields.jsx",
+      "size": 1537,
+      "sha256": "8d6cc8d8a4b4463c78e59dde93ff228148f7c944baac569d7ce0615543c5752e"
+    },
+    {
+      "path": "frontend/src/components/intel/RelatedEntityIntake.jsx",
+      "size": 1673,
+      "sha256": "7256e515874bba67f09c061a90d99b5e78d56f8348e2b7a33b88b2e735ed6375"
+    },
+    {
+      "path": "frontend/src/components/intel/Shell.jsx",
+      "size": 2552,
+      "sha256": "62cd008a6853929a34c9ee5c18406466a6665787491fcdf0605ae35a61eebef6"
+    },
+    {
+      "path": "frontend/src/components/intel/SourceCorrection.jsx",
+      "size": 2970,
+      "sha256": "c13bfa9e213a78edb1003b8dd16fbecd2f28cb6ee515439299f4e14440d44007"
+    },
+    {
+      "path": "frontend/src/components/intel/SourceGeography.jsx",
+      "size": 1202,
+      "sha256": "e4952c51e280f638eed58586e175499fb162ab19be3d1b1e5e2b068d7e818d3c"
+    },
+    {
+      "path": "frontend/src/components/intel/SourceIdentityIntake.jsx",
+      "size": 2748,
+      "sha256": "6f98e59c8f80b1352ad554c63c3e7fda706e976ee2f36c4b0d043fd91f108d5a"
+    },
+    {
+      "path": "frontend/src/components/intel/SourceIdentityProvenance.jsx",
+      "size": 2151,
+      "sha256": "f17e3ba2931860afdcb23a26022575133d83209ba894fa5711e672fd48f05e63"
+    },
+    {
+      "path": "frontend/src/components/intel/Status.jsx",
+      "size": 479,
+      "sha256": "64936d4a33ab003617f9bbbd2d015ffbd48024369c8f7f480a57fe875698f724"
+    },
+    {
+      "path": "frontend/src/components/intel/SubmissionJurisdiction.jsx",
+      "size": 4305,
+      "sha256": "74556f994a7846fbb9a7db9ac8fb951036aaaa49aee4b438d9fdd2d3a245effc"
+    },
+    {
+      "path": "frontend/src/components/intel/SuggestionRow.jsx",
+      "size": 1666,
+      "sha256": "13b9ab3ab0a44df3619d9331e9efe88da5c9ecb58180ae19869155aa4a8e8268"
+    },
+    {
+      "path": "frontend/src/components/intel/TriageReview.jsx",
+      "size": 7275,
+      "sha256": "21150558e15f240247390382439c8b1efcbe6cd9bbfaf0f1f020419f665ee477"
+    },
+    {
+      "path": "frontend/src/components/intel/UserAccessHistory.jsx",
+      "size": 1424,
+      "sha256": "e7864f759f49cb8e4dbaae0c0771720cfec29bc76487df306294457b8f6bf125"
+    },
+    {
+      "path": "frontend/src/components/intel/WatchlistMatchRow.jsx",
+      "size": 3893,
+      "sha256": "459f6175015493cc17a1c83b7a8ca5e97a5f4bc782e3f20473d733cc610909cd"
+    },
+    {
+      "path": "frontend/src/components/intel/accessRoles.js",
+      "size": 479,
+      "sha256": "d14f50b8ed0bb4bc9027c02066ae650a23754b809b726b3fb75af60026090ae9"
+    },
+    {
+      "path": "frontend/src/components/intel/actorPictureView.js",
+      "size": 1053,
+      "sha256": "c9c1658349a9db084c494b8b3366e83c687395b405b296c47675a17a4030680f"
+    },
+    {
+      "path": "frontend/src/components/intel/auditLabels.js",
+      "size": 1322,
+      "sha256": "bd17d95f6f24c18a8461c12e2ddbf847a8fec1cd5bea2a82cd995cd6741ec950"
+    },
+    {
+      "path": "frontend/src/components/intel/languageOptions.js",
+      "size": 608,
+      "sha256": "19ea1cd78b2a2bb436f88338a4a30eecde52e2fda361d5cb0ef241551133ae08"
+    },
+    {
+      "path": "frontend/src/components/intel/locale.js",
+      "size": 1118,
+      "sha256": "07acb1637faa3d00b8b44f03c6f6e275ab049823f4eafa1b430bb18c1a4322a4"
+    },
+    {
+      "path": "frontend/src/components/intel/observedPublisher.js",
+      "size": 1027,
+      "sha256": "76c279af5fe01a7bd0c7d7693f964cebc4b18efc3d293e282da4a2ae14245895"
+    },
+    {
+      "path": "frontend/src/components/intel/publicationLabel.js",
+      "size": 665,
+      "sha256": "3af26976a3ac3f057ae88b28db8a2f781db6e75538bb58ceab02465250f09b18"
+    },
+    {
+      "path": "frontend/src/components/intel/regions.json",
+      "size": 36974,
+      "sha256": "a0982be5472f81ad503bdac94bf1361b343cf8268e45740c09b5e5a85dba965a"
+    },
+    {
+      "path": "frontend/src/components/intel/sourceMetadata.js",
+      "size": 479,
+      "sha256": "962dfb00e0e662a617c4ce1178180c03d02625d0d6b73ca2c7bf180d6cbcf7ae"
+    },
+    {
+      "path": "frontend/src/components/intel/structuredReview.js",
+      "size": 774,
+      "sha256": "31cac39b1f208ce693c6c7eff2d953813ce14278df14d1f85f145c331296f280"
+    },
+    {
+      "path": "frontend/src/components/intel/triagePresentation.js",
+      "size": 3343,
+      "sha256": "f4bc78a66ff8037cc5038d0f57de3cf253d18f98b98e7ca20f3cfb24a26bf0e9"
+    },
+    {
+      "path": "frontend/src/components/intel/triageReview.js",
+      "size": 1087,
+      "sha256": "b145ae2edb5e51881e85a1118910944b3f20e75086245eea5f59fa0bea97a347"
+    },
+    {
+      "path": "frontend/src/components/intel/triageSections.js",
+      "size": 2307,
+      "sha256": "16ad0206eb6336d28185cfb240103761d2e46904039a719ce559531b863c4a0a"
+    },
+    {
+      "path": "frontend/src/components/intel/useIntel.jsx",
+      "size": 1150,
+      "sha256": "6a9bc72c25e20bf7245aa59655cccc69c9a6d9724628eb41f182d8541906e7ed"
+    },
+    {
+      "path": "frontend/src/components/ui/accordion.jsx",
+      "size": 1615,
+      "sha256": "b47533b3783b8149550b8481e4ae93d54bdcbc51d434793c176b0aec5558ee1c"
+    },
+    {
+      "path": "frontend/src/components/ui/alert-dialog.jsx",
+      "size": 3461,
+      "sha256": "a20098cdc2eb2b5915575d3f0fb7a3e8e6c1035c7eef77144f3fc389e0fdbda0"
+    },
+    {
+      "path": "frontend/src/components/ui/alert.jsx",
+      "size": 1335,
+      "sha256": "c5baf27fb6a4bf130236fa0f336c21084fee192e8215bb6b20c87436c27f3b38"
+    },
+    {
+      "path": "frontend/src/components/ui/aspect-ratio.jsx",
+      "size": 140,
+      "sha256": "08b0aa0b05efc573c7d63363c03e83d4b101bfeb54140764e96ddea30659cfcc"
+    },
+    {
+      "path": "frontend/src/components/ui/avatar.jsx",
+      "size": 1043,
+      "sha256": "703fb6852952bd039b68dc494c004eee1d835fa12647b851722ab9b6b3058b32"
+    },
+    {
+      "path": "frontend/src/components/ui/badge.jsx",
+      "size": 990,
+      "sha256": "380dcda78ff8fdd80c82b89cb7dd38ffd84c355735fc8f16300ff647e15988aa"
+    },
+    {
+      "path": "frontend/src/components/ui/breadcrumb.jsx",
+      "size": 2271,
+      "sha256": "4c0972765dc0212c5101446cb931db44b7db68a21ef9d7bc8a75c46f9bb96e42"
+    },
+    {
+      "path": "frontend/src/components/ui/button.jsx",
+      "size": 1679,
+      "sha256": "6c28699c64ff8c36ec5a2baf835d6bfa141cedeaf472b97d64671dac6cf7cbf8"
+    },
+    {
+      "path": "frontend/src/components/ui/calendar.jsx",
+      "size": 2851,
+      "sha256": "06e0c81497bda70ac24855b54fddd385557cbc3be8d8066a345bedbec551b3ee"
+    },
+    {
+      "path": "frontend/src/components/ui/card.jsx",
+      "size": 1440,
+      "sha256": "8ab6f42e722e9c51752ce2f14aabb2696bddc0b6818041fb8f313f670955c2c4"
+    },
+    {
+      "path": "frontend/src/components/ui/carousel.jsx",
+      "size": 4821,
+      "sha256": "55eb9456609f96f5c28c1fa35fe79554fc0ffab12883e3aceb041ff10e347e83"
+    },
+    {
+      "path": "frontend/src/components/ui/chart.jsx",
+      "size": 8639,
+      "sha256": "c4684b470cae53b857a08e5fe006d4406450a442a103858beb179ec810aba2b3"
+    },
+    {
+      "path": "frontend/src/components/ui/checkbox.jsx",
+      "size": 880,
+      "sha256": "b0260cb7767493d8273f5def1b7d32e844d068db5f5760258d333ae6ad88f0d8"
+    },
+    {
+      "path": "frontend/src/components/ui/collapsible.jsx",
+      "size": 329,
+      "sha256": "f4cdd104de29928bfcd40b865c7d08eed9157a537fbb8b5e6d0921f02b63cc04"
+    },
+    {
+      "path": "frontend/src/components/ui/command.jsx",
+      "size": 3897,
+      "sha256": "e7cea37aff49e211ffea1bf3ed67add6ce1ab29862e902aff739fcd11014f06f"
+    },
+    {
+      "path": "frontend/src/components/ui/context-menu.jsx",
+      "size": 5995,
+      "sha256": "5fe320cad9ee1833e9528f86e340f83f419f77790549f4cff083fad329e8dc4c"
+    },
+    {
+      "path": "frontend/src/components/ui/dialog.jsx",
+      "size": 3228,
+      "sha256": "50a7cc4ae5ce0f2527662ed9742d35b8c4933d1629a2740b26890793aee00742"
+    },
+    {
+      "path": "frontend/src/components/ui/drawer.jsx",
+      "size": 2359,
+      "sha256": "3d2dce97d3f6bc5dfa887e87c6688228298526bfdc29a28f2edbd6c1dc2eb47a"
+    },
+    {
+      "path": "frontend/src/components/ui/dropdown-menu.jsx",
+      "size": 6157,
+      "sha256": "d36cd67e71781bbb03059b057b6f686445477a4275120359178729574398c465"
+    },
+    {
+      "path": "frontend/src/components/ui/form.jsx",
+      "size": 3141,
+      "sha256": "d899b071230c321acdb2996cbe02d84a46dd9825f81af1015f7e54c6b9ee211c"
+    },
+    {
+      "path": "frontend/src/components/ui/hover-card.jsx",
+      "size": 1070,
+      "sha256": "3b49e533ad60995767a3419351642037438e8f27b62132115fc71115cf1fd0ad"
+    },
+    {
+      "path": "frontend/src/components/ui/image-helpers.js",
+      "size": 3168,
+      "sha256": "2bf8f14c37c7c8165afe4562a1fb445866f8ab21b2baf55af34961d68b170d42"
+    },
+    {
+      "path": "frontend/src/components/ui/image.jsx",
+      "size": 3980,
+      "sha256": "28f925694fedbec102d3333b6ec0e4a571439fff5e29ccd3da050aec21512dd5"
+    },
+    {
+      "path": "frontend/src/components/ui/input-otp.jsx",
+      "size": 1811,
+      "sha256": "78a437a82203c1d9d22d47db830bdc67d49d6473c5c28ad77634eeb8c399a649"
+    },
+    {
+      "path": "frontend/src/components/ui/input.jsx",
+      "size": 690,
+      "sha256": "4455aea152904f128df0ecd82047bbceb23e06ffcc9ccc7cbb3bcc87df5bcc4f"
+    },
+    {
+      "path": "frontend/src/components/ui/label.jsx",
+      "size": 525,
+      "sha256": "37c6425d2a5c798ade4e60f89f86054d703433a8977e12d796de2b5bb4e3d0b7"
+    },
+    {
+      "path": "frontend/src/components/ui/menubar.jsx",
+      "size": 6790,
+      "sha256": "5411f1b8221d9a34fc9b58f830642cfa3a33c776d0072014690e2f024515391d"
+    },
+    {
+      "path": "frontend/src/components/ui/navigation-menu.jsx",
+      "size": 4217,
+      "sha256": "a1f789747cb750329a33ee04c54209b044239a15ba200fb9d7da1f2ce6b73403"
+    },
+    {
+      "path": "frontend/src/components/ui/pagination.jsx",
+      "size": 2322,
+      "sha256": "1d519fc3ba1c8c6cf7f2d30c98739ecba2fa7af35cbc024d6793785e7a6d65c8"
+    },
+    {
+      "path": "frontend/src/components/ui/popover.jsx",
+      "size": 1166,
+      "sha256": "199cc7b3d810013867ae91305f0966b8a66526a1c13d10248c38ee1797d169db"
+    },
+    {
+      "path": "frontend/src/components/ui/progress.jsx",
+      "size": 667,
+      "sha256": "1ad2808d51c365f04f23a4e985b03274dcc30735d74db68e1f78332a6533859c"
+    },
+    {
+      "path": "frontend/src/components/ui/radio-group.jsx",
+      "size": 1135,
+      "sha256": "10ced1e6932e4fe53d6c18201f50b8bb4b334b4372f01ce5f0993aa2a6bb9110"
+    },
+    {
+      "path": "frontend/src/components/ui/resizable.jsx",
+      "size": 1570,
+      "sha256": "4e74fb31b8321012570554dc8c55a58aacf1adcced2fdc43085c67ff96ce9773"
+    },
+    {
+      "path": "frontend/src/components/ui/responsive-image.jsx",
+      "size": 2427,
+      "sha256": "e15b3be64dd8d69183a64c052becafaa6b9a27472bf358edc9fced194e09ba5b"
+    },
+    {
+      "path": "frontend/src/components/ui/scroll-area.jsx",
+      "size": 1362,
+      "sha256": "3de4bed34be51a940243b0fbf8c6d9324ecb416a91a919d65ca18d15a7ba32a1"
+    },
+    {
+      "path": "frontend/src/components/ui/select.jsx",
+      "size": 4677,
+      "sha256": "15c7a0e4c45b655ffa8d3f3be8bdaab727a19fd6baa95b34056bf02c7254243e"
+    },
+    {
+      "path": "frontend/src/components/ui/separator.jsx",
+      "size": 600,
+      "sha256": "2c82247abd573d0f4a93eb259166e3b778365b58c0d18921b4739d5ba4b29e7e"
+    },
+    {
+      "path": "frontend/src/components/ui/sheet.jsx",
+      "size": 3549,
+      "sha256": "33f27d1b55925dbc354d0a61b0cbc6f977352da13f4df519f06e5b5bd9ed2d5c"
+    },
+    {
+      "path": "frontend/src/components/ui/sidebar.jsx",
+      "size": 20643,
+      "sha256": "828bec5ac1ec715fe50deebae08a7da23f01e9b0dcb221b110e37de63eb22d3c"
+    },
+    {
+      "path": "frontend/src/components/ui/skeleton.jsx",
+      "size": 227,
+      "sha256": "c5f32316d9f8feeba529bac6321766424067185afee5f29a15bb18145adaf1bc"
+    },
+    {
+      "path": "frontend/src/components/ui/slider.jsx",
+      "size": 914,
+      "sha256": "1761bfaa0a06480b76b31511e4a5c24903b407732e027fc11ad615dd3d93a562"
+    },
+    {
+      "path": "frontend/src/components/ui/sonner.jsx",
+      "size": 799,
+      "sha256": "f1309f953467d583202225d08414161fc3183758ac38c997249eb63686a27ba8"
+    },
+    {
+      "path": "frontend/src/components/ui/switch.jsx",
+      "size": 1025,
+      "sha256": "880e95637cc1d90ef4476f79114afd2fa7b5f6e5da1f49a70e0efc1f84aa0c8a"
+    },
+    {
+      "path": "frontend/src/components/ui/table.jsx",
+      "size": 2231,
+      "sha256": "301509bb8337184f1b299cb15b8d4f8ec8f0d3bbc17a2ffdf33ff58f7eaa444e"
+    },
+    {
+      "path": "frontend/src/components/ui/tabs.jsx",
+      "size": 1529,
+      "sha256": "57591bdfb3fa931b06edcf4168b6881a79785c674ad0618003d12cd656072350"
+    },
+    {
+      "path": "frontend/src/components/ui/textarea.jsx",
+      "size": 587,
+      "sha256": "b64a8fabf495dd59dbfd23914334ffbdfa695f506a133370603a49eca1243f62"
+    },
+    {
+      "path": "frontend/src/components/ui/toast.jsx",
+      "size": 3915,
+      "sha256": "cf9d4869024d879c2e0c4122f74dd0d7cfc834c7377634a14e1bfc47db1d15e0"
+    },
+    {
+      "path": "frontend/src/components/ui/toaster.jsx",
+      "size": 785,
+      "sha256": "fc1bce32d9a45f5be28c67b486962b90eed76742f3c0995f5fb908ffc6bde3cd"
+    },
+    {
+      "path": "frontend/src/components/ui/toggle-group.jsx",
+      "size": 1284,
+      "sha256": "1c7566b9f2aa00f0afdf161527be90588a11386158dca55425ea0d8c0e3883e4"
+    },
+    {
+      "path": "frontend/src/components/ui/toggle.jsx",
+      "size": 1310,
+      "sha256": "e8fe6de52ef73d6fa868229ae7a21e681fb3088975847d6ee65a8387731c1c79"
+    },
+    {
+      "path": "frontend/src/components/ui/tooltip.jsx",
+      "size": 1091,
+      "sha256": "73e47a5dde6c55aca2e32e429ba95d8746ce2cca02cc718613f337b5bc9f5f19"
+    },
+    {
+      "path": "frontend/src/components/ui/use-responsive-image.jsx",
+      "size": 1469,
+      "sha256": "2bf5573b4688bea5f3edf76c68889737c8b8e0163b5fb4c3b4ab5da5715e25b9"
+    },
+    {
+      "path": "frontend/src/components/ui/use-toast.jsx",
+      "size": 3379,
+      "sha256": "40f2839736597a3f7d54e4359a375c5991ce58eb341d8abb944874ac0dce9bbc"
+    },
+    {
+      "path": "frontend/src/hooks/use-mobile.jsx",
+      "size": 545,
+      "sha256": "a136217739e79f9d02440e711b9bd1abb6adf60f1a83b45a39a009a09568ad1c"
+    },
+    {
+      "path": "frontend/src/hooks/use-size.jsx",
+      "size": 900,
+      "sha256": "9d9e943e8dadcc95a2be6c40c20dee85029c87b443ed1fa1c6104d10ae7b9bdc"
+    },
+    {
+      "path": "frontend/src/index.css",
+      "size": 3928,
+      "sha256": "dd4a0835ce042b69886eb6264d4a23a0eda904bfcaea28b0ffaa18271dee20ce"
+    },
+    {
+      "path": "frontend/src/lib/AuthContext.jsx",
+      "size": 4271,
+      "sha256": "52d3a2638cb189fcbc949d2a28d7618ab7ed0ad9d4a754b3833412a645399b28"
+    },
+    {
+      "path": "frontend/src/lib/PageNotFound.jsx",
+      "size": 3930,
+      "sha256": "8536e2091188275762a6729ecd77a77b8c5f1187525ae4189df42c95ca42f196"
+    },
+    {
+      "path": "frontend/src/lib/app-params.js",
+      "size": 121,
+      "sha256": "0332b10b4b521a1e4ffc49ae4171a61ca3486cdf8d3fc6bd6e1b09497245b03f"
+    },
+    {
+      "path": "frontend/src/lib/authReturnTo.js",
+      "size": 1609,
+      "sha256": "16c9c0b4a5f432a6338b1d9bb8eddc662c7a41580b5ae462df6a2db6439e7041"
+    },
+    {
+      "path": "frontend/src/lib/query-client.js",
+      "size": 197,
+      "sha256": "0a080b6d9a1ed9f5f32150d9e3faa928f955d2b8d6206831e2b1658e84612c92"
+    },
+    {
+      "path": "frontend/src/lib/utils.js",
+      "size": 190,
+      "sha256": "4f592359765d69c32c3617700fa111af9a6a9cac8f18cb1987c25503a343c203"
+    },
+    {
+      "path": "frontend/src/main.jsx",
+      "size": 189,
+      "sha256": "caa3bab80b647fbb53fccd2e80d6e190d45a4b06c92bf85e3968d87e8d891cec"
+    },
+    {
+      "path": "frontend/src/pages/AddIntelligence.jsx",
+      "size": 11372,
+      "sha256": "6ed0bb83c688fdf61c90a0fbda565d527a6c2022393ed352244010e26ff869be"
+    },
+    {
+      "path": "frontend/src/pages/Administration.jsx",
+      "size": 4314,
+      "sha256": "f7217931b06c8f518db730aa09080e0116302cf92b1fb870d7d10ff3acbd7bd1"
+    },
+    {
+      "path": "frontend/src/pages/DataSources.jsx",
+      "size": 3331,
+      "sha256": "163769da9ecd4102fafb6db6b76d97598e4fde923e524b643b266c91781b1983"
+    },
+    {
+      "path": "frontend/src/pages/ForgotPassword.jsx",
+      "size": 2434,
+      "sha256": "a5637ed3c56e98a97dd70ff74201a87383d9b9683af43599d39979e0b4a059f3"
+    },
+    {
+      "path": "frontend/src/pages/Home.jsx",
+      "size": 3771,
+      "sha256": "9682f5e8070c6e5a012105f08c86ee2f0ea00cff4bdcd5792bead027e42b4883"
+    },
+    {
+      "path": "frontend/src/pages/Inbox.jsx",
+      "size": 3638,
+      "sha256": "1fa4c1bd9463fba7f6db3535f2442a94844f2d08d972966900c036b416a34634"
+    },
+    {
+      "path": "frontend/src/pages/IntelligenceAssistant.jsx",
+      "size": 3888,
+      "sha256": "2bc90e49d033976ee0d33f23c9bf44e5cb71d51f686aba5ae9c1d1f606d9e006"
+    },
+    {
+      "path": "frontend/src/pages/IntelligenceDetail.jsx",
+      "size": 17043,
+      "sha256": "14d5872d71a788fe92d08258001616064502fd1fc604d0b44a705cd0841226d4"
+    },
+    {
+      "path": "frontend/src/pages/Login.jsx",
+      "size": 4376,
+      "sha256": "67cd78276649914dda282abf7c200d14d67687b51a079be7dd977f9a9e929ffe"
+    },
+    {
+      "path": "frontend/src/pages/OAuthConsent.jsx",
+      "size": 9904,
+      "sha256": "010ab0d83bb6b84c371b7895c99b8ae6fa21b06253c4a705bf3edea4d18d030a"
+    },
+    {
+      "path": "frontend/src/pages/Register.jsx",
+      "size": 7371,
+      "sha256": "6e828bb3056c5729a1ca703cd1afa6032b2a2d477ecdb15df52b47ab56a0971b"
+    },
+    {
+      "path": "frontend/src/pages/ResetPassword.jsx",
+      "size": 3729,
+      "sha256": "e68c455710f69a5bd3028c3c42609eba8dd11155f076462cb3a1e0e18fc4c3f4"
+    },
+    {
+      "path": "frontend/src/pages/SocialListening.jsx",
+      "size": 12393,
+      "sha256": "6e94d4ca2fa8cd913b13436121903fb4e78f288db72835d9020d5590c76879eb"
+    },
+    {
+      "path": "frontend/src/pages/Validation.jsx",
+      "size": 819,
+      "sha256": "b17292920d67b27b26b11b2d57cb68fa7a4ebaebcf539c6be7bdecac507b3c97"
+    },
+    {
+      "path": "frontend/src/pages/Watchlist.jsx",
+      "size": 6896,
+      "sha256": "0a6ac04d4fe21481f730ec01080de328b8fd520d3e4b369a01d9dec59e06810e"
+    },
+    {
+      "path": "frontend/src/pages/WatchlistProfile.jsx",
+      "size": 2489,
+      "sha256": "f4a27c8f8be7c290c7e69bad2162950e4513b3590be3d64fbdbd757fae3ae388"
+    },
+    {
+      "path": "frontend/src/utils/index.ts",
+      "size": 97,
+      "sha256": "1bd31d3e8630b19dcb1d92878a2501d5e29fc935eab48ec5d90e66c410cf7e1a"
+    },
+    {
+      "path": "frontend/tailwind.config.js",
+      "size": 2689,
+      "sha256": "6c342077c8a18ed6ce5742a69d871ebed3d0af6101d133e8b7bfec4a7f02a9b3"
+    },
+    {
+      "path": "frontend/vite.config.js",
+      "size": 298,
+      "sha256": "f2f62a46102fcf610170951960367c9b7cec0b03a70e44ebf694c82e7293e7cb"
+    },
+    {
+      "path": "legacy_base44_contracts/BASE44_README.md",
+      "size": 3238,
+      "sha256": "5c6fe0381c205771a272950c6c2b1742affb307d6d634160e7677448b23ae60d"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/config.jsonc",
+      "size": 209,
+      "sha256": "7d74d7a8d7366437fae4b65bccfc526006e55eb9177e0963fdf8e052c9ac960a"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/AccessGrant.jsonc",
+      "size": 1010,
+      "sha256": "c3d80a246db833b65ae72f57345e0c3f09a4e728e7fb0c36d543825a30b12431"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/AuditEvent.jsonc",
+      "size": 879,
+      "sha256": "9dceb7f5b61f351cd3c51e6a0651d0642bdac54eaea230a41eab239be2808fd8"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/DataSource.jsonc",
+      "size": 771,
+      "sha256": "ab372c24c5da9ca9ad2bc58b8c4d95dc459785206e1d8464659f0c4f946e0424"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/EntityRelationship.jsonc",
+      "size": 684,
+      "sha256": "c28c051d8c1d1d5580b8839bdee7487328c8a28689a5162d4638d5bd09f7a0ff"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/EvidenceFile.jsonc",
+      "size": 1083,
+      "sha256": "84bc9b209897cbd2857f8344441f8014d1b0d5f15a05c5927d36272f23d75cc8"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/ExternalDataConnector.jsonc",
+      "size": 986,
+      "sha256": "fc416dd505ab41b44163586e829b48bf65049f080a210a3d4ab1b5eb9d19c50c"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/IntelligenceItem.jsonc",
+      "size": 12695,
+      "sha256": "51bfe2e5a52a0b5d59ba0d0522cb51f8bf12a1a91624162c7523b13596ab01a1"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/IntelligenceSequence.jsonc",
+      "size": 611,
+      "sha256": "ef08e4760e1498cc3e775492df8268cb2832bafc1da983e091031fe9473ccee1"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/IssueCategory.jsonc",
+      "size": 637,
+      "sha256": "21959e10d9391220a9755e862818541217e1961aa5dcb0266b81c45c7aa7ad74"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/SourceAccount.jsonc",
+      "size": 804,
+      "sha256": "eda5d450ef701bd55151866308cae87d88ed2d1beeb15fd9b6224b303488f9f6"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/TriageGeneration.jsonc",
+      "size": 1718,
+      "sha256": "71545a9022af0736e8af8725f9bf52b4d1aa4942b09f31b6bc36569c3cdc629b"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/User.jsonc",
+      "size": 78,
+      "sha256": "6a2e5ff9a93839122e7e6e3fc9df6840aa4fd60c37f17779a88aaaece5397f30"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/entities/WatchlistItem.jsonc",
+      "size": 1100,
+      "sha256": "d07e27ea2171c7b125300499094f35ad0d472ed9b3254826c0beaf69090ecc64"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/assistIntelligence/entry.ts",
+      "size": 12828,
+      "sha256": "bb24704fca4d646b3bd7a5586b43bb03add32f64c14e4ab13478b8a620ba1acc"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/getMyEffectiveAccess/entry.ts",
+      "size": 993,
+      "sha256": "a226904a23ad3cdba6218c43a7390efd92ed9c4f8abbf4f9f29432e804e97d2d"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/intelligence/entry.ts",
+      "size": 43573,
+      "sha256": "3db045309323130d247d9de0b657ec34dae8d639e417d64ba76147fcc3b6ba2e"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/intelligenceAssistant/answer.ts",
+      "size": 7769,
+      "sha256": "285464194d2470482f3c85c600b9cb52175ad4c76528a75cdd5e768a2d21a935"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/intelligenceAssistant/entry.ts",
+      "size": 5673,
+      "sha256": "79a9c886cc47dff0c08ca403b3911d8add1924a79a88cfc7e7813a644650d161"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/registry/entry.ts",
+      "size": 10049,
+      "sha256": "d00555e5f341ca072553f3f2f09c35887317f7335ca495e6e76bb9c988517633"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/functions/suggestSourceLanguage/entry.ts",
+      "size": 1457,
+      "sha256": "3f6955ed6fe5da6c76aa0639fca2c915d8eed365f7a2b15d7629af0aae0e4778"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/access.ts",
+      "size": 5560,
+      "sha256": "68b8709904ab1ff529b35d8a944a5517dfae178be20799df356b8acb80b6e539"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/aiTriageReview.ts",
+      "size": 1131,
+      "sha256": "dbabaab0b33a89b75f1aa571f551f2a35629c92ce2371e0af6acb2ab7a9f1920"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/duplicates.ts",
+      "size": 1425,
+      "sha256": "0f04a57d39d06a495409dff62f0879f97173a01d2044df63ddb0a974969066d1"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/geographicMismatch.ts",
+      "size": 3564,
+      "sha256": "043c229676ff83055e667e76c2a19217308dcd74cc2d1121c7a21db4b7d378e8"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/geography.ts",
+      "size": 4904,
+      "sha256": "a25cc7bd1f455de0aad2527fa17b07ccd99a5fddfe438aae0476f19028fe52a4"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/intelligenceSource.ts",
+      "size": 2270,
+      "sha256": "c8b72e97fac84bb490d078750dbbfb34314faebab315aa6654b35729f3e3f19c"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/languages.ts",
+      "size": 214,
+      "sha256": "88535a495782198ca60727b7336edfbc0f206e3b43e33037484082e1d102eac5"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/ownedChannel.ts",
+      "size": 3625,
+      "sha256": "d7e0c8727a2c1f88e34a5e22c5408a9d92572903c6520b5bd29fcdda0117754c"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/regions.json",
+      "size": 36974,
+      "sha256": "a0982be5472f81ad503bdac94bf1361b343cf8268e45740c09b5e5a85dba965a"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/resolveIntakeIdentity.ts",
+      "size": 3304,
+      "sha256": "3a768560ece6aaa7c91d05ab4610224c02279dae4f84a531099bb4e0ab343560"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/sequence.ts",
+      "size": 880,
+      "sha256": "a47afaa0214d3890fc1a7c1f9e3509bc37957e01cf114a8cfe11b4f6c48e563a"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/source.ts",
+      "size": 4062,
+      "sha256": "bd51f64424a67582ecabe7940c23ff120cad3b8cb2a0a00796f05ce48aa8a92a"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/sourceGeography.ts",
+      "size": 3300,
+      "sha256": "e47608680c7431bc47ccebbc3aa4dcb415d5432ca4959af3783bc38e4ed82085"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/structuredTriage.ts",
+      "size": 3270,
+      "sha256": "92558890c37eae1dc50026c67a51597094b589a22c44b6d2fcf1d89406320795"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/triageApproval.ts",
+      "size": 3497,
+      "sha256": "a89ff268141be4b42761e3740228c472e9c41a961c9f86846910b9fe161b495c"
+    },
+    {
+      "path": "legacy_base44_contracts/base44/shared/v3TriageContract.ts",
+      "size": 10201,
+      "sha256": "063ab7450261fbb785a0e9494001a12d4ebfe446cbd58259f212729a232881e4"
+    },
+    {
+      "path": "migration_manifests/govintel_v027_bawaslu_reference.json",
+      "size": 837,
+      "sha256": "2a1c77b3cb9b5f5f288101253f3861371e5baf5584386c68c14722312b36dc11"
+    }
+  ]
+}

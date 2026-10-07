@@ -1,0 +1,40 @@
+{
+  "name": "IssueCategory",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean"
+    },
+    "sort_order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

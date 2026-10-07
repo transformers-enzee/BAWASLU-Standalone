@@ -1,0 +1,13 @@
+import { useState } from 'react';
+import { base44 } from '@/api/base44Client';
+import { languageOptions,languageLabel } from './languageOptions';
+import { err } from './Fields';
+export default function LanguagePicker({value,onChange,content}){
+  const [search,setSearch]=useState(''),[open,setOpen]=useState(false),[suggestion,setSuggestion]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const options=languageOptions.filter(([,label])=>label.toLowerCase().includes(search.toLowerCase()));
+  const currentSuggestion=suggestion?.content===content?suggestion.code:null;
+  const commit=code=>{onChange(code);setSearch('');setOpen(false)};
+  const commitOnEnter=()=>options.length===1?commit(options[0][0]):null;
+  async function detect(){setBusy(true);setError('');try{const r=await base44.functions.invoke('suggestSourceLanguage',{content:content.slice(0,6000)});setSuggestion({code:r.data.language_code,content})}catch(e){setError(err(e))}finally{setBusy(false)}}
+  return <div className="space-y-2"><label className="intel-label" htmlFor="language-search">Original language · {value?value==='unknown'?'UNKNOWN':'analyst selection':'NOT SELECTED'}</label><p className="text-sm">Selected: {value?languageLabel(value):'Not selected'}</p><input id="language-search" className="intel-input" role="combobox" aria-expanded={open} aria-controls="language-options" placeholder={value?languageLabel(value):'Search languages to change'} value={open?search:(value?languageLabel(value):'')} onFocus={()=>{setOpen(true);setSearch('')}} onChange={e=>{setSearch(e.target.value);setOpen(true)}} onBlur={()=>{setOpen(false);setSearch('')}} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commitOnEnter()}if(e.key==='Escape')setOpen(false)}}/>{open&&<div id="language-options" role="listbox" className="max-h-40 overflow-auto rounded-lg border border-[#dce3ec] bg-white">{options.map(([code,label])=><button key={code} role="option" aria-selected={code===value} type="button" className="block w-full text-left px-3 py-2 text-sm hover:bg-[#f1f6f8]" onMouseDown={e=>{e.preventDefault();commit(code)}}>{label}</button>)}{!options.length&&<p className="px-3 py-2 text-sm">No matching language</p>}</div>}<div className="flex flex-wrap gap-2 items-center"><button type="button" className="intel-ghost" disabled={busy||content?.trim().length<80} onClick={detect}>{busy?'Detecting...':'Suggest language (optional)'}</button>{currentSuggestion&&<span className="text-xs">AI SUGGESTED: {languageLabel(currentSuggestion)} <button type="button" className="text-[#126d91] font-semibold underline" onClick={()=>onChange(currentSuggestion)}>Use suggestion</button></span>}</div>{error&&<p role="alert" className="text-xs text-red-700">{error}</p>}</div>;
+}

@@ -1,0 +1,50 @@
+{
+  "name": "SourceAccount",
+  "type": "object",
+  "properties": {
+    "watchlist_id": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "handle": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "regency_city": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "watchlist_id",
+    "url"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

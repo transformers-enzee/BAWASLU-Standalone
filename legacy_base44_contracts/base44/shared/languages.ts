@@ -1,0 +1,1 @@
+export const languageNames={id:'Bahasa Indonesia',en:'English',jv:'Javanese',su:'Sundanese',mad:'Madurese',min:'Minangkabau',ban:'Balinese',ace:'Acehnese',bug:'Buginese',ms:'Malay',other:'Other',unknown:'Unknown'};

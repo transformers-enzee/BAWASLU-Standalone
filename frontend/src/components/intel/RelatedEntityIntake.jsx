@@ -1,0 +1,9 @@
+import { Field } from './Fields';
+const relationships=[['PUBLISHER','PUBLISHER'],['MENTIONS','MENTIONS'],['FEATURES','FEATURES'],['OTHER_REQUIRES_REVIEW','OTHER / REQUIRES REVIEW']];
+export default function RelatedEntityIntake({form,setForm,entities}) {
+  const set=(key,value)=>setForm(f=>({...f,[key]:value}));
+  return <div className="space-y-3">
+    <label className="block"><span className="intel-label">Related monitored entity (separate from source ownership)</span><select className="intel-input" value={form.related_entity_id||''} onChange={e=>setForm(f=>({...f,related_entity_id:e.target.value,relationship_type:'',relationship_evidence_basis:''}))}><option value="">No monitored entity selected</option>{entities.map(e=><option value={e.id} key={e.id}>{e.name} · {e.type}</option>)}</select></label>
+    {form.related_entity_id&&<><label className="block"><span className="intel-label">Relationship to source evidence</span><select className="intel-input" required value={form.relationship_type||''} onChange={e=>set('relationship_type',e.target.value)}><option value="">Select relationship</option>{relationships.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><Field label="Evidence basis for this relationship" required value={form.relationship_evidence_basis} onChange={v=>set('relationship_evidence_basis',v)} placeholder="What in the source supports this relationship?"/><p className="text-xs text-[#617789]">PUBLISHER describes the entity relationship supported by the evidence; it does not confirm ownership of a registered account. This is a human-confirmed relationship, not an AI finding.</p></>}
+  </div>;
+}

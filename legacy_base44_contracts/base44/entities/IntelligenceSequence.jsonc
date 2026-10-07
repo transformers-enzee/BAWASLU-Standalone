@@ -1,0 +1,38 @@
+{
+  "name": "IntelligenceSequence",
+  "type": "object",
+  "properties": {
+    "sequence": {
+      "type": "number"
+    },
+    "year": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "sequence",
+    "year"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

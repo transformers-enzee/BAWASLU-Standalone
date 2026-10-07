@@ -1,0 +1,5 @@
+// Interface locale only. Source language and original evidence are independent of this setting.
+export const activeLocale='en';
+export const supportedLocales={en:{enabled:true,label:'English'},id:{enabled:false,label:'Bahasa Indonesia'}};
+export const messages={en:{home:'Intelligence Situation Today',watchlist:'Watchlist',inbox:'Intelligence Inbox',add:'Add Intelligence',sources:'Data Sources',validation:'Validation Queue',administration:'Administration',intelligenceRecord:'Intelligence record',originalSource:'Original Source',supportingEvidence:'Supporting Evidence',humanReview:'Human Review',activityTimeline:'Activity Timeline',potentialDuplicate:'Potential Duplicate',viewComparison:'View Comparison',merge:'Merge',keepSeparate:'Keep Separate',submit:'Submit to Intelligence Inbox',saveAssignment:'Save assignment',categories:'Potential issue categories',search:'Search keywords, ID, entity or location...',select:'Select',addEvidence:'Upload evidence',verified:'VERIFIED',unverified:'UNVERIFIED',observed:'OBSERVED',inferred:'INFERRED'}};
+export function t(key){return messages[activeLocale]?.[key]||key;}

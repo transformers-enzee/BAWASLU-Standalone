@@ -1,0 +1,63 @@
+{
+  "name": "EvidenceFile",
+  "type": "object",
+  "properties": {
+    "intelligence_item_id": {
+      "type": "string"
+    },
+    "file_uri": {
+      "type": "string"
+    },
+    "original_filename": {
+      "type": "string"
+    },
+    "file_type": {
+      "type": "string"
+    },
+    "uploaded_by": {
+      "type": "string"
+    },
+    "uploaded_at": {
+      "type": "string"
+    },
+    "related_entity": {
+      "type": "string"
+    },
+    "related_location": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "evidence_state": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "intelligence_item_id",
+    "file_uri",
+    "original_filename"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    }
+  }
+}

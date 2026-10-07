@@ -1,0 +1,95 @@
+{
+  "name": "TriageGeneration",
+  "type": "object",
+  "properties": {
+    "triage_run_id": {
+      "type": "string"
+    },
+    "intelligence_item_id": {
+      "type": "string"
+    },
+    "initiated_by_id": {
+      "type": "string"
+    },
+    "source_fingerprint": {
+      "type": "string"
+    },
+    "proposal_fingerprint": {
+      "type": "string"
+    },
+    "triage_schema_version": {
+      "type": "number"
+    },
+    "generator": {
+      "type": "string"
+    },
+    "generator_version": {
+      "type": "string"
+    },
+    "service_action": {
+      "type": "string"
+    },
+    "attempt_started_at": {
+      "type": "string"
+    },
+    "attempt_ended_at": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "validation_outcome": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "GENERATED",
+        "REJECTED"
+      ]
+    },
+    "rejected_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "proposal_field_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "triage_run_id",
+    "initiated_by_id",
+    "source_fingerprint",
+    "triage_schema_version",
+    "generator",
+    "generator_version",
+    "service_action",
+    "attempt_started_at",
+    "validation_outcome"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "access_grant_writer"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "audit_writer"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "audit_writer"
+      }
+    }
+  }
+}

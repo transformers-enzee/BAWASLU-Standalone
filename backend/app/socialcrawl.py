@@ -1,9 +1,10 @@
 import hashlib, json, os, uuid
 from datetime import datetime, timezone
+from pathlib import Path
 import httpx
 from sqlalchemy.orm import Session
-from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage
-from .access import has, audit
+from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IssueCategory, WatchlistItem
+from .access import has, audit, allowed
 from .domain import source_identity, create_intelligence
 
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
@@ -130,6 +131,21 @@ def _map_result(db,item):
       'text_content':text,'language':language,'relevance_score':str(relevance),'engagement':engagement,'geography':{},'source_identity':identity,
       'watchlist_matches':[],'content_fingerprint':fp,'raw':item}
 
+def filter_options(db:Session,p):
+    regions=json.loads(Path(__file__).with_name('regions.json').read_text(encoding='utf-8'))
+    categories=db.query(IssueCategory).filter(IssueCategory.active.is_(True)).order_by(IssueCategory.sort_order,IssueCategory.name).all()
+    watchlists=[x for x in db.query(WatchlistItem).filter(WatchlistItem.status=='Active').order_by(WatchlistItem.name).all() if allowed(p,x)]
+    return {
+      'issue_categories':[{'id':str(x.id),'name':x.name} for x in categories],
+      'provinces':regions.get('provinces',[]),
+      'regencies':regions.get('regencies',[]),
+      'watchlists':[{'id':str(x.id),'name':x.name,'type':x.type,'province':x.province,'regency_city':x.regency_city} for x in watchlists],
+      'platforms':DEFAULT_PLATFORMS,
+      'content_types':['post','video','short','reel','comment','reply'],
+      'languages':[{'value':'id','label':'Bahasa Indonesia'},{'value':'en','label':'English'}],
+      'sort_options':[{'value':'relevance','label':'Relevance'},{'value':'newest','label':'Newest'},{'value':'engagement','label':'Engagement'}]
+    }
+
 def capabilities():
     return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/everywhere','auth':'x-api-key',
       'platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS)}
@@ -182,6 +198,7 @@ def serialize_result(x): return {'id':str(x.id),'run_id':str(x.run_id),'provider
 
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='capabilities': return capabilities()
+    if action=='filterOptions': return filter_options(db,p)
     if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client)
     if action=='rules': return {'rules':[serialize_rule(x) for x in db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc()).all()]}
     if action=='saveRule':

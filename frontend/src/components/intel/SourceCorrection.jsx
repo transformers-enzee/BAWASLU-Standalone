@@ -16,17 +16,24 @@ const fieldLabels={
  original_language_code:'original language'
 };
 
+const hydrateSource=x=>({...x,publication_time:x?.publication_time||(x?.publication_datetime?.includes('T')?x.publication_datetime.split('T')[1]?.slice(0,5):'')});
+const flashKey=id=>`bawaslu-source-recovery-${id}`;
+
 export default function SourceCorrection({item,onSaved,onRecordAction,canTriage}){
- const [source,setSource]=useState(item),[status,setStatus]=useState(''),[recovered,setRecovered]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
- useEffect(()=>setSource(item),[item.updated_date]);
+ const initialFlash=(()=>{try{return JSON.parse(sessionStorage.getItem(flashKey(item.id))||'null')}catch{return null}})();
+ const [source,setSource]=useState(()=>hydrateSource(item)),[status,setStatus]=useState(initialFlash?.status||''),[recovered,setRecovered]=useState(initialFlash?.recovered||[]),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>setSource(hydrateSource(item)),[item.updated_date]);
 
  async function retrieve(){
   setBusy(true);setError('');setRecovered([]);
   try{
    const r=await onRecordAction('recoverSource',{automatic:true},item.id);
-   setSource(r.item||item);
-   setRecovered(r.recovered_fields||[]);
-   setStatus((r.recovered_fields||[]).length?'Missing source fields recovered. Review them below.':'Source retrieved, but no missing fields required changes.');
+   const recoveredFields=r.recovered_fields||[];
+   const message=recoveredFields.length?'Missing source fields recovered. Review them below.':'Source retrieved, but no missing fields required changes.';
+   setSource(hydrateSource(r.item||item));
+   setRecovered(recoveredFields);
+   setStatus(message);
+   try{sessionStorage.setItem(flashKey(item.id),JSON.stringify({status:message,recovered:recoveredFields}))}catch{}
    await onSaved();
   }catch(e){
    setStatus('SOURCE RETRIEVAL UNAVAILABLE');
@@ -45,12 +52,15 @@ export default function SourceCorrection({item,onSaved,onRecordAction,canTriage}
     author:source.author,
     publication_date:source.publication_date,
     publication_time_precision:source.publication_time_precision,
-    publication_time:source.publication_datetime?.includes('T')?source.publication_datetime.split('T')[1]?.slice(0,8):'',
+    publication_time:source.publication_time||'',
     original_language_code:source.original_language_code
    },item.id);
-   setSource(r.item||source);
-   setRecovered(r.recovered_fields||[]);
-   setStatus((r.recovered_fields||[]).length?'Missing source fields saved.':'No missing source fields were changed.');
+   const recoveredFields=r.recovered_fields||[];
+   const message=recoveredFields.length?'Missing source fields saved.':'No missing source fields were changed.';
+   setSource(hydrateSource(r.item||source));
+   setRecovered(recoveredFields);
+   setStatus(message);
+   try{sessionStorage.setItem(flashKey(item.id),JSON.stringify({status:message,recovered:recoveredFields}))}catch{}
    await onSaved();
   }catch(e){setError(err(e))}finally{setBusy(false)}
  }

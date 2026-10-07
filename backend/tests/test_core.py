@@ -186,3 +186,25 @@ def test_existing_record_source_recovery_fills_only_missing_fields(monkeypatch):
     r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
     actions=[e['action'] for e in r.json()['events']]
     assert 'SOURCE_RECOVERED' in actions
+
+
+def test_source_recovery_downgrades_exact_precision_without_time():
+    from app.domain import apply_source_recovery
+    item=IntelligenceItem(
+      intelligence_id='INT-TEST-RECOVERY',
+      title='Existing',
+      original_content='Evidence',
+      source_type='MANUAL_LINK',
+      source_url='https://example.com/item',
+      publication_time_precision='UNKNOWN'
+    )
+    changes,recovered=apply_source_recovery(item,{
+      'publication_date':'2026-10-05',
+      'publication_time':'',
+      'publication_time_precision':'EXACT'
+    })
+    assert item.publication_date=='2026-10-05'
+    assert item.publication_time_precision=='TIME_UNKNOWN'
+    assert item.publication_datetime==''
+    assert 'publication_date' in recovered
+    assert 'publication_time_precision' in recovered

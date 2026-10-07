@@ -223,6 +223,10 @@ def apply_source_recovery(item,retrieved):
     incoming_date=clean(retrieved.get('publication_date'),32)
     incoming_precision=clean(retrieved.get('publication_time_precision'),32)
     incoming_time=clean(retrieved.get('publication_time'),32)
+    if incoming_precision=='DATE_ONLY':
+        incoming_precision='TIME_UNKNOWN'
+    if incoming_precision=='EXACT' and not incoming_time:
+        incoming_precision='TIME_UNKNOWN'
 
     if incoming_date and _missing_source_value(item,'publication_date'):
         old=item.publication_date

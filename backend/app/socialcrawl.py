@@ -166,6 +166,24 @@ def capabilities():
     return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/everywhere','auth':'x-api-key',
       'platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS)}
 
+def provider_status():
+    if not SOCIALCRAWL_API_KEY:
+        return {'provider':'SOCIALCRAWL','configured':False,'connected':False,'balance':None,'message':'SOCIALCRAWL_API_KEY is not configured in Render'}
+    headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json'}
+    try:
+        with httpx.Client(timeout=20) as client:
+            res=client.get(SOCIALCRAWL_BASE_URL+'/v1/credits/balance',headers=headers)
+        try: env=res.json()
+        except Exception: env={}
+        if res.status_code>=400 or env.get('success') is False:
+            detail=env.get('error') or env.get('message') or res.text or f'HTTP {res.status_code}'
+            if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
+            return {'provider':'SOCIALCRAWL','configured':True,'connected':False,'balance':None,'message':str(detail)}
+        data=env.get('data') or {}
+        return {'provider':'SOCIALCRAWL','configured':True,'connected':True,'balance':data.get('balance',env.get('credits_remaining')),'request_id':env.get('request_id'),'credits_used':env.get('credits_used',0),'message':'Connected'}
+    except Exception as e:
+        return {'provider':'SOCIALCRAWL','configured':True,'connected':False,'balance':None,'message':str(e)}
+
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_normalize_filters(filters)
@@ -240,6 +258,7 @@ def serialize_result(x): return {'id':str(x.id),'run_id':str(x.run_id),'provider
 
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='capabilities': return capabilities()
+    if action=='providerStatus': return provider_status()
     if action=='filterOptions': return filter_options(db,p)
     if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client)
     if action=='rules': return {'rules':[serialize_rule(x) for x in db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc()).all()]}

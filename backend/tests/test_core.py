@@ -308,10 +308,34 @@ def test_tiktok_oembed_autofills_caption_and_identity():
         def get(self,*args,**kwargs): return Response()
     result={'title':'','original_content':'','source_name':'tiktok.com','platform':'TikTok','author':'','original_language_code':''}
     out=_apply_tiktok_oembed(Client(),'https://www.tiktok.com/@langkahbobbynst/video/7691197405810674964',result)
-    assert out['title'].startswith('Bawaslu mengawasi proses pemilu')
-    assert out['original_content']==out['title']
+    assert out['title']=='Bawaslu mengawasi proses pemilu dan meminta masyarakat melaporkan dugaan pelanggaran'
+    assert out['original_content'].startswith('Bawaslu mengawasi proses pemilu')
     assert out['source_name']=='@langkahbobbynst'
     assert out['author']=='Langkah Bobby'
     assert out['platform']=='TikTok'
     assert out['original_language_code']=='id'
     assert out['oembed_used'] is True
+
+
+def test_tiktok_caption_headline_is_first_clean_sentence_and_language_overrides_shell():
+    from app.source_retrieval import _apply_tiktok_oembed
+    caption='Pada 2026, fasilitas listrik dan internet di seluruh SMA, SMK, dan SLB Negeri di bawah kewenangan Pemprov Sumut telah terpenuhi 100%. Program ini ditujukan untuk mendukung pembelajaran digital, termasuk bagi sekolah di wilayah yang sulit dijangkau. #PendidikanSumut'
+    class Response:
+        status_code=200
+        content=b'{}'
+        def json(self):
+            return {'title':caption,'author_name':'Langkah Bobby'}
+    class Client:
+        def get(self,*args,**kwargs): return Response()
+    result={'title':'TikTok - Make Your Day','original_content':'','source_name':'tiktok.com','platform':'TikTok','author':'','original_language_code':'en'}
+    out=_apply_tiktok_oembed(Client(),'https://www.tiktok.com/@langkahbobbynst/video/7691197405810674964',result)
+    assert out['title']=='Pada 2026, fasilitas listrik dan internet di seluruh SMA, SMK, dan SLB Negeri di bawah kewenangan Pemprov Sumut telah terpenuhi 100%'
+    assert out['original_content']==caption
+    assert out['original_language_code']=='id'
+
+def test_caption_headline_caps_long_caption_without_copying_everything():
+    from app.source_retrieval import _caption_headline
+    caption=' '.join(['kata']*80)
+    headline=_caption_headline(caption,80)
+    assert len(headline)<=81
+    assert headline.endswith('…')

@@ -49,6 +49,20 @@ def _generic_social_title(title,platform=''):
     }
     return value in generic.get(str(platform or '').lower(),())
 
+def _caption_headline(caption,max_len=160):
+    text=re.sub(r'\s+',' ',str(caption or '')).strip()
+    text=re.sub(r'(?:^|\s)#[\w.-]+',' ',text)
+    text=re.sub(r'\s+',' ',text).strip()
+    if not text: return ''
+    sentence=re.split(r'(?<=[.!?])\s+',text,maxsplit=1)[0].strip()
+    candidate=sentence or text
+    if len(candidate)<=max_len:
+        return candidate.rstrip(' .')
+    shortened=candidate[:max_len+1]
+    if ' ' in shortened:
+        shortened=shortened.rsplit(' ',1)[0]
+    return shortened.rstrip(' ,;:.')+'…'
+
 def _apply_tiktok_oembed(client,url,result):
     if _social_platform(url)!='TikTok':
         return result
@@ -59,12 +73,11 @@ def _apply_tiktok_oembed(client,url,result):
         data=res.json() if res.content else {}
         caption=str(data.get('title') or '').strip()
         if caption:
-            if not result.get('title') or _generic_social_title(result.get('title'),'TikTok'):
-                result['title']=caption[:3000]
-            if not result.get('original_content'):
-                result['original_content']=caption[:20000]
-            if not result.get('original_language_code'):
-                result['original_language_code']=_detect_language(caption,'')
+            result['title']=_caption_headline(caption)
+            result['original_content']=caption[:20000]
+            detected=_detect_language(caption,'')
+            if detected:
+                result['original_language_code']=detected
         handle=_social_handle(url)
         if handle:
             result['source_name']=handle

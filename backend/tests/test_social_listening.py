@@ -108,3 +108,38 @@ def test_result_limit_is_enforced_after_filtering():
     assert r['run']['result_count']==1
     assert db.query(SocialListeningResult).count()==1
     db.close()
+
+
+def test_cost_preflight_estimates_social_and_news_and_warns_on_repeat():
+    from app.socialcrawl import estimate_search_cost
+    social=estimate_search_cost({'query':'BAWASLU','platforms':['tiktok'],'limit':2})
+    assert social['estimated_credits']==20
+    assert social['result_limit_affects_cost'] is False
+    mixed=estimate_search_cost({'query':'BAWASLU','platforms':['tiktok','online_news']})
+    assert mixed['estimated_credits']==21
+    news=estimate_search_cost({'query':'BAWASLU','platforms':['online_news']})
+    assert news['estimated_credits']==1
+
+    db=SessionLocal(); p=admin(db)
+    social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['tiktok']}},provider_client=fake_provider)
+    pf=social_listening_action(db,p,'preflight',{'filters':{'query':'BAWASLU','platforms':['tiktok']}})
+    assert pf['estimated_credits']==20
+    assert pf['duplicate_recent'] is not None
+    assert pf['duplicate_recent']['credits_used']==20
+    db.close()
+
+def test_default_social_listening_platforms_exclude_online_news():
+    from app.socialcrawl import _normalize_filters
+    f=_normalize_filters({'query':'BAWASLU'})
+    assert 'online_news' not in f['platforms']
+    assert 'tiktok' in f['platforms']
+
+def test_usage_action_returns_summary_without_result_id():
+    db=SessionLocal(); p=admin(db)
+    social_listening_action(db,p,'search',{'filters':{'query':'election','platforms':['tiktok']}},provider_client=fake_provider)
+    usage=social_listening_action(db,p,'usage',{})
+    assert usage['summary']['last_24h_credits']==20
+    assert usage['summary']['last_24h_calls']==1
+    assert usage['usage'][0]['credits_used']==20
+    assert usage['usage'][0]['user_name']=='Admin'
+    db.close()

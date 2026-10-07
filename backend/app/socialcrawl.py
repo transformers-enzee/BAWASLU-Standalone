@@ -1,16 +1,20 @@
 import hashlib, json, os, uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import httpx
 from sqlalchemy.orm import Session
-from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IssueCategory, WatchlistItem
+from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IssueCategory, WatchlistItem, User
 from .access import has, audit, allowed
 from .domain import source_identity, create_intelligence
 
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
-DEFAULT_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news']
-SUPPORTED_EVERYWHERE_SOURCES=set([x for x in DEFAULT_PLATFORMS if x!='online_news'] + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
+SOCIAL_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin']
+AVAILABLE_PLATFORMS=SOCIAL_PLATFORMS+['online_news']
+DEFAULT_PLATFORMS=list(SOCIAL_PLATFORMS)
+SUPPORTED_EVERYWHERE_SOURCES=set(SOCIAL_PLATFORMS + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
+SEARCH_EVERYWHERE_ESTIMATED_CREDITS=20
+GOOGLE_NEWS_ESTIMATED_CREDITS=1
 
 ALLOWED_FILTERS={
  'query','exact_phrase','include_terms','exclude_terms','hashtags','accounts','watchlist_ids','issue_category','topics','locations',
@@ -27,6 +31,57 @@ def _normalize_filters(filters):
     if 'limit' not in f: f['limit']=50
     f['limit']=max(1,min(int(f['limit']),200))
     return f
+
+def estimate_search_cost(filters):
+    f=_normalize_filters(filters)
+    selected=f.get('platforms') or DEFAULT_PLATFORMS
+    social_sources=[x for x in selected if x!='online_news']
+    wants_news='online_news' in selected
+    components=[]
+    total=0
+    if social_sources:
+        total+=SEARCH_EVERYWHERE_ESTIMATED_CREDITS
+        components.append({'endpoint':'/v1/search/everywhere','credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,'label':'Universal social search'})
+    if wants_news:
+        total+=GOOGLE_NEWS_ESTIMATED_CREDITS
+        components.append({'endpoint':'/v1/google_news/search','credits':GOOGLE_NEWS_ESTIMATED_CREDITS,'label':'Online News'})
+    return {'estimated_credits':total,'components':components,'result_limit':f.get('limit',50),'result_limit_affects_cost':False,'filters':f}
+
+def _filter_fingerprint(filters):
+    return hashlib.sha256(json.dumps(_normalize_filters(filters),sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+
+def search_preflight(db:Session,p,filters):
+    if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+    estimate=estimate_search_cost(filters)
+    fingerprint=_filter_fingerprint(estimate['filters'])
+    cutoff=datetime.utcnow()-timedelta(minutes=10)
+    recent=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff).order_by(SocialListeningRun.executed_at.desc()).limit(50).all()
+    duplicate=None
+    for run in recent:
+        try:
+            if _filter_fingerprint(json.loads(run.query_json or '{}'))==fingerprint:
+                age=max(0,int((datetime.utcnow()-run.executed_at).total_seconds()))
+                duplicate={'run_id':str(run.id),'executed_at':run.executed_at.isoformat(),'seconds_ago':age,'credits_used':run.credits_used,'result_count':run.result_count,'cached':run.cached,'executed_by':run.executed_by}
+                break
+        except Exception:
+            continue
+    return {**estimate,'duplicate_recent':duplicate,'confirmation_required':estimate['estimated_credits']>0}
+
+def usage_summary(db:Session,p):
+    if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+    rows=db.query(SocialListeningProviderUsage).order_by(SocialListeningProviderUsage.created_at.desc()).limit(100).all()
+    cutoff=datetime.utcnow()-timedelta(hours=24)
+    recent=[x for x in rows if x.created_at>=cutoff]
+    user_ids={str(x.user_id) for x in rows if x.user_id}
+    names={}
+    for uid in user_ids:
+        try:
+            user=db.get(User,int(uid))
+            if user: names[uid]=user.full_name or user.email
+        except Exception:
+            pass
+    items=[{'id':str(x.id),'provider':x.provider,'endpoint':x.endpoint,'request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'user_id':x.user_id,'user_name':names.get(str(x.user_id),str(x.user_id or 'Unknown user')),'created_at':x.created_at.isoformat()} for x in rows]
+    return {'usage':items,'summary':{'last_24h_credits':sum(x.credits_used for x in recent),'last_24h_calls':len(recent),'listed_credits':sum(x.credits_used for x in rows),'listed_calls':len(rows)}}
 
 def _provider_source_name(name):
     n=str(name or '').strip().lower()
@@ -167,7 +222,7 @@ def filter_options(db:Session,p):
       'provinces':regions.get('provinces',[]),
       'regencies':regions.get('regencies',[]),
       'watchlists':[{'id':str(x.id),'name':x.name,'type':x.type,'province':x.province,'regency_city':x.regency_city} for x in watchlists],
-      'platforms':DEFAULT_PLATFORMS,
+      'platforms':AVAILABLE_PLATFORMS,
       'content_types':['post','video','short','reel','comment','reply'],
       'languages':[{'value':'id','label':'Bahasa Indonesia'},{'value':'en','label':'English'}],
       'sort_options':[{'value':'relevance','label':'Relevance'},{'value':'newest','label':'Newest'},{'value':'engagement','label':'Engagement'}]
@@ -175,7 +230,7 @@ def filter_options(db:Session,p):
 
 def capabilities():
     return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/everywhere','auth':'x-api-key',
-      'platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS)}
+      'platforms':AVAILABLE_PLATFORMS,'default_platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS),'credit_estimates':{'search_everywhere':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,'google_news':GOOGLE_NEWS_ESTIMATED_CREDITS}}
 
 def provider_status():
     if not SOCIALCRAWL_API_KEY:
@@ -195,20 +250,23 @@ def provider_status():
     except Exception as e:
         return {'provider':'SOCIALCRAWL','configured':True,'connected':False,'balance':None,'message':str(e)}
 
-def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
+def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_normalize_filters(filters)
+    estimate=estimate_search_cost(f)
+    if provider_client is None and estimate['estimated_credits']>0 and not confirmed_cost:
+        raise ValueError(f"COST_CONFIRMATION_REQUIRED: estimated maximum {estimate['estimated_credits']} SocialCrawl credits")
     run=SocialListeningRun(rule_id=rule_id,query_json=_json(f),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
-    endpoint='/v1/search/everywhere'
+    selected=f.get('platforms') or DEFAULT_PLATFORMS
+    wants_news='online_news' in selected
+    social_sources=[x for x in selected if x!='online_news']
+    endpoint='/v1/search/everywhere + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/everywhere'
     try:
         if provider_client:
             envelope=provider_client(f)
         else:
             if not SOCIALCRAWL_API_KEY: raise ValueError('SOCIALCRAWL_API_KEY is not configured in Render')
             headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json'}
-            selected=f.get('platforms') or DEFAULT_PLATFORMS
-            wants_news='online_news' in selected
-            social_sources=[x for x in selected if x!='online_news']
             envelopes=[]
             def call_provider(path,params):
                 with httpx.Client(timeout=75) as client:
@@ -272,7 +330,8 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='capabilities': return capabilities()
     if action=='providerStatus': return provider_status()
     if action=='filterOptions': return filter_options(db,p)
-    if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client)
+    if action=='preflight': return search_preflight(db,p,data.get('filters') or data)
+    if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
     if action=='rules': return {'rules':[serialize_rule(x) for x in db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc()).all()]}
     if action=='saveRule':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
@@ -283,12 +342,14 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='runRule':
         rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')
-        return execute_search(db,p,json.loads(rule.filters_json or '{}'),rule_id=rule.id,provider_client=provider_client)
+        return execute_search(db,p,json.loads(rule.filters_json or '{}'),rule_id=rule.id,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
     if action=='queue':
         rows=db.query(SocialListeningResult).order_by(SocialListeningResult.collected_at.desc()).limit(500).all()
         state=data.get('state')
         if state: rows=[x for x in rows if x.review_state==state]
         return {'results':[serialize_result(x) for x in rows]}
+    if action=='usage':
+        return usage_summary(db,p)
     row=db.get(SocialListeningResult,int(id)) if str(id or '').isdigit() else None
     if not row: raise ValueError('Social listening result not found')
     if action=='review':
@@ -300,7 +361,4 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         if row.promoted_intelligence_id: return {'intelligence_id':str(row.promoted_intelligence_id),'already_promoted':True}
         item=create_intelligence(db,p,{'title':(row.text_content[:160] or 'Social listening result'),'original_content':row.text_content,'source_type':'SOCIAL_LISTENING','ingestion_method':'SOCIALCRAWL','observed_publisher_handle':row.observed_handle,'provider_source_metadata':{'provider':'SOCIALCRAWL','run_id':row.run_id,'provider_result_id':row.provider_result_id},'source_identity':json.loads(row.source_identity_json or '{}'),'source_url':row.canonical_url,'source_name':row.author_name,'platform':row.platform,'author':row.author_name,'publication_datetime':row.published_at,'collection_datetime':_now(),'evidence_state':'UNVERIFIED','review_status':'Pending Review'})
         row.promoted_intelligence_id=item.id; row.review_state='PROMOTED'; db.commit(); audit(db,p,'SocialListeningResult',row.id,'SOCIAL_LISTENING_RESULT_PROMOTED',{'intelligence_id':{'new':item.intelligence_id}}); return {'intelligence_id':str(item.id),'intelligence_code':item.intelligence_id}
-    if action=='usage':
-        rows=db.query(SocialListeningProviderUsage).order_by(SocialListeningProviderUsage.created_at.desc()).limit(100).all()
-        return {'usage':[{'id':str(x.id),'provider':x.provider,'endpoint':x.endpoint,'request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'user_id':x.user_id,'created_at':x.created_at.isoformat()} for x in rows]}
     raise ValueError('Unknown social listening action')

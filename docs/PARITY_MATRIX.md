@@ -33,6 +33,6 @@
 | Social listening search | New requirement | Implemented foundation | SocialCrawl Universal Search adapter |
 | Social listening filters | New requirement | Implemented | Provider-native + stable BAWASLU filter contract |
 | Saved monitoring searches | New requirement | Implemented | Manual run in v0.1; scheduler later |
-| Provider usage / credits | New requirement | Implemented | Request/credit/cache audit |
+| Provider usage / credits | New requirement | Implemented | Request/credit/cache audit, pre-search cost estimate/confirmation, repeat-search warning and recent usage summary |
 | Social result review queue | New requirement | Implemented foundation | Human review states |
 | Promote social result to Intelligence | New requirement | Implemented | Creates UNVERIFIED/Pending Review record |

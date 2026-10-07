@@ -73,3 +73,21 @@ def test_normalized_nested_socialcrawl_fields_are_preserved():
     assert x['engagement']['engagement_rate']==0.073
     assert x['content_type']=='video'
     db.close()
+
+
+def source_items_provider(filters):
+    return {'success':True,'request_id':'req-source-items','credits_used':5,'credits_remaining':970,'cached':False,'data':{'items':[
+      {'platform':'tiktok-hashtag','id':'ranked-1','url':'https://www.tiktok.com/@politik.seputar/video/99','text':'BAWASLU source item test','computed':{'relevance':{'p':0.81}},'source_items':[{'author':'@politik.seputar','published_at':'2026-10-07T05:30:00Z','metadata':{'language':'id'},'engagement':{'views':9000,'likes':850,'comments':65,'shares':33,'engagement_rate':0.105}}]}
+    ]}}
+
+def test_source_items_metadata_fallbacks_are_preserved():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['tiktok']}},provider_client=source_items_provider)
+    x=r['results'][0]
+    assert x['observed_handle']=='@politik.seputar'
+    assert x['published_at']=='2026-10-07T05:30:00Z'
+    assert x['language']=='id'
+    assert x['relevance_score']=='0.81'
+    assert x['engagement']['views']==9000
+    assert x['engagement']['engagement_rate']==0.105
+    db.close()

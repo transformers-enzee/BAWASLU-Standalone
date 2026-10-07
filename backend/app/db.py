@@ -4,6 +4,11 @@ from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./bawaslu.db')
+# Render's managed Postgres connection string is usually postgresql://...
+# This project installs psycopg v3, so normalize the scheme explicitly.
+if DATABASE_URL.startswith('postgresql://'):
+    DATABASE_URL = 'postgresql+psycopg://' + DATABASE_URL[len('postgresql://'):]
+
 connect_args = {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
 engine_kwargs = {'future': True, 'connect_args': connect_args}
 if DATABASE_URL in ('sqlite:///:memory:', 'sqlite://'):

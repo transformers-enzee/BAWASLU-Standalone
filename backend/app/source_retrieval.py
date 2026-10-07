@@ -38,8 +38,12 @@ class _ArticleParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title=[]
         self.paragraphs=[]
+        self.headings=[]
+        self.visible_text=[]
+        self.time_values=[]
         self._in_title=False
         self._in_p=False
+        self._heading_index=None
         self._skip=0
         self._jsonld_depth=0
         self._jsonld_buffer=[]
@@ -60,11 +64,16 @@ class _ArticleParser(HTMLParser):
             self._skip+=1
         if t=='title':
             self._in_title=True
+        if t in ('h1','h2'):
+            self.headings.append([])
+            self._heading_index=len(self.headings)-1
         if t=='p':
             self._in_p=True
             self.paragraphs.append([])
+        if t=='time' and a.get('datetime'):
+            self.time_values.append(a.get('datetime','').strip())
         if t=='meta':
-            key=(a.get('property') or a.get('name') or '').lower()
+            key=(a.get('property') or a.get('name') or a.get('itemprop') or '').lower()
             val=a.get('content','').strip()
             if key and val and key not in self.meta:
                 self.meta[key]=val
@@ -84,6 +93,8 @@ class _ArticleParser(HTMLParser):
             return
         if t=='title':
             self._in_title=False
+        if t in ('h1','h2'):
+            self._heading_index=None
         if t=='p':
             self._in_p=False
         if t in ('script','style','noscript','svg') and self._skip:
@@ -97,8 +108,11 @@ class _ArticleParser(HTMLParser):
         txt=' '.join(data.split())
         if not txt:
             return
+        self.visible_text.append(txt)
         if self._in_title:
             self.title.append(txt)
+        if self._heading_index is not None and self._heading_index < len(self.headings):
+            self.headings[self._heading_index].append(txt)
         if self._in_p and self.paragraphs:
             self.paragraphs[-1].append(txt)
 
@@ -160,6 +174,48 @@ def _detect_language(content,declared=''):
         return d
     return ''
 
+MONTHS_ID={
+ 'januari':1,'februari':2,'maret':3,'april':4,'mei':5,'juni':6,'juli':7,'agustus':8,'september':9,'oktober':10,'november':11,'desember':12,
+ 'jan':1,'feb':2,'mar':3,'apr':4,'jun':6,'jul':7,'agu':8,'agt':8,'sep':9,'sept':9,'okt':10,'nov':11,'des':12
+}
+GENERIC_TITLE_PREFIXES=('post -','post:','article -','article:','berita -','berita:','news -','news:')
+
+def _heading_title(parser, existing=''):
+    choices=[]
+    for parts in parser.headings:
+        value=' '.join(parts).strip()
+        if 4 <= len(value) <= 300 and value.lower() not in ('pencarian','tinggalkan komentar','komentar'):
+            choices.append(value)
+    if not choices:
+        return ''
+    current=str(existing or '').strip().lower()
+    if not current or current.startswith(GENERIC_TITLE_PREFIXES):
+        return choices[0]
+    return ''
+
+def _visible_publication_date(parser):
+    for value in parser.time_values:
+        if value:
+            return value
+    text=' | '.join(parser.visible_text[:160])
+    m=re.search(r'\b([0-3]?\d)\s+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|Jan|Feb|Mar|Apr|Jun|Jul|Agu|Agt|Sep|Sept|Okt|Nov|Des)\s+(20\d{2}|19\d{2})\b',text,re.I)
+    if m:
+        day=int(m.group(1)); month=MONTHS_ID.get(m.group(2).lower()); year=int(m.group(3))
+        if month:
+            try:
+                from datetime import date
+                return date(year,month,day).isoformat()
+            except ValueError:
+                pass
+    m=re.search(r'\b([0-3]?\d)[/-]([01]?\d)[/-](20\d{2}|19\d{2})\b',text)
+    if m:
+        try:
+            from datetime import date
+            return date(int(m.group(3)),int(m.group(2)),int(m.group(1))).isoformat()
+        except ValueError:
+            pass
+    return ''
+
 def _published_parts(published):
     pub_date=''
     pub_time=''
@@ -190,6 +246,9 @@ def _extract_html(html,url):
 
     jsonld_title=str(article.get('headline') or article.get('name') or '').strip()
     title=(jsonld_title or meta.get('og:title') or meta.get('twitter:title') or ' '.join(parser.title)).strip()
+    heading_title=_heading_title(parser,title)
+    if heading_title:
+        title=heading_title
 
     jsonld_source=_publisher_name(article.get('publisher'))
     source=(jsonld_source or meta.get('og:site_name') or urlparse(url).hostname or '').removeprefix('www.')
@@ -197,8 +256,10 @@ def _extract_html(html,url):
     jsonld_author=_author_name(article.get('author'))
     author=(jsonld_author or meta.get('author') or meta.get('article:author') or '').strip()
 
-    published=(article.get('datePublished') or article.get('dateCreated') or meta.get('article:published_time') or meta.get('date') or meta.get('datepublished') or meta.get('publish_date') or '')
+    published=(article.get('datePublished') or article.get('dateCreated') or meta.get('article:published_time') or meta.get('date') or meta.get('datepublished') or meta.get('publish_date') or meta.get('datepublished') or '')
     published=str(published or '').strip()
+    if not published:
+        published=_visible_publication_date(parser)
 
     paragraphs=[' '.join(x).strip() for x in parser.paragraphs]
     paragraphs=[x for x in paragraphs if len(x)>=25]

@@ -84,3 +84,12 @@ def test_article_text_can_override_incorrect_html_language():
     html='''<html lang="en"><head><title>Berita</title></head><body><p>Informasi ini adalah laporan pemilu yang disampaikan oleh Bawaslu dan telah diberikan kepada masyarakat untuk pengawasan.</p><p>Dalam laporan tersebut juga dijelaskan bahwa proses ini dilakukan dengan ketentuan yang berlaku.</p></body></html>'''
     r=_extract_html(html,'https://example.com/berita')
     assert r['original_language_code']=='id'
+
+
+def test_visible_heading_and_indonesian_date_fallbacks():
+    from app.source_retrieval import _extract_html
+    html='''<html lang="id"><head><title>Post - Muhammad Bobby Afif Nasution</title><meta property="og:title" content="Post - Muhammad Bobby Afif Nasution"></head><body><div>Pencarian</div><h2>Muhammad Bobby Afif Nasution</h2><a>Admin</a><span>03 Maret 2026</span><span>0 Komentar</span><p>Membangun Sumatera Utara Melalui Kolaborasi dan Inovasi merupakan bagian dari profil ini.</p><p>Muhammad Bobby Afif Nasution lahir di Medan pada 5 Juli 1991 sebagai putra bungsu dari keluarga yang menjunjung nilai pendidikan.</p></body></html>'''
+    r=_extract_html(html,'https://alumniipbpedia.id/post/muhammad-bobby-afif-nasution')
+    assert r['title']=='Muhammad Bobby Afif Nasution'
+    assert r['publication_date']=='2026-03-03'
+    assert r['publication_time_precision']=='DATE_ONLY'

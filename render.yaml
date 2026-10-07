@@ -20,7 +20,7 @@ services:
       - key: SOCIALCRAWL_API_KEY
         sync: false
       - key: SOCIALCRAWL_BASE_URL
-        value: https://api.socialcrawl.dev
+        value: https://www.socialcrawl.dev
       - key: CORS_ORIGINS
         sync: false
       - key: UPLOAD_DIR

@@ -129,3 +129,13 @@ def test_unrelated_items_are_not_marked_duplicate():
     client.post('/api/functions/intelligence',json=a,headers=h)
     r=client.post('/api/functions/intelligence',json=b,headers=h); assert r.status_code==200
     assert not r.json()['item']['duplicate_of']
+
+
+def test_no_geographic_mismatch_contract_is_safe_for_frontend():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'No mismatch','original_content':'Evidence','jurisdiction_type':'National','confirm_jurisdiction':True}},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    assert r.status_code==200
+    mismatch=r.json()['item']['geographic_mismatch']
+    assert mismatch=={'status':'none'}

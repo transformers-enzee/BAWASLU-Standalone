@@ -7,6 +7,7 @@ from .models import *
 from .serializers import *
 from .access import has, allowed, audit
 from .source_retrieval import fetch_public_source
+from .geography import normalize_jurisdiction
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def jdump(v): return json.dumps(v,ensure_ascii=False)
@@ -163,6 +164,7 @@ def create_intelligence(db,p,data):
     if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
+    geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))
     item=IntelligenceItem(
       intelligence_id=next_intelligence_id(db), title=clean(data.get('title'),3000), original_content=clean(data.get('original_content') or data.get('description'),20000),
       original_language=clean(data.get('original_language'),100), original_language_code=clean(data.get('original_language_code'),20), english_translation=clean(data.get('english_translation'),20000),
@@ -171,11 +173,11 @@ def create_intelligence(db,p,data):
       entity_relationships_json=jdump(data.get('entity_relationships') or []), source_id=clean(data.get('source_id'),255), source_url=clean(data.get('source_url'),2000), source_name=clean(data.get('source_name'),255),
       platform=clean(data.get('platform'),100), author=clean(data.get('author') or observed,255), publication_datetime=clean(data.get('publication_datetime'),64), publication_date=clean(data.get('publication_date'),32),
       publication_time_precision=clean(data.get('publication_time_precision') or 'UNKNOWN',32), collection_datetime=clean(data.get('collection_datetime') or now(),64), owned_channel_json=jdump(data.get('owned_channel') or {}),
-      related_entities_json=jdump((data.get('related_entities') or [])[:20]), related_topics_json=jdump((data.get('related_topics') or [])[:20]), jurisdiction_type=clean(data.get('jurisdiction_type') or 'Unresolved',32),
+      related_entities_json=jdump((data.get('related_entities') or [])[:20]), related_topics_json=jdump((data.get('related_topics') or [])[:20]), jurisdiction_type=geo['jurisdiction_type'],
       jurisdiction_confirmed=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')), jurisdiction_confirmed_by=p['name'] if data.get('confirm_jurisdiction') else clean(data.get('jurisdiction_confirmed_by'),255),
       jurisdiction_confirmed_at=now() if data.get('confirm_jurisdiction') else clean(data.get('jurisdiction_confirmed_at'),64), jurisdiction_source=clean(data.get('jurisdiction_source') or ('HUMAN_INTAKE' if data.get('confirm_jurisdiction') else ''),128),
-      province=clean(data.get('province'),128), regency_city=clean(data.get('regency_city'),128), province_code=clean(data.get('province_code'),32), regency_city_code=clean(data.get('regency_city_code'),32),
-      geographic_assignments_json=jdump(data.get('geographic_assignments') or []), location_text=clean(data.get('location_text'),3000), potential_issue_category=clean(data.get('potential_issue_category'),255), analyst_notes=clean(data.get('analyst_notes'),5000),
+      province=geo['province'], regency_city=geo['regency_city'], province_code=geo['province_code'], regency_city_code=geo['regency_city_code'],
+      geographic_assignments_json=jdump(geo['geographic_assignments']), location_text=clean(data.get('location_text'),3000), potential_issue_category=clean(data.get('potential_issue_category'),255), analyst_notes=clean(data.get('analyst_notes'),5000),
       evidence_state=clean(data.get('evidence_state') or 'UNVERIFIED',32), evidence_type=clean(data.get('evidence_type') or 'OBSERVED',32), verification_status=clean(data.get('verification_status') or 'UNVERIFIED',32),
       review_status=clean(data.get('review_status') or 'Pending Review',128), priority=clean(data.get('priority') or 'Medium',64), duplicate_of=str(dupe.id) if dupe else '',
       ai_suggestions_json='{}', proposed_geography_json=jdump(data.get('proposed_geography') or {}), ai_geography_json=jdump(data.get('ai_review',{}).get('geography') or data.get('ai_geography') or {})
@@ -294,7 +296,10 @@ def intelligence_action(db,p,action,data,id=None):
         return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
     if action=='confirmJurisdiction':
         if not has(p,'human_validation') and not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
-        item.jurisdiction_type=clean(data.get('jurisdiction_type') or item.jurisdiction_type,32); item.province=clean(data.get('province') or item.province,128); item.regency_city=clean(data.get('regency_city') or item.regency_city,128); item.province_code=clean(data.get('province_code') or item.province_code,32); item.regency_city_code=clean(data.get('regency_city_code') or item.regency_city_code,32); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'province':{'new':item.province},'regency_city':{'new':item.regency_city}}); return {'ok':True}
+        geo=normalize_jurisdiction(data,require_valid=True)
+        if geo['jurisdiction_type']=='Unresolved': raise ValueError('Unresolved jurisdiction cannot be confirmed')
+        before={'type':item.jurisdiction_type,'province':item.province,'regency_city':item.regency_city,'geographic_assignments':loads(item.geographic_assignments_json,[])}
+        item.jurisdiction_type=geo['jurisdiction_type']; item.province=geo['province']; item.regency_city=geo['regency_city']; item.province_code=geo['province_code']; item.regency_city_code=geo['regency_city_code']; item.geographic_assignments_json=jdump(geo['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'previous':before,'new':geo}); return {'ok':True}
     if action=='reviewGeographicMismatch':
         if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
         decision=clean(data.get('decision'),80); reason=clean(data.get('reason'),1000)

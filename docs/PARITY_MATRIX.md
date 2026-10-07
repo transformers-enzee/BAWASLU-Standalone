@@ -6,7 +6,7 @@
 | `INT-YYYY-######` sequence | Yes | Implemented | Database-backed sequence |
 | Jurisdiction confirmation | Yes | Implemented | Human-governed |
 | Province / Regency-City ACL | Yes | Implemented | Enforced server-side |
-| Multi-region data fields | Yes | Preserved in schema/import | Expanded enforcement is a v0.2 gate |
+| Multi-region data fields | Yes | Implemented | Normalized assignments, server-side Province/Regency ACL enforcement and human confirmation |
 | Geographic mismatch review | Yes | Implemented foundation | Human keep/change decisions |
 | Source identity states | Yes | Implemented | Registered/known/unresolved |
 | Observed publisher provenance | Yes | Implemented | Kept distinct from registered identity |

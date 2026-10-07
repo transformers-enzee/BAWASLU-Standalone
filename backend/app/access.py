@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from .models import AccessGrant, User, AuditEvent
+from .geography import profile_region_codes, assignment_matches_profile, normalize_assignment
 
 PERMISSION_LABELS={
  'view_intelligence':'View Intelligence','add_intelligence':'Add Intelligence','edit_intelligence':'Edit Intelligence',
@@ -30,9 +31,12 @@ def profile(db:Session,user:User):
     role=grant.access_role if grant else 'Viewer'
     perms=json.loads(grant.permissions_json or '{}') if grant else {}
     if not perms: perms=default_permissions(role)
+    province=grant.province if grant else ''
+    regency_city=grant.regency_city if grant else ''
+    province_code,regency_city_code=profile_region_codes(province,regency_city)
     return {
       'id':str(user.id),'name':user.full_name or user.email,'email':user.email,'role':role,
-      'province':grant.province if grant else '','regency_city':grant.regency_city if grant else '',
+      'province':province,'regency_city':regency_city,'province_code':province_code,'regency_city_code':regency_city_code,
       'geographic_scope':grant.geographic_scope if grant else 'Province','status':grant.status if grant else 'Inactive',
       'permissions':perms
     }
@@ -43,11 +47,21 @@ def allowed(p,record):
     if p.get('status')!='Active': return False
     scope=p.get('geographic_scope')
     if scope=='Nationwide': return True
-    rec_province=getattr(record,'province','') or ''
-    rec_city=getattr(record,'regency_city','') or ''
-    if not p.get('province') or p.get('province')!=rec_province: return False
-    if scope=='Regency/City': return bool(p.get('regency_city')) and p.get('regency_city')==rec_city
-    return True
+
+    if getattr(record,'jurisdiction_type','')=='Multi-Region':
+        try:
+            assignments=json.loads(getattr(record,'geographic_assignments_json','[]') or '[]')
+        except Exception:
+            assignments=[]
+        return any(assignment_matches_profile(area,p) for area in assignments)
+
+    area=normalize_assignment({
+      'province':getattr(record,'province','') or '',
+      'province_code':getattr(record,'province_code','') or '',
+      'regency_city':getattr(record,'regency_city','') or '',
+      'regency_city_code':getattr(record,'regency_city_code','') or '',
+    })
+    return assignment_matches_profile(area,p)
 
 def audit(db,p,subject_type,subject_id,action,changes=None):
     from datetime import datetime, timezone

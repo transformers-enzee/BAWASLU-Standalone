@@ -208,3 +208,66 @@ def test_source_recovery_downgrades_exact_precision_without_time():
     assert item.publication_datetime==''
     assert 'publication_date' in recovered
     assert 'publication_time_precision' in recovered
+
+
+def test_profile_derives_region_codes_from_indonesian_names():
+    db=SessionLocal()
+    u=User(email='codes@test.local',full_name='Codes',password_hash=hash_password('secret')); db.add(u); db.flush()
+    db.add(AccessGrant(user_id=u.id,access_role='Provincial Analyst',geographic_scope='Province',province='Jawa Barat',permissions_json=json.dumps(default_permissions('Provincial Analyst')),status='Active')); db.commit()
+    p=profile(db,u)
+    assert p['province_code']=='32'
+    db.close()
+
+def test_multi_region_acl_enforces_assignments_for_regional_users():
+    db=SessionLocal()
+    multi=IntelligenceItem(
+      intelligence_id='INT-2026-MULTI01',title='Multi region',
+      jurisdiction_type='Multi-Region',jurisdiction_confirmed=True,
+      geographic_assignments_json=json.dumps([
+        {'province_code':'32','province':'West Java','regency_city_code':'32.73','regency_city':'Kota Bandung'},
+        {'province_code':'31','province':'DKI Jakarta','regency_city_code':'','regency_city':''}
+      ])
+    )
+    db.add(multi)
+    p_user=User(email='westjava@test.local',full_name='West Java',password_hash=hash_password('secret')); db.add(p_user); db.flush()
+    db.add(AccessGrant(user_id=p_user.id,access_role='Provincial Analyst',geographic_scope='Province',province='Jawa Barat',permissions_json=json.dumps(default_permissions('Provincial Analyst')),status='Active'))
+    c_user=User(email='bandung@test.local',full_name='Bandung',password_hash=hash_password('secret')); db.add(c_user); db.flush()
+    db.add(AccessGrant(user_id=c_user.id,access_role='Regency/City Analyst',geographic_scope='Regency/City',province='Jawa Barat',regency_city='Kota Bandung',permissions_json=json.dumps(default_permissions('Regency/City Analyst')),status='Active'))
+    other=User(email='bogor@test.local',full_name='Bogor',password_hash=hash_password('secret')); db.add(other); db.flush()
+    db.add(AccessGrant(user_id=other.id,access_role='Regency/City Analyst',geographic_scope='Regency/City',province='Jawa Barat',regency_city='Kota Bogor',permissions_json=json.dumps(default_permissions('Regency/City Analyst')),status='Active'))
+    db.commit()
+    assert allowed(profile(db,p_user),multi) is True
+    assert allowed(profile(db,c_user),multi) is True
+    assert allowed(profile(db,other),multi) is False
+    db.close()
+
+def test_multi_region_create_normalizes_names_and_requires_two_distinct_areas():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Cross-region monitoring',
+      'original_content':'Evidence across two regions.',
+      'jurisdiction_type':'Multi-Region',
+      'geographic_assignments':[
+        {'province_code':'32','regency_city_code':'32.73'},
+        {'province_code':'31','regency_city_code':''}
+      ],
+      'confirm_jurisdiction':True
+    }},headers=h)
+    assert r.status_code==200, r.text
+    item=r.json()['item']
+    assert item['jurisdiction_type']=='Multi-Region'
+    assert len(item['geographic_assignments'])==2
+    assert item['geographic_assignments'][0]['province']
+    assert item['geographic_assignments'][0]['regency_city']=='Kota Bandung'
+
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Invalid multi',
+      'original_content':'Only one unique area.',
+      'jurisdiction_type':'Multi-Region',
+      'geographic_assignments':[
+        {'province_code':'32','regency_city_code':'32.73'},
+        {'province_code':'32','regency_city_code':'32.73'}
+      ],
+      'confirm_jurisdiction':True
+    }},headers=h)
+    assert r.status_code==400

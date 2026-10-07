@@ -54,3 +54,22 @@ def test_deduplication_prevents_repeat_imports():
     assert len(b['results'])==0
     assert db.query(SocialListeningResult).count()==2
     db.close()
+
+
+def nested_provider(filters):
+    return {'success':True,'request_id':'req-nested','credits_used':5,'credits_remaining':975,'cached':False,'data':{'items':[
+      {'platform':'tiktok','post':{'id':'nested-1','url':'https://www.tiktok.com/@nested/video/1','author':{'display_name':'Nested Actor','username':'@nested'},'content':{'text':'Nested BAWASLU update','type':'video'},'engagement':{'views':3210,'likes':210,'comments':18,'shares':7},'published_at':'2026-10-07T04:00:00Z'},'computed':{'language':'id','engagement_rate':0.073,'estimated_reach':4100,'relevance':{'p':0.88}}}
+    ]}}
+
+def test_normalized_nested_socialcrawl_fields_are_preserved():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['tiktok']}},provider_client=nested_provider)
+    x=r['results'][0]
+    assert x['observed_handle']=='@nested'
+    assert x['published_at']=='2026-10-07T04:00:00Z'
+    assert x['language']=='id'
+    assert x['relevance_score']=='0.88'
+    assert x['engagement']['views']==3210
+    assert x['engagement']['engagement_rate']==0.073
+    assert x['content_type']=='video'
+    db.close()

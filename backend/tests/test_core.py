@@ -64,3 +64,23 @@ def test_source_retrieval_blocks_private_addresses():
         _validate_public_url('http://127.0.0.1/private')
     with pytest.raises(ValueError):
         _validate_public_url('http://169.254.169.254/latest/meta-data')
+
+
+def test_jsonld_article_metadata_and_content_are_preferred():
+    from app.source_retrieval import _extract_html
+    html='''<html lang="en"><head><title>Post - Muhammad Bobby Afif Nasution</title><meta property="og:title" content="Post - Muhammad Bobby Afif Nasution"><script type="application/ld+json">{"@context":"https://schema.org","@type":"NewsArticle","headline":"Muhammad Bobby Afif Nasution","author":{"@type":"Person","name":"Alumni IPB"},"publisher":{"@type":"Organization","name":"Alumni IPB Pedia"},"datePublished":"2026-09-18T10:45:00+07:00","inLanguage":"id-ID","url":"https://alumniipbpedia.id/post/muhammad-bobby-afif-nasution","articleBody":"Muhammad Bobby Afif Nasution lahir di Medan sebagai putra bungsu dari keluarga yang menjunjung pendidikan. Ia juga aktif dalam kegiatan masyarakat dan pembangunan untuk Sumatera Utara."}</script></head><body><p>Muhammad Bobby Afif Nasution lahir di Medan sebagai putra bungsu dari keluarga yang menjunjung pendidikan.</p></body></html>'''
+    r=_extract_html(html,'https://alumniipbpedia.id/post/muhammad-bobby-afif-nasution')
+    assert r['title']=='Muhammad Bobby Afif Nasution'
+    assert r['author']=='Alumni IPB'
+    assert r['source_name']=='Alumni IPB Pedia'
+    assert r['platform']=='Web'
+    assert r['original_language_code']=='id'
+    assert r['publication_date']=='2026-09-18'
+    assert r['publication_time_precision']=='EXACT'
+    assert 'pembangunan untuk Sumatera Utara' in r['original_content']
+
+def test_article_text_can_override_incorrect_html_language():
+    from app.source_retrieval import _extract_html
+    html='''<html lang="en"><head><title>Berita</title></head><body><p>Informasi ini adalah laporan pemilu yang disampaikan oleh Bawaslu dan telah diberikan kepada masyarakat untuk pengawasan.</p><p>Dalam laporan tersebut juga dijelaskan bahwa proses ini dilakukan dengan ketentuan yang berlaku.</p></body></html>'''
+    r=_extract_html(html,'https://example.com/berita')
+    assert r['original_language_code']=='id'

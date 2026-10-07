@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from .db import Base, engine, get_db
@@ -144,4 +145,15 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():
-    app.mount('/',StaticFiles(directory=str(FRONTEND_DIST),html=True),name='frontend')
+    ASSETS_DIR=FRONTEND_DIST/'assets'
+    if ASSETS_DIR.exists():
+        app.mount('/assets',StaticFiles(directory=str(ASSETS_DIR)),name='frontend-assets')
+
+    @app.get('/{full_path:path}',include_in_schema=False)
+    def frontend_spa(full_path:str):
+        if full_path.startswith('api/'):
+            raise HTTPException(404,'Not Found')
+        candidate=FRONTEND_DIST/full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(FRONTEND_DIST/'index.html')

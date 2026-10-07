@@ -249,6 +249,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
         items=_extract_items(envelope)
         mapped=[]
         for raw in items:
+            if len(mapped) >= f['limit']: break
             m=_map_result(db,raw)
             if not _matches_local_filters(m,f): continue
             existing=db.query(SocialListeningResult).filter(SocialListeningResult.content_fingerprint==m['content_fingerprint']).first()

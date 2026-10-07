@@ -471,3 +471,57 @@ def test_legacy_incomplete_triage_cannot_be_treated_as_review_complete():
     assert triage['state']=='IN REVIEW'
     r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence'},'id':iid},headers=h)
     assert r.status_code==400
+
+
+def test_local_triage_generator_produces_valid_v3_contract():
+    from app.domain import _valid_v3_proposal
+    h=auth()
+    content='Bawaslu memantau proses pemilu dan menerima laporan masyarakat. Informasi ini disimpan sebagai bahan pemantauan awal dan belum merupakan temuan atau pelanggaran.'
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Local V3 triage test',
+      'original_content':content,
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'priority':'Medium','evidence_type':'OBSERVED'
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    proposal=body['suggestions']
+    assert _valid_v3_proposal(proposal) is True
+    assert proposal['_version']==3
+    assert proposal['supervision_signal']=='NO SIGNAL IDENTIFIED'
+    assert proposal['screening_confidence']=='LOW'
+    assert proposal['confidence']=='LOW'
+    assert proposal['evidence_type']=='OBSERVED'
+    assert proposal['source_facts'].startswith('Bawaslu memantau')
+    assert 'analysis' not in proposal
+    assert body['generation']['generator']=='standalone-local-placeholder'
+    assert body['generation']['validation_outcome']=='VALID_V3_PLACEHOLDER'
+    assert body['triage_review']['state']=='NOT STARTED'
+    assert body['triage_review']['total']>=5
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    item=r.json()['item']
+    assert item['triage_review']['state']=='NOT STARTED'
+    assert item['ai_suggestions']['_version']==3
+
+def test_local_triage_contract_rejects_previous_incomplete_shape():
+    from app.domain import _valid_v3_proposal
+    old={'_version':3,'summary':'Old incomplete proposal','analysis':'Legacy field','confidence':'','priority':'Medium'}
+    assert _valid_v3_proposal(old) is False
+
+def test_local_triage_requires_original_source_content():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Missing source content',
+      'original_content':'',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
+    assert r.status_code==400
+    assert 'Original source content is required' in r.text

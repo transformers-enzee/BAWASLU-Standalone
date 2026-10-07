@@ -19,6 +19,61 @@ TRIAGE_REVIEW_FIELDS=[
  'evidence_type','evidence_gaps','issue_category','suggested_evidence_state','analysis','reasoning','watchlist_match'
 ]
 TRIAGE_DECISION_STATUSES={'Human Accepted','Human Modified','Human Rejected'}
+V3_TRIAGE_SCALAR_FIELDS=['summary','english_translation','content_type','supervision_signal','signal_reason','screening_confidence','priority','evidence_type','confidence']
+V3_TRIAGE_STRUCTURED_FIELDS=['activity','actors','location_signal','narrative','relationships','topics','evidence_gaps','inferences','check_next','screening_evidence_basis']
+V3_TRIAGE_ALLOWED=set(V3_TRIAGE_SCALAR_FIELDS+V3_TRIAGE_STRUCTURED_FIELDS+['source_facts','_version','_triage_run_id','_decisions','watchlist_match'])
+
+def _local_v3_triage(item,run_id):
+    source_text=re.sub(r'\s+',' ',item.original_content or '').strip()
+    if not source_text:
+        raise ValueError('Original source content is required before AI Triage can be generated')
+    source_facts=source_text[:4000]
+    summary=clean(item.ai_summary or item.title or source_facts,1200)
+    priority=item.priority if item.priority in ('Critical','High','Medium','Low') else 'Medium'
+    evidence_type=item.evidence_type if item.evidence_type in ('OBSERVED','INFERRED') else 'OBSERVED'
+    return {
+      '_version':3,
+      '_triage_run_id':run_id,
+      'source_facts':source_facts,
+      'summary':summary,
+      'english_translation':clean(item.english_translation,4000),
+      'content_type':'',
+      'activity':'',
+      'actors':'',
+      'location_signal':'',
+      'narrative':'',
+      'relationships':'',
+      'topics':'',
+      'evidence_gaps':'',
+      'inferences':'',
+      'check_next':'',
+      'screening_evidence_basis':'',
+      'supervision_signal':'NO SIGNAL IDENTIFIED',
+      'signal_reason':'',
+      'screening_confidence':'LOW',
+      'priority':priority,
+      'evidence_type':evidence_type,
+      'confidence':'LOW'
+    }
+
+def _valid_v3_proposal(value):
+    if not isinstance(value,dict) or value.get('_version')!=3: return False
+    if any(k not in V3_TRIAGE_ALLOWED for k in value): return False
+    if any(not isinstance(value.get(k,''),str) for k in V3_TRIAGE_SCALAR_FIELDS+V3_TRIAGE_STRUCTURED_FIELDS+['source_facts']): return False
+    if not value.get('summary','').strip() or not value.get('confidence','').strip() or not value.get('screening_confidence','').strip(): return False
+    if value.get('supervision_signal') not in ('NO SIGNAL IDENTIFIED','MONITOR','REVIEW RECOMMENDED','POTENTIAL REGULATORY ISSUE'): return False
+    if value.get('evidence_type') not in ('OBSERVED','INFERRED'): return False
+    if value.get('priority') not in ('Critical','High','Medium','Low'): return False
+    for key in V3_TRIAGE_STRUCTURED_FIELDS:
+        raw=value.get(key,'')
+        if not raw: continue
+        try: parsed=json.loads(raw)
+        except Exception: return False
+        if key in ('actors','relationships','topics','evidence_gaps','inferences','check_next','screening_evidence_basis') and not isinstance(parsed,list): return False
+        if key in ('activity','location_signal','narrative') and not isinstance(parsed,dict): return False
+    if value.get('supervision_signal')!='NO SIGNAL IDENTIFIED':
+        if not value.get('signal_reason','').strip() or not value.get('check_next') or not value.get('screening_evidence_basis'): return False
+    return True
 
 def _triage_reviewable(item):
     suggestions=loads(item.ai_suggestions_json,{}) or {}
@@ -466,7 +521,17 @@ def intelligence_action(db,p,action,data,id=None):
         return {'url':f.file_uri}
     if action=='runTriage':
         if not has(p,'review_ai_suggestions'): raise PermissionError('Not permitted')
-        run_id=str(uuid.uuid4()); source_fp=hashlib.sha256((item.original_content+'|'+item.source_url).encode()).hexdigest(); proposal={'_version':3,'_triage_run_id':run_id,'summary':item.ai_summary or '','analysis':item.ai_analysis or '','confidence':item.confidence or '','priority':item.priority or 'Medium'}; prop_fp=hashlib.sha256(jdump(proposal).encode()).hexdigest(); g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator='standalone-local',generator_version='v0.1',service_action='runTriage',generated_at=now(),validation_outcome='GENERATED',proposal_field_names_json=jdump(list(proposal))); db.add(g); item.ai_suggestions_json=jdump(proposal); db.commit(); audit(db,p,'IntelligenceItem',item.id,'AI_TRIAGE_GENERATED',{'triage_run_id':{'new':run_id}}); return {'suggestions':proposal,'generation':{'triage_run_id':run_id,'triage_schema_version':3,'generator':'standalone-local','generator_version':'v0.1','service_action':'runTriage','generated_at':g.generated_at,'proposal_field_names':list(proposal)},'geography':loads(item.ai_geography_json,{}),'watchlist_match':None}
+        run_id=str(uuid.uuid4())
+        source_fp=hashlib.sha256(((item.original_content or '')+'|'+(item.source_url or '')).encode()).hexdigest()
+        proposal=_local_v3_triage(item,run_id)
+        if not _valid_v3_proposal(proposal): raise ValueError('Local V3 triage generator produced an invalid proposal contract')
+        prop_fp=hashlib.sha256(jdump(proposal).encode()).hexdigest()
+        field_names=[k for k in proposal.keys() if not k.startswith('_')]
+        g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator='standalone-local-placeholder',generator_version='v0.2',service_action='runTriage',generated_at=now(),validation_outcome='VALID_V3_PLACEHOLDER',proposal_field_names_json=jdump(field_names))
+        db.add(g); item.ai_suggestions_json=jdump(proposal); item.updated_at=datetime.utcnow(); db.commit()
+        review_state=triage_review_status(item)
+        audit(db,p,'IntelligenceItem',item.id,'AI_TRIAGE_GENERATED',{'triage_run_id':{'new':run_id},'generator':{'new':'standalone-local-placeholder'},'validation_outcome':{'new':'VALID_V3_PLACEHOLDER'},'triage_review':{'new':review_state}})
+        return {'suggestions':proposal,'generation':{'triage_run_id':run_id,'triage_schema_version':3,'generator':'standalone-local-placeholder','generator_version':'v0.2','service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':'VALID_V3_PLACEHOLDER','proposal_field_names':field_names},'triage_review':review_state,'geography':loads(item.ai_geography_json,{}),'watchlist_match':None}
     if action=='triageDecision':
         if not has(p,'review_ai_suggestions'): raise PermissionError('Not permitted')
         key=clean(data.get('key'),100); status=clean(data.get('status'),64); reason=clean(data.get('reason'),500); value=data.get('value')

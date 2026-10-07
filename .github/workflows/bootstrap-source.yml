@@ -1,0 +1,48 @@
+name: Bootstrap BAWASLU source
+
+on:
+  push:
+    paths:
+      - "bootstrap/READY"
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check bootstrap marker
+        id: marker
+        run: |
+          if [ -f bootstrap/READY ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reconstruct and extract source
+        if: steps.marker.outputs.ready == 'true'
+        run: |
+          cat bootstrap/archive.part.* | base64 -d > /tmp/bawaslu-source.zip
+          mkdir -p /tmp/bawaslu-source
+          unzip -q /tmp/bawaslu-source.zip -d /tmp/bawaslu-source
+          rsync -a /tmp/bawaslu-source/BAWASLU-Standalone-v0.1/ ./
+          rm -rf bootstrap
+
+      - name: Commit imported source
+        if: steps.marker.outputs.ready == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "Import BAWASLU standalone v0.1 source with SocialCrawl"
+          git push

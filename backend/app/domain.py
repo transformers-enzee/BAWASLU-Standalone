@@ -196,6 +196,56 @@ def create_intelligence(db,p,data):
     audit(db,p,'IntelligenceItem',item.id,'CREATED',{'intelligence_id':{'new':item.intelligence_id},'source_url':{'new':item.source_url},'jurisdiction':{'new':{'type':item.jurisdiction_type,'province':item.province,'regency_city':item.regency_city}},'duplicate_candidate':{'new':{'id':str(dupe.id),'intelligence_id':dupe.intelligence_id,'score':dupe_match['score'],'basis':dupe_match['basis']} if dupe else None}})
     return item
 
+SOURCE_RECOVERY_FIELDS={
+ 'title':3000,
+ 'original_content':20000,
+ 'source_name':255,
+ 'platform':100,
+ 'author':255,
+ 'original_language_code':20,
+}
+
+def _missing_source_value(item,field):
+    value=getattr(item,field,'')
+    return value is None or (isinstance(value,str) and not value.strip())
+
+def apply_source_recovery(item,retrieved):
+    changes={}
+    recovered=[]
+    for field,max_len in SOURCE_RECOVERY_FIELDS.items():
+        value=clean(retrieved.get(field),max_len)
+        if value and _missing_source_value(item,field):
+            old=getattr(item,field,'')
+            setattr(item,field,value)
+            changes[field]={'previous':old,'new':value}
+            recovered.append(field)
+
+    incoming_date=clean(retrieved.get('publication_date'),32)
+    incoming_precision=clean(retrieved.get('publication_time_precision'),32)
+    incoming_time=clean(retrieved.get('publication_time'),32)
+
+    if incoming_date and _missing_source_value(item,'publication_date'):
+        old=item.publication_date
+        item.publication_date=incoming_date
+        changes['publication_date']={'previous':old,'new':incoming_date}
+        recovered.append('publication_date')
+
+    if incoming_precision and (not item.publication_time_precision or item.publication_time_precision=='UNKNOWN'):
+        old=item.publication_time_precision
+        item.publication_time_precision=incoming_precision
+        changes['publication_time_precision']={'previous':old,'new':incoming_precision}
+        recovered.append('publication_time_precision')
+
+    if incoming_date and incoming_precision=='EXACT' and incoming_time and _missing_source_value(item,'publication_datetime'):
+        combined=f'{incoming_date}T{incoming_time}'
+        old=item.publication_datetime
+        item.publication_datetime=combined
+        changes['publication_datetime']={'previous':old,'new':combined}
+        recovered.append('publication_datetime')
+
+    item.updated_at=datetime.utcnow()
+    return changes,recovered
+
 def list_intelligence(db,p): return [x for x in db.query(IntelligenceItem).order_by(IntelligenceItem.created_at.desc()).limit(500).all() if allowed(p,x)]
 
 def intelligence_action(db,p,action,data,id=None):
@@ -305,5 +355,20 @@ def intelligence_action(db,p,action,data,id=None):
         if decision=='Link': item.watchlist_id=wid; ents=loads(item.related_entities_json,[]); item.related_entities_json=jdump(list(dict.fromkeys(ents+[w.name]))[:20])
         elif decision!='Reject': raise ValueError('Invalid decision')
         db.commit(); audit(db,p,'IntelligenceItem',item.id,'WATCHLIST_MATCH_REVIEWED',{'watchlist_id':{'new':wid if decision=='Link' else None},'decision':{'new':decision}}); return {'ok':True}
-    if action=='recoverSource': return {'ok':True,'item':intelligence(item),'message':'Standalone v0.1 keeps source recovery human-controlled; no external fetch was performed.'}
+    if action=='recoverSource':
+        if not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
+        if item.source_type!='MANUAL_LINK' or not item.source_url: raise ValueError('Public URL source required')
+        automatic=bool(data.get('automatic'))
+        retrieved=fetch_public_source(item.source_url) if automatic else data
+        changes,recovered=apply_source_recovery(item,retrieved)
+        db.commit(); db.refresh(item)
+        if changes:
+            audit(db,p,'IntelligenceItem',item.id,'SOURCE_RECOVERED' if automatic else 'SOURCE_FIELDS_COMPLETED',changes)
+        return {
+          'ok':True,
+          'item':intelligence(item),
+          'recovered_fields':recovered,
+          'retrieval_status':retrieved.get('retrieval_status','MANUAL_COMPLETION'),
+          'message':'Recovered missing source fields.' if recovered else 'No missing source fields were changed.'
+        }
     raise ValueError('Unknown action')

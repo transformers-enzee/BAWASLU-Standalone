@@ -139,3 +139,50 @@ def test_no_geographic_mismatch_contract_is_safe_for_frontend():
     assert r.status_code==200
     mismatch=r.json()['item']['geographic_mismatch']
     assert mismatch=={'status':'none'}
+
+
+def test_existing_record_source_recovery_fills_only_missing_fields(monkeypatch):
+    import app.domain as domain
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Existing headline',
+      'original_content':'Existing original evidence must stay unchanged.',
+      'source_type':'MANUAL_LINK',
+      'source_url':'https://example.com/article',
+      'source_name':'Existing Publisher',
+      'platform':'Web',
+      'author':'',
+      'publication_time_precision':'UNKNOWN',
+      'jurisdiction_type':'National',
+      'confirm_jurisdiction':True
+    }},headers=h)
+    iid=r.json()['item']['id']
+    monkeypatch.setattr(domain,'fetch_public_source',lambda url:{
+      'available':True,
+      'title':'Retrieved headline must not replace existing',
+      'original_content':'Retrieved content must not replace existing',
+      'source_name':'Retrieved Publisher',
+      'platform':'Web',
+      'author':'Reporter Name',
+      'original_language_code':'id',
+      'publication_date':'2026-10-06',
+      'publication_time':'14:30:00',
+      'publication_time_precision':'EXACT',
+      'retrieval_status':'CONTENT_RETRIEVED'
+    })
+    r=client.post('/api/functions/intelligence',json={'action':'recoverSource','data':{'automatic':True},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    assert body['item']['title']=='Existing headline'
+    assert body['item']['original_content']=='Existing original evidence must stay unchanged.'
+    assert body['item']['source_name']=='Existing Publisher'
+    assert body['item']['author']=='Reporter Name'
+    assert body['item']['original_language_code']=='id'
+    assert body['item']['publication_date']=='2026-10-06'
+    assert body['item']['publication_time_precision']=='EXACT'
+    assert body['item']['publication_datetime']=='2026-10-06T14:30:00'
+    assert set(body['recovered_fields']) >= {'author','original_language_code','publication_date','publication_time_precision','publication_datetime'}
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    actions=[e['action'] for e in r.json()['events']]
+    assert 'SOURCE_RECOVERED' in actions

@@ -25,12 +25,11 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Reconstruct and extract source
+      - name: Extract source
         if: steps.marker.outputs.ready == 'true'
         run: |
-          cat bootstrap/archive.part.* | base64 -d > /tmp/bawaslu-source.zip
           mkdir -p /tmp/bawaslu-source
-          unzip -q /tmp/bawaslu-source.zip -d /tmp/bawaslu-source
+          unzip -q bootstrap/source.zip -d /tmp/bawaslu-source
           rsync -a /tmp/bawaslu-source/BAWASLU-Standalone-v0.1/ ./
           rm -rf bootstrap
 

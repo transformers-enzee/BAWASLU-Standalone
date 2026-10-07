@@ -121,30 +121,35 @@ def _matches_local_filters(r, filters):
     return True
 
 def _map_result(db,item):
-    url=str(_value(item,'url','canonical_url','permalink','post.url',default=''))
-    author=str(_value(item,'author.name','author.display_name','username','owner.name','source',default=''))
-    handle=str(_value(item,'author.handle','handle','username','owner.username',default=''))
-    title=str(_value(item,'title',default=''))
+    # SocialCrawl's normalized search rows are post-shaped:
+    # post.content.text, post.author, post.engagement, post.published_at,
+    # plus a sibling computed block. Keep legacy fallbacks for provider variations.
+    url=str(_value(item,'post.url','url','canonical_url','permalink',default=''))
+    author=str(_value(item,'post.author.display_name','post.author.username','author.display_name','author.name','author.username','username','owner.name','source',default=''))
+    handle=str(_value(item,'post.author.username','author.username','author.handle','handle','username','owner.username',default=''))
+    title=str(_value(item,'title','post.title',default=''))
     snippet=str(_value(item,'snippet',default=''))
-    text=str(_value(item,'text','content','caption','description',default='')) or (' — '.join(x for x in [title,snippet] if x))
+    text=str(_value(item,'post.content.text','content.text','text','content','caption','description',default='')) or (' — '.join(x for x in [title,snippet] if x))
     platform=str(_value(item,'platform','source','network',default=''))
-    rid=str(_value(item,'id','post_id','video_id','shortcode',default=''))
-    language=str(_value(item,'language','computed.language',default=''))
-    relevance=_value(item,'computed.relevance.p','relevance_score','relevance.score','score',default='')
+    rid=str(_value(item,'post.id','id','post_id','video_id','shortcode',default=''))
+    language=str(_value(item,'computed.language','post.computed.language','language','metadata.language',default=''))
+    relevance=_value(item,'computed.relevance.p','computed.relevance.score','relevance_score','relevance.score','score',default='')
+    published=_value(item,'post.published_at','published_at','post.datetime','datetime','created_at','timestamp','date',default='')
     identity,observed=source_identity(db,{'source_url':url})
     if handle and not observed: observed=handle
     engagement={
-      'views':_value(item,'metrics.views','views','view_count',default=None),
-      'likes':_value(item,'metrics.likes','likes','like_count',default=None),
-      'comments':_value(item,'metrics.comments','comments','comment_count',default=None),
-      'shares':_value(item,'metrics.shares','shares','share_count',default=None),
-      'engagement_rate':_value(item,'engagement_rate','computed.engagement_rate',default=None),
-      'estimated_reach':_value(item,'estimated_reach','computed.estimated_reach',default=None),
+      'views':_value(item,'post.engagement.views','engagement.views','metrics.views','views','view_count',default=None),
+      'likes':_value(item,'post.engagement.likes','engagement.likes','metrics.likes','likes','like_count',default=None),
+      'comments':_value(item,'post.engagement.comments','engagement.comments','metrics.comments','comments','comment_count',default=None),
+      'shares':_value(item,'post.engagement.shares','engagement.shares','metrics.shares','shares','share_count',default=None),
+      'saves':_value(item,'post.engagement.saves','engagement.saves','metrics.saves','saves',default=None),
+      'engagement_rate':_value(item,'computed.engagement_rate','post.computed.engagement_rate','engagement.engagement_rate','engagement_rate',default=None),
+      'estimated_reach':_value(item,'computed.estimated_reach','post.computed.estimated_reach','estimated_reach',default=None),
     }
     fp=hashlib.sha256((platform+'|'+rid+'|'+url+'|'+text[:2000]).encode()).hexdigest()
-    return {'provider_result_id':rid,'platform':platform,'content_type':str(_value(item,'content_type','type',default='')),
-      'canonical_url':url,'author_name':author,'observed_handle':observed or handle,'published_at':str(_value(item,'published_at','created_at','timestamp','date',default='')),
-      'text_content':text,'language':language,'relevance_score':str(relevance),'engagement':engagement,'geography':{},'source_identity':identity,
+    return {'provider_result_id':rid,'platform':platform,'content_type':str(_value(item,'post.content.type','content_type','type',default='')),
+      'canonical_url':url,'author_name':author,'observed_handle':observed or handle,'published_at':str(published or ''),
+      'text_content':text,'language':language,'relevance_score':str(relevance) if relevance not in (None,'') else '','engagement':engagement,'geography':{},'source_identity':identity,
       'watchlist_matches':[],'content_fingerprint':fp,'raw':item}
 
 def filter_options(db:Session,p):

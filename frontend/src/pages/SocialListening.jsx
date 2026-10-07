@@ -3,7 +3,7 @@ import { Search, Save, RefreshCw, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import Status from '@/components/intel/Status';
 
-const platforms=['tiktok','instagram','youtube','facebook','twitter','threads','reddit','linkedin'];
+const platforms=['tiktok','instagram','youtube','twitter','threads','reddit','linkedin'];
 const blank={query:'',exact_phrase:'',include_terms:'',exclude_terms:'',hashtags:'',accounts:'',watchlist_ids:'',issue_category:'',topics:'',locations:'',province:'',regency_city:'',date_from:'',date_to:'',language:'',platforms,content_types:'',lookback_days:7,minimum_relevance:'',minimum_engagement:'',minimum_followers:'',verified_only:false,include_sources:'',exclude_sources:'',include_comments:true,sort:'relevance',limit:50};
 const list=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 export default function SocialListening(){

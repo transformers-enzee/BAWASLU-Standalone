@@ -6,8 +6,9 @@ ALEMBIC EMPTY-DB MIGRATION: passed; 21 tables
 FRONTEND BASE44 SDK RUNTIME DEPENDENCY: removed
 FRONTEND FULL VITE BUILD: not verified in execution environment (npm install timeout)
 AI PROVIDER: deterministic placeholder only in v0.1
-PUBLIC CONTENT RETRIEVAL: URL validation/preservation only in v0.1
-NEXT: v0.2 parity closure (AI provider, hardened retrieval, auth providers, object storage, full dataset reconciliation)
+PUBLIC CONTENT RETRIEVAL: hardened public HTML retrieval implemented (SSRF controls, metadata/JSON-LD, human-editable intake)
+DUPLICATE REVIEW: similarity scoring implemented; merge/keep-separate remains human-controlled
+NEXT: v0.2 parity closure (AI provider, auth providers, object storage, multi-region enforcement, full dataset reconciliation)
 
 SOCIAL LISTENING: SocialCrawl foundation implemented
 SOCIAL LISTENING GOVERNANCE: human review required before Intelligence promotion

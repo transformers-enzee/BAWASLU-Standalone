@@ -1,6 +1,7 @@
 import hashlib, json, re, uuid
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from sqlalchemy.orm import Session
 from .models import *
 from .serializers import *
@@ -23,19 +24,107 @@ def get_item(db,id):
     try: return db.get(IntelligenceItem,int(id))
     except Exception: return None
 
+TRACKING_QUERY_KEYS={'utm_source','utm_medium','utm_campaign','utm_term','utm_content','utm_id','gclid','fbclid','mc_cid','mc_eid'}
+
+def _norm_text(value):
+    return re.sub(r'[^a-z0-9]+',' ',str(value or '').lower()).strip()
+
+def _canonical_url(value):
+    raw=clean(value,2000)
+    if not raw: return ''
+    try:
+        p=urlparse(raw)
+        host=(p.hostname or '').lower().removeprefix('www.')
+        if not host: return raw.rstrip('/').lower()
+        port=f':{p.port}' if p.port and p.port not in (80,443) else ''
+        path=re.sub(r'/+','/',p.path or '/').rstrip('/') or '/'
+        query=urlencode([(k,v) for k,v in parse_qsl(p.query,keep_blank_values=True) if k.lower() not in TRACKING_QUERY_KEYS])
+        return urlunparse(((p.scheme or 'https').lower(),host+port,path,'',query,''))
+    except Exception:
+        return raw.rstrip('/').lower()
+
+def _token_set(value,limit=600):
+    tokens=_norm_text(value).split()
+    return set(tokens[:limit])
+
+def _jaccard(a,b):
+    if len(a)<4 or len(b)<4: return 0.0
+    union=a|b
+    return len(a&b)/len(union) if union else 0.0
+
+def duplicate_similarity(data, candidate):
+    incoming={
+      'source_url':data.get('source_url') if isinstance(data,dict) else getattr(data,'source_url',''),
+      'title':data.get('title') if isinstance(data,dict) else getattr(data,'title',''),
+      'original_content':data.get('original_content') if isinstance(data,dict) else getattr(data,'original_content',''),
+      'source_name':data.get('source_name') if isinstance(data,dict) else getattr(data,'source_name',''),
+      'author':data.get('author') if isinstance(data,dict) else getattr(data,'author',''),
+      'platform':data.get('platform') if isinstance(data,dict) else getattr(data,'platform',''),
+      'publication_date':data.get('publication_date') if isinstance(data,dict) else getattr(data,'publication_date',''),
+    }
+    existing={
+      'source_url':getattr(candidate,'source_url',''),
+      'title':getattr(candidate,'title',''),
+      'original_content':getattr(candidate,'original_content',''),
+      'source_name':getattr(candidate,'source_name',''),
+      'author':getattr(candidate,'author',''),
+      'platform':getattr(candidate,'platform',''),
+      'publication_date':getattr(candidate,'publication_date',''),
+    }
+    url_a,url_b=_canonical_url(incoming['source_url']),_canonical_url(existing['source_url'])
+    if url_a and url_b and url_a==url_b:
+        return {'score':1.0,'basis':['Same source URL'],'signals':{'url_exact':True,'title_similarity':1.0 if _norm_text(incoming['title'])==_norm_text(existing['title']) and incoming['title'] else 0.0,'content_similarity':0.0}}
+
+    title_a,title_b=_norm_text(incoming['title']),_norm_text(existing['title'])
+    title_similarity=SequenceMatcher(None,title_a,title_b).ratio() if title_a and title_b else 0.0
+    content_similarity=_jaccard(_token_set(incoming['original_content']),_token_set(existing['original_content']))
+    source_a=_norm_text(incoming['source_name'] or incoming['author'])
+    source_b=_norm_text(existing['source_name'] or existing['author'])
+    same_source=bool(source_a and source_b and source_a==source_b)
+    same_date=bool(incoming['publication_date'] and existing['publication_date'] and incoming['publication_date']==existing['publication_date'])
+    same_platform=bool(_norm_text(incoming['platform']) and _norm_text(incoming['platform'])==_norm_text(existing['platform']))
+
+    score=(0.55*title_similarity)+(0.30*content_similarity)+(0.08 if same_source else 0)+(0.05 if same_date else 0)+(0.02 if same_platform else 0)
+    exact_title=bool(title_a and title_a==title_b)
+    if exact_title: score=max(score,0.94)
+
+    basis=[]
+    if exact_title: basis.append('Same normalized headline')
+    elif title_similarity>=0.90: basis.append('Very similar headline')
+    elif title_similarity>=0.82: basis.append('Similar headline')
+    if content_similarity>=0.70: basis.append('Highly overlapping source text')
+    elif content_similarity>=0.45: basis.append('Overlapping source text')
+    if same_source: basis.append('Same source / publisher')
+    if same_date: basis.append('Same publication date')
+    if same_platform: basis.append('Same platform')
+
+    return {
+      'score':round(min(score,1.0),3),
+      'basis':basis,
+      'signals':{
+        'url_exact':False,
+        'title_similarity':round(title_similarity,3),
+        'content_similarity':round(content_similarity,3),
+        'same_source':same_source,
+        'same_date':same_date,
+        'same_platform':same_platform,
+      }
+    }
+
 def duplicate_candidate(db, data):
-    url=clean(data.get('source_url',''),2000)
-    if url:
-        hit=db.query(IntelligenceItem).filter(IntelligenceItem.source_url==url).order_by(IntelligenceItem.id.desc()).first()
-        if hit: return hit
-    title=clean(data.get('title',''),1000).lower()
-    if title:
-        candidates=db.query(IntelligenceItem).order_by(IntelligenceItem.id.desc()).limit(200).all()
-        norm=lambda s: re.sub(r'\W+',' ',(s or '').lower()).strip()
-        nt=norm(title)
-        for x in candidates:
-            if nt and norm(x.title)==nt: return x
-    return None
+    candidates=db.query(IntelligenceItem).order_by(IntelligenceItem.id.desc()).limit(250).all()
+    best=None
+    for candidate in candidates:
+        match=duplicate_similarity(data,candidate)
+        title_sim=match['signals'].get('title_similarity',0)
+        content_sim=match['signals'].get('content_similarity',0)
+        support=match['signals'].get('same_source') or match['signals'].get('same_date') or content_sim>=0.45
+        qualifies=match['score']>=0.78 and (match['signals'].get('url_exact') or title_sim>=0.82 and support)
+        if _norm_text(data.get('title')) and _norm_text(data.get('title'))==_norm_text(candidate.title):
+            qualifies=True
+        if qualifies and (best is None or match['score']>best[1]['score']):
+            best=(candidate,match)
+    return best if best else (None,None)
 
 def source_identity(db,data):
     url=clean(data.get('source_url',''),2000)
@@ -72,7 +161,7 @@ def geography_mismatch(item):
 
 def create_intelligence(db,p,data):
     if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
-    dupe=duplicate_candidate(db,data)
+    dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     item=IntelligenceItem(
       intelligence_id=next_intelligence_id(db), title=clean(data.get('title'),3000), original_content=clean(data.get('original_content') or data.get('description'),20000),
@@ -104,7 +193,7 @@ def create_intelligence(db,p,data):
     if run_id:
         gen=db.query(TriageGeneration).filter(TriageGeneration.triage_run_id==run_id).first()
         if gen and gen.intelligence_item_id is None: gen.intelligence_item_id=item.id; db.commit()
-    audit(db,p,'IntelligenceItem',item.id,'CREATED',{'intelligence_id':{'new':item.intelligence_id},'source_url':{'new':item.source_url},'jurisdiction':{'new':{'type':item.jurisdiction_type,'province':item.province,'regency_city':item.regency_city}}})
+    audit(db,p,'IntelligenceItem',item.id,'CREATED',{'intelligence_id':{'new':item.intelligence_id},'source_url':{'new':item.source_url},'jurisdiction':{'new':{'type':item.jurisdiction_type,'province':item.province,'regency_city':item.regency_city}},'duplicate_candidate':{'new':{'id':str(dupe.id),'intelligence_id':dupe.intelligence_id,'score':dupe_match['score'],'basis':dupe_match['basis']} if dupe else None}})
     return item
 
 def list_intelligence(db,p): return [x for x in db.query(IntelligenceItem).order_by(IntelligenceItem.created_at.desc()).limit(500).all() if allowed(p,x)]
@@ -144,7 +233,11 @@ def intelligence_action(db,p,action,data,id=None):
         if sug.get('_triage_run_id'):
             g=db.query(TriageGeneration).filter(TriageGeneration.triage_run_id==sug['_triage_run_id']).first()
             if g: gen={'triage_run_id':g.triage_run_id,'triage_schema_version':g.triage_schema_version,'generator':g.generator,'generator_version':g.generator_version,'service_action':g.service_action,'generated_at':g.generated_at,'proposal_field_names':loads(g.proposal_field_names_json,[])}
-        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(linked[0]) if linked else None}
+        comparison_item=get_item(db,item.duplicate_of) if item.duplicate_of else None
+        if comparison_item and not allowed(p,comparison_item): comparison_item=None
+        if not comparison_item and linked: comparison_item=linked[0]
+        duplicate_match=duplicate_similarity(item,comparison_item) if comparison_item and item.duplicate_of else None
+        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
     if action=='confirmJurisdiction':
         if not has(p,'human_validation') and not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
         item.jurisdiction_type=clean(data.get('jurisdiction_type') or item.jurisdiction_type,32); item.province=clean(data.get('province') or item.province,128); item.regency_city=clean(data.get('regency_city') or item.regency_city,128); item.province_code=clean(data.get('province_code') or item.province_code,32); item.regency_city_code=clean(data.get('regency_city_code') or item.regency_city_code,32); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'province':{'new':item.province},'regency_city':{'new':item.regency_city}}); return {'ok':True}

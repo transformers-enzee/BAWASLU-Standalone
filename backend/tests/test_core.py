@@ -101,3 +101,30 @@ def test_date_only_precision_contract_uses_time_unknown():
     assert d=='2026-03-03'
     assert t==''
     assert p=='TIME_UNKNOWN'
+
+
+def test_near_duplicate_detection_uses_similarity_and_human_review():
+    h=auth()
+    first={'action':'create','data':{'title':'Bawaslu reviews election supervision access in Jakarta','original_content':'Bawaslu reviewed access to election supervision documents in Jakarta after officials reported restrictions during the verification process. The agency requested complete access for oversight and documented the incident for follow-up.','source_name':'Media Nusantara','platform':'Web','publication_date':'2026-10-07','source_url':'https://media.example/a','jurisdiction_type':'National','confirm_jurisdiction':True}}
+    r=client.post('/api/functions/intelligence',json=first,headers=h); assert r.status_code==200
+    original=r.json()['item']
+    second={'action':'create','data':{'title':'Bawaslu reviews access for election supervision in Jakarta','original_content':'Officials said Bawaslu reviewed access to election supervision documents in Jakarta after restrictions were reported during verification. The agency requested complete access for oversight and recorded the incident for further follow-up.','source_name':'Media Nusantara','platform':'Web','publication_date':'2026-10-07','source_url':'https://media.example/b','jurisdiction_type':'National','confirm_jurisdiction':True}}
+    r=client.post('/api/functions/intelligence',json=second,headers=h); assert r.status_code==200
+    duplicate=r.json()['item']
+    assert duplicate['duplicate_of']==original['id']
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':duplicate['id']},headers=h); assert r.status_code==200
+    match=r.json()['duplicate_match']
+    assert match['score']>=0.78
+    assert 'Same source / publisher' in match['basis']
+    assert r.json()['comparison']['id']==original['id']
+    r=client.post('/api/functions/intelligence',json={'action':'duplicate','data':{'decision':'Keep Separate'},'id':duplicate['id']},headers=h); assert r.status_code==200
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':duplicate['id']},headers=h)
+    assert r.json()['item']['duplicate_resolution']=='Keep Separate'
+
+def test_unrelated_items_are_not_marked_duplicate():
+    h=auth()
+    a={'action':'create','data':{'title':'Bawaslu meeting in Jakarta','original_content':'Election supervisors discussed monitoring access and reporting procedures with local officials in Jakarta.','source_name':'Source A','source_url':'https://a.example/one','jurisdiction_type':'National','confirm_jurisdiction':True}}
+    b={'action':'create','data':{'title':'Flood response in Surabaya','original_content':'Emergency teams distributed food and opened shelters after heavy rain affected several neighbourhoods.','source_name':'Source B','source_url':'https://b.example/two','jurisdiction_type':'National','confirm_jurisdiction':True}}
+    client.post('/api/functions/intelligence',json=a,headers=h)
+    r=client.post('/api/functions/intelligence',json=b,headers=h); assert r.status_code==200
+    assert not r.json()['item']['duplicate_of']

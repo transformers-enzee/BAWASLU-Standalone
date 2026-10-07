@@ -17,14 +17,14 @@
 | Production AI triage | Yes | Pending v0.2 | Deterministic placeholder only |
 | Human triage decisions | Yes | Implemented foundation | Stored in `_decisions`; review remains human controlled |
 | Evidence verification | Yes | Implemented | Independent human action |
-| Duplicate detection/review | Yes | Implemented foundation | Exact URL/title candidate detection in v0.1; richer legacy scoring to port |
+| Duplicate detection/review | Yes | Implemented | Exact/canonical URL plus headline/content/source/date similarity scoring; human merge/keep-separate decision retained |
 | Evidence attachments | Yes | Implemented local | Object storage/signed URL pending |
 | Audit events | Yes | Implemented | First-class audit table |
 | User/access administration | Yes | Implemented | Standalone account + access grant |
 | Issue categories | Yes | Implemented | Included in importer |
 | Data sources | Yes | Implemented | Included in importer |
 | External connector registry | Yes | Implemented schema/import | Provider execution pending |
-| Public URL retrieval | Yes | Partial | URL preserved; hardened fetch pending |
+| Public URL retrieval | Yes | Implemented | Hardened public HTML retrieval with SSRF controls, metadata/JSON-LD extraction and human-editable intake |
 | Intelligence Assistant | Yes | Implemented foundation | Evidence-search assistant, no generative provider yet |
 | Google OAuth | Yes | Pending | Email/password available |
 | OTP/password reset delivery | Yes | Pending | Requires delivery provider |

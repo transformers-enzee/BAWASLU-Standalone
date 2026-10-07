@@ -230,12 +230,12 @@ def _published_parts(published):
                 pub_time=dt.time().replace(tzinfo=None).isoformat(timespec='seconds')
                 precision='EXACT'
             else:
-                precision='DATE_ONLY'
+                precision='TIME_UNKNOWN'
         except Exception:
             value=str(published).strip()
             if len(value)>=10 and value[4:5]=='-' and value[7:8]=='-':
                 pub_date=value[:10]
-                precision='DATE_ONLY'
+                precision='TIME_UNKNOWN'
     return pub_date,pub_time,precision
 
 def _extract_html(html,url):

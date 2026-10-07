@@ -92,4 +92,12 @@ def test_visible_heading_and_indonesian_date_fallbacks():
     r=_extract_html(html,'https://alumniipbpedia.id/post/muhammad-bobby-afif-nasution')
     assert r['title']=='Muhammad Bobby Afif Nasution'
     assert r['publication_date']=='2026-03-03'
-    assert r['publication_time_precision']=='DATE_ONLY'
+    assert r['publication_time_precision']=='TIME_UNKNOWN'
+
+
+def test_date_only_precision_contract_uses_time_unknown():
+    from app.source_retrieval import _published_parts
+    d,t,p=_published_parts('2026-03-03')
+    assert d=='2026-03-03'
+    assert t==''
+    assert p=='TIME_UNKNOWN'

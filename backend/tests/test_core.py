@@ -390,3 +390,84 @@ def test_geographic_mismatch_change_jurisdiction_updates_codes_and_audit():
     assert body['item']['geographic_mismatch']['status']=='resolved'
     actions=[e['action'] for e in body['events']]
     assert 'GEOGRAPHIC_MISMATCH_REVIEWED' in actions
+
+
+def test_final_validation_is_blocked_until_all_generated_ai_suggestions_are_decided():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Triage governance case',
+      'original_content':'Source material for triage governance testing with sufficient detail.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{
+        '_version':3,
+        'summary':'AI proposed summary',
+        'priority':'High',
+        'issue_category':'Election administration'
+      }
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    triage=r.json()['item']['triage_review']
+    assert triage['generated'] is True
+    assert triage['state']=='NOT STARTED'
+    assert triage['total']==3
+
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence','review_notes':'Attempt too early'},'id':iid},headers=h)
+    assert r.status_code==400
+    assert 'AI TRIAGE REVIEW INCOMPLETE' in r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['triage_review']['state']=='IN REVIEW'
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'priority','status':'Human Modified','value':'Medium'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'issue_category','status':'Human Rejected','reason':'Not supported by the source evidence.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['triage_review']['state']=='REVIEW COMPLETE'
+
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence','review_notes':'All AI suggestions reviewed by human.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    body=r.json()
+    assert body['item']['review_status']=='Validated as Relevant Intelligence'
+    assert body['item']['triage_review']['state']=='REVIEW COMPLETE'
+    actions=[e['action'] for e in body['events']]
+    assert actions.count('AI_SUGGESTION_DECIDED')==3
+
+def test_triage_decision_rejects_unknown_key_and_empty_modified_value():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Triage validation case','original_content':'Evidence',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_version':3,'summary':'Suggested summary'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'confidence','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==400
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Modified','value':'   '},'id':iid},headers=h)
+    assert r.status_code==400
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Rejected','reason':'no'},'id':iid},headers=h)
+    assert r.status_code==400
+
+def test_legacy_incomplete_triage_cannot_be_treated_as_review_complete():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Legacy triage case','original_content':'Evidence',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_decisions':{'legacy_field':{'status':'Human Accepted'}}}
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    triage=r.json()['item']['triage_review']
+    assert triage['legacy'] is True
+    assert triage['state']=='IN REVIEW'
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence'},'id':iid},headers=h)
+    assert r.status_code==400

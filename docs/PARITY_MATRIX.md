@@ -15,7 +15,7 @@
 | Actor/entity relationships | Yes | Implemented | First-class registry + intelligence JSON contract retained |
 | V3 triage provenance | Yes | Implemented foundation | Generation/fingerprint/version table |
 | Production AI triage | Yes | Pending v0.2 | Deterministic placeholder only |
-| Human triage decisions | Yes | Implemented foundation | Stored in `_decisions`; review remains human controlled |
+| Human triage decisions | Yes | Implemented | Backend-enforced Accept/Modify/Reject review, completion state, rejection/modify validation, audit provenance and final-validation gate |
 | Evidence verification | Yes | Implemented | Independent human action |
 | Duplicate detection/review | Yes | Implemented | Exact/canonical URL plus headline/content/source/date similarity scoring; human merge/keep-separate decision retained |
 | Evidence attachments | Yes | Implemented local | Object storage/signed URL pending |

@@ -24,6 +24,19 @@ def _social_platform(url):
     if 'linkedin.com' in host: return 'LinkedIn'
     return ''
 
+def _generic_social_title(title,platform=''):
+    value=re.sub(r'\s+',' ',str(title or '')).strip().lower()
+    if not value: return True
+    generic={
+      'tiktok':('tiktok','tiktok - make your day','make your day'),
+      'instagram':('instagram','instagram photos and videos','login • instagram','log in • instagram'),
+      'facebook':('facebook','facebook - log in or sign up','log into facebook'),
+      'x':('x','x.com','log in to x / x'),
+      'threads':('threads','threads • say more'),
+      'linkedin':('linkedin','linkedin: log in or sign up'),
+    }
+    return value in generic.get(str(platform or '').lower(),())
+
 def _validate_public_url(url):
     p=urlparse(str(url or '').strip())
     if p.scheme not in ('http','https') or not p.hostname:
@@ -344,6 +357,8 @@ def fetch_public_source(url):
                 social_platform=_social_platform(original) or _social_platform(current)
                 if social_platform:
                     result['platform']=social_platform
+                    if _generic_social_title(result.get('title'),social_platform):
+                        result['title']=''
                 ready=bool(result.get('title') and result.get('original_content'))
                 result['submission_ready']=ready
                 partial=bool(result.get('title') or result.get('original_content'))

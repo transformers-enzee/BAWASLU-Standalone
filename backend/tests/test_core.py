@@ -287,3 +287,11 @@ def test_social_platform_detection_covers_supported_manual_urls():
     assert _social_platform('https://youtu.be/abc')=='YouTube'
     assert _social_platform('https://x.com/example/status/1')=='X'
     assert _social_platform('https://www.reddit.com/r/test/comments/1')=='Reddit'
+
+
+def test_generic_social_shell_titles_are_rejected_as_headlines():
+    from app.source_retrieval import _generic_social_title
+    assert _generic_social_title('TikTok - Make Your Day','TikTok') is True
+    assert _generic_social_title('TikTok','TikTok') is True
+    assert _generic_social_title('Actual election monitoring update from Bawaslu','TikTok') is False
+    assert _generic_social_title('Login • Instagram','Instagram') is True

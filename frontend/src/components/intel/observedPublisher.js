@@ -10,7 +10,16 @@ export function observedPublisherFromUrl(value) {
       return { platform: 'TikTok', handle: segments[0] };
     }
     if (['x.com', 'twitter.com'].some(domain => host === domain || host.endsWith('.' + domain)) && segments[0] && segments[1]?.toLowerCase() === 'status' && segments[2]) {
-      return { platform: 'X', handle: segments[0] };
+      return { platform: 'X', handle: '@' + segments[0].replace(/^@/, '') };
+    }
+    if (host === 'instagram.com' && segments.length === 1 && !['p','reel','reels','stories','explore'].includes((segments[0]||'').toLowerCase())) {
+      return { platform: 'Instagram', handle: '@' + segments[0].replace(/^@/, '') };
+    }
+    if ((host === 'youtube.com' || host.endsWith('.youtube.com')) && /^@[^/]+$/.test(segments[0] || '')) {
+      return { platform: 'YouTube', handle: segments[0] };
+    }
+    if (host === 'threads.net' && /^@[^/]+$/.test(segments[0] || '')) {
+      return { platform: 'Threads', handle: segments[0] };
     }
   } catch { /* URL still being entered */ }
   return { platform: '', handle: '' };

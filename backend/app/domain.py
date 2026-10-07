@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from .models import *
 from .serializers import *
 from .access import has, allowed, audit
+from .source_retrieval import fetch_public_source
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def jdump(v): return json.dumps(v,ensure_ascii=False)
@@ -120,9 +121,9 @@ def intelligence_action(db,p,action,data,id=None):
         return {'events':[audit_event(x) for x in ev if x.subject_type!='SecurityAccess' and x.subject_id in visible][:10]}
     if action=='retrieve':
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
-        url=clean(data.get('url'),2000); parsed=urlparse(url)
-        if parsed.scheme not in ('http','https') or not parsed.netloc: raise ValueError('Public HTTP(S) URL required')
-        return {'source_url':url,'source_name':parsed.hostname.removeprefix('www.') if parsed.hostname else '','platform':'Web','title':'','original_content':'','retrieval_status':'URL_ACCEPTED_CONTENT_NOT_FETCHED','requires_manual_content':True}
+        url=clean(data.get('url'),2000)
+        result=fetch_public_source(url)
+        return result
     if action=='resolveSourceIdentity':
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
         identity,observed=source_identity(db,data); return {'source_identity':identity,'observed_publisher_handle':observed}

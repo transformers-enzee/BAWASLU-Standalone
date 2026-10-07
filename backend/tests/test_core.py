@@ -42,3 +42,25 @@ def test_human_verification_is_separate_action():
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Evidence','original_content':'x','jurisdiction_type':'National','confirm_jurisdiction':True}},headers=h); iid=r.json()['item']['id']
     r=client.post('/api/functions/intelligence',json={'action':'verifyEvidence','data':{},'id':iid},headers=h); assert r.status_code==200
     r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h); assert r.json()['item']['verification_status']=='HUMAN_VERIFIED'; assert r.json()['item']['evidence_state']=='VERIFIED'
+
+
+def test_source_retrieval_parser_extracts_article_metadata():
+    from app.source_retrieval import _extract_html
+    html='''<html lang="id-ID"><head><title>Fallback title</title><meta property="og:title" content="Judul Berita"><meta property="og:site_name" content="Media Test"><meta name="author" content="Reporter"><meta property="article:published_time" content="2026-10-07T09:15:00+07:00"><link rel="canonical" href="/news/1"></head><body><p>Paragraf berita yang cukup panjang untuk menjadi isi sumber asli yang disimpan oleh sistem.</p><p>Paragraf kedua memberikan konteks tambahan untuk pengujian ekstraksi artikel.</p></body></html>'''
+    r=_extract_html(html,'https://example.com/path')
+    assert r['title']=='Judul Berita'
+    assert r['source_name']=='Media Test'
+    assert r['author']=='Reporter'
+    assert r['original_language_code']=='id'
+    assert r['publication_date']=='2026-10-07'
+    assert r['publication_time_precision']=='EXACT'
+    assert r['canonical_url']=='https://example.com/news/1'
+    assert 'Paragraf berita' in r['original_content']
+
+def test_source_retrieval_blocks_private_addresses():
+    from app.source_retrieval import _validate_public_url
+    import pytest
+    with pytest.raises(ValueError):
+        _validate_public_url('http://127.0.0.1/private')
+    with pytest.raises(ValueError):
+        _validate_public_url('http://169.254.169.254/latest/meta-data')

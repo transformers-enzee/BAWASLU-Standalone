@@ -65,7 +65,9 @@ export default function GeographicMismatch({ item, canReview, onSaved, onRecordA
       <p>Decision: {mismatch.decision || 'Human reviewed'}</p>
       <p>Reviewed by {mismatch.reviewed_by || 'authorized reviewer'}{mismatch.reviewed_at ? ` · ${new Date(mismatch.reviewed_at).toLocaleString('en-GB')}` : ''}</p>
       {mismatch.reason && <p>Reason: {mismatch.reason}</p>}
+      {mismatch.resulting_jurisdiction&&<p>Resulting jurisdiction: {mismatch.resulting_jurisdiction.jurisdiction_type || 'Unresolved'} · {[mismatch.resulting_jurisdiction.regency_city,mismatch.resulting_jurisdiction.province].filter(Boolean).join(', ') || 'National'}</p>}
     </div>}
+    {mismatch.review_reopened&&<p className="text-sm font-semibold text-[#a04724]">A previous geographic review exists, but the jurisdiction evidence changed. A new human decision is required.</p>}
 
     <Notice error={error}/>
 

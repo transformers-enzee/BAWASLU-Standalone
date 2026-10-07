@@ -147,18 +147,71 @@ def source_identity(db,data):
         return {'status':'KNOWN_EXTERNAL_ACCOUNT','matched_registered_account_id':'','match_basis':'OBSERVED_PUBLIC_IDENTITY','verification_status':'NOT_VERIFIED','verified_by':'','verified_at':''}, handle
     return {'status':'UNRESOLVED','matched_registered_account_id':'','match_basis':'','verification_status':'NOT_VERIFIED','verified_by':'','verified_at':''}, ''
 
+def _jurisdiction_payload(item):
+    return {
+      'jurisdiction_type':item.jurisdiction_type or 'Unresolved',
+      'province':item.province or '',
+      'province_code':item.province_code or '',
+      'regency_city':item.regency_city or '',
+      'regency_city_code':item.regency_city_code or '',
+      'geographic_assignments':loads(item.geographic_assignments_json,[])
+    }
+
+def _proposed_jurisdiction(proposed):
+    proposed=dict(proposed or {})
+    if not proposed.get('jurisdiction_type'):
+        if proposed.get('geographic_assignments'):
+            proposed['jurisdiction_type']='Multi-Region'
+        elif proposed.get('regency_city') or proposed.get('regency_city_name') or proposed.get('regency_city_code'):
+            proposed['jurisdiction_type']='Regency / City'
+        elif proposed.get('province') or proposed.get('province_name') or proposed.get('province_code'):
+            proposed['jurisdiction_type']='Province'
+        else:
+            proposed['jurisdiction_type']='Unresolved'
+    if not proposed.get('province') and proposed.get('province_name'):
+        proposed['province']=proposed.get('province_name')
+    if not proposed.get('regency_city') and proposed.get('regency_city_name'):
+        proposed['regency_city']=proposed.get('regency_city_name')
+    try:
+        return normalize_jurisdiction(proposed,require_valid=False)
+    except Exception:
+        return {'jurisdiction_type':'Unresolved','province':'','province_code':'','regency_city':'','regency_city_code':'','geographic_assignments':[]}
+
+def _jurisdiction_signature(geo):
+    kind=geo.get('jurisdiction_type') or 'Unresolved'
+    if kind=='Multi-Region':
+        rows=geo.get('geographic_assignments') or []
+        return (kind,tuple(sorted((x.get('province_code') or _norm_text(x.get('province')),x.get('regency_city_code') or _norm_text(x.get('regency_city'))) for x in rows)))
+    return (kind,geo.get('province_code') or _norm_text(geo.get('province')),geo.get('regency_city_code') or _norm_text(geo.get('regency_city')))
+
 def geography_mismatch(item):
-    proposed=loads(item.proposed_geography_json,{}) or loads(item.ai_geography_json,{})
-    if not proposed or not item.jurisdiction_confirmed: return {'status':'none'}
-    pprov=proposed.get('province') or proposed.get('province_name') or ''
-    pcity=proposed.get('regency_city') or proposed.get('regency_city_name') or ''
-    mismatch=(pprov and item.province and pprov!=item.province) or (pcity and item.regency_city and pcity!=item.regency_city)
-    if not mismatch: return {'status':'none'}
+    proposed_raw=loads(item.proposed_geography_json,{}) or loads(item.ai_geography_json,{})
     review=loads(item.geographic_mismatch_review_json,{})
-    if review.get('decision'): return {'status':'resolved',**review,'proposed':proposed}
-    basis=proposed.get('supporting_text') or proposed.get('evidence') or ''
-    fp=hashlib.sha256(f'{item.id}|{item.province}|{item.regency_city}|{pprov}|{pcity}|{basis}'.encode()).hexdigest()
-    return {'status':'pending','fingerprint':fp,'proposed':proposed,'confirmed':{'province':item.province,'regency_city':item.regency_city},'supporting_text':basis}
+    if not proposed_raw or not item.jurisdiction_confirmed:
+        return {'status':'resolved',**review,'proposed':proposed_raw} if review.get('decision') else {'status':'none'}
+
+    confirmed=normalize_jurisdiction(_jurisdiction_payload(item),require_valid=False)
+    proposed=_proposed_jurisdiction(proposed_raw)
+    basis=proposed_raw.get('supporting_text') or proposed_raw.get('evidence') or ''
+    if proposed.get('jurisdiction_type')=='Unresolved':
+        return {'status':'resolved',**review,'proposed':proposed_raw,'confirmed':confirmed} if review.get('decision') else {'status':'none'}
+
+    mismatch=_jurisdiction_signature(confirmed)!=_jurisdiction_signature(proposed)
+    fp=hashlib.sha256(jdump({'item_id':str(item.id),'confirmed':confirmed,'proposed':proposed,'basis':basis}).encode()).hexdigest()
+
+    if not mismatch:
+        if review.get('decision'):
+            return {'status':'resolved',**review,'proposed':proposed_raw,'confirmed':confirmed,'supporting_text':basis}
+        return {'status':'none'}
+
+    if review.get('decision') and review.get('fingerprint')==fp:
+        return {'status':'resolved',**review,'proposed':proposed_raw,'confirmed':confirmed,'supporting_text':basis}
+
+    result={'status':'pending','fingerprint':fp,'proposed':proposed_raw,'normalized_proposed':proposed,'confirmed':confirmed,'supporting_text':basis}
+    if review.get('decision'):
+        result['previous_review']=review
+        result['review_reopened']=True
+    return result
 
 def create_intelligence(db,p,data):
     if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
@@ -298,16 +351,31 @@ def intelligence_action(db,p,action,data,id=None):
         if not has(p,'human_validation') and not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
         geo=normalize_jurisdiction(data,require_valid=True)
         if geo['jurisdiction_type']=='Unresolved': raise ValueError('Unresolved jurisdiction cannot be confirmed')
-        before={'type':item.jurisdiction_type,'province':item.province,'regency_city':item.regency_city,'geographic_assignments':loads(item.geographic_assignments_json,[])}
-        item.jurisdiction_type=geo['jurisdiction_type']; item.province=geo['province']; item.regency_city=geo['regency_city']; item.province_code=geo['province_code']; item.regency_city_code=geo['regency_city_code']; item.geographic_assignments_json=jdump(geo['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'previous':before,'new':geo}); return {'ok':True}
+        before=_jurisdiction_payload(item)
+        item.jurisdiction_type=geo['jurisdiction_type']; item.province=geo['province']; item.regency_city=geo['regency_city']; item.province_code=geo['province_code']; item.regency_city_code=geo['regency_city_code']; item.geographic_assignments_json=jdump(geo['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow()
+        if _jurisdiction_signature(normalize_jurisdiction(before,require_valid=False))!=_jurisdiction_signature(geo):
+            item.geographic_mismatch_review_json='{}'
+        db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'previous':before,'new':geo}); return {'ok':True}
     if action=='reviewGeographicMismatch':
         if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
+        current=geography_mismatch(item)
+        if current.get('status')!='pending': raise ValueError('No pending geographic mismatch requires review')
         decision=clean(data.get('decision'),80); reason=clean(data.get('reason'),1000)
         if decision not in ('KEEP_CONFIRMED_JURISDICTION','CHANGE_JURISDICTION'): raise ValueError('Invalid geographic mismatch decision')
-        before={'province':item.province,'regency_city':item.regency_city}
+        if len(reason)<3: raise ValueError('Analyst note / reason is required')
+        before=normalize_jurisdiction(_jurisdiction_payload(item),require_valid=False)
+        after=before
         if decision=='CHANGE_JURISDICTION':
-            item.province=clean(data.get('province') or data.get('proposed',{}).get('province'),128); item.regency_city=clean(data.get('regency_city') or data.get('proposed',{}).get('regency_city'),128)
-        item.geographic_mismatch_review_json=jdump({'decision':decision,'reason':reason,'reviewed_by':p['name'],'reviewed_at':now(),'previous':before}); db.commit(); audit(db,p,'IntelligenceItem',item.id,'GEOGRAPHIC_MISMATCH_REVIEWED',{'decision':{'new':decision},'reason':{'new':reason}}); return {'ok':True}
+            requested=dict(current.get('normalized_proposed') or _proposed_jurisdiction(current.get('proposed') or {}))
+            for key in ('jurisdiction_type','province','province_code','regency_city','regency_city_code','geographic_assignments'):
+                if key in data and data.get(key) not in (None,'',[]):
+                    requested[key]=data.get(key)
+            after=normalize_jurisdiction(requested,require_valid=True)
+            if after.get('jurisdiction_type')=='Unresolved': raise ValueError('Changed jurisdiction must be resolved')
+            item.jurisdiction_type=after['jurisdiction_type']; item.province=after['province']; item.regency_city=after['regency_city']; item.province_code=after['province_code']; item.regency_city_code=after['regency_city_code']; item.geographic_assignments_json=jdump(after['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='GEOGRAPHIC_MISMATCH_REVIEW'
+        review={'decision':decision,'reason':reason,'reviewed_by':p['name'],'reviewed_at':now(),'fingerprint':current.get('fingerprint'),'previous':before,'resulting_jurisdiction':after,'proposed':current.get('proposed') or {}}
+        item.geographic_mismatch_review_json=jdump(review); item.updated_at=datetime.utcnow(); db.commit()
+        audit(db,p,'IntelligenceItem',item.id,'GEOGRAPHIC_MISMATCH_REVIEWED',{'decision':{'new':decision},'reason':{'new':reason},'previous_jurisdiction':{'previous':before},'resulting_jurisdiction':{'new':after},'fingerprint':{'new':current.get('fingerprint')}}); return {'ok':True}
     if action=='update':
         if not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
         fields=['title','english_translation','source_name','platform','author','publication_datetime','analyst_notes','reason','priority','location_text','assigned_reviewer','evidence_type']

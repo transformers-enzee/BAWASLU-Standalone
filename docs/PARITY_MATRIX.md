@@ -7,7 +7,7 @@
 | Jurisdiction confirmation | Yes | Implemented | Human-governed |
 | Province / Regency-City ACL | Yes | Implemented | Enforced server-side |
 | Multi-region data fields | Yes | Implemented | Normalized assignments, server-side Province/Regency ACL enforcement and human confirmation |
-| Geographic mismatch review | Yes | Implemented foundation | Human keep/change decisions |
+| Geographic mismatch review | Yes | Implemented | Fingerprinted mismatch detection, human keep/change decisions, validation blocking, normalized jurisdiction updates and audit |
 | Source identity states | Yes | Implemented | Registered/known/unresolved |
 | Observed publisher provenance | Yes | Implemented | Kept distinct from registered identity |
 | Watchlists | Yes | Implemented | First-class table/API |

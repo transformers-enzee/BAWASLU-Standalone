@@ -339,3 +339,54 @@ def test_caption_headline_caps_long_caption_without_copying_everything():
     headline=_caption_headline(caption,80)
     assert len(headline)<=81
     assert headline.endswith('…')
+
+
+def test_geographic_mismatch_blocks_final_validation_until_human_resolution():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Geographic mismatch case',
+      'original_content':'Source evidence refers to Jakarta while the submitted jurisdiction is West Java.',
+      'jurisdiction_type':'Province','province_code':'32','confirm_jurisdiction':True,
+      'proposed_geography':{'jurisdiction_type':'Province','province_code':'31','supporting_text':'Source explicitly mentions Jakarta.'}
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    mismatch=r.json()['item']['geographic_mismatch']
+    assert mismatch['status']=='pending'
+    assert mismatch['fingerprint']
+
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence','review_notes':'Final'},'id':iid},headers=h)
+    assert r.status_code==400
+    assert 'GEOGRAPHIC MISMATCH' in r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'reviewGeographicMismatch','data':{'decision':'KEEP_CONFIRMED_JURISDICTION','reason':'Analyst confirms West Java assignment after checking the source.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    resolved=r.json()['item']['geographic_mismatch']
+    assert resolved['status']=='resolved'
+    assert resolved['decision']=='KEEP_CONFIRMED_JURISDICTION'
+    assert resolved['fingerprint']==mismatch['fingerprint']
+
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence','review_notes':'Final after geography review'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+
+def test_geographic_mismatch_change_jurisdiction_updates_codes_and_audit():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Change jurisdiction case','original_content':'Source evidence points to Jakarta.',
+      'jurisdiction_type':'Province','province_code':'32','confirm_jurisdiction':True,
+      'proposed_geography':{'jurisdiction_type':'Province','province_code':'31','supporting_text':'Jakarta is explicitly named.'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'reviewGeographicMismatch','data':{'decision':'CHANGE_JURISDICTION','reason':'Source location verified as Jakarta.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    body=r.json()
+    assert body['item']['province_code']=='31'
+    assert body['item']['jurisdiction_source']=='GEOGRAPHIC_MISMATCH_REVIEW'
+    assert body['item']['geographic_mismatch']['status']=='resolved'
+    actions=[e['action'] for e in body['events']]
+    assert 'GEOGRAPHIC_MISMATCH_REVIEWED' in actions

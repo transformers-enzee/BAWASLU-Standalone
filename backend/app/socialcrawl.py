@@ -1,15 +1,15 @@
 import hashlib, json, os, uuid
 from datetime import datetime, timezone
-from urllib.parse import urlencode
 import httpx
 from sqlalchemy.orm import Session
-from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IntelligenceItem
+from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage
 from .access import has, audit
 from .domain import source_identity, create_intelligence
 
-SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://api.socialcrawl.dev').rstrip('/')
+SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
-DEFAULT_PLATFORMS=['tiktok','instagram','youtube','facebook','twitter','threads','reddit','linkedin']
+DEFAULT_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin']
+SUPPORTED_EVERYWHERE_SOURCES=set(DEFAULT_PLATFORMS + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
 
 ALLOWED_FILTERS={
  'query','exact_phrase','include_terms','exclude_terms','hashtags','accounts','watchlist_ids','issue_category','topics','locations',
@@ -27,6 +27,15 @@ def _normalize_filters(filters):
     f['limit']=max(1,min(int(f['limit']),200))
     return f
 
+def _provider_source_name(name):
+    n=str(name or '').strip().lower()
+    if n in ('twitter','x','x/twitter'): return 'twitter-ai-search'
+    if n=='facebook':
+        raise ValueError('Facebook is not supported by SocialCrawl Universal Search Everywhere. Use a supported source or a dedicated Facebook endpoint.')
+    if n not in SUPPORTED_EVERYWHERE_SOURCES:
+        raise ValueError(f'Unsupported SocialCrawl source for Universal Search: {name}')
+    return n
+
 def _provider_params(filters):
     f=_normalize_filters(filters)
     parts=[]
@@ -35,20 +44,32 @@ def _provider_params(filters):
     for x in f.get('include_terms',[]): parts.append(str(x))
     for x in f.get('exclude_terms',[]): parts.append('-'+str(x))
     for x in f.get('hashtags',[]): parts.append('#'+str(x).lstrip('#'))
-    params={'q':' '.join(parts).strip(),'limit':f['limit']}
-    if f.get('platforms'): params['sources']=','.join(f['platforms'])
-    if f.get('exclude_sources'): params['exclude_sources']=','.join(f['exclude_sources'])
-    if f.get('lookback_days'): params['lookback_days']=f['lookback_days']
-    if f.get('date_from'): params['from']=f['date_from']
-    if f.get('date_to'): params['to']=f['date_to']
-    if f.get('include_comments') is not None: params['include_comments']='true' if f.get('include_comments') else 'false'
-    if f.get('minimum_relevance') is not None: params['min_relevance']=f['minimum_relevance']
+    query=' '.join(parts).strip()
+    if not query:
+        raise ValueError('A SocialCrawl search query is required')
+    params={'query':query}
+    if f.get('platforms'):
+        params['sources']=','.join(_provider_source_name(x) for x in f['platforms'])
+    if f.get('exclude_sources'):
+        if params.get('sources'):
+            raise ValueError('SocialCrawl sources and exclude cannot be used together')
+        params['exclude']=','.join(_provider_source_name(x) for x in f['exclude_sources'])
+    if f.get('date_from') or f.get('date_to'):
+        if f.get('lookback_days'):
+            raise ValueError('Choose either lookback days or an explicit date range, not both')
+        if f.get('date_from'): params['from_date']=f['date_from']
+        if f.get('date_to'): params['to_date']=f['date_to']
+    elif f.get('lookback_days'):
+        params['lookback_days']=f['lookback_days']
+    if f.get('minimum_relevance') not in (None,''):
+        params['relevance']='filter'
+        params['relevance_threshold']=f['minimum_relevance']
     return params
 
 def _extract_items(envelope):
     data=envelope.get('data') or {}
     if isinstance(data,list): return data
-    for k in ('items','results','posts'):
+    for k in ('items','results','posts','candidates'):
         if isinstance(data.get(k),list): return data[k]
     return []
 
@@ -92,7 +113,7 @@ def _map_result(db,item):
     platform=str(_value(item,'platform','source','network',default=''))
     rid=str(_value(item,'id','post_id','video_id','shortcode',default=''))
     language=str(_value(item,'language','computed.language',default=''))
-    relevance=_value(item,'relevance_score','relevance.score','score',default='')
+    relevance=_value(item,'computed.relevance.p','relevance_score','relevance.score','score',default='')
     identity,observed=source_identity(db,{'source_url':url})
     if handle and not observed: observed=handle
     engagement={
@@ -110,7 +131,7 @@ def _map_result(db,item):
       'watchlist_matches':[],'content_fingerprint':fp,'raw':item}
 
 def capabilities():
-    return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'endpoint':'/v1/search/everywhere','auth':'x-api-key',
+    return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/everywhere','auth':'x-api-key',
       'platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS)}
 
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
@@ -122,11 +143,22 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
         if provider_client:
             envelope=provider_client(f)
         else:
-            if not SOCIALCRAWL_API_KEY: raise ValueError('SOCIALCRAWL_API_KEY is not configured')
-            headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json','Idempotency-Key':str(uuid.uuid4())}
-            with httpx.Client(timeout=60) as client:
+            if not SOCIALCRAWL_API_KEY: raise ValueError('SOCIALCRAWL_API_KEY is not configured in Render')
+            headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json'}
+            with httpx.Client(timeout=75) as client:
                 res=client.get(SOCIALCRAWL_BASE_URL+endpoint,params=_provider_params(f),headers=headers)
-                res.raise_for_status(); envelope=res.json()
+                try:
+                    envelope=res.json()
+                except Exception:
+                    envelope={}
+                if res.status_code >= 400:
+                    detail=(envelope.get('error') or envelope.get('message') or res.text or f'HTTP {res.status_code}')
+                    if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
+                    raise ValueError(f'SocialCrawl request failed ({res.status_code}): {detail}')
+                if envelope.get('success') is False:
+                    detail=envelope.get('error') or envelope.get('message') or 'SocialCrawl returned success=false'
+                    if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
+                    raise ValueError(f'SocialCrawl request failed: {detail}')
         items=_extract_items(envelope)
         mapped=[]
         for raw in items:
@@ -140,8 +172,9 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None):
         audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)}})
         return {'run':serialize_run(run),'results':mapped,'provider':capabilities()}
     except Exception as e:
-        run.status='FAILED'; run.error_text=str(e); db.commit();
-        raise
+        run.status='FAILED'; run.error_text=str(e); db.commit()
+        if isinstance(e,(ValueError,PermissionError)): raise
+        raise ValueError(f'SocialCrawl search failed: {e}')
 
 def serialize_rule(x): return {'id':str(x.id),'name':x.name,'description':x.description,'provider':x.provider,'enabled':x.enabled,'filters':json.loads(x.filters_json or '{}'),'created_by':x.created_by,'created_at':x.created_at.isoformat(),'updated_at':x.updated_at.isoformat()}
 def serialize_run(x): return {'id':str(x.id),'rule_id':str(x.rule_id) if x.rule_id else None,'provider':x.provider,'query':json.loads(x.query_json or '{}'),'provider_request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'status':x.status,'error_text':x.error_text,'executed_by':x.executed_by,'executed_at':x.executed_at.isoformat()}

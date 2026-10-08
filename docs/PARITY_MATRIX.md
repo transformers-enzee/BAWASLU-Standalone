@@ -16,6 +16,7 @@
 | V3 triage provenance | Yes | Implemented | Validated V3 contract, generation/source/proposal fingerprints, versioned local placeholder provenance and audit |
 | Production AI triage | Yes | Pending v0.2 | Deterministic placeholder only |
 | Human triage decisions | Yes | Implemented | Backend-enforced Accept/Modify/Reject review, completion state, rejection/modify validation, audit provenance and final-validation gate |
+| Human-approved intelligence summary | Yes | Implemented | Server-derived accepted/modified triage projection; rejected/pending suggestions excluded; per-field reviewer/timestamp provenance and final-review audit snapshot |
 | Evidence verification | Yes | Implemented | Independent human action |
 | Duplicate detection/review | Yes | Implemented | Exact/canonical URL plus headline/content/source/date similarity scoring; human merge/keep-separate decision retained |
 | Evidence attachments | Yes | Implemented local | Object storage/signed URL pending |

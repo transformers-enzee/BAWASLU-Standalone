@@ -525,3 +525,85 @@ def test_local_triage_requires_original_source_content():
     r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
     assert r.status_code==400
     assert 'Original source content is required' in r.text
+
+
+def test_human_approved_triage_projection_excludes_rejected_and_uses_modified_values():
+    h=auth()
+    suggestions={
+      '_version':3,
+      'summary':'AI summary',
+      'actors':json.dumps([{'entity_id':'','entity_name':'Actor A','entity_type':'Person','relationship_to_content':'mentioned','evidence_basis':'Source names Actor A','evidence_type':'OBSERVED','confidence':'MEDIUM'}]),
+      'supervision_signal':'MONITOR',
+      'signal_reason':'AI reason',
+      'priority':'High'
+    }
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Human approved projection','original_content':'Source evidence.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':suggestions
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    for payload in [
+      {'key':'summary','status':'Human Modified','value':'Human corrected summary'},
+      {'key':'actors','status':'Human Accepted'},
+      {'key':'supervision_signal','status':'Human Accepted'},
+      {'key':'signal_reason','status':'Human Rejected','reason':'Reason is not supported by the source.'},
+      {'key':'priority','status':'Human Modified','value':'Medium'}
+    ]:
+        r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':payload,'id':iid},headers=h)
+        assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    approved=r.json()['item']['human_approved_triage']
+    assert approved['values']['summary']=='Human corrected summary'
+    assert approved['values']['actors'][0]['entity_name']=='Actor A'
+    assert approved['values']['supervision_signal']=='MONITOR'
+    assert approved['values']['priority']=='Medium'
+    assert 'signal_reason' not in approved['values']
+    assert 'signal_reason' in approved['rejected_fields']
+    assert approved['provenance']['summary']['decision']=='Human Modified'
+    assert approved['provenance']['actors']['decision']=='Human Accepted'
+    assert approved['approved_count']==4
+
+def test_changing_triage_decision_updates_human_approved_projection_without_overwriting_source():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Projection changes','original_content':'Original evidence stays unchanged.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_version':3,'summary':'AI proposed summary'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['human_approved_triage']['values']['summary']=='AI proposed summary'
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Rejected','reason':'Source does not support this summary.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    assert 'summary' not in r.json()['human_approved_triage']['values']
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    item=r.json()['item']
+    assert item['original_content']=='Original evidence stays unchanged.'
+    assert item['ai_suggestions']['summary']=='AI proposed summary'
+    assert 'summary' not in item['human_approved_triage']['values']
+
+def test_final_review_audit_contains_human_approved_triage_snapshot():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Audit approved projection','original_content':'Evidence',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_version':3,'summary':'AI summary'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==200
+    r=client.post('/api/functions/intelligence',json={'action':'review','data':{'decision':'Validated as Relevant Intelligence','review_notes':'Approved after triage review.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    reviewed=[e for e in r.json()['events'] if e['action']=='REVIEWED'][0]
+    snapshot=reviewed['changes']['human_approved_triage']['new']
+    assert snapshot['values']['summary']=='AI summary'
+    assert snapshot['provenance']['summary']['reviewer']=='Admin'

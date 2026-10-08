@@ -113,6 +113,43 @@ def triage_review_status(item):
       'pending_keys':[k for k in fields if k not in valid],'reviewed_keys':reviewed
     }
 
+def _approved_triage_value(key,value):
+    if key in V3_TRIAGE_STRUCTURED_FIELDS and isinstance(value,str) and value.strip():
+        try: return json.loads(value)
+        except Exception: return value
+    return value
+
+def human_approved_triage(item):
+    suggestions,_=_triage_reviewable(item)
+    decisions=suggestions.get('_decisions') or {}
+    values={}
+    provenance={}
+    rejected=[]
+    for key,decision in decisions.items():
+        if not isinstance(decision,dict): continue
+        status=decision.get('status')
+        if status not in TRIAGE_DECISION_STATUSES: continue
+        if status=='Human Rejected':
+            rejected.append(key)
+            continue
+        raw=decision.get('value') if status=='Human Modified' else suggestions.get(key)
+        if raw is None or (isinstance(raw,str) and not raw.strip()): continue
+        values[key]=_approved_triage_value(key,raw)
+        provenance[key]={
+          'decision':status,
+          'reviewer':decision.get('reviewer') or '',
+          'reviewer_id':decision.get('reviewer_id') or '',
+          'decided_at':decision.get('decided_at') or '',
+          'source':'HUMAN_MODIFIED_AI_SUGGESTION' if status=='Human Modified' else 'HUMAN_ACCEPTED_AI_SUGGESTION'
+        }
+    return {
+      'values':values,
+      'provenance':provenance,
+      'rejected_fields':sorted(rejected),
+      'approved_count':len(values),
+      'review_state':triage_review_status(item).get('state')
+    }
+
 def next_intelligence_id(db:Session):
     year=datetime.now(timezone.utc).year
     row=db.get(IntelligenceSequence,year)
@@ -412,7 +449,7 @@ def intelligence_action(db,p,action,data,id=None):
     if p.get('status')!='Active': raise PermissionError('BAWASLU account access is inactive')
     if action=='list':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-        return {'items':[{**intelligence(x),'geographic_mismatch':geography_mismatch(x),'triage_review':triage_review_status(x)} for x in list_intelligence(db,p)]}
+        return {'items':[{**intelligence(x),'geographic_mismatch':geography_mismatch(x),'triage_review':triage_review_status(x),'human_approved_triage':human_approved_triage(x)} for x in list_intelligence(db,p)]}
     if action=='activity':
         visible={str(x.id) for x in list_intelligence(db,p)}
         ev=db.query(AuditEvent).order_by(AuditEvent.id.desc()).limit(100).all()
@@ -446,7 +483,7 @@ def intelligence_action(db,p,action,data,id=None):
         if comparison_item and not allowed(p,comparison_item): comparison_item=None
         if not comparison_item and linked: comparison_item=linked[0]
         duplicate_match=duplicate_similarity(item,comparison_item) if comparison_item and item.duplicate_of else None
-        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item),'triage_review':triage_review_status(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
+        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item),'triage_review':triage_review_status(item),'human_approved_triage':human_approved_triage(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
     if action=='confirmJurisdiction':
         if not has(p,'human_validation') and not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
         geo=normalize_jurisdiction(data,require_valid=True)
@@ -502,7 +539,7 @@ def intelligence_action(db,p,action,data,id=None):
             triage=triage_review_status(item)
             if triage['generated'] and triage['state']!='REVIEW COMPLETE':
                 raise ValueError(f"AI TRIAGE REVIEW INCOMPLETE — {triage['reviewed']} of {triage['total']} generated suggestions decided")
-        item.review_status=decision; item.review_notes=clean(data.get('review_notes'),5000); item.assigned_reviewer=p['name']; item.validated_at=now(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'REVIEWED',{'review_status':{'new':decision},'review_notes':{'new':item.review_notes},'triage_review':{'new':triage_review_status(item)}}); return {'ok':True}
+        item.review_status=decision; item.review_notes=clean(data.get('review_notes'),5000); item.assigned_reviewer=p['name']; item.validated_at=now(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'REVIEWED',{'review_status':{'new':decision},'review_notes':{'new':item.review_notes},'triage_review':{'new':triage_review_status(item)},'human_approved_triage':{'new':human_approved_triage(item)}}); return {'ok':True}
     if action=='duplicate':
         if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
         decision=clean(data.get('decision'),64)
@@ -546,8 +583,9 @@ def intelligence_action(db,p,action,data,id=None):
         decisions[key]={'status':status,'value':value,'reason':reason,'reviewer':p['name'],'reviewer_id':p['id'],'decided_at':now()}
         item.ai_suggestions_json=jdump(stored); item.updated_at=datetime.utcnow(); db.commit()
         current=triage_review_status(item)
-        audit(db,p,'IntelligenceItem',item.id,'AI_SUGGESTION_DECIDED',{key:{'previous':previous,'new':decisions[key]},'triage_review':{'new':current}})
-        return {'ok':True,'triage_review':current}
+        approved=human_approved_triage(item)
+        audit(db,p,'IntelligenceItem',item.id,'AI_SUGGESTION_DECIDED',{key:{'previous':previous,'new':decisions[key]},'triage_review':{'new':current},'human_approved_triage':{'new':approved}})
+        return {'ok':True,'triage_review':current,'human_approved_triage':approved}
     if action=='linkWatchlist':
         if not has(p,'review_ai_suggestions'): raise PermissionError('Not permitted')
         wid=str(data.get('watchlist_id','')); w=db.get(WatchlistItem,int(wid)) if wid.isdigit() else None

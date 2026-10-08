@@ -44,7 +44,7 @@ export default function ResetPassword() {
         subtitle={t('invalid_reset_subtitle')}
         footer={
           <Link to="/forgot-password" className="text-primary font-medium hover:underline">
-            Request a new link
+            {t('request_new_link')}
           </Link>
         }
       >

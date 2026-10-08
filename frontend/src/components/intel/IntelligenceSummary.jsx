@@ -1,5 +1,4 @@
 import Status from './Status';
-import { activityLabel, narrativeLabel, locationLabel, actorLabels, relationshipLabels, screeningNext, gapsLabel } from './actorPictureView';
 
 const listText=value=>Array.isArray(value)?value.filter(Boolean).join(' · '):value||'';
 const actorText=value=>Array.isArray(value)?value.map(a=>typeof a==='string'?a:[a?.entity_name,a?.relationship_to_content].filter(Boolean).join(' · ')).filter(Boolean).join(', '):value||'';
@@ -8,37 +7,57 @@ const activityText=value=>typeof value==='string'?value:[value?.type,value?.desc
 const narrativeText=value=>typeof value==='string'?value:[value?.label,value?.description].filter(Boolean).join(' · ');
 const locationText=value=>typeof value==='string'?value:value?.location_text||'';
 
+function FieldState({state}){
+  if(!state)return <p className="text-[#73879a]">No AI suggestion generated</p>;
+  if(state.state==='REJECTED')return <><p className="font-medium text-[#8b4b37]">Rejected by human reviewer</p>{state.reason&&<p className="mt-1 text-[10px] text-[#8b6f65]">Reason: {state.reason}</p>}<Provenance state={state}/></>;
+  if(state.state==='PENDING')return <p className="text-[#8a6d35]">Awaiting human review</p>;
+  return null;
+}
+function Provenance({state}){
+  if(!state?.decision)return null;
+  return <p className="mt-1 text-[10px] text-[#8293a4]">Human {state.decision==='Human Modified'?'modified':state.decision==='Human Accepted'?'accepted':'rejected'} · {state.reviewer||'authorized reviewer'}{state.decided_at?` · ${new Date(state.decided_at).toLocaleString('en-GB')}`:''}</p>;
+}
+function ApprovedField({label,field,value,states}){
+  const state=states[field];
+  return <div><span className="intel-label">{label}</span>{state?.state==='APPROVED'?<><p className="whitespace-pre-wrap">{value||'Human-approved value not available'}</p><Provenance state={state}/></>:<FieldState state={state}/>}</div>;
+}
+
 export default function IntelligenceSummary({item}){
-  const x=item,e=x.intelligence_extraction||{},s=x.supervision_screening||{},approved=x.human_approved_triage?.values||{},provenance=x.human_approved_triage?.provenance||{};
-  const happened=approved.summary||x.ai_summary;
-  const actors=actorText(approved.actors||approved.entity)||[...(x.related_entities||[]),...actorLabels(e)].filter(Boolean).join(', ');
-  const where=locationText(approved.location_signal||approved.location)||locationLabel(e,x);
-  const activity=activityText(approved.activity)||activityLabel(e);
-  const narrative=narrativeText(approved.narrative)||narrativeLabel(e);
-  const relationships=relationshipText(approved.relationships)||relationshipLabels(e).join('; ')||(typeof e.relationships==='string'?e.relationships:'');
-  const signal=approved.supervision_signal||s.supervision_signal;
-  const screeningConfidence=approved.screening_confidence||s.confidence;
-  const signalReason=approved.signal_reason||s.signal_reason;
-  const checkNext=listText(approved.check_next)||screeningNext(s);
-  const evidenceBasis=listText(approved.screening_evidence_basis)||(Array.isArray(s.evidence_basis)?s.evidence_basis.join(' · '):'');
-  const gaps=listText(approved.evidence_gaps)||gapsLabel(e);
-  const priority=approved.priority||x.priority;
-  const rows=[
-    ['What happened',happened,'summary'],
-    ['Who is involved',actors,approved.actors?'actors':approved.entity?'entity':''],
-    ['Where',where,approved.location_signal?'location_signal':approved.location?'location':''],
-    ['Activity',activity,approved.activity?'activity':''],
-    ['Narrative',narrative,approved.narrative?'narrative':''],
-    ['Source / Publisher',x.observed_publisher_handle||x.author||x.source_name,''],
-    ['Human-confirmed monitored relationship',x.entity_relationships?.filter(r=>r.review_status==='HUMAN_CONFIRMED').map(r=>`${r.relationship_type} · ${r.evidence_basis}`).join('; '),''],
-    ['Extracted relationship · not ownership',relationships,approved.relationships?'relationships':''],
-    ['Supervision signal',signal,approved.supervision_signal?'supervision_signal':''],
-    ['Screening confidence',screeningConfidence,approved.screening_confidence?'screening_confidence':''],
-    ['Why attention may be warranted',signalReason,approved.signal_reason?'signal_reason':''],
-    ['What to check next',checkNext,approved.check_next?'check_next':''],
-    ['Screening evidence basis',evidenceBasis,approved.screening_evidence_basis?'screening_evidence_basis':''],
-    ['Evidence gaps',gaps,approved.evidence_gaps?'evidence_gaps':'']
+  const x=item,projection=x.human_approved_triage||{},approved=projection.values||{},states=projection.field_states||{};
+  const approvedCount=projection.approved_count||0;
+  const actorKey=approved.actors!==undefined?'actors':approved.entity!==undefined?'entity':'actors';
+  const locationKey=approved.location_signal!==undefined?'location_signal':approved.location!==undefined?'location':'location_signal';
+  const jurisdiction=x.jurisdiction_confirmed?[x.regency_city,x.province].filter(Boolean).join(', ')||(x.jurisdiction_type==='National'?'National · Nationwide':x.jurisdiction_type):'Not human-confirmed';
+  const analytical=[
+    ['What happened','summary',approved.summary||''],
+    ['Who is involved',actorKey,actorText(approved.actors||approved.entity)],
+    ['Where / location signal',locationKey,locationText(approved.location_signal||approved.location)],
+    ['Activity','activity',activityText(approved.activity)],
+    ['Narrative','narrative',narrativeText(approved.narrative)],
+    ['Extracted relationship · not ownership','relationships',relationshipText(approved.relationships)],
+    ['Supervision signal','supervision_signal',approved.supervision_signal||''],
+    ['Screening confidence','screening_confidence',approved.screening_confidence||''],
+    ['Why attention may be warranted','signal_reason',approved.signal_reason||''],
+    ['What to check next','check_next',listText(approved.check_next)],
+    ['Screening evidence basis','screening_evidence_basis',listText(approved.screening_evidence_basis)],
+    ['Evidence gaps','evidence_gaps',listText(approved.evidence_gaps)]
   ];
-  const approvedCount=x.human_approved_triage?.approved_count||0;
-  return <section className="intel-card p-6 space-y-4"><h2 className="font-semibold text-lg">Intelligence Summary</h2><p className="font-medium">{x.title}</p><div className="flex flex-wrap items-center gap-2"><p className="text-[11px] font-bold uppercase tracking-wider text-[#267291]">FINAL SUMMARY · HUMAN-APPROVED ONLY</p>{approvedCount>0&&<span className="text-[11px] rounded-full bg-[#eef5f8] px-2 py-1 text-[#42657a]">{approvedCount} triage field{approvedCount===1?'':'s'} human-approved</span>}</div><div className="grid sm:grid-cols-2 gap-4 text-sm">{rows.map(([label,value,key])=><div key={label}><span className="intel-label">{label}</span><p className="whitespace-pre-wrap">{value||'Not yet human-approved / recorded'}</p>{key&&provenance[key]&&<p className="mt-1 text-[10px] text-[#8293a4]">Human {provenance[key].decision==='Human Modified'?'modified':'accepted'} · {provenance[key].reviewer||'authorized reviewer'}{provenance[key].decided_at?` · ${new Date(provenance[key].decided_at).toLocaleString('en-GB')}`:''}</p>}</div>)}<div><span className="intel-label">Priority</span><Status value={priority}/>{approved.priority&&provenance.priority&&<p className="mt-1 text-[10px] text-[#8293a4]">Human {provenance.priority.decision==='Human Modified'?'modified':'accepted'} · {provenance.priority.reviewer||'authorized reviewer'}</p>}</div></div>{x.potential_issue_category&&<div className="border-t pt-3"><h3 className="text-xs font-bold uppercase tracking-wider">LEGACY ASSESSMENT</h3><p className="text-sm mt-2">Historical potential issue category: {x.potential_issue_category}</p><p className="text-xs text-[#617789]">Historical value only; not a current supervision signal or finding.</p></div>}{signal&&<p className="text-xs text-[#617789]">This supervision signal does not establish a violation. Regulatory assessment is separate.</p>}<p className="text-xs text-[#8c9bab]">Only accepted or human-modified triage outcomes can appear here. Rejected and pending AI suggestions are excluded. Original source evidence and AI proposals remain unchanged.</p></section>;
+  return <section className="intel-card p-6 space-y-6">
+    <div className="space-y-2"><h2 className="font-semibold text-lg">Intelligence Summary</h2><p className="font-medium">{x.title}</p><div className="flex flex-wrap items-center gap-2"><p className="text-[11px] font-bold uppercase tracking-wider text-[#267291]">FINAL SUMMARY · HUMAN-APPROVED ONLY</p>{approvedCount>0&&<span className="text-[11px] rounded-full bg-[#eef5f8] px-2 py-1 text-[#42657a]">{approvedCount} triage field{approvedCount===1?'':'s'} human-approved</span>}</div></div>
+
+    <div className="space-y-3"><h3 className="text-xs font-bold uppercase tracking-wider text-[#53657b]">Human-approved analytical fields</h3><div className="grid sm:grid-cols-2 gap-4 text-sm">{analytical.map(([label,field,value])=><ApprovedField key={label} label={label} field={field} value={value} states={states}/>)}
+      <div><span className="intel-label">Priority</span>{states.priority?.state==='APPROVED'?<><Status value={approved.priority}/><Provenance state={states.priority}/></>:<FieldState state={states.priority}/>}</div>
+      <div><span className="intel-label">Evidence Type · not verification</span>{states.evidence_type?.state==='APPROVED'?<><Status value={approved.evidence_type}/><Provenance state={states.evidence_type}/></>:<FieldState state={states.evidence_type}/>}</div>
+    </div></div>
+
+    <div className="border-t pt-4 space-y-3"><div><h3 className="text-xs font-bold uppercase tracking-wider text-[#53657b]">Recorded source & confirmed context</h3><p className="mt-1 text-[10px] text-[#8293a4]">These values come from source metadata or separate human confirmation. They are not AI-triage approvals.</p></div><div className="grid sm:grid-cols-2 gap-4 text-sm">
+      <div><span className="intel-label">Source / Publisher</span><p>{x.observed_publisher_handle||x.author||x.source_name||'Not recorded'}</p></div>
+      <div><span className="intel-label">Confirmed jurisdiction</span><p>{jurisdiction||'Not recorded'}</p></div>
+      <div><span className="intel-label">Human-confirmed monitored relationship</span><p>{x.entity_relationships?.filter(r=>r.review_status==='HUMAN_CONFIRMED').map(r=>`${r.relationship_type} · ${r.evidence_basis}`).join('; ')||'Not recorded'}</p></div>
+      <div><span className="intel-label">Evidence verification status</span><Status value={x.verification_status}/></div>
+    </div></div>
+
+    {x.potential_issue_category&&<div className="border-t pt-3"><h3 className="text-xs font-bold uppercase tracking-wider">LEGACY ASSESSMENT</h3><p className="text-sm mt-2">Historical potential issue category: {x.potential_issue_category}</p><p className="text-xs text-[#617789]">Historical value only; not a current supervision signal or finding.</p></div>}
+    <p className="text-xs text-[#8c9bab]">Human-accepted or human-modified triage outcomes appear as approved values. Human-rejected fields are shown as rejected, genuinely undecided suggestions are shown as awaiting review, and fields never proposed by AI are shown separately. Original source evidence and AI proposals remain unchanged.</p>
+  </section>;
 }

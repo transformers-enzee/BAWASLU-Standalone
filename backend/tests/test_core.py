@@ -607,3 +607,51 @@ def test_final_review_audit_contains_human_approved_triage_snapshot():
     snapshot=reviewed['changes']['human_approved_triage']['new']
     assert snapshot['values']['summary']=='AI summary'
     assert snapshot['provenance']['summary']['reviewer']=='Admin'
+
+
+def test_human_approved_projection_exposes_rejected_pending_and_approved_field_states():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Field state clarity','original_content':'Source evidence.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{
+        '_version':3,
+        'summary':'AI summary',
+        'supervision_signal':'NO SIGNAL IDENTIFIED',
+        'screening_confidence':'LOW',
+        'priority':'Medium',
+        'evidence_type':'OBSERVED'
+      }
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'supervision_signal','status':'Human Rejected','reason':'No supported supervision signal.'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    projection=r.json()['item']['human_approved_triage']
+    assert projection['field_states']['summary']['state']=='APPROVED'
+    assert projection['field_states']['summary']['decision']=='Human Accepted'
+    assert projection['field_states']['supervision_signal']['state']=='REJECTED'
+    assert projection['field_states']['supervision_signal']['reason']=='No supported supervision signal.'
+    assert projection['field_states']['screening_confidence']['state']=='PENDING'
+    assert projection['field_states']['evidence_type']['state']=='PENDING'
+    assert 'supervision_signal' not in projection['values']
+    assert projection['values']['summary']=='AI summary'
+
+def test_projection_only_marks_generated_reviewable_fields_as_pending():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Only proposed fields pending','original_content':'Evidence',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_version':3,'summary':'Only summary proposed'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    projection=r.json()['item']['human_approved_triage']
+    assert projection['field_states']['summary']['state']=='PENDING'
+    assert 'evidence_type' not in projection['field_states']
+    assert projection['reviewable_fields']==['summary']

@@ -120,31 +120,44 @@ def _approved_triage_value(key,value):
     return value
 
 def human_approved_triage(item):
-    suggestions,_=_triage_reviewable(item)
+    suggestions,reviewable=_triage_reviewable(item)
     decisions=suggestions.get('_decisions') or {}
     values={}
     provenance={}
     rejected=[]
-    for key,decision in decisions.items():
-        if not isinstance(decision,dict): continue
+    field_states={}
+    for key in reviewable:
+        decision=decisions.get(key) if isinstance(decisions.get(key),dict) else {}
         status=decision.get('status')
-        if status not in TRIAGE_DECISION_STATUSES: continue
-        if status=='Human Rejected':
-            rejected.append(key)
-            continue
-        raw=decision.get('value') if status=='Human Modified' else suggestions.get(key)
-        if raw is None or (isinstance(raw,str) and not raw.strip()): continue
-        values[key]=_approved_triage_value(key,raw)
-        provenance[key]={
-          'decision':status,
+        base={
           'reviewer':decision.get('reviewer') or '',
           'reviewer_id':decision.get('reviewer_id') or '',
           'decided_at':decision.get('decided_at') or '',
-          'source':'HUMAN_MODIFIED_AI_SUGGESTION' if status=='Human Modified' else 'HUMAN_ACCEPTED_AI_SUGGESTION'
+          'reason':decision.get('reason') or ''
         }
+        if status=='Human Rejected':
+            rejected.append(key)
+            field_states[key]={**base,'state':'REJECTED','decision':status,'source':'HUMAN_REJECTED_AI_SUGGESTION'}
+            continue
+        if status in ('Human Accepted','Human Modified'):
+            raw=decision.get('value') if status=='Human Modified' else suggestions.get(key)
+            if raw is not None and (not isinstance(raw,str) or raw.strip()):
+                values[key]=_approved_triage_value(key,raw)
+                provenance[key]={
+                  'decision':status,
+                  'reviewer':base['reviewer'],
+                  'reviewer_id':base['reviewer_id'],
+                  'decided_at':base['decided_at'],
+                  'source':'HUMAN_MODIFIED_AI_SUGGESTION' if status=='Human Modified' else 'HUMAN_ACCEPTED_AI_SUGGESTION'
+                }
+                field_states[key]={**base,'state':'APPROVED','decision':status,'source':provenance[key]['source']}
+                continue
+        field_states[key]={**base,'state':'PENDING','decision':''}
     return {
       'values':values,
       'provenance':provenance,
+      'field_states':field_states,
+      'reviewable_fields':sorted(reviewable),
       'rejected_fields':sorted(rejected),
       'approved_count':len(values),
       'review_state':triage_review_status(item).get('state')

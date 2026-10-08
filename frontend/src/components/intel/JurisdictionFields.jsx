@@ -8,7 +8,7 @@ export default function JurisdictionFields({value,onChange}){
  const assignments=type==='Multi-Region'?(value.geographic_assignments?.length?value.geographic_assignments:[empty(),empty()]):[{province_code:value.province_code||'',regency_city_code:value.regency_city_code||''}];
  const setType=v=>onChange({...value,jurisdiction_type:v,province_code:'',regency_city_code:'',geographic_assignments:v==='Multi-Region'?[empty(),empty()]:[]});
  const setAssignment=(index,patch)=>{const next=assignments.map((x,i)=>i===index?{...x,...patch}:x);onChange(type==='Multi-Region'?{...value,geographic_assignments:next}:{...value,...next[0]});};
- const typeLabel=x=>x==='National'?t('national'):x==='Province'?t('province'):x==='Regency / City'?t('regency_city'):x==='Multi-Region'?'Multi-Region':t('unresolved');
+ const typeLabel=x=>x==='National'?t('national'):x==='Province'?t('province'):x==='Regency / City'?t('regency_city'):x==='Multi-Region'?t('multi_region'):t('unresolved');
  return <div className="space-y-3">
   <label className="block"><span className="intel-label">{t('jurisdiction_classification')}</span><select className="intel-input" value={type} onChange={e=>setType(e.target.value)}>{types.map(x=><option key={x} value={x}>{typeLabel(x)}</option>)}</select></label>
   {type==='Unresolved'&&<p className="text-xs text-muted-foreground">{t('requires_regional_block')}</p>}

@@ -2,8 +2,8 @@
 
 | Capability | Legacy BAWASLU | v0.1 status | Notes |
 |---|---|---|---|
-| Intelligence create/list/get | Yes | Implemented | Standalone DB/API; Inbox now includes quick operational views, explicit sorting, active-filter chips and a responsive no-horizontal-scroll analyst list |
-| Workspace Home / Dashboard | Yes | Implemented | Compact management dashboard with scoped metrics, metric-to-filter deep links, urgency-ranked attention reasons, validated intelligence summary, Watchlist/Social queue breakdowns, resilient partial-loading/failure states and recent activity timeline |
+| Intelligence create/list/get | Yes | Implemented | Standalone DB/API; Inbox now includes quick operational views, explicit sorting, active-filter chips, responsive no-horizontal-scroll analyst cards, and EN/ID localized Inbox UI |
+| Workspace Home / Dashboard | Yes | Implemented | Compact management dashboard with scoped metrics, metric-to-filter deep links, urgency-ranked attention reasons, validated intelligence summary, Watchlist/Social queue breakdowns, resilient partial-loading/failure states, recent activity timeline, and EN/ID localized Home UI |
 | `INT-YYYY-######` sequence | Yes | Implemented | Database-backed sequence |
 | Jurisdiction confirmation | Yes | Implemented | Human-governed |
 | Province / Regency-City ACL | Yes | Implemented | Enforced server-side |

@@ -50,7 +50,7 @@ export default function Login() {
             to={"/register" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")}
             className="text-primary font-medium hover:underline"
           >
-            Create one
+            {t('create_one')}
           </Link>
         </>
       }
@@ -101,7 +101,7 @@ export default function Login() {
           <div className="flex items-center justify-between">
             <Label htmlFor="password">{t('password')}</Label>
             <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-              Forgot password?
+              {t('forgot_password')}
             </Link>
           </div>
           <div className="relative">

@@ -103,7 +103,7 @@ export default function Inbox(){
     <div>
       <p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">Collection / Triage</p>
       <h1 className="intel-heading">Intelligence Inbox</h1>
-      <p className="text-sm text-[#77899b] mt-2">{currentView} · {sorted.length} of {items.length} authorized records</p>
+      <p className="text-sm text-[#77899b] mt-2">{currentView} · {sorted.length} match{sorted.length===1?'':'es'} · {items.length} record{items.length===1?'':'s'} in authorized scope</p>
     </div>
 
     <Notice error={error}/>

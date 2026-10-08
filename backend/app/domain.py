@@ -583,13 +583,17 @@ def intelligence_action(db,p,action,data,id=None):
     if action=='review':
         if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
         decision=clean(data.get('decision'),128)
+        notes=clean(data.get('review_notes'),5000)
         if decision not in ['Validated as Relevant Intelligence','Request More Information','Not Relevant','Escalate for Further Review']: raise ValueError('Invalid review decision')
+        if decision in ['Request More Information','Not Relevant','Escalate for Further Review'] and len(notes)<3:
+            raise ValueError('Reviewer notes are required for this decision')
         if decision=='Validated as Relevant Intelligence':
+            if item.jurisdiction_confirmed is not True: raise ValueError('JURISDICTION CONFIRMATION REQUIRED before final validation')
             if geography_mismatch(item).get('status')=='pending': raise ValueError('GEOGRAPHIC MISMATCH — REVIEW REQUIRED before final validation')
             triage=triage_review_status(item)
             if triage['generated'] and triage['state']!='REVIEW COMPLETE':
                 raise ValueError(f"AI TRIAGE REVIEW INCOMPLETE — {triage['reviewed']} of {triage['total']} generated suggestions decided")
-        item.review_status=decision; item.review_notes=clean(data.get('review_notes'),5000); item.assigned_reviewer=p['name']; item.validated_at=now(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'REVIEWED',{'review_status':{'new':decision},'review_notes':{'new':item.review_notes},'triage_review':{'new':triage_review_status(item)},'human_approved_triage':{'new':human_approved_triage(item)}}); return {'ok':True}
+        item.review_status=decision; item.review_notes=notes; item.assigned_reviewer=p['name']; item.validated_at=now(); db.commit(); audit(db,p,'IntelligenceItem',item.id,'REVIEWED',{'review_status':{'new':decision},'review_notes':{'new':item.review_notes},'triage_review':{'new':triage_review_status(item)},'human_approved_triage':{'new':human_approved_triage(item)}}); return {'ok':True}
     if action=='duplicate':
         if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
         decision=clean(data.get('decision'),64)

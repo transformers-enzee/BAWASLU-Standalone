@@ -2,4 +2,68 @@ import { useState } from 'react';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import IntelligenceTable from '@/components/intel/IntelligenceTable';
 import { PRIORITIES, Notice } from '@/components/intel/Fields';
-export default function Inbox(){const {items,loading,error}=useIntel(),{items:entities}=useRegistry();const [f,setF]=useState(()=>({entity:new URLSearchParams(window.location.search).get('entity')||''}));const pick=(key,value)=>setF(v=>({...v,[key]:value}));const unique=key=>[...new Set(items.flatMap(x=>['province','regency_city'].includes(key)?(x.geographic_assignments||[]).map(a=>a[key]).filter(Boolean):[x[key]]).filter(Boolean))].sort();const options={province:unique('province'),regency_city:unique('regency_city'),entity:entities.map(x=>x.name),platform:unique('platform'),evidence_type:['OBSERVED','INFERRED'],verification_status:['UNVERIFIED','HUMAN_VERIFIED'],supervision_signal:['NO SIGNAL IDENTIFIED','MONITOR','REVIEW RECOMMENDED','POTENTIAL REGULATORY ISSUE'],priority:PRIORITIES,reviewer:unique('assigned_reviewer'),review_status:unique('review_status'),source_type:unique('source_type')};const filtered=items.filter(x=>{const text=`${x.intelligence_id} ${x.title} ${x.original_content} ${x.related_entities?.join(' ')} ${x.province} ${x.regency_city} ${(x.geographic_assignments||[]).map(a=>`${a.province} ${a.regency_city}`).join(' ')}`.toLowerCase();return (!f.search||text.includes(f.search.toLowerCase()))&&(!f.date||x.created_date?.slice(0,10)===f.date)&&Object.keys(options).every(k=>!f[k]||(k==='entity'?x.related_entities?.includes(f[k]):k==='reviewer'?x.assigned_reviewer===f[k]:k==='supervision_signal'?x.supervision_screening?.supervision_signal===f[k]:k==='evidence_type'?(x.evidence_type||(['OBSERVED','INFERRED'].includes(x.evidence_state)?x.evidence_state:''))===f[k]:k==='verification_status'?(x.verification_status||(x.evidence_state==='VERIFIED'?'HUMAN_VERIFIED':'UNVERIFIED'))===f[k]:['province','regency_city'].includes(k)?(x.geographic_assignments||[]).some(a=>a[k]===f[k]):x[k]===f[k]))});return <div className="space-y-6"><div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">Collection / Triage</p><h1 className="intel-heading">Intelligence Inbox</h1><p className="text-sm text-[#77899b] mt-2">Source material and analyst submissions · {filtered.length} records</p></div><Notice error={error}/>{new URLSearchParams(window.location.search).get('jurisdiction')==='pending'&&<p role="status" className="text-sm">Submitted for national jurisdiction resolution. Regional users cannot access the record until it is confirmed.</p>}<div className="intel-card p-5"><div className="grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3"><input className="intel-input sm:col-span-2" placeholder="Search keywords, ID, entity or location..." aria-label="Search intelligence" value={f.search||''} onChange={e=>pick('search',e.target.value)}/><input className="intel-input" type="date" aria-label="Filter by date" value={f.date||''} onChange={e=>pick('date',e.target.value)}/>{Object.entries(options).map(([key,values])=><select key={key} className="intel-input" aria-label={`Filter by ${key.replace('_',' ')}`} value={f[key]||''} onChange={e=>pick(key,e.target.value)}><option value="">All {key.replace(/_/g,' ')}s</option>{values.map(v=><option key={v} value={v}>{v}</option>)}</select>)}</div><button className="text-xs font-semibold text-[#126b8b] mt-3" onClick={()=>setF({})}>Clear filters</button></div>{loading?<p className="text-sm text-[#77899b]">Loading intelligence...</p>:error?null:<IntelligenceTable items={filtered}/>}</div>}
+
+const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
+const triagePending=x=>{
+  const t=x.triage_review||x.triage_review_status||{};
+  const state=typeof t==='string'?t:t.state;
+  const generated=typeof t==='object'?t.generated:!!state;
+  return generated&&state&&state!=='REVIEW COMPLETE';
+};
+
+function initialFilters(){
+  const q=new URLSearchParams(window.location.search);
+  const f={};
+  for(const key of ['entity','verification_status','review_status','priority','province','regency_city','platform','evidence_type','reviewer','source_type','supervision_signal','date','search']){
+    const value=q.get(key);
+    if(value)f[key]=value;
+  }
+  if(q.get('view'))f.view=q.get('view');
+  return f;
+}
+
+export default function Inbox(){
+  const {items,loading,error}=useIntel(),{items:entities}=useRegistry();
+  const [f,setF]=useState(initialFilters);
+  const pick=(key,value)=>setF(v=>({...v,[key]:value}));
+  const unique=key=>[...new Set(items.flatMap(x=>['province','regency_city'].includes(key)?(x.geographic_assignments||[]).map(a=>a[key]).filter(Boolean):[x[key]]).filter(Boolean))].sort();
+  const options={
+    province:unique('province'),regency_city:unique('regency_city'),entity:entities.map(x=>x.name),
+    platform:unique('platform'),evidence_type:['OBSERVED','INFERRED'],verification_status:['UNVERIFIED','HUMAN_VERIFIED'],
+    supervision_signal:['NO SIGNAL IDENTIFIED','MONITOR','REVIEW RECOMMENDED','POTENTIAL REGULATORY ISSUE'],
+    priority:PRIORITIES,reviewer:unique('assigned_reviewer'),review_status:unique('review_status'),source_type:unique('source_type')
+  };
+  const filtered=items.filter(x=>{
+    const text=(x.intelligence_id+' '+x.title+' '+x.original_content+' '+(x.related_entities||[]).join(' ')+' '+x.province+' '+x.regency_city+' '+(x.geographic_assignments||[]).map(a=>a.province+' '+a.regency_city).join(' ')).toLowerCase();
+    const specialOk=!f.view||
+      (f.view==='pending-review'&&pendingReview(x))||
+      (f.view==='jurisdiction-unresolved'&&x.jurisdiction_confirmed!==true)||
+      (f.view==='triage-pending'&&triagePending(x));
+    return specialOk&&(!f.search||text.includes(f.search.toLowerCase()))&&(!f.date||x.created_date?.slice(0,10)===f.date)&&Object.keys(options).every(k=>!f[k]||(
+      k==='entity'?x.related_entities?.includes(f[k]):
+      k==='reviewer'?x.assigned_reviewer===f[k]:
+      k==='supervision_signal'?x.supervision_screening?.supervision_signal===f[k]:
+      k==='evidence_type'?(x.evidence_type||(['OBSERVED','INFERRED'].includes(x.evidence_state)?x.evidence_state:''))===f[k]:
+      k==='verification_status'?(x.verification_status||(x.evidence_state==='VERIFIED'?'HUMAN_VERIFIED':'UNVERIFIED'))===f[k]:
+      ['province','regency_city'].includes(k)?(x.geographic_assignments||[]).some(a=>a[k]===f[k]):
+      x[k]===f[k]
+    ));
+  });
+  const viewLabel={
+    'pending-review':'Dashboard filter: Pending Intelligence Review',
+    'jurisdiction-unresolved':'Dashboard filter: Jurisdiction Unresolved',
+    'triage-pending':'Dashboard filter: AI Triage Awaiting Review'
+  }[f.view];
+  return <div className="space-y-6">
+    <div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">Collection / Triage</p><h1 className="intel-heading">Intelligence Inbox</h1><p className="text-sm text-[#77899b] mt-2">Source material and analyst submissions · {filtered.length} records</p></div>
+    <Notice error={error}/>
+    {viewLabel&&<div className="intel-card px-4 py-3 text-sm text-[#536d80] flex items-center justify-between gap-3"><span><strong>{viewLabel}</strong> · {filtered.length} matching record(s)</span><button className="text-xs font-semibold text-[#126b8b]" onClick={()=>setF(v=>({...v,view:''}))}>Clear dashboard filter</button></div>}
+    {new URLSearchParams(window.location.search).get('jurisdiction')==='pending'&&<p role="status" className="text-sm">Submitted for national jurisdiction resolution. Regional users cannot access the record until it is confirmed.</p>}
+    <div className="intel-card p-5"><div className="grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+      <input className="intel-input sm:col-span-2" placeholder="Search keywords, ID, entity or location..." aria-label="Search intelligence" value={f.search||''} onChange={e=>pick('search',e.target.value)}/>
+      <input className="intel-input" type="date" aria-label="Filter by date" value={f.date||''} onChange={e=>pick('date',e.target.value)}/>
+      {Object.entries(options).map(([key,values])=><select key={key} className="intel-input" aria-label={'Filter by '+key.replace('_',' ')} value={f[key]||''} onChange={e=>pick(key,e.target.value)}><option value="">All {key.replace(/_/g,' ')}s</option>{values.map(v=><option key={v} value={v}>{v}</option>)}</select>)}
+    </div><button className="text-xs font-semibold text-[#126b8b] mt-3" onClick={()=>setF({})}>Clear filters</button></div>
+    {loading?<p className="text-sm text-[#77899b]">Loading intelligence...</p>:error?null:<IntelligenceTable items={filtered}/>}
+  </div>;
+}

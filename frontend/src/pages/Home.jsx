@@ -115,12 +115,12 @@ export default function Home(){
   }),[watch]);
 
   const cards=[
-    {label:'Pending Intelligence Review',value:metrics.pending,detail:'Needs human review or validation.',to:'/validation',Icon:Inbox,permission:'human_validation'},
-    {label:'Validated Intelligence',value:metrics.validatedCount,detail:'Human-validated relevant intelligence.',to:'/inbox',Icon:BadgeCheck},
-    {label:'UNVERIFIED Evidence',value:metrics.unverified,detail:'Source verification is still pending.',to:'/inbox',Icon:ShieldAlert},
-    {label:'Jurisdiction Unresolved',value:metrics.unresolved,detail:'Needs human jurisdiction confirmation.',to:'/inbox',Icon:MapPin},
-    {label:'AI Triage Awaiting Review',value:metrics.triage,detail:'Generated suggestions still need analyst decisions.',to:'/inbox',Icon:Sparkles},
-    {label:'Social Review Queue',value:metrics.socialPending===null?'—':metrics.socialPending,detail:'Stored results awaiting human disposition.',to:'/social-listening',Icon:Radio}
+    {label:'Pending Intelligence Review',value:metrics.pending,detail:'Needs human review or validation.',to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},
+    {label:'Validated Intelligence',value:metrics.validatedCount,detail:'Human-validated relevant intelligence.',to:'/inbox?review_status=Validated%20as%20Relevant%20Intelligence',Icon:BadgeCheck},
+    {label:'UNVERIFIED Evidence',value:metrics.unverified,detail:'Source verification is still pending.',to:'/inbox?verification_status=UNVERIFIED',Icon:ShieldAlert},
+    {label:'Jurisdiction Unresolved',value:metrics.unresolved,detail:'Needs human jurisdiction confirmation.',to:'/inbox?view=jurisdiction-unresolved',Icon:MapPin},
+    {label:'AI Triage Awaiting Review',value:metrics.triage,detail:'Generated suggestions still need analyst decisions.',to:'/inbox?view=triage-pending',Icon:Sparkles},
+    {label:'Social Review Queue',value:metrics.socialPending===null?'—':metrics.socialPending,detail:'Stored results awaiting human disposition.',to:'/social-listening?tab=queue&pending=1',Icon:Radio}
   ];
 
   return <div className="space-y-8">

@@ -692,7 +692,7 @@ def test_openai_converter_produces_valid_v3_contract():
 def test_run_triage_uses_production_provider_when_configured(monkeypatch):
     import app.domain as domain
     monkeypatch.setenv('OPENAI_API_KEY','test-key')
-    def fake_generate(item,run_id):
+    def fake_generate(item,run_id,**kwargs):
         proposal=domain._local_v3_triage(item,run_id)
         proposal['summary']='Production structured summary'
         proposal['content_type']='News report'
@@ -722,7 +722,7 @@ def test_run_triage_falls_back_once_when_openai_provider_fails(monkeypatch):
     from app.openai_triage import OpenAITriageError
     monkeypatch.setenv('OPENAI_API_KEY','test-key')
     calls={'count':0}
-    def fail_generate(item,run_id):
+    def fail_generate(item,run_id,**kwargs):
         calls['count']+=1
         raise OpenAITriageError('provider_timeout','timeout')
     monkeypatch.setattr(domain,'generate_openai_triage',fail_generate)
@@ -740,3 +740,50 @@ def test_run_triage_falls_back_once_when_openai_provider_fails(monkeypatch):
     assert body['generation']['validation_outcome']=='FALLBACK_PROVIDER'
     assert body['generation']['fallback_code']=='provider_timeout'
     assert body['triage_review']['state']=='NOT STARTED'
+
+
+def test_malay_and_indonesian_language_detection_are_distinguished():
+    from app.source_retrieval import _language_detection
+    malay='Pihak berkuasa memaklumkan kejadian itu berlaku selepas seorang kakitangan dilaporkan meninggal dunia. Setakat ini tiada penularan dikesan dan orang ramai diminta bertenang. Langkah berjaga-jaga turut dilaksanakan.'
+    indonesian='Informasi ini adalah laporan pemilu yang disampaikan kepada masyarakat. Dalam laporan tersebut dijelaskan bahwa pengawasan dilakukan sesuai ketentuan yang berlaku dan Bawaslu meminta masyarakat melapor.'
+    assert _language_detection(malay,'')['code']=='ms'
+    assert _language_detection(indonesian,'en')['code']=='id'
+
+def test_article_cleaner_removes_trailing_publisher_promotions():
+    from app.source_retrieval import _extract_html
+    html='''<html lang="ms"><head><title>Insiden makmal disiasat</title></head><body><p>Pihak berkuasa sedang menyiasat satu insiden selepas kemalangan makmal.</p><p>Setakat ini jenis patogen masih belum disahkan dan siasatan lanjut diteruskan.</p><p>Orang ramai diminta bertenang sementara kontak rapat dipantau.</p><p>Berita, sorotan utama, dan segala dari Awani terus ke peti masuk anda.</p><p>© 2026 Astro AWANI Network Sdn. Bhd. All Rights Reserved.</p><p>Dapatkan berita hari ini dan berita terkini Malaysia, Dunia, Sukan dan Hiburan.</p></body></html>'''
+    r=_extract_html(html,'https://www.astroawani.com/berita-dunia/test')
+    assert 'Dapatkan berita hari ini' not in r['original_content']
+    assert 'Dapatkan berita hari ini' in r['raw_original_content']
+    assert r['source_cleaning']['applied'] is True
+    assert r['original_language_code']=='ms'
+
+def test_run_triage_passes_cleaned_source_and_resolved_language(monkeypatch):
+    import app.domain as domain
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    captured={}
+    def fake_clean_generate(item,run_id,**kwargs):
+        captured.update(kwargs)
+        proposal=domain._local_v3_triage(item,run_id,source_text=kwargs.get('source_text'))
+        return proposal,{'model':'gpt-test','response_id':'resp_clean','usage':{'input_tokens':50,'output_tokens':20,'total_tokens':70}}
+    monkeypatch.setattr(domain,'generate_openai_triage',fake_clean_generate)
+    text='''Pihak berkuasa memaklumkan satu kejadian sedang disiasat selepas laporan diterima.
+
+Setakat ini tiada penularan dikesan dan orang ramai diminta bertenang.
+
+Langkah berjaga-jaga turut dilaksanakan oleh pihak berkuasa.
+
+Berita, sorotan utama, dan segala dari Awani terus ke peti masuk anda.
+
+© 2026 Astro AWANI Network Sdn. Bhd. All Rights Reserved.
+
+Dapatkan berita hari ini dan berita terkini Malaysia, Dunia, Sukan dan Hiburan.'''
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Clean triage input','original_content':text,'jurisdiction_type':'National','confirm_jurisdiction':True}},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    assert 'Dapatkan berita hari ini' not in captured['source_text']
+    assert captured['language_code']=='ms'
+    assert r.json()['generation']['source_cleaning']['applied'] is True
+    assert r.json()['generation']['language_resolution']['code']=='ms'

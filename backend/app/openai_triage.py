@@ -122,8 +122,8 @@ Rules:
 
 Confidence values describe confidence in extraction from the supplied source only, not truth verification."""
 
-def _source_prompt(item):
-    source=(item.original_content or '').strip()
+def _source_prompt(item,source_text=None,language_code=None):
+    source=(source_text if source_text is not None else (item.original_content or '')).strip()
     if not source:
         raise OpenAITriageError('missing_source','Original source content is required before AI Triage can be generated')
     source=source[:18000]
@@ -133,7 +133,7 @@ def _source_prompt(item):
       'platform':item.platform or '',
       'author_account':item.author or '',
       'publication_date':item.publication_date or '',
-      'original_language':item.original_language or item.original_language_code or '',
+      'original_language':language_code or item.original_language_code or item.original_language or '',
       'source_url':item.source_url or ''
     }
     return "SOURCE METADATA\n"+json.dumps(metadata,ensure_ascii=False)+"\n\nSOURCE MATERIAL\n"+source
@@ -192,7 +192,7 @@ def convert_model_result_to_v3(result,run_id,source_text):
     }
     return proposal
 
-def generate_openai_triage(item,run_id):
+def generate_openai_triage(item,run_id,source_text=None,language_code=None):
     api_key=os.getenv('OPENAI_API_KEY','').strip()
     if not api_key:
         raise OpenAITriageError('not_configured','OPENAI_API_KEY is not configured')
@@ -203,7 +203,7 @@ def generate_openai_triage(item,run_id):
       'store':False,
       'input':[
         {'role':'system','content':SYSTEM_PROMPT},
-        {'role':'user','content':_source_prompt(item)}
+        {'role':'user','content':_source_prompt(item,source_text=source_text,language_code=language_code)}
       ],
       'text':{
         'format':{
@@ -241,7 +241,7 @@ def generate_openai_triage(item,run_id):
     except Exception as exc:
         raise OpenAITriageError('provider_invalid_json','OpenAI structured output could not be parsed') from exc
 
-    proposal=convert_model_result_to_v3(result,run_id,item.original_content or '')
+    proposal=convert_model_result_to_v3(result,run_id,source_text if source_text is not None else (item.original_content or ''))
     usage=payload.get('usage') or {}
     meta={
       'model':payload.get('model') or model,

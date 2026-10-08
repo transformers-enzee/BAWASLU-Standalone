@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .models import *
 from .serializers import *
 from .access import has, allowed, audit
-from .source_retrieval import fetch_public_source
+from .source_retrieval import fetch_public_source, clean_article_text, _language_detection, language_label
 from .geography import normalize_jurisdiction
 from .openai_triage import openai_triage_configured, generate_openai_triage, OpenAITriageError
 
@@ -24,8 +24,8 @@ V3_TRIAGE_SCALAR_FIELDS=['summary','english_translation','content_type','supervi
 V3_TRIAGE_STRUCTURED_FIELDS=['activity','actors','location_signal','narrative','relationships','topics','evidence_gaps','inferences','check_next','screening_evidence_basis']
 V3_TRIAGE_ALLOWED=set(V3_TRIAGE_SCALAR_FIELDS+V3_TRIAGE_STRUCTURED_FIELDS+['source_facts','_version','_triage_run_id','_decisions','watchlist_match'])
 
-def _local_v3_triage(item,run_id):
-    source_text=re.sub(r'\s+',' ',item.original_content or '').strip()
+def _local_v3_triage(item,run_id,source_text=None):
+    source_text=re.sub(r'\s+',' ',source_text if source_text is not None else (item.original_content or '')).strip()
     if not source_text:
         raise ValueError('Original source content is required before AI Triage can be generated')
     source_facts=source_text[:4000]
@@ -298,6 +298,24 @@ def source_identity(db,data):
         return {'status':'KNOWN_EXTERNAL_ACCOUNT','matched_registered_account_id':'','match_basis':'OBSERVED_PUBLIC_IDENTITY','verification_status':'NOT_VERIFIED','verified_by':'','verified_at':''}, handle
     return {'status':'UNRESOLVED','matched_registered_account_id':'','match_basis':'','verification_status':'NOT_VERIFIED','verified_by':'','verified_at':''}, ''
 
+def source_language_resolution(item):
+    metadata=loads(item.provider_source_metadata_json,{}) or {}
+    selection_source=str(metadata.get('language_selection_source') or '').upper()
+    recorded=clean(item.original_language_code,20).lower()
+    detection=_language_detection(item.original_content or item.title or '',recorded)
+    detected=clean(detection.get('code'),20).lower()
+    if selection_source=='ANALYST' and recorded:
+        code=recorded; method='ANALYST_CONFIRMED'; confidence='HUMAN'
+    elif detected and detection.get('confidence') in ('HIGH','MEDIUM'):
+        code=detected; method=detection.get('method') or 'SYSTEM_DETECTED'; confidence=detection.get('confidence') or 'MEDIUM'
+    else:
+        code=recorded or detected; method='RECORDED_FALLBACK' if recorded else detection.get('method') or 'UNRESOLVED'; confidence=detection.get('confidence') or 'LOW'
+    return {'code':code,'label':language_label(code) if code else 'Undetermined','confidence':confidence,'method':method,'recorded_code':recorded,'detected_code':detected,'mismatch':bool(recorded and detected and recorded!=detected),'selection_source':selection_source or 'SYSTEM_OR_LEGACY','detection':detection}
+
+def triage_source_view(item):
+    cleaned,meta=clean_article_text(item.original_content or '')
+    return {'text':cleaned,'cleaning':meta,'language':source_language_resolution(item)}
+
 def _jurisdiction_payload(item):
     return {
       'jurisdiction_type':item.jurisdiction_type or 'Unresolved',
@@ -369,11 +387,20 @@ def create_intelligence(db,p,data):
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))
+    source_text=clean(data.get('original_content') or data.get('description'),20000)
+    provider_meta=dict(data.get('provider_source_metadata') or {})
+    selected_language=clean(data.get('original_language_code'),20).lower()
+    if str(provider_meta.get('language_selection_source') or '').upper()!='ANALYST':
+        detected_language=_language_detection(source_text,selected_language)
+        if detected_language.get('code') and detected_language.get('confidence') in ('HIGH','MEDIUM'):
+            selected_language=detected_language['code']
+        provider_meta['language_detection']=detected_language
+        provider_meta.setdefault('language_selection_source','SYSTEM_DETECTED')
     item=IntelligenceItem(
-      intelligence_id=next_intelligence_id(db), title=clean(data.get('title'),3000), original_content=clean(data.get('original_content') or data.get('description'),20000),
-      original_language=clean(data.get('original_language'),100), original_language_code=clean(data.get('original_language_code'),20), english_translation=clean(data.get('english_translation'),20000),
+      intelligence_id=next_intelligence_id(db), title=clean(data.get('title'),3000), original_content=source_text,
+      original_language=language_label(selected_language) if selected_language else clean(data.get('original_language'),100), original_language_code=selected_language, english_translation=clean(data.get('english_translation'),20000),
       source_type=clean(data.get('source_type'),64), ingestion_method=clean(data.get('ingestion_method') or ({'MANUAL_LINK':'MANUAL_URL','FILE_UPLOAD':'FILE_UPLOAD'}.get(data.get('source_type'),'MANUAL_ENTRY')),64),
-      observed_publisher_handle=clean(data.get('observed_publisher_handle') or observed,255), provider_source_metadata_json=jdump(data.get('provider_source_metadata') or {}), source_identity_json=jdump(data.get('source_identity') or identity),
+      observed_publisher_handle=clean(data.get('observed_publisher_handle') or observed,255), provider_source_metadata_json=jdump(provider_meta), source_identity_json=jdump(data.get('source_identity') or identity),
       entity_relationships_json=jdump(data.get('entity_relationships') or []), source_id=clean(data.get('source_id'),255), source_url=clean(data.get('source_url'),2000), source_name=clean(data.get('source_name'),255),
       platform=clean(data.get('platform'),100), author=clean(data.get('author') or observed,255), publication_datetime=clean(data.get('publication_datetime'),64), publication_date=clean(data.get('publication_date'),32),
       publication_time_precision=clean(data.get('publication_time_precision') or 'UNKNOWN',32), collection_datetime=clean(data.get('collection_datetime') or now(),64), owned_channel_json=jdump(data.get('owned_channel') or {}),
@@ -463,7 +490,7 @@ def intelligence_action(db,p,action,data,id=None):
     if p.get('status')!='Active': raise PermissionError('BAWASLU account access is inactive')
     if action=='list':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-        return {'items':[{**intelligence(x),'geographic_mismatch':geography_mismatch(x),'triage_review':triage_review_status(x),'human_approved_triage':human_approved_triage(x)} for x in list_intelligence(db,p)]}
+        return {'items':[{**intelligence(x),'geographic_mismatch':geography_mismatch(x),'triage_review':triage_review_status(x),'human_approved_triage':human_approved_triage(x),'language_resolution':source_language_resolution(x)} for x in list_intelligence(db,p)]}
     if action=='activity':
         visible={str(x.id) for x in list_intelligence(db,p)}
         ev=db.query(AuditEvent).order_by(AuditEvent.id.desc()).limit(100).all()
@@ -492,12 +519,14 @@ def intelligence_action(db,p,action,data,id=None):
         gen=None; sug=loads(item.ai_suggestions_json,{})
         if sug.get('_triage_run_id'):
             g=db.query(TriageGeneration).filter(TriageGeneration.triage_run_id==sug['_triage_run_id']).first()
-            if g: gen={'triage_run_id':g.triage_run_id,'triage_schema_version':g.triage_schema_version,'generator':g.generator,'generator_version':g.generator_version,'service_action':g.service_action,'generated_at':g.generated_at,'validation_outcome':g.validation_outcome,'proposal_field_names':loads(g.proposal_field_names_json,[])}
+            if g:
+                source_view=triage_source_view(item)
+                gen={'triage_run_id':g.triage_run_id,'triage_schema_version':g.triage_schema_version,'generator':g.generator,'generator_version':g.generator_version,'service_action':g.service_action,'generated_at':g.generated_at,'validation_outcome':g.validation_outcome,'proposal_field_names':loads(g.proposal_field_names_json,[]),'source_cleaning':source_view['cleaning'],'language_resolution':source_view['language']}
         comparison_item=get_item(db,item.duplicate_of) if item.duplicate_of else None
         if comparison_item and not allowed(p,comparison_item): comparison_item=None
         if not comparison_item and linked: comparison_item=linked[0]
         duplicate_match=duplicate_similarity(item,comparison_item) if comparison_item and item.duplicate_of else None
-        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item),'triage_review':triage_review_status(item),'human_approved_triage':human_approved_triage(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
+        return {'item':{**intelligence(item),'geographic_mismatch':geography_mismatch(item),'triage_review':triage_review_status(item),'human_approved_triage':human_approved_triage(item),'language_resolution':source_language_resolution(item)},'generation':gen,'files':[evidence_file(x) for x in files],'events':[audit_event(x) for x in ev],'related':[intelligence(x) for x in linked],'comparison':intelligence(comparison_item) if comparison_item else None,'duplicate_match':duplicate_match}
     if action=='confirmJurisdiction':
         if not has(p,'human_validation') and not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
         geo=normalize_jurisdiction(data,require_valid=True)
@@ -529,7 +558,7 @@ def intelligence_action(db,p,action,data,id=None):
         audit(db,p,'IntelligenceItem',item.id,'GEOGRAPHIC_MISMATCH_REVIEWED',{'decision':{'new':decision},'reason':{'new':reason},'previous_jurisdiction':{'previous':before},'resulting_jurisdiction':{'new':after},'fingerprint':{'new':current.get('fingerprint')}}); return {'ok':True}
     if action=='update':
         if not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
-        fields=['title','english_translation','source_name','platform','author','publication_datetime','analyst_notes','reason','priority','location_text','assigned_reviewer','evidence_type']
+        fields=['title','english_translation','source_name','platform','author','publication_datetime','analyst_notes','reason','priority','location_text','assigned_reviewer','evidence_type','original_language_code']
         changes={}
         for k in fields:
             if k in data:
@@ -537,6 +566,13 @@ def intelligence_action(db,p,action,data,id=None):
                 v=clean(data[k],20000 if k=='english_translation' else 3000); old=getattr(item,k); setattr(item,k,v); changes[k]={'previous':old,'new':v}
         for k,col in [('related_entities','related_entities_json'),('related_topics','related_topics_json')]:
             if k in data: old=loads(getattr(item,col),[]); nv=(data[k] or [])[:20]; setattr(item,col,jdump(nv)); changes[k]={'previous':old,'new':nv}
+        if 'original_language_code' in data:
+            metadata=loads(item.provider_source_metadata_json,{}) or {}
+            metadata['language_selection_source']='ANALYST'
+            metadata['language_selection_code']=item.original_language_code
+            item.provider_source_metadata_json=jdump(metadata)
+            item.original_language=language_label(item.original_language_code) if item.original_language_code else ''
+            changes['language_selection_source']={'new':'ANALYST'}
         item.updated_at=datetime.utcnow(); db.commit();
         if changes: audit(db,p,'IntelligenceItem',item.id,'EDITED',changes)
         return {'ok':True}
@@ -575,24 +611,27 @@ def intelligence_action(db,p,action,data,id=None):
         if not (item.original_content or '').strip(): raise ValueError('Original source content is required before AI Triage can be generated')
         run_id=str(uuid.uuid4())
         attempt_started=now()
+        source_view=triage_source_view(item)
+        triage_source=source_view['text']
+        language_resolution=source_view['language']
         source_fp=hashlib.sha256(((item.original_content or '')+'|'+(item.source_url or '')).encode()).hexdigest()
         provider_meta={}
         fallback_code=''
         if openai_triage_configured():
             try:
-                proposal,provider_meta=generate_openai_triage(item,run_id)
+                proposal,provider_meta=generate_openai_triage(item,run_id,source_text=triage_source,language_code=language_resolution.get('code'))
                 if not _valid_v3_proposal(proposal): raise OpenAITriageError('provider_invalid_v3','OpenAI proposal did not satisfy the BAWASLU V3 contract')
                 generator='openai-responses'
                 generator_version=clean(provider_meta.get('model'),128) or 'configured-model'
                 validation_outcome='VALID_V3_OPENAI'
             except OpenAITriageError as exc:
                 fallback_code=exc.code
-                proposal=_local_v3_triage(item,run_id)
+                proposal=_local_v3_triage(item,run_id,source_text=triage_source)
                 generator='standalone-local-fallback'
                 generator_version='v0.3'
                 validation_outcome='FALLBACK_PROVIDER'
         else:
-            proposal=_local_v3_triage(item,run_id)
+            proposal=_local_v3_triage(item,run_id,source_text=triage_source)
             generator='standalone-local-placeholder'
             generator_version='v0.3'
             validation_outcome='FALLBACK_NO_KEY'
@@ -604,7 +643,7 @@ def intelligence_action(db,p,action,data,id=None):
         g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator=generator,generator_version=generator_version,service_action='runTriage',attempt_started_at=attempt_started,attempt_ended_at=generated_at,generated_at=generated_at,validation_outcome=validation_outcome,proposal_field_names_json=jdump(field_names))
         db.add(g); item.ai_suggestions_json=jdump(proposal); item.updated_at=datetime.utcnow(); db.commit()
         review_state=triage_review_status(item)
-        generation={'triage_run_id':run_id,'triage_schema_version':3,'generator':generator,'generator_version':generator_version,'service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':validation_outcome,'proposal_field_names':field_names}
+        generation={'triage_run_id':run_id,'triage_schema_version':3,'generator':generator,'generator_version':generator_version,'service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':validation_outcome,'proposal_field_names':field_names,'source_cleaning':source_view['cleaning'],'language_resolution':language_resolution}
         if provider_meta:
             generation['provider_response_id']=provider_meta.get('response_id') or ''
             generation['usage']=provider_meta.get('usage') or {}

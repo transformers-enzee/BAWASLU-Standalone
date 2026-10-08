@@ -75,9 +75,12 @@ def _apply_tiktok_oembed(client,url,result):
         if caption:
             result['title']=_caption_headline(caption)
             result['original_content']=caption[:20000]
-            detected=_detect_language(caption,'')
-            if detected:
-                result['original_language_code']=detected
+            result['raw_original_content']=caption[:40000]
+            result['source_cleaning']={'applied':False,'method':'SOCIAL_OEMBED_CAPTION','original_chars':len(caption),'cleaned_chars':len(caption),'removed_chars':0,'removed_paragraphs':0}
+            detection=_language_detection(caption,'')
+            result['language_detection']=detection
+            if detection.get('code'):
+                result['original_language_code']=detection['code']
         handle=_social_handle(url)
         if handle:
             result['source_name']=handle
@@ -237,22 +240,66 @@ def _publisher_name(value):
         return str(value.get('name') or '').strip()
     return ''
 
-def _detect_language(content,declared=''):
+LANGUAGE_LABELS={'id':'Bahasa Indonesia','ms':'Bahasa Melayu','en':'English','jv':'Javanese','su':'Sundanese','other':'Other','unknown':'Unknown'}
+
+def language_label(code):
+    return LANGUAGE_LABELS.get(str(code or '').lower(),str(code or '') or 'Unknown')
+
+def _language_detection(content,declared=''):
     text=' '+re.sub(r'[^a-zA-Z\u00C0-\u024F]+',' ',str(content or '').lower())+' '
-    id_markers=[' yang ',' dan ',' dengan ',' untuk ',' dari ',' pada ',' sebagai ',' tidak ',' dalam ',' adalah ',' juga ',' kepada ',' telah ',' akan ',' karena ',' pemilu ',' bawaslu ']
-    en_markers=[' the ',' and ',' with ',' for ',' from ',' this ',' that ',' not ',' are ',' is ',' was ',' election ',' article ',' news ']
-    id_score=sum(text.count(x) for x in id_markers)
-    en_score=sum(text.count(x) for x in en_markers)
-    if id_score>=3 and id_score>en_score:
-        return 'id'
-    if en_score>=3 and en_score>id_score:
-        return 'en'
+    ms_markers=[' pihak berkuasa ',' selepas ',' berhampiran ',' setakat ini ',' memaklumkan ',' kakitangan ',' orang ramai ',' pelitup muka ',' khabar angin ',' terbabit ',' berkenaan ',' turut ',' berpunca ',' daripada ',' tiada ',' boleh ',' sehingga kini ',' susulan ',' dikesan ',' dilaksanakan ',' berkemungkinan ',' disahkan ',' berkesan ']
+    id_markers=[' pihak berwenang ',' setelah ',' sampai saat ini ',' masyarakat ',' masker ',' kabar ',' terkait ',' tersebut ',' disebabkan ',' dapat ',' dikonfirmasi ',' terjadi ',' dilakukan ',' informasi ini ',' adalah ',' disampaikan ',' dijelaskan ',' bahwa ',' ketentuan ',' pengawasan ',' pemilu ',' bawaslu ']
+    en_markers=[' the ',' and ',' with ',' for ',' from ',' this ',' that ',' not ',' are ',' is ',' was ',' election ',' article ',' news ',' authorities ',' reported ']
+    scores={'ms':sum(text.count(x) for x in ms_markers),'id':sum(text.count(x) for x in id_markers),'en':sum(text.count(x) for x in en_markers)}
+    ranked=sorted(scores.items(),key=lambda x:x[1],reverse=True)
+    best,best_score=ranked[0]; second_score=ranked[1][1]
     d=str(declared or '').split('-')[0].lower()
-    if d in ('id','in'):
-        return 'id'
-    if d:
-        return d
-    return ''
+    if d=='in': d='id'
+    if best_score>=3 and best_score>=second_score+2:
+        return {'code':best,'label':language_label(best),'confidence':'HIGH' if best_score>=6 or best_score>=second_score+4 else 'MEDIUM','method':'TEXT_MARKERS','scores':scores,'declared':d}
+    if d in ('ms','id','en'):
+        return {'code':d,'label':language_label(d),'confidence':'MEDIUM','method':'DECLARED_LANGUAGE_FALLBACK','scores':scores,'declared':d}
+    if best_score>=2 and best_score>second_score:
+        return {'code':best,'label':language_label(best),'confidence':'LOW','method':'TEXT_MARKERS_WEAK','scores':scores,'declared':d}
+    return {'code':d if d else '','label':language_label(d) if d else 'Unknown','confidence':'LOW','method':'UNRESOLVED','scores':scores,'declared':d}
+
+def _detect_language(content,declared=''):
+    return _language_detection(content,declared).get('code','')
+
+BOILERPLATE_STOP_PATTERNS=[
+  r'^berita,\s*sorotan utama,.*peti masuk',
+  r'^©\s*\d{4}\b',
+  r'\ball rights reserved\b',
+  r'^dapatkan cerita gosip artis',
+  r'^dapatkan berita hari ini dan berita terkini',
+  r'^astro.?s chinese channel',
+  r'^mandarin news and infotainment',
+  r'^catch the latest news and updates on local and global sporting events',
+  r'^indian entertainment, events hub',
+  r'^featuring entertainment, lifestyle',
+  r'^choose and pay for what you watch',
+  r'^enjoy malaysia.?s best radio',
+  r'^watch tv shows you',
+  r'^exclusive privileges and promotions',
+  r'^subscribe to',
+  r'^sign up for our newsletter'
+]
+
+def clean_article_text(content):
+    raw=str(content or '').strip()
+    if not raw:
+        return '',{'applied':False,'method':'PARAGRAPH_BOILERPLATE_V1','original_chars':0,'cleaned_chars':0,'removed_chars':0,'removed_paragraphs':0}
+    paragraphs=[re.sub(r'\s+',' ',p).strip() for p in re.split(r'\n\s*\n+',raw) if re.sub(r'\s+',' ',p).strip()]
+    kept=[]; removed=0
+    for idx,p in enumerate(paragraphs):
+        if any(re.search(pattern,p.lower(),re.I) for pattern in BOILERPLATE_STOP_PATTERNS) and (len(' '.join(kept))>=400 or len(kept)>=3):
+            removed=len(paragraphs)-idx
+            break
+        kept.append(p)
+    cleaned='\n\n'.join(kept).strip()
+    if not cleaned or len(cleaned)<min(160,max(1,int(len(raw)*0.25))):
+        cleaned=raw; removed=0
+    return cleaned,{'applied':cleaned!=raw,'method':'PARAGRAPH_BOILERPLATE_V1','original_chars':len(raw),'cleaned_chars':len(cleaned),'removed_chars':max(0,len(raw)-len(cleaned)),'removed_paragraphs':removed}
 
 MONTHS_ID={
  'januari':1,'februari':2,'maret':3,'april':4,'mei':5,'juni':6,'juli':7,'agustus':8,'september':9,'oktober':10,'november':11,'desember':12,
@@ -343,17 +390,20 @@ def _extract_html(html,url):
 
     paragraphs=[' '.join(x).strip() for x in parser.paragraphs]
     paragraphs=[x for x in paragraphs if len(x)>=25]
-    paragraph_content='\n\n'.join(paragraphs)[:20000]
-    jsonld_body=str(article.get('articleBody') or '').strip()[:20000]
+    paragraph_content='\n\n'.join(paragraphs)[:40000]
+    jsonld_body=str(article.get('articleBody') or '').strip()[:40000]
     if jsonld_body and (not paragraph_content or len(jsonld_body)>len(paragraph_content)*0.65):
-        content=jsonld_body
+        raw_content=jsonld_body
     else:
-        content=paragraph_content
-    if not content:
-        content=(meta.get('description') or meta.get('og:description') or str(article.get('description') or '')).strip()[:20000]
+        raw_content=paragraph_content
+    if not raw_content:
+        raw_content=(meta.get('description') or meta.get('og:description') or str(article.get('description') or '')).strip()[:40000]
+    content,cleaning=clean_article_text(raw_content)
+    content=content[:20000]
 
     declared_language=(article.get('inLanguage') or parser.lang or meta.get('language') or '')
-    language=_detect_language(content or title,declared_language)
+    language_detection=_language_detection(content or title,declared_language)
+    language=language_detection.get('code','')
 
     pub_date,pub_time,precision=_published_parts(published)
     canonical_value=str(article.get('url') or parser.canonical or '').strip()
@@ -364,6 +414,9 @@ def _extract_html(html,url):
       'submission_ready':bool(title and content),
       'title':title[:3000],
       'original_content':content,
+      'raw_original_content':raw_content,
+      'source_cleaning':cleaning,
+      'language_detection':language_detection,
       'author':author[:255],
       'source_name':source[:255],
       'platform':'Web',

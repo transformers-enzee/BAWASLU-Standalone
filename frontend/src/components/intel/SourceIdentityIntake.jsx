@@ -32,7 +32,7 @@ export default function SourceIdentityIntake({url,content}) {
       <p className="text-xs text-[#617789]">{result.identity.status==='REGISTERED_ACCOUNT_CONFIRMED'?'Registered-account provenance confirmed by strict server checks. This does not verify the post content.':'Registered URL match observed; strict ownership checks have not confirmed provenance. Submission can continue unresolved. '+(!ready?'Paste at least 80 characters of original post content to complete the existing strict check.':'')}</p>
     </>:<>
       <p className="text-sm">{t('registered_comparison_no_exact')}</p>
-      <p className="text-sm font-semibold">Identity status: UNRESOLVED</p>
+      <p className="text-sm font-semibold">{t('identity_unresolved')}</p>
       <p className="text-xs text-[#617789]">{t('no_registered_match')}</p>
     </>}
   </section>;

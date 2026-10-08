@@ -232,7 +232,12 @@ const valueLabels={
     'MONITOR':'PANTAU','REVIEW RECOMMENDED':'PENINJAUAN DIREKOMENDASIKAN',
     'POTENTIAL REGULATORY ISSUE':'POTENSI ISU REGULASI',
     'DISCOVERED':'DITEMUKAN','RELEVANT':'RELEVAN','NOT_RELEVANT':'TIDAK RELEVAN',
-    'PROMOTED':'DITAMBAHKAN KE INTELIJEN'
+    'PROMOTED':'DITAMBAHKAN KE INTELIJEN',
+    'Candidate':'Kandidat','Political Party':'Partai Politik','Campaign Team':'Tim Kampanye','Official Account':'Akun Resmi',
+    'Election-related Public Figure':'Tokoh Publik Terkait Pemilu','Media':'Media','Public Community':'Komunitas Publik','Organisation':'Organisasi',
+    'Topic / Issue':'Topik / Isu','Location':'Lokasi','Other Approved Public Source':'Sumber Publik Lain yang Disetujui',
+    'Associated with':'Terkait dengan','Member of':'Anggota dari','Campaign relationship':'Hubungan kampanye',
+    'Publicly linked to':'Terkait secara publik dengan','Other observed relationship':'Hubungan lain yang teramati'
   }
 };
 

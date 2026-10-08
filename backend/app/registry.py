@@ -165,8 +165,40 @@ def registry_action(db:Session,p,action,data,id=None):
 
     if action=='addSource':
         if not has(p,'administration'): raise PermissionError('Not permitted')
-        s=DataSource(name=clean(data.get('name'),255),source_type=clean(data.get('source_type'),100),description=clean(data.get('description'),5000),status=clean(data.get('status') or 'Active',64),province=clean(data.get('province'),128),regency_city=clean(data.get('regency_city'),128))
-        db.add(s); db.commit(); db.refresh(s); return {'source':{'id':str(s.id),'name':s.name,'source_type':s.source_type,'description':s.description,'status':s.status,'province':s.province,'regency_city':s.regency_city}}
+        name=clean(data.get('name'),255); source_type=clean(data.get('source_type'),100)
+        if not name: raise ValueError('Source name is required')
+        if not source_type: raise ValueError('Source type is required')
+        if source_type not in {'MANUAL_LINK','MANUAL_ENTRY','FILE_UPLOAD','INTERNAL_BAWASLU','OFFICIAL_SOURCE'}: raise ValueError('Invalid source type')
+        status=clean(data.get('status') or 'Active',64)
+        if status not in {'Active','Inactive'}: raise ValueError('Invalid source status')
+        s=DataSource(name=name,source_type=source_type,description=clean(data.get('description'),5000),status=status,province=clean(data.get('province'),128),regency_city=clean(data.get('regency_city'),128))
+        db.add(s); db.commit(); db.refresh(s)
+        audit(db,p,'DataSource',s.id,'CREATED',{'name':{'new':s.name},'source_type':{'new':s.source_type},'status':{'new':s.status}})
+        return {'source':{'id':str(s.id),'name':s.name,'source_type':s.source_type,'description':s.description,'status':s.status,'province':s.province,'regency_city':s.regency_city}}
+
+    if action=='updateSource':
+        if not has(p,'administration'): raise PermissionError('Not permitted')
+        s=db.get(DataSource,int(id)) if str(id or '').isdigit() else None
+        if not s or not allowed(p,s): raise ValueError('Data source unavailable')
+        previous={'name':s.name,'source_type':s.source_type,'description':s.description,'status':s.status,'province':s.province,'regency_city':s.regency_city}
+        if 'name' in data:
+            s.name=clean(data.get('name'),255)
+            if not s.name: raise ValueError('Source name is required')
+        if 'source_type' in data:
+            source_type=clean(data.get('source_type'),100)
+            if source_type not in {'MANUAL_LINK','MANUAL_ENTRY','FILE_UPLOAD','INTERNAL_BAWASLU','OFFICIAL_SOURCE'}: raise ValueError('Invalid source type')
+            s.source_type=source_type
+        if 'description' in data: s.description=clean(data.get('description'),5000)
+        if 'status' in data:
+            status=clean(data.get('status'),64)
+            if status not in {'Active','Inactive'}: raise ValueError('Invalid source status')
+            s.status=status
+        if 'province' in data: s.province=clean(data.get('province'),128)
+        if 'regency_city' in data: s.regency_city=clean(data.get('regency_city'),128)
+        db.commit(); db.refresh(s)
+        current={'name':s.name,'source_type':s.source_type,'description':s.description,'status':s.status,'province':s.province,'regency_city':s.regency_city}
+        audit(db,p,'DataSource',s.id,'UPDATED',{'previous':previous,'new':current})
+        return {'source':{'id':str(s.id),'name':s.name,'source_type':s.source_type,'description':s.description,'status':s.status,'province':s.province,'regency_city':s.regency_city}}
 
     if action=='category':
         if p.get('role')!='National Administrator' or not has(p,'administration'): raise PermissionError('Not permitted')

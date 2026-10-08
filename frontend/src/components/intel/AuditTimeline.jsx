@@ -10,7 +10,7 @@ const safeKey=k=>!(/(^|_)id$|^to$|^merged_into$|^duplicate_of$/.test(k));
 function AuditEntry({ev,field,change,t}){
  const [open,setOpen]=useState(false),ai=!!field,source=ev.action==='SOURCE_RECOVERED',watch=ev.action==='WATCHLIST_MATCH_REVIEWED';
  const status=watch?(ev.changes?.decision?.new==='Link'?'Human Accepted':'Human Rejected'):change?.status;
- const title=auditTitle(ev,field,change);
+ const title=auditTitle(ev,field,change,t);
  const proposed=watch?ev.changes?.name?.previous:change?.previous,final=watch?ev.changes?.name?.new:change?.new;
  const generic=Object.entries(ev.changes||{}).filter(([k])=>safeKey(k));
  const mismatch=ev.action==='GEOGRAPHIC_MISMATCH_REVIEWED';

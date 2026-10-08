@@ -29,7 +29,7 @@ function AuditEntry({ev,field,change,t}){
    </p>
    <button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?t('hide_changes'):t('view_changes')}</button>
    {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#405669] space-y-2 break-words max-h-80 overflow-auto">
-    <p>{t('suggestion_type')}: {types[field]||(watch?'WATCHLIST MATCH':field)}</p>
+    <p>{t('suggestion_type')}: {types[field]||(watch?t('watchlist_match_label'):field)}</p>
     <p>{t('ai_proposed')}{typeof proposed==='string'&&proposed.endsWith('…')?' ('+t('historical_excerpt')+')':''}: <span className="whitespace-pre-wrap">{proposed??t('not_recorded')}</span></p>
     <p>{t('human_decision')}: {status?.replace('Human ','')||t('not_recorded')}{change?.prior_decision?' ('+t('changed_from')+' '+change.prior_decision+')':''}</p>
     {status==='Human Rejected'&&<p>{t('rejection_reason')}: {change?.reason||ev.changes?.reason?.new||t('not_recorded')}</p>}
@@ -41,7 +41,7 @@ function AuditEntry({ev,field,change,t}){
    {mismatch&&<p className="text-xs text-[#617789]">{ev.changes?.decision?.new} · {t('reviewed_by')}: {ev.changes?.reviewer?.new} · {t('reason')}: {ev.changes?.reason?.new}</p>}
    {source&&<p className="text-xs text-[#617789]">{t('recovered_label')}: {generic.filter(([k])=>k!=='method').map(([k])=>fieldName(k,t)).join(' · ')}</p>}
    <button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?t('hide_changes'):t('view_changes')}</button>
-   {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#617789] space-y-2">{generic.map(([k,v])=><p key={k} className="break-words">{fieldName(k,t)}: {mismatch?<span className="whitespace-pre-wrap">{typeof v?.new==='object'?JSON.stringify(v.new):String(v?.new??'None')}</span>:k==='original_content'?t('recovered_label')+' ('+t('original_source')+')':short(v?.previous,t)+' → '+short(v?.new,t)}</p>)}</div>}
+   {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#617789] space-y-2">{generic.map(([k,v])=><p key={k} className="break-words">{fieldName(k,t)}: {mismatch?<span className="whitespace-pre-wrap">{typeof v?.new==='object'?JSON.stringify(v.new):String(v?.new??t('not_recorded'))}</span>:k==='original_content'?t('recovered_label')+' ('+t('original_source')+')':short(v?.previous,t)+' → '+short(v?.new,t)}</p>)}</div>}
   </>}
  </div>;
 }

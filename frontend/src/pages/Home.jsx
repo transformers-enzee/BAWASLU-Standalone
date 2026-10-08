@@ -6,174 +6,47 @@ import { auditTitle } from '@/components/intel/auditLabels';
 import { Notice } from '@/components/intel/Fields';
 import { base44 } from '@/api/base44Client';
 import Status from '@/components/intel/Status';
+import { useLanguage } from '@/lib/LanguageContext';
 
 const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
 const validated=x=>x.review_status==='Validated as Relevant Intelligence';
-const triagePending=x=>{
-  const t=x.triage_review||x.triage_review_status||{};
-  const state=typeof t==='string'?t:t.state;
-  const generated=typeof t==='object'?t.generated:!!state;
-  return generated&&state&&state!=='REVIEW COMPLETE';
-};
+const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};const state=typeof t==='string'?t:t.state;const generated=typeof t==='object'?t.generated:!!state;return generated&&state&&state!=='REVIEW COMPLETE';};
 const mismatchPending=x=>(x.geographic_mismatch_review?.status||x.geographic_mismatch?.status)==='pending';
 const fmtDate=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('en-GB')};
-const sourceLabel=x=>x.observed_publisher_handle||x.source_name||x.platform||x.source_type||'Source not recorded';
 
-function attentionReasons(x){
-  const r=[];
-  if(mismatchPending(x))r.push({label:'Geographic mismatch',weight:70});
-  if(triagePending(x))r.push({label:'AI triage review',weight:60});
-  if(pendingReview(x))r.push({label:'Pending human review',weight:55});
-  if(x.jurisdiction_confirmed!==true)r.push({label:'Jurisdiction unresolved',weight:50});
-  if(x.priority==='Critical')r.push({label:'Critical priority',weight:45});
-  else if(x.priority==='High'&&!validated(x))r.push({label:'High priority',weight:35});
-  return r;
-}
-function reasonScore(x){return attentionReasons(x).reduce((n,r)=>n+r.weight,0)}
+function attentionReasons(x,t){const r=[];if(mismatchPending(x))r.push({label:t('geographic_mismatch'),weight:70});if(triagePending(x))r.push({label:t('ai_triage_review'),weight:60});if(pendingReview(x))r.push({label:t('pending_human_review'),weight:55});if(x.jurisdiction_confirmed!==true)r.push({label:t('jurisdiction_unresolved'),weight:50});if(x.priority==='Critical')r.push({label:t('critical_priority'),weight:45});else if(x.priority==='High'&&!validated(x))r.push({label:t('high_priority'),weight:35});return r;}
+function reasonScore(x,t){return attentionReasons(x,t).reduce((n,r)=>n+r.weight,0)}
 
-function MetricCard({label,value,detail,to,Icon,permission,access}){
-  if(permission&&access.permissions?.[permission]!==true)return null;
-  return <Link to={to} className="intel-card p-5 group hover:border-[#abc7d5] transition-colors">
-    <div className="flex items-start justify-between gap-4">
-      <div><p className="text-xs font-semibold text-[#75899a]">{label}</p><strong className="block mt-2 text-3xl font-semibold text-[#163750]">{value}</strong><p className="text-xs text-[#8192a3] mt-2 leading-5">{detail}</p></div>
-      <div className="rounded-lg bg-[#eef5f7] p-2.5 text-[#176e8e]"><Icon size={18}/></div>
-    </div>
-    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#176e8e]">Open <ArrowUpRight size={13}/></span>
-  </Link>
-}
+function MetricCard({label,value,detail,to,Icon,permission,access,openLabel}){if(permission&&access.permissions?.[permission]!==true)return null;return <Link to={to} className="intel-card p-5 group hover:border-[#abc7d5] transition-colors"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#75899a]">{label}</p><strong className="block mt-2 text-3xl font-semibold text-[#163750]">{value}</strong><p className="text-xs text-[#8192a3] mt-2 leading-5">{detail}</p></div><div className="rounded-lg bg-[#eef5f7] p-2.5 text-[#176e8e]"><Icon size={18}/></div></div><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#176e8e]">{openLabel} <ArrowUpRight size={13}/></span></Link>}
 
-function AttentionList({items}){
-  if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">No intelligence currently requires immediate attention.</div>;
-  return <div className="intel-card divide-y divide-[#edf1f5]">
-    {items.map(x=><div key={x.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-      <div className="min-w-0 flex-1">
-        <Link to={'/intelligence/'+x.id} className="text-xs font-semibold text-[#146a8b] hover:underline">{x.intelligence_id}</Link>
-        <Link to={'/intelligence/'+x.id} className="block mt-1 font-semibold text-[#1e354b] hover:underline truncate">{x.title||'Untitled intelligence'}</Link>
-        <div className="mt-2 flex flex-wrap gap-1.5">{attentionReasons(x).map(r=><span key={r.label} className="rounded-full bg-[#fff5e9] px-2 py-1 text-[11px] font-semibold text-[#8a5d27]">{r.label}</span>)}</div>
-      </div>
-      <div className="lg:w-[250px] text-xs text-[#718398]">
-        <div>{sourceLabel(x)}</div><div className="mt-1">{x.jurisdiction_confirmed===true?(x.jurisdiction_type==='National'?'National':[x.regency_city,x.province].filter(Boolean).join(', ')||'Confirmed'):'Jurisdiction not confirmed'}</div>
-      </div>
-      <div className="flex flex-wrap gap-1.5 lg:w-[220px]"><Status value={x.priority}/><Status value={x.review_status}/><Status value={x.verification_status}/></div>
-    </div>)}
-  </div>
-}
+function AttentionList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_immediate_attention')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><div key={x.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-3"><div className="min-w-0 flex-1"><Link to={'/intelligence/'+x.id} className="text-xs font-semibold text-[#146a8b] hover:underline">{x.intelligence_id}</Link><Link to={'/intelligence/'+x.id} className="block mt-1 font-semibold text-[#1e354b] hover:underline truncate">{x.title||t('untitled_intelligence')}</Link><div className="mt-2 flex flex-wrap gap-1.5">{attentionReasons(x,t).map(r=><span key={r.label} className="rounded-full bg-[#fff5e9] px-2 py-1 text-[11px] font-semibold text-[#8a5d27]">{r.label}</span>)}</div></div><div className="lg:w-[250px] text-xs text-[#718398]"><div>{x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</div><div className="mt-1">{x.jurisdiction_confirmed===true?(x.jurisdiction_type==='National'?t('national'):[x.regency_city,x.province].filter(Boolean).join(', ')||t('confirmed')):t('jurisdiction_not_confirmed')}</div></div><div className="flex flex-wrap gap-1.5 lg:w-[220px]"><Status value={x.priority}/><Status value={x.review_status}/><Status value={x.verification_status}/></div></div>)}</div>}
 
-function ValidatedList({items}){
-  if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">No validated intelligence in your authorized scope yet.</div>;
-  return <div className="intel-card divide-y divide-[#edf1f5]">
-    {items.map(x=><Link key={x.id} to={'/intelligence/'+x.id} className="block p-4 hover:bg-[#fafcfd]">
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold text-[#146a8b]">{x.intelligence_id}</p><p className="font-semibold text-[#1e354b] mt-1 line-clamp-2">{x.title||'Untitled intelligence'}</p></div><Status value={x.priority}/></div>
-      <div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs text-[#718398]"><span>Validated: {fmtDate(x.validated_at||x.updated_date)}</span><span>Source: {sourceLabel(x)}</span><span>Verification: {x.verification_status||'UNVERIFIED'}</span></div>
-    </Link>)}
-  </div>
-}
+function ValidatedList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_validated_scope')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><Link key={x.id} to={'/intelligence/'+x.id} className="block p-4 hover:bg-[#fafcfd]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold text-[#146a8b]">{x.intelligence_id}</p><p className="font-semibold text-[#1e354b] mt-1 line-clamp-2">{x.title||t('untitled_intelligence')}</p></div><Status value={x.priority}/></div><div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs text-[#718398]"><span>{t('validated_label')}: {fmtDate(x.validated_at||x.updated_date)}</span><span>{t('source_label')}: {x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</span><span>{t('verification_label')}: {x.verification_status||'UNVERIFIED'}</span></div></Link>)}</div>}
 
 export default function Home(){
-  const {access}=useOutletContext();
-  const [activity,setActivity]=useState([]);
-  const [activityError,setActivityError]=useState('');
-  const [socialCounts,setSocialCounts]=useState(null);
-  const [socialError,setSocialError]=useState('');
-  const {items,loading,error}=useIntel();
-  const registryState=useRegistry();
-  const watch=registryState.items||[];
-
-  useEffect(()=>{
-    intel('activity').then(r=>setActivity(r.events||[])).catch(()=>setActivityError('Recent activity is temporarily unavailable.'));
-    base44.functions.invoke('socialListening',{action:'queue',data:{state:''}})
-      .then(r=>setSocialCounts(r.data?.counts||{}))
-      .catch(()=>setSocialError('Social Listening queue status is temporarily unavailable.'));
-  },[]);
-
-  const metrics=useMemo(()=>{
-    const pending=items.filter(pendingReview).length;
-    const validatedCount=items.filter(validated).length;
-    const unverified=items.filter(x=>x.verification_status==='UNVERIFIED').length;
-    const unresolved=items.filter(x=>x.jurisdiction_confirmed!==true).length;
-    const triage=items.filter(triagePending).length;
-    const socialPending=socialCounts?['DISCOVERED','RELEVANT','MONITOR'].reduce((n,k)=>n+Number(socialCounts[k]||0),0):null;
-    return {pending,validatedCount,unverified,unresolved,triage,socialPending};
-  },[items,socialCounts]);
-
-  const attention=useMemo(()=>items.filter(x=>attentionReasons(x).length).sort((a,b)=>{
-    const score=reasonScore(b)-reasonScore(a);
-    if(score)return score;
-    return new Date(b.updated_date||b.created_date||0)-new Date(a.updated_date||a.created_date||0);
-  }).slice(0,6),[items]);
-
-  const recentValidated=useMemo(()=>items.filter(validated).sort((a,b)=>{
-    const da=new Date(a.validated_at||a.updated_date||a.created_date||0).getTime();
-    const db=new Date(b.validated_at||b.updated_date||b.created_date||0).getTime();
-    return db-da;
-  }).slice(0,5),[items]);
-
-  const watchCounts=useMemo(()=>({
-    Active:watch.filter(x=>x.status==='Active').length,
-    'Under Review':watch.filter(x=>x.status==='Under Review').length,
-    Inactive:watch.filter(x=>x.status==='Inactive').length
-  }),[watch]);
-
-  const cards=[
-    {label:'Pending Intelligence Review',value:metrics.pending,detail:'Needs human review or validation.',to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},
-    {label:'Validated Intelligence',value:metrics.validatedCount,detail:'Human-validated relevant intelligence.',to:'/inbox?review_status=Validated%20as%20Relevant%20Intelligence',Icon:BadgeCheck},
-    {label:'UNVERIFIED Evidence',value:metrics.unverified,detail:'Source verification is still pending.',to:'/inbox?verification_status=UNVERIFIED',Icon:ShieldAlert},
-    {label:'Jurisdiction Unresolved',value:metrics.unresolved,detail:'Needs human jurisdiction confirmation.',to:'/inbox?view=jurisdiction-unresolved',Icon:MapPin},
-    {label:'AI Triage Awaiting Review',value:metrics.triage,detail:'Generated suggestions still need analyst decisions.',to:'/inbox?view=triage-pending',Icon:Sparkles},
-    {label:'Social Review Queue',value:metrics.socialPending===null?'—':metrics.socialPending,detail:'Stored results awaiting human disposition.',to:'/social-listening?tab=queue&pending=1',Icon:Radio}
-  ];
-
-  return <div className="space-y-8">
-    <div>
-      <div className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">Workspace Overview</div>
-      <h1 className="intel-heading">Intelligence Situation</h1>
-      <p className="text-[#75879a] text-sm mt-2">Operational overview of the existing BAWASLU workspace and the items that need attention now.</p>
-    </div>
-
-    <Notice error={error}/>
-    {loading?<p className="text-sm text-[#73869a]">Loading intelligence overview...</p>:error?null:<>
-      <section>
-        <div className="mb-4"><h2 className="text-lg font-semibold">1. Operational metrics</h2><p className="text-xs text-[#7a8b9e] mt-1">Counts are limited to intelligence records available within your authorized scope.</p></div>
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{cards.map(c=><MetricCard key={c.label} {...c} access={access}/>)}</div>
-      </section>
-
-      <section>
-        <div className="flex justify-between items-end gap-4 mb-4">
-          <div><h2 className="text-lg font-semibold">2. What needs attention now</h2><p className="text-xs text-[#7a8b9e] mt-1">Ranked by geographic mismatch, AI review, human review, jurisdiction and priority.</p></div>
-          <Link to="/inbox" className="text-sm text-[#176e8e] font-semibold flex items-center gap-1">Open inbox <ArrowUpRight size={15}/></Link>
-        </div>
-        <AttentionList items={attention}/>
-      </section>
-
-      <section>
-        <div className="mb-4"><h2 className="text-lg font-semibold">3. Validated intelligence & monitoring queues</h2><p className="text-xs text-[#7a8b9e] mt-1">Compact management view of validated intelligence, Watchlist state and stored Social Listening review work.</p></div>
-        <div className="grid xl:grid-cols-[1.5fr_1fr] gap-6">
-          <div>
-            <div className="flex justify-between items-center mb-3"><h3 className="font-semibold">Latest validated intelligence</h3><Link to="/inbox" className="text-xs text-[#176e8e] font-semibold">View all →</Link></div>
-            <ValidatedList items={recentValidated}/>
-          </div>
-          <div className="space-y-4">
-            <div className="intel-card p-5">
-              <div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><ListFilter size={16}/>Watchlist</h3><Link to="/watchlist" className="text-xs text-[#176e8e] font-semibold">Open →</Link></div>
-              {registryState.error?<p className="text-xs text-[#8a5d27] mt-3">Watchlist summary unavailable. The rest of Home remains available.</p>:registryState.loading?<p className="text-xs text-[#8192a3] mt-3">Loading Watchlist summary...</p>:<div className="grid grid-cols-3 gap-2 mt-4">{Object.entries(watchCounts).map(([label,value])=><div key={label} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{value}</strong><p className="text-[11px] text-[#718398] mt-1">{label}</p></div>)}</div>}
-            </div>
-            <div className="intel-card p-5">
-              <div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><Radio size={16}/>Social review queue</h3><Link to="/social-listening" className="text-xs text-[#176e8e] font-semibold">Open →</Link></div>
-              {socialError?<p className="text-xs text-[#8a5d27] mt-3">{socialError} No SocialCrawl search was triggered.</p>:socialCounts?<div className="grid grid-cols-3 gap-2 mt-4">{[['Discovered','DISCOVERED'],['Relevant','RELEVANT'],['Monitor','MONITOR']].map(([label,key])=><div key={key} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{label}</p></div>)}</div>:<p className="text-xs text-[#8192a3] mt-3">Loading stored Social Listening queue...</p>}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4"><h2 className="text-lg font-semibold">4. Recent activity</h2><p className="text-xs text-[#7a8b9e] mt-1">Latest recorded workspace actions. Activity failure does not block the operational dashboard.</p></div>
-        <div className="intel-card p-5">
-          {activityError?<p className="text-sm text-[#8a5d27]">{activityError}</p>:activity.length?<div className="space-y-0">{activity.slice(0,8).map((x,i)=><div key={x.id} className={'flex gap-3 py-3 '+(i?'border-t border-[#edf1f5]':'')}>
-            <div className="mt-0.5 rounded-full bg-[#eef5f7] p-2 text-[#176e8e]"><Clock3 size={14}/></div>
-            <div className="min-w-0"><p className="text-sm"><span className="font-semibold">{auditTitle(x)}</span> <span className="text-[#718398]">· {x.subject_type}</span></p><p className="text-xs text-[#8293a4] mt-1">{x.actor_name||'System'} · {new Date(x.occurred_at||x.created_date).toLocaleString('en-GB')}</p></div>
-          </div>)}</div>:<div className="flex items-center gap-2 text-sm text-[#8293a4]"><AlertTriangle size={15}/>No recent activity yet.</div>}
-        </div>
-      </section>
-    </>}
-  </div>;
+ const {access}=useOutletContext();const {t}=useLanguage();
+ const [activity,setActivity]=useState([]),[activityError,setActivityError]=useState(''),[socialCounts,setSocialCounts]=useState(null),[socialError,setSocialError]=useState('');
+ const {items,loading,error}=useIntel();const registryState=useRegistry();const watch=registryState.items||[];
+ useEffect(()=>{intel('activity').then(r=>setActivity(r.events||[])).catch(()=>setActivityError(t('recent_activity_unavailable')));base44.functions.invoke('socialListening',{action:'queue',data:{state:''}}).then(r=>setSocialCounts(r.data?.counts||{})).catch(()=>setSocialError(t('social_queue_unavailable')))},[t]);
+ const metrics=useMemo(()=>({pending:items.filter(pendingReview).length,validatedCount:items.filter(validated).length,unverified:items.filter(x=>x.verification_status==='UNVERIFIED').length,unresolved:items.filter(x=>x.jurisdiction_confirmed!==true).length,triage:items.filter(triagePending).length,socialPending:socialCounts?['DISCOVERED','RELEVANT','MONITOR'].reduce((n,k)=>n+Number(socialCounts[k]||0),0):null}),[items,socialCounts]);
+ const attention=useMemo(()=>items.filter(x=>attentionReasons(x,t).length).sort((a,b)=>reasonScore(b,t)-reasonScore(a,t)||new Date(b.updated_date||b.created_date||0)-new Date(a.updated_date||a.created_date||0)).slice(0,6),[items,t]);
+ const recentValidated=useMemo(()=>items.filter(validated).sort((a,b)=>new Date(b.validated_at||b.updated_date||b.created_date||0)-new Date(a.validated_at||a.updated_date||a.created_date||0)).slice(0,5),[items]);
+ const watchCounts={Active:watch.filter(x=>x.status==='Active').length,'Under Review':watch.filter(x=>x.status==='Under Review').length,Inactive:watch.filter(x=>x.status==='Inactive').length};
+ const cards=[
+ {label:t('pending_intelligence_review'),value:metrics.pending,detail:t('pending_intelligence_detail'),to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},
+ {label:t('validated_intelligence'),value:metrics.validatedCount,detail:t('validated_intelligence_detail'),to:'/inbox?review_status=Validated%20as%20Relevant%20Intelligence',Icon:BadgeCheck},
+ {label:t('unverified_evidence'),value:metrics.unverified,detail:t('unverified_evidence_detail'),to:'/inbox?verification_status=UNVERIFIED',Icon:ShieldAlert},
+ {label:t('jurisdiction_unresolved'),value:metrics.unresolved,detail:t('jurisdiction_unresolved_detail'),to:'/inbox?view=jurisdiction-unresolved',Icon:MapPin},
+ {label:t('ai_triage_awaiting_review'),value:metrics.triage,detail:t('ai_triage_detail'),to:'/inbox?view=triage-pending',Icon:Sparkles},
+ {label:t('social_review_queue'),value:metrics.socialPending===null?'—':metrics.socialPending,detail:t('social_review_detail'),to:'/social-listening?tab=queue&pending=1',Icon:Radio}
+ ];
+ return <div className="space-y-8"><div><div className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('workspace_overview')}</div><h1 className="intel-heading">{t('intelligence_situation')}</h1><p className="text-[#75879a] text-sm mt-2">{t('home_intro')}</p></div><Notice error={error}/>{loading?<p className="text-sm text-[#73869a]">{t('loading_intelligence')}</p>:error?null:<>
+ <section><div className="mb-4"><h2 className="text-lg font-semibold">1. {t('operational_metrics')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('authorized_scope_note')}</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{cards.map(c=><MetricCard key={c.label} {...c} access={access} openLabel={t('open')}/>)}</div></section>
+ <section><div className="flex justify-between items-end gap-4 mb-4"><div><h2 className="text-lg font-semibold">2. {t('attention_now')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('attention_rank_note')}</p></div><Link to="/inbox" className="text-sm text-[#176e8e] font-semibold flex items-center gap-1">{t('open_inbox')} <ArrowUpRight size={15}/></Link></div><AttentionList items={attention} t={t}/></section>
+ <section><div className="mb-4"><h2 className="text-lg font-semibold">3. {t('validated_monitoring')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('validated_monitoring_note')}</p></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-6"><div><div className="flex justify-between items-center mb-3"><h3 className="font-semibold">{t('latest_validated')}</h3><Link to="/inbox" className="text-xs text-[#176e8e] font-semibold">{t('view_all')} →</Link></div><ValidatedList items={recentValidated} t={t}/></div><div className="space-y-4">
+ <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><ListFilter size={16}/>{t('watchlist')}</h3><Link to="/watchlist" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{registryState.error?<p className="text-xs text-[#8a5d27] mt-3">{t('watchlist_summary_unavailable')}</p>:registryState.loading?<p className="text-xs text-[#8192a3] mt-3">{t('loading_watchlist_summary')}</p>:<div className="grid grid-cols-3 gap-2 mt-4">{Object.entries(watchCounts).map(([label,value])=><div key={label} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{value}</strong><p className="text-[11px] text-[#718398] mt-1">{label==='Active'?t('active'):label==='Under Review'?t('under_review'):t('inactive')}</p></div>)}</div>}</div>
+ <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><Radio size={16}/>{t('social_review_queue')}</h3><Link to="/social-listening" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{socialError?<p className="text-xs text-[#8a5d27] mt-3">{socialError} {t('no_socialcrawl_search')}</p>:socialCounts?<div className="grid grid-cols-3 gap-2 mt-4">{[['discovered','DISCOVERED'],['relevant','RELEVANT'],['monitor','MONITOR']].map(([label,key])=><div key={key} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{t(label)}</p></div>)}</div>:<p className="text-xs text-[#8192a3] mt-3">{t('loading_social_queue')}</p>}</div>
+ </div></div></section>
+ <section><div className="mb-4"><h2 className="text-lg font-semibold">4. {t('recent_activity')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('recent_activity_note')}</p></div><div className="intel-card p-5">{activityError?<p className="text-sm text-[#8a5d27]">{activityError}</p>:activity.length?<div>{activity.slice(0,8).map((x,i)=><div key={x.id} className={'flex gap-3 py-3 '+(i?'border-t border-[#edf1f5]':'')}><div className="mt-0.5 rounded-full bg-[#eef5f7] p-2 text-[#176e8e]"><Clock3 size={14}/></div><div className="min-w-0"><p className="text-sm"><span className="font-semibold">{auditTitle(x)}</span> <span className="text-[#718398]">· {x.subject_type}</span></p><p className="text-xs text-[#8293a4] mt-1">{x.actor_name||t('system')} · {new Date(x.occurred_at||x.created_date).toLocaleString('en-GB')}</p></div></div>)}</div>:<div className="flex items-center gap-2 text-sm text-[#8293a4]"><AlertTriangle size={15}/>{t('no_recent_activity')}</div>}</div></section>
+ </>}</div>;
 }

@@ -151,12 +151,12 @@ export default function Watchlist(){
               const outgoing=r.from_id===x.id;
               const otherId=outgoing?r.to_id:r.from_id;
               const other=items.find(i=>i.id===otherId);
-              return <div key={r.id} className="flex items-center justify-between gap-3 text-xs"><span>{outgoing?'→':'←'} <strong>{r.relationship_type}</strong> · {other?.name||'Entity'}</span>{canManage&&<button className="text-red-700" onClick={()=>removeRelation(r)}><Trash2 size={13}/></button>}</div>
+              return <div key={r.id} className="flex items-center justify-between gap-3 text-xs"><span>{outgoing?'→':'←'} <strong>{r.relationship_type}</strong> · {other?.name||'Entity'}{other?.type?' · '+other.type:''}</span>{canManage&&<button className="text-red-700" onClick={()=>removeRelation(r)}><Trash2 size={13}/></button>}</div>
             })}
             {!relationsFor(x).length&&<p className="text-xs text-[#8192a3]">No recorded relationship.</p>}
           </div>
           {relation?.from_id===x.id?<form onSubmit={saveRelation} className="grid sm:grid-cols-2 gap-2 mt-3">
-            <select className="intel-input" value={relation.to_id||''} onChange={e=>setRelation({...relation,to_id:e.target.value})} required><option value="">Select watchlist item</option>{items.filter(i=>i.id!==x.id).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select>
+            <select className="intel-input" value={relation.to_id||''} onChange={e=>setRelation({...relation,to_id:e.target.value})} required><option value="">Select watchlist item</option>{items.filter(i=>i.id!==x.id).map(i=><option key={i.id} value={i.id}>{i.name} · {i.type}{(i.regency_city||i.province)?' · '+[i.regency_city,i.province].filter(Boolean).join(', '):''}</option>)}</select>
             <select className="intel-input" value={relation.relationship_type||''} onChange={e=>setRelation({...relation,relationship_type:e.target.value})} required><option value="">Select relationship type</option>{RELATIONSHIP_TYPES.map(v=><option key={v}>{v}</option>)}</select>
             <button disabled={busy} className="intel-button">Link items</button>
             <button type="button" className="intel-ghost" onClick={()=>setRelation(null)}>Cancel</button>

@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { auditTitle, suggestionTypes as types } from './auditLabels';
 import { useLanguage } from '@/lib/LanguageContext';
 
-const names={original_content:'Source text',publication_datetime:'Publication date',original_language:'Original language',author:'Author',title:'Headline',source_name:'Publisher'};
+const nameKeys={original_content:'audit_field_source_text',publication_datetime:'audit_field_publication_date',original_language:'audit_field_original_language',author:'author',title:'headline',source_name:'audit_field_publisher'};
+const fieldName=(k,t)=>t(nameKeys[k]||'')||k.replaceAll('_',' ');
 const stamp=ev=>new Date(ev.occurred_at||ev.created_date).toLocaleString('en-GB',{timeZone:'Asia/Kuala_Lumpur'});
-const short=v=>{const s=typeof v==='object'?JSON.stringify(v):String(v??'None');return s.length>140?s.slice(0,140)+'…':s};
+const short=(v,t)=>{const s=typeof v==='object'?JSON.stringify(v):String(v??t('not_recorded'));return s.length>140?s.slice(0,140)+'…':s};
 const safeKey=k=>!(/(^|_)id$|^to$|^merged_into$|^duplicate_of$/.test(k));
 
 function AuditEntry({ev,field,change,t}){
@@ -24,7 +25,7 @@ function AuditEntry({ev,field,change,t}){
     {t('decision_label')}: {status}
     {change?.prior_decision?' · '+t('changed_from')+' '+change.prior_decision:''}
     {status==='Human Rejected'&&(change?.reason||ev.changes?.reason?.new)?' · '+t('reason')+': '+(change?.reason||ev.changes?.reason?.new):''}
-    {status!=='Human Rejected'&&final?' · '+t('final_value')+': '+short(final):''}
+    {status!=='Human Rejected'&&final?' · '+t('final_value')+': '+short(final,t):''}
    </p>
    <button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?t('hide_changes'):t('view_changes')}</button>
    {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#405669] space-y-2 break-words max-h-80 overflow-auto">
@@ -33,14 +34,14 @@ function AuditEntry({ev,field,change,t}){
     <p>{t('human_decision')}: {status?.replace('Human ','')||t('not_recorded')}{change?.prior_decision?' ('+t('changed_from')+' '+change.prior_decision+')':''}</p>
     {status==='Human Rejected'&&<p>{t('rejection_reason')}: {change?.reason||ev.changes?.reason?.new||t('not_recorded')}</p>}
     {(change?.confidence||ev.changes?.confidence?.new)&&<p>{t('ai_confidence')}: {change?.confidence||ev.changes?.confidence?.new}</p>}
-    <p>{status==='Human Modified'?t('human_final'):t('final_value')}{typeof final==='string'&&final.endsWith('…')?' ('+t('historical_excerpt')+')':''}: {status==='Human Rejected'?'None':<span className="whitespace-pre-wrap">{final??t('not_recorded')}</span>}</p>
+    <p>{status==='Human Modified'?t('human_final'):t('final_value')}{typeof final==='string'&&final.endsWith('…')?' ('+t('historical_excerpt')+')':''}: {status==='Human Rejected'?t('not_recorded'):<span className="whitespace-pre-wrap">{final??t('not_recorded')}</span>}</p>
     <p>{t('actor')}: {ev.actor_name||t('unknown')} · {t('timestamp_label')}: {stamp(ev)}</p>
    </div>}
   </>:<>
    {mismatch&&<p className="text-xs text-[#617789]">{ev.changes?.decision?.new} · {t('reviewed_by')}: {ev.changes?.reviewer?.new} · {t('reason')}: {ev.changes?.reason?.new}</p>}
-   {source&&<p className="text-xs text-[#617789]">{t('recovered_label')}: {generic.filter(([k])=>k!=='method').map(([k])=>names[k]||k.replaceAll('_',' ')).join(' · ')}</p>}
+   {source&&<p className="text-xs text-[#617789]">{t('recovered_label')}: {generic.filter(([k])=>k!=='method').map(([k])=>fieldName(k,t)).join(' · ')}</p>}
    <button type="button" className="text-xs text-[#126d91]" onClick={()=>setOpen(!open)}>{open?t('hide_changes'):t('view_changes')}</button>
-   {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#617789] space-y-2">{generic.map(([k,v])=><p key={k} className="break-words">{names[k]||k.replaceAll('_',' ')}: {mismatch?<span className="whitespace-pre-wrap">{typeof v?.new==='object'?JSON.stringify(v.new):String(v?.new??'None')}</span>:k==='original_content'?t('recovered_label')+' ('+t('original_source')+')':short(v?.previous)+' → '+short(v?.new)}</p>)}</div>}
+   {open&&<div className="rounded-lg bg-[#f7fafb] p-3 text-xs text-[#617789] space-y-2">{generic.map(([k,v])=><p key={k} className="break-words">{fieldName(k,t)}: {mismatch?<span className="whitespace-pre-wrap">{typeof v?.new==='object'?JSON.stringify(v.new):String(v?.new??'None')}</span>:k==='original_content'?t('recovered_label')+' ('+t('original_source')+')':short(v?.previous,t)+' → '+short(v?.new,t)}</p>)}</div>}
   </>}
  </div>;
 }

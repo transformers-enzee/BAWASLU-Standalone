@@ -121,7 +121,7 @@ export default function Register() {
         <p className="text-center text-sm text-muted-foreground mt-4">
           {t('didnt_receive_code')}{" "}
           <button onClick={handleResend} className="text-primary font-medium hover:underline">
-            Resend
+            {t('resend')}
           </button>
         </p>
       </AuthLayout>
@@ -140,7 +140,7 @@ export default function Register() {
             to={"/login" + (safeReturnTo() !== "/" ? "?returnTo=" + encodeURIComponent(safeReturnTo()) : "")}
             className="text-primary font-medium hover:underline"
           >
-            Log in
+            {t('log_in')}
           </Link>
         </>
       }

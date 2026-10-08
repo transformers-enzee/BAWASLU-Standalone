@@ -3,7 +3,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 const listText=value=>Array.isArray(value)?value.filter(Boolean).join(' · '):value||'';
 const actorText=value=>Array.isArray(value)?value.map(a=>typeof a==='string'?a:[a?.entity_name,a?.relationship_to_content].filter(Boolean).join(' · ')).filter(Boolean).join(', '):value||'';
-const relationshipText=value=>Array.isArray(value)?value.map(r=>typeof r==='string'?r:(r?.subject_entity_name||'Actor')+' · '+(r?.relationship_type||'related to')+' · '+(r?.object_entity_name||r?.observed_account||'source')).filter(Boolean).join('; '):value||'';
+const relationshipText=(value,t)=>Array.isArray(value)?value.map(r=>typeof r==='string'?r:(r?.subject_entity_name||t('generic_actor'))+' · '+(r?.relationship_type||t('generic_related_to'))+' · '+(r?.object_entity_name||r?.observed_account||t('generic_source'))).filter(Boolean).join('; '):value||'';
 const activityText=value=>typeof value==='string'?value:[value?.type,value?.description].filter(Boolean).join(' · ');
 const narrativeText=value=>typeof value==='string'?value:[value?.label,value?.description].filter(Boolean).join(' · ');
 const locationText=value=>typeof value==='string'?value:value?.location_text||'';
@@ -37,7 +37,7 @@ export default function IntelligenceSummary({item}){
     [t('where_signal'),locationKey,locationText(approved.location_signal||approved.location)],
     [t('activity'),'activity',activityText(approved.activity)],
     [t('narrative'),'narrative',narrativeText(approved.narrative)],
-    [t('extracted_relationship_not_ownership'),'relationships',relationshipText(approved.relationships)],
+    [t('extracted_relationship_not_ownership'),'relationships',relationshipText(approved.relationships,t)],
     [t('filter_supervision_signal'),'supervision_signal',approved.supervision_signal||''],
     [t('screening_confidence'),'screening_confidence',approved.screening_confidence||''],
     [t('why_attention'),'signal_reason',approved.signal_reason||''],

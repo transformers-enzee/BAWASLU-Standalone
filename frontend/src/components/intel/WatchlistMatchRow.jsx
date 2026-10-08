@@ -1,19 +1,35 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '@/lib/LanguageContext';
+
 export default function WatchlistMatchRow({match,decision,items,busy,onDecide,linkedId}){
  const {t,label}=useLanguage();
  const [editing,setEditing]=useState(false),[changing,setChanging]=useState(false),[rejecting,setRejecting]=useState(false),[reason,setReason]=useState(''),[selected,setSelected]=useState('');
  const linked=linkedId&&items.find(x=>x.id===linkedId),decided=!!decision?.status;
- const decide=async(status,value,reason)=>{if(await onDecide('watchlist_match',status,value,reason)){setEditing(false);setChanging(false);setRejecting(false);setReason('')}};
- const basis=match.confidence>=0.9?t('exact_name_match'):t('name_overlap'),strength=match.confidence>=0.9?t('strength_high'):t('strength_moderate');
+ const decide=async(status,value,reasonText)=>{if(await onDecide('watchlist_match',status,value,reasonText)){setEditing(false);setChanging(false);setRejecting(false);setReason('')}};
+ const basis=match.confidence>=0.9?t('exact_name_match'):t('name_overlap');
+ const strength=match.confidence>=0.9?t('strength_high'):t('strength_moderate');
+ const statusText=decided?(linked&&decision.status==='Human Accepted'?t('human_accepted_linked'):linked&&decision.status==='Human Modified'?t('human_modified_linked'):label(decision.status)):t('awaiting_human_review_label');
+
  return <div className="rounded-lg border border-[#e3eaf0] p-4 space-y-3">
-  <div className="flex flex-wrap justify-between gap-2"><h4 className="text-xs font-bold uppercase tracking-wide text-[#53657b]">{t('possible_watchlist_match')}</h4><span className="text-xs text-[#607b8a]">{decided?(linked&&decision.status==='Human Accepted'?t('human_accepted_linked'):linked&&decision.status==='Human Modified'?t('human_modified_linked'):decision.status) :t('awaiting_human_review_label')}</span></div>
-  <p className="text-sm">{match.name}{match.type&&` — ${match.type}`}</p>
+  <div className="flex flex-wrap justify-between gap-2"><h4 className="text-xs font-bold uppercase tracking-wide text-[#53657b]">{t('possible_watchlist_match')}</h4><span className="text-xs text-[#607b8a]">{statusText}</span></div>
+  <p className="text-sm">{match.name}{match.type?' — '+label(match.type):''}</p>
   <p className="text-xs text-[#667b8e]">{t('match_basis')}: {basis} · {t('match_strength')}: {strength}. {linked?t('analyst_linked_note'):t('identity_unconfirmed_note')}</p>
-  {decided&&<p className="text-xs text-[#42657a]">{t('human_decision_label')}: {decision.status}{decision.status!=='Human Rejected'&&decision.value&&` · ${decision.value}`}{decision.status==='Human Rejected'&&decision.reason&&` · Reason: ${decision.reason}`}. {t('link_disclaimer')}</p>}
-  {linked&&decision.status!=='Human Rejected'&&<Link to={`/watchlist/${linked.id}`} className="inline-block text-xs font-semibold text-[#126d91]">{t('view_linked_profile')}</Link>}
-  {decided&&!changing?<div><button type="button" disabled={busy} className="text-xs font-semibold text-[#126d91] hover:underline" onClick={()=>setChanging(true)}>{t('change_decision')}</button></div>:<div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className="intel-ghost" onClick={()=>decide('Human Accepted')}>{t('accept_link')}</button><button type="button" disabled={busy} className="intel-ghost" onClick={()=>setEditing(true)}>{t('modify')}</button><button type="button" disabled={busy} className="intel-ghost" onClick={()=>{setEditing(false);setRejecting(true)}}>{t('reject')}</button>{changing&&<button type="button" className="intel-ghost" onClick={()=>{setChanging(false);setEditing(false)}}>{t('cancel_change')}</button>}</div>}
-  {rejecting&&<div className="space-y-2"><label className="intel-label" htmlFor="watchlist-reason">{t('reason_rejection')}</label><textarea id="watchlist-reason" className="intel-input" maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} rows={2}/><button type="button" disabled={busy||reason.trim().length<5} className="intel-button" onClick={()=>decide('Human Rejected','',reason)}>{t('save_rejection')}</button> <button type="button" className="intel-ghost" onClick={()=>setRejecting(false)}>{t('cancel')}</button></div>}{editing&&<div className="space-y-2"><select className="intel-input" aria-label={t('choose_corrected_match')} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">{t('choose_watchlist_entry')}</option>{items.map(x=><option key={x.id} value={x.id}>{x.name} — {label(x.type)}</option>)}</select><button type="button" disabled={busy||!selected} className="intel-button" onClick={()=>decide('Human Modified',selected)}>{t('save_link_corrected')}</button><button type="button" className="intel-ghost" onClick={()=>setEditing(false)}>Cancel</button></div>}
+  {decided&&<p className="text-xs text-[#42657a]">{t('human_decision_label')}: {label(decision.status)}{decision.status!=='Human Rejected'&&decision.value?' · '+decision.value:''}{decision.status==='Human Rejected'&&decision.reason?' · '+t('reason')+': '+decision.reason:''}. {t('link_disclaimer')}</p>}
+  {linked&&decision.status!=='Human Rejected'&&<Link to={'/watchlist/'+linked.id} className="inline-block text-xs font-semibold text-[#126d91]">{t('view_linked_profile')}</Link>}
+
+  {decided&&!changing
+   ?<div><button type="button" disabled={busy} className="text-xs font-semibold text-[#126d91] hover:underline" onClick={()=>setChanging(true)}>{t('change_decision')}</button></div>
+   :<div className="flex flex-wrap gap-2">
+     <button type="button" disabled={busy} className="intel-ghost" onClick={()=>decide('Human Accepted')}>{t('accept_link')}</button>
+     <button type="button" disabled={busy} className="intel-ghost" onClick={()=>setEditing(true)}>{t('modify')}</button>
+     <button type="button" disabled={busy} className="intel-ghost" onClick={()=>{setEditing(false);setRejecting(true)}}>{t('reject')}</button>
+     {changing&&<button type="button" className="intel-ghost" onClick={()=>{setChanging(false);setEditing(false)}}>{t('cancel_change')}</button>}
+    </div>
+  }
+
+  {rejecting&&<div className="space-y-2"><label className="intel-label" htmlFor="watchlist-reason">{t('reason_rejection')}</label><textarea id="watchlist-reason" className="intel-input" maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} rows={2}/><button type="button" disabled={busy||reason.trim().length<5} className="intel-button" onClick={()=>decide('Human Rejected','',reason)}>{t('save_rejection')}</button> <button type="button" className="intel-ghost" onClick={()=>setRejecting(false)}>{t('cancel')}</button></div>}
+
+  {editing&&<div className="space-y-2"><select className="intel-input" aria-label={t('choose_corrected_match')} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">{t('choose_watchlist_entry')}</option>{items.map(x=><option key={x.id} value={x.id}>{x.name} — {label(x.type)}</option>)}</select><button type="button" disabled={busy||!selected} className="intel-button" onClick={()=>decide('Human Modified',selected)}>{t('save_link_corrected')}</button><button type="button" className="intel-ghost" onClick={()=>setEditing(false)}>{t('cancel')}</button></div>}
  </div>;
 }

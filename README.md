@@ -74,6 +74,12 @@ The importer covers all 13 existing BAWASLU entities, including `IssueCategory`,
 
 Set `SOCIALCRAWL_API_KEY` in the deployment environment. `SOCIALCRAWL_BASE_URL` is configurable. Social listening results remain evidence-discovery records until a human promotes them; promotion still creates UNVERIFIED / Pending Review intelligence. See `docs/SOCIAL_LISTENING_SOCIALCRAWL.md`.
 
+## Source cleaning and language resolution
+
+Public URL retrieval preserves the full retrieved source in provider metadata while using a deterministic cleaned article-body copy for AI triage. Recognized trailing publisher/footer/promotional boilerplate can be removed from the analysis copy without deleting the preserved source evidence.
+
+The same deterministic language resolver is used by public-source retrieval, the optional Suggest language control, and AI Triage. It distinguishes Bahasa Melayu (`ms`), Bahasa Indonesia (`id`) and English (`en`) when the text provides sufficient evidence. A human analyst's explicit language selection always takes precedence.
+
 ## Production AI Triage
 
 Set `OPENAI_API_KEY` in the deployment environment to enable production AI triage. `OPENAI_MODEL` defaults to `gpt-6-luna`, and `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`.
@@ -84,6 +90,6 @@ The provider call is single-attempt. If the key is absent or the provider reques
 
 ## v0.1 boundaries
 
-This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The standalone AI triage endpoint uses the configured OpenAI Responses API when available and falls back to the deterministic local placeholder when it is not. Public URL retrieval validates and preserves URLs but does not yet perform the hardened article/social retrieval work now present in GovIntel. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.
+This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The standalone AI triage endpoint uses the configured OpenAI Responses API when available and falls back to the deterministic local placeholder when it is not. Public URL retrieval includes hardened article/social retrieval, source cleaning and language-resolution safeguards. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.
 
 Those are intentionally listed as parity gates for the next version rather than silently removed. See `docs/PARITY_MATRIX.md`.

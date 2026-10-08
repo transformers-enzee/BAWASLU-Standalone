@@ -787,3 +787,38 @@ Dapatkan berita hari ini dan berita terkini Malaysia, Dunia, Sukan dan Hiburan.'
     assert captured['language_code']=='ms'
     assert r.json()['generation']['source_cleaning']['applied'] is True
     assert r.json()['generation']['language_resolution']['code']=='ms'
+
+
+def test_suggest_source_language_api_uses_shared_detector():
+    h=auth()
+    malay='Pihak berkuasa memaklumkan kejadian berlaku selepas laporan diterima. Setakat ini tiada penularan dikesan dan orang ramai diminta bertenang.'
+    indonesian='Informasi ini adalah laporan pemilu yang disampaikan kepada masyarakat. Dalam laporan tersebut dijelaskan bahwa pengawasan dilakukan sesuai ketentuan yang berlaku.'
+    english='Authorities reported that the investigation remains ongoing and the situation is stable. The source is a news report with no election activity.'
+    r=client.post('/api/functions/suggestSourceLanguage',json={'content':malay},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['language_code']=='ms'
+    assert r.json()['language_label']=='Bahasa Melayu'
+    r=client.post('/api/functions/suggestSourceLanguage',json={'content':indonesian},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['language_code']=='id'
+    r=client.post('/api/functions/suggestSourceLanguage',json={'content':english},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['language_code']=='en'
+
+
+def test_analyst_language_override_remains_authoritative():
+    h=auth()
+    malay='Pihak berkuasa memaklumkan kejadian berlaku selepas laporan diterima. Setakat ini tiada penularan dikesan dan orang ramai diminta bertenang.'
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Analyst language override','original_content':malay,'original_language_code':'id',
+      'provider_source_metadata':{'language_selection_source':'ANALYST','language_selection_code':'id'},
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    resolution=r.json()['item']['language_resolution']
+    assert resolution['code']=='id'
+    assert resolution['method']=='ANALYST_CONFIRMED'
+    assert resolution['mismatch'] is True

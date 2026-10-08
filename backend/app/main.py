@@ -13,6 +13,7 @@ from .access import profile
 from .domain import intelligence_action
 from .registry import registry_action
 from .socialcrawl import social_listening_action
+from .source_retrieval import _language_detection
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
@@ -93,14 +94,14 @@ def effective_access(body:dict,user:User=Depends(current_user),db:Session=Depend
 @app.post('/api/functions/suggestSourceLanguage')
 def suggest_language(body:dict,user:User=Depends(current_user)):
     content=str(body.get('content',''))
-    low=content.lower()
-    code='id'
-    if re_search := __import__('re').search:
-        if re_search(r'[\u0600-\u06ff]',content): code='ar'
-        elif re_search(r'[\u4e00-\u9fff]',content): code='zh'
-        elif any(w in low for w in [' yang ',' dan ',' dengan ',' untuk ',' dari ',' pada ']): code='id'
-        elif content.strip(): code='en'
-    return {'language_code':code,'method':'deterministic_v0_1'}
+    detection=_language_detection(content,str(body.get('declared_language') or ''))
+    return {
+      'language_code':detection.get('code') or 'unknown',
+      'language_label':detection.get('label') or 'Unknown',
+      'confidence':detection.get('confidence') or 'LOW',
+      'method':detection.get('method') or 'UNRESOLVED',
+      'scores':detection.get('scores') or {}
+    }
 
 @app.post('/api/functions/assistIntelligence')
 def assist_intelligence(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):

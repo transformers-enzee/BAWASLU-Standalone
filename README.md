@@ -92,7 +92,7 @@ The provider call is single-attempt. If the key is absent or the provider reques
 
 The BAWASLU Intelligence Assistant is read-only and uses only intelligence records already accessible to the current user under the server-side geographic ACL. OpenAI synthesis receives compact evidence records containing recorded source excerpts, record status, verification state and human-approved triage values; raw pending/rejected AI triage suggestions are not supplied as approved analysis.
 
-Each answer returns supporting intelligence records for traceability. The OpenAI call runs only when the user submits a question and uses `store: false`. If the provider is unavailable, the Assistant returns a deterministic summary of the matched authorized records. It does not trigger SocialCrawl searches or background provider work.
+Each answer returns supporting intelligence records for traceability. Time-sensitive questions use explicit date semantics: “last 7 days” / “today” default to source publication date, “added/collected” uses collection or creation time, and “latest validated” sorts by human validation time. The answer states which date basis was used. Analytical responses are standardized to Bahasa Indonesia while source names and quotations remain unchanged. The OpenAI call runs only when the user submits a question and uses `store: false`. If the provider is unavailable, the Assistant returns a deterministic summary of the matched authorized records. It does not trigger SocialCrawl searches or background provider work.
 
 ## v0.1 boundaries
 

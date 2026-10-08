@@ -27,7 +27,7 @@
 | External connector registry | Yes | Implemented schema/import | Provider execution pending |
 | Public URL retrieval | Yes | Implemented | Hardened public HTML retrieval with SSRF controls, metadata/JSON-LD extraction, preserved raw retrieval, deterministic boilerplate cleaning and human-editable intake |
 | Source language resolution | New requirement | Implemented | Shared Malay/Indonesian/English detector used by retrieval, optional suggestion and AI Triage; analyst override remains authoritative |
-| Intelligence Assistant | Yes | Implemented | OpenAI-grounded read-only synthesis over current-user-authorized records only; human-approved triage separated from source evidence; supporting-record traceability and deterministic safe fallback |
+| Intelligence Assistant | Yes | Implemented | OpenAI-grounded read-only synthesis over current-user-authorized records only; explicit publication/collection/validation date semantics; Bahasa Indonesia analytical output; human-approved triage separated from source evidence; supporting-record traceability and deterministic safe fallback |
 | Google OAuth | Yes | Pending | Email/password available |
 | OTP/password reset delivery | Yes | Pending | Requires delivery provider |
 | Base44 data migration | N/A | Implemented importer foundation | Requires real export reconciliation |

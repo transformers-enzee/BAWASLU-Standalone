@@ -1,4 +1,7 @@
-const headings=['ANSWER / INTELLIGENCE SUMMARY','KEY OBSERVATIONS','EVIDENCE STATUS','LIMITATION'];
+const headings=[
+  'RINGKASAN INTELIJEN','OBSERVASI KUNCI','STATUS BUKTI','DASAR WAKTU','KETERBATASAN',
+  'ANSWER / INTELLIGENCE SUMMARY','KEY OBSERVATIONS','EVIDENCE STATUS','LIMITATION'
+];
 export default function AssistantAnswer({text}){
   const sections=String(text||'').split(/\n\n+/);
   return <div className="space-y-4">{sections.map((section,i)=>{

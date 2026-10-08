@@ -130,7 +130,7 @@ def assist_intelligence(body:dict,user:User=Depends(current_user),db:Session=Dep
 def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     from .domain import list_intelligence
     from .intelligence_assistant import (
-      select_assistant_records,assistant_evidence_record,assistant_record_view,
+      select_assistant_records,assistant_evidence_record,assistant_record_view,assistant_query_semantics,
       generate_openai_assistant_answer,format_assistant_answer,deterministic_assistant_answer,
       AssistantProviderError
     )
@@ -159,7 +159,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     support=[assistant_record_view(selected_by_id[x]) for x in cited_ids if x in selected_by_id]
     if not support:
         support=[assistant_record_view(x) for x in selected[:6]]
-    return {'answer':answer,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY'}}
+    semantics=assistant_query_semantics(q)
+    return {'answer':answer,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY','date_basis':semantics['date_basis'],'date_basis_label':semantics['date_basis_label'],'date_basis_note':semantics['date_basis_note'],'window':semantics['window']}}
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():

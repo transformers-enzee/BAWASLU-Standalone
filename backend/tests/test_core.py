@@ -904,3 +904,95 @@ def test_intelligence_assistant_falls_back_safely_on_provider_error(monkeypatch)
     assert body['provider']['mode']=='DETERMINISTIC_FALLBACK'
     assert body['provider']['fallback_code']=='provider_timeout'
     assert body['records']
+
+
+def test_assistant_last_7_days_uses_publication_date(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    h=auth()
+    today=datetime.now(timezone.utc).date()
+    recent=(today-timedelta(days=2)).isoformat()
+    old=(today-timedelta(days=40)).isoformat()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Recent published intelligence','original_content':'Recent source material about election supervision.',
+      'publication_date':recent,'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    recent_id=r.json()['item']['intelligence_id']
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Old published but newly added','original_content':'Old source material added to the system today.',
+      'publication_date':old,'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    old_id=r.json()['item']['intelligence_id']
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'Summarise intelligence from the last 7 days.'},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    ids=[x['intelligence_id'] for x in body['records']]
+    assert recent_id in ids
+    assert old_id not in ids
+    assert body['grounding']['date_basis']=='publication_date'
+    assert body['grounding']['window']=='LAST_7_DAYS'
+
+def test_assistant_added_last_7_days_uses_collection_or_creation_date(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    h=auth()
+    old=(datetime.now(timezone.utc).date()-timedelta(days=90)).isoformat()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Old publication added recently','original_content':'Historical source newly entered into BAWASLU.',
+      'publication_date':old,'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    iid=r.json()['item']['intelligence_id']
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'Summarise intelligence added in the last 7 days.'},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    assert iid in [x['intelligence_id'] for x in body['records']]
+    assert body['grounding']['date_basis']=='collection_or_created'
+
+def test_assistant_latest_validated_sorts_by_validated_at(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    db=SessionLocal()
+    now=datetime.now(timezone.utc)
+    older_validation=(now-timedelta(hours=3)).isoformat()
+    newer_validation=(now-timedelta(hours=1)).isoformat()
+    older=IntelligenceItem(
+      intelligence_id='INT-2026-200001',title='Newer publication but older validation',
+      original_content='Validated election supervision evidence A.',publication_date=(now.date()-timedelta(days=1)).isoformat(),
+      jurisdiction_type='National',jurisdiction_confirmed=True,review_status='Validated as Relevant Intelligence',
+      validated_at=older_validation,verification_status='UNVERIFIED',evidence_type='OBSERVED'
+    )
+    newer=IntelligenceItem(
+      intelligence_id='INT-2026-200002',title='Older publication but newer validation',
+      original_content='Validated election supervision evidence B.',publication_date=(now.date()-timedelta(days=20)).isoformat(),
+      jurisdiction_type='National',jurisdiction_confirmed=True,review_status='Validated as Relevant Intelligence',
+      validated_at=newer_validation,verification_status='UNVERIFIED',evidence_type='OBSERVED'
+    )
+    pending=IntelligenceItem(
+      intelligence_id='INT-2026-200003',title='Pending record',
+      original_content='Pending evidence.',publication_date=now.date().isoformat(),
+      jurisdiction_type='National',jurisdiction_confirmed=True,review_status='Pending Review'
+    )
+    db.add_all([older,newer,pending]); db.commit(); db.close()
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    h=auth()
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What are the latest validated intelligence records?'},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    ids=[x['intelligence_id'] for x in body['records']]
+    assert ids[0]=='INT-2026-200002'
+    assert 'INT-2026-200003' not in ids
+    assert body['grounding']['date_basis']=='validated_at'
+
+def test_assistant_deterministic_fallback_uses_bahasa_indonesia(monkeypatch):
+    h=auth()
+    client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Bahasa output test','original_content':'Recorded source evidence.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What evidence is available?'},headers=h)
+    assert r.status_code==200, r.text
+    answer=r.json()['answer']
+    assert 'RINGKASAN INTELIJEN' in answer
+    assert 'STATUS BUKTI' in answer
+    assert 'DASAR WAKTU' in answer
+    assert 'KETERBATASAN' in answer

@@ -36,7 +36,9 @@ const actionKey={
  RELATIONSHIP_REMOVED:'audit_relationship_removed',
  SOURCE_RECOVERED:'audit_source_recovered',
  GEOGRAPHIC_MISMATCH_REVIEWED:'audit_geographic_reviewed',
- WATCHLIST_UPDATED:'audit_watchlist_updated'
+ WATCHLIST_UPDATED:'audit_watchlist_updated',
+ AI_TRIAGE_GENERATED:'audit_ai_triage_generated',
+ SOCIAL_LISTENING_SEARCH_EXECUTED:'audit_social_listening_search_executed'
 };
 
 const identity=x=>x;

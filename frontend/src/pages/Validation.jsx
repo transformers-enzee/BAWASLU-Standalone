@@ -6,7 +6,7 @@ import { Notice, err } from '@/components/intel/Fields';
 import Status from '@/components/intel/Status';
 import { useLanguage } from '@/lib/LanguageContext';
 
-const queueStatuses=['Awaiting Validation','Request More Information','Escalate for Further Review'];
+const queueStatuses=['Pending Review','Awaiting Validation','Request More Information','Escalate for Further Review'];
 const decisions=['Validated as Relevant Intelligence','Request More Information','Not Relevant','Escalate for Further Review'];
 const priorities=['Critical','High','Medium','Low'];
 

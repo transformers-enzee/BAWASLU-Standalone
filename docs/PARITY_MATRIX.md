@@ -11,13 +11,13 @@
 | Geographic mismatch review | Yes | Implemented | Fingerprinted mismatch detection, human keep/change decisions, validation blocking, normalized jurisdiction updates and audit |
 | Source identity states | Yes | Implemented | Registered/known/unresolved |
 | Observed publisher provenance | Yes | Implemented | Kept distinct from registered identity |
-| Watchlists | Yes | Implemented | Full human-managed lifecycle with edit/status controls, filters, duplicate safeguards, public account management, bidirectional relationship display, ACL and audit |
+| Watchlists | Yes | Implemented | Full human-managed lifecycle with edit/status controls, filters, duplicate safeguards, public account management, bidirectional relationship display, ACL, audit and EN/ID localized Watchlist/Profile UI |
 | Source accounts | Yes | Implemented | Validated/normalized public URLs and handles, duplicate prevention, edit/remove lifecycle, audit, identity matching |
 | Actor/entity relationships | Yes | Implemented | First-class registry with self/duplicate prevention, controlled relationship labels, bidirectional display and removal audit |
 | V3 triage provenance | Yes | Implemented | Validated V3 contract, generation/source/proposal fingerprints, OpenAI/provider-or-fallback provenance and audit |
 | Production AI triage | Yes | Implemented | OpenAI Responses API + Structured Outputs under V3 contract when configured; single-attempt safe local fallback; human review remains mandatory |
 | Human triage decisions | Yes | Implemented | Backend-enforced Accept/Modify/Reject review, completion state, rejection/modify validation, audit provenance and final-validation gate |
-| Human-approved intelligence summary | Yes | Implemented | Server-derived field states distinguish approved/rejected/pending/not-generated; Evidence Type included; source metadata and confirmed context separated from AI-triage approvals; reviewer/timestamp provenance retained |
+| Human-approved intelligence summary | Yes | Implemented | Server-derived field states distinguish approved/rejected/pending/not-generated; Evidence Type included; source metadata and confirmed context separated from AI-triage approvals; reviewer/timestamp provenance retained; Intelligence Detail workflow localized for EN/ID |
 | Evidence verification | Yes | Implemented | Independent human action |
 | Duplicate detection/review | Yes | Implemented | Exact/canonical URL plus headline/content/source/date similarity scoring; human merge/keep-separate decision retained |
 | Evidence attachments | Yes | Implemented local | Object storage/signed URL pending |

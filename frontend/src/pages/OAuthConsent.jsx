@@ -43,7 +43,7 @@ export default function OAuthConsent() {
           { credentials: "include", headers: infoHeaders },
         );
         if (!res.ok) {
-          setError("This authorization link is invalid or has expired.");
+          setError(t('oauth_invalid'));
           return;
         }
         const data = await res.json();

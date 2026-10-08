@@ -822,3 +822,85 @@ def test_analyst_language_override_remains_authoritative():
     assert resolution['code']=='id'
     assert resolution['method']=='ANALYST_CONFIRMED'
     assert resolution['mismatch'] is True
+
+
+def test_intelligence_assistant_respects_geographic_acl(monkeypatch):
+    db=SessionLocal()
+    u=User(email='assistant-prov@test.local',full_name='Assistant Provincial',password_hash=hash_password('secret'))
+    db.add(u); db.flush()
+    perms=default_permissions('Provincial Analyst')
+    db.add(AccessGrant(user_id=u.id,access_role='Provincial Analyst',geographic_scope='Province',province='Jawa Barat',permissions_json=json.dumps(perms),status='Active'))
+    db.add(IntelligenceItem(intelligence_id='INT-2026-100001',title='Visible Bandung election supervision',original_content='Bawaslu reviewed election supervision in Bandung.',province='Jawa Barat',jurisdiction_type='Province',jurisdiction_confirmed=True,priority='High',review_status='Validated as Relevant Intelligence',verification_status='HUMAN_VERIFIED',evidence_type='OBSERVED'))
+    db.add(IntelligenceItem(intelligence_id='INT-2026-100002',title='Hidden Central Java record',original_content='Confidential Central Java election material.',province='Jawa Tengah',jurisdiction_type='Province',jurisdiction_confirmed=True,priority='High'))
+    db.commit(); db.close()
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    r=client.post('/api/auth/login',json={'email':'assistant-prov@test.local','password':'secret'})
+    h={'Authorization':'Bearer '+r.json()['access_token']}
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What election supervision records are available?'},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    ids=[x['intelligence_id'] for x in body['records']]
+    assert 'INT-2026-100001' in ids
+    assert 'INT-2026-100002' not in ids
+    assert body['grounding']['scope']=='CURRENT_USER_AUTHORIZED_RECORDS_ONLY'
+
+def test_intelligence_assistant_provider_receives_only_human_approved_triage(monkeypatch):
+    import app.intelligence_assistant as ia
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Approved assistant evidence','original_content':'Source says Bawaslu requested clarification about an election supervision issue.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True,
+      'ai_suggestions':{'_version':3,'summary':'Approved factual summary','signal_reason':'RAW UNAPPROVED SECRET CLAIM','screening_confidence':'HIGH','priority':'High','evidence_type':'OBSERVED','confidence':'HIGH'}
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'triageDecision','data':{'key':'summary','status':'Human Accepted'},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    captured={}
+    def fake_provider(question,previous,records):
+        captured['records']=records
+        rid=records[0]['record_id']
+        return {'answer_summary':'Grounded answer','key_observations':[f'[{rid}] Approved evidence used.'],'evidence_status':['Source status retained.'],'limitations':[],'cited_record_ids':[rid]}, {'mode':'OPENAI_GROUNDED','model':'gpt-test','usage':{'total_tokens':10}}
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    monkeypatch.setattr(ia,'generate_openai_assistant_answer',fake_provider)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What does the approved evidence say?'},headers=h)
+    assert r.status_code==200, r.text
+    record=captured['records'][0]
+    assert record['human_approved_triage']['summary']=='Approved factual summary'
+    assert 'RAW UNAPPROVED SECRET CLAIM' not in json.dumps(record)
+    assert r.json()['provider']['mode']=='OPENAI_GROUNDED'
+
+def test_intelligence_assistant_filters_hallucinated_citations(monkeypatch):
+    import app.intelligence_assistant as ia
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Citation filter test','original_content':'Recorded Bawaslu evidence for citation testing.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    real_id=r.json()['item']['intelligence_id']
+    def fake_provider(question,previous,records):
+        return {'answer_summary':'Test answer','key_observations':[f'[{real_id}] Supported.'],'evidence_status':[],'limitations':[],'cited_record_ids':[real_id,'INT-2099-999999']}, {'mode':'OPENAI_GROUNDED','model':'gpt-test','usage':{}}
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    monkeypatch.setattr(ia,'generate_openai_assistant_answer',fake_provider)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'Show citation test evidence'},headers=h)
+    assert r.status_code==200, r.text
+    ids=[x['intelligence_id'] for x in r.json()['records']]
+    assert real_id in ids
+    assert 'INT-2099-999999' not in ids
+
+def test_intelligence_assistant_falls_back_safely_on_provider_error(monkeypatch):
+    import app.intelligence_assistant as ia
+    h=auth()
+    client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Fallback assistant record','original_content':'Bawaslu source evidence remains available if the provider fails.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    def fail_provider(question,previous,records):
+        raise ia.AssistantProviderError('provider_timeout','timeout')
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    monkeypatch.setattr(ia,'generate_openai_assistant_answer',fail_provider)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What evidence is available?'},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    assert body['provider']['mode']=='DETERMINISTIC_FALLBACK'
+    assert body['provider']['fallback_code']=='provider_timeout'
+    assert body['records']

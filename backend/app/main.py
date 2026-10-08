@@ -129,20 +129,37 @@ def assist_intelligence(body:dict,user:User=Depends(current_user),db:Session=Dep
 @app.post('/api/functions/intelligenceAssistant')
 def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     from .domain import list_intelligence
-    from .serializers import intelligence as serialize
+    from .intelligence_assistant import (
+      select_assistant_records,assistant_evidence_record,assistant_record_view,
+      generate_openai_assistant_answer,format_assistant_answer,deterministic_assistant_answer,
+      AssistantProviderError
+    )
     p=profile(db,user)
-    q=str(body.get('question','')).strip().lower()
-    tokens=[t for t in __import__('re').findall(r'[a-z0-9_\-]{3,}',q) if t not in {'what','when','where','which','with','from','that','this','show','tell','about'}]
-    rows=[]
-    for x in list_intelligence(db,p):
-        hay=' '.join([x.title,x.original_content,x.province,x.regency_city,x.platform,x.author]).lower()
-        if not tokens or any(t in hay for t in tokens): rows.append(x)
-    rows=rows[:12]
-    if rows:
-        answer=f'Found {len(rows)} accessible intelligence record(s) matching the question. Review the cited records for source evidence and human validation state.'
-    else:
-        answer='No accessible intelligence records matched the question. The assistant does not infer facts beyond stored BAWASLU evidence.'
-    return {'answer':answer,'records':[serialize(x) for x in rows]}
+    q=str(body.get('question','')).strip()
+    if not q: raise HTTPException(400,'Question is required')
+    if len(q)>500: raise HTTPException(400,'Question is too long')
+    previous=str(body.get('previousQuestion','')).strip()[:500]
+    accessible=list_intelligence(db,p)
+    selected=select_assistant_records(q,accessible,limit=12)
+    evidence=[assistant_evidence_record(x) for x in selected]
+    provider={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':''}
+    cited_ids=[]
+    try:
+        if not os.getenv('OPENAI_API_KEY','').strip():
+            raise AssistantProviderError('not_configured','OpenAI is not configured')
+        result,provider=generate_openai_assistant_answer(q,previous,evidence)
+        allowed_ids={r['record_id'] for r in evidence}
+        cited_ids=[x for x in (result.get('cited_record_ids') or []) if x in allowed_ids]
+        answer=format_assistant_answer(result)
+    except AssistantProviderError as exc:
+        fallback=deterministic_assistant_answer(q,evidence,exc.code)
+        answer=fallback['answer']; cited_ids=fallback['cited_record_ids']
+        provider={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}
+    selected_by_id={x.intelligence_id:x for x in selected}
+    support=[assistant_record_view(selected_by_id[x]) for x in cited_ids if x in selected_by_id]
+    if not support:
+        support=[assistant_record_view(x) for x in selected[:6]]
+    return {'answer':answer,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY'}}
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():

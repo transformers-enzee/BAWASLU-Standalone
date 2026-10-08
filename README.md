@@ -88,6 +88,12 @@ BAWASLU calls the OpenAI Responses API only when an authorized analyst clicks Ge
 
 The provider call is single-attempt. If the key is absent or the provider request fails, BAWASLU does not retry automatically; it generates the clearly labelled local workflow placeholder instead.
 
+## Intelligence Assistant
+
+The BAWASLU Intelligence Assistant is read-only and uses only intelligence records already accessible to the current user under the server-side geographic ACL. OpenAI synthesis receives compact evidence records containing recorded source excerpts, record status, verification state and human-approved triage values; raw pending/rejected AI triage suggestions are not supplied as approved analysis.
+
+Each answer returns supporting intelligence records for traceability. The OpenAI call runs only when the user submits a question and uses `store: false`. If the provider is unavailable, the Assistant returns a deterministic summary of the matched authorized records. It does not trigger SocialCrawl searches or background provider work.
+
 ## v0.1 boundaries
 
 This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The standalone AI triage endpoint uses the configured OpenAI Responses API when available and falls back to the deterministic local placeholder when it is not. Public URL retrieval includes hardened article/social retrieval, source cleaning and language-resolution safeguards. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.

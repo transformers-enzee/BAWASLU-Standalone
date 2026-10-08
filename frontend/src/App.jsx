@@ -25,6 +25,7 @@ import DataSources from '@/pages/DataSources';
 import SocialListening from '@/pages/SocialListening';
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
+import { LanguageProvider } from '@/lib/LanguageContext';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
@@ -84,7 +85,8 @@ const AuthenticatedApp = () => {
 function App() {
 
   return (
-    <AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
@@ -93,6 +95,7 @@ function App() {
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
+    </LanguageProvider>
   )
 }
 

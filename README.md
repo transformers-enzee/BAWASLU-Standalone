@@ -74,8 +74,16 @@ The importer covers all 13 existing BAWASLU entities, including `IssueCategory`,
 
 Set `SOCIALCRAWL_API_KEY` in the deployment environment. `SOCIALCRAWL_BASE_URL` is configurable. Social listening results remain evidence-discovery records until a human promotes them; promotion still creates UNVERIFIED / Pending Review intelligence. See `docs/SOCIAL_LISTENING_SOCIALCRAWL.md`.
 
+## Production AI Triage
+
+Set `OPENAI_API_KEY` in the deployment environment to enable production AI triage. `OPENAI_MODEL` defaults to `gpt-6-luna`, and `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`.
+
+BAWASLU calls the OpenAI Responses API only when an authorized analyst clicks Generate/Regenerate AI Triage. The request uses Structured Outputs constrained to the BAWASLU V3 triage schema and `store: false`. AI output remains suggestion-only and each generated field still requires human Accept / Modify / Reject review before final validation.
+
+The provider call is single-attempt. If the key is absent or the provider request fails, BAWASLU does not retry automatically; it generates the clearly labelled local workflow placeholder instead.
+
 ## v0.1 boundaries
 
-This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The current standalone AI triage endpoint is deterministic and human-review-only; it does not yet invoke the production OpenAI/provider abstraction. Public URL retrieval validates and preserves URLs but does not yet perform the hardened article/social retrieval work now present in GovIntel. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.
+This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The standalone AI triage endpoint uses the configured OpenAI Responses API when available and falls back to the deterministic local placeholder when it is not. Public URL retrieval validates and preserves URLs but does not yet perform the hardened article/social retrieval work now present in GovIntel. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.
 
 Those are intentionally listed as parity gates for the next version rather than silently removed. See `docs/PARITY_MATRIX.md`.

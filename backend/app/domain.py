@@ -8,6 +8,7 @@ from .serializers import *
 from .access import has, allowed, audit
 from .source_retrieval import fetch_public_source
 from .geography import normalize_jurisdiction
+from .openai_triage import openai_triage_configured, generate_openai_triage, OpenAITriageError
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def jdump(v): return json.dumps(v,ensure_ascii=False)
@@ -491,7 +492,7 @@ def intelligence_action(db,p,action,data,id=None):
         gen=None; sug=loads(item.ai_suggestions_json,{})
         if sug.get('_triage_run_id'):
             g=db.query(TriageGeneration).filter(TriageGeneration.triage_run_id==sug['_triage_run_id']).first()
-            if g: gen={'triage_run_id':g.triage_run_id,'triage_schema_version':g.triage_schema_version,'generator':g.generator,'generator_version':g.generator_version,'service_action':g.service_action,'generated_at':g.generated_at,'proposal_field_names':loads(g.proposal_field_names_json,[])}
+            if g: gen={'triage_run_id':g.triage_run_id,'triage_schema_version':g.triage_schema_version,'generator':g.generator,'generator_version':g.generator_version,'service_action':g.service_action,'generated_at':g.generated_at,'validation_outcome':g.validation_outcome,'proposal_field_names':loads(g.proposal_field_names_json,[])}
         comparison_item=get_item(db,item.duplicate_of) if item.duplicate_of else None
         if comparison_item and not allowed(p,comparison_item): comparison_item=None
         if not comparison_item and linked: comparison_item=linked[0]
@@ -571,17 +572,45 @@ def intelligence_action(db,p,action,data,id=None):
         return {'url':f.file_uri}
     if action=='runTriage':
         if not has(p,'review_ai_suggestions'): raise PermissionError('Not permitted')
+        if not (item.original_content or '').strip(): raise ValueError('Original source content is required before AI Triage can be generated')
         run_id=str(uuid.uuid4())
+        attempt_started=now()
         source_fp=hashlib.sha256(((item.original_content or '')+'|'+(item.source_url or '')).encode()).hexdigest()
-        proposal=_local_v3_triage(item,run_id)
-        if not _valid_v3_proposal(proposal): raise ValueError('Local V3 triage generator produced an invalid proposal contract')
+        provider_meta={}
+        fallback_code=''
+        if openai_triage_configured():
+            try:
+                proposal,provider_meta=generate_openai_triage(item,run_id)
+                if not _valid_v3_proposal(proposal): raise OpenAITriageError('provider_invalid_v3','OpenAI proposal did not satisfy the BAWASLU V3 contract')
+                generator='openai-responses'
+                generator_version=clean(provider_meta.get('model'),128) or 'configured-model'
+                validation_outcome='VALID_V3_OPENAI'
+            except OpenAITriageError as exc:
+                fallback_code=exc.code
+                proposal=_local_v3_triage(item,run_id)
+                generator='standalone-local-fallback'
+                generator_version='v0.3'
+                validation_outcome='FALLBACK_PROVIDER'
+        else:
+            proposal=_local_v3_triage(item,run_id)
+            generator='standalone-local-placeholder'
+            generator_version='v0.3'
+            validation_outcome='FALLBACK_NO_KEY'
+            fallback_code='not_configured'
+        if not _valid_v3_proposal(proposal): raise ValueError('AI Triage generator produced an invalid V3 proposal contract')
         prop_fp=hashlib.sha256(jdump(proposal).encode()).hexdigest()
         field_names=[k for k in proposal.keys() if not k.startswith('_')]
-        g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator='standalone-local-placeholder',generator_version='v0.2',service_action='runTriage',generated_at=now(),validation_outcome='VALID_V3_PLACEHOLDER',proposal_field_names_json=jdump(field_names))
+        generated_at=now()
+        g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator=generator,generator_version=generator_version,service_action='runTriage',attempt_started_at=attempt_started,attempt_ended_at=generated_at,generated_at=generated_at,validation_outcome=validation_outcome,proposal_field_names_json=jdump(field_names))
         db.add(g); item.ai_suggestions_json=jdump(proposal); item.updated_at=datetime.utcnow(); db.commit()
         review_state=triage_review_status(item)
-        audit(db,p,'IntelligenceItem',item.id,'AI_TRIAGE_GENERATED',{'triage_run_id':{'new':run_id},'generator':{'new':'standalone-local-placeholder'},'validation_outcome':{'new':'VALID_V3_PLACEHOLDER'},'triage_review':{'new':review_state}})
-        return {'suggestions':proposal,'generation':{'triage_run_id':run_id,'triage_schema_version':3,'generator':'standalone-local-placeholder','generator_version':'v0.2','service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':'VALID_V3_PLACEHOLDER','proposal_field_names':field_names},'triage_review':review_state,'geography':loads(item.ai_geography_json,{}),'watchlist_match':None}
+        generation={'triage_run_id':run_id,'triage_schema_version':3,'generator':generator,'generator_version':generator_version,'service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':validation_outcome,'proposal_field_names':field_names}
+        if provider_meta:
+            generation['provider_response_id']=provider_meta.get('response_id') or ''
+            generation['usage']=provider_meta.get('usage') or {}
+        if fallback_code: generation['fallback_code']=fallback_code
+        audit(db,p,'IntelligenceItem',item.id,'AI_TRIAGE_GENERATED',{'triage_run_id':{'new':run_id},'generator':{'new':generator},'generator_version':{'new':generator_version},'validation_outcome':{'new':validation_outcome},'fallback_code':{'new':fallback_code or None},'provider_usage':{'new':provider_meta.get('usage') if provider_meta else None},'provider_response_id':{'new':provider_meta.get('response_id') if provider_meta else None},'triage_review':{'new':review_state}})
+        return {'suggestions':proposal,'generation':generation,'triage_review':review_state,'geography':loads(item.ai_geography_json,{}),'watchlist_match':None}
     if action=='triageDecision':
         if not has(p,'review_ai_suggestions'): raise PermissionError('Not permitted')
         key=clean(data.get('key'),100); status=clean(data.get('status'),64); reason=clean(data.get('reason'),500); value=data.get('value')

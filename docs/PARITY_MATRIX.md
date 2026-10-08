@@ -14,7 +14,7 @@
 | Source accounts | Yes | Implemented | Used for identity matching |
 | Actor/entity relationships | Yes | Implemented | First-class registry + intelligence JSON contract retained |
 | V3 triage provenance | Yes | Implemented | Validated V3 contract, generation/source/proposal fingerprints, versioned local placeholder provenance and audit |
-| Production AI triage | Yes | Pending v0.2 | Deterministic placeholder only |
+| Production AI triage | Yes | Implemented | OpenAI Responses API + Structured Outputs under V3 contract when configured; single-attempt safe local fallback; human review remains mandatory |
 | Human triage decisions | Yes | Implemented | Backend-enforced Accept/Modify/Reject review, completion state, rejection/modify validation, audit provenance and final-validation gate |
 | Human-approved intelligence summary | Yes | Implemented | Server-derived field states distinguish approved/rejected/pending/not-generated; Evidence Type included; source metadata and confirmed context separated from AI-triage approvals; reviewer/timestamp provenance retained |
 | Evidence verification | Yes | Implemented | Independent human action |

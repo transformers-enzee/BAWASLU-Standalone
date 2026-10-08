@@ -1,5 +1,6 @@
 import json, os, tempfile
 os.environ['DATABASE_URL']='sqlite:///:memory:'
+os.environ.pop('OPENAI_API_KEY',None)
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db import Base, engine, SessionLocal
@@ -655,3 +656,87 @@ def test_projection_only_marks_generated_reviewable_fields_as_pending():
     assert projection['field_states']['summary']['state']=='PENDING'
     assert 'evidence_type' not in projection['field_states']
     assert projection['reviewable_fields']==['summary']
+
+
+def test_openai_converter_produces_valid_v3_contract():
+    from app.openai_triage import convert_model_result_to_v3
+    from app.domain import _valid_v3_proposal
+    result={
+      'summary':'Bawaslu memantau tahapan pemilu.',
+      'english_translation':'BAWASLU monitors the election stages.',
+      'content_type':'News report',
+      'activity':{'type':'Monitoring','description':'Election supervision activity','evidence_basis':'Source states Bawaslu is monitoring the process.','evidence_type':'OBSERVED','confidence':'HIGH'},
+      'actors':[{'entity_id':'','entity_name':'Bawaslu','entity_type':'Institution','relationship_to_content':'supervisory body','evidence_basis':'Bawaslu is named in the source.','evidence_type':'OBSERVED','confidence':'HIGH'}],
+      'location_signal':None,
+      'narrative':None,
+      'relationships':[],
+      'topics':['election supervision'],
+      'evidence_gaps':['No independent corroboration supplied'],
+      'inferences':[],
+      'check_next':[],
+      'screening_evidence_basis':[],
+      'supervision_signal':'NO SIGNAL IDENTIFIED',
+      'signal_reason':'',
+      'screening_confidence':'MEDIUM',
+      'priority':'Medium',
+      'evidence_type':'OBSERVED',
+      'confidence':'HIGH'
+    }
+    proposal=convert_model_result_to_v3(result,'run-test','Sumber asli untuk pengujian.')
+    assert _valid_v3_proposal(proposal) is True
+    assert proposal['_version']==3
+    assert proposal['actors'].startswith('[')
+    assert proposal['relationships']==''
+    assert proposal['source_facts']=='Sumber asli untuk pengujian.'
+
+def test_run_triage_uses_production_provider_when_configured(monkeypatch):
+    import app.domain as domain
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    def fake_generate(item,run_id):
+        proposal=domain._local_v3_triage(item,run_id)
+        proposal['summary']='Production structured summary'
+        proposal['content_type']='News report'
+        return proposal,{'model':'gpt-test-production','response_id':'resp_test','usage':{'input_tokens':100,'output_tokens':50,'total_tokens':150}}
+    monkeypatch.setattr(domain,'generate_openai_triage',fake_generate)
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Production triage test','original_content':'Source material with enough information to test a production provider path.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    assert body['generation']['generator']=='openai-responses'
+    assert body['generation']['generator_version']=='gpt-test-production'
+    assert body['generation']['validation_outcome']=='VALID_V3_OPENAI'
+    assert body['generation']['provider_response_id']=='resp_test'
+    assert body['generation']['usage']['total_tokens']==150
+    assert body['suggestions']['summary']=='Production structured summary'
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    assert r.json()['generation']['generator']=='openai-responses'
+    assert r.json()['generation']['validation_outcome']=='VALID_V3_OPENAI'
+
+def test_run_triage_falls_back_once_when_openai_provider_fails(monkeypatch):
+    import app.domain as domain
+    from app.openai_triage import OpenAITriageError
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    calls={'count':0}
+    def fail_generate(item,run_id):
+        calls['count']+=1
+        raise OpenAITriageError('provider_timeout','timeout')
+    monkeypatch.setattr(domain,'generate_openai_triage',fail_generate)
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Provider fallback test','original_content':'Source material used to confirm safe local fallback after a provider error.',
+      'jurisdiction_type':'National','confirm_jurisdiction':True
+    }},headers=h)
+    iid=r.json()['item']['id']
+    r=client.post('/api/functions/intelligence',json={'action':'runTriage','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    body=r.json()
+    assert calls['count']==1
+    assert body['generation']['generator']=='standalone-local-fallback'
+    assert body['generation']['validation_outcome']=='FALLBACK_PROVIDER'
+    assert body['generation']['fallback_code']=='provider_timeout'
+    assert body['triage_review']['state']=='NOT STARTED'

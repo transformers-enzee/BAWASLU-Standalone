@@ -21,6 +21,12 @@ services:
         sync: false
       - key: SOCIALCRAWL_BASE_URL
         value: https://www.socialcrawl.dev
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-6-luna
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
       - key: CORS_ORIGINS
         sync: false
       - key: UPLOAD_DIR

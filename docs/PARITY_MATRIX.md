@@ -3,7 +3,7 @@
 | Capability | Legacy BAWASLU | v0.1 status | Notes |
 |---|---|---|---|
 | Intelligence create/list/get | Yes | Implemented | Standalone DB/API |
-| Workspace Home / Dashboard | Yes | Implemented | Operational overview of existing workspace: pending review, validated intelligence, unverified evidence, unresolved jurisdiction, AI triage review, Social Listening queue, recent validated intelligence, activity and module shortcuts |
+| Workspace Home / Dashboard | Yes | Implemented | Compact management dashboard with scoped metrics, urgency-ranked attention reasons, validated intelligence summary, Watchlist/Social queue breakdowns, resilient partial-loading/failure states and recent activity timeline |
 | `INT-YYYY-######` sequence | Yes | Implemented | Database-backed sequence |
 | Jurisdiction confirmation | Yes | Implemented | Human-governed |
 | Province / Regency-City ACL | Yes | Implemented | Enforced server-side |

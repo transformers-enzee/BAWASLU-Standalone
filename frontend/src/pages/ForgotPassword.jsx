@@ -34,7 +34,7 @@ export default function ForgotPassword() {
       subtitle={t('reset_password_subtitle')}
       footer={
         <Link to="/login" className="text-primary font-medium hover:underline">
-          <ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in
+          <ArrowLeft className="w-3 h-3 inline mr-1" />{t('back_login')}
         </Link>
       }
     >

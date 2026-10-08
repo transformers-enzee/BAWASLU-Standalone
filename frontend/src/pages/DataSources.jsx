@@ -34,11 +34,11 @@ export default function DataSources(){
    <button disabled={busy} className="intel-button">{t('save_source')}</button> <button type="button" onClick={()=>setForm(null)} className="intel-ghost">{t('cancel')}</button>
   </form>}
   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-   {types.map(type=><div key={type} className="intel-card p-5"><div className="flex justify-between"><span className="font-semibold text-sm">{type.replaceAll('_',' ')}</span><Status value="Available"/></div><p className="text-xs text-[#8192a3] mt-3">{t('collection_method_note')}</p></div>)}
+   {types.map(type=><div key={type} className="intel-card p-5"><div className="flex justify-between"><span className="font-semibold text-sm">{label(type)}</span><Status value="Available"/></div><p className="text-xs text-[#8192a3] mt-3">{t('collection_method_note')}</p></div>)}
    <div className="intel-card p-5"><div className="flex justify-between"><span className="font-semibold text-sm">SOCIALCRAWL</span><Status value="Available"/></div><p className="text-xs text-[#8192a3] mt-3">{t('socialcrawl_provider_note')}</p></div>
    <div className="intel-card p-5 opacity-60"><div className="flex justify-between"><span className="font-semibold text-sm">NEWS API</span><Status value="Disabled"/></div><p className="text-xs text-[#8192a3] mt-3">{t('no_provider_connected')}</p></div>
   </div>
   <h2 className="font-semibold">{t('registered_sources')}</h2>
-  {loading?<p>{t('loading_generic')}</p>:sources.length?<div className="intel-card divide-y">{sources.map(s=><div key={s.id} className="p-4 flex justify-between text-sm"><span>{s.name} <span className="text-[#8293a4]">· {s.source_type} · {label(s.province||'National')}</span></span><Status value={s.status}/></div>)}</div>:<div className="intel-card p-6 text-sm text-[#8192a3]">{t('no_custom_sources')}</div>}
+  {loading?<p>{t('loading_generic')}</p>:sources.length?<div className="intel-card divide-y">{sources.map(s=><div key={s.id} className="p-4 flex justify-between text-sm"><span>{s.name} <span className="text-[#8293a4]">· {label(s.source_type)} · {label(s.province||'National')}</span></span><Status value={s.status}/></div>)}</div>:<div className="intel-card p-6 text-sm text-[#8192a3]">{t('no_custom_sources')}</div>}
  </div>;
 }

@@ -232,7 +232,7 @@ const valueLabels={
     'MONITOR':'PANTAU','REVIEW RECOMMENDED':'PENINJAUAN DIREKOMENDASIKAN',
     'POTENTIAL REGULATORY ISSUE':'POTENSI ISU REGULASI',
     'DISCOVERED':'DITEMUKAN','RELEVANT':'RELEVAN','NOT_RELEVANT':'TIDAK RELEVAN',
-    'PROMOTED':'DITAMBAHKAN KE INTELIJEN',
+    'PROMOTED':'DITAMBAHKAN KE INTELIJEN','Human Accepted':'Diterima Manusia','Human Modified':'Diubah Manusia','Human Rejected':'Ditolak Manusia','REVIEW COMPLETE':'PENINJAUAN SELESAI','REVIEW PENDING':'PENINJAUAN MENUNGGU','NOT GENERATED':'BELUM DIHASILKAN',
     'Candidate':'Kandidat','Political Party':'Partai Politik','Campaign Team':'Tim Kampanye','Official Account':'Akun Resmi',
     'Election-related Public Figure':'Tokoh Publik Terkait Pemilu','Media':'Media','Public Community':'Komunitas Publik','Organisation':'Organisasi',
     'Topic / Issue':'Topik / Isu','Location':'Lokasi','Other Approved Public Source':'Sumber Publik Lain yang Disetujui',

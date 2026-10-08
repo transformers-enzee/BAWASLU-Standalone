@@ -20,7 +20,7 @@ export default function UserAccessHistory({userId}){
    ? <p className="text-xs text-muted-foreground mt-2">{t('loading_history')}</p>
    : events.length
     ? events.map(ev=><div key={ev.id} className="text-xs border-b border-border py-2">
-       <strong>{ev.action.replaceAll('_',' ')}</strong>
+       <strong>{ev.action==='USER_ACCESS_UPDATED'?t('user_access_updated'):ev.action.replaceAll('_',' ')}</strong>
        <span className="text-muted-foreground"> · {ev.actor_name} · {new Date(ev.occurred_at||ev.created_date).toLocaleString('en-GB')}</span>
        {ev.action==='USER_ACCESS_UPDATED'&&<p className="mt-1 text-muted-foreground">
         {label(ev.changes?.assignment?.previous?.access_role)||t('unassigned')} → {label(ev.changes?.assignment?.new?.access_role)||t('unassigned')} · {ev.changes?.assignment?.new?.province||t('nationwide')}{ev.changes?.assignment?.new?.regency_city?` / ${ev.changes.assignment.new.regency_city}`:` / ${t('all_regencies_cities')}`} · {label(ev.changes?.assignment?.new?.status)}

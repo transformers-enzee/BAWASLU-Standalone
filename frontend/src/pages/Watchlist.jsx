@@ -138,7 +138,7 @@ export default function Watchlist(){
           </div>)}
           {!accounts.some(a=>a.watchlist_id===x.id)&&<p className="text-xs text-[#8192a3]">{t('no_public_account')}</p>}
           {account?.watchlist_id===x.id?<form onSubmit={saveAccount} className="grid sm:grid-cols-3 gap-2 mt-3">
-            <Field label="Platform" value={account.platform} onChange={v=>setAccount({...account,platform:v})}/>
+            <Field label={t('platform')} value={account.platform} onChange={v=>setAccount({...account,platform:v})}/>
             <Field label={t('public_url')} type="url" value={account.url} onChange={v=>setAccount({...account,url:v})} required/>
             <Field label={t('handle')} value={account.handle} onChange={v=>setAccount({...account,handle:v})}/>
             <button disabled={busy} className="intel-button">{account.account_id?t('save_account'):t('add_account')}</button>

@@ -81,7 +81,7 @@ export default function SourceCorrection({item,onSaved,onRecordAction,canTriage}
     <div className="grid md:grid-cols-2 gap-3">
      <Field label={t('original_headline')} value={source.title} onChange={v=>setSource(x=>({...x,title:v}))}/>
      <Field label={t('source_publisher')} value={source.source_name} onChange={v=>setSource(x=>({...x,source_name:v}))}/>
-     <Field label="Platform" value={source.platform} onChange={v=>setSource(x=>({...x,platform:v}))}/>
+     <Field label={t('platform')} value={source.platform} onChange={v=>setSource(x=>({...x,platform:v}))}/>
      <Field label={t('author_account_lower')} value={source.author} onChange={v=>setSource(x=>({...x,author:v}))}/>
      <PublicationFields value={source} onChange={setSource}/>
      <LanguagePicker value={source.original_language_code||''} onChange={v=>setSource(x=>({...x,original_language_code:v}))} content={source.original_content||''}/>

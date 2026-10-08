@@ -5,7 +5,7 @@ const LanguageContext=createContext(null);
 const translations={
   en:{
     workspace:'Workspace',future_modules:'Future modules',soon:'SOON',
-    home:'Home',watchlist:'Watchlist',social_listening:'Social Listening',intelligence_inbox:'Intelligence Inbox',
+    home:'Home',watchlist:'Watchlist',social_listening:'Social Listening',intelligence_inbox:'Intelligence Inbox',inbox_workspace:'Operational intelligence workspace',inbox_needs_action:'Needs analyst action',inbox_pending_review:'Pending human review',inbox_unresolved_jurisdiction:'Jurisdiction unresolved',inbox_triage_pending:'AI triage pending',inbox_validated:'Validated intelligence',inbox_next_action:'Next action',inbox_action_confirm_jurisdiction:'Confirm jurisdiction',inbox_action_review_geography:'Review geographic mismatch',inbox_action_complete_triage:'Complete AI triage review',inbox_action_human_review:'Complete human validation',inbox_action_verify_evidence:'Verify evidence when required',inbox_action_none:'No immediate action',inbox_open_record:'Open record',inbox_summary_note:'Counts reflect intelligence records available within your authorized scope.',
     intelligence_assistant:'BAWASLU Intelligence Assistant',add_intelligence:'Add Intelligence',data_sources:'Data Sources',
     validation:'Validation',administration:'Administration',intelligence_command:'Intelligence Command',
     secure_workspace:'Secure workspace',authorized_user:'Authorized user',
@@ -114,7 +114,7 @@ const translations={
 
   id:{
     workspace:'Ruang Kerja',future_modules:'Modul Mendatang',soon:'SEGERA',
-    home:'Beranda',watchlist:'Daftar Pantauan',social_listening:'Pemantauan Media Sosial',intelligence_inbox:'Kotak Masuk Intelijen',
+    home:'Beranda',watchlist:'Daftar Pantauan',social_listening:'Pemantauan Media Sosial',intelligence_inbox:'Kotak Masuk Intelijen',inbox_workspace:'Ruang kerja intelijen operasional',inbox_needs_action:'Perlu tindakan analis',inbox_pending_review:'Menunggu tinjauan manusia',inbox_unresolved_jurisdiction:'Yurisdiksi belum ditentukan',inbox_triage_pending:'Triage AI belum selesai',inbox_validated:'Intelijen tervalidasi',inbox_next_action:'Tindakan berikutnya',inbox_action_confirm_jurisdiction:'Konfirmasi yurisdiksi',inbox_action_review_geography:'Tinjau ketidaksesuaian geografis',inbox_action_complete_triage:'Selesaikan tinjauan triage AI',inbox_action_human_review:'Selesaikan validasi manusia',inbox_action_verify_evidence:'Verifikasi bukti bila diperlukan',inbox_action_none:'Tidak ada tindakan segera',inbox_open_record:'Buka catatan',inbox_summary_note:'Jumlah mencerminkan catatan intelijen yang tersedia dalam cakupan akses Anda.',
     intelligence_assistant:'Asisten Intelijen BAWASLU',add_intelligence:'Tambah Intelijen',data_sources:'Sumber Data',
     validation:'Validasi',administration:'Administrasi',intelligence_command:'Komando Intelijen',
     secure_workspace:'Ruang kerja aman',authorized_user:'Pengguna berwenang',

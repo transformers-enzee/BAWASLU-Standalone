@@ -996,3 +996,56 @@ def test_assistant_deterministic_fallback_uses_bahasa_indonesia(monkeypatch):
     assert 'STATUS BUKTI' in answer
     assert 'DASAR WAKTU' in answer
     assert 'KETERBATASAN' in answer
+
+
+def test_watchlist_management_bundle():
+    h=auth()
+    create={'action':'createWatchlist','data':{'name':'Candidate A','type':'Candidate','province':'Jawa Barat','priority':'High','status':'Active'}}
+    r=client.post('/api/functions/registry',json=create,headers=h)
+    assert r.status_code==200, r.text
+    wid=r.json()['item']['id']
+    r=client.post('/api/functions/registry',json=create,headers=h)
+    assert r.status_code==400
+    assert 'already exists' in r.text
+
+    r=client.post('/api/functions/registry',json={'action':'updateWatchlist','id':wid,'data':{'name':'Candidate A Updated','status':'Under Review','priority':'Medium'}},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['item']['name']=='Candidate A Updated'
+    assert r.json()['item']['status']=='Under Review'
+
+    r=client.post('/api/functions/registry',json={'action':'addAccount','id':wid,'data':{'platform':'TikTok','url':'https://www.tiktok.com/@candidatea/','handle':'candidatea'}},headers=h)
+    assert r.status_code==200, r.text
+    account=r.json()['account']
+    assert account['url']=='https://www.tiktok.com/@candidatea'
+    assert account['handle']=='@candidatea'
+    r=client.post('/api/functions/registry',json={'action':'addAccount','id':wid,'data':{'platform':'TikTok','url':'https://www.tiktok.com/@candidatea','handle':'@candidatea'}},headers=h)
+    assert r.status_code==400
+    r=client.post('/api/functions/registry',json={'action':'updateAccount','id':account['id'],'data':{'platform':'TikTok','url':'https://www.tiktok.com/@candidatea-new','handle':'candidatea_new'}},headers=h)
+    assert r.status_code==200, r.text
+    assert r.json()['account']['handle']=='@candidatea_new'
+    r=client.post('/api/functions/registry',json={'action':'removeAccount','id':account['id'],'data':{}},headers=h)
+    assert r.status_code==200, r.text
+
+    r=client.post('/api/functions/registry',json={'action':'createWatchlist','data':{'name':'Campaign Team A','type':'Campaign Team','province':'Jawa Barat'}},headers=h)
+    other=r.json()['item']['id']
+    r=client.post('/api/functions/registry',json={'action':'addRelationship','id':wid,'data':{'to_id':wid,'relationship_type':'Associated with'}},headers=h)
+    assert r.status_code==400
+    r=client.post('/api/functions/registry',json={'action':'addRelationship','id':wid,'data':{'to_id':other,'relationship_type':'Associated with'}},headers=h)
+    assert r.status_code==200, r.text
+    rel=r.json()['relationship']
+    r=client.post('/api/functions/registry',json={'action':'addRelationship','id':wid,'data':{'to_id':other,'relationship_type':'Associated with'}},headers=h)
+    assert r.status_code==400
+    r=client.post('/api/functions/registry',json={'action':'removeRelationship','id':rel['id'],'data':{}},headers=h)
+    assert r.status_code==200, r.text
+
+def test_watchlist_manage_permission_is_server_enforced():
+    db=SessionLocal()
+    u=User(email='viewer@test.local',full_name='Viewer',password_hash=hash_password('secret'))
+    db.add(u); db.flush()
+    perms=default_permissions('Viewer'); perms['manage_watchlist']=False
+    db.add(AccessGrant(user_id=u.id,access_role='Viewer',geographic_scope='Nationwide',permissions_json=json.dumps(perms),status='Active'))
+    db.commit(); db.close()
+    r=client.post('/api/auth/login',json={'email':'viewer@test.local','password':'secret'})
+    h={'Authorization':'Bearer '+r.json()['access_token']}
+    r=client.post('/api/functions/registry',json={'action':'createWatchlist','data':{'name':'Blocked','type':'Topic / Issue'}},headers=h)
+    assert r.status_code==403

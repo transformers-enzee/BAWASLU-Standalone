@@ -11,9 +11,9 @@
 | Geographic mismatch review | Yes | Implemented | Fingerprinted mismatch detection, human keep/change decisions, validation blocking, normalized jurisdiction updates and audit |
 | Source identity states | Yes | Implemented | Registered/known/unresolved |
 | Observed publisher provenance | Yes | Implemented | Kept distinct from registered identity |
-| Watchlists | Yes | Implemented | First-class table/API |
-| Source accounts | Yes | Implemented | Used for identity matching |
-| Actor/entity relationships | Yes | Implemented | First-class registry + intelligence JSON contract retained |
+| Watchlists | Yes | Implemented | Full human-managed lifecycle with edit/status controls, filters, duplicate safeguards, public account management, bidirectional relationship display, ACL and audit |
+| Source accounts | Yes | Implemented | Validated/normalized public URLs and handles, duplicate prevention, edit/remove lifecycle, audit, identity matching |
+| Actor/entity relationships | Yes | Implemented | First-class registry with self/duplicate prevention, controlled relationship labels, bidirectional display and removal audit |
 | V3 triage provenance | Yes | Implemented | Validated V3 contract, generation/source/proposal fingerprints, OpenAI/provider-or-fallback provenance and audit |
 | Production AI triage | Yes | Implemented | OpenAI Responses API + Structured Outputs under V3 contract when configured; single-attempt safe local fallback; human review remains mandatory |
 | Human triage decisions | Yes | Implemented | Backend-enforced Accept/Modify/Reject review, completion state, rejection/modify validation, audit provenance and final-validation gate |

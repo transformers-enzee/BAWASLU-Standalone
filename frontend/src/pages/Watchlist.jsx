@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus, Link2, Pencil, Trash2, ArrowRightLeft } from 'lucide-react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useRegistry, registry } from '@/components/intel/useIntel';
@@ -17,18 +17,22 @@ export default function Watchlist(){
   const [form,setForm]=useState(null),[account,setAccount]=useState(null),[relation,setRelation]=useState(null);
   const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
   const [q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState(''),[typeFilter,setTypeFilter]=useState(''),[priorityFilter,setPriorityFilter]=useState(''),[geoFilter,setGeoFilter]=useState('');
+  const formRef=useRef(null);
 
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const startCreate=()=>{setForm(blankItem());setMessage('')};
-  const startEdit=x=>{setForm({...x,mode:'edit',related_topics:topicText(x.related_topics)});setMessage('')};
+  const revealForm=()=>setTimeout(()=>formRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);
+  const startCreate=()=>{setForm(blankItem());setMessage('');revealForm()};
+  const startEdit=x=>{setForm({...x,mode:'edit',related_topics:topicText(x.related_topics)});setMessage('');revealForm()};
 
   async function submit(e){
     e.preventDefault();setBusy(true);setMessage('');
     const payload={...form,related_topics:String(form.related_topics||'').split(',').map(x=>x.trim()).filter(Boolean)};
     try{
+      const editedId=form.mode==='edit'?form.id:null;
       if(form.mode==='edit') await registry('updateWatchlist',payload,form.id);
       else await registry('createWatchlist',payload);
       setForm(null);await refresh();
+      if(editedId) setTimeout(()=>document.getElementById('watchlist-card-'+editedId)?.scrollIntoView({behavior:'smooth',block:'center'}),0);
     }catch(e){setMessage(err(e))}finally{setBusy(false)}
   }
 
@@ -80,8 +84,8 @@ export default function Watchlist(){
     </div>
     <Notice error={message||error}/>
 
-    {form&&<form onSubmit={submit} className="intel-card p-6 space-y-5">
-      <h2 className="font-semibold">{form.mode==='edit'?'Edit watchlist item':'New watchlist item'}</h2>
+    {form&&<form ref={formRef} onSubmit={submit} className={`intel-card p-6 space-y-5 scroll-mt-6 ${form.mode==='edit'?'ring-2 ring-[#b9d8e5]':''}`}>
+      <div><p className="text-[11px] uppercase tracking-[.14em] font-bold text-[#9a7e49]">{form.mode==='edit'?'Editing existing watchlist item':'Create watchlist item'}</p><h2 className="font-semibold text-lg mt-1">{form.mode==='edit'?`Edit: ${form.name||'Watchlist item'}`:'New watchlist item'}</h2>{form.mode==='edit'&&<p className="text-xs text-[#718398] mt-1">Save changes to update this existing record. Cancel returns to the watchlist without changing it.</p>}</div>
       <div className="grid md:grid-cols-3 gap-4">
         <Field label="Name" value={form.name} onChange={v=>set('name',v)} required/>
         <Field label="Type" options={TYPES} value={form.type} onChange={v=>set('type',v)} required/>
@@ -107,7 +111,7 @@ export default function Watchlist(){
     </div>
 
     {loading?<p>Loading watchlist...</p>:<div className="grid xl:grid-cols-2 gap-4">
-      {list.map(x=><div className="intel-card p-6" key={x.id}>
+      {list.map(x=><div id={'watchlist-card-'+x.id} className="intel-card p-6 scroll-mt-6" key={x.id}>
         <div className="flex justify-between gap-3">
           <div><p className="text-[11px] uppercase text-[#6b8ca0] font-bold tracking-wider">{x.type}</p><h2 className="font-semibold text-lg mt-1">{x.name}</h2></div>
           <div className="flex items-start gap-2"><Status value={x.priority}/><Status value={x.status}/></div>

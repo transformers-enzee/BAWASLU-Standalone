@@ -141,7 +141,7 @@ export default function OAuthConsent() {
       <AuthLayout icon={ShieldCheck} title={t('authorize_access')}>
         <div className="flex items-center justify-center py-6 text-muted-foreground">
           <Loader2 className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
-          Loading…
+          {t('loading')}
         </div>
       </AuthLayout>
     );
@@ -225,7 +225,7 @@ export default function OAuthConsent() {
           disabled={submitting}
           onClick={() => respond("deny")}
         >
-          Deny
+          {t('deny')}
         </Button>
         <Button
           className="flex-1 h-12 font-medium"
@@ -233,7 +233,7 @@ export default function OAuthConsent() {
           onClick={() => respond("approve")}
         >
           {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Approve
+          {t('approve')}
         </Button>
       </div>
     </AuthLayout>

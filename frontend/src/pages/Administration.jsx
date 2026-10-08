@@ -7,7 +7,7 @@ import AccessAssignmentForm from '@/components/intel/AccessAssignmentForm';
 import { useLanguage } from '@/lib/LanguageContext';
 
 export default function Administration(){
- const {t}=useLanguage();
+ const {t,label}=useLanguage();
  const {access}=useOutletContext();const mayManage=access.permissions?.manage_users===true;
  const [users,setUsers]=useState([]),[denied,setDenied]=useState(false),[loading,setLoading]=useState(true),[edit,setEdit]=useState(null);
  const [adminRole,setAdminRole]=useState(''),[adminProvince,setAdminProvince]=useState(''),[roles,setRoles]=useState({}),[labels,setLabels]=useState({});
@@ -22,7 +22,7 @@ export default function Administration(){
   {!mayManage?<p className="intel-card p-6 text-sm">{t('manage_users_required')}</p>:loading?<p className="text-sm text-muted-foreground">{t('loading_generic')}</p>:denied?<p className="intel-card p-6 text-sm">{t('manage_admin_required')}</p>:<section className="intel-card overflow-x-auto">
    <div className="p-5 flex flex-wrap gap-3 justify-between items-center"><h2 className="font-semibold">{t('user_access')}</h2><input className="intel-input max-w-xs" aria-label={t('search_users')} placeholder={t('search_users')} value={search} onChange={e=>setSearch(e.target.value)}/></div>
    <table className="intel-table min-w-[900px]"><thead><tr>{[t('name'),'Email',t('table_bawaslu_role'),t('table_geographic_scope'),t('table_reviewer_authority'),t('table_status'),t('table_last_updated'),t('table_actions')].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{visible.map(u=><tr key={u.id}>
-    <td>{u.full_name||'—'}</td><td>{u.email}</td><td>{u.access_role}</td><td>{location(u)}</td><td>{u.permissions?.human_validation?t('yes'):t('no')}</td><td>{u.status}</td><td>{u.updated_date?new Date(u.updated_date).toLocaleDateString('en-GB'):'—'}</td><td><button className="text-[#146a8b] font-semibold" onClick={()=>{setEdit({...u});setMessage('')}}>{t('assign')}</button></td>
+    <td>{u.full_name||'—'}</td><td>{u.email}</td><td>{label(u.access_role)}</td><td>{location(u)}</td><td>{u.permissions?.human_validation?t('yes'):t('no')}</td><td>{label(u.status)}</td><td>{u.updated_date?new Date(u.updated_date).toLocaleDateString('en-GB'):'—'}</td><td><button className="text-[#146a8b] font-semibold" onClick={()=>{setEdit({...u});setMessage('')}}>{t('assign')}</button></td>
    </tr>)}</tbody></table>{!visible.length&&<p className="p-5 text-sm text-muted-foreground">{t('no_users_found')}</p>}
   </section>}
   {mayManage&&edit&&<AccessAssignmentForm key={edit.id} edit={edit} setEdit={setEdit} adminRole={adminRole} adminProvince={adminProvince} users={users} roles={roles} labels={labels} busy={busy} onSave={save} onCancel={()=>setEdit(null)}/>}

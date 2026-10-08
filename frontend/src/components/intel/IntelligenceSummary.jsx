@@ -11,7 +11,7 @@ const locationText=value=>typeof value==='string'?value:value?.location_text||''
 function Provenance({state,t}){
   if(!state?.decision)return null;
   const action=state.decision==='Human Modified'?t('human_modified'):state.decision==='Human Accepted'?t('human_accepted'):t('human_rejected');
-  return <p className="mt-1 text-[10px] text-[#8293a4]">Human {action} · {state.reviewer||t('authorized_reviewer')}{state.decided_at?' · '+new Date(state.decided_at).toLocaleString('en-GB'):''}</p>;
+  return <p className="mt-1 text-[10px] text-[#8293a4]">{t('human_label')} {action} · {state.reviewer||t('authorized_reviewer')}{state.decided_at?' · '+new Date(state.decided_at).toLocaleString('en-GB'):''}</p>;
 }
 function FieldState({state,t}){
   if(!state)return <p className="text-[#73879a]">{t('no_ai_suggestion')}</p>;

@@ -9,7 +9,7 @@ export default function SubmissionJurisdiction({ value, onChange, access }) {
   const province = regions.provinces.find(p => p.code === access.province_code);
   const cities = regions.regencies.filter(c => c.province_code === access.province_code && (!cityRestricted || c.code === access.regency_city_code));
   const types = cityRestricted ? ['Regency / City', 'Unresolved'] : access.role === 'Provincial Administrator' ? ['Province', 'Regency / City', 'Multi-Region', 'Unresolved'] : ['Province', 'Regency / City', 'Unresolved'];
-  const scopeLabel = regional ? `${access.geographic_scope === 'Province' ? 'Province' : 'Regency / City'} · ${[access.regency_city, access.province].filter(Boolean).join(', ')}` : 'National · Nationwide';
+  const scopeLabel = regional ? `${access.geographic_scope === 'Province' ? t('province') : t('regency_city')} · ${[access.regency_city, access.province].filter(Boolean).join(', ')}` : `${t('national')} · ${t('nationwide')}`;
   const type = value.jurisdiction_type || 'Unresolved';
   const changeType = next => onChange({ ...value, jurisdiction_type: next, province_code: next === 'Unresolved' ? '' : access.province_code, regency_city_code: next === 'Regency / City' ? (access.regency_city_code || '') : '', geographic_assignments: next === 'Multi-Region' ? [{ province_code: access.province_code, regency_city_code: '' }, { province_code: access.province_code, regency_city_code: '' }] : [] });
   const assignments = value.geographic_assignments || [];
@@ -22,7 +22,7 @@ export default function SubmissionJurisdiction({ value, onChange, access }) {
       <p className="mt-2 text-xs text-muted-foreground">{t('submission_scope_note')}</p>
     </section>
     {!regional ? <JurisdictionFields value={value} onChange={onChange} /> : <div className="space-y-3">
-      <label className="block"><span className="intel-label">{t('jurisdiction_classification')}</span><select className="intel-input" value={types.includes(type) ? type : 'Unresolved'} onChange={e => changeType(e.target.value)}>{types.map(t => <option key={t} value={t}>{t === 'Province' ? t('province_wide') : t}</option>)}</select></label>
+      <label className="block"><span className="intel-label">{t('jurisdiction_classification')}</span><select className="intel-input" value={types.includes(type) ? type : 'Unresolved'} onChange={e => changeType(e.target.value)}>{types.map(typeOption => <option key={typeOption} value={typeOption}>{typeOption === 'Province' ? t('province_wide') : typeOption === 'Regency / City' ? t('regency_city') : typeOption === 'Multi-Region' ? t('multi_region') : t('unresolved')}</option>)}</select></label>
       {type === 'Unresolved' && <p className="text-xs text-muted-foreground">{t('requires_regional_block')}</p>}
       {type !== 'Unresolved' && <div><span className="intel-label">{t('province')}</span><p className="intel-input">{province?.name || access.province}</p></div>}
       {type === 'Regency / City' && <label className="block"><span className="intel-label">{t('regency_city_required_label')}</span><select required className="intel-input" value={value.regency_city_code || ''} onChange={e => onChange({ ...value, province_code: access.province_code, regency_city_code: e.target.value })}><option value="">{t('select_regency_city')}</option>{cities.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>}

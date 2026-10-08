@@ -16,8 +16,16 @@ const dateLabel=value=>{
   return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-GB',{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 };
 
+function jurisdictionNeedsConfirmation(item){
+  if(item.jurisdiction_confirmed!==true)return true;
+  if(!item.jurisdiction_type||item.jurisdiction_type==='Unresolved')return true;
+  if(item.jurisdiction_type==='National')return false;
+  if(item.jurisdiction_type==='Multi-Region')return !(item.geographic_assignments||[]).length;
+  return !(item.province||item.province_code);
+}
+
 function readyForValidation(item){
-  const jurisdictionBlocked=item.jurisdiction_confirmed!==true;
+  const jurisdictionBlocked=jurisdictionNeedsConfirmation(item);
   const geoBlocked=(item.geographic_mismatch?.status||item.geographic_mismatch_review?.status)==='pending';
   const triage=item.triage_review||{};
   const triageBlocked=triage.generated&&triage.state!=='REVIEW COMPLETE';
@@ -100,7 +108,7 @@ export default function Validation(){
     const geoBlocked=(item.geographic_mismatch?.status||item.geographic_mismatch_review?.status)==='pending';
     const triageState=item.triage_review?.state||'NOT GENERATED';
     const triageBlocked=item.triage_review?.generated&&triageState!=='REVIEW COMPLETE';
-    const jurisdictionBlocked=item.jurisdiction_confirmed!==true;
+    const jurisdictionBlocked=jurisdictionNeedsConfirmation(item);
     const blockers=[jurisdictionBlocked?t('validation_blocker_jurisdiction'):'',geoBlocked?t('validation_blocker_geography'):'',triageBlocked?t('validation_blocker_triage'):''].filter(Boolean);
     const finalBlocked=blockers.length>0;
     return <article key={item.id} className="intel-card p-5 md:p-6 space-y-5">

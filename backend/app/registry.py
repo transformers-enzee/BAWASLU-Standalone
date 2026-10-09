@@ -232,15 +232,25 @@ def registry_action(db:Session,p,action,data,id=None):
         if not (has(p,'manage_users') and has(p,'administration')): raise PermissionError('Not permitted')
         u=db.get(User,int(id)) if str(id or '').isdigit() else None
         if not u: raise ValueError('Not found')
+        if str(u.id)==str(p.get('id')): raise PermissionError('Administrators cannot change their own access assignment')
         role=clean(data.get('access_role'),100)
         if role not in ROLE_DEFINITIONS: raise ValueError('Invalid role')
+        if p.get('role')=='Provincial Administrator' and role in NATIONAL: raise PermissionError('Provincial administrators cannot assign national roles')
         scope=data.get('geographic_scope') or ROLE_DEFINITIONS[role]['scope']
         if scope=='Selectable': scope='Province'
         if scope not in ('Nationwide','Province','Regency/City'): raise ValueError('Choose a geographic scope')
+        if p.get('role')=='Provincial Administrator' and scope=='Nationwide': raise PermissionError('Provincial administrators cannot assign nationwide access')
         province='' if scope=='Nationwide' else clean(data.get('province'),128); city='' if scope!='Regency/City' else clean(data.get('regency_city'),128)
+        if p.get('role')=='Provincial Administrator':
+            if province and province!=p.get('province'): raise PermissionError('Access may only be assigned within the administrator province')
+            province=p.get('province') or ''
         if scope!='Nationwide' and not province: raise ValueError('Province required')
         if scope=='Regency/City' and not city: raise ValueError('Regency / City required')
         perms=data.get('permissions') or default_permissions(role)
+        perms={k:bool(perms.get(k,False)) for k in PERMISSION_LABELS}
+        for key,enabled in perms.items():
+            if enabled and not p.get('permissions',{}).get(key,False):
+                raise PermissionError('Cannot delegate a permission the administrator does not hold')
         status=data.get('status') if data.get('status') in ('Active','Inactive') else 'Active'
         g=db.query(AccessGrant).filter(AccessGrant.user_id==u.id).one_or_none()
         if not g: g=AccessGrant(user_id=u.id); db.add(g)

@@ -69,3 +69,23 @@ test('saved Social Listening search can edit and delete without provider calls',
   await card.getByRole('button',{name:/delete/i}).click();
   await expect(page.locator('.intel-card').filter({hasText:renamed})).toHaveCount(0);
 });
+
+
+test('Social Listening date filters are mutually exclusive without provider calls',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+
+  const lookback=page.getByLabel(/lookback days/i);
+  const dateFrom=page.getByLabel(/date from/i);
+  const dateTo=page.getByLabel(/date to/i);
+
+  await expect(lookback).toHaveValue('7');
+  await dateFrom.fill('2026-10-01');
+  await expect(lookback).toHaveValue('');
+  await dateTo.fill('2026-10-08');
+  await expect(dateFrom).toHaveValue('2026-10-01');
+
+  await lookback.fill('14');
+  await expect(dateFrom).toHaveValue('');
+  await expect(dateTo).toHaveValue('');
+});

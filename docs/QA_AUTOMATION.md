@@ -47,3 +47,17 @@ The Playwright configuration starts an isolated local FastAPI backend using `bac
 ## CI
 
 GitHub Actions runs the Playwright suite on pushes and pull requests to `main`. Failure artifacts include the HTML report and, when available, traces/screenshots/video.
+
+
+## Social Listening hardening guarantees
+
+The zero-credit automated suite also verifies production-safety rules around Social Listening:
+- explicit empty or unsupported source selections are rejected before provider execution;
+- ambiguous date-range/lookback combinations are rejected;
+- regional review queues cannot inherit results from unscoped nationwide searches;
+- non-national users only see their own provider-usage and repeat-search history;
+- only the National Administrator receives cross-user Saved Search management override;
+- promoted results are locked against later review-state changes;
+- repeat paid searches require an additional acknowledgement in the UI.
+
+These safeguards are tested with fake/local providers only and do not consume SocialCrawl credits.

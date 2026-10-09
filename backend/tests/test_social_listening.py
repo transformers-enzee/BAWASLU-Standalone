@@ -17,6 +17,10 @@ def provincial_analyst(db,province='Bali'):
     u=User(email='analyst@sl.local',full_name='Provincial Analyst',password_hash=hash_password('secret')); db.add(u); db.flush()
     db.add(AccessGrant(user_id=u.id,access_role='Provincial Analyst',geographic_scope='Province',province=province,permissions_json=json.dumps(default_permissions('Provincial Analyst')),status='Active')); db.commit(); return profile(db,u)
 
+def provincial_admin(db,province='Bali'):
+    u=User(email='provadmin@sl.local',full_name='Provincial Administrator',password_hash=hash_password('secret')); db.add(u); db.flush()
+    db.add(AccessGrant(user_id=u.id,access_role='Provincial Administrator',geographic_scope='Province',province=province,permissions_json=json.dumps(default_permissions('Provincial Administrator')),status='Active')); db.commit(); return profile(db,u)
+
 def fake_provider(filters):
     return {'success':True,'request_id':'req-1','credits_used':20,'credits_remaining':980,'cached':False,'data':{'items':[
       {'id':'post-1','platform':'tiktok','url':'https://www.tiktok.com/@actor/video/1','author':{'name':'Actor','handle':'@actor'},'text':'Public election administration update in Jakarta','language':'id','relevance_score':0.91,'metrics':{'views':1000,'likes':100,'comments':10,'shares':5},'engagement_rate':0.115,'estimated_reach':1200},
@@ -335,4 +339,86 @@ def test_saved_search_delete_is_owner_or_admin_only():
     except PermissionError as exc:
         assert 'owner or an administrator' in str(exc)
     assert any(x['id']==rule['id'] for x in social_listening_action(db,national,'rules',{})['rules'])
+    db.close()
+
+def test_filter_validation_blocks_unsafe_or_ambiguous_searches():
+    from app.socialcrawl import _normalize_filters
+    cases=[
+      ({'query':'BAWASLU','platforms':[]},'Select at least one platform'),
+      ({'query':'BAWASLU','platforms':['facebook']},'Unsupported Social Listening platform'),
+      ({'query':'BAWASLU','platforms':['online_news'],'lookback_days':7,'date_from':'2026-10-01'},'either lookback days or an explicit date range'),
+      ({'query':'BAWASLU','platforms':['online_news'],'date_from':'2026-10-09','date_to':'2026-10-01'},'Date from cannot be after date to'),
+      ({'query':'BAWASLU','platforms':['online_news'],'minimum_relevance':1.2},'between 0 and 1'),
+    ]
+    for payload,message in cases:
+        try:
+            _normalize_filters(payload)
+            assert False, 'Expected validation error'
+        except ValueError as exc:
+            assert message in str(exc)
+
+def test_unscoped_national_results_are_not_exposed_to_regional_users():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+    national_run=social_listening_action(db,national,'search',{'filters':{'query':'national election','platforms':['online_news']}},provider_client=fake_provider)
+    rid=national_run['results'][0]['id']
+    queue=social_listening_action(db,bali,'queue',{})
+    assert all(x['id']!=rid for x in queue['results'])
+    try:
+        social_listening_action(db,bali,'review',{'decision':'RELEVANT'},id=rid)
+        assert False, 'Expected unscoped national result to be hidden from regional user'
+    except PermissionError as exc:
+        assert 'outside your authorized geographic scope' in str(exc)
+    db.close()
+
+def test_usage_and_duplicate_history_are_private_except_for_national_admin():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+    social_listening_action(db,national,'search',{'filters':{'query':'privacy check','province':'Bali','platforms':['online_news']}},provider_client=fake_provider)
+
+    analyst_usage=social_listening_action(db,bali,'usage',{})
+    assert analyst_usage['visibility_scope']=='self'
+    assert analyst_usage['usage']==[]
+    analyst_preflight=social_listening_action(db,bali,'preflight',{'filters':{'query':'privacy check','platforms':['online_news']}})
+    assert analyst_preflight['duplicate_recent'] is None
+
+    social_listening_action(db,bali,'search',{'filters':{'query':'privacy check','platforms':['online_news']}},provider_client=fake_provider)
+    analyst_usage=social_listening_action(db,bali,'usage',{})
+    assert analyst_usage['summary']['last_24h_calls']==1
+    analyst_preflight=social_listening_action(db,bali,'preflight',{'filters':{'query':'privacy check','platforms':['online_news']}})
+    assert analyst_preflight['duplicate_recent'] is not None
+    assert 'executed_by' not in analyst_preflight['duplicate_recent']
+
+    admin_usage=social_listening_action(db,national,'usage',{})
+    assert admin_usage['visibility_scope']=='all'
+    assert admin_usage['summary']['last_24h_calls']==2
+    db.close()
+
+def test_provincial_administrator_cannot_manage_other_users_saved_searches():
+    db=SessionLocal()
+    national=admin(db)
+    province_admin=provincial_admin(db,'Bali')
+    national_rule=social_listening_action(db,national,'saveRule',{'name':'National private rule','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
+    visible=social_listening_action(db,province_admin,'rules',{})['rules']
+    assert all(x['id']!=national_rule['id'] for x in visible)
+    try:
+        social_listening_action(db,province_admin,'deleteRule',{},id=national_rule['id'])
+        assert False, 'Expected Provincial Administrator cross-user delete to be blocked'
+    except PermissionError:
+        pass
+    db.close()
+
+def test_promoted_social_result_is_locked_from_further_review():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'lock after promote','platforms':['online_news']}},provider_client=fake_provider)
+    rid=r['results'][0]['id']
+    social_listening_action(db,p,'review',{'decision':'RELEVANT'},id=rid)
+    social_listening_action(db,p,'promote',{},id=rid)
+    try:
+        social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT','notes':'Should be locked'},id=rid)
+        assert False, 'Expected promoted result review to be locked'
+    except ValueError as exc:
+        assert 'locked from further review changes' in str(exc)
     db.close()

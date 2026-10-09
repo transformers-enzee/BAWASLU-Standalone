@@ -27,10 +27,36 @@ def _json(v): return json.dumps(v,ensure_ascii=False)
 def _now(): return datetime.now(timezone.utc).isoformat()
 
 def _normalize_filters(filters):
-    f={k:v for k,v in (filters or {}).items() if k in ALLOWED_FILTERS and v not in (None,'',[],{})}
-    if 'platforms' not in f: f['platforms']=DEFAULT_PLATFORMS
+    raw=filters or {}
+    f={k:v for k,v in raw.items() if k in ALLOWED_FILTERS and v not in (None,'',[],{})}
+    if 'platforms' in raw:
+        selected=raw.get('platforms')
+        if not isinstance(selected,(list,tuple)): raise ValueError('Platforms must be a list')
+        f['platforms']=list(dict.fromkeys(str(x).strip() for x in selected if str(x).strip()))
+        if not f['platforms']: raise ValueError('Select at least one platform or Online News')
+    else:
+        f['platforms']=DEFAULT_PLATFORMS
+    invalid=[x for x in f['platforms'] if x not in AVAILABLE_PLATFORMS]
+    if invalid: raise ValueError('Unsupported Social Listening platform: '+', '.join(invalid))
     if 'limit' not in f: f['limit']=50
     f['limit']=max(1,min(int(f['limit']),200))
+    if f.get('lookback_days') not in (None,''):
+        days=int(f['lookback_days'])
+        if days < 1 or days > 365: raise ValueError('Lookback days must be between 1 and 365')
+        f['lookback_days']=days
+    if (f.get('date_from') or f.get('date_to')) and f.get('lookback_days'):
+        raise ValueError('Choose either lookback days or an explicit date range, not both')
+    if f.get('date_from') and f.get('date_to') and str(f['date_from'])>str(f['date_to']):
+        raise ValueError('Date from cannot be after date to')
+    if f.get('minimum_relevance') not in (None,''):
+        relevance=float(f['minimum_relevance'])
+        if relevance < 0 or relevance > 1: raise ValueError('Minimum relevance must be between 0 and 1')
+        f['minimum_relevance']=relevance
+    for key,label in (('minimum_engagement','Minimum engagement'),('minimum_followers','Minimum followers')):
+        if f.get(key) not in (None,''):
+            value=float(f[key])
+            if value < 0: raise ValueError(label+' cannot be negative')
+            f[key]=value
     return f
 
 
@@ -42,15 +68,25 @@ def _result_in_scope(db:Session,p,row):
         return False
     try:
         query=json.loads(run.query_json or '{}')
-        scoped=_scope_filters(p,query)
-    except (PermissionError,ValueError):
+    except Exception:
         return False
     assigned=normalize_assignment({'province':p.get('province'),'province_code':p.get('province_code'),'regency_city':p.get('regency_city'),'regency_city_code':p.get('regency_city_code')})
-    requested=normalize_assignment({'province':scoped.get('province'),'regency_city':scoped.get('regency_city')})
-    if assigned.get('province_code') and requested.get('province_code')!=assigned.get('province_code'):
+    original=normalize_assignment({'province':query.get('province'),'regency_city':query.get('regency_city')})
+    # Regional users may only see results collected by a search explicitly scoped
+    # to their authorized area. Nationwide/unscoped runs are not silently
+    # reinterpreted as regional runs.
+    if not query.get('province'):
+        return False
+    assigned_p=assigned.get('province_code') or province_code_for(assigned.get('province'))
+    original_p=original.get('province_code') or province_code_for(query.get('province'))
+    if assigned_p and original_p!=assigned_p:
         return False
     if p.get('geographic_scope')=='Regency/City':
-        if assigned.get('regency_city_code') and requested.get('regency_city_code')!=assigned.get('regency_city_code'):
+        if not query.get('regency_city'):
+            return False
+        assigned_r=assigned.get('regency_city_code') or regency_code_for(assigned.get('regency_city'),assigned_p)
+        original_r=original.get('regency_city_code') or regency_code_for(query.get('regency_city'),original_p)
+        if assigned_r and original_r!=assigned_r:
             return False
     return True
 
@@ -112,13 +148,16 @@ def search_preflight(db:Session,p,filters):
     estimate=estimate_search_cost(scoped)
     fingerprint=_filter_fingerprint(estimate['filters'])
     cutoff=datetime.utcnow()-timedelta(minutes=10)
-    recent=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff).order_by(SocialListeningRun.executed_at.desc()).limit(50).all()
+    recent_q=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff)
+    if p.get('role')!='National Administrator':
+        recent_q=recent_q.filter(SocialListeningRun.executed_by==p['id'])
+    recent=recent_q.order_by(SocialListeningRun.executed_at.desc()).limit(50).all()
     duplicate=None
     for run in recent:
         try:
             if _filter_fingerprint(json.loads(run.query_json or '{}'))==fingerprint:
                 age=max(0,int((datetime.utcnow()-run.executed_at).total_seconds()))
-                duplicate={'run_id':str(run.id),'executed_at':run.executed_at.isoformat(),'seconds_ago':age,'credits_used':run.credits_used,'result_count':run.result_count,'cached':run.cached,'executed_by':run.executed_by}
+                duplicate={'run_id':str(run.id),'executed_at':run.executed_at.isoformat(),'seconds_ago':age,'credits_used':run.credits_used,'result_count':run.result_count,'cached':run.cached}
                 break
         except Exception:
             continue
@@ -126,7 +165,11 @@ def search_preflight(db:Session,p,filters):
 
 def usage_summary(db:Session,p):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-    rows=db.query(SocialListeningProviderUsage).order_by(SocialListeningProviderUsage.created_at.desc()).limit(100).all()
+    q=db.query(SocialListeningProviderUsage)
+    visibility_scope='all' if p.get('role')=='National Administrator' else 'self'
+    if visibility_scope=='self':
+        q=q.filter(SocialListeningProviderUsage.user_id==p['id'])
+    rows=q.order_by(SocialListeningProviderUsage.created_at.desc()).limit(100).all()
     cutoff=datetime.utcnow()-timedelta(hours=24)
     recent=[x for x in rows if x.created_at>=cutoff]
     user_ids={str(x.user_id) for x in rows if x.user_id}
@@ -138,7 +181,7 @@ def usage_summary(db:Session,p):
         except Exception:
             pass
     items=[{'id':str(x.id),'provider':x.provider,'endpoint':x.endpoint,'request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'user_id':x.user_id,'user_name':names.get(str(x.user_id),str(x.user_id or 'Unknown user')),'created_at':x.created_at.isoformat()} for x in rows]
-    return {'usage':items,'summary':{'last_24h_credits':sum(x.credits_used for x in recent),'last_24h_calls':len(recent),'listed_credits':sum(x.credits_used for x in rows),'listed_calls':len(rows)}}
+    return {'usage':items,'visibility_scope':visibility_scope,'summary':{'last_24h_credits':sum(x.credits_used for x in recent),'last_24h_calls':len(recent),'listed_credits':sum(x.credits_used for x in rows),'listed_calls':len(rows)}}
 
 def _provider_source_name(name):
     n=str(name or '').strip().lower()
@@ -410,12 +453,12 @@ def _rule_view(db:Session,p,rule):
     return data
 
 def _can_manage_rule(p,rule):
-    return bool(rule) and (str(rule.created_by or '')==str(p.get('id') or '') or has(p,'administration'))
+    return bool(rule) and (str(rule.created_by or '')==str(p.get('id') or '') or p.get('role')=='National Administrator')
 
 def _visible_rules(db:Session,p):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     q=db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc())
-    if has(p,'administration'):
+    if p.get('role')=='National Administrator':
         return q.all()
     return q.filter(SocialListeningRule.created_by==str(p.get('id') or '')).all()
 
@@ -476,6 +519,8 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if not row: raise ValueError('Social listening result not found')
     if not _result_in_scope(db,p,row): raise PermissionError('Social listening result is outside your authorized geographic scope')
     if action=='review':
+        if row.promoted_intelligence_id or row.review_state=='PROMOTED':
+            raise ValueError('Promoted Social Listening results are locked from further review changes')
         decision=str(data.get('decision') or '')
         notes=str(data.get('notes') or '').strip()
         if decision not in ('RELEVANT','MONITOR','NOT_RELEVANT'): raise ValueError('Invalid decision')

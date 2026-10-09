@@ -17,7 +17,7 @@ test('release navigation exposes every completed administrator module',async({pa
   const nav=page.getByRole('navigation');
   const modules=[
     'Home','Watchlist','Social Listening','Intelligence Inbox',
-    'Intelligence Assistant','Add Intelligence','Data Sources',
+    'BAWASLU Intelligence Assistant','Add Intelligence','Data Sources',
     'Validation','Administration'
   ];
   for(const name of modules){

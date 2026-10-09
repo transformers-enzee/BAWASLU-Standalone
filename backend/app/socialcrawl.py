@@ -389,6 +389,17 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         raise ValueError(f'SocialCrawl search failed: {e}')
 
 def serialize_rule(x): return {'id':str(x.id),'name':x.name,'description':x.description,'provider':x.provider,'enabled':x.enabled,'filters':json.loads(x.filters_json or '{}'),'created_by':x.created_by,'created_at':x.created_at.isoformat(),'updated_at':x.updated_at.isoformat()}
+
+def _can_manage_rule(p,rule):
+    return bool(rule) and (str(rule.created_by or '')==str(p.get('id') or '') or has(p,'administration'))
+
+def _visible_rules(db:Session,p):
+    if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+    q=db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc())
+    if has(p,'administration'):
+        return q.all()
+    return q.filter(SocialListeningRule.created_by==str(p.get('id') or '')).all()
+
 def serialize_run(x): return {'id':str(x.id),'rule_id':str(x.rule_id) if x.rule_id else None,'provider':x.provider,'query':json.loads(x.query_json or '{}'),'provider_request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'status':x.status,'error_text':x.error_text,'executed_by':x.executed_by,'executed_at':x.executed_at.isoformat()}
 def serialize_result(x): return {'id':str(x.id),'run_id':str(x.run_id),'provider':x.provider,'provider_result_id':x.provider_result_id,'platform':x.platform,'content_type':x.content_type,'canonical_url':x.canonical_url,'author_name':x.author_name,'observed_handle':x.observed_handle,'published_at':x.published_at,'text_content':x.text_content,'language':x.language,'relevance_score':x.relevance_score,'engagement':json.loads(x.engagement_json or '{}'),'geography':json.loads(x.geography_json or '{}'),'source_identity':json.loads(x.source_identity_json or '{}'),'watchlist_matches':json.loads(x.watchlist_matches_json or '[]'),'review_state':x.review_state,'review_notes':x.review_notes,'promoted_intelligence_id':str(x.promoted_intelligence_id) if x.promoted_intelligence_id else None,'collected_at':x.collected_at.isoformat()}
 
@@ -398,16 +409,18 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='filterOptions': return filter_options(db,p)
     if action=='preflight': return search_preflight(db,p,data.get('filters') or data)
     if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
-    if action=='rules': return {'rules':[serialize_rule(x) for x in db.query(SocialListeningRule).order_by(SocialListeningRule.updated_at.desc()).all()]}
+    if action=='rules': return {'rules':[serialize_rule(x) for x in _visible_rules(db,p)]}
     if action=='saveRule':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
         rid=str(id or data.get('id') or '')
         rule=db.get(SocialListeningRule,int(rid)) if rid.isdigit() else None
+        if rule and not _can_manage_rule(p,rule): raise PermissionError('Only the saved search owner or an administrator can modify this rule')
         if not rule: rule=SocialListeningRule(name=str(data.get('name') or 'Untitled monitoring rule'),created_by=p['id']); db.add(rule)
         rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_scope_filters(p,data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':serialize_rule(rule)}
     if action=='runRule':
         rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')
+        if not _can_manage_rule(p,rule): raise PermissionError('Only the saved search owner or an administrator can run this rule')
         return execute_search(db,p,json.loads(rule.filters_json or '{}'),rule_id=rule.id,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
     if action=='queue':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')

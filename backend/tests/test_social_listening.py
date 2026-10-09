@@ -254,3 +254,34 @@ def test_social_listening_queue_and_review_are_geographically_scoped():
     reviewed=social_listening_action(db,bali,'review',{'decision':'RELEVANT'},id=bali_id)
     assert reviewed['result']['review_state']=='RELEVANT'
     db.close()
+
+def test_saved_searches_are_owner_scoped_and_admin_can_manage_all():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+
+    admin_rule=social_listening_action(db,national,'saveRule',{'name':'Admin monitoring','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
+    bali_rule=social_listening_action(db,bali,'saveRule',{'name':'Bali monitoring','filters':{'query':'BAWASLU Bali','platforms':['online_news']}})['rule']
+
+    analyst_rules=social_listening_action(db,bali,'rules',{})['rules']
+    assert [x['id'] for x in analyst_rules]==[bali_rule['id']]
+    assert all(x['created_by']==bali['id'] for x in analyst_rules)
+
+    admin_rules=social_listening_action(db,national,'rules',{})['rules']
+    assert {x['id'] for x in admin_rules}=={admin_rule['id'],bali_rule['id']}
+
+    try:
+        social_listening_action(db,bali,'saveRule',{'name':'Hijack','filters':{'query':'other','platforms':['online_news']}},id=admin_rule['id'])
+        assert False, 'Expected non-owner update to be blocked'
+    except PermissionError as exc:
+        assert 'owner or an administrator' in str(exc)
+
+    try:
+        social_listening_action(db,bali,'runRule',{},id=admin_rule['id'],provider_client=fake_provider)
+        assert False, 'Expected non-owner run to be blocked'
+    except PermissionError as exc:
+        assert 'owner or an administrator' in str(exc)
+
+    updated=social_listening_action(db,national,'saveRule',{'name':'Bali monitoring updated','filters':bali_rule['filters'],'enabled':True},id=bali_rule['id'])['rule']
+    assert updated['name']=='Bali monitoring updated'
+    db.close()

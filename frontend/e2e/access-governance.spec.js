@@ -71,9 +71,10 @@ test.beforeEach(async ({ request }) => {
 test('national administrator sees governance modules and cannot edit own assignment', async ({ page }) => {
   await uiLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
 
-  await expect(page.getByRole('link', { name: /data sources/i })).toBeVisible();
-  await expect(page.getByRole('link', { name: /validation/i })).toBeVisible();
-  await expect(page.getByRole('link', { name: /administration/i })).toBeVisible();
+  const nav = page.getByRole('navigation');
+  await expect(nav.getByRole('link', { name: /data sources/i })).toBeVisible();
+  await expect(nav.getByRole('link', { name: /validation/i })).toBeVisible();
+  await expect(nav.getByRole('link', { name: /administration/i })).toBeVisible();
 
   await page.getByRole('link', { name: /administration/i }).click();
   await expect(page.getByRole('heading', { name: /user access management/i })).toBeVisible();

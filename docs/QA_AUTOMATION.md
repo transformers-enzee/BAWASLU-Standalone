@@ -71,3 +71,8 @@ Build 46.1 adds zero-credit regression coverage for Online News response normali
 ## Google News wrapped-row compatibility
 
 Build 46.2 expands zero-credit Google News regression coverage to support provider rows wrapped under an `article` object and source/publisher objects, while exposing field-name-only structural diagnostics when a provider row still cannot be mapped. Diagnostics do not expose article content.
+
+
+## System-wide final regression batch
+
+Build 47.0 adds a zero-credit authenticated smoke pass across the completed BAWASLU workspace routes and strengthens Social Listening review-state affordances. Review decisions now mirror the stored state directly in the action row using an active button style, check mark, and `aria-pressed` state in both Search Results and Review Queue. Promoted results remain locked.

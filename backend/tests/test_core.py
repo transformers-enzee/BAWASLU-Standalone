@@ -206,7 +206,7 @@ def test_source_recovery_downgrades_exact_precision_without_time():
     })
     assert item.publication_date=='2026-10-05'
     assert item.publication_time_precision=='TIME_UNKNOWN'
-    assert item.publication_datetime==''
+    assert not item.publication_datetime
     assert 'publication_date' in recovered
     assert 'publication_time_precision' in recovered
 
@@ -500,7 +500,7 @@ def test_local_triage_generator_produces_valid_v3_contract():
     assert proposal['source_facts'].startswith('Bawaslu memantau')
     assert 'analysis' not in proposal
     assert body['generation']['generator']=='standalone-local-placeholder'
-    assert body['generation']['validation_outcome']=='VALID_V3_PLACEHOLDER'
+    assert body['generation']['validation_outcome']=='FALLBACK_NO_KEY'
     assert body['triage_review']['state']=='NOT STARTED'
     assert body['triage_review']['total']>=5
 

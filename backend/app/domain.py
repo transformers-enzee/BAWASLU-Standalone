@@ -402,7 +402,7 @@ def create_intelligence(db,p,data):
       source_type=clean(data.get('source_type'),64), ingestion_method=clean(data.get('ingestion_method') or ({'MANUAL_LINK':'MANUAL_URL','FILE_UPLOAD':'FILE_UPLOAD'}.get(data.get('source_type'),'MANUAL_ENTRY')),64),
       observed_publisher_handle=clean(data.get('observed_publisher_handle') or observed,255), provider_source_metadata_json=jdump(provider_meta), source_identity_json=jdump(data.get('source_identity') or identity),
       entity_relationships_json=jdump(data.get('entity_relationships') or []), source_id=clean(data.get('source_id'),255), source_url=clean(data.get('source_url'),2000), source_name=clean(data.get('source_name'),255),
-      platform=clean(data.get('platform'),100), author=clean(data.get('author') or observed,255), publication_datetime=clean(data.get('publication_datetime'),64), publication_date=clean(data.get('publication_date'),32),
+      platform=clean(data.get('platform'),100), author=clean(data.get('author'),255), publication_datetime=clean(data.get('publication_datetime'),64), publication_date=clean(data.get('publication_date'),32),
       publication_time_precision=clean(data.get('publication_time_precision') or 'UNKNOWN',32), collection_datetime=clean(data.get('collection_datetime') or now(),64), owned_channel_json=jdump(data.get('owned_channel') or {}),
       related_entities_json=jdump((data.get('related_entities') or [])[:20]), related_topics_json=jdump((data.get('related_topics') or [])[:20]), jurisdiction_type=geo['jurisdiction_type'],
       jurisdiction_confirmed=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')), jurisdiction_confirmed_by=p['name'] if data.get('confirm_jurisdiction') else clean(data.get('jurisdiction_confirmed_by'),255),

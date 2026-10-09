@@ -248,7 +248,7 @@ def language_label(code):
 def _language_detection(content,declared=''):
     text=' '+re.sub(r'[^a-zA-Z\u00C0-\u024F]+',' ',str(content or '').lower())+' '
     ms_markers=[' pihak berkuasa ',' selepas ',' berhampiran ',' setakat ini ',' memaklumkan ',' kakitangan ',' orang ramai ',' pelitup muka ',' khabar angin ',' terbabit ',' berkenaan ',' turut ',' berpunca ',' daripada ',' tiada ',' boleh ',' sehingga kini ',' susulan ',' dikesan ',' dilaksanakan ',' berkemungkinan ',' disahkan ',' berkesan ']
-    id_markers=[' pihak berwenang ',' setelah ',' sampai saat ini ',' masyarakat ',' masker ',' kabar ',' terkait ',' tersebut ',' disebabkan ',' dapat ',' dikonfirmasi ',' terjadi ',' dilakukan ',' informasi ini ',' adalah ',' disampaikan ',' dijelaskan ',' bahwa ',' ketentuan ',' pengawasan ',' pemilu ',' bawaslu ']
+    id_markers=[' pihak berwenang ',' setelah ',' sampai saat ini ',' masyarakat ',' masker ',' kabar ',' terkait ',' tersebut ',' disebabkan ',' dapat ',' dikonfirmasi ',' terjadi ',' dilakukan ',' informasi ini ',' adalah ',' disampaikan ',' dijelaskan ',' bahwa ',' ketentuan ',' pengawasan ',' pemilu ',' bawaslu ',' kewenangan ',' ditujukan ',' pembelajaran ',' terpenuhi ',' sulit dijangkau ']
     en_markers=[' the ',' and ',' with ',' for ',' from ',' this ',' that ',' not ',' are ',' is ',' was ',' election ',' article ',' news ',' authorities ',' reported ']
     scores={'ms':sum(text.count(x) for x in ms_markers),'id':sum(text.count(x) for x in id_markers),'en':sum(text.count(x) for x in en_markers)}
     ranked=sorted(scores.items(),key=lambda x:x[1],reverse=True)

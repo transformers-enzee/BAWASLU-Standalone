@@ -13,6 +13,10 @@ def admin(db):
     u=User(email='admin@sl.local',full_name='Admin',password_hash=hash_password('secret'),platform_admin=True); db.add(u); db.flush()
     db.add(AccessGrant(user_id=u.id,access_role='National Administrator',geographic_scope='Nationwide',permissions_json=json.dumps(default_permissions('National Administrator')),status='Active')); db.commit(); return profile(db,u)
 
+def provincial_analyst(db,province='Bali'):
+    u=User(email='analyst@sl.local',full_name='Provincial Analyst',password_hash=hash_password('secret')); db.add(u); db.flush()
+    db.add(AccessGrant(user_id=u.id,access_role='Provincial Analyst',geographic_scope='Province',province=province,permissions_json=json.dumps(default_permissions('Provincial Analyst')),status='Active')); db.commit(); return profile(db,u)
+
 def fake_provider(filters):
     return {'success':True,'request_id':'req-1','credits_used':20,'credits_remaining':980,'cached':False,'data':{'items':[
       {'id':'post-1','platform':'tiktok','url':'https://www.tiktok.com/@actor/video/1','author':{'name':'Actor','handle':'@actor'},'text':'Public election administration update in Jakarta','language':'id','relevance_score':0.91,'metrics':{'views':1000,'likes':100,'comments':10,'shares':5},'engagement_rate':0.115,'estimated_reach':1200},
@@ -200,4 +204,25 @@ def test_review_queue_filters_states_and_never_calls_provider():
         assert False, 'Expected invalid queue state to fail'
     except ValueError:
         pass
+    db.close()
+
+def test_social_listening_geography_is_restricted_to_authorized_scope():
+    db=SessionLocal(); p=provincial_analyst(db,'Bali')
+    options=social_listening_action(db,p,'filterOptions',{})
+    assert [x['name'] for x in options['provinces']]==['Bali']
+    assert options['regencies']
+    assert all(str(x['province_code'])=='51' for x in options['regencies'])
+
+    pf=social_listening_action(db,p,'preflight',{'filters':{'query':'BAWASLU','platforms':['online_news']}})
+    assert pf['filters']['province']=='Bali'
+    assert pf['estimated_credits']==1
+
+    try:
+        social_listening_action(db,p,'preflight',{'filters':{'query':'BAWASLU','province':'DKI Jakarta','platforms':['online_news']}})
+        assert False, 'Expected out-of-scope province to be blocked'
+    except PermissionError as exc:
+        assert 'outside your authorized province' in str(exc)
+
+    rule=social_listening_action(db,p,'saveRule',{'name':'Scoped Bali news','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
+    assert rule['filters']['province']=='Bali'
     db.close()

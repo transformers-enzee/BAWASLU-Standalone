@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IssueCategory, WatchlistItem, User
 from .access import has, audit, allowed
 from .domain import source_identity, create_intelligence
+from .geography import normalize_assignment, province_code_for, regency_code_for
 
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
@@ -32,6 +33,40 @@ def _normalize_filters(filters):
     f['limit']=max(1,min(int(f['limit']),200))
     return f
 
+def _scope_filters(p,filters):
+    f=_normalize_filters(filters)
+    scope=str(p.get('geographic_scope') or '')
+    if scope=='Nationwide':
+        return f
+    assigned=normalize_assignment({'province':p.get('province'),'province_code':p.get('province_code'),'regency_city':p.get('regency_city'),'regency_city_code':p.get('regency_city_code')})
+    if not (assigned.get('province_code') or assigned.get('province')):
+        raise PermissionError('No authorized geographic scope is assigned')
+    requested=normalize_assignment({'province':f.get('province'),'regency_city':f.get('regency_city')})
+    if f.get('province'):
+        req_code=requested.get('province_code') or province_code_for(f.get('province'))
+        if req_code and assigned.get('province_code') and req_code!=assigned.get('province_code'):
+            raise PermissionError('Social Listening search is outside your authorized province')
+        if not req_code and str(f.get('province')).strip().lower()!=str(assigned.get('province') or '').strip().lower():
+            raise PermissionError('Social Listening search is outside your authorized province')
+    f['province']=assigned.get('province') or p.get('province')
+    if scope=='Regency/City':
+        if not (assigned.get('regency_city_code') or assigned.get('regency_city')):
+            raise PermissionError('No authorized Regency / City scope is assigned')
+        if f.get('regency_city'):
+            req_reg=requested.get('regency_city_code') or regency_code_for(f.get('regency_city'),assigned.get('province_code'))
+            if req_reg and assigned.get('regency_city_code') and req_reg!=assigned.get('regency_city_code'):
+                raise PermissionError('Social Listening search is outside your authorized Regency / City')
+            if not req_reg and str(f.get('regency_city')).strip().lower()!=str(assigned.get('regency_city') or '').strip().lower():
+                raise PermissionError('Social Listening search is outside your authorized Regency / City')
+        f['regency_city']=assigned.get('regency_city') or p.get('regency_city')
+    elif f.get('regency_city'):
+        req_reg=requested.get('regency_city_code') or regency_code_for(f.get('regency_city'),assigned.get('province_code'))
+        if req_reg:
+            reg_area=normalize_assignment({'regency_city_code':req_reg})
+            if reg_area.get('province_code') and assigned.get('province_code') and reg_area.get('province_code')!=assigned.get('province_code'):
+                raise PermissionError('Social Listening search is outside your authorized province')
+    return f
+
 def estimate_search_cost(filters):
     f=_normalize_filters(filters)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
@@ -52,7 +87,8 @@ def _filter_fingerprint(filters):
 
 def search_preflight(db:Session,p,filters):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-    estimate=estimate_search_cost(filters)
+    scoped=_scope_filters(p,filters)
+    estimate=estimate_search_cost(scoped)
     fingerprint=_filter_fingerprint(estimate['filters'])
     cutoff=datetime.utcnow()-timedelta(minutes=10)
     recent=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff).order_by(SocialListeningRun.executed_at.desc()).limit(50).all()
@@ -215,12 +251,21 @@ def _map_result(db,item):
 
 def filter_options(db:Session,p):
     regions=json.loads(Path(__file__).with_name('regions.json').read_text(encoding='utf-8'))
+    provinces=regions.get('provinces',[])
+    regencies=regions.get('regencies',[])
+    if p.get('geographic_scope')!='Nationwide':
+        pcode=p.get('province_code') or province_code_for(p.get('province'))
+        provinces=[x for x in provinces if str(x.get('code'))==str(pcode)]
+        regencies=[x for x in regencies if str(x.get('province_code'))==str(pcode)]
+        if p.get('geographic_scope')=='Regency/City':
+            rcode=p.get('regency_city_code') or regency_code_for(p.get('regency_city'),pcode)
+            regencies=[x for x in regencies if str(x.get('code'))==str(rcode)]
     categories=db.query(IssueCategory).filter(IssueCategory.active.is_(True)).order_by(IssueCategory.sort_order,IssueCategory.name).all()
     watchlists=[x for x in db.query(WatchlistItem).filter(WatchlistItem.status=='Active').order_by(WatchlistItem.name).all() if allowed(p,x)]
     return {
       'issue_categories':[{'id':str(x.id),'name':x.name} for x in categories],
-      'provinces':regions.get('provinces',[]),
-      'regencies':regions.get('regencies',[]),
+      'provinces':provinces,
+      'regencies':regencies,
       'watchlists':[{'id':str(x.id),'name':x.name,'type':x.type,'province':x.province,'regency_city':x.regency_city} for x in watchlists],
       'platforms':AVAILABLE_PLATFORMS,
       'content_types':['post','video','short','reel','comment','reply'],
@@ -252,7 +297,7 @@ def provider_status():
 
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-    f=_normalize_filters(filters)
+    f=_scope_filters(p,filters)
     estimate=estimate_search_cost(f)
     if provider_client is None and estimate['estimated_credits']>0 and not confirmed_cost:
         raise ValueError(f"COST_CONFIRMATION_REQUIRED: estimated maximum {estimate['estimated_credits']} SocialCrawl credits")
@@ -338,7 +383,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         rid=str(id or data.get('id') or '')
         rule=db.get(SocialListeningRule,int(rid)) if rid.isdigit() else None
         if not rule: rule=SocialListeningRule(name=str(data.get('name') or 'Untitled monitoring rule'),created_by=p['id']); db.add(rule)
-        rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_normalize_filters(data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':serialize_rule(rule)}
+        rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_scope_filters(p,data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':serialize_rule(rule)}
     if action=='runRule':
         rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')

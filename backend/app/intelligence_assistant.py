@@ -14,9 +14,9 @@ STOPWORDS={
  'what','when','where','which','with','from','that','this','show','tell','about','are','the','and','for','into',
  'latest','summarise','summarize','intelligence','records','record','main','issues','highest','priority','today',
  'last','past','days','day','validated','unverified','evidence','supported','remain','remains','added','collected',
- 'created','published','human-approved','human','approved','jurisdiction','recent','newest',
+ 'created','published','human-approved','human','approved','jurisdiction','jurisdictions','recent','newest','available','accessible','authorized','scope','user','users','my','our',
  'yang','dan','untuk','dari','dalam','apa','mana','terkini','ringkaskan','intelijen','catatan','rekod','bukti',
- 'tervalidasi','divalidasi','belum','terverifikasi','hari','ditambahkan','dikumpulkan','dibuat','diterbitkan'
+ 'tervalidasi','divalidasi','belum','terverifikasi','hari','ditambahkan','dikumpulkan','dibuat','diterbitkan','tersedia','yurisdiksi','cakupan','akses','pengguna','saya','kami'
 }
 
 ANSWER_SCHEMA={

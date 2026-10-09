@@ -25,7 +25,7 @@ jobs:
       - name: Run backend QA
         working-directory: backend
         env:
-          DATABASE_URL: sqlite:///:memory:
+          DATABASE_URL: 'sqlite:///:memory:'
           OPENAI_API_KEY: ""
           SOCIALCRAWL_API_KEY: ""
         run: pytest -q

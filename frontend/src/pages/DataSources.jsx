@@ -3,6 +3,7 @@ import { useRegistry, registry } from '@/components/intel/useIntel';
 import { Field, Notice, err } from '@/components/intel/Fields';
 import Status from '@/components/intel/Status';
 import { useLanguage } from '@/lib/LanguageContext';
+import regions from '@/components/intel/regions.json';
 
 const types=['MANUAL_LINK','MANUAL_ENTRY','FILE_UPLOAD','INTERNAL_BAWASLU','OFFICIAL_SOURCE'];
 const statuses=['Active','Inactive'];
@@ -21,6 +22,9 @@ export default function DataSources(){
  const [statusFilter,setStatusFilter]=useState('');
 
  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+ const selectedProvince=regions.provinces.find(p=>p.name===form?.province);
+ const regencyOptions=selectedProvince?regions.regencies.filter(r=>r.province_code===selectedProvince.code):[];
+ const setProvince=v=>setForm(f=>({...f,province:v,regency_city:''}));
 
  const activeCount=sources.filter(x=>x.status==='Active').length;
  const inactiveCount=sources.filter(x=>x.status==='Inactive').length;
@@ -98,8 +102,8 @@ export default function DataSources(){
     <Field label={t('name')} required value={form.name} onChange={v=>set('name',v)}/>
     <Field label={t('source_type')} required options={types} value={form.source_type} onChange={v=>set('source_type',v)}/>
     <Field label={t('source_status')} required options={statuses} value={form.status} onChange={v=>set('status',v)}/>
-    <Field label={t('province')} value={form.province} onChange={v=>set('province',v)}/>
-    <Field label={t('regency_city')} value={form.regency_city} onChange={v=>set('regency_city',v)}/>
+    <label className="block"><span className="intel-label">{t('province')}</span><select className="intel-input" value={form.province||''} onChange={e=>setProvince(e.target.value)}><option value="">{t('select_province')}</option>{regions.provinces.map(p=><option key={p.code} value={p.name}>{p.name}</option>)}</select></label>
+    <label className="block"><span className="intel-label">{t('regency_city')}</span><select className="intel-input" value={form.regency_city||''} onChange={e=>set('regency_city',e.target.value)} disabled={!form.province}><option value="">{form.province?t('entire_province'):t('select_province_first')}</option>{regencyOptions.map(r=><option key={r.code} value={r.name}>{r.name}</option>)}</select></label>
    </div>
    <Field label={t('description')} as="textarea" value={form.description} onChange={v=>set('description',v)}/>
    <button disabled={busy} className="intel-button">{busy?t('saving'):(editingId?t('update_source'):t('save_source'))}</button>

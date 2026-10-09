@@ -61,3 +61,8 @@ The zero-credit automated suite also verifies production-safety rules around Soc
 - repeat paid searches require an additional acknowledgement in the UI.
 
 These safeguards are tested with fake/local providers only and do not consume SocialCrawl credits.
+
+
+## Google News response regression
+
+Build 46.1 adds zero-credit regression coverage for Online News response normalization, including Google News payloads where articles are returned under `data.articles`. The suite verifies title/snippet/source/domain/URL/publication mapping, forced `online_news` platform tagging, and zero-result diagnostics that distinguish provider-zero, locally filtered, duplicate, and unusable rows.

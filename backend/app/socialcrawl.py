@@ -237,10 +237,34 @@ def _news_params(filters):
     return params
 
 def _extract_items(envelope):
-    data=envelope.get('data') or {}
-    if isinstance(data,list): return data
-    for k in ('items','results','posts','candidates'):
-        if isinstance(data.get(k),list): return data[k]
+    if isinstance(envelope,list):
+        return envelope
+    if not isinstance(envelope,dict):
+        return []
+    containers=[envelope]
+    data=envelope.get('data')
+    if isinstance(data,list):
+        return data
+    if isinstance(data,dict):
+        containers.append(data)
+    seen=set()
+    while containers:
+        container=containers.pop(0)
+        if not isinstance(container,dict) or id(container) in seen:
+            continue
+        seen.add(id(container))
+        for key in ('items','articles','results','news','posts','candidates'):
+            value=container.get(key)
+            if isinstance(value,list):
+                return value
+            if isinstance(value,dict):
+                containers.append(value)
+        for key in ('data','payload','response'):
+            value=container.get(key)
+            if isinstance(value,list):
+                return value
+            if isinstance(value,dict):
+                containers.append(value)
     return []
 
 def _value(item,*paths,default=''):
@@ -281,21 +305,24 @@ def _matches_local_filters(r, filters):
         except Exception: pass
     return True
 
-def _map_result(db,item):
+def _map_result(db,item,default_platform=''):
     # SocialCrawl's normalized search rows are post-shaped:
     # post.content.text, post.author, post.engagement, post.published_at,
     # plus a sibling computed block. Keep legacy fallbacks for provider variations.
-    url=str(_value(item,'post.url','url','canonical_url','permalink',default=''))
-    author=str(_value(item,'post.author.display_name','post.author.username','source_items.0.author','author.display_name','author.name','author.username','username','owner.name','source',default=''))
+    url=str(_value(item,'post.url','url','link','canonical_url','permalink',default=''))
+    author=str(_value(item,'post.author.display_name','post.author.username','source_items.0.author','author.display_name','author.name','author.username','username','owner.name','source','publisher','domain',default=''))
     handle=str(_value(item,'post.author.username','source_items.0.author','author.username','author.handle','handle','username','owner.username',default=''))
-    title=str(_value(item,'title','post.title',default=''))
-    snippet=str(_value(item,'snippet',default=''))
-    text=str(_value(item,'post.content.text','content.text','text','content','caption','description',default='')) or (' — '.join(x for x in [title,snippet] if x))
-    platform=str(_value(item,'platform','source','network',default=''))
-    rid=str(_value(item,'post.id','id','post_id','video_id','shortcode',default=''))
+    title=str(_value(item,'title','headline','post.title',default=''))
+    snippet=str(_value(item,'snippet','summary','description','content_snippet',default=''))
+    raw_text=_value(item,'post.content.text','content.text','text','content','caption','description',default='')
+    text=str(raw_text) if isinstance(raw_text,(str,int,float)) else ''
+    if not text:
+        text=' — '.join(x for x in [title,snippet] if x)
+    platform=str(_value(item,'platform','network',default=default_platform or ''))
+    rid=str(_value(item,'post.id','id','article_id','post_id','video_id','shortcode',default=''))
     language=str(_value(item,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default=''))
     relevance=_value(item,'computed.relevance.p','computed.relevance.score','relevance_score','relevance.score','score',default='')
-    published=_value(item,'post.published_at','source_items.0.published_at','source_items.0.date','published_at','post.datetime','datetime','created_at','timestamp','date',default='')
+    published=_value(item,'post.published_at','source_items.0.published_at','source_items.0.date','published_at','published','publish_date','published_date','post.datetime','datetime','created_at','timestamp','date',default='')
     identity,observed=source_identity(db,{'source_url':url})
     if handle and not observed: observed=handle
     engagement={
@@ -399,10 +426,12 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                 news_items=_extract_items(news_env)
                 for item in news_items:
                     if isinstance(item,dict): item['platform']='online_news'
-                if isinstance(news_env.get('data'),dict):
-                    news_env['data']['items']=news_items
-                else:
-                    news_env['data']={'items':news_items}
+                news_env=dict(news_env)
+                data_block=news_env.get('data')
+                if not isinstance(data_block,dict):
+                    data_block={}
+                data_block['items']=news_items
+                news_env['data']=data_block
                 envelopes.append(news_env)
             if not envelopes: raise ValueError('Select at least one platform or Online News')
             envelope={
@@ -415,17 +444,27 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
             }
         items=_extract_items(envelope)
         mapped=[]
+        diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0}
+        default_platform='online_news' if wants_news and not social_sources else ''
         for raw in items:
             if len(mapped) >= f['limit']: break
-            m=_map_result(db,raw)
-            if not _matches_local_filters(m,f): continue
+            m=_map_result(db,raw,default_platform=default_platform)
+            if not (m.get('text_content') or m.get('canonical_url') or m.get('author_name')):
+                diagnostics['empty_items']+=1
+                continue
+            diagnostics['mapped_items']+=1
+            if not _matches_local_filters(m,f):
+                diagnostics['filtered_items']+=1
+                continue
             existing=db.query(SocialListeningResult).filter(SocialListeningResult.content_fingerprint==m['content_fingerprint']).first()
-            if existing: continue
+            if existing:
+                diagnostics['duplicate_items']+=1
+                continue
             row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row))
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
-        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)}})
-        return {'run':serialize_run(run),'results':mapped,'provider':capabilities()}
+        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})
+        return {'run':serialize_run(run),'results':mapped,'provider':capabilities(),'diagnostics':diagnostics}
     except Exception as e:
         run.status='FAILED'; run.error_text=str(e); db.commit()
         if isinstance(e,(ValueError,PermissionError)): raise

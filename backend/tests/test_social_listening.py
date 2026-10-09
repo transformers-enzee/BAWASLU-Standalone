@@ -422,3 +422,63 @@ def test_promoted_social_result_is_locked_from_further_review():
     except ValueError as exc:
         assert 'locked from further review changes' in str(exc)
     db.close()
+
+
+def google_news_articles_provider(filters):
+    return {
+      'success':True,
+      'request_id':'req-google-news',
+      'credits_used':1,
+      'credits_remaining':19999,
+      'cached':False,
+      'data':{
+        'articles':[
+          {
+            'article_id':'gn-1',
+            'title':'Apple launches new iPhone feature',
+            'snippet':'The company announced a new iPhone capability.',
+            'url':'https://example.com/iphone-news',
+            'source':'Example News',
+            'domain':'example.com',
+            'published_at':'2026-10-08T10:00:00Z'
+          }
+        ]
+      }
+    }
+
+def test_google_news_articles_shape_is_extracted_and_mapped():
+    from app.socialcrawl import _extract_items
+    env=google_news_articles_provider({})
+    items=_extract_items(env)
+    assert len(items)==1
+    assert items[0]['title'].startswith('Apple launches')
+
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'iphone','platforms':['online_news'],'lookback_days':60}},provider_client=google_news_articles_provider)
+    assert len(r['results'])==1
+    x=r['results'][0]
+    assert x['platform']=='online_news'
+    assert x['canonical_url']=='https://example.com/iphone-news'
+    assert x['author_name']=='Example News'
+    assert 'iPhone' in x['text_content']
+    assert x['published_at']=='2026-10-08T10:00:00Z'
+    assert r['diagnostics']['provider_items']==1
+    assert r['diagnostics']['mapped_items']==1
+    assert r['diagnostics']['filtered_items']==0
+    db.close()
+
+def test_google_news_zero_result_diagnostics_distinguish_provider_zero_from_filtering():
+    db=SessionLocal(); p=admin(db)
+    empty=lambda f:{'success':True,'request_id':'req-empty','credits_used':1,'credits_remaining':19998,'cached':False,'data':{'articles':[]}}
+    r=social_listening_action(db,p,'search',{'filters':{'query':'iphone','platforms':['online_news']}},provider_client=empty)
+    assert r['results']==[]
+    assert r['diagnostics']['provider_items']==0
+
+    filtered=lambda f:{'success':True,'request_id':'req-filtered','credits_used':1,'credits_remaining':19997,'cached':False,'data':{'articles':[{
+      'article_id':'gn-2','title':'Apple event','snippet':'English story','url':'https://example.com/apple','source':'Example News','language':'en'
+    }]}}
+    r2=social_listening_action(db,p,'search',{'filters':{'query':'apple','platforms':['online_news'],'language':'id'}},provider_client=filtered)
+    assert r2['results']==[]
+    assert r2['diagnostics']['provider_items']==1
+    assert r2['diagnostics']['filtered_items']==1
+    db.close()

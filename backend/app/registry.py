@@ -220,7 +220,8 @@ def registry_action(db:Session,p,action,data,id=None):
         for u in db.query(User).order_by(User.created_at.desc()).all():
             up=profile(db,u)
             if p['geographic_scope']!='Nationwide' and not (up['province']==p['province'] and up['role'] not in NATIONAL): continue
-            rows.append({'id':str(u.id),'full_name':u.full_name,'email':u.email,'access_role':up['role'],'province':up['province'],'regency_city':up['regency_city'],'geographic_scope':up['geographic_scope'],'permissions':up['permissions'],'status':up['status'],'updated_date':'','platform_admin':u.platform_admin})
+            grant=db.query(AccessGrant).filter(AccessGrant.user_id==u.id).one_or_none()
+            rows.append({'id':str(u.id),'full_name':u.full_name,'email':u.email,'access_role':up['role'],'province':up['province'],'regency_city':up['regency_city'],'geographic_scope':up['geographic_scope'],'permissions':up['permissions'],'status':up['status'],'updated_date':grant.updated_at.isoformat() if grant and grant.updated_at else '','platform_admin':u.platform_admin})
         return {'users':rows,'administrator_role':p['role'],'administrator_province':p['province'],'roles':ROLE_DEFINITIONS,'permission_labels':PERMISSION_LABELS}
 
     if action=='accessHistory':
@@ -233,6 +234,9 @@ def registry_action(db:Session,p,action,data,id=None):
         u=db.get(User,int(id)) if str(id or '').isdigit() else None
         if not u: raise ValueError('Not found')
         if str(u.id)==str(p.get('id')): raise PermissionError('Administrators cannot change their own access assignment')
+        target_profile=profile(db,u)
+        if p.get('role')=='Provincial Administrator' and (target_profile.get('province')!=p.get('province') or target_profile.get('role') in NATIONAL):
+            raise PermissionError('Target user is outside the administrator scope')
         role=clean(data.get('access_role'),100)
         if role not in ROLE_DEFINITIONS: raise ValueError('Invalid role')
         if p.get('role')=='Provincial Administrator' and role in NATIONAL: raise PermissionError('Provincial administrators cannot assign national roles')

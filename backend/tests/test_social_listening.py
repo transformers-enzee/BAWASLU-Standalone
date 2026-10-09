@@ -46,6 +46,26 @@ def test_saved_rule_and_promotion_are_human_controlled():
     assert item.verification_status=='UNVERIFIED'
     db.close()
 
+def test_promotion_requires_prior_human_review():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'election','platforms':['tiktok']}},provider_client=fake_provider)
+    rid=r['results'][0]['id']
+    try:
+        social_listening_action(db,p,'promote',{},id=rid)
+        assert False, 'Expected discovered result promotion to be blocked'
+    except ValueError as exc:
+        assert 'Human review is required' in str(exc)
+    social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT'},id=rid)
+    try:
+        social_listening_action(db,p,'promote',{},id=rid)
+        assert False, 'Expected not relevant result promotion to be blocked'
+    except ValueError as exc:
+        assert 'Human review is required' in str(exc)
+    social_listening_action(db,p,'review',{'decision':'MONITOR'},id=rid)
+    promoted=social_listening_action(db,p,'promote',{},id=rid)
+    assert promoted['intelligence_code'].startswith('INT-')
+    db.close()
+
 def test_deduplication_prevents_repeat_imports():
     db=SessionLocal(); p=admin(db)
     a=social_listening_action(db,p,'search',{'filters':{'query':'election'}},provider_client=fake_provider)

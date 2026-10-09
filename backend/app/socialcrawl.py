@@ -364,6 +364,8 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='promote':
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
         if row.promoted_intelligence_id: return {'intelligence_id':str(row.promoted_intelligence_id),'already_promoted':True}
+        if row.review_state not in ('RELEVANT','MONITOR'):
+            raise ValueError('Human review is required before adding this result to Intelligence')
         item=create_intelligence(db,p,{'title':(row.text_content[:160] or 'Social listening result'),'original_content':row.text_content,'source_type':'SOCIAL_LISTENING','ingestion_method':'SOCIALCRAWL','observed_publisher_handle':row.observed_handle,'provider_source_metadata':{'provider':'SOCIALCRAWL','run_id':row.run_id,'provider_result_id':row.provider_result_id},'source_identity':json.loads(row.source_identity_json or '{}'),'source_url':row.canonical_url,'source_name':row.author_name,'platform':row.platform,'author':row.author_name,'publication_datetime':row.published_at,'collection_datetime':_now(),'evidence_state':'UNVERIFIED','review_status':'Pending Review'})
         row.promoted_intelligence_id=item.id; row.review_state='PROMOTED'; db.commit(); audit(db,p,'SocialListeningResult',row.id,'SOCIAL_LISTENING_RESULT_PROMOTED',{'intelligence_id':{'new':item.intelligence_id}}); return {'intelligence_id':str(item.id),'intelligence_code':item.intelligence_id}
     raise ValueError('Unknown social listening action')

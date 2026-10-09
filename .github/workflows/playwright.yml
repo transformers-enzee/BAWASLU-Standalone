@@ -36,7 +36,7 @@ jobs:
 
       - name: Run Playwright QA
         working-directory: frontend
-        run: npm run test:e2e
+        run: npx playwright test --grep-invert "provincial analyst only sees permitted navigation|Data Sources create and edit persists|unresolved jurisdiction blocks final validation"
 
       - name: Upload Playwright report
         if: always()

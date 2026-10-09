@@ -390,6 +390,25 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
 
 def serialize_rule(x): return {'id':str(x.id),'name':x.name,'description':x.description,'provider':x.provider,'enabled':x.enabled,'filters':json.loads(x.filters_json or '{}'),'created_by':x.created_by,'created_at':x.created_at.isoformat(),'updated_at':x.updated_at.isoformat()}
 
+def _rule_view(db:Session,p,rule):
+    data=serialize_rule(rule)
+    creator=None
+    try:
+        creator=db.get(User,int(rule.created_by)) if str(rule.created_by or '').isdigit() else None
+    except Exception:
+        creator=None
+    filters=data.get('filters') or {}
+    province=str(filters.get('province') or '').strip()
+    regency=str(filters.get('regency_city') or '').strip()
+    scope='Nationwide' if not province else (province + (' / '+regency if regency else ''))
+    data.update({
+      'creator_name':(creator.full_name or creator.email) if creator else str(rule.created_by or 'Unknown user'),
+      'is_owner':str(rule.created_by or '')==str(p.get('id') or ''),
+      'can_manage':_can_manage_rule(p,rule),
+      'scope_label':scope,
+    })
+    return data
+
 def _can_manage_rule(p,rule):
     return bool(rule) and (str(rule.created_by or '')==str(p.get('id') or '') or has(p,'administration'))
 
@@ -409,14 +428,14 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='filterOptions': return filter_options(db,p)
     if action=='preflight': return search_preflight(db,p,data.get('filters') or data)
     if action=='search': return execute_search(db,p,data.get('filters') or data,provider_client=provider_client,confirmed_cost=bool(data.get('confirm_cost')))
-    if action=='rules': return {'rules':[serialize_rule(x) for x in _visible_rules(db,p)]}
+    if action=='rules': return {'rules':[_rule_view(db,p,x) for x in _visible_rules(db,p)]}
     if action=='saveRule':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
         rid=str(id or data.get('id') or '')
         rule=db.get(SocialListeningRule,int(rid)) if rid.isdigit() else None
         if rule and not _can_manage_rule(p,rule): raise PermissionError('Only the saved search owner or an administrator can modify this rule')
         if not rule: rule=SocialListeningRule(name=str(data.get('name') or 'Untitled monitoring rule'),created_by=p['id']); db.add(rule)
-        rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_scope_filters(p,data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':serialize_rule(rule)}
+        rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_scope_filters(p,data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':_rule_view(db,p,rule)}
     if action=='runRule':
         rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')

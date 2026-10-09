@@ -285,3 +285,21 @@ def test_saved_searches_are_owner_scoped_and_admin_can_manage_all():
     updated=social_listening_action(db,national,'saveRule',{'name':'Bali monitoring updated','filters':bali_rule['filters'],'enabled':True},id=bali_rule['id'])['rule']
     assert updated['name']=='Bali monitoring updated'
     db.close()
+
+def test_saved_search_view_includes_creator_scope_and_manageability():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+    created=social_listening_action(db,bali,'saveRule',{'name':'Bali creator metadata','filters':{'query':'BAWASLU Bali','platforms':['online_news']}})['rule']
+    assert created['creator_name']=='Provincial Analyst'
+    assert created['is_owner'] is True
+    assert created['can_manage'] is True
+    assert created['scope_label']=='Bali'
+
+    admin_rules=social_listening_action(db,national,'rules',{})['rules']
+    viewed=next(x for x in admin_rules if x['id']==created['id'])
+    assert viewed['creator_name']=='Provincial Analyst'
+    assert viewed['is_owner'] is False
+    assert viewed['can_manage'] is True
+    assert viewed['scope_label']=='Bali'
+    db.close()

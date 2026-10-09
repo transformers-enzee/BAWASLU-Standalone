@@ -25,6 +25,9 @@ test('saved Social Listening search can pause resume and load filters without pr
   const card=page.locator('.intel-card').filter({hasText:name});
   await expect(card).toBeVisible();
   await expect(card.getByText('Active',{exact:true})).toBeVisible();
+  await expect(card.getByText('Mine',{exact:true})).toBeVisible();
+  await expect(card.getByText(/Created by:/i)).toBeVisible();
+  await expect(card.getByText(/Scope:/i)).toBeVisible();
 
   await card.getByRole('button',{name:/pause/i}).click();
   await expect(card.getByText('Inactive',{exact:true})).toBeVisible();

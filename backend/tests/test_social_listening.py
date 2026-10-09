@@ -303,3 +303,36 @@ def test_saved_search_view_includes_creator_scope_and_manageability():
     assert viewed['can_manage'] is True
     assert viewed['scope_label']=='Bali'
     db.close()
+
+def test_saved_search_update_delete_and_run_history_are_preserved():
+    db=SessionLocal()
+    national=admin(db)
+    rule=social_listening_action(db,national,'saveRule',{'name':'Lifecycle rule','description':'Initial','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
+    updated=social_listening_action(db,national,'saveRule',{'name':'Lifecycle rule renamed','description':'Updated description','filters':{'query':'BAWASLU election','platforms':['online_news']},'enabled':True},id=rule['id'])['rule']
+    assert updated['name']=='Lifecycle rule renamed'
+    assert updated['description']=='Updated description'
+    assert updated['filters']['query']=='BAWASLU election'
+
+    run=social_listening_action(db,national,'runRule',{},id=rule['id'],provider_client=fake_provider)
+    run_id=run['run']['id']
+    deleted=social_listening_action(db,national,'deleteRule',{},id=rule['id'])
+    assert deleted['deleted'] is True
+    assert social_listening_action(db,national,'rules',{})['rules']==[]
+    from app.models import SocialListeningRun
+    preserved=db.get(SocialListeningRun,int(run_id))
+    assert preserved is not None
+    assert preserved.rule_id is None
+    db.close()
+
+def test_saved_search_delete_is_owner_or_admin_only():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+    rule=social_listening_action(db,national,'saveRule',{'name':'Protected delete','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
+    try:
+        social_listening_action(db,bali,'deleteRule',{},id=rule['id'])
+        assert False, 'Expected non-owner delete to be blocked'
+    except PermissionError as exc:
+        assert 'owner or an administrator' in str(exc)
+    assert any(x['id']==rule['id'] for x in social_listening_action(db,national,'rules',{})['rules'])
+    db.close()

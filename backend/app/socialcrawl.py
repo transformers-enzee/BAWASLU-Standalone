@@ -435,7 +435,25 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         rule=db.get(SocialListeningRule,int(rid)) if rid.isdigit() else None
         if rule and not _can_manage_rule(p,rule): raise PermissionError('Only the saved search owner or an administrator can modify this rule')
         if not rule: rule=SocialListeningRule(name=str(data.get('name') or 'Untitled monitoring rule'),created_by=p['id']); db.add(rule)
-        rule.name=str(data.get('name') or rule.name); rule.description=str(data.get('description') or ''); rule.enabled=bool(data.get('enabled',True)); rule.filters_json=_json(_scope_filters(p,data.get('filters') or {})); rule.updated_at=datetime.utcnow(); db.commit(); db.refresh(rule); audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'new':rule.name}}); return {'rule':_rule_view(db,p,rule)}
+        previous_name=rule.name
+        rule.name=str(data.get('name') or rule.name).strip() or 'Untitled monitoring rule'
+        rule.description=str(data.get('description') or '').strip()
+        rule.enabled=bool(data.get('enabled',True))
+        rule.filters_json=_json(_scope_filters(p,data.get('filters') or {}))
+        rule.updated_at=datetime.utcnow()
+        db.commit(); db.refresh(rule)
+        audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'old':previous_name,'new':rule.name},'enabled':{'new':rule.enabled}})
+        return {'rule':_rule_view(db,p,rule)}
+    if action=='deleteRule':
+        if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+        rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
+        if not rule: raise ValueError('Saved search not found')
+        if not _can_manage_rule(p,rule): raise PermissionError('Only the saved search owner or an administrator can delete this rule')
+        rule_id=rule.id; rule_name=rule.name
+        db.query(SocialListeningRun).filter(SocialListeningRun.rule_id==rule.id).update({SocialListeningRun.rule_id:None},synchronize_session=False)
+        db.delete(rule); db.commit()
+        audit(db,p,'SocialListeningRule',rule_id,'SOCIAL_LISTENING_RULE_DELETED',{'name':{'old':rule_name}})
+        return {'deleted':True,'id':str(rule_id)}
     if action=='runRule':
         rule=db.get(SocialListeningRule,int(id)) if str(id or '').isdigit() else None
         if not rule or not rule.enabled: raise ValueError('Monitoring rule unavailable')

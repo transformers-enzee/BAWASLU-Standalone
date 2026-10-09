@@ -30,6 +30,8 @@ These flows remain manual QA unless a dedicated sandbox/free test provider or ex
 
 When a release changes a paid-provider flow, the developer should ask the project owner to run the relevant manual QA step and confirm the result.
 
+For Social Listening production-provider QA, use **Google News / Online News only** unless the project owner explicitly approves another provider. The current application estimate is approximately **1 SocialCrawl credit** for a Google News-only search. Automated QA must never spend that credit. The developer should provide the exact manual steps and expected result, and the project owner performs the paid search.
+
 ## Local run
 
 From `frontend/`:

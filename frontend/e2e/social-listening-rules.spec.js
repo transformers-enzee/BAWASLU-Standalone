@@ -38,3 +38,34 @@ test('saved Social Listening search can pause resume and load filters without pr
   await card.getByRole('button',{name:/load filters/i}).click();
   await expect(page.getByLabel(/keyword/i)).toHaveValue('bawaslu qa');
 });
+
+
+test('saved Social Listening search can edit and delete without provider calls',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+
+  const original='QA Lifecycle '+Date.now();
+  const renamed=original+' Renamed';
+  await page.getByLabel(/keyword/i).fill('bawaslu lifecycle');
+  await page.getByPlaceholder(/saved search name/i).fill(original);
+  await page.getByPlaceholder(/saved search description/i).fill('Initial QA description');
+  await page.getByRole('button',{name:/save search/i}).click();
+
+  await page.getByRole('button',{name:/saved searches/i}).click();
+  let card=page.locator('.intel-card').filter({hasText:original});
+  await expect(card).toBeVisible();
+  await card.getByRole('button',{name:/edit/i}).click();
+
+  await expect(page.getByText(/Editing saved search/i)).toBeVisible();
+  await page.getByPlaceholder(/saved search name/i).fill(renamed);
+  await page.getByPlaceholder(/saved search description/i).fill('Updated QA description');
+  await page.getByRole('button',{name:/update saved search/i}).click();
+
+  card=page.locator('.intel-card').filter({hasText:renamed});
+  await expect(card).toBeVisible();
+  await expect(card.getByText('Updated QA description')).toBeVisible();
+
+  page.once('dialog',dialog=>dialog.accept());
+  await card.getByRole('button',{name:/delete/i}).click();
+  await expect(page.locator('.intel-card').filter({hasText:renamed})).toHaveCount(0);
+});

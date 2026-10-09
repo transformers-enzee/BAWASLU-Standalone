@@ -305,24 +305,37 @@ def _matches_local_filters(r, filters):
         except Exception: pass
     return True
 
+def _news_article_payload(item):
+    if not isinstance(item,dict):
+        return {}
+    for key in ('article','news_article','newsArticle','result','item'):
+        value=item.get(key)
+        if isinstance(value,dict):
+            return value
+    return item
+
 def _map_result(db,item,default_platform=''):
     # SocialCrawl's normalized search rows are post-shaped:
     # post.content.text, post.author, post.engagement, post.published_at,
     # plus a sibling computed block. Keep legacy fallbacks for provider variations.
-    url=str(_value(item,'post.url','url','link','canonical_url','permalink',default=''))
-    author=str(_value(item,'post.author.display_name','post.author.username','source_items.0.author','author.display_name','author.name','author.username','username','owner.name','source','publisher','domain',default=''))
-    handle=str(_value(item,'post.author.username','source_items.0.author','author.username','author.handle','handle','username','owner.username',default=''))
-    title=str(_value(item,'title','headline','post.title',default=''))
-    snippet=str(_value(item,'snippet','summary','description','content_snippet',default=''))
-    raw_text=_value(item,'post.content.text','content.text','text','content','caption','description',default='')
+    article=_news_article_payload(item) if default_platform=='online_news' else item
+    url=str(_value(article,'post.url','url','link','canonical_url','permalink',default=''))
+    author_value=_value(article,'post.author.display_name','post.author.username','source_items.0.author','author.display_name','author.name','author.username','username','owner.name','source.name','source.title','publisher.name','publisher.title','source','publisher','domain',default='')
+    if isinstance(author_value,dict):
+        author_value=author_value.get('name') or author_value.get('title') or author_value.get('domain') or ''
+    author=str(author_value or '')
+    handle=str(_value(article,'post.author.username','source_items.0.author','author.username','author.handle','handle','username','owner.username',default=''))
+    title=str(_value(article,'title','headline','post.title',default=''))
+    snippet=str(_value(article,'snippet','summary','description','content_snippet','excerpt',default=''))
+    raw_text=_value(article,'post.content.text','content.text','text','content','caption','description','body',default='')
     text=str(raw_text) if isinstance(raw_text,(str,int,float)) else ''
     if not text:
         text=' — '.join(x for x in [title,snippet] if x)
-    platform=str(_value(item,'platform','network',default=default_platform or ''))
-    rid=str(_value(item,'post.id','id','article_id','post_id','video_id','shortcode',default=''))
-    language=str(_value(item,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default=''))
-    relevance=_value(item,'computed.relevance.p','computed.relevance.score','relevance_score','relevance.score','score',default='')
-    published=_value(item,'post.published_at','source_items.0.published_at','source_items.0.date','published_at','published','publish_date','published_date','post.datetime','datetime','created_at','timestamp','date',default='')
+    platform=str(_value(article,'platform','network',default=default_platform or ''))
+    rid=str(_value(article,'post.id','id','article_id','articleId','post_id','video_id','shortcode',default=''))
+    language=str(_value(article,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default=''))
+    relevance=_value(article,'computed.relevance.p','computed.relevance.score','relevance_score','relevance.score','score',default='')
+    published=_value(article,'post.published_at','source_items.0.published_at','source_items.0.date','published_at','published','publish_date','published_date','post.datetime','datetime','created_at','timestamp','date',default='')
     identity,observed=source_identity(db,{'source_url':url})
     if handle and not observed: observed=handle
     engagement={
@@ -444,7 +457,14 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
             }
         items=_extract_items(envelope)
         mapped=[]
-        diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0}
+        sample=items[0] if items else {}
+        sample_keys=sorted(list(sample.keys()))[:20] if isinstance(sample,dict) else []
+        nested_keys={}
+        if isinstance(sample,dict):
+            for key,value in sample.items():
+                if isinstance(value,dict):
+                    nested_keys[str(key)]=sorted(list(value.keys()))[:20]
+        diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0,'sample_item_keys':sample_keys,'sample_nested_keys':nested_keys}
         default_platform='online_news' if wants_news and not social_sources else ''
         for raw in items:
             if len(mapped) >= f['limit']: break

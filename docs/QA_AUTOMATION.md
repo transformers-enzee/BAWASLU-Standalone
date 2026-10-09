@@ -66,3 +66,8 @@ These safeguards are tested with fake/local providers only and do not consume So
 ## Google News response regression
 
 Build 46.1 adds zero-credit regression coverage for Online News response normalization, including Google News payloads where articles are returned under `data.articles`. The suite verifies title/snippet/source/domain/URL/publication mapping, forced `online_news` platform tagging, and zero-result diagnostics that distinguish provider-zero, locally filtered, duplicate, and unusable rows.
+
+
+## Google News wrapped-row compatibility
+
+Build 46.2 expands zero-credit Google News regression coverage to support provider rows wrapped under an `article` object and source/publisher objects, while exposing field-name-only structural diagnostics when a provider row still cannot be mapped. Diagnostics do not expose article content.

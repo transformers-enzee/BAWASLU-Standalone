@@ -482,3 +482,48 @@ def test_google_news_zero_result_diagnostics_distinguish_provider_zero_from_filt
     assert r2['diagnostics']['provider_items']==1
     assert r2['diagnostics']['filtered_items']==1
     db.close()
+
+
+def wrapped_google_news_provider(filters):
+    return {
+      'success':True,
+      'request_id':'req-google-news-wrapped',
+      'credits_used':1,
+      'credits_remaining':19996,
+      'cached':False,
+      'data':{
+        'items':[
+          {'article':{
+            'id':'gn-wrap-1',
+            'title':'Apple unveils iPhone update',
+            'url':'https://example.com/iphone-wrapped',
+            'source':'Wrapped News',
+            'domain':'example.com',
+            'snippet':None,
+            'published_at':'2026-10-09T02:00:00Z'
+          }}
+        ]
+      }
+    }
+
+def test_google_news_wrapped_article_shape_is_supported():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'iphone','platforms':['online_news'],'lookback_days':60}},provider_client=wrapped_google_news_provider)
+    assert len(r['results'])==1
+    x=r['results'][0]
+    assert x['platform']=='online_news'
+    assert x['canonical_url']=='https://example.com/iphone-wrapped'
+    assert x['author_name']=='Wrapped News'
+    assert 'iPhone update' in x['text_content']
+    assert r['diagnostics']['sample_item_keys']==['article']
+    assert 'article' in r['diagnostics']['sample_nested_keys']
+    db.close()
+
+def test_google_news_source_object_is_supported():
+    db=SessionLocal(); p=admin(db)
+    provider=lambda f:{'success':True,'request_id':'req-source-object','credits_used':1,'credits_remaining':19995,'cached':False,'data':{'items':[{
+      'id':'gn-source-object','title':'iPhone coverage','url':'https://example.com/source-object','source':{'name':'Object News'},'published_at':'2026-10-09T03:00:00Z'
+    }]}}
+    r=social_listening_action(db,p,'search',{'filters':{'query':'iphone','platforms':['online_news']}},provider_client=provider)
+    assert r['results'][0]['author_name']=='Object News'
+    db.close()

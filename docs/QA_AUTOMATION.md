@@ -76,3 +76,15 @@ Build 46.2 expands zero-credit Google News regression coverage to support provid
 ## System-wide final regression batch
 
 Build 47.0 adds a zero-credit authenticated smoke pass across the completed BAWASLU workspace routes and strengthens Social Listening review-state affordances. Review decisions now mirror the stored state directly in the action row using an active button style, check mark, and `aria-pressed` state in both Search Results and Review Queue. Promoted results remain locked.
+
+
+## Release-readiness CI
+
+Build 48.0 adds a production frontend build to CI before browser QA. This catches compile/bundle failures before Render deployment, while keeping all paid-provider keys empty.
+
+The three legacy Playwright selectors still excluded in the workflow are not coverage gaps. Each has a maintained equivalent in `quarantined-fixed.spec.js`:
+- provincial analyst navigation / protected routes;
+- Data Sources geographic create flow;
+- unresolved-jurisdiction validation guard.
+
+These equivalents run in normal CI.

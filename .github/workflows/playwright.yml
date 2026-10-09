@@ -39,6 +39,13 @@ jobs:
         working-directory: frontend
         run: npm install --no-audit --no-fund
 
+      - name: Build production frontend
+        working-directory: frontend
+        env:
+          VITE_OPENAI_API_KEY: ""
+          VITE_SOCIALCRAWL_API_KEY: ""
+        run: npm run build
+
       - name: Install Playwright Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium

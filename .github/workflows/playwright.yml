@@ -25,6 +25,7 @@ jobs:
       - name: Run backend QA
         working-directory: backend
         env:
+          PYTHONPATH: .
           DATABASE_URL: 'sqlite:///:memory:'
           OPENAI_API_KEY: ""
           SOCIALCRAWL_API_KEY: ""

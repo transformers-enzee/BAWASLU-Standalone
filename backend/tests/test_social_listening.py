@@ -55,7 +55,7 @@ def test_promotion_requires_prior_human_review():
         assert False, 'Expected discovered result promotion to be blocked'
     except ValueError as exc:
         assert 'Human review is required' in str(exc)
-    social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT'},id=rid)
+    social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT','notes':'Outside monitoring scope'},id=rid)
     try:
         social_listening_action(db,p,'promote',{},id=rid)
         assert False, 'Expected not relevant result promotion to be blocked'
@@ -64,6 +64,20 @@ def test_promotion_requires_prior_human_review():
     social_listening_action(db,p,'review',{'decision':'MONITOR'},id=rid)
     promoted=social_listening_action(db,p,'promote',{},id=rid)
     assert promoted['intelligence_code'].startswith('INT-')
+    db.close()
+
+def test_not_relevant_review_requires_notes_and_preserves_them():
+    db=SessionLocal(); p=admin(db)
+    r=social_listening_action(db,p,'search',{'filters':{'query':'election','platforms':['tiktok']}},provider_client=fake_provider)
+    rid=r['results'][0]['id']
+    try:
+        social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT','notes':''},id=rid)
+        assert False, 'Expected notes requirement'
+    except ValueError as exc:
+        assert 'Review notes are required' in str(exc)
+    reviewed=social_listening_action(db,p,'review',{'decision':'NOT_RELEVANT','notes':'Duplicate or outside monitoring scope'},id=rid)
+    assert reviewed['result']['review_state']=='NOT_RELEVANT'
+    assert reviewed['result']['review_notes']=='Duplicate or outside monitoring scope'
     db.close()
 
 def test_deduplication_prevents_repeat_imports():

@@ -359,8 +359,10 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if not row: raise ValueError('Social listening result not found')
     if action=='review':
         decision=str(data.get('decision') or '')
+        notes=str(data.get('notes') or '').strip()
         if decision not in ('RELEVANT','MONITOR','NOT_RELEVANT'): raise ValueError('Invalid decision')
-        row.review_state=decision; row.review_notes=str(data.get('notes') or ''); db.commit(); audit(db,p,'SocialListeningResult',row.id,'SOCIAL_LISTENING_RESULT_REVIEWED',{'review_state':{'new':decision}}); return {'result':serialize_result(row)}
+        if decision=='NOT_RELEVANT' and len(notes)<5: raise ValueError('Review notes are required when marking a result Not Relevant')
+        row.review_state=decision; row.review_notes=notes; db.commit(); audit(db,p,'SocialListeningResult',row.id,'SOCIAL_LISTENING_RESULT_REVIEWED',{'review_state':{'new':decision},'review_notes':{'new':notes or None}}); return {'result':serialize_result(row)}
     if action=='promote':
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
         if row.promoted_intelligence_id: return {'intelligence_id':str(row.promoted_intelligence_id),'already_promoted':True}

@@ -226,3 +226,31 @@ def test_social_listening_geography_is_restricted_to_authorized_scope():
     rule=social_listening_action(db,p,'saveRule',{'name':'Scoped Bali news','filters':{'query':'BAWASLU','platforms':['online_news']}})['rule']
     assert rule['filters']['province']=='Bali'
     db.close()
+
+def test_social_listening_queue_and_review_are_geographically_scoped():
+    db=SessionLocal()
+    national=admin(db)
+    bali=provincial_analyst(db,'Bali')
+
+    bali_run=social_listening_action(db,bali,'search',{'filters':{'query':'bali election','platforms':['online_news']}},provider_client=fake_provider)
+    bali_id=bali_run['results'][0]['id']
+
+    jakarta_run=social_listening_action(db,national,'search',{'filters':{'query':'jakarta election','province':'DKI Jakarta','platforms':['online_news']}},provider_client=lambda f:{
+      'success':True,'request_id':'req-jkt','credits_used':1,'credits_remaining':999,'cached':False,
+      'data':{'items':[{'id':'jkt-1','platform':'online_news','url':'https://example.com/jakarta','title':'Jakarta election update','snippet':'Public Jakarta election administration update'}]}
+    })
+    jakarta_id=jakarta_run['results'][0]['id']
+
+    queue=social_listening_action(db,bali,'queue',{})
+    assert any(x['id']==bali_id for x in queue['results'])
+    assert all(x['id']!=jakarta_id for x in queue['results'])
+
+    try:
+        social_listening_action(db,bali,'review',{'decision':'RELEVANT'},id=jakarta_id)
+        assert False, 'Expected out-of-scope review to be blocked'
+    except PermissionError as exc:
+        assert 'outside your authorized geographic scope' in str(exc)
+
+    reviewed=social_listening_action(db,bali,'review',{'decision':'RELEVANT'},id=bali_id)
+    assert reviewed['result']['review_state']=='RELEVANT'
+    db.close()

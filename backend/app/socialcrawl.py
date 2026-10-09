@@ -33,6 +33,27 @@ def _normalize_filters(filters):
     f['limit']=max(1,min(int(f['limit']),200))
     return f
 
+
+def _result_in_scope(db:Session,p,row):
+    if p.get('geographic_scope')=='Nationwide':
+        return True
+    run=db.get(SocialListeningRun,row.run_id)
+    if not run:
+        return False
+    try:
+        query=json.loads(run.query_json or '{}')
+        scoped=_scope_filters(p,query)
+    except (PermissionError,ValueError):
+        return False
+    assigned=normalize_assignment({'province':p.get('province'),'province_code':p.get('province_code'),'regency_city':p.get('regency_city'),'regency_city_code':p.get('regency_city_code')})
+    requested=normalize_assignment({'province':scoped.get('province'),'regency_city':scoped.get('regency_city')})
+    if assigned.get('province_code') and requested.get('province_code')!=assigned.get('province_code'):
+        return False
+    if p.get('geographic_scope')=='Regency/City':
+        if assigned.get('regency_city_code') and requested.get('regency_city_code')!=assigned.get('regency_city_code'):
+            return False
+    return True
+
 def _scope_filters(p,filters):
     f=_normalize_filters(filters)
     scope=str(p.get('geographic_scope') or '')
@@ -391,6 +412,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action=='queue':
         if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
         all_rows=db.query(SocialListeningResult).order_by(SocialListeningResult.collected_at.desc()).limit(500).all()
+        all_rows=[x for x in all_rows if _result_in_scope(db,p,x)]
         counts={'ALL':len(all_rows)}
         for key in ('DISCOVERED','RELEVANT','MONITOR','NOT_RELEVANT','PROMOTED'):
             counts[key]=sum(1 for x in all_rows if x.review_state==key)
@@ -402,6 +424,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         return usage_summary(db,p)
     row=db.get(SocialListeningResult,int(id)) if str(id or '').isdigit() else None
     if not row: raise ValueError('Social listening result not found')
+    if not _result_in_scope(db,p,row): raise PermissionError('Social listening result is outside your authorized geographic scope')
     if action=='review':
         decision=str(data.get('decision') or '')
         notes=str(data.get('notes') or '').strip()

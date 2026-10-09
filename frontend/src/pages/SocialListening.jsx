@@ -62,7 +62,7 @@ export default function SocialListening(){
  {tab==='queue'&&<div className="space-y-4">{dashboardPending&&<div className="intel-card p-4 text-sm text-[#536d80]"><strong>{t('dashboard_filter')}:</strong> {t('dashboard_filter_note')}</div>}
   <div className="intel-card p-5 space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><h2 className="font-semibold text-lg">{t('social_review_queue_title')}</h2><p className="text-sm text-[#77899b] mt-1">{t('social_review_queue_intro')}</p></div>
+      <div><h2 className="font-semibold text-lg">{t('social_review_queue_title')}</h2><p className="text-sm text-[#77899b] mt-1">{t('social_review_queue_intro')}</p><p className="text-xs text-[#8192a3] mt-1">{t('social_queue_scope_note')}</p></div>
       <button type="button" className="intel-ghost" onClick={()=>refreshQueue(queueState)}><RefreshCw size={14}/>{t('refresh_queue')}</button>
     </div>
     <div className="flex flex-wrap gap-2 text-xs">

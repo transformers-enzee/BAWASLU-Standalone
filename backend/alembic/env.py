@@ -6,7 +6,11 @@ from app.db import Base
 from app import models  # noqa: F401
 config = context.config
 if config.config_file_name is not None: fileConfig(config.config_file_name)
-config.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL', config.get_main_option('sqlalchemy.url')))
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    # Alembic uses configparser, where literal percent signs must be doubled.
+    # Keep URL-encoded password characters intact for SQLAlchemy.
+    config.set_main_option('sqlalchemy.url', database_url.replace('%', '%%'))
 target_metadata = Base.metadata
 
 def run_migrations_offline():

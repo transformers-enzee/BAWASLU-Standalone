@@ -67,3 +67,10 @@ Use this checklist for the client/UAT pass:
 - Automated CI never spends SocialCrawl or OpenAI credits.
 - SocialCrawl production checks are manual and use Online News / Google News unless explicitly approved otherwise.
 - Future sidebar modules remain intentionally deferred.
+
+
+## Build 50.0 UAT defect hardening
+
+The Intelligence Assistant now uses a canonical UTC representation for human-validation timestamps in both model grounding and supporting-record UI. The prompt requires exact reuse of the supplied UTC validation timestamp rather than model-side conversion.
+
+Historical records that carry a validated status but do not satisfy current validation prerequisites are not silently rewritten. They are exposed as `LEGACY_GOVERNANCE_EXCEPTION` with explicit blockers so analysts can distinguish historical state from a clean current-rules validation.

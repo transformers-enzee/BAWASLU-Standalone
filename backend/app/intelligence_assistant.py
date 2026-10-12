@@ -2,7 +2,7 @@ import json, os, re
 from datetime import datetime, timezone, timedelta
 import httpx
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
-from .domain import human_approved_triage
+from .domain import human_approved_triage, geography_mismatch, triage_review_status
 from .source_retrieval import clean_article_text
 
 class AssistantProviderError(RuntimeError):
@@ -49,6 +49,8 @@ Mandatory rules:
 11. Answer in clear, professional Bahasa Indonesia. Preserve proper names, source quotations, official status values, and intelligence IDs exactly where needed.
 12. Avoid mixing Malay vocabulary into the analytical prose unless directly quoting the source.
 13. Keep the answer useful for an analyst: concise, evidence-grounded, and traceable.
+14. When mentioning a human-validation timestamp, copy validated_at_display_utc exactly as supplied. Do not convert, infer, recalculate, or silently change its date/time. All validated_at_display_utc values are UTC.
+15. A record with validation_governance_state=LEGACY_GOVERNANCE_EXCEPTION has a historical validated status but does not satisfy one or more current validation prerequisites. Explicitly label it as a governance exception; do not present it as a clean current-rules validation.
 
 The assistant is read-only and does not validate, verify, modify, or promote intelligence records."""
 
@@ -78,6 +80,38 @@ def _parse_datetime(value):
 def _date(value):
     dt=_parse_datetime(value)
     return dt.date() if dt else None
+
+def _canonical_utc(value):
+    dt=_parse_datetime(value)
+    if not dt:
+        return ''
+    return dt.astimezone(timezone.utc).isoformat().replace('+00:00','Z')
+
+def _utc_display(value):
+    dt=_parse_datetime(value)
+    if not dt:
+        return ''
+    return dt.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+def _validation_governance(item):
+    if item.review_status!='Validated as Relevant Intelligence':
+        return {'state':'NOT_APPLICABLE','blockers':[],'note':''}
+    blockers=[]
+    if item.jurisdiction_confirmed is not True:
+        blockers.append('JURISDICTION_NOT_CONFIRMED')
+    mismatch=geography_mismatch(item)
+    if mismatch.get('status')=='pending':
+        blockers.append('GEOGRAPHIC_MISMATCH_PENDING')
+    triage=triage_review_status(item)
+    if triage.get('generated') and triage.get('state')!='REVIEW COMPLETE':
+        blockers.append('AI_TRIAGE_REVIEW_INCOMPLETE')
+    if blockers:
+        return {
+          'state':'LEGACY_GOVERNANCE_EXCEPTION',
+          'blockers':blockers,
+          'note':'Historical validated status does not satisfy all current validation prerequisites.'
+        }
+    return {'state':'CURRENT_RULES_SATISFIED','blockers':[],'note':'Current validation prerequisites are satisfied.'}
 
 def _publication_date(item):
     return _date(item.publication_datetime) or _date(item.publication_date)
@@ -198,6 +232,7 @@ def select_assistant_records(question, rows, limit=12):
 
 def assistant_evidence_record(item):
     approved=human_approved_triage(item) or {}
+    governance=_validation_governance(item)
     source,_=clean_article_text(item.original_content or '')
     return {
       'record_id':item.intelligence_id,
@@ -206,7 +241,8 @@ def assistant_evidence_record(item):
       'publication_datetime':item.publication_datetime or '',
       'collection_datetime':item.collection_datetime or '',
       'created_at':item.created_at.isoformat() if item.created_at else '',
-      'validated_at':item.validated_at or '',
+      'validated_at':_canonical_utc(item.validated_at),
+      'validated_at_display_utc':_utc_display(item.validated_at),
       'confirmed_jurisdiction':_jurisdiction(item),
       'jurisdiction_confirmed':bool(item.jurisdiction_confirmed),
       'priority':item.priority or '',
@@ -217,11 +253,15 @@ def assistant_evidence_record(item):
       'source_excerpt':source[:1800],
       'human_approved_triage':approved.get('values') or {},
       'human_approved_field_count':approved.get('approved_count') or 0,
-      'triage_review_state':approved.get('review_state') or ''
+      'triage_review_state':approved.get('review_state') or '',
+      'validation_governance_state':governance['state'],
+      'validation_governance_blockers':governance['blockers'],
+      'validation_governance_note':governance['note']
     }
 
 def assistant_record_view(item):
     approved=human_approved_triage(item) or {}
+    governance=_validation_governance(item)
     return {
       'id':str(item.id),
       'intelligence_id':item.intelligence_id,
@@ -229,14 +269,18 @@ def assistant_record_view(item):
       'publication_date':item.publication_date or '',
       'collection_datetime':item.collection_datetime or '',
       'created_at':item.created_at.isoformat() if item.created_at else '',
-      'validated_at':item.validated_at or '',
+      'validated_at':_canonical_utc(item.validated_at),
+      'validated_at_display_utc':_utc_display(item.validated_at),
       'jurisdiction':_jurisdiction(item),
       'priority':item.priority,
       'review_status':item.review_status,
       'evidence_type':item.evidence_type,
       'verification_status':item.verification_status,
       'approved_count':approved.get('approved_count') or 0,
-      'source_name':item.observed_publisher_handle or item.source_name or item.author or ''
+      'source_name':item.observed_publisher_handle or item.source_name or item.author or '',
+      'validation_governance_state':governance['state'],
+      'validation_governance_blockers':governance['blockers'],
+      'validation_governance_note':governance['note']
     }
 
 def _response_output_text(payload):

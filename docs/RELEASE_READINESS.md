@@ -90,3 +90,15 @@ Production UAT for the current release scope is complete. The manually exercised
 The UAT defects discovered during the pass were fixed in Builds 50.0 and 51.0 and subsequently re-verified in production. There are no known blocking defects from this UAT cycle.
 
 The release is now in defect-fix-only mode. New feature development requires explicit scope approval.
+
+
+## Build 53.0 Command Center development cycle
+
+A new post-UAT feature cycle is opened with Command Center as the first upcoming module. The initial Command Center release is read-only and role-aware. It reuses existing authorized Intelligence and stored Social Listening queue data to provide:
+- operational metrics with drill-down links;
+- a ranked priority attention queue;
+- Critical/High priority snapshot;
+- geographic distribution within the user's authorized scope;
+- links into Validation, Social Listening and Intelligence Inbox.
+
+Opening Command Center does not call OpenAI or execute a paid SocialCrawl search.

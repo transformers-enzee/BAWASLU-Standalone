@@ -16,7 +16,7 @@ test('release navigation exposes every completed administrator module',async({pa
   await uiLogin(page);
   const nav=page.getByRole('navigation');
   const modules=[
-    'Home','Watchlist','Social Listening','Intelligence Inbox',
+    'Home','Command Center','Watchlist','Social Listening','Intelligence Inbox',
     'BAWASLU Intelligence Assistant','Add Intelligence','Data Sources',
     'Validation','Administration'
   ];
@@ -27,7 +27,7 @@ test('release navigation exposes every completed administrator module',async({pa
 
 test('completed module routes remain authenticated after direct navigation',async({page})=>{
   await uiLogin(page);
-  const routes=['/','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration'];
+  const routes=['/','/command-center','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration'];
   for(const route of routes){
     const response=await page.goto(route);
     expect(response?.status()||200).toBeLessThan(500);
@@ -43,7 +43,7 @@ test('release build does not expose paid-provider execution during navigation',a
     if(/socialcrawl\.dev|api\.openai\.com/i.test(url)) paidCalls.push(url);
   });
   await uiLogin(page);
-  for(const route of ['/','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration']){
+  for(const route of ['/','/command-center','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration']){
     await page.goto(route);
     await page.waitForLoadState('domcontentloaded');
   }

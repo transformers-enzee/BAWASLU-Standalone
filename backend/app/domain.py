@@ -514,7 +514,7 @@ def intelligence_action(db,p,action,data,id=None):
     item=get_item(db,id)
     if not item or not allowed(p,item): raise PermissionError('Access denied')
     if action=='get':
-        files=db.query(EvidenceFile).filter(EvidenceFile.intelligence_item_id==item.id).all(); ev=db.query(AuditEvent).filter(AuditEvent.subject_id==str(item.id)).order_by(AuditEvent.id.desc()).limit(100).all()
+        files=db.query(EvidenceFile).filter(EvidenceFile.intelligence_item_id==item.id).all(); ev=db.query(AuditEvent).filter(AuditEvent.subject_type=='IntelligenceItem',AuditEvent.subject_id==str(item.id)).order_by(AuditEvent.id.desc()).limit(100).all()
         allv=list_intelligence(db,p); linked=[x for x in allv if x.id!=item.id and (str(x.id)==item.duplicate_of or x.duplicate_of==str(item.id) or str(x.id)==item.merged_into or x.merged_into==str(item.id))][:20]
         gen=None; sug=loads(item.ai_suggestions_json,{})
         if sug.get('_triage_run_id'):

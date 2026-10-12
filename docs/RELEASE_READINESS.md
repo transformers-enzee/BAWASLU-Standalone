@@ -74,3 +74,10 @@ Use this checklist for the client/UAT pass:
 The Intelligence Assistant now uses a canonical UTC representation for human-validation timestamps in both model grounding and supporting-record UI. The prompt requires exact reuse of the supplied UTC validation timestamp rather than model-side conversion.
 
 Historical records that carry a validated status but do not satisfy current validation prerequisites are not silently rewritten. They are exposed as `LEGACY_GOVERNANCE_EXCEPTION` with explicit blockers so analysts can distinguish historical state from a clean current-rules validation.
+
+
+## Build 51.0 UAT defect hardening
+
+Intelligence record timelines now filter audit events by both `subject_type=IntelligenceItem` and the record's `subject_id`. This prevents audit events from unrelated object types that happen to share the same numeric ID from appearing on an Intelligence record.
+
+A zero-credit backend regression test creates a colliding non-Intelligence audit event and verifies that it is excluded from the Intelligence detail timeline while the record's own creation event remains visible.

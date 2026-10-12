@@ -4,7 +4,7 @@ os.environ.pop('OPENAI_API_KEY',None)
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db import Base, engine, SessionLocal
-from app.models import User, AccessGrant, IntelligenceItem, WatchlistItem, SourceAccount
+from app.models import User, AccessGrant, IntelligenceItem, WatchlistItem, SourceAccount, AuditEvent
 from app.auth import hash_password
 from app.access import default_permissions, profile, allowed
 
@@ -1049,3 +1049,35 @@ def test_watchlist_manage_permission_is_server_enforced():
     h={'Authorization':'Bearer '+r.json()['access_token']}
     r=client.post('/api/functions/registry',json={'action':'createWatchlist','data':{'name':'Blocked','type':'Topic / Issue'}},headers=h)
     assert r.status_code==403
+
+
+def test_intelligence_timeline_does_not_leak_audit_events_from_other_subject_types():
+    h=auth()
+    r=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Timeline isolation test',
+      'original_content':'Synthetic evidence for audit isolation.',
+      'jurisdiction_type':'National',
+      'confirm_jurisdiction':True
+    }},headers=h)
+    assert r.status_code==200, r.text
+    iid=r.json()['item']['id']
+
+    db=SessionLocal()
+    db.add(AuditEvent(
+      subject_type='SocialListeningResult',
+      subject_id=str(iid),
+      action='SOCIAL_LISTENING_SEARCH_EXECUTED',
+      actor_id='test',
+      actor_name='Test Actor',
+      changes_json='{}',
+      occurred_at='2026-10-12T00:00:00+00:00'
+    ))
+    db.commit()
+    db.close()
+
+    r=client.post('/api/functions/intelligence',json={'action':'get','data':{},'id':iid},headers=h)
+    assert r.status_code==200, r.text
+    events=r.json()['events']
+    assert any(e['action']=='CREATED' for e in events)
+    assert all(e['subject_type']=='IntelligenceItem' for e in events)
+    assert all(e['action']!='SOCIAL_LISTENING_SEARCH_EXECUTED' for e in events)

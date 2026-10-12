@@ -79,7 +79,7 @@ export default function SocialListening(){
         ['MONITOR',t('monitor')],
         ['NOT_RELEVANT',t('not_relevant')],
         ['PROMOTED',t('added_to_intelligence')]
-      ].map(([value,label])=><button key={value||'all'} type="button" className={queueState===value?'intel-button':'intel-ghost'} onClick={()=>{setQueueState(value);refreshQueue(value)}}>{label} ({value?queueCounts[value]||0:queueCounts.ALL||0})</button>)}
+      ].map(([value,label])=><button key={value||'all'} type="button" className={queueState===value?'intel-button':'intel-ghost'} onClick={()=>{setQueueState(value);setQueuePlatform('');refreshQueue(value)}}>{label} ({value?queueCounts[value]||0:queueCounts.ALL||0})</button>)}
     </div>
     <div className="grid md:grid-cols-2 gap-3 max-w-2xl"><label className="block"><span className="intel-label">{t('search_queue')}</span><input className="intel-input" placeholder={t('search_queue_placeholder')} value={queueQuery} onChange={e=>setQueueQuery(e.target.value)}/></label><label className="block"><span className="intel-label">{t('platform')}</span><select className="intel-input" value={queuePlatform} onChange={e=>setQueuePlatform(e.target.value)}><option value="">{t('all_platforms')}</option>{Array.from(new Set(queueResults.map(x=>x.platform).filter(Boolean))).sort().map(p=><option key={p} value={p}>{p}</option>)}</select></label></div>
     <div className="text-xs text-[#8192a3]">{t('showing_results').replace('{shown}',visibleQueue.length).replace('{total}',queueResults.length)}</div>

@@ -2,7 +2,7 @@
 
 ## Current release status
 
-Build 48.0 is the release-readiness baseline for the completed standalone BAWASLU workspace.
+Build 52.0 is the signed-off UAT baseline for the completed standalone BAWASLU workspace.
 
 ### Feature-complete modules
 - Home
@@ -81,3 +81,12 @@ Historical records that carry a validated status but do not satisfy current vali
 Intelligence record timelines now filter audit events by both `subject_type=IntelligenceItem` and the record's `subject_id`. This prevents audit events from unrelated object types that happen to share the same numeric ID from appearing on an Intelligence record.
 
 A zero-credit backend regression test creates a colliding non-Intelligence audit event and verifies that it is excluded from the Intelligence detail timeline while the record's own creation event remains visible.
+
+
+## Build 52.0 UAT closeout
+
+Production UAT for the current release scope is complete. The manually exercised workflows include Social Listening promotion, Intelligence creation/detail, jurisdiction confirmation and validation, Administration geographic access changes and audit history, Data Sources persistence, dashboard/inbox visibility, and Intelligence Assistant grounding.
+
+The UAT defects discovered during the pass were fixed in Builds 50.0 and 51.0 and subsequently re-verified in production. There are no known blocking defects from this UAT cycle.
+
+The release is now in defect-fix-only mode. New feature development requires explicit scope approval.

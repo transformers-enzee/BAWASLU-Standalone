@@ -18,9 +18,9 @@ test('Command Center loads read-only operational overview without paid-provider 
   await uiLogin(page);
   await page.goto('/command-center');
   await expect(page.getByRole('heading',{name:/Command Center/i})).toBeVisible();
-  await expect(page.getByText(/Operational picture/i)).toBeVisible();
-  await expect(page.getByText(/Priority attention queue/i)).toBeVisible();
-  await expect(page.getByText(/Geographic picture/i)).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Operational picture',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Priority attention queue',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Geographic picture',exact:true})).toBeVisible();
   expect(paidCalls).toEqual([]);
 });
 
@@ -28,6 +28,6 @@ test('Command Center drill-down links point to operational modules',async({page}
   await uiLogin(page);
   await page.goto('/command-center');
   await expect(page.getByRole('link',{name:/Intelligence Inbox/i})).toHaveAttribute('href','/inbox');
-  await expect(page.getByRole('link',{name:/Validation/i})).toHaveAttribute('href','/validation');
-  await expect(page.getByRole('link',{name:/Social Review Queue/i})).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link',{name:'Validation',exact:true})).toHaveAttribute('href','/validation');
+  await expect(page.getByRole('main').getByRole('link',{name:'Social Review Queue',exact:true})).toBeVisible();
 });

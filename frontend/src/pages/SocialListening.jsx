@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, Save, RefreshCw, ExternalLink, Pencil, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -11,13 +11,14 @@ const blank={query:'',exact_phrase:'',include_terms:'',exclude_terms:'',hashtags
 const list=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 export default function SocialListening(){
  const {t}=useLanguage();
+ const queueRequestId=useRef(0);
  const initialParams=new URLSearchParams(window.location.search);const dashboardPending=initialParams.get('pending')==='1';
  const [filters,setFilters]=useState(blank),[results,setResults]=useState([]),[queueResults,setQueueResults]=useState([]),[queueCounts,setQueueCounts]=useState({}),[queueState,setQueueState]=useState(''),[queuePlatform,setQueuePlatform]=useState(''),[queueQuery,setQueueQuery]=useState(''),[rules,setRules]=useState([]),[caps,setCaps]=useState(null),[providerStatus,setProviderStatus]=useState(null),[usage,setUsage]=useState({usage:[],summary:{}}),[pendingSearch,setPendingSearch]=useState(null),[duplicateAcknowledged,setDuplicateAcknowledged]=useState(false),[searchNotice,setSearchNotice]=useState(''),[options,setOptions]=useState({issue_categories:[],provinces:[],regencies:[],watchlists:[],platforms,content_types:[]}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[tab,setTab]=useState(initialParams.get('tab')==='queue'?'queue':'search'),[ruleName,setRuleName]=useState(''),[ruleDescription,setRuleDescription]=useState(''),[editingRule,setEditingRule]=useState(null),[reviewNotes,setReviewNotes]=useState({});
  useEffect(()=>{base44.functions.invoke('socialListening',{action:'capabilities',data:{}}).then(r=>setCaps(r.data)).catch(()=>{});refreshProvider();base44.functions.invoke('socialListening',{action:'filterOptions',data:{}}).then(r=>setOptions(r.data||{})).catch(()=>{});refreshRules();refreshUsage();if(initialParams.get('tab')==='queue')refreshQueue('');},[]);
  async function refreshProvider(){try{const r=await base44.functions.invoke('socialListening',{action:'providerStatus',data:{}});setProviderStatus(r.data)}catch{}}
  async function refreshUsage(){try{const r=await base44.functions.invoke('socialListening',{action:'usage',data:{}});setUsage(r.data||{usage:[],summary:{}})}catch{}}
  async function refreshRules(){try{const r=await base44.functions.invoke('socialListening',{action:'rules',data:{}});setRules(r.data.rules||[])}catch{}}
- async function refreshQueue(state=queueState){try{const r=await base44.functions.invoke('socialListening',{action:'queue',data:{state}});setQueueResults(r.data.results||[]);setQueueCounts(r.data.counts||{})}catch(e){setError(e.response?.data?.error||e.message)}}
+ async function refreshQueue(state=queueState){const requestId=++queueRequestId.current;try{const r=await base44.functions.invoke('socialListening',{action:'queue',data:{state}});if(requestId!==queueRequestId.current)return;setQueueResults(r.data.results||[]);setQueueCounts(r.data.counts||{})}catch(e){if(requestId===queueRequestId.current)setError(e.response?.data?.error||e.message)}}
  const set=(k,v)=>{setPendingSearch(null);setDuplicateAcknowledged(false);setSearchNotice('');setFilters(f=>{if(k==='province')return {...f,province:v,regency_city:''};if((k==='date_from'||k==='date_to')&&v)return {...f,[k]:v,lookback_days:''};if(k==='lookback_days'&&v)return {...f,lookback_days:v,date_from:'',date_to:''};return {...f,[k]:v}})};
  const provinceCode=options.provinces?.find(x=>x.name===filters.province)?.code||'';
  const regencies=(options.regencies||[]).filter(x=>x.province_code===provinceCode);

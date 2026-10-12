@@ -88,3 +88,8 @@ The three legacy Playwright selectors still excluded in the workflow are not cov
 - unresolved-jurisdiction validation guard.
 
 These equivalents run in normal CI.
+
+
+## Final UAT policy
+
+After Build 48.0, new feature development is frozen for the current release unless explicitly approved. Subsequent changes should be limited to release defects, UAT findings, documentation, or production-safety fixes. Any defect fix must keep the same CI gates: backend pytest, production frontend build, zero-credit Playwright, and CI-gated Render deployment.

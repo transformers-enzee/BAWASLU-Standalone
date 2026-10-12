@@ -1,4 +1,4 @@
-# BAWASLU Intelligence — Standalone v0.1
+# BAWASLU Intelligence — Standalone
 
 This is the first standalone migration of `bawaslu-insight-core`, aligned to the shared NK Intelligence architecture used by GovIntel v0.27 while retaining BAWASLU-specific domain semantics.
 
@@ -94,8 +94,19 @@ The BAWASLU Intelligence Assistant is read-only and uses only intelligence recor
 
 Each answer returns supporting intelligence records for traceability. Time-sensitive questions use explicit date semantics: “last 7 days” / “today” default to source publication date, “added/collected” uses collection or creation time, and “latest validated” sorts by human validation time. The answer states which date basis was used. Analytical responses are standardized to Bahasa Indonesia while source names and quotations remain unchanged. The OpenAI call runs only when the user submits a question and uses `store: false`. If the provider is unavailable, the Assistant returns a deterministic summary of the matched authorized records. It does not trigger SocialCrawl searches or background provider work.
 
-## v0.1 boundaries
+## Current release scope
 
-This release is an architecture/parity foundation, not a claim of complete Base44 feature equivalence. The standalone AI triage endpoint uses the configured OpenAI Responses API when available and falls back to the deterministic local placeholder when it is not. Public URL retrieval includes hardened article/social retrieval, source cleaning and language-resolution safeguards. Google OAuth, email OTP delivery, password-reset delivery, signed private object-store URLs, and external provider execution are also not yet wired.
+The standalone workspace is release-ready for client/UAT across the completed modules documented in `docs/RELEASE_READINESS.md`.
 
-Those are intentionally listed as parity gates for the next version rather than silently removed. See `docs/PARITY_MATRIX.md`.
+Completed release scope:
+- Home
+- Watchlist
+- Social Listening
+- Intelligence Inbox
+- BAWASLU Intelligence Assistant
+- Add Intelligence
+- Data Sources
+- Validation
+- Administration
+
+The sidebar items explicitly labelled as future modules remain outside this release scope. See `docs/RELEASE_READINESS.md` and `docs/PARITY_MATRIX.md` for the maintained release boundary and parity references.

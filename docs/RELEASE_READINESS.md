@@ -42,3 +42,28 @@ The sidebar items marked as future modules remain intentionally deferred and are
 - Risk & Early Warning
 - Action Center
 - Intelligence & Reporting
+
+
+## UAT handover checklist
+
+Use this checklist for the client/UAT pass:
+1. Sign in as a National Administrator and confirm all completed modules are visible.
+2. Sign in as a regional analyst and confirm geography and permission restrictions.
+3. Create or open a Watchlist item and confirm authorized visibility.
+4. Run a zero-credit Social Listening saved-search management flow; paid provider searches remain manual.
+5. Review a stored Social Listening result and confirm the selected review state is visibly highlighted.
+6. Promote one eligible Social Listening result to Intelligence and open the created record.
+7. Open the Intelligence Inbox and confirm scoped records/actions.
+8. Ask the Intelligence Assistant a question and verify supporting-record traceability.
+9. Add a manual Intelligence record and confirm it enters the expected review workflow.
+10. Register/edit a Data Source as an authorized administrator.
+11. Validate an eligible record and confirm jurisdiction/reviewer safeguards.
+12. Change a user assignment in Administration and confirm audit history.
+13. Toggle EN/ID and confirm app-owned labels change consistently.
+14. Confirm no P0/P1 defect remains before handover sign-off.
+
+## Known operational boundaries
+
+- Automated CI never spends SocialCrawl or OpenAI credits.
+- SocialCrawl production checks are manual and use Online News / Google News unless explicitly approved otherwise.
+- Future sidebar modules remain intentionally deferred.

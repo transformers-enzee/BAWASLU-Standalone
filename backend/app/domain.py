@@ -396,6 +396,9 @@ def create_intelligence(db,p,data):
         raise ValueError('Select the original source language (or Unknown) for manual intelligence entry')
     if data.get('source_type')=='MANUAL_ENTRY' and clean(data.get('original_language_code'),20).lower() not in {'id','en','jv','su','mad','min','ban','ace','bug','ms','other','unknown'}:
         raise ValueError('Select a supported original source language for manual intelligence entry')
+    if data.get('source_type')=='MANUAL_ENTRY' and clean(data.get('original_language_code'),20).lower()=='unknown':
+        # Explicit unknown is an analyst decision, not a language-detection override.
+        data={**data,'provider_source_metadata':{**(data.get('provider_source_metadata') or {}),'language_selection_source':'ANALYST','language_selection_code':'unknown'}}
     provider_meta=dict(data.get('provider_source_metadata') or {})
     selected_language=clean(data.get('original_language_code'),20).lower()
     if str(provider_meta.get('language_selection_source') or '').upper()!='ANALYST':

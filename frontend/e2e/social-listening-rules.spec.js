@@ -113,3 +113,14 @@ test('Review Queue refresh gives visible feedback without resetting filters', as
   await expect(page.getByRole('status')).toContainText('Queue refreshed successfully.');
   await expect(page).toHaveURL(/tab=queue/);
 });
+
+
+test('TikTok only displays native one-credit estimate without provider execution',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+  const sources=['Instagram','Youtube','X / Twitter','Threads','Reddit','Linkedin','Online News'];
+  for(const label of sources){const cb=page.getByRole('checkbox',{name:label,exact:true});if(await cb.isChecked())await cb.uncheck();}
+  const tiktok=page.getByRole('checkbox',{name:'Tiktok',exact:true});if(!(await tiktok.isChecked()))await tiktok.check();
+  await expect(page.getByText(/1 credits?/i).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:/Search SocialCrawl.*1 credits?/i})).toBeVisible();
+});

@@ -469,8 +469,8 @@ def filter_options(db:Session,p):
     }
 
 def capabilities():
-    return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/everywhere','auth':'x-api-key',
-      'platforms':AVAILABLE_PLATFORMS,'default_platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS),'credit_estimates':{'search_everywhere':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,'google_news':GOOGLE_NEWS_ESTIMATED_CREDITS}}
+    return {'provider':'SOCIALCRAWL','configured':bool(SOCIALCRAWL_API_KEY),'base_url':SOCIALCRAWL_BASE_URL,'endpoint':'/v1/search/multi','auth':'x-api-key',
+      'platforms':AVAILABLE_PLATFORMS,'default_platforms':DEFAULT_PLATFORMS,'filters':sorted(ALLOWED_FILTERS),'credit_estimates':{'search_everywhere':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,'native_platforms':NATIVE_PLATFORM_CREDIT_CAP,'google_news':GOOGLE_NEWS_ESTIMATED_CREDITS}}
 
 def provider_status():
     if not SOCIALCRAWL_API_KEY:

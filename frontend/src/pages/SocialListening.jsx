@@ -51,9 +51,10 @@ export default function SocialListening(){
  const regencies=(options.regencies||[]).filter(x=>x.province_code===provinceCode);
  const selectedSocialPlatforms=(filters.platforms||[]).filter(x=>x!=='online_news');
  const includesOnlineNews=(filters.platforms||[]).includes('online_news');
- const socialSearchCredits=Number(caps?.credit_estimates?.search_everywhere??20);
+ const nativeCostCaps=caps?.credit_estimates?.native_platforms||{};
+ const socialSearchCredits=selectedSocialPlatforms.reduce((sum,platform)=>sum+Number(nativeCostCaps[platform]??(platform==='linkedin'?5:1)),0);
  const onlineNewsCredits=Number(caps?.credit_estimates?.google_news??1);
- const liveEstimatedCredits=(selectedSocialPlatforms.length?socialSearchCredits:0)+(includesOnlineNews?onlineNewsCredits:0);
+ const liveEstimatedCredits=socialSearchCredits+(includesOnlineNews?onlineNewsCredits:0);
  const estimatedBalanceAfter=providerStatus?.balance!==null&&providerStatus?.balance!==undefined?Number(providerStatus.balance)-liveEstimatedCredits:null;
  const payload=()=>({...filters,include_terms:list(filters.include_terms),exclude_terms:list(filters.exclude_terms),hashtags:list(filters.hashtags),accounts:list(filters.accounts),watchlist_ids:filters.watchlist_ids||[],topics:list(filters.topics),locations:list(filters.locations),content_types:filters.content_types||[],include_sources:list(filters.include_sources),exclude_sources:list(filters.exclude_sources)});
  async function prepareSearch(custom,type='search',rule=null){setBusy(true);setError('');setSearchNotice('');setDuplicateAcknowledged(false);try{const filtersToRun=custom||payload();const r=await base44.functions.invoke('socialListening',{action:'preflight',data:{filters:filtersToRun}});setPendingSearch({type,rule,filters:filtersToRun,preflight:r.data});}catch(e){setError(e.response?.data?.error||e.message)}finally{setBusy(false)}}

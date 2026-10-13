@@ -102,6 +102,16 @@ def test_manual_selected_language_is_not_overridden_by_detection():
     assert item['original_language']=='English'
 
 
+def test_manual_validation_rejects_multiple_missing_fields_before_source_processing():
+    h=auth()
+    response=client.post('/api/functions/intelligence',json={'action':'create','data':{'source_type':'MANUAL_ENTRY','title':'','original_content':'','original_language_code':''}},headers=h)
+    assert response.status_code==400, response.text
+    assert 'Headline is required' in response.json()['detail']
+    listed=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h)
+    assert listed.status_code==200
+    assert listed.json()['items']==[]
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

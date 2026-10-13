@@ -384,10 +384,6 @@ def geography_mismatch(item):
 
 def create_intelligence(db,p,data):
     if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
-    dupe,dupe_match=duplicate_candidate(db,data)
-    identity, observed=source_identity(db,data)
-    geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))
-    source_text=clean(data.get('original_content') or data.get('description'),20000)
     if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('title'),3000).strip():
         raise ValueError('Headline is required for manual intelligence entry')
     if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('original_content'),20000).strip():
@@ -396,6 +392,10 @@ def create_intelligence(db,p,data):
         raise ValueError('Select the original source language (or Unknown) for manual intelligence entry')
     if data.get('source_type')=='MANUAL_ENTRY' and clean(data.get('original_language_code'),20).lower() not in {'id','en','jv','su','mad','min','ban','ace','bug','ms','other','unknown'}:
         raise ValueError('Select a supported original source language for manual intelligence entry')
+    dupe,dupe_match=duplicate_candidate(db,data)
+    identity, observed=source_identity(db,data)
+    geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))
+    source_text=clean(data.get('original_content') or data.get('description'),20000)
     if data.get('source_type')=='MANUAL_ENTRY':
         # Manual language selections are authoritative analyst input, including Unknown.
         selected_code=clean(data.get('original_language_code'),20).lower()

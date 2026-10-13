@@ -398,6 +398,14 @@ def create_intelligence(db,p,data):
         parsed_source=urlparse(clean(data.get('source_url'),2000))
         if parsed_source.scheme.lower() not in ('http','https') or not parsed_source.hostname:
             raise ValueError('Manual link requires a valid HTTP or HTTPS source URL')
+        if parsed_source.username is not None or parsed_source.password is not None:
+            raise ValueError('Manual link source URL must not contain embedded credentials')
+        try:
+            source_port=parsed_source.port
+        except ValueError:
+            raise ValueError('Manual link source URL has an invalid port')
+        if any(char.isspace() for char in parsed_source.netloc):
+            raise ValueError('Manual link source URL must not contain spaces')
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))

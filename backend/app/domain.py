@@ -388,6 +388,8 @@ def create_intelligence(db,p,data):
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))
     source_text=clean(data.get('original_content') or data.get('description'),20000)
+    if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('title'),3000).strip():
+        raise ValueError('Headline is required for manual intelligence entry')
     if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('original_content'),20000).strip():
         raise ValueError('Original source content is required for manual intelligence entry')
     if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('original_language_code'),20).strip():

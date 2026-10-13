@@ -395,6 +395,9 @@ def create_intelligence(db,p,data):
     if data.get('source_type')=='MANUAL_LINK' and not clean(data.get('source_url'),2000).strip():
         raise ValueError('Original source URL is required for manual link intake')
     if data.get('source_type')=='MANUAL_LINK':
+        raw_source_url=clean(data.get('source_url'),2000)
+        if any(ord(char)<32 or ord(char)==127 for char in raw_source_url):
+            raise ValueError('Manual link source URL must not contain control characters')
         parsed_source=urlparse(clean(data.get('source_url'),2000))
         if parsed_source.scheme.lower() not in ('http','https') or not parsed_source.hostname:
             raise ValueError('Manual link requires a valid HTTP or HTTPS source URL')
@@ -406,8 +409,6 @@ def create_intelligence(db,p,data):
             raise ValueError('Manual link source URL has an invalid port')
         if any(char.isspace() for char in parsed_source.netloc):
             raise ValueError('Manual link source URL must not contain spaces')
-        if any(ord(char)<32 or ord(char)==127 for char in clean(data.get('source_url'),2000)):
-            raise ValueError('Manual link source URL must not contain control characters')
         if not parsed_source.hostname.strip('.') or any(char.isspace() for char in parsed_source.hostname):
             raise ValueError('Manual link source URL has an invalid hostname')
     dupe,dupe_match=duplicate_candidate(db,data)

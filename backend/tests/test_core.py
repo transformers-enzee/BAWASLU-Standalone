@@ -153,8 +153,8 @@ def test_manual_link_rejects_embedded_credentials_and_malformed_authority():
 def test_manual_link_rejects_control_characters_and_invalid_hosts():
     h=auth()
     cases=[
-        ('https://example.org/story\\nother','control characters'),
-        ('https://example.org/story\\tother','control characters'),
+        ('https://example.org/story'+chr(10)+'other','control characters'),
+        ('https://example.org/story'+chr(9)+'other','control characters'),
         ('https://./story','invalid hostname'),
     ]
     for url,message in cases:

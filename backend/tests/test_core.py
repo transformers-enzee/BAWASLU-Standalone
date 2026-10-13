@@ -122,6 +122,17 @@ def test_manual_link_requires_source_url_before_creation():
     assert listed.json()['items']==[]
 
 
+def test_manual_link_rejects_unsupported_source_urls():
+    h=auth()
+    for url in ('javascript:alert(1)', 'ftp://example.com/post', 'not-a-url', 'https:///missing-host'):
+        response=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Invalid URL','source_type':'MANUAL_LINK','original_content':'Test evidence','source_url':url}},headers=h)
+        assert response.status_code==400, response.text
+        assert 'valid HTTP or HTTPS' in response.json()['detail']
+    listed=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h)
+    assert listed.status_code==200
+    assert listed.json()['items']==[]
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

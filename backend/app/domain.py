@@ -394,6 +394,10 @@ def create_intelligence(db,p,data):
         raise ValueError('Select a supported original source language for manual intelligence entry')
     if data.get('source_type')=='MANUAL_LINK' and not clean(data.get('source_url'),2000).strip():
         raise ValueError('Original source URL is required for manual link intake')
+    if data.get('source_type')=='MANUAL_LINK':
+        parsed_source=urlparse(clean(data.get('source_url'),2000))
+        if parsed_source.scheme.lower() not in ('http','https') or not parsed_source.hostname:
+            raise ValueError('Manual link requires a valid HTTP or HTTPS source URL')
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))

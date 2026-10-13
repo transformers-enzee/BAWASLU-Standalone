@@ -89,3 +89,16 @@ test('Social Listening date filters are mutually exclusive without provider call
   await expect(dateFrom).toHaveValue('');
   await expect(dateTo).toHaveValue('');
 });
+
+
+test('Social Listening tabs persist through browser reload without running provider searches', async ({ page }) => {
+  await page.goto('/SocialListening?tab=rules');
+  await expect(page.getByRole('button', { name: /Saved Searches/i }).first()).toBeVisible();
+  await expect(page).toHaveURL(/tab=rules/);
+  await page.reload();
+  await expect(page).toHaveURL(/tab=rules/);
+  await page.getByRole('button', { name: /Review Queue/i }).first().click();
+  await expect(page).toHaveURL(/tab=queue/);
+  await page.reload();
+  await expect(page).toHaveURL(/tab=queue/);
+});

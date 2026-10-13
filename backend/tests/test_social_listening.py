@@ -740,3 +740,31 @@ def test_promoted_language_sync_fills_missing_only():
     db.refresh(item)
     assert item.original_language_code=='id'
     db.close()
+
+
+def test_provincial_all_provinces_preflight_is_forced_to_bali_without_provider_charge():
+    db=SessionLocal(); bali=provincial_analyst(db,'Bali')
+    before=db.query(SocialListeningProviderUsage).count()
+    response=social_listening_action(db,bali,'preflight',{'filters':{'query':'BAWASLU','province':'','platforms':['online_news']}})
+    assert response['filters']['province']=='Bali'
+    assert db.query(SocialListeningProviderUsage).count()==before
+    db.close()
+
+
+def test_provincial_search_cannot_escape_bali_even_with_direct_backend_call():
+    db=SessionLocal(); bali=provincial_analyst(db,'Bali')
+    calls=[]
+    def provider(filters):
+        calls.append(filters.copy())
+        return {'success':True,'data':{'items':[]},'credits_used':0}
+    result=social_listening_action(db,bali,'search',{'filters':{'query':'BAWASLU','province':'','platforms':['online_news']}},provider_client=provider)
+    assert calls and calls[0]['province']=='Bali'
+    assert result['run']['query']['province']=='Bali'
+    assert db.query(SocialListeningProviderUsage).count()==1
+    try:
+        social_listening_action(db,bali,'search',{'filters':{'query':'BAWASLU','province':'DKI Jakarta','platforms':['online_news']}},provider_client=provider)
+        assert False,'Out-of-scope search should be rejected'
+    except PermissionError:
+        pass
+    assert len(calls)==1
+    db.close()

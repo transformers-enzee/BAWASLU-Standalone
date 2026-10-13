@@ -44,6 +44,19 @@ def test_manual_entry_requires_original_source_content_server_side():
     assert valid.json()['item']['original_content']=='Evidence supplied for manual intelligence entry.'
 
 
+def test_manual_entry_requires_explicit_source_language_server_side():
+    h=auth()
+    for missing in ('', '   '):
+        response=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'No language','source_type':'MANUAL_ENTRY','original_content':'Valid original source content','original_language_code':missing}},headers=h)
+        assert response.status_code==400, response.text
+        assert 'Select the original source language' in response.json()['detail']
+    listed=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h)
+    assert listed.status_code==200
+    assert listed.json()['items']==[]
+    valid=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Explicit unknown','source_type':'MANUAL_ENTRY','original_content':'Valid original source content','original_language_code':'unknown'}},headers=h)
+    assert valid.status_code==200, valid.text
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

@@ -390,6 +390,8 @@ def create_intelligence(db,p,data):
     source_text=clean(data.get('original_content') or data.get('description'),20000)
     if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('original_content'),20000).strip():
         raise ValueError('Original source content is required for manual intelligence entry')
+    if data.get('source_type')=='MANUAL_ENTRY' and not clean(data.get('original_language_code'),20).strip():
+        raise ValueError('Select the original source language (or Unknown) for manual intelligence entry')
     provider_meta=dict(data.get('provider_source_metadata') or {})
     selected_language=clean(data.get('original_language_code'),20).lower()
     if str(provider_meta.get('language_selection_source') or '').upper()!='ANALYST':

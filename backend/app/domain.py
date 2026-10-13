@@ -406,6 +406,10 @@ def create_intelligence(db,p,data):
             raise ValueError('Manual link source URL has an invalid port')
         if any(char.isspace() for char in parsed_source.netloc):
             raise ValueError('Manual link source URL must not contain spaces')
+        if any(ord(char)<32 or ord(char)==127 for char in clean(data.get('source_url'),2000)):
+            raise ValueError('Manual link source URL must not contain control characters')
+        if not parsed_source.hostname.strip('.') or any(char.isspace() for char in parsed_source.hostname):
+            raise ValueError('Manual link source URL has an invalid hostname')
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))

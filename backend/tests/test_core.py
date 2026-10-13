@@ -150,6 +150,19 @@ def test_manual_link_rejects_embedded_credentials_and_malformed_authority():
     assert listed.json()['items']==[]
 
 
+def test_manual_link_rejects_control_characters_and_invalid_hosts():
+    h=auth()
+    cases=[
+        ('https://example.org/story\\nother','control characters'),
+        ('https://example.org/story\\tother','control characters'),
+        ('https://./story','invalid hostname'),
+    ]
+    for url,message in cases:
+        response=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Invalid link','source_type':'MANUAL_LINK','source_url':url}},headers=h)
+        assert response.status_code==400, (url,response.text)
+        assert message in response.json()['detail']
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

@@ -68,6 +68,16 @@ def test_manual_entry_requires_nonblank_headline_server_side():
     assert response.json()['items']==[]
 
 
+def test_manual_entry_rejects_unsupported_language_code():
+    h=auth()
+    response=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Unsupported language','source_type':'MANUAL_ENTRY','original_content':'Evidence for language validation','original_language_code':'invalid-code'}},headers=h)
+    assert response.status_code==400, response.text
+    assert 'supported original source language' in response.json()['detail']
+    listed=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h)
+    assert listed.status_code==200
+    assert listed.json()['items']==[]
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

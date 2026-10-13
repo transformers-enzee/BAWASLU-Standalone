@@ -579,3 +579,41 @@ def test_sequence_preflight_is_before_provider_search(monkeypatch):
     assert called['guard']==1
     assert db.query(module.SocialListeningRun).count()==0
     db.close()
+
+
+def test_sequence_preflight_detects_next_id_collision_when_sequence_uncalled(monkeypatch):
+    from types import SimpleNamespace
+    import app.socialcrawl as module
+    db=SessionLocal()
+    class FakeExecute:
+        def one(self):
+            return SimpleNamespace(max_id=154,sequence_id=154,is_called=False)
+    class FakeDialect:
+        name='postgresql'
+    class FakeBind:
+        dialect=FakeDialect()
+    monkeypatch.setattr(db,'bind',FakeBind(),raising=False)
+    monkeypatch.setattr(db,'execute',lambda statement:FakeExecute())
+    try:
+        module.ensure_result_id_sequence_ready(db)
+        assert False,'Expected sequence guard to prevent ID collision'
+    except ValueError as exc:
+        assert 'behind existing records' in str(exc)
+    db.close()
+
+
+def test_sequence_preflight_allows_next_id_above_existing_max(monkeypatch):
+    from types import SimpleNamespace
+    import app.socialcrawl as module
+    db=SessionLocal()
+    class FakeExecute:
+        def one(self):
+            return SimpleNamespace(max_id=154,sequence_id=154,is_called=True)
+    class FakeDialect:
+        name='postgresql'
+    class FakeBind:
+        dialect=FakeDialect()
+    monkeypatch.setattr(db,'bind',FakeBind(),raising=False)
+    monkeypatch.setattr(db,'execute',lambda statement:FakeExecute())
+    module.ensure_result_id_sequence_ready(db)
+    db.close()

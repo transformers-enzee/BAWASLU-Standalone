@@ -410,10 +410,13 @@ def ensure_result_id_sequence_ready(db):
     from sqlalchemy import text
     row=db.execute(text("""
         SELECT COALESCE((SELECT MAX(id) FROM social_listening_results),0) AS max_id,
-               last_value AS sequence_id
+               last_value AS sequence_id,
+               is_called
         FROM social_listening_results_id_seq
     """)).one()
-    if row.sequence_id < row.max_id:
+    # nextval() returns last_value itself when is_called is false.
+    next_id=row.sequence_id + (1 if row.is_called else 0)
+    if next_id <= row.max_id:
         raise ValueError('Social Listening database ID sequence is behind existing records; contact administrator before a paid search')
 
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
@@ -508,11 +511,15 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         # A failed INSERT invalidates the SQLAlchemy transaction. Roll it back before
         # persisting the failure so the original database error is not masked.
         db.rollback()
-        failed_run=db.get(SocialListeningRun,run.id)
-        if failed_run is not None:
-            failed_run.status='FAILED'
-            failed_run.error_text=str(e)[:2000]
-            db.commit()
+        try:
+            failed_run=db.get(SocialListeningRun,run.id)
+            if failed_run is not None:
+                failed_run.status='FAILED'
+                failed_run.error_text=str(e)[:2000]
+                db.commit()
+        except Exception:
+            # Do not let failure logging conceal the original provider/storage error.
+            db.rollback()
         if isinstance(e,(ValueError,PermissionError)): raise
         raise ValueError(f'SocialCrawl search failed: {e}')
 

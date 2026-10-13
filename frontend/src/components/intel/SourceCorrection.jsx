@@ -19,6 +19,7 @@ const fieldLabels={
 
 const hydrateSource=x=>({...x,publication_time:x?.publication_time||(x?.publication_datetime?.includes('T')?x.publication_datetime.split('T')[1]?.slice(0,5):'')});
 const flashKey=id=>`bawaslu-source-recovery-${id}`;
+const safeSourceUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}};
 
 export default function SourceCorrection({item,onSaved,onRecordAction,canTriage}){
  const {t}=useLanguage();
@@ -70,7 +71,7 @@ export default function SourceCorrection({item,onSaved,onRecordAction,canTriage}
  return <div className="space-y-4">
   <section className="intel-card p-5 space-y-4">
    <h3 className="font-semibold">{t('source_recovery')} · {item.intelligence_id}</h3>
-   <p className="text-sm break-all">{item.source_url}</p>
+   {safeSourceUrl(item.source_url)?<a className="text-sm text-[#126d91] underline break-all" href={safeSourceUrl(item.source_url)} target="_blank" rel="noopener noreferrer">{item.source_url}</a>:<p className="text-sm break-all">{item.source_url||'Source URL not available'}</p>}
    <Notice error={error}/>
    <button type="button" className="intel-ghost" disabled={busy} onClick={retrieve}>{busy?t('retrieving'):t('retrieve_source')}</button>
    {status&&<p role="status" className="text-sm font-semibold text-[#a04724]">{status}</p>}

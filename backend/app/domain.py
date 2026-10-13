@@ -395,10 +395,18 @@ def create_intelligence(db,p,data):
     if data.get('source_type')=='MANUAL_LINK' and not clean(data.get('source_url'),2000).strip():
         raise ValueError('Original source URL is required for manual link intake')
     if data.get('source_type')=='MANUAL_LINK':
-        raw_source_url=clean(data.get('source_url'),2000)
+        supplied_url=data.get('source_url')
+        raw_source_url=clean(supplied_url,2000)
+        if isinstance(supplied_url,str) and len(supplied_url.strip())>2000:
+            raise ValueError('Manual link source URL exceeds maximum length')
         if any(ord(char)<32 or ord(char)==127 for char in raw_source_url):
             raise ValueError('Manual link source URL must not contain control characters')
-        parsed_source=urlparse(clean(data.get('source_url'),2000))
+        if any(char.isspace() for char in raw_source_url):
+            raise ValueError('Manual link source URL must not contain whitespace')
+        try:
+            parsed_source=urlparse(raw_source_url)
+        except ValueError:
+            raise ValueError('Manual link requires a valid HTTP or HTTPS source URL')
         if parsed_source.scheme.lower() not in ('http','https') or not parsed_source.hostname:
             raise ValueError('Manual link requires a valid HTTP or HTTPS source URL')
         if parsed_source.username is not None or parsed_source.password is not None:
@@ -411,6 +419,10 @@ def create_intelligence(db,p,data):
             raise ValueError('Manual link source URL must not contain spaces')
         if not parsed_source.hostname.strip('.') or any(char.isspace() for char in parsed_source.hostname):
             raise ValueError('Manual link source URL has an invalid hostname')
+        if parsed_source.hostname.startswith('.') or '..' in parsed_source.hostname:
+            raise ValueError('Manual link source URL has an invalid hostname')
+        if parsed_source.netloc.endswith(':'):
+            raise ValueError('Manual link source URL has an invalid port')
     dupe,dupe_match=duplicate_candidate(db,data)
     identity, observed=source_identity(db,data)
     geo=normalize_jurisdiction(data,require_valid=bool(data.get('confirm_jurisdiction') or data.get('jurisdiction_confirmed')))

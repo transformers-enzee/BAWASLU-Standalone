@@ -173,6 +173,24 @@ def test_socialcrawl_utc_helper_preserves_naive_utc_database_contract():
     assert before <= current <= after
 
 
+def test_manual_link_batch_rejects_unsafe_url_variants():
+    h=auth()
+    cases=[
+        ('https://example.org/p ath','whitespace'),
+        ('https://example.org/space\\tinside','control characters'),
+        ('https://example.org/story\\nnext','control characters'),
+        ('https://example.org/path '+('x'*2001),'maximum length'),
+        ('https://.example.org/story','invalid hostname'),
+        ('https://example..org/story','invalid hostname'),
+        ('https://example.org:/story','invalid port'),
+        ('https://[broken-ipv6/story','valid HTTP or HTTPS'),
+    ]
+    for url,detail in cases:
+        response=client.post('/api/functions/intelligence',json={'action':'create','data':{'source_type':'MANUAL_LINK','title':'Rejected source','source_url':url}},headers=h)
+        assert response.status_code==400, (url,response.text)
+        assert detail in response.json()['detail']
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

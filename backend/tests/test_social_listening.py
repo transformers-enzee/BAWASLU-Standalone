@@ -773,7 +773,11 @@ def test_provincial_search_cannot_escape_bali_even_with_direct_backend_call():
 def test_second_provincial_analyst_cannot_access_another_users_saved_search():
     db=SessionLocal()
     owner=provincial_analyst(db,'Bali')
-    other=provincial_analyst(db,'Bali')
+    other_user=User(email='analyst-two@sl.local',full_name='Second Provincial Analyst',password_hash=hash_password('secret'))
+    db.add(other_user); db.flush()
+    db.add(AccessGrant(user_id=other_user.id,access_role='Provincial Analyst',geographic_scope='Province',province='Bali',permissions_json=json.dumps(default_permissions('Provincial Analyst')),status='Active'))
+    db.commit()
+    other=profile(db,other_user)
     national=admin(db)
     rule=social_listening_action(db,owner,'saveRule',{'name':'Bali private QA','filters':{'query':'BAWASLU Bali','platforms':['online_news']}})['rule']
     rid=rule['id']

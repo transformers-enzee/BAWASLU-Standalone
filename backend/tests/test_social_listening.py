@@ -768,3 +768,29 @@ def test_provincial_search_cannot_escape_bali_even_with_direct_backend_call():
         pass
     assert len(calls)==1
     db.close()
+
+
+def test_second_provincial_analyst_cannot_access_another_users_saved_search():
+    db=SessionLocal()
+    owner=provincial_analyst(db,'Bali')
+    other=provincial_analyst(db,'Bali')
+    national=admin(db)
+    rule=social_listening_action(db,owner,'saveRule',{'name':'Bali private QA','filters':{'query':'BAWASLU Bali','platforms':['online_news']}})['rule']
+    rid=rule['id']
+    assert all(x['id']!=rid for x in social_listening_action(db,other,'rules',{})['rules'])
+    assert any(x['id']==rid for x in social_listening_action(db,owner,'rules',{})['rules'])
+    assert any(x['id']==rid for x in social_listening_action(db,national,'rules',{})['rules'])
+    attempts=[
+      ('saveRule',{'name':'Unauthorized edit','filters':{'query':'other','platforms':['online_news']}}),
+      ('deleteRule',{}),
+      ('runRule',{}),
+      ('toggleRule',{'enabled':False}),
+    ]
+    for action,data in attempts:
+        try:
+            social_listening_action(db,other,action,data,id=rid)
+            assert False, f'{action} should reject a non-owner'
+        except PermissionError:
+            pass
+    assert any(x['id']==rid for x in social_listening_action(db,owner,'rules',{})['rules'])
+    db.close()

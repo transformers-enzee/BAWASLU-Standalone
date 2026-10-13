@@ -20,6 +20,7 @@ DEFAULT_PLATFORMS=list(SOCIAL_PLATFORMS)
 SUPPORTED_EVERYWHERE_SOURCES=set(SOCIAL_PLATFORMS + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
 SEARCH_EVERYWHERE_ESTIMATED_CREDITS=20
 GOOGLE_NEWS_ESTIMATED_CREDITS=1
+NATIVE_PLATFORM_CREDIT_CAP={'tiktok':1,'instagram':1,'youtube':1,'reddit':1,'threads':1,'linkedin':5,'twitter-ai-search':1}
 
 ALLOWED_FILTERS={
  'query','exact_phrase','include_terms','exclude_terms','hashtags','accounts','watchlist_ids','issue_category','topics','locations',
@@ -136,8 +137,9 @@ def estimate_search_cost(filters):
     components=[]
     total=0
     if social_sources:
-        total+=SEARCH_EVERYWHERE_ESTIMATED_CREDITS
-        components.append({'endpoint':'/v1/search/everywhere','credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,'label':'Universal social search'})
+        native_cost=sum(NATIVE_PLATFORM_CREDIT_CAP[x] for x in social_sources)
+        total+=native_cost
+        components.append({'endpoint':'/v1/search/multi','credits':native_cost,'label':'Native social search: '+', '.join(social_sources)})
     if wants_news:
         total+=GOOGLE_NEWS_ESTIMATED_CREDITS
         components.append({'endpoint':'/v1/google_news/search','credits':GOOGLE_NEWS_ESTIMATED_CREDITS,'label':'Online News'})
@@ -224,6 +226,17 @@ def _provider_params(filters):
         if f.get('date_to'): params['to_date']=f['date_to']
     elif f.get('lookback_days'):
         params['lookback_days']=f['lookback_days']
+    if f.get('minimum_relevance') not in (None,''):
+        params['relevance']='filter'
+        params['relevance_threshold']=f['minimum_relevance']
+    return params
+
+def _multi_provider_params(filters):
+    f=_normalize_filters(filters)
+    selected=[x for x in f['platforms'] if x!='online_news']
+    if not selected: raise ValueError('Select at least one social platform')
+    params={'query':_query_text(f),'platforms':','.join('x' if x=='twitter-ai-search' else x for x in selected)}
+    if f.get('date_from'): params['since']=f['date_from']
     if f.get('minimum_relevance') not in (None,''):
         params['relevance']='filter'
         params['relevance_threshold']=f['minimum_relevance']
@@ -512,7 +525,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
     selected=f.get('platforms') or DEFAULT_PLATFORMS
     wants_news='online_news' in selected
     social_sources=[x for x in selected if x!='online_news']
-    endpoint='/v1/search/everywhere + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/everywhere'
+    endpoint='/v1/search/multi + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/multi'
     try:
         if provider_client:
             envelope=provider_client(f)
@@ -536,7 +549,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                     return env
             if social_sources:
                 sf=dict(f); sf['platforms']=social_sources
-                envelopes.append(call_provider('/v1/search/everywhere',_provider_params(sf)))
+                envelopes.append(call_provider('/v1/search/multi',_multi_provider_params(sf)))
             if wants_news:
                 news_env=call_provider('/v1/google_news/search',_news_params(f))
                 news_items=_extract_items(news_env)

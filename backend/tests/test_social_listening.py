@@ -155,17 +155,17 @@ def test_result_limit_is_enforced_after_filtering():
 def test_cost_preflight_estimates_social_and_news_and_warns_on_repeat():
     from app.socialcrawl import estimate_search_cost
     social=estimate_search_cost({'query':'BAWASLU','platforms':['tiktok'],'limit':2})
-    assert social['estimated_credits']==20
+    assert social['estimated_credits']==1
     assert social['result_limit_affects_cost'] is False
     mixed=estimate_search_cost({'query':'BAWASLU','platforms':['tiktok','online_news']})
-    assert mixed['estimated_credits']==21
+    assert mixed['estimated_credits']==2
     news=estimate_search_cost({'query':'BAWASLU','platforms':['online_news']})
     assert news['estimated_credits']==1
 
     db=SessionLocal(); p=admin(db)
     social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['tiktok']}},provider_client=fake_provider)
     pf=social_listening_action(db,p,'preflight',{'filters':{'query':'BAWASLU','platforms':['tiktok']}})
-    assert pf['estimated_credits']==20
+    assert pf['estimated_credits']==1
     assert pf['duplicate_recent'] is not None
     assert pf['duplicate_recent']['credits_used']==20
     db.close()
@@ -798,3 +798,12 @@ def test_second_provincial_analyst_cannot_access_another_users_saved_search():
             pass
     assert any(x['id']==rid for x in social_listening_action(db,owner,'rules',{})['rules'])
     db.close()
+
+
+def test_native_multi_route_estimate_and_parameters():
+    from app.socialcrawl import estimate_search_cost, _multi_provider_params
+    assert estimate_search_cost({'query':'BAWASLU','platforms':['tiktok']})['estimated_credits']==1
+    assert estimate_search_cost({'query':'BAWASLU','platforms':['tiktok','instagram','youtube']})['estimated_credits']==3
+    assert estimate_search_cost({'query':'BAWASLU','platforms':['linkedin','tiktok']})['estimated_credits']==6
+    assert estimate_search_cost({'query':'BAWASLU','platforms':['tiktok','online_news']})['estimated_credits']==2
+    assert _multi_provider_params({'query':'BAWASLU','platforms':['tiktok']})=={'query':'BAWASLU','platforms':'tiktok'}

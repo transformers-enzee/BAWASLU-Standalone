@@ -75,7 +75,7 @@ test('fixed validation card selector uses exact intelligence code',async({page,r
   const adminToken=await loginToken(request,ADMIN_EMAIL,ADMIN_PASSWORD);
   const created=await intelligence(request,adminToken,'create',{
     title:'Playwright Fixed Validation Record',original_content:'Synthetic local QA evidence only.',
-    source_type:'MANUAL_ENTRY',evidence_type:'OBSERVED',verification_status:'UNVERIFIED',
+    source_type:'MANUAL_ENTRY',original_language_code:'en',evidence_type:'OBSERVED',verification_status:'UNVERIFIED',
     review_status:'Pending Review',priority:'Medium',jurisdiction_type:'Unresolved'
   });
   const record=(await created.json()).item;

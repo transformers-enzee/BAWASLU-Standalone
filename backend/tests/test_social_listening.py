@@ -660,3 +660,27 @@ def test_online_news_provider_declared_language_has_priority():
 def test_online_news_unknown_language_is_not_guessed_without_evidence():
     from app.socialcrawl import _news_language
     assert _news_language({},'KPU Bawaslu','', '', 'https://example.org/article')==''
+
+
+def test_online_news_full_article_body_takes_priority_over_headline():
+    from app.socialcrawl import _map_result
+    db=SessionLocal()
+    row=_map_result(db,{'platform':'online_news','title':'Headline only','snippet':'Summary only','article_text':'Verified publisher-provided full text of the article.','url':'https://example.org/story'},default_platform='online_news')
+    assert row['text_content']=='Verified publisher-provided full text of the article.'
+    db.close()
+
+
+def test_online_news_nested_body_is_mapped_without_dict_stringification():
+    from app.socialcrawl import _map_result
+    db=SessionLocal()
+    row=_map_result(db,{'platform':'online_news','title':'Headline','body':{'text':'Article body supplied by provider'},'url':'https://example.org/nested'},default_platform='online_news')
+    assert row['text_content']=='Article body supplied by provider'
+    db.close()
+
+
+def test_online_news_headline_only_remains_headline_only():
+    from app.socialcrawl import _map_result
+    db=SessionLocal()
+    row=_map_result(db,{'platform':'online_news','title':'Only the headline','url':'https://example.org/headline'},default_platform='online_news')
+    assert row['text_content']=='Only the headline'
+    db.close()

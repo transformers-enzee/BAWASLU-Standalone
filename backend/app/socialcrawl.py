@@ -348,10 +348,18 @@ def _map_result(db,item,default_platform=''):
     handle=str(_value(article,'post.author.username','source_items.0.author','author.username','author.handle','handle','username','owner.username',default=''))
     title=str(_value(article,'title','headline','post.title',default=''))
     snippet=str(_value(article,'snippet','summary','description','content_snippet','excerpt',default=''))
-    raw_text=_value(article,'post.content.text','content.text','text','content','caption','description','body',default='')
-    text=str(raw_text) if isinstance(raw_text,(str,int,float)) else ''
+    # Prefer actual article body when supplied; Google News often returns only
+    # title/snippet. Never invent missing full-text content.
+    if default_platform=='online_news':
+        raw_text=_value(article,'full_text','fullText','article_text','articleText','body.text','body','content.text','content','text',default='')
+    else:
+        raw_text=_value(article,'post.content.text','content.text','text','content','caption','description','body',default='')
+    text=str(raw_text).strip() if isinstance(raw_text,(str,int,float)) else ''
     if not text:
         text=' — '.join(x for x in [title,snippet] if x)
+    if default_platform=='online_news' and not text:
+        text=title
+
     platform=str(_value(article,'platform','network',default=default_platform or ''))
     rid=str(_value(article,'post.id','id','article_id','articleId','post_id','video_id','shortcode',default=''))
     language=str(_value(article,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default=''))

@@ -788,7 +788,7 @@ def test_second_provincial_analyst_cannot_access_another_users_saved_search():
       ('saveRule',{'name':'Unauthorized edit','filters':{'query':'other','platforms':['online_news']}}),
       ('deleteRule',{}),
       ('runRule',{}),
-      ('toggleRule',{'enabled':False}),
+      ('saveRule',{'name':'Unauthorized pause','enabled':False,'filters':{'query':'BAWASLU','platforms':['online_news']}}),
     ]
     for action,data in attempts:
         try:

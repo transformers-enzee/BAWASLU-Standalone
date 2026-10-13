@@ -417,7 +417,12 @@ def ensure_result_id_sequence_ready(db):
     # nextval() returns last_value itself when is_called is false.
     next_id=row.sequence_id + (1 if row.is_called else 0)
     if next_id <= row.max_id:
-        raise ValueError('Social Listening database ID sequence is behind existing records; contact administrator before a paid search')
+        # Only report safe numeric diagnostics; never disclose DB credentials.
+        raise ValueError(
+            f'Social Listening database ID sequence is behind existing records '
+            f'(next_id={next_id}, max_id={row.max_id}, last_value={row.sequence_id}, '
+            f'is_called={row.is_called}); contact administrator before a paid search'
+        )
 
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')

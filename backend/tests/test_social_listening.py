@@ -598,7 +598,8 @@ def test_sequence_preflight_detects_next_id_collision_when_sequence_uncalled(mon
         module.ensure_result_id_sequence_ready(db)
         assert False,'Expected sequence guard to prevent ID collision'
     except ValueError as exc:
-        assert 'behind existing records' in str(exc)
+        assert 'next_id=154' in str(exc)
+        assert 'max_id=154' in str(exc)
     db.close()
 
 

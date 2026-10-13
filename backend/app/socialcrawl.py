@@ -8,6 +8,10 @@ from .access import has, audit, allowed
 from .domain import source_identity, create_intelligence
 from .geography import normalize_assignment, province_code_for, regency_code_for
 
+def utc_now_naive():
+    # Existing database timestamps use naive UTC; preserve storage and comparison semantics.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
 SOCIAL_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin']
@@ -147,7 +151,7 @@ def search_preflight(db:Session,p,filters):
     scoped=_scope_filters(p,filters)
     estimate=estimate_search_cost(scoped)
     fingerprint=_filter_fingerprint(estimate['filters'])
-    cutoff=datetime.utcnow()-timedelta(minutes=10)
+    cutoff=utc_now_naive()-timedelta(minutes=10)
     recent_q=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff)
     if p.get('role')!='National Administrator':
         recent_q=recent_q.filter(SocialListeningRun.executed_by==p['id'])
@@ -156,7 +160,7 @@ def search_preflight(db:Session,p,filters):
     for run in recent:
         try:
             if _filter_fingerprint(json.loads(run.query_json or '{}'))==fingerprint:
-                age=max(0,int((datetime.utcnow()-run.executed_at).total_seconds()))
+                age=max(0,int((utc_now_naive()-run.executed_at).total_seconds()))
                 duplicate={'run_id':str(run.id),'executed_at':run.executed_at.isoformat(),'seconds_ago':age,'credits_used':run.credits_used,'result_count':run.result_count,'cached':run.cached}
                 break
         except Exception:
@@ -170,7 +174,7 @@ def usage_summary(db:Session,p):
     if visibility_scope=='self':
         q=q.filter(SocialListeningProviderUsage.user_id==p['id'])
     rows=q.order_by(SocialListeningProviderUsage.created_at.desc()).limit(100).all()
-    cutoff=datetime.utcnow()-timedelta(hours=24)
+    cutoff=utc_now_naive()-timedelta(hours=24)
     recent=[x for x in rows if x.created_at>=cutoff]
     user_ids={str(x.user_id) for x in rows if x.user_id}
     names={}
@@ -542,7 +546,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
         rule.description=str(data.get('description') or '').strip()
         rule.enabled=bool(data.get('enabled',True))
         rule.filters_json=_json(_scope_filters(p,data.get('filters') or {}))
-        rule.updated_at=datetime.utcnow()
+        rule.updated_at=utc_now_naive()
         db.commit(); db.refresh(rule)
         audit(db,p,'SocialListeningRule',rule.id,'SOCIAL_LISTENING_RULE_SAVED',{'name':{'old':previous_name,'new':rule.name},'enabled':{'new':rule.enabled}})
         return {'rule':_rule_view(db,p,rule)}

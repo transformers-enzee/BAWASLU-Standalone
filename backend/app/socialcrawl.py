@@ -403,10 +403,25 @@ def provider_status():
     except Exception as e:
         return {'provider':'SOCIALCRAWL','configured':True,'connected':False,'balance':None,'message':str(e)}
 
+def ensure_result_id_sequence_ready(db):
+    """Fail before calling a paid provider if PostgreSQL cannot allocate new result IDs."""
+    if db.bind.dialect.name!='postgresql':
+        return
+    from sqlalchemy import text
+    row=db.execute(text("""
+        SELECT COALESCE((SELECT MAX(id) FROM social_listening_results),0) AS max_id,
+               last_value AS sequence_id
+        FROM social_listening_results_id_seq
+    """)).one()
+    if row.sequence_id < row.max_id:
+        raise ValueError('Social Listening database ID sequence is behind existing records; contact administrator before a paid search')
+
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_scope_filters(p,filters)
     estimate=estimate_search_cost(f)
+    if provider_client is None and estimate['estimated_credits']>0 and confirmed_cost:
+        ensure_result_id_sequence_ready(db)
     if provider_client is None and estimate['estimated_credits']>0 and not confirmed_cost:
         raise ValueError(f"COST_CONFIRMATION_REQUIRED: estimated maximum {estimate['estimated_credits']} SocialCrawl credits")
     run=SocialListeningRun(rule_id=rule_id,query_json=_json(f),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)

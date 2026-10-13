@@ -554,3 +554,28 @@ def test_social_search_flush_failure_records_failed_run(monkeypatch):
     assert 'duplicate key' in runs[0].error_text
     assert db.query(SocialListeningResult).count()==0
     db.close()
+
+
+def test_sequence_preflight_is_safe_for_sqlite():
+    from app.socialcrawl import ensure_result_id_sequence_ready
+    db=SessionLocal()
+    ensure_result_id_sequence_ready(db)
+    db.close()
+
+
+def test_sequence_preflight_is_before_provider_search(monkeypatch):
+    import app.socialcrawl as module
+    db=SessionLocal(); p=admin(db)
+    called={'guard':0}
+    def guard(session):
+        called['guard']+=1
+        raise ValueError('Social Listening database ID sequence is behind existing records')
+    monkeypatch.setattr(module,'ensure_result_id_sequence_ready',guard)
+    try:
+        module.execute_search(db,p,{'query':'BAWASLU','platforms':['online_news']},confirmed_cost=True)
+        assert False, 'Expected paid search to be blocked'
+    except ValueError as exc:
+        assert 'behind existing records' in str(exc)
+    assert called['guard']==1
+    assert db.query(module.SocialListeningRun).count()==0
+    db.close()

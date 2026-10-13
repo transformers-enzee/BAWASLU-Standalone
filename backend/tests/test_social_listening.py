@@ -527,3 +527,30 @@ def test_google_news_source_object_is_supported():
     r=social_listening_action(db,p,'search',{'filters':{'query':'iphone','platforms':['online_news']}},provider_client=provider)
     assert r['results'][0]['author_name']=='Object News'
     db.close()
+
+
+def test_social_search_flush_failure_records_failed_run(monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import Session as SASession
+    from app.models import SocialListeningRun
+    db=SessionLocal(); p=admin(db)
+    original_flush=SASession.flush
+    state={'raised':False}
+    def fail_once(self,*args,**kwargs):
+        if self is db and not state['raised'] and any(isinstance(obj,SocialListeningResult) for obj in self.new):
+            state['raised']=True
+            raise IntegrityError('INSERT social_listening_results',{},Exception('duplicate key'))
+        return original_flush(self,*args,**kwargs)
+    monkeypatch.setattr(SASession,'flush',fail_once)
+    try:
+        social_listening_action(db,p,'search',{'filters':{'query':'election','platforms':['tiktok']}},provider_client=fake_provider)
+        assert False, 'Expected controlled provider persistence error'
+    except ValueError as exc:
+        assert 'duplicate key' in str(exc)
+    assert state['raised']
+    runs=db.query(SocialListeningRun).all()
+    assert len(runs)==1
+    assert runs[0].status=='FAILED'
+    assert 'duplicate key' in runs[0].error_text
+    assert db.query(SocialListeningResult).count()==0
+    db.close()

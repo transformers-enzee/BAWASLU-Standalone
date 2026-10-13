@@ -490,7 +490,14 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})
         return {'run':serialize_run(run),'results':mapped,'provider':capabilities(),'diagnostics':diagnostics}
     except Exception as e:
-        run.status='FAILED'; run.error_text=str(e); db.commit()
+        # A failed INSERT invalidates the SQLAlchemy transaction. Roll it back before
+        # persisting the failure so the original database error is not masked.
+        db.rollback()
+        failed_run=db.get(SocialListeningRun,run.id)
+        if failed_run is not None:
+            failed_run.status='FAILED'
+            failed_run.error_text=str(e)[:2000]
+            db.commit()
         if isinstance(e,(ValueError,PermissionError)): raise
         raise ValueError(f'SocialCrawl search failed: {e}')
 

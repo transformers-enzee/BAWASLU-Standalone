@@ -30,6 +30,20 @@ def test_create_and_list_intelligence_preserves_source_identity_fields():
     item=r.json()['item']; assert item['intelligence_id'].startswith('INT-'); assert item['observed_publisher_handle']=='@publisher'; assert item['source_identity']['status']=='KNOWN_EXTERNAL_ACCOUNT'; assert item['jurisdiction_confirmed'] is True
     r=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h); assert len(r.json()['items'])==1
 
+def test_manual_entry_requires_original_source_content_server_side():
+    h=auth()
+    for missing in ('', '   '):
+        response=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Missing source test','source_type':'MANUAL_ENTRY','original_language_code':'id','original_content':missing}},headers=h)
+        assert response.status_code==400, response.text
+        assert 'Original source content is required' in response.json()['detail']
+    result=client.post('/api/functions/intelligence',json={'action':'list','data':{}},headers=h)
+    assert result.status_code==200
+    assert result.json()['items']==[]
+    valid=client.post('/api/functions/intelligence',json={'action':'create','data':{'title':'Valid source test','source_type':'MANUAL_ENTRY','original_language_code':'id','original_content':'Evidence supplied for manual intelligence entry.'}},headers=h)
+    assert valid.status_code==200,valid.text
+    assert valid.json()['item']['original_content']=='Evidence supplied for manual intelligence entry.'
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

@@ -11,6 +11,7 @@ from .geography import normalize_jurisdiction
 from .openai_triage import openai_triage_configured, generate_openai_triage, OpenAITriageError
 
 def now(): return datetime.now(timezone.utc).isoformat()
+def utc_now_naive(): return datetime.now(timezone.utc).replace(tzinfo=None)
 def jdump(v): return json.dumps(v,ensure_ascii=False)
 def clean(v,n=5000): return (v.strip()[:n] if isinstance(v,str) else '')
 
@@ -523,7 +524,7 @@ def apply_source_recovery(item,retrieved):
         changes['publication_datetime']={'previous':old,'new':combined}
         recovered.append('publication_datetime')
 
-    item.updated_at=datetime.utcnow()
+    item.updated_at=utc_now_naive()
     return changes,recovered
 
 def list_intelligence(db,p): return [x for x in db.query(IntelligenceItem).order_by(IntelligenceItem.created_at.desc()).limit(500).all() if allowed(p,x)]
@@ -575,7 +576,7 @@ def intelligence_action(db,p,action,data,id=None):
         geo=normalize_jurisdiction(data,require_valid=True)
         if geo['jurisdiction_type']=='Unresolved': raise ValueError('Unresolved jurisdiction cannot be confirmed')
         before=_jurisdiction_payload(item)
-        item.jurisdiction_type=geo['jurisdiction_type']; item.province=geo['province']; item.regency_city=geo['regency_city']; item.province_code=geo['province_code']; item.regency_city_code=geo['regency_city_code']; item.geographic_assignments_json=jdump(geo['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=datetime.utcnow()
+        item.jurisdiction_type=geo['jurisdiction_type']; item.province=geo['province']; item.regency_city=geo['regency_city']; item.province_code=geo['province_code']; item.regency_city_code=geo['regency_city_code']; item.geographic_assignments_json=jdump(geo['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='HUMAN_CONFIRMATION'; item.updated_at=utc_now_naive()
         if _jurisdiction_signature(normalize_jurisdiction(before,require_valid=False))!=_jurisdiction_signature(geo):
             item.geographic_mismatch_review_json='{}'
         db.commit(); audit(db,p,'IntelligenceItem',item.id,'JURISDICTION_CONFIRMED',{'previous':before,'new':geo}); return {'ok':True}
@@ -597,7 +598,7 @@ def intelligence_action(db,p,action,data,id=None):
             if after.get('jurisdiction_type')=='Unresolved': raise ValueError('Changed jurisdiction must be resolved')
             item.jurisdiction_type=after['jurisdiction_type']; item.province=after['province']; item.regency_city=after['regency_city']; item.province_code=after['province_code']; item.regency_city_code=after['regency_city_code']; item.geographic_assignments_json=jdump(after['geographic_assignments']); item.jurisdiction_confirmed=True; item.jurisdiction_confirmed_by=p['name']; item.jurisdiction_confirmed_at=now(); item.jurisdiction_source='GEOGRAPHIC_MISMATCH_REVIEW'
         review={'decision':decision,'reason':reason,'reviewed_by':p['name'],'reviewed_at':now(),'fingerprint':current.get('fingerprint'),'previous':before,'resulting_jurisdiction':after,'proposed':current.get('proposed') or {}}
-        item.geographic_mismatch_review_json=jdump(review); item.updated_at=datetime.utcnow(); db.commit()
+        item.geographic_mismatch_review_json=jdump(review); item.updated_at=utc_now_naive(); db.commit()
         audit(db,p,'IntelligenceItem',item.id,'GEOGRAPHIC_MISMATCH_REVIEWED',{'decision':{'new':decision},'reason':{'new':reason},'previous_jurisdiction':{'previous':before},'resulting_jurisdiction':{'new':after},'fingerprint':{'new':current.get('fingerprint')}}); return {'ok':True}
     if action=='update':
         if not has(p,'edit_intelligence'): raise PermissionError('Not permitted')
@@ -616,7 +617,7 @@ def intelligence_action(db,p,action,data,id=None):
             item.provider_source_metadata_json=jdump(metadata)
             item.original_language=language_label(item.original_language_code) if item.original_language_code else ''
             changes['language_selection_source']={'new':'ANALYST'}
-        item.updated_at=datetime.utcnow(); db.commit();
+        item.updated_at=utc_now_naive(); db.commit();
         if changes: audit(db,p,'IntelligenceItem',item.id,'EDITED',changes)
         return {'ok':True}
     if action=='verifyEvidence':
@@ -688,7 +689,7 @@ def intelligence_action(db,p,action,data,id=None):
         field_names=[k for k in proposal.keys() if not k.startswith('_')]
         generated_at=now()
         g=TriageGeneration(triage_run_id=run_id,intelligence_item_id=item.id,initiated_by_id=p['id'],source_fingerprint=source_fp,proposal_fingerprint=prop_fp,triage_schema_version=3,generator=generator,generator_version=generator_version,service_action='runTriage',attempt_started_at=attempt_started,attempt_ended_at=generated_at,generated_at=generated_at,validation_outcome=validation_outcome,proposal_field_names_json=jdump(field_names))
-        db.add(g); item.ai_suggestions_json=jdump(proposal); item.updated_at=datetime.utcnow(); db.commit()
+        db.add(g); item.ai_suggestions_json=jdump(proposal); item.updated_at=utc_now_naive(); db.commit()
         review_state=triage_review_status(item)
         generation={'triage_run_id':run_id,'triage_schema_version':3,'generator':generator,'generator_version':generator_version,'service_action':'runTriage','generated_at':g.generated_at,'validation_outcome':validation_outcome,'proposal_field_names':field_names,'source_cleaning':source_view['cleaning'],'language_resolution':language_resolution}
         if provider_meta:
@@ -709,7 +710,7 @@ def intelligence_action(db,p,action,data,id=None):
         decisions=stored.setdefault('_decisions',{})
         previous=decisions.get(key)
         decisions[key]={'status':status,'value':value,'reason':reason,'reviewer':p['name'],'reviewer_id':p['id'],'decided_at':now()}
-        item.ai_suggestions_json=jdump(stored); item.updated_at=datetime.utcnow(); db.commit()
+        item.ai_suggestions_json=jdump(stored); item.updated_at=utc_now_naive(); db.commit()
         current=triage_review_status(item)
         approved=human_approved_triage(item)
         audit(db,p,'IntelligenceItem',item.id,'AI_SUGGESTION_DECIDED',{key:{'previous':previous,'new':decisions[key]},'triage_review':{'new':current},'human_approved_triage':{'new':approved}})

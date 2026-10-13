@@ -191,6 +191,16 @@ def test_manual_link_batch_rejects_unsafe_url_variants():
         assert detail in response.json()['detail']
 
 
+def test_domain_utc_helper_preserves_naive_database_timestamps():
+    from datetime import datetime, timezone, timedelta
+    from app.domain import utc_now_naive
+    before=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(seconds=1)
+    current=utc_now_naive()
+    after=datetime.now(timezone.utc).replace(tzinfo=None)+timedelta(seconds=1)
+    assert current.tzinfo is None
+    assert before <= current <= after
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

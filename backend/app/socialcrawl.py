@@ -335,6 +335,26 @@ def _news_language(article, title, snippet, text, url):
         return detection['code']
     return publisher_language or ''
 
+def recover_existing_news_languages(db):
+    """Fill missing Online News language from stored evidence only; never touch raw evidence."""
+    rows=db.query(SocialListeningResult).filter(SocialListeningResult.platform=='online_news',SocialListeningResult.language.in_(['', 'unknown', 'Unknown'])).all()
+    changed=0
+    for row in rows:
+        try:
+            raw=json.loads(row.raw_payload_json or '{}')
+            article=_news_article_payload(raw)
+            title=str(_value(article,'title','headline',default='') or '')
+            snippet=str(_value(article,'snippet','summary','description',default='') or '')
+            language=_news_language(article,title,snippet,row.text_content or '',row.canonical_url or '')
+            if language:
+                row.language=language
+                changed+=1
+        except (TypeError,ValueError):
+            continue
+    if changed:
+        db.commit()
+    return changed
+
 def _map_result(db,item,default_platform=''):
     # SocialCrawl's normalized search rows are post-shaped:
     # post.content.text, post.author, post.engagement, post.published_at,

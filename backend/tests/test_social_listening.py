@@ -684,3 +684,36 @@ def test_online_news_headline_only_remains_headline_only():
     row=_map_result(db,{'platform':'online_news','title':'Only the headline','url':'https://example.org/headline'},default_platform='online_news')
     assert row['text_content']=='Only the headline'
     db.close()
+
+
+def test_historical_news_language_recovery_preserves_original_evidence_and_review():
+    from app.socialcrawl import recover_existing_news_languages
+    db=SessionLocal(); p=admin(db)
+    provider=lambda f:{'data':{'items':[{'id':'historical-tempo-qa','platform':'online_news','title':'KPU, Bawaslu Reported to Ethics Council over Gibran Rules','url':'https://en.tempo.co/read/98765/qa'}]}}
+    result=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['online_news']}},provider_client=provider)
+    row=db.get(SocialListeningResult,int(result['results'][0]['id']))
+    original=row.raw_payload_json
+    row.language=''
+    row.review_state='RELEVANT'
+    db.commit()
+    assert recover_existing_news_languages(db)==1
+    db.refresh(row)
+    assert row.language=='en'
+    assert row.review_state=='RELEVANT'
+    assert row.raw_payload_json==original
+    assert recover_existing_news_languages(db)==0
+    db.close()
+
+
+def test_historical_news_recovery_does_not_guess_unknown_sources():
+    from app.socialcrawl import recover_existing_news_languages
+    db=SessionLocal(); p=admin(db)
+    provider=lambda f:{'data':{'items':[{'id':'historical-unknown-qa','platform':'online_news','title':'KPU Bawaslu','url':'https://example.org/98765'}]}}
+    result=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['online_news']}},provider_client=provider)
+    row=db.get(SocialListeningResult,int(result['results'][0]['id']))
+    row.language=''
+    db.commit()
+    assert recover_existing_news_languages(db)==0
+    db.refresh(row)
+    assert row.language==''
+    db.close()

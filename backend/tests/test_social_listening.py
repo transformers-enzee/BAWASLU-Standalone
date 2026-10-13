@@ -717,3 +717,26 @@ def test_historical_news_recovery_does_not_guess_unknown_sources():
     db.refresh(row)
     assert row.language==''
     db.close()
+
+
+def test_promoted_language_sync_fills_missing_only():
+    from app.socialcrawl import sync_promoted_news_languages
+    db=SessionLocal(); p=admin(db)
+    provider=lambda f:{'data':{'items':[{'id':'sync-lang-1','platform':'online_news','title':'KPU Bawaslu Reported','url':'https://en.tempo.co/read/sync-lang-1'}]}}
+    found=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['online_news']}},provider_client=provider)
+    row=db.get(SocialListeningResult,int(found['results'][0]['id']))
+    item=IntelligenceItem(intelligence_id='INT-SYNC-01',title=row.text_content,original_content=row.text_content,source_type='SOCIAL_LISTENING',original_language='Undetermined',original_language_code='')
+    db.add(item);db.flush()
+    row.promoted_intelligence_id=item.id
+    db.commit()
+    assert sync_promoted_news_languages(db)==1
+    db.refresh(item)
+    assert item.original_language=='English'
+    assert item.original_language_code=='en'
+    item.original_language='Bahasa Indonesia'
+    item.original_language_code='id'
+    db.commit()
+    assert sync_promoted_news_languages(db)==0
+    db.refresh(item)
+    assert item.original_language_code=='id'
+    db.close()

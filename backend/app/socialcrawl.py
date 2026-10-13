@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import httpx
 from sqlalchemy.orm import Session
-from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IssueCategory, WatchlistItem, User
+from .models import SocialListeningRule, SocialListeningRun, SocialListeningResult, SocialListeningProviderUsage, IntelligenceItem, IssueCategory, WatchlistItem, User
 from .access import has, audit, allowed
 from .domain import source_identity, create_intelligence
 from .geography import normalize_assignment, province_code_for, regency_code_for
@@ -351,6 +351,33 @@ def recover_existing_news_languages(db):
                 changed+=1
         except (TypeError,ValueError):
             continue
+    if changed:
+        db.commit()
+    return changed
+
+def sync_promoted_news_languages(db):
+    """Backfill only unknown language on linked promoted intelligence records."""
+    rows=db.query(SocialListeningResult).filter(
+        SocialListeningResult.platform=='online_news',
+        SocialListeningResult.promoted_intelligence_id.isnot(None)
+    ).all()
+    changed=0
+    labels={'en':'English','id':'Bahasa Indonesia','ms':'Bahasa Melayu'}
+    for row in rows:
+        language=(row.language or '').strip().lower()
+        if language not in labels:
+            continue
+        item=db.get(IntelligenceItem,row.promoted_intelligence_id)
+        if not item or item.source_type!='SOCIAL_LISTENING':
+            continue
+        if (item.original_language or '').strip().lower() not in ('','unknown','undetermined'):
+            continue
+        if (item.original_language_code or '').strip().lower() not in ('','unknown','undetermined'):
+            continue
+        # Only fill blank/unknown fields, preserving reviewed source context.
+        item.original_language=labels[language]
+        item.original_language_code=language
+        changed+=1
     if changed:
         db.commit()
     return changed

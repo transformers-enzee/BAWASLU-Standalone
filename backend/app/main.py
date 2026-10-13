@@ -12,7 +12,7 @@ from .auth import current_user, verify_password, create_session, hash_password
 from .access import profile
 from .domain import intelligence_action
 from .registry import registry_action
-from .socialcrawl import social_listening_action, recover_existing_news_languages
+from .socialcrawl import social_listening_action, recover_existing_news_languages, sync_promoted_news_languages
 from .source_retrieval import _language_detection
 from .seed import seed
 
@@ -29,6 +29,7 @@ def startup():
     try:
         seed(db)
         recover_existing_news_languages(db)
+        sync_promoted_news_languages(db)
     finally: db.close()
 
 class LoginIn(BaseModel): email:str; password:str
@@ -36,7 +37,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'59.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'60.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):

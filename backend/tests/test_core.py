@@ -90,6 +90,18 @@ def test_manual_explicit_unknown_language_is_not_overridden_by_detection():
     assert item['original_language']=='Unknown'
 
 
+def test_manual_selected_language_is_not_overridden_by_detection():
+    h=auth()
+    response=client.post('/api/functions/intelligence',json={'action':'create','data':{
+      'title':'Analyst selected English','source_type':'MANUAL_ENTRY',
+      'original_content':'Presiden dan masyarakat Indonesia membahas informasi tentang pemilu dan pengawasan yang dilakukan oleh lembaga terkait.',
+      'original_language_code':'en'}},headers=h)
+    assert response.status_code==200, response.text
+    item=response.json()['item']
+    assert item['original_language_code']=='en'
+    assert item['original_language']=='English'
+
+
 def test_registered_source_account_resolves_identity():
     db=SessionLocal(); w=WatchlistItem(name='Actor',type='Candidate',province='',regency_city=''); db.add(w); db.flush(); db.add(SourceAccount(watchlist_id=w.id,platform='TikTok',url='https://www.tiktok.com/@actor',handle='@actor')); db.commit(); db.close()
     h=auth(); r=client.post('/api/functions/intelligence',json={'action':'resolveSourceIdentity','data':{'source_url':'https://www.tiktok.com/@actor/video/123'}},headers=h); assert r.status_code==200; assert r.json()['source_identity']['status']=='REGISTERED_ACCOUNT_CONFIRMED'

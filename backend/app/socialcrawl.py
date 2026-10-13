@@ -404,25 +404,27 @@ def provider_status():
         return {'provider':'SOCIALCRAWL','configured':True,'connected':False,'balance':None,'message':str(e)}
 
 def ensure_result_id_sequence_ready(db):
-    """Fail before calling a paid provider if PostgreSQL cannot allocate new result IDs."""
+    """Repair sequence drift using the same PostgreSQL DB as the live app.
+
+    Lock result inserts while inspecting max(id), and release before calling
+    the paid provider. Existing results are never modified or deleted.
+    """
     if db.bind.dialect.name!='postgresql':
         return
     from sqlalchemy import text
+    db.execute(text('LOCK TABLE social_listening_results IN SHARE ROW EXCLUSIVE MODE'))
     row=db.execute(text("""
         SELECT COALESCE((SELECT MAX(id) FROM social_listening_results),0) AS max_id,
-               last_value AS sequence_id,
-               is_called
+               last_value AS sequence_id, is_called
         FROM social_listening_results_id_seq
     """)).one()
-    # nextval() returns last_value itself when is_called is false.
     next_id=row.sequence_id + (1 if row.is_called else 0)
     if next_id <= row.max_id:
-        # Only report safe numeric diagnostics; never disclose DB credentials.
-        raise ValueError(
-            f'Social Listening database ID sequence is behind existing records '
-            f'(next_id={next_id}, max_id={row.max_id}, last_value={row.sequence_id}, '
-            f'is_called={row.is_called}); contact administrator before a paid search'
-        )
+        db.execute(text("SELECT setval('social_listening_results_id_seq', :max_id, true)"), {'max_id':row.max_id})
+        verified=db.execute(text("SELECT last_value, is_called FROM social_listening_results_id_seq")).one()
+        if verified.last_value < row.max_id or not verified.is_called:
+            raise ValueError('Social Listening database ID sequence repair verification failed')
+    db.commit()
 
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')

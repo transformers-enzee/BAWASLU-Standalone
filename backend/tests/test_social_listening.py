@@ -581,40 +581,63 @@ def test_sequence_preflight_is_before_provider_search(monkeypatch):
     db.close()
 
 
-def test_sequence_preflight_detects_next_id_collision_when_sequence_uncalled(monkeypatch):
+def test_sequence_preflight_repairs_lagging_ids_and_commits(monkeypatch):
     from types import SimpleNamespace
     import app.socialcrawl as module
     db=SessionLocal()
-    class FakeExecute:
-        def one(self):
-            return SimpleNamespace(max_id=154,sequence_id=154,is_called=False)
-    class FakeDialect:
-        name='postgresql'
-    class FakeBind:
-        dialect=FakeDialect()
-    monkeypatch.setattr(db,'bind',FakeBind(),raising=False)
-    monkeypatch.setattr(db,'execute',lambda statement:FakeExecute())
+    statements=[]
+    def fake_execute(statement, params=None):
+        sql=str(statement)
+        statements.append((sql,params))
+        if 'COALESCE' in sql:
+            return SimpleNamespace(one=lambda: SimpleNamespace(max_id=500, sequence_id=3, is_called=True))
+        if 'SELECT last_value, is_called' in sql:
+            return SimpleNamespace(one=lambda: SimpleNamespace(last_value=500,is_called=True))
+        return SimpleNamespace(one=lambda: None)
+    monkeypatch.setattr(db,'bind',SimpleNamespace(dialect=SimpleNamespace(name='postgresql')),raising=False)
+    monkeypatch.setattr(db,'execute',fake_execute)
+    commits=[]
+    monkeypatch.setattr(db,'commit',lambda: commits.append(True))
+    module.ensure_result_id_sequence_ready(db)
+    assert any('setval' in sql and params['max_id']==500 for sql,params in statements)
+    assert len(commits)==1
+    db.close()
+
+
+def test_sequence_preflight_leaves_aligned_sequence_unchanged(monkeypatch):
+    from types import SimpleNamespace
+    import app.socialcrawl as module
+    db=SessionLocal()
+    statements=[]
+    def fake_execute(statement,params=None):
+        sql=str(statement)
+        statements.append(sql)
+        return SimpleNamespace(one=lambda: SimpleNamespace(max_id=154,sequence_id=154,is_called=True))
+    monkeypatch.setattr(db,'bind',SimpleNamespace(dialect=SimpleNamespace(name='postgresql')),raising=False)
+    monkeypatch.setattr(db,'execute',fake_execute)
+    monkeypatch.setattr(db,'commit',lambda: None)
+    module.ensure_result_id_sequence_ready(db)
+    assert not any('setval' in sql for sql in statements)
+    db.close()
+
+
+def test_sequence_preflight_fails_if_repair_unverified(monkeypatch):
+    from types import SimpleNamespace
+    import app.socialcrawl as module
+    db=SessionLocal()
+    def fake_execute(statement,params=None):
+        sql=str(statement)
+        if 'COALESCE' in sql:
+            return SimpleNamespace(one=lambda: SimpleNamespace(max_id=500,sequence_id=3,is_called=True))
+        if 'SELECT last_value, is_called' in sql:
+            return SimpleNamespace(one=lambda: SimpleNamespace(last_value=3,is_called=True))
+        return SimpleNamespace(one=lambda: None)
+    monkeypatch.setattr(db,'bind',SimpleNamespace(dialect=SimpleNamespace(name='postgresql')),raising=False)
+    monkeypatch.setattr(db,'execute',fake_execute)
     try:
         module.ensure_result_id_sequence_ready(db)
-        assert False,'Expected sequence guard to prevent ID collision'
+        assert False,'Expected verified repair failure'
     except ValueError as exc:
-        assert 'next_id=154' in str(exc)
-        assert 'max_id=154' in str(exc)
+        assert 'verification failed' in str(exc)
     db.close()
 
-
-def test_sequence_preflight_allows_next_id_above_existing_max(monkeypatch):
-    from types import SimpleNamespace
-    import app.socialcrawl as module
-    db=SessionLocal()
-    class FakeExecute:
-        def one(self):
-            return SimpleNamespace(max_id=154,sequence_id=154,is_called=True)
-    class FakeDialect:
-        name='postgresql'
-    class FakeBind:
-        dialect=FakeDialect()
-    monkeypatch.setattr(db,'bind',FakeBind(),raising=False)
-    monkeypatch.setattr(db,'execute',lambda statement:FakeExecute())
-    module.ensure_result_id_sequence_ready(db)
-    db.close()

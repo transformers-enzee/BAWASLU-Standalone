@@ -177,8 +177,8 @@ def test_manual_link_batch_rejects_unsafe_url_variants():
     h=auth()
     cases=[
         ('https://example.org/p ath','whitespace'),
-        ('https://example.org/space\\tinside','control characters'),
-        ('https://example.org/story\\nnext','control characters'),
+        ('https://example.org/space'+chr(9)+'inside','control characters'),
+        ('https://example.org/story'+chr(10)+'next','control characters'),
         ('https://example.org/path '+('x'*2001),'maximum length'),
         ('https://.example.org/story','invalid hostname'),
         ('https://example..org/story','invalid hostname'),

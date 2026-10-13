@@ -402,7 +402,7 @@ def create_intelligence(db,p,data):
         if any(ord(char)<32 or ord(char)==127 for char in raw_source_url):
             raise ValueError('Manual link source URL must not contain control characters')
         if any(char.isspace() for char in raw_source_url):
-            raise ValueError('Manual link source URL must not contain whitespace')
+            raise ValueError('Manual link source URL must not contain spaces or whitespace')
         try:
             parsed_source=urlparse(raw_source_url)
         except ValueError:

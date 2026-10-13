@@ -92,7 +92,8 @@ test('Social Listening date filters are mutually exclusive without provider call
 
 
 test('Social Listening tabs persist through browser reload without running provider searches', async ({ page }) => {
-  await page.goto('/SocialListening?tab=rules');
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=rules');
   await expect(page.getByRole('button', { name: /Saved Searches/i }).first()).toBeVisible();
   await expect(page).toHaveURL(/tab=rules/);
   await page.reload();
@@ -105,7 +106,8 @@ test('Social Listening tabs persist through browser reload without running provi
 
 
 test('Review Queue refresh gives visible feedback without resetting filters', async ({ page }) => {
-  await page.goto('/SocialListening?tab=queue');
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=queue');
   await expect(page.getByRole('button', { name: /Refresh queue/i })).toBeVisible();
   await page.getByRole('button', { name: /Refresh queue/i }).click();
   await expect(page.getByRole('status')).toContainText('Queue refreshed successfully.');

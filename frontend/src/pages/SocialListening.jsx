@@ -31,6 +31,7 @@ function PostPreview({ text, fallback }) {
 export default function SocialListening(){
  const {t}=useLanguage();
  const queueRequestId=useRef(0);
+ const [queueRefreshing,setQueueRefreshing]=useState(false),[queueFeedback,setQueueFeedback]=useState('');
  const initialParams=new URLSearchParams(window.location.search);const dashboardPending=initialParams.get('pending')==='1';
  const [filters,setFilters]=useState(blank),[results,setResults]=useState([]),[queueResults,setQueueResults]=useState([]),[queueCounts,setQueueCounts]=useState({}),[queueState,setQueueState]=useState(''),[queuePlatform,setQueuePlatform]=useState(''),[queueQuery,setQueueQuery]=useState(''),[rules,setRules]=useState([]),[caps,setCaps]=useState(null),[providerStatus,setProviderStatus]=useState(null),[usage,setUsage]=useState({usage:[],summary:{}}),[pendingSearch,setPendingSearch]=useState(null),[duplicateAcknowledged,setDuplicateAcknowledged]=useState(false),[searchNotice,setSearchNotice]=useState(''),[options,setOptions]=useState({issue_categories:[],provinces:[],regencies:[],watchlists:[],platforms,content_types:[]}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[tab,setTab]=useState(['search','queue','rules'].includes(initialParams.get('tab'))?initialParams.get('tab'):'search'),[ruleName,setRuleName]=useState(''),[ruleDescription,setRuleDescription]=useState(''),[editingRule,setEditingRule]=useState(null),[reviewNotes,setReviewNotes]=useState({});
  useEffect(()=>{
@@ -44,7 +45,7 @@ export default function SocialListening(){
  async function refreshProvider(){try{const r=await base44.functions.invoke('socialListening',{action:'providerStatus',data:{}});setProviderStatus(r.data)}catch{}}
  async function refreshUsage(){try{const r=await base44.functions.invoke('socialListening',{action:'usage',data:{}});setUsage(r.data||{usage:[],summary:{}})}catch{}}
  async function refreshRules(){try{const r=await base44.functions.invoke('socialListening',{action:'rules',data:{}});setRules(r.data.rules||[])}catch{}}
- async function refreshQueue(state=queueState){const requestId=++queueRequestId.current;try{const r=await base44.functions.invoke('socialListening',{action:'queue',data:{state}});if(requestId!==queueRequestId.current)return;setQueueResults(r.data.results||[]);setQueueCounts(r.data.counts||{})}catch(e){if(requestId===queueRequestId.current)setError(e.response?.data?.error||e.message)}}
+ async function refreshQueue(state=queueState,showFeedback=false){const requestId=++queueRequestId.current;if(showFeedback){setQueueRefreshing(true);setQueueFeedback('');}try{const r=await base44.functions.invoke('socialListening',{action:'queue',data:{state}});if(requestId!==queueRequestId.current)return;setQueueResults(r.data.results||[]);setQueueCounts(r.data.counts||{});if(showFeedback)setQueueFeedback('Queue refreshed successfully.')}catch(e){if(requestId===queueRequestId.current){setError(e.response?.data?.error||e.message);if(showFeedback)setQueueFeedback('Queue refresh failed.')}}finally{if(requestId===queueRequestId.current)setQueueRefreshing(false)}}
  const set=(k,v)=>{setPendingSearch(null);setDuplicateAcknowledged(false);setSearchNotice('');setFilters(f=>{if(k==='province')return {...f,province:v,regency_city:''};if((k==='date_from'||k==='date_to')&&v)return {...f,[k]:v,lookback_days:''};if(k==='lookback_days'&&v)return {...f,lookback_days:v,date_from:'',date_to:''};return {...f,[k]:v}})};
  const provinceCode=options.provinces?.find(x=>x.name===filters.province)?.code||'';
  const regencies=(options.regencies||[]).filter(x=>x.province_code===provinceCode);
@@ -96,7 +97,7 @@ export default function SocialListening(){
   <div className="intel-card p-5 space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h2 className="font-semibold text-lg">{t('social_review_queue_title')}</h2><p className="text-sm text-[#77899b] mt-1">{t('social_review_queue_intro')}</p><p className="text-xs text-[#8192a3] mt-1">{t('social_queue_scope_note')}</p></div>
-      <button type="button" className="intel-ghost" onClick={()=>refreshQueue(queueState)}><RefreshCw size={14}/>{t('refresh_queue')}</button>
+      <button type="button" className="intel-ghost" disabled={queueRefreshing} onClick={()=>refreshQueue(queueState,true)}><RefreshCw size={14} className={queueRefreshing?'animate-spin':''}/>{queueRefreshing?'Refreshing queue…':t('refresh_queue')}</button><span role="status" aria-live="polite" className="text-xs text-[#536d80]">{queueFeedback}</span>
     </div>
     <div className="flex flex-wrap gap-2 text-xs">
       {[

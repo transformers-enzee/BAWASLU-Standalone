@@ -102,3 +102,12 @@ test('Social Listening tabs persist through browser reload without running provi
   await page.reload();
   await expect(page).toHaveURL(/tab=queue/);
 });
+
+
+test('Review Queue refresh gives visible feedback without resetting filters', async ({ page }) => {
+  await page.goto('/SocialListening?tab=queue');
+  await expect(page.getByRole('button', { name: /Refresh queue/i })).toBeVisible();
+  await page.getByRole('button', { name: /Refresh queue/i }).click();
+  await expect(page.getByRole('status')).toContainText('Queue refreshed successfully.');
+  await expect(page).toHaveURL(/tab=queue/);
+});

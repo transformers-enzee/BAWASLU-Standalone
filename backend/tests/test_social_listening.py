@@ -641,3 +641,22 @@ def test_sequence_preflight_fails_if_repair_unverified(monkeypatch):
         assert 'verification failed' in str(exc)
     db.close()
 
+
+
+def test_online_news_language_identified_from_tempo_english_edition():
+    db=SessionLocal(); p=admin(db)
+    provider=lambda f:{'success':True,'request_id':'language-tempo','credits_used':0,'credits_remaining':19997,'data':{'items':[{'id':'tempo-en-qa','platform':'online_news','title':'KPU, Bawaslu Reported to Ethics Council over Gibran Rules','url':'https://en.tempo.co/read/123456/example','source':'Tempo.co English'}]}}
+    r=social_listening_action(db,p,'search',{'filters':{'query':'BAWASLU','platforms':['online_news']}},provider_client=provider)
+    assert r['results'][0]['language']=='en'
+    db.close()
+
+
+def test_online_news_provider_declared_language_has_priority():
+    from app.socialcrawl import _news_language
+    item={'language':'id'}
+    assert _news_language(item,'English article','', '', 'https://en.tempo.co/read/1')=='id'
+
+
+def test_online_news_unknown_language_is_not_guessed_without_evidence():
+    from app.socialcrawl import _news_language
+    assert _news_language({},'KPU Bawaslu','', '', 'https://example.org/article')==''

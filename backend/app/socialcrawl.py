@@ -318,6 +318,23 @@ def _news_article_payload(item):
             return value
     return item
 
+def _news_language(article, title, snippet, text, url):
+    """Use provider-declared language first; otherwise conservative text detection."""
+    from .source_retrieval import _language_detection
+    from urllib.parse import urlparse
+    declared=str(_value(article,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default='') or '').strip()
+    normalized=declared.lower().replace('_','-').split('-')[0]
+    if normalized=='in': normalized='id'
+    if normalized in ('id','en','ms'):
+        return normalized
+    host=(urlparse(url).hostname or '').lower()
+    # The English edition of Tempo is a publisher-provided language signal.
+    publisher_language='en' if host=='en.tempo.co' else ''
+    detection=_language_detection(' '.join([title,snippet,text]),publisher_language)
+    if detection['confidence'] in ('HIGH','MEDIUM'):
+        return detection['code']
+    return publisher_language or ''
+
 def _map_result(db,item,default_platform=''):
     # SocialCrawl's normalized search rows are post-shaped:
     # post.content.text, post.author, post.engagement, post.published_at,
@@ -338,6 +355,8 @@ def _map_result(db,item,default_platform=''):
     platform=str(_value(article,'platform','network',default=default_platform or ''))
     rid=str(_value(article,'post.id','id','article_id','articleId','post_id','video_id','shortcode',default=''))
     language=str(_value(article,'computed.language','post.computed.language','source_items.0.metadata.language','source_items.0.language','language','metadata.language',default=''))
+    if platform=='online_news':
+        language=_news_language(article,title,snippet,text,url)
     relevance=_value(article,'computed.relevance.p','computed.relevance.score','relevance_score','relevance.score','score',default='')
     published=_value(article,'post.published_at','source_items.0.published_at','source_items.0.date','published_at','published','publish_date','published_date','post.datetime','datetime','created_at','timestamp','date',default='')
     identity,observed=source_identity(db,{'source_url':url})

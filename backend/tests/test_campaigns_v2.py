@@ -120,3 +120,18 @@ def test_viewer_cannot_create_campaign():
         action(db,p,'createCampaign',payload())
     assert action(db,p,'listCampaigns')['total']==0
     db.close()
+
+
+def test_campaign_credit_preview_is_read_only_and_scoped():
+    db=SessionLocal();p=actor(db,'admin','National Administrator')
+    result=action(db,p,'campaignCostPreview',payload(platforms=['tiktok','linkedin','online_news']))
+    assert result['estimated_credits']==7
+    assert result['paid_run_enabled'] is False
+    assert result['approval_required'] is True
+    assert db.query(MonitoringCampaign).count()==0
+    assert db.query(SocialListeningRun).count()==0
+    assert db.query(SocialListeningResult).count()==0
+    regional=actor(db,'regional','Provincial Analyst','Province','Bali')
+    with pytest.raises(PermissionError):
+        action(db,regional,'campaignCostPreview',payload(province='Jawa Barat'))
+    db.close()

@@ -99,11 +99,11 @@ def campaign_history(db,c,limit=20):
             'error':run.error_text or ''})
     return items
 
-def _keyword_match(c,row):
-    """Literal keyword screening only, not an AI relevance determination.
+def keyword_screen(c,row):
+    """Literal OR for main keywords; secondary terms add context, never gate.
 
-    Comments count only if they are actually present in returned provider data.
-    Excludes are applied even if the mock provider ignores them.
+    All assessments remain preliminary, not findings of violations.
+    Source evidence is retained separately by the collection pipeline.
     """
     raw=row.get('raw') or {}
     comments=raw.get('comments') if isinstance(raw,dict) else None
@@ -111,11 +111,20 @@ def _keyword_match(c,row):
     if isinstance(comments,list):
         comment_text=' '.join(str(x.get('text') or '') for x in comments if isinstance(x,dict))
     haystack=((row.get('text_content') or '')+' '+comment_text).casefold()
-    words=json.loads(c.primary_keywords_json or '[]')
+    primary=json.loads(c.primary_keywords_json or '[]')
+    secondary=json.loads(c.secondary_keywords_json or '[]')
     excluded=json.loads(c.excluded_keywords_json or '[]')
-    return bool(words) and any(word.casefold() in haystack for word in words) and not any(
-        word.casefold() in haystack for word in excluded
-    )
+    matched_main=[word for word in primary if word.casefold() in haystack]
+    matched_secondary=[word for word in secondary if word.casefold() in haystack]
+    matched_excluded=[word for word in excluded if word.casefold() in haystack]
+    return {'matched':bool(matched_main) and not bool(matched_excluded),
+            'main_keywords':matched_main,'secondary_keywords':matched_secondary,
+            'excluded_keywords':matched_excluded,
+            'context_signal':'STRONGER_CONTEXT' if matched_secondary and matched_main else
+                             'MAIN_KEYWORD_ONLY' if matched_main else 'NO_MAIN_KEYWORD'}
+
+def _keyword_match(c,row):
+    return keyword_screen(c,row)['matched']
 
 def simulate_campaign_cycle(db,p,c,provider_client=None,now=None,daily_budget=0,per_run_limit=0):
     """Exercise scheduled collection with an injected fake provider only.
@@ -182,7 +191,8 @@ def simulate_campaign_cycle(db,p,c,provider_client=None,now=None,daily_budget=0,
             if not isinstance(raw,dict): continue
             mapped=_map_result(db,raw,default_platform='online_news' if
                 json.loads(c.platforms_json or '[]')==['online_news'] else '')
-            if not _keyword_match(c,mapped) or not _matches_local_filters(mapped,filters): continue
+            screen=keyword_screen(c,mapped)
+            if not screen['matched'] or not _matches_local_filters(mapped,filters): continue
             row=db.query(SocialListeningResult).filter(
                 SocialListeningResult.content_fingerprint==mapped['content_fingerprint']
             ).order_by(SocialListeningResult.id.asc()).first()
@@ -192,7 +202,10 @@ def simulate_campaign_cycle(db,p,c,provider_client=None,now=None,daily_budget=0,
                 CampaignEvidence.result_id==row.id).first()
             if not prior:
                 db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
-                    match_method='KEYWORD',matched_fields_json='["text_content"]'))
+                    match_method='KEYWORD',matched_fields_json=json.dumps({
+                        'field':'text_content','main_keywords':screen['main_keywords'],
+                        'secondary_keywords':screen['secondary_keywords'],
+                        'context_signal':screen['context_signal']},ensure_ascii=False)))
                 new_links+=1
     if error:
         # Retried later at bounded intervals (15, 30, 60 minutes).

@@ -137,7 +137,7 @@ def _manual_preflight(db,p,c):
             'can_run':bool(cost>0 and cost<=MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT),
             'manual_only':True,'paid_provider_called':False,'retrieval_mode':'PER_KEYWORD_OR'}
 
-def _existing_thumbnail(item):
+def _existing_thumbnail(item, include_expired=False):
     """Read already-stored image metadata for social posts and news. No network calls."""
     from .socialcrawl import _value
     try: raw=json.loads(item.raw_payload_json or '{}')
@@ -166,7 +166,7 @@ def _existing_thumbnail(item):
             # TikTok and other sources can provide signed image URLs that expire.
             try:
                 expiry=parse_qs(urlsplit(candidate).query).get('x-expires',[])
-                if expiry and int(expiry[0])<=time()+60: continue
+                if expiry and int(expiry[0])<=time()+60 and not include_expired: continue
             except (ValueError,OverflowError):
                 continue
             return candidate
@@ -278,7 +278,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['remaining']+=1
                 continue
             report['checked']+=1
-            reason=cache_thumbnail_diagnostic(db,item,_existing_thumbnail(item))
+            reason=cache_thumbnail_diagnostic(db,item,_existing_thumbnail(item,include_expired=True))
             if reason=='saved':
                 report['recovered']+=1
             else:

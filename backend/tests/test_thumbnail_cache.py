@@ -19,3 +19,13 @@ def test_thumbnail_diagnostics_reject_untrusted_url_without_network():
     assert cache_thumbnail_diagnostic(Empty(),item,'')=='no_valid_url'
     assert cache_thumbnail_diagnostic(Empty(),item,'https://example.com/a.jpg')=='unsupported_host'
     assert cache_thumbnail_diagnostic(Empty(),item,'https://p16.tiktokcdn.com/a.jpg?x-expires=1')=='expired_url'
+
+
+def test_expired_provider_thumbnail_is_visible_to_recovery_diagnostics():
+    from app.campaigns import _existing_thumbnail
+    from types import SimpleNamespace
+    import json
+    expired='https://p16.tiktokcdn.com/cover.jpg?x-expires=1'
+    item=SimpleNamespace(raw_payload_json=json.dumps({'source_items':[{'media':{'thumbnail_url':expired}}]}))
+    assert _existing_thumbnail(item)==''
+    assert _existing_thumbnail(item,include_expired=True)==expired

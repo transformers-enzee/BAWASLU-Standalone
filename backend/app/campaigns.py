@@ -378,9 +378,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                     if not isinstance(signal,dict): continue
                     try: category_id=int(signal.get('category_id') or 0)
                     except (TypeError,ValueError): continue
-                    if category_id in active_categories:
+                    if category_id in active_categories and signal.get('signal_type')=='POTENTIAL_VIOLATION' and len(str(signal.get('evidence_quote') or ''))>=12 and str(signal.get('evidence_quote')).casefold() in (item.text_content or '').casefold():
                         issue_signals.append({'category_id':category_id,'category_name':active_categories[category_id],
-                                              'explanation':str(signal.get('explanation') or '')[:400]})
+                                              'explanation':str(signal.get('explanation') or '')[:400],'evidence_quote':str(signal.get('evidence_quote') or '')[:350]})
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
                     'author_name':item.author_name,'published_at':item.published_at,

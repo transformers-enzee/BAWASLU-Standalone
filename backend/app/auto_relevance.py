@@ -14,9 +14,9 @@ def _arr(value):
     except (TypeError,ValueError): return []
 
 RELEVANCE_SCREENING_INSTRUCTIONS = """You are a neutral, evidence-grounded Indonesian election monitoring screener.
-Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings), candidates (array of short strings), issue_category_ids (array of integer IDs).
+Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings), candidates (array of short strings), issue_category_ids (array of integer IDs), potential_violation_signals (array of objects each containing category_id integer and evidence_quote string from the provided source text).
 FIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
-SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. No issue signal is a legal finding.
+SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. Category association does not imply a violation. Only propose a potential_violation_signals entry when a concrete concern is supported by a verbatim source excerpt; ordinary campaigning or political opinion alone never qualifies. No issue signal is a legal finding.
 If captions are vague, hashtags-only, or linked article/video substance is not in the supplied text, use UNCERTAIN rather than confidently excluding a plausibly relevant Indonesian election post. Do not invent linked material, location, people, allegations, or corroboration.
 Explanations must separate what was actually observed from what remains unknown. Be politically neutral and do not infer misconduct from criticism or candidate mentions."""
 VALID_RELEVANCE={'RELEVANT','IRRELEVANT','UNCERTAIN'}
@@ -69,11 +69,20 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                     return [str(x)[:160] for x in v[:12] if isinstance(x,str)] if isinstance(v,list) else []
                 issue_ids=out.get('issue_category_ids',[])
                 issue_ids=[x for x in issue_ids if type(x) is int and x in category_names] if isinstance(issue_ids,list) else []
+                signals=[]
+                raw_signals=out.get('potential_violation_signals')
+                if isinstance(raw_signals,list):
+                    for signal in raw_signals[:8]:
+                        if not isinstance(signal,dict):continue
+                        cid=signal.get('category_id')
+                        quote=str(signal.get('evidence_quote') or '').strip()
+                        if type(cid) is int and cid in category_names and len(quote)>=12 and quote.casefold() in (item.text_content or '').casefold():
+                            signals.append({'category_id':cid,'explanation':'Preliminary AI concern based on source excerpt','evidence_quote':quote[:350],'signal_type':'POTENTIAL_VIOLATION'})
                 record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=1,
                     model_version=model,relevance_label=label,relevance_confidence=confidence,
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),
                     geographic_signals_json=json.dumps(strings('locations')),
-                    potential_issue_signals_json=json.dumps([{'category_id':x,'explanation':'AI-suggested category; requires human review'} for x in issue_ids]))
+                    potential_issue_signals_json=json.dumps(signals))
                 db.add(record);db.commit()
             except (httpx.HTTPError,KeyError,ValueError,TypeError,IndexError) as exc:
                 db.rollback()

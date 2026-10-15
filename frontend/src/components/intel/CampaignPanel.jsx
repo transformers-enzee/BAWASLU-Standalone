@@ -146,10 +146,17 @@ export default function CampaignPanel(){
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    <CampaignScheduleSummary campaign={selected} />
    <h4 className="font-semibold">Campaign evidence</h4>
+   <p className="text-xs text-slate-600">Only already-linked evidence is shown; viewing this page does not trigger SocialCrawl or spend credits.</p>
    {evidenceLoading&&<p role="status">Loading evidence…</p>}
    {evidenceError&&<p role="alert" className="text-red-700">{evidenceError}</p>}
    {!evidenceLoading&&!evidenceError&&!evidence.length&&<p className="text-sm text-slate-600">No evidence linked yet. Saving a campaign does not run paid collection.</p>}
-   {evidence.map(item=><article key={item.id} className="rounded-lg border border-slate-200 p-3 space-y-1 text-sm"><p className="text-xs text-slate-600">{item.platform} · {item.author_name||'Unknown author'} · {item.published_at||'Date unavailable'}</p><p className="whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p>{item.canonical_url&&item.canonical_url.startsWith('https://')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="underline">Open original source</a>}<p className="text-xs text-slate-600">Keyword match: {JSON.stringify(item.matched_fields||[])}</p></article>)}
+   {evidence.map(item=><article key={item.id} className="rounded-lg border border-slate-200 p-3 space-y-1 text-sm"><p className="text-xs text-slate-600">{item.platform} · {item.author_name||'Unknown author'} · {item.published_at||'Date unavailable'}</p><p className="whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p>{item.canonical_url&&item.canonical_url.startsWith('https://')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="underline">Open original source</a>}<div className="text-xs space-y-1">
+     {Array.isArray(item.matched_fields)?<p className="text-slate-600">Legacy keyword-match metadata: {item.matched_fields.join(', ')||'Not recorded'}</p>:
+      <div className="flex flex-wrap gap-2 items-center">
+       <span className="font-semibold">Main matches:</span>{(item.matched_fields?.main_keywords||[]).length?item.matched_fields.main_keywords.map(k=><span key={k} className="rounded-full bg-cyan-50 px-2 py-1 text-cyan-900">{k}</span>):<span>Not recorded</span>}
+       {(item.matched_fields?.secondary_keywords||[]).length>0&&<><span className="font-semibold">Context:</span>{item.matched_fields.secondary_keywords.map(k=><span key={k} className="rounded-full bg-amber-50 px-2 py-1 text-amber-900">{k}</span>)}</>}
+      </div>}
+    <p className="text-slate-500">Evidence match is a preliminary signal, not an assessed violation.</p></div></article>)}
    <p className="text-xs text-[#77899b]">Trend dashboards and AI classification will be enabled in subsequent builds.</p>
    <button type="button" className="intel-ghost" onClick={()=>setSelected(null)}>Close</button>
   </div>}

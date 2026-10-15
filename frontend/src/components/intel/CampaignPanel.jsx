@@ -71,8 +71,13 @@ export default function CampaignPanel(){
   </div>
   {error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
-  {creating&&<form className="intel-card p-5 space-y-4" onSubmit={save} aria-label="Campaign editor">
-   <h3 className="font-semibold">{editing?'Edit Campaign':'Create Campaign'}</h3>
+  {creating&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setCreating(false)}}>
+   <div role="dialog" aria-modal="true" aria-labelledby="campaign-modal-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+    <form className="p-5 sm:p-7 space-y-4" onSubmit={save} aria-label="Campaign editor">
+   <div className="flex items-center justify-between gap-4">
+    <h3 id="campaign-modal-title" className="text-lg font-semibold">{editing?'Edit Campaign':'Create Campaign'}</h3>
+    <button type="button" aria-label="Close campaign popup" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>✕</button>
+   </div>
    <div className="grid gap-3 md:grid-cols-2">
     <label className="text-sm">Campaign name *<input className="intel-input mt-1" value={form.name} maxLength={255} required onChange={e=>set('name',e.target.value)}/></label>
     <label className="text-sm">Language<select className="intel-input mt-1" value={form.language} onChange={e=>set('language',e.target.value)}>
@@ -95,7 +100,9 @@ export default function CampaignPanel(){
    </fieldset>
    <div className="flex gap-2"><button className="intel-button" disabled={saving}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
-  </form>}
+    </form>
+   </div>
+  </div>}
   {loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="grid gap-3 md:grid-cols-2">
    {visible.map(c=><article className="intel-card p-5 space-y-3" key={c.id}>
     <div className="flex justify-between gap-2"><h3 className="font-semibold">{c.name}</h3><span className="text-xs text-[#77899b]">{displayStatus(c.status)}</span></div>

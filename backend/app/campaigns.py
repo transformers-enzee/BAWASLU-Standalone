@@ -277,7 +277,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 counts['instagram_missing']+=1
                 if (item.canonical_url or '').startswith(('https://www.instagram.com/','https://instagram.com/')):
                     counts['post_url_available']+=1
-        return {'counts':counts,'endpoint_candidate':'Instagram post-detail endpoint',
+        return {'counts':counts,'endpoint_candidate':'GET /v1/instagram/post',
                 'credits_per_request_estimate':1,'media_fields_confirmed':False,
                 'post_detail_calls_enabled':False,'potential_calls':counts['post_url_available'],
                 'potential_credit_estimate':counts['post_url_available'],

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
+import KeywordTags from '@/components/intel/KeywordTags';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
-const initial={name:'',description:'',primary_keywords:'',secondary_keywords:'',excluded_keywords:'',platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:180,province:'',regency_city:''};
+const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:'',platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:180,province:'',regency_city:''};
 const split=v=>String(v||'').split(',').map(s=>s.trim()).filter(Boolean);
 const presentDate=v=>v?new Date(v).toLocaleString('en-GB'):'Not scheduled';
 const displayStatus=s=>s==='PAUSED'?'Paused':'Draft';
@@ -21,8 +22,8 @@ export default function CampaignPanel(){
   setEstimating(true);setEstimateError('');setCreditEstimate(null);
   try{
    const r=await base44.functions.invoke('socialListening',{action:'campaignCostPreview',data:{
-     ...form,primary_keywords:split(form.primary_keywords),
-     secondary_keywords:split(form.secondary_keywords),excluded_keywords:split(form.excluded_keywords)
+     ...form,primary_keywords:form.primary_keywords,
+     secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)
    }});
    setCreditEstimate(r.data);
   }catch(e){setEstimateError(e.response?.data?.detail||e.response?.data?.error||e.message)}
@@ -41,8 +42,8 @@ export default function CampaignPanel(){
  function newCampaign(){clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
   clearEstimate();setForm({name:c.name,description:c.description||'',
-   primary_keywords:(c.primary_keywords||[]).join(', '),
-   secondary_keywords:(c.secondary_keywords||[]).join(', '),
+   primary_keywords:[...(c.primary_keywords||[])],
+   secondary_keywords:[...(c.secondary_keywords||[])],
    excluded_keywords:(c.excluded_keywords||[]).join(', '),
    platforms:[...(c.platforms||[])],language:c.language||'',date_from:c.date_from||'',date_to:c.date_to||'',
    interval_minutes:c.interval_minutes||180,province:c.province||'',regency_city:c.regency_city||''});
@@ -50,8 +51,8 @@ export default function CampaignPanel(){
  }
  async function save(e){
   e.preventDefault();setSaving(true);setError('');setNotice('');
-  const data={...form,primary_keywords:split(form.primary_keywords),
-   secondary_keywords:split(form.secondary_keywords),excluded_keywords:split(form.excluded_keywords)};
+  const data={...form,primary_keywords:form.primary_keywords,
+   secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)};
   try{
    const action=editing?'updateCampaign':'createCampaign';
    const r=await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
@@ -97,8 +98,8 @@ export default function CampaignPanel(){
     <label className="text-sm">Language<select className="intel-input mt-1" value={form.language} onChange={e=>set('language',e.target.value)}>
        <option value="">All languages</option><option value="id">Bahasa Indonesia</option><option value="en">English</option><option value="ms">Bahasa Melayu</option>
     </select></label>
-    <label className="text-sm">Main keywords * (comma-separated)<input className="intel-input mt-1" required value={form.primary_keywords} onChange={e=>set('primary_keywords',e.target.value)} placeholder="pemilu, gibran"/></label>
-    <label className="text-sm">Secondary keywords<input className="intel-input mt-1" value={form.secondary_keywords} onChange={e=>set('secondary_keywords',e.target.value)} placeholder="wapres, kampanye"/></label>
+    <KeywordTags label="Main keywords" required items={form.primary_keywords} onChange={tags=>set('primary_keywords',tags)} />
+    <KeywordTags label="Secondary keywords" items={form.secondary_keywords} onChange={tags=>set('secondary_keywords',tags)} />
     <label className="text-sm">Excluded keywords<input className="intel-input mt-1" value={form.excluded_keywords} onChange={e=>set('excluded_keywords',e.target.value)} placeholder="music, concert"/></label>
     <label className="text-sm">Monitoring interval<select className="intel-input mt-1" value={form.interval_minutes} onChange={e=>set('interval_minutes',Number(e.target.value))}>
        <option value={60}>Every hour</option><option value={180}>Every 3 hours</option><option value={360}>Every 6 hours</option><option value={720}>Every 12 hours</option><option value={1440}>Daily</option>
@@ -115,7 +116,7 @@ export default function CampaignPanel(){
    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2" aria-label="Campaign credit preflight">
     <p className="text-sm font-semibold text-amber-950">SocialCrawl credit estimate — before running</p>
     <p className="text-xs text-amber-900">A cost preview does not call SocialCrawl or use credits. Always review the latest estimate before authorizing a paid run.</p>
-    <button type="button" className="intel-ghost" disabled={estimating||saving||!form.name.trim()||!split(form.primary_keywords).length||!form.platforms.length} onClick={checkCredits}>{estimating?'Calculating…':'Check estimated credits'}</button>
+    <button type="button" className="intel-ghost" disabled={estimating||saving||!form.name.trim()||!form.primary_keywords.length||!form.platforms.length} onClick={checkCredits}>{estimating?'Calculating…':'Check estimated credits'}</button>
     {estimateError&&<p role="alert" className="text-xs text-red-700">{estimateError}</p>}
     {creditEstimate&&<div role="status" className="text-sm text-amber-950">
       Estimated cost: <strong>{creditEstimate.estimated_credits} credits per run</strong>
@@ -123,7 +124,7 @@ export default function CampaignPanel(){
       <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
     </div>}
    </div>
-   <div className="flex gap-2"><button className="intel-button" disabled={saving}>{saving?'Saving…':'Save Draft'}</button>
+   <div className="flex gap-2"><button className="intel-button" disabled={saving||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>
    </div>

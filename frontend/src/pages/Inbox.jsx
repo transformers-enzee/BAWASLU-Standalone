@@ -1,9 +1,48 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import IntelligenceTable from '@/components/intel/IntelligenceTable';
 import { PRIORITIES, Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
 
+function SocialEvidenceInbox(){
+ const [items,setItems]=useState([]),[status,setStatus]=useState('DISCOVERED'),[busy,setBusy]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState(''),[notes,setNotes]=useState({});
+ async function refresh(next=status){
+  setError('');
+  try{const response=await base44.functions.invoke('socialListening',{action:'queue',data:{state:next}});setItems(response.data.results||[])}
+  catch(e){setError(e.response?.data?.detail||e.message||'Unable to load social evidence')}
+ }
+ useEffect(()=>{refresh(status)},[status]);
+ async function decide(item,decision){
+  setBusy(item.id);setNotice('');setError('');
+  try{
+   await base44.functions.invoke('socialListening',{action:'review',id:item.id,data:{decision,notes:notes[item.id]||''}});
+   setNotice('Review decision saved. Intelligence promotion remains a separate human action.');await refresh();
+  }catch(e){setError(e.response?.data?.detail||e.message||'Review failed')}
+  finally{setBusy('')}
+ }
+ async function promote(item){
+  if(!window.confirm('Create an intelligence record from this human-reviewed social evidence?'))return;
+  setBusy(item.id);setNotice('');setError('');
+  try{await base44.functions.invoke('socialListening',{action:'promote',id:item.id,data:{}});setNotice('Evidence promoted to Intelligence Inbox. Refresh the intelligence list to view it.');await refresh()}
+  catch(e){setError(e.response?.data?.detail||e.message||'Promotion failed')}
+  finally{setBusy('')}
+ }
+ return <section className="intel-card p-5 space-y-3" aria-label="Social evidence review queue">
+  <div><h2 className="font-semibold text-lg">Social Listening evidence review</h2><p className="text-xs text-slate-500">Source evidence is not validated intelligence. Review each post before promoting it; no automatic promotion or paid crawl.</p></div>
+  <div className="flex flex-wrap gap-2">{[['DISCOVERED','New evidence'],['RELEVANT','Relevant'],['MONITOR','Monitor'],['NOT_RELEVANT','Not relevant'],['PROMOTED','Promoted']].map(([key,label])=><button type="button" key={key} onClick={()=>setStatus(key)} className={status===key?'intel-button':'intel-ghost'}>{label}</button>)}</div>
+  {error&&<p className="text-sm text-red-600" role="alert">{error}</p>}{notice&&<p className="text-sm text-teal-700" role="status">{notice}</p>}
+  <div className="max-h-80 overflow-y-auto space-y-2">{items.slice(0,30).map(item=><div key={item.id} className="rounded-lg border p-3 space-y-2 text-sm">
+   <div className="flex justify-between gap-2"><strong className="capitalize">{item.platform||'Social'} · {item.author_name||'Unknown source'}</strong><span className="text-xs text-slate-500">{item.review_state}</span></div>
+   <p className="line-clamp-3 whitespace-pre-wrap">{item.text_content||'No source text'}</p>
+   {item.canonical_url&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 underline">View original source</a>}
+   {item.review_state!=='PROMOTED'&&<><textarea className="intel-input w-full" rows={2} placeholder="Reviewer notes (required when not relevant)" value={notes[item.id]||''} onChange={e=>setNotes(v=>({...v,[item.id]:e.target.value}))}/>
+   <div className="flex flex-wrap gap-2">{['RELEVANT','MONITOR','NOT_RELEVANT'].map(decision=><button type="button" key={decision} className="intel-ghost text-xs" disabled={!!busy} onClick={()=>decide(item,decision)}>{decision.replaceAll('_',' ')}</button>)}
+   {['RELEVANT','MONITOR'].includes(item.review_state)&&<button type="button" className="intel-button text-xs" disabled={!!busy} onClick={()=>promote(item)}>Promote to Intelligence</button>}</div></>}
+  </div>)}{items.length===0&&!error&&<p className="text-sm text-slate-500">No evidence in this review state.</p>}</div>
+  <p className="text-xs text-slate-500">Showing up to 30 records from the authorized Social Listening review queue. Promotions require explicit confirmation.</p>
+ </section>
+}
 const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
 const validated=x=>x.review_status==='Validated as Relevant Intelligence';
 const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};const state=typeof t==='string'?t:t.state;const generated=typeof t==='object'?t.generated:!!state;return generated&&state&&state!=='REVIEW COMPLETE';};
@@ -26,6 +65,7 @@ export default function Inbox(){
  const activeFilters=Object.entries(f).filter(([k,v])=>k!=='view'&&v),clearOne=key=>setF(v=>({...v,[key]:''})),currentView=quickViews.find(([value])=>value===(f.view||''))?.[1]||t('all_intelligence');
  const recordScope=items.length===1?t('record_authorized_scope'):t('records_authorized_scope');
  return <div className="space-y-6"><div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('collection_triage')}</p><h1 className="intel-heading">{t('intelligence_inbox')}</h1><p className="text-sm text-[#77899b] mt-2">{t('inbox_workspace')} · {currentView} · {sorted.length} {t(sorted.length===1?'result':'results')} · {items.length} {recordScope}</p></div><Notice error={error}/>
+ <SocialEvidenceInbox/>
  <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_needs_action')}</p><p className="text-2xl font-semibold mt-1">{needsAction}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_pending_review')}</p><p className="text-2xl font-semibold mt-1">{counts['pending-review']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_unresolved_jurisdiction')}</p><p className="text-2xl font-semibold mt-1">{counts['jurisdiction-unresolved']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_triage_pending')}</p><p className="text-2xl font-semibold mt-1">{counts['triage-pending']}</p></div></div><p className="text-xs text-[#8192a3]">{t('inbox_summary_note')}</p>
  <div className="intel-card p-4"><div className="flex flex-wrap gap-2">{quickViews.map(([value,text])=><button key={value||'all'} type="button" className={(f.view||'')===value?'intel-button':'intel-ghost'} onClick={()=>pick('view',value)}>{text} <span className="opacity-70">({counts[value]||0})</span></button>)}</div></div>
  <div className="intel-card p-5 space-y-4"><div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"><input className="intel-input sm:col-span-2" placeholder={t('search_placeholder')} aria-label={t('filter_search')} value={f.search||''} onChange={e=>pick('search',e.target.value)}/><input className="intel-input" type="date" aria-label={t('filter_date')} value={f.date||''} onChange={e=>pick('date',e.target.value)}/>

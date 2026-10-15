@@ -289,8 +289,8 @@ test('Campaign detail includes four evidence panels without calling paid provide
  await input.fill('pemilu');await input.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Audience and geographic insights'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
- await expect(page.getByLabel('Audience and geographic insights')).toContainText('Audience demographics');
+ for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Campaign word cloud'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Campaign word cloud')).toContainText('Word cloud');
  expect(calls).toEqual([]);
 });
 
@@ -307,7 +307,7 @@ test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
  await expect(page).toHaveURL(/\/social-listening\/campaigns\/\d+/);
  await expect(page.getByLabel('Channel distribution',{exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toHaveCount(0);
- await page.reload();await expect(page.getByLabel('Audience and geographic insights')).toBeVisible();
+ await page.reload();await expect(page.getByLabel('Campaign word cloud')).toBeVisible();
  await page.getByRole('button',{name:/Back to campaigns/i}).click();
  await expect(page).toHaveURL(/\/social-listening\?tab=campaigns/);
 });
@@ -325,4 +325,18 @@ test('Campaign trend panel uses a two-series line chart when dated evidence exis
  const panel=page.getByLabel('Posts and comments trend');
  await expect(panel).toBeVisible();
  await expect(panel).toContainText('No dated evidence in this period');
+});
+
+
+test('Campaign word cloud panel replaces demographics and respects no-evidence state',async({page})=>{
+ await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
+ await page.getByRole('button',{name:/New Campaign/i}).click();
+ const dialog=page.getByRole('dialog');const name='QA Wordcloud '+Date.now();
+ await dialog.getByLabel(/Campaign name/i).fill(name);
+ const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
+ await keyword.fill('pemilu');await keyword.press('Enter');
+ await dialog.getByRole('button',{name:'Save Draft'}).click();
+ await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
+ await expect(page.getByLabel('Campaign word cloud')).toContainText('Not enough repeated terms');
+ await expect(page.getByLabel('Audience and geographic insights')).toHaveCount(0);
 });

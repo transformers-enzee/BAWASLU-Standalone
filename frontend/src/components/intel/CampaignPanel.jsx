@@ -274,10 +274,10 @@ export default function CampaignPanel({campaignId=null}){
  </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>
- <section className="rounded-lg border p-4 space-y-3" aria-label="Audience and geographic insights">
- <h5 className="font-semibold">Audience & geographic insights</h5>
- {Object.keys(dashboard.geographies||{}).length?<div className="space-y-2">{Object.entries(dashboard.geographies).sort((a,b)=>b[1]-a[1]).map(([place,count])=><div key={place} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm"><span>{place}</span><strong>{count}</strong></div>)}</div>:<p className="text-sm text-slate-500">No verified geographic metadata available for these posts.</p>}
- <div className="border-t pt-3"><h6 className="font-semibold text-sm">Audience demographics</h6><p className="text-xs text-slate-600 mt-1">Gender and age are unavailable unless a provider supplies reliable aggregate audience data. They are not inferred from post text or profiles.</p></div>
+ <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
+ <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
+ {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:['#0c5963','#237e86','#326b88','#426c78'][index%4]}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">Not enough repeated terms to display a word cloud.</p>}
+ <p className="text-xs text-slate-500">Based on stored campaign evidence and the selected publication-date range. Common filler words and primary query terms are suppressed to surface discussion themes. No additional SocialCrawl or AI calls.</p>
  </section>
     </div>
     <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>

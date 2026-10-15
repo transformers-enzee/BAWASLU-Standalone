@@ -13,6 +13,21 @@ from .socialcrawl import _scope_filters, AVAILABLE_PLATFORMS
 MAX_KEYWORDS=30
 MAX_CAMPAIGNS_PER_LIST=200
 MAX_NAME=255
+WORD_CLOUD_STOPWORDS=set("""dan yang untuk dengan dari pada dalam adalah atau ini itu serta agar karena oleh kepada
+sebagai juga telah akan sudah tidak bisa dapat menjadi mereka kami kita anda kamu saya dia nya
+di ke se para tentang saat lebih masih hanya semua tahun hari bulan waktu setelah sebelum
+bagi guna terkait antara melalui yaitu yakni bahwa namun hingga seperti sangat agar
+the and for with from are was were this that have has had not but our your their into
+atau pada jadi pun lah sebuah suatu selamat terima kasih yuk mari ayo simak info informasi
+bawaslu pemilu https http www com tiktok video post""".split())
+
+def _cloud_terms(text,counts):
+    import re
+    for token in re.findall(r"[^\W\d_][^\W_]*",str(text or '').casefold(),flags=re.UNICODE):
+        token=token.strip('-')
+        if len(token)<3 or len(token)>35 or token in WORD_CLOUD_STOPWORDS: continue
+        counts[token]+=1
+
 
 def _keywords(value,label,mandatory=False):
     if not isinstance(value,list):
@@ -304,7 +319,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
-        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter()
         visible=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
@@ -314,6 +329,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             except ValueError: source_day=''
             if (from_day or to_day) and (not source_day or (from_day and source_day<from_day) or (to_day and source_day>to_day)): continue
             visible+=1
+            _cloud_terms(item.text_content,cloud_terms)
             if source_day: daily[source_day]+=1
             platforms[item.platform or 'unknown']+=1
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
@@ -337,6 +353,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),
+                'word_cloud':[{'word':word,'count':count} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0]))[:55] if count>=2],
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'limited_to':5000,'truncated':len(links)==5000,

@@ -98,3 +98,119 @@ def campaign_history(db,c,limit=20):
             'credits_used':run.credits_used,'result_count':run.result_count,
             'error':run.error_text or ''})
     return items
+
+def _keyword_match(c,row):
+    """Literal keyword screening only, not an AI relevance determination.
+
+    Comments count only if they are actually present in returned provider data.
+    Excludes are applied even if the mock provider ignores them.
+    """
+    raw=row.get('raw') or {}
+    comments=raw.get('comments') if isinstance(raw,dict) else None
+    comment_text=''
+    if isinstance(comments,list):
+        comment_text=' '.join(str(x.get('text') or '') for x in comments if isinstance(x,dict))
+    haystack=((row.get('text_content') or '')+' '+comment_text).casefold()
+    words=json.loads(c.primary_keywords_json or '[]')
+    excluded=json.loads(c.excluded_keywords_json or '[]')
+    return bool(words) and any(word.casefold() in haystack for word in words) and not any(
+        word.casefold() in haystack for word in excluded
+    )
+
+def simulate_campaign_cycle(db,p,c,provider_client=None,now=None,daily_budget=0,per_run_limit=0):
+    """Exercise scheduled collection with an injected fake provider only.
+
+    NOT an HTTP endpoint or background job. Never accepts the real network
+    provider; budgets are explicit test inputs, default-deny. Production paid
+    crawling remains blocked until a separately approved execution design.
+    """
+    if provider_client is None or not callable(provider_client):
+        raise ValueError('Simulated scheduler requires an injected test provider')
+    from .access import allowed, has
+    from .socialcrawl import (_scope_filters, execute_search, _extract_items,
+                              _map_result, _matches_local_filters, _result_in_scope)
+    from .models import CampaignEvidence, SocialListeningResult
+    from sqlalchemy import func
+
+    if not has(p,'view_intelligence') or not allowed(p,c):
+        raise PermissionError('Campaign is outside authorized access')
+    if str(c.created_by)!=str(p.get('id')) and not (
+        p.get('role')=='National Administrator' and has(p,'administration')
+    ): raise PermissionError('Campaign owner or national administrator required')
+    if c.status!='ACTIVE':
+        return {'status':'SKIPPED','reason':'Campaign is not active'}
+    now=now or utc_now()
+    due=c.next_run_at or c.created_at+timedelta(minutes=c.interval_minutes)
+    if due and due>now:
+        return {'status':'SKIPPED','reason':'Not due','next_run_at':due.isoformat()}
+    filters=_scope_filters(p,campaign_query(c))
+    estimate=estimate_search_cost(filters)['estimated_credits']
+    recent=used_credits_24h(db,now)
+    if (type(per_run_limit) is not int or type(daily_budget) is not int
+        or per_run_limit<1 or daily_budget<1
+        or estimate>per_run_limit or recent+estimate>daily_budget):
+        return {'status':'BLOCKED','reason':'Credit budget unavailable',
+                'estimated_credits':estimate,'credits_used_last_24h':recent}
+    previous_id=db.query(func.max(SocialListeningRun.id)).scalar() or 0
+    envelope=[]
+    def capture(scoped):
+        response=provider_client(scoped)
+        envelope.append(response)
+        return response
+    error=None
+    result=None
+    try:
+        result=execute_search(db,p,filters,provider_client=capture)
+    except Exception as exc:
+        error=str(exc)[:160]
+    if result:
+        run=db.get(SocialListeningRun,int(result['run']['id']))
+    else:
+        # This is only safe in a single-worker synthetic test environment.
+        run=db.query(SocialListeningRun).filter(
+            SocialListeningRun.id>previous_id,
+            SocialListeningRun.executed_by==str(p['id'])
+        ).order_by(SocialListeningRun.id.desc()).first()
+    if not run:
+        raise RuntimeError('Synthetic provider attempt did not create a run record')
+    edge=CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='SIMULATED')
+    db.add(edge)
+    new_links=0
+    if result and envelope:
+        env=envelope[-1]
+        for raw in _extract_items(env):
+            if not isinstance(raw,dict): continue
+            mapped=_map_result(db,raw,default_platform='online_news' if
+                json.loads(c.platforms_json or '[]')==['online_news'] else '')
+            if not _keyword_match(c,mapped) or not _matches_local_filters(mapped,filters): continue
+            row=db.query(SocialListeningResult).filter(
+                SocialListeningResult.content_fingerprint==mapped['content_fingerprint']
+            ).order_by(SocialListeningResult.id.asc()).first()
+            if not row or not _result_in_scope(db,p,row): continue
+            prior=db.query(CampaignEvidence).filter(
+                CampaignEvidence.campaign_id==c.id,
+                CampaignEvidence.result_id==row.id).first()
+            if not prior:
+                db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
+                    match_method='KEYWORD',matched_fields_json='["text_content"]'))
+                new_links+=1
+    if error:
+        # Retried later at bounded intervals (15, 30, 60 minutes).
+        # Count prior consecutive failures, stopping at the last success.
+        history=campaign_history(db,c,limit=10)
+        failures=0
+        for h in history:
+            if h['status']!='FAILED': break
+            failures+=1
+        backoff=min(60,15*(2**min(failures,2)))
+        c.next_run_at=now+timedelta(minutes=backoff)
+    else:
+        c.last_success_at=now
+        c.next_run_at=now+timedelta(minutes=c.interval_minutes)
+    c.updated_at=now
+    db.commit()
+    return {'status':'FAILED' if error else 'COMPLETED',
+            'run_id':str(run.id),'error':error or '',
+            'linked_new_evidence':new_links,
+            'credits_used':run.credits_used,
+            'next_run_at':c.next_run_at.isoformat()}

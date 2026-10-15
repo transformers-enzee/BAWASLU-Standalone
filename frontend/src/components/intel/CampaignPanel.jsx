@@ -274,12 +274,17 @@ export default function CampaignPanel({campaignId=null}){
  </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>
- <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
- <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
- {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">Not enough repeated terms to display a word cloud.</p>}
- <p className="text-xs text-slate-500">Based on stored campaign evidence and the selected publication-date range. Primary keywords define the campaign evidence; observed secondary keywords are highlighted in gold. Word sizes reflect actual mentions. No additional SocialCrawl or AI calls.</p>
+ <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">
+ <h5 className="font-semibold">Demographics</h5>
+ <p className="text-sm text-slate-600">Gender, age, and audience location are not available from the current captured evidence.</p>
+ <p className="text-xs text-slate-500">Demographic charts will appear only when reliable source-provided aggregate data is available. Demographics are not inferred from names, posts, or profiles.</p>
  </section>
     </div>
+<section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
+ <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
+ {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured campaign keywords appear in the selected evidence.</p>}
+ <p className="text-xs text-slate-500">Only configured main and secondary keywords are shown. Sizes reflect recorded mentions in the selected date range. Gold indicates secondary keywords. No additional SocialCrawl or AI calls.</p>
+ </section>
     <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
     {dashboard.truncated&&<p className="text-xs text-amber-800">Statistics cover only the latest 5,000 campaign evidence links.</p>}
     {[

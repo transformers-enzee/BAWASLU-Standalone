@@ -322,7 +322,6 @@ def campaign_action(db:Session,p,action,data,id=None):
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
-        observed_secondary=Counter()
         visible=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
@@ -333,11 +332,11 @@ def campaign_action(db:Session,p,action,data,id=None):
             if (from_day or to_day) and (not source_day or (from_day and source_day<from_day) or (to_day and source_day>to_day)): continue
             visible+=1
             # Already-linked campaign evidence is the main-keyword-matched corpus.
-            _cloud_terms(item.text_content,cloud_terms)
             lowered=(item.text_content or '').casefold()
-            for keyword in secondary_terms:
-                occurrences=lowered.count(keyword.casefold()) if keyword.strip() else 0
-                if occurrences: observed_secondary[keyword]+=occurrences
+            for keyword in primary_terms+secondary_terms:
+                if not keyword.strip(): continue
+                occurrences=lowered.count(keyword.casefold())
+                if occurrences: cloud_terms[keyword]+=occurrences
             if source_day: daily[source_day]+=1
             platforms[item.platform or 'unknown']+=1
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
@@ -355,15 +354,13 @@ def campaign_action(db:Session,p,action,data,id=None):
             if isinstance(matched,dict):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
                 for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
-        for term,count in observed_secondary.items():
-            cloud_terms[term.casefold()]=max(cloud_terms[term.casefold()],count)
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
         return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),
-                'word_cloud':[{'word':word,'count':count,'secondary':word.casefold() in {s.casefold() for s in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0]))[:55] if count>=2],
+                'word_cloud':[{'word':word,'count':count,'secondary':word.casefold() in {s.casefold() for s in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0],
                 'secondary_word_counts':dict(observed_secondary),
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),

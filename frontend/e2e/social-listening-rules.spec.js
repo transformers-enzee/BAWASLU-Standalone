@@ -311,3 +311,18 @@ test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
  await page.getByRole('button',{name:/Back to campaigns/i}).click();
  await expect(page).toHaveURL(/\/social-listening\?tab=campaigns/);
 });
+
+
+test('Campaign trend panel uses a two-series line chart when dated evidence exists',async({page})=>{
+ await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
+ const name='QA Line Trend '+Date.now();
+ await page.getByRole('button',{name:/New Campaign/i}).click();
+ const dialog=page.getByRole('dialog');await dialog.getByLabel(/Campaign name/i).fill(name);
+ const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
+ await keyword.fill('pemilu');await keyword.press('Enter');
+ await dialog.getByRole('button',{name:'Save Draft'}).click();
+ await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
+ const panel=page.getByLabel('Posts and comments trend');
+ await expect(panel).toBeVisible();
+ await expect(panel).toContainText('No dated evidence in this period');
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -197,7 +198,25 @@ export default function CampaignPanel({campaignId=null}){
     <p className="text-xs text-slate-500">Date filtering uses source publication dates. Records without dates are omitted when a date filter is applied.</p>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Posts and comments trend"><h5 className="font-semibold">Posts & comments over time</h5>{dashboard.daily_trend?.length?<div className="space-y-2">{dashboard.daily_trend.map(point=><div key={point.date} className="text-xs"><div className="flex justify-between"><span>{point.date}</span><span>{point.posts||0} posts · {point.comments||0} comments</span></div><div className="flex mt-1 h-3 rounded bg-slate-100 overflow-hidden"><div className="bg-[#285f82]" style={{width:(100*(point.posts||0)/Math.max(1,...dashboard.daily_trend.map(x=>x.count)))+'%'}}/><div className="bg-[#bc9b62]" style={{width:(100*(point.comments||0)/Math.max(1,...dashboard.daily_trend.map(x=>x.count)))+'%'}}/></div></div>)}</div>:<p className="text-xs text-slate-500">No dated evidence in this period</p>}<div className="flex gap-3 text-xs"><span>■ Posts</span><span className="text-amber-700">■ Comments</span></div></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Posts and comments trend">
+        <h5 className="font-semibold">Posts & comments over time</h5>
+        {dashboard.daily_trend?.length?
+          <div role="img" aria-label="Daily posts and comments line chart" className="h-80 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={dashboard.daily_trend} margin={{top:12,right:14,left:-18,bottom:12}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                <XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/>
+                <YAxis allowDecimals={false} tick={{fontSize:11}}/>
+                <Tooltip/>
+                <Legend verticalAlign="bottom"/>
+                <Line type="monotone" dataKey="posts" name="Posts" stroke="#285f82" strokeWidth={2.5} dot={false} activeDot={{r:4}} connectNulls/>
+                <Line type="monotone" dataKey="comments" name="Comments" stroke="#bc9b62" strokeWidth={2.5} dot={false} activeDot={{r:4}} connectNulls/>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+         :<p className="text-xs text-slate-500">No dated evidence in this period</p>}
+        <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
+      </section>
       <section className="rounded-lg border p-4 space-y-2" aria-label="Captured posts"><h5 className="font-semibold">Captured posts & sources</h5>{evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-72 overflow-y-auto space-y-2">{evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=><article key={item.id} className="border-b pb-2 text-xs"><p className="font-semibold">{item.platform} · {item.content_type||'post'} · {item.published_at||'Undated'}</p><p className="line-clamp-3 whitespace-pre-wrap">{item.text_content||'No source text'}</p>{/^https:\/\//i.test(item.canonical_url||'')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">Open original source ↗</a>}</article>)}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}<p className="text-xs text-slate-500">Showing up to 40 of the latest 200 linked records.</p></section>
       <section className="rounded-lg border p-4 space-y-2" aria-label="Sentiment analysis"><h5 className="font-semibold">Sentiment analysis</h5><div className="grid grid-cols-2 gap-2 text-xs">{['Positive','Neutral','Negative','Unclassified'].map(name=><div key={name} className="rounded bg-slate-50 p-3"><span>{name}</span><strong className="block text-lg">{dashboard.sentiment?.[name]||0}</strong></div>)}</div><p className="text-xs text-slate-600">AI sentiment classification is not yet active. Existing records remain Unclassified; no sentiment is inferred.</p></section>
     </div>

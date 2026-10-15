@@ -299,7 +299,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
         active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
-        records=[]; unassessed=0
+        records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
@@ -308,7 +308,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 assessment=(db.query(EvidenceAssessment)
                     .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id)
                     .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
-                if not assessment or assessment.relevance_label.upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+                label=str(assessment.relevance_label or 'UNASSESSED').upper() if assessment else 'UNASSESSED'
+                bucket='PENDING' if label=='UNASSESSED' else 'RELEVANT' if label in ('RELEVANT','HIGHLY_RELEVANT') else label if label in ('IRRELEVANT','UNCERTAIN') else 'OTHER'
+                assessment_counts[bucket]+=1
+                if not assessment or label not in ('RELEVANT','HIGHLY_RELEVANT'):
                     if not assessment or assessment.relevance_label.upper()=='UNASSESSED': unassessed+=1
                     continue
                 def parse_list(value):
@@ -331,7 +334,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version})
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
-                'unassessed_count':unassessed,'scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'processing_status':'Not tracked: background jobs do not yet persist processing or failure state','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

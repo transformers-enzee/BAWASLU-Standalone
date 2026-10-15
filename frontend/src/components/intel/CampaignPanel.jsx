@@ -64,7 +64,7 @@ export default function CampaignPanel({campaignId=null}){
   try{
    const response=await base44.functions.invoke('socialListening',{action:'campaignThumbnailRecovery',id:selected.id,data:{}});
    const result=response.data;
-   setThumbnailRecoveryMessage(result.recovered+' images saved; '+result.unavailable+' unavailable; '+result.already_saved+' already stored. Reasons: '+(Object.entries(result.failure_reasons||{}).map(([name,count])=>name.replaceAll('_',' ')+': '+count).join(', ')||'none')+'.'+(result.remaining?' Additional records not checked.':''));
+   setThumbnailRecoveryMessage(result.recovered+' images saved; '+result.unavailable+' unavailable; '+result.already_saved+' already stored. Reasons: '+(Object.entries(result.failure_reasons||{}).map(([name,count])=>name.replaceAll('_',' ')+': '+count).join(', ')||'none')+'.'+(' Metadata: '+(result.source_metadata?.with_thumbnail_field||0)+' records with stored thumbnail field, '+(result.source_metadata?.without_thumbnail_field||0)+' without.' )+(result.remaining?' Additional records not checked.':''));
    const latest=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{}});
    setEvidence(latest.data.evidence||[]);
   }catch(e){setThumbnailRecoveryMessage(e.response?.data?.detail||e.message||'Recovery unavailable')}

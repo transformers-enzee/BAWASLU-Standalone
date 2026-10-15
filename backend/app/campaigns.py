@@ -265,7 +265,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
-                'paid_provider_called':False,'failure_reasons':{}}
+                'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0}}
         budget=12
         for link in rows:
             item=db.get(SocialListeningResult,link.result_id)
@@ -278,6 +278,20 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['remaining']+=1
                 continue
             report['checked']+=1
+            try:
+                raw=json.loads(item.raw_payload_json or '{}')
+            except (ValueError,TypeError):
+                raw={}
+                report['source_metadata']['invalid_payload']+=1
+            source_items=raw.get('source_items') if isinstance(raw,dict) else None
+            if isinstance(source_items,list) and source_items:
+                report['source_metadata']['source_items']+=1
+            # Inspect the metadata without ever returning signed URLs or tokens.
+            media=(source_items[0].get('media') if isinstance(source_items,list) and source_items and isinstance(source_items[0],dict) else None)
+            if isinstance(media,dict) and media.get('thumbnail_url'):
+                report['source_metadata']['with_thumbnail_field']+=1
+            else:
+                report['source_metadata']['without_thumbnail_field']+=1
             reason=cache_thumbnail_diagnostic(db,item,_existing_thumbnail(item,include_expired=True))
             if reason=='saved':
                 report['recovered']+=1

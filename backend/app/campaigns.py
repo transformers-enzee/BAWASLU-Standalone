@@ -96,16 +96,42 @@ def _editable(p,c):
 
 MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT=5
 
-def _manual_preflight(db,p,c):
+def _keyword_search_plan(db,p,c):
     from .campaign_scheduler import campaign_query
     from .socialcrawl import search_preflight
-    preview=search_preflight(db,p,campaign_query(c))
-    cost=int(preview['estimated_credits'])
-    return {'estimated_credits':cost,'components':preview['components'],
-            'duplicate_recent':preview.get('duplicate_recent'),
+    base=campaign_query(c)
+    keywords=json.loads(c.primary_keywords_json or '[]')
+    searches=[]
+    for keyword in keywords:
+        filters={**base,'query':keyword}
+        pre=search_preflight(db,p,filters)
+        searches.append({'keyword':keyword,'filters':filters,'credits':int(pre['estimated_credits']),
+                         'components':pre['components'],'duplicate_recent':pre.get('duplicate_recent')})
+    return searches
+
+def _manual_preflight(db,p,c):
+    searches=_keyword_search_plan(db,p,c)
+    cost=sum(s['credits'] for s in searches)
+    return {'estimated_credits':cost,'components':[
+                {'label':s['keyword']+': '+part['label'],'credits':part['credits']}
+                for s in searches for part in s['components']],
+            'duplicate_recent':next((s['duplicate_recent'] for s in searches if s['duplicate_recent']),None),
+            'keyword_searches':[{'keyword':s['keyword'],'estimated_credits':s['credits'],
+                                 'duplicate_recent':s['duplicate_recent']} for s in searches],
             'credit_limit':MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT,
             'can_run':bool(cost>0 and cost<=MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT),
-            'manual_only':True,'paid_provider_called':False}
+            'manual_only':True,'paid_provider_called':False,'retrieval_mode':'PER_KEYWORD_OR'}
+
+def _existing_thumbnail(item):
+    from .socialcrawl import _value
+    try: raw=json.loads(item.raw_payload_json or '{}')
+    except (ValueError,TypeError): return ''
+    url=_value(raw,'post.media.thumbnail_url','post.media.thumbnail','post.media.cover_url',
+               'post.video.cover_url','post.thumbnail_url','thumbnail_url','image_url',
+               'post.media.0.thumbnail_url','post.media.0.url',default='')
+    if isinstance(url,str) and url.startswith('https://') and len(url)<=2048:
+        return url
+    return ''
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
@@ -126,26 +152,34 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Credit estimate changed; request a new preview')
         if preview['duplicate_recent'] and (data or {}).get('acknowledge_duplicate') is not True:
             raise ValueError('Recent duplicate search requires acknowledgement')
-        response=execute_search(db,p,campaign_query(c),confirmed_cost=True)
-        run_id=int(response['run']['id'])
-        db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run_id,triggered_by='MANUAL'))
-        linked=0
-        for item in response.get('results') or []:
-            row=db.get(SocialListeningResult,int(item['id']))
-            if not row or not _result_in_scope(db,p,row): continue
-            match=keyword_screen(c,{'text_content':row.text_content,
-                                    'raw':json.loads(row.raw_payload_json or '{}')})
-            if not match['matched']: continue
-            existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
-            if existing: continue
-            db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
-                  matched_fields_json=json.dumps(match,ensure_ascii=False)))
-            linked+=1
+        runs=[]; linked=0; new_results=0; credits_used=0
+        # Independent searches ensure each main keyword can retrieve content.
+        # Existing fingerprints and CampaignEvidence uniqueness deduplicate overlap.
+        for search in _keyword_search_plan(db,p,c):
+            response=execute_search(db,p,search['filters'],confirmed_cost=True)
+            run_id=int(response['run']['id'])
+            runs.append(response['run'])
+            credits_used+=int(response['run'].get('credits_used') or 0)
+            new_results+=len(response.get('results') or [])
+            db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run_id,triggered_by='MANUAL'))
+            for item in response.get('results') or []:
+                row=db.get(SocialListeningResult,int(item['id']))
+                if not row or not _result_in_scope(db,p,row): continue
+                match=keyword_screen(c,{'text_content':row.text_content,
+                                        'raw':json.loads(row.raw_payload_json or '{}')})
+                if not match['matched']: continue
+                existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
+                if existing: continue
+                db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
+                      matched_fields_json=json.dumps(match,ensure_ascii=False)))
+                linked+=1
+            db.commit()
         c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
-        audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'run_id':{'new':run_id},'linked_evidence':{'new':linked}})
-        return {'run':response['run'],'linked_evidence':linked,'result_count':len(response.get('results') or []),
-                'manual_only':True,'estimated_credits':preview['estimated_credits']}
+        audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'runs':{'new':len(runs)},'linked_evidence':{'new':linked}})
+        return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
+                'credits_used':credits_used,'manual_only':True,'estimated_credits':preview['estimated_credits'],
+                'retrieval_mode':'PER_KEYWORD_OR'}
     if action=='campaignDashboard':
         from collections import Counter
         from .models import SocialListeningResult
@@ -215,7 +249,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not item or not _result_in_scope(db,p,item): continue
             try: match=json.loads(link.matched_fields_json or '[]')
             except (ValueError,TypeError): match=[]
-            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'matched_fields':match})
+            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'matched_fields':match})
         return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

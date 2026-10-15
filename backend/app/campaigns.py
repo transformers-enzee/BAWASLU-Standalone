@@ -258,14 +258,14 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action=='campaignThumbnailRecovery':
         from .models import SocialListeningResult, SocialMediaThumbnail
         from .socialcrawl import _result_in_scope
-        from .thumbnail_cache import cache_thumbnail, stored_thumbnail_uri
+        from .thumbnail_cache import cache_thumbnail_diagnostic
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can recover thumbnails')
         rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
-                'paid_provider_called':False}
+                'paid_provider_called':False,'failure_reasons':{}}
         budget=12
         for link in rows:
             item=db.get(SocialListeningResult,link.result_id)
@@ -278,10 +278,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['remaining']+=1
                 continue
             report['checked']+=1
-            if cache_thumbnail(db,item,_existing_thumbnail(item)):
+            reason=cache_thumbnail_diagnostic(db,item,_existing_thumbnail(item))
+            if reason=='saved':
                 report['recovered']+=1
             else:
                 report['unavailable']+=1
+                report['failure_reasons'][reason]=report['failure_reasons'].get(reason,0)+1
         db.commit()
         return report
     if action in ('campaignManualPreflight','campaignManualRun'):

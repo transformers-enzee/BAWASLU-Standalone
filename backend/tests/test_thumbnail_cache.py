@@ -8,3 +8,14 @@ def test_image_cache_rejects_untrusted_and_insecure_image_urls():
     assert not _allowed_image_host('https://localhost/photo.jpg')
     assert not _allowed_image_host('https://fbcdn.net.evil.example/photo.jpg')
     assert not _allowed_image_host('https://user:password@fbcdn.net/photo.jpg')
+
+
+def test_thumbnail_diagnostics_reject_untrusted_url_without_network():
+    from app.thumbnail_cache import cache_thumbnail_diagnostic
+    from types import SimpleNamespace
+    class Empty:
+        def get(self,model,key): return None
+    item=SimpleNamespace(id=42)
+    assert cache_thumbnail_diagnostic(Empty(),item,'')=='no_valid_url'
+    assert cache_thumbnail_diagnostic(Empty(),item,'https://example.com/a.jpg')=='unsupported_host'
+    assert cache_thumbnail_diagnostic(Empty(),item,'https://p16.tiktokcdn.com/a.jpg?x-expires=1')=='expired_url'

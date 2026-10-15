@@ -361,7 +361,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),
                 'word_cloud':[{'word':word,'count':count,'secondary':word.casefold() in {s.casefold() for s in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0],
-                'secondary_word_counts':dict(observed_secondary),
+                'secondary_word_counts':{word:cloud_terms.get(word,0) for word in secondary_terms if cloud_terms.get(word,0)>0},
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'limited_to':5000,'truncated':len(links)==5000,

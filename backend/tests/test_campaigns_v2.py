@@ -158,3 +158,13 @@ def test_campaign_evidence_read_only_no_charge():
     assert result['evidence']==[] and result['paid_provider_called'] is False
     assert db.query(SocialListeningRun).count()==0
     db.close()
+
+
+def test_campaign_dashboard_word_cloud_without_secondary_keywords():
+    db=SessionLocal(); p=actor(db,'wordcloudadmin','National Administrator')
+    campaign=action(db,p,'createCampaign',payload(primary_keywords=['bawaslu','pemilu'],secondary_keywords=[]))['campaign']
+    result=action(db,p,'campaignDashboard',{},campaign['id'])
+    assert result['word_cloud']==[]
+    assert result['secondary_word_counts']=={}
+    assert result['paid_provider_called'] is False
+    db.close()

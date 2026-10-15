@@ -27,7 +27,7 @@ test('Command Center loads read-only operational overview without paid-provider 
 test('Command Center drill-down links point to operational modules',async({page})=>{
   await uiLogin(page);
   await page.goto('/command-center');
-  await expect(page.getByRole('link',{name:/Intelligence Inbox/i})).toHaveAttribute('href','/inbox');
+  await expect(page.getByRole('main').getByRole('link',{name:/Intelligence Inbox/i})).toHaveAttribute('href','/inbox');
   await expect(page.getByRole('main').getByRole('link',{name:'Validation',exact:true})).toHaveAttribute('href','/validation');
   await expect(page.getByRole('main').getByRole('link',{name:'Social Review Queue',exact:true})).toBeVisible();
 });

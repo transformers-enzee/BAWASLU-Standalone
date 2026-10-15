@@ -94,8 +94,58 @@ def _editable(p,c):
     if p.get('role')=='National Administrator' and has(p,'administration'): return True
     return c.created_by==p.get('id') and has(p,'add_intelligence')
 
+MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT=5
+
+def _manual_preflight(db,p,c):
+    from .campaign_scheduler import campaign_query
+    from .socialcrawl import search_preflight
+    preview=search_preflight(db,p,campaign_query(c))
+    cost=int(preview['estimated_credits'])
+    return {'estimated_credits':cost,'components':preview['components'],
+            'duplicate_recent':preview.get('duplicate_recent'),
+            'credit_limit':MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT,
+            'can_run':bool(cost>0 and cost<=MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT),
+            'manual_only':True,'paid_provider_called':False}
+
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action in ('campaignManualPreflight','campaignManualRun'):
+        from .campaign_scheduler import campaign_query, keyword_screen
+        from .socialcrawl import execute_search
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can run collection')
+        if c.status!='DRAFT': raise ValueError('Only draft campaigns can be crawled manually')
+        preview=_manual_preflight(db,p,c)
+        if action=='campaignManualPreflight': return preview
+        if not preview['can_run']: raise ValueError('Estimated crawl exceeds the 5-credit manual limit')
+        if (data or {}).get('confirm_cost') is not True: raise ValueError('Explicit credit confirmation required')
+        if int((data or {}).get('confirmed_credits',-1))!=preview['estimated_credits']:
+            raise ValueError('Credit estimate changed; request a new preview')
+        if preview['duplicate_recent'] and (data or {}).get('acknowledge_duplicate') is not True:
+            raise ValueError('Recent duplicate search requires acknowledgement')
+        response=execute_search(db,p,campaign_query(c),confirmed_cost=True)
+        run_id=int(response['run']['id'])
+        db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run_id,triggered_by='MANUAL'))
+        linked=0
+        for item in response.get('results') or []:
+            row=db.get(SocialListeningResult,int(item['id']))
+            if not row or not _result_in_scope(db,p,row): continue
+            match=keyword_screen(c,{'text_content':row.text_content,
+                                    'raw':json.loads(row.raw_payload_json or '{}')})
+            if not match['matched']: continue
+            existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
+            if existing: continue
+            db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
+                  matched_fields_json=json.dumps(match,ensure_ascii=False)))
+            linked+=1
+        c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+        audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'run_id':{'new':run_id},'linked_evidence':{'new':linked}})
+        return {'run':response['run'],'linked_evidence':linked,'result_count':len(response.get('results') or []),
+                'manual_only':True,'estimated_credits':preview['estimated_credits']}
     if action=='campaignDashboard':
         from collections import Counter
         from .models import SocialListeningResult

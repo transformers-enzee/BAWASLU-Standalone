@@ -23,12 +23,27 @@ export default function CampaignPanel(){
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
+ const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setSelected(c);setEvidence([]);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setEvidence([]);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
+ }
+ async function previewManualCrawl(){
+  if(!selected)return;setManualBusy(true);setManualPreview(null);setManualNotice('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualPreflight',id:selected.id,data:{}});setManualPreview(r.data);setManualDuplicate(false)}
+  catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setManualBusy(false)}
+ }
+ async function executeManualCrawl(){
+  if(!selected||!manualPreview?.can_run)return;setManualBusy(true);setManualNotice('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate}});
+   setManualPreview(null);setManualNotice('Completed: '+r.data.result_count+' new results, '+r.data.linked_evidence+' linked campaign evidence. Actual credits: '+r.data.run.credits_used+'.');
+   await refresh();await viewEvidence(selected);
+  }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setManualBusy(false)}
  }
  async function applyAnalyticsDates(){
   if(!selected)return;
@@ -179,6 +194,18 @@ export default function CampaignPanel(){
     ].map(([label,values])=><div key={label}><h5 className="text-sm font-semibold">{label}</h5>{Object.entries(values||{}).length?<div className="space-y-1 mt-2">{Object.entries(values).sort((x,y)=>y[1]-x[1]).map(([name,count])=><div key={name} className="flex gap-3 items-center text-xs"><span className="w-32 break-words">{name}</span><div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#285f82]" style={{width:(100*count/Math.max(1,...Object.values(values)))+'%'}} /></div><strong>{count}</strong></div>)}</div>:<p className="text-xs text-slate-500 mt-1">No evidence yet</p>}</div>)}
     <p className="text-xs text-slate-500">Based on stored, access-scoped evidence. Keyword matches are not verified election violations. No SocialCrawl credits used.</p>
    </section>}
+   <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
+    <h4 className="font-semibold">Manual SocialCrawl collection</h4>
+    <p className="text-xs text-slate-600">Manual runs only. Maximum estimated charge: 5 credits per run. Scheduled crawling remains disabled.</p>
+    <button type="button" className="intel-ghost" disabled={manualBusy||selected.status!=='DRAFT'} onClick={previewManualCrawl}>Check manual crawl cost (free)</button>
+    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p>
+      {(manualPreview.components||[]).map((x,i)=><p key={i} className="text-xs">{x.label}: {x.credits} credits</p>)}
+      {manualPreview.duplicate_recent&&<label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={manualDuplicate} onChange={e=>setManualDuplicate(e.target.checked)}/> I understand this repeats a recent search</label>}
+      <button type="button" className="intel-button" disabled={manualBusy||!manualPreview.can_run||(manualPreview.duplicate_recent&&!manualDuplicate)} onClick={executeManualCrawl}>Confirm and run paid crawl ({manualPreview.estimated_credits} estimated credits)</button>
+      {!manualPreview.can_run&&<p role="alert" className="text-red-700">Credit limit exceeded; reduce selected platforms.</p>}
+    </div>}
+    {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
+   </section>
    <CampaignScheduleSummary campaign={selected} />
    <div className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Campaign keyword screening preview">
     <h4 className="font-semibold">Test keyword matching (no credits)</h4>

@@ -16,10 +16,14 @@ export default function CampaignPanel(){
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [total,setTotal]=useState(0);
+ const [sampleText,setSampleText]=useState(''),[keywordPreview,setKeywordPreview]=useState(null),[previewBusy,setPreviewBusy]=useState(false),[previewError,setPreviewError]=useState('');
+ const keywordPreviewRequest=useRef(0);
+ function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
+ async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  async function viewEvidence(c){
-  setSelected(c);setEvidence([]);setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setSelected(c);setEvidence([]);setEvidenceError('');setEvidenceLoading(true);
   try{const r=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}});setEvidence(r.data.evidence||[])}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
@@ -49,9 +53,9 @@ export default function CampaignPanel(){
   finally{setLoading(false)}
  }
  useEffect(()=>{refresh()},[]);
- function newCampaign(){clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
+ function newCampaign(){resetKeywordPreview();clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
-  clearEstimate();setForm({name:c.name,description:c.description||'',
+  resetKeywordPreview();clearEstimate();setForm({name:c.name,description:c.description||'',
    primary_keywords:[...(c.primary_keywords||[])],
    secondary_keywords:[...(c.secondary_keywords||[])],
    excluded_keywords:(c.excluded_keywords||[]).join(', '),
@@ -148,6 +152,14 @@ export default function CampaignPanel(){
    <p className="text-sm">Excluded: {selected.excluded_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    <CampaignScheduleSummary campaign={selected} />
+   <div className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Campaign keyword screening preview">
+    <h4 className="font-semibold">Test keyword matching (no credits)</h4>
+    <p className="text-xs text-slate-600">Paste sample source text. At least one main keyword must appear, and excluded keywords block the match. Secondary keywords add context but are not required. This local preview does not call SocialCrawl.</p>
+    <label className="block text-sm">Sample social post<textarea className="intel-input mt-1 w-full" rows={3} maxLength={5000} value={sampleText} onChange={e=>{keywordPreviewRequest.current+=1;setSampleText(e.target.value);setKeywordPreview(null);setPreviewBusy(false);setPreviewError('')}} /></label>
+    <button type="button" className="intel-ghost" disabled={previewBusy||!sampleText.trim()} onClick={checkKeywordPreview}>{previewBusy?'Checking…':'Preview keyword match'}</button>
+    {previewError&&<p role="alert" className="text-red-700 text-sm">{previewError}</p>}
+    {keywordPreview&&<div role="status" className="rounded-md bg-slate-50 p-3 text-sm space-y-1"><p className="font-semibold">{keywordPreview.matched?'Matches campaign keywords':'Does not match campaign keywords'}</p><p>Main matches: {(keywordPreview.main_keywords||[]).join(', ')||'None'}</p><p>Secondary context: {(keywordPreview.secondary_keywords||[]).join(', ')||'None'}</p><p>Excluded matches: {(keywordPreview.excluded_keywords||[]).join(', ')||'None'}</p><p className="text-xs text-slate-600">Preliminary literal keyword match only — not evidence of an election violation.</p></div>}
+   </div>
    <h4 className="font-semibold">Campaign evidence</h4>
    <p className="text-xs text-slate-600">Only already-linked evidence is shown; viewing this page does not trigger SocialCrawl or spend credits.</p>
    {evidenceLoading&&<p role="status">Loading evidence…</p>}
@@ -161,7 +173,7 @@ export default function CampaignPanel(){
       </div>}
     <p className="text-slate-500">Evidence match is a preliminary signal, not an assessed violation.</p></div></article>)}
    <p className="text-xs text-[#77899b]">Trend dashboards and AI classification will be enabled in subsequent builds.</p>
-   <button type="button" className="intel-ghost" onClick={()=>setSelected(null)}>Close</button>
+   <button type="button" className="intel-ghost" onClick={()=>{resetKeywordPreview();setSelected(null)}}>Close</button>
   </div>}
  </section>
 }

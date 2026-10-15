@@ -210,3 +210,28 @@ test('Campaign credit preview shows per-source breakdown and clears when configu
   await expect(dialog.getByText('Estimated cost:')).toHaveCount(0);
   await expect(dialog.getByRole('list',{name:'Estimated credits by source'})).toHaveCount(0);
 });
+
+
+test('Campaign keyword screening preview is free and distinguishes main, secondary and excluded terms',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=campaigns');
+  const name='QA Keyword Preview '+Date.now();
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByLabel(/Campaign name/i).fill(name);
+  const main=dialog.getByRole('textbox',{name:'Main keywords'});
+  await main.fill('pemilu');await main.press('Enter');
+  const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
+  await secondary.fill('bawaslu');await secondary.press('Enter');
+  await dialog.getByRole('button',{name:'Save Draft'}).click();
+  await page.getByRole('button',{name:'View Evidence'}).first().click();
+  const preview=page.getByLabel('Campaign keyword screening preview');
+  await preview.getByRole('textbox',{name:'Sample social post'}).fill('Bawaslu mengawasi pemilu');
+  await preview.getByRole('button',{name:'Preview keyword match'}).click();
+  await expect(preview.getByRole('status')).toContainText('Matches campaign keywords');
+  await expect(preview.getByRole('status')).toContainText('Secondary context: bawaslu');
+  await preview.getByRole('textbox',{name:'Sample social post'}).fill('Topik lain');
+  await expect(preview.getByRole('status')).toHaveCount(0);
+  await preview.getByRole('button',{name:'Preview keyword match'}).click();
+  await expect(preview.getByRole('status')).toContainText('Does not match campaign keywords');
+});

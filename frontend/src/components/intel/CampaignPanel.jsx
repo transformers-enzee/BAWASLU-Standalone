@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:'',secondary_keywords:'',excluded_keywords:'',platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:180,province:'',regency_city:''};
@@ -115,7 +116,8 @@ export default function CampaignPanel(){
    <p className="text-sm">Secondary: {selected.secondary_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Excluded: {selected.excluded_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
-   <p className="text-xs text-[#77899b]">Trend dashboards, classification and scheduled crawling will be enabled in subsequent builds.</p>
+   <CampaignScheduleSummary campaign={selected} />
+   <p className="text-xs text-[#77899b]">Trend dashboards and AI classification will be enabled in subsequent builds.</p>
    <button type="button" className="intel-ghost" onClick={()=>setSelected(null)}>Close</button>
   </div>}
  </section>

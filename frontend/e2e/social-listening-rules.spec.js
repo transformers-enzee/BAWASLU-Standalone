@@ -193,3 +193,20 @@ test('Campaign keyword tags support Enter, deduplication, removal and preserved 
   await expect(dialog.getByText('money politics',{exact:true})).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();
 });
+
+
+test('Campaign credit preview shows per-source breakdown and clears when configuration changes',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=campaigns');
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByLabel(/Campaign name/i).fill('QA credit preview');
+  const main=dialog.getByRole('textbox',{name:'Main keywords'});
+  await main.fill('pemilu');await main.press('Enter');
+  await dialog.getByRole('button',{name:'Check estimated credits'}).click();
+  await expect(dialog.getByRole('status')).toContainText('Estimated cost:');
+  await expect(dialog.getByRole('list',{name:'Estimated credits by source'})).toContainText('Native social search');
+  await dialog.getByLabel(/Language/i).selectOption('id');
+  await expect(dialog.getByText('Estimated cost:')).toHaveCount(0);
+  await expect(dialog.getByRole('list',{name:'Estimated credits by source'})).toHaveCount(0);
+});

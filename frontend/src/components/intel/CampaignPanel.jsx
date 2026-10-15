@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -25,17 +25,19 @@ export default function CampaignPanel(){
   finally{setEvidenceLoading(false)}
  }
  const [creditEstimate,setCreditEstimate]=useState(null),[estimating,setEstimating]=useState(false),[estimateError,setEstimateError]=useState('');
- const clearEstimate=()=>{setCreditEstimate(null);setEstimateError('')};
+ const previewRequestId=useRef(0);
+ const clearEstimate=()=>{previewRequestId.current+=1;setCreditEstimate(null);setEstimateError('');setEstimating(false)};
  async function checkCredits(){
+  const requestId=++previewRequestId.current;
   setEstimating(true);setEstimateError('');setCreditEstimate(null);
   try{
    const r=await base44.functions.invoke('socialListening',{action:'campaignCostPreview',data:{
      ...form,primary_keywords:form.primary_keywords,
      secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)
    }});
-   setCreditEstimate(r.data);
-  }catch(e){setEstimateError(e.response?.data?.detail||e.response?.data?.error||e.message)}
-  finally{setEstimating(false)}
+   if(requestId===previewRequestId.current)setCreditEstimate(r.data);
+  }catch(e){if(requestId===previewRequestId.current)setEstimateError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{if(requestId===previewRequestId.current)setEstimating(false)}
  }
 
  const set=(key,value)=>{clearEstimate();setForm(x=>({...x,[key]:value}))};
@@ -128,6 +130,7 @@ export default function CampaignPanel(){
     {estimateError&&<p role="alert" className="text-xs text-red-700">{estimateError}</p>}
     {creditEstimate&&<div role="status" className="text-sm text-amber-950">
       Estimated cost: <strong>{creditEstimate.estimated_credits} credits per run</strong>
+      {Array.isArray(creditEstimate.components)&&creditEstimate.components.length>0&&<ul className="mt-2 space-y-1 text-xs" aria-label="Estimated credits by source">{creditEstimate.components.map((part,index)=><li key={part.endpoint||index} className="flex justify-between gap-3"><span>{part.label||part.endpoint}</span><strong>{part.credits} credits</strong></li>)}</ul>}
       <p className="text-xs">Estimate, not a guaranteed final charge. Actual provider usage may differ.</p>
       <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
     </div>}

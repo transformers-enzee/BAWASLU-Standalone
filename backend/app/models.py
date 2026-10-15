@@ -397,3 +397,15 @@ class SocialListeningProviderUsage(Base):
     result_count: Mapped[int] = mapped_column(Integer, default=0)
     user_id: Mapped[str] = mapped_column(String(128), default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class AIAssessmentJob(Base):
+    __tablename__='ai_assessment_jobs'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'), index=True)
+    state: Mapped[str] = mapped_column(String(24), default='PENDING', index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(String(160), default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__=(UniqueConstraint('campaign_id','result_id',name='uq_ai_assessment_job_campaign_result'),)

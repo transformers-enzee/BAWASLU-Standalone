@@ -4,7 +4,7 @@ import os
 import logging
 import httpx
 from .db import SessionLocal
-from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase
+from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob
 
 log=logging.getLogger(__name__)
 def _arr(value):
@@ -25,6 +25,20 @@ def normalize_relevance_label(output):
     label=str(output.get('relevance_label') or '').strip().upper()
     return label if label in VALID_RELEVANCE else 'UNCERTAIN'
 
+def enqueue_campaign_evidence(campaign_id):
+    """Create durable pending rows; never calls an AI provider."""
+    db=SessionLocal()
+    try:
+        linked=db.query(CampaignEvidence).filter_by(campaign_id=campaign_id).limit(500).all()
+        added=0
+        for link in linked:
+            if db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign_id,result_id=link.result_id).first():continue
+            if db.query(AIAssessmentJob.id).filter_by(campaign_id=campaign_id,result_id=link.result_id).first():continue
+            db.add(AIAssessmentJob(campaign_id=campaign_id,result_id=link.result_id,state='PENDING'));added+=1
+        db.commit()
+        return added
+    finally:db.close()
+
 def assess_pending_campaign(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -42,15 +56,21 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
         category_names={c.id:c.name for c in categories}
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
         taxonomy=[{'id':c.id,'name':c.name,'phrases':[p.phrase for p in phrases if p.category_id==c.id][:12]} for c in categories]
+        enqueue_campaign_evidence(campaign.id)
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         used=0
         for link in links:
             if used>=limit: break
             exists=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if exists:continue
+            job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
+            if job and job.state=='COMPLETED':continue
+            if job and job.attempts>=3:continue
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
             used+=1
+            if job:
+                job.state='PROCESSING';job.attempts+=1;db.commit()
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
             try:
                 model=os.getenv('BAWASLU_RELEVANCE_MODEL','gpt-4o-mini')
@@ -83,9 +103,16 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),
                     geographic_signals_json=json.dumps(strings('locations')),
                     potential_issue_signals_json=json.dumps(signals))
-                db.add(record);db.commit()
+                db.add(record)
+                if job:job.state='COMPLETED';job.last_error=''
+                db.commit()
             except (httpx.HTTPError,KeyError,ValueError,TypeError,IndexError) as exc:
                 db.rollback()
+                if job:
+                    job=db.get(AIAssessmentJob,job.id)
+                    job.state='FAILED' if job.attempts>=3 else 'PENDING'
+                    job.last_error=type(exc).__name__
+                    db.commit()
                 log.warning('AI screening stopped after request error: %s',type(exc).__name__)
                 break
     finally:

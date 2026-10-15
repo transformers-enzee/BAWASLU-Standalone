@@ -167,7 +167,7 @@ test('Campaign schedule panel shows estimates and no automatic paid crawling',as
   await page.getByRole('button',{name:'Save Draft'}).click();
   const card=page.getByRole('row').filter({hasText:name});
   await expect(card).toBeVisible();
-  await card.getByRole('button',{name:'View Evidence'}).click();
+  await card.getByRole('button',{name:'Open Dashboard'}).click();
   const schedule=page.getByLabel('Campaign schedule and crawl history');
   await expect(schedule).toBeVisible();
   await expect(schedule).toContainText('Estimated credits per run:');
@@ -225,7 +225,7 @@ test('Campaign keyword screening preview is free and distinguishes main, seconda
   const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
   await secondary.fill('bawaslu');await secondary.press('Enter');
   await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
+  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
   const preview=page.getByLabel('Campaign keyword screening preview');
   await preview.getByRole('textbox',{name:'Sample social post'}).fill('Bawaslu mengawasi pemilu');
   await preview.getByRole('button',{name:'Preview keyword match'}).click();
@@ -248,7 +248,7 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
   await keyword.fill('pemilu');await keyword.press('Enter');
   await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
+  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
   const filters=page.getByLabel('Campaign analytics date filters');
   await expect(page.getByLabel('Posts and comments trend')).toBeVisible();
   await filters.getByLabel('From date').fill('2026-10-15');
@@ -288,8 +288,26 @@ test('Campaign detail includes four evidence panels without calling paid provide
  const input=dialog.getByRole('textbox',{name:'Main keywords'});
  await input.fill('pemilu');await input.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
+ await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
  for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Sentiment analysis'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
  await expect(page.getByLabel('Sentiment analysis')).toContainText('Unclassified');
  expect(calls).toEqual([]);
+});
+
+
+test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
+ await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
+ await page.getByRole('button',{name:/New Campaign/i}).click();
+ const dialog=page.getByRole('dialog');const name='QA Dedicated Dashboard '+Date.now();
+ await dialog.getByLabel(/Campaign name/i).fill(name);
+ const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
+ await keyword.fill('pemilu');await keyword.press('Enter');
+ await dialog.getByRole('button',{name:'Save Draft'}).click();
+ await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
+ await expect(page).toHaveURL(/\/social-listening\/campaigns\/\d+/);
+ await expect(page.getByLabel('Channel distribution',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toHaveCount(0);
+ await page.reload();await expect(page.getByLabel('Sentiment analysis')).toBeVisible();
+ await page.getByRole('button',{name:/Back to campaigns/i}).click();
+ await expect(page).toHaveURL(/\/social-listening\?tab=campaigns/);
 });

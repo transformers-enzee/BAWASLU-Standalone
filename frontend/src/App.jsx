@@ -24,6 +24,9 @@ import AddIntelligence from '@/pages/AddIntelligence';
 import IntelligenceDetail from '@/pages/IntelligenceDetail';
 import DataSources from '@/pages/DataSources';
 import SocialListening from '@/pages/SocialListening';
+import CampaignPanel from '@/components/intel/CampaignPanel';
+import { useParams } from 'react-router-dom';
+const CampaignDashboardPage=()=>{const {id}=useParams();return <CampaignPanel campaignId={id}/>};
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
 import { LanguageProvider } from '@/lib/LanguageContext';
@@ -73,6 +76,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/social-listening" element={<SocialListening />} />
+            <Route path="/social-listening/campaigns/:id" element={<CampaignDashboardPage />} />
           </Route>
           <Route element={<AccessGate permission="human_validation" />}>
             <Route path="/validation" element={<Validation />} />

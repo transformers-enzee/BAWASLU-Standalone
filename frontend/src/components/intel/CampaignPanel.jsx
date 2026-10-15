@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -18,7 +19,8 @@ function ChannelDonut({values}){
  return <div className="flex flex-col sm:flex-row items-center gap-5"><div aria-label="Channel distribution donut" role="img" className="relative w-40 h-40 shrink-0 rounded-full" style={{background:gradient}}><div className="absolute inset-8 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-xl">{total}</strong><span className="text-xs text-slate-500">captured</span></div></div><ul className="text-xs flex-1 space-y-2 w-full">{segments.map(s=><li key={s.name} className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded" style={{background:s.color}}/><span className="flex-1 break-words">{s.name}</span><strong>{s.count} ({s.percent.toFixed(1)}%)</strong></li>)}{!total&&<li>No channel evidence yet</li>}</ul></div>
 }
 
-export default function CampaignPanel(){
+export default function CampaignPanel({campaignId=null}){
+ const navigate=useNavigate();
  const [campaigns,setCampaigns]=useState([]);
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
  const [creating,setCreating]=useState(false),[editing,setEditing]=useState(null);
@@ -87,7 +89,7 @@ export default function CampaignPanel(){
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setLoading(false)}
  }
- useEffect(()=>{refresh()},[]);
+ useEffect(()=>{if(!campaignId){refresh();return}let active=true;setLoading(true);base44.functions.invoke('socialListening',{action:'getCampaign',id:campaignId,data:{}}).then(r=>{if(active)viewEvidence(r.data.campaign)}).catch(e=>{if(active)setError(e.response?.data?.detail||e.response?.data?.error||e.message)}).finally(()=>{if(active)setLoading(false)});return ()=>{active=false}},[campaignId]);
  function newCampaign(){resetKeywordPreview();clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
   resetKeywordPreview();clearEstimate();setForm({name:c.name,description:c.description||'',
@@ -121,7 +123,7 @@ export default function CampaignPanel(){
  }
  const visible=campaigns.filter(x=>(statusFilter==='all'||x.status===statusFilter)&&(x.name+' '+x.description+' '+x.primary_keywords.join(' ')).toLowerCase().includes(query.toLowerCase()));
  return <section className="space-y-5" aria-label="Monitoring campaigns">
-  {!selected&&<div className="intel-card p-5 space-y-3">
+  {!campaignId&&<div className="intel-card p-5 space-y-3">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="text-lg font-semibold">Monitoring Campaigns</h2>
       <p className="text-sm text-[#77899b]">Organize ongoing listening by topic, candidate and keyword.</p></div>
@@ -180,9 +182,9 @@ export default function CampaignPanel(){
     </form>
    </div>
   </div>}
-  {!selected&&(loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="intel-card overflow-x-auto"><table className="w-full text-left text-sm" aria-label="Campaign list"><thead className="bg-slate-50 text-xs uppercase text-slate-600"><tr><th className="p-3">Campaign</th><th className="p-3">Dates</th><th className="p-3">Status</th><th className="p-3">Evidence</th><th className="p-3">Actions</th></tr></thead><tbody>{visible.map(c=><tr key={c.id} className="border-t border-slate-100"><td className="p-3"><strong>{c.name}</strong><div className="text-xs text-slate-500">{(c.primary_keywords||[]).join(' · ')}</div></td><td className="p-3 text-xs">{c.date_from||'Any'} — {c.date_to||'Any'}</td><td className="p-3">{displayStatus(c.status)}</td><td className="p-3">{c.evidence_count}</td><td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost" onClick={()=>viewEvidence(c)}>View Evidence</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div></td></tr>)}</tbody></table>{!visible.length&&<p className="p-4 text-sm">No campaigns match your filters.</p>}</div>)}
-  {selected&&!creating&&<div className="intel-card p-5 space-y-2">
-   <button type="button" className="intel-ghost" onClick={()=>{setSelected(null);setManualPreview(null)}}>← Back to campaigns</button>
+  {!campaignId&&(loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="intel-card overflow-x-auto"><table className="w-full text-left text-sm" aria-label="Campaign list"><thead className="bg-slate-50 text-xs uppercase text-slate-600"><tr><th className="p-3">Campaign</th><th className="p-3">Dates</th><th className="p-3">Status</th><th className="p-3">Evidence</th><th className="p-3">Actions</th></tr></thead><tbody>{visible.map(c=><tr key={c.id} className="border-t border-slate-100"><td className="p-3"><strong>{c.name}</strong><div className="text-xs text-slate-500">{(c.primary_keywords||[]).join(' · ')}</div></td><td className="p-3 text-xs">{c.date_from||'Any'} — {c.date_to||'Any'}</td><td className="p-3">{displayStatus(c.status)}</td><td className="p-3">{c.evidence_count}</td><td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost" onClick={()=>navigate(`/social-listening/campaigns/${c.id}`)}>Open Dashboard</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div></td></tr>)}</tbody></table>{!visible.length&&<p className="p-4 text-sm">No campaigns match your filters.</p>}</div>)}
+  {campaignId&&selected&&!creating&&<div className="intel-card p-5 space-y-2">
+   <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
    <h3 className="font-semibold text-xl">{selected.name} — Campaign Overview</h3>
    <p className="text-sm">Main keywords: {selected.primary_keywords.join(', ')}</p>
    <p className="text-sm">Secondary: {selected.secondary_keywords.join(', ')||'None'}</p>

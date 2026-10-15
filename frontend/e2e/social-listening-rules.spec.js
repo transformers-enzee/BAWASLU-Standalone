@@ -134,8 +134,12 @@ test('Monitoring campaigns are saved as drafts and survive reload without provid
   const name='QA Campaign '+Date.now();
   await page.getByRole('button',{name:/New Campaign/i}).click();
   await page.getByLabel(/Campaign name/i).fill(name);
-  await page.getByLabel(/Main keywords/i).fill('pemilu, gibran');
-  await page.getByLabel(/Secondary keywords/i).fill('wapres');
+  await page.getByRole('textbox',{name:'Main keywords'}).fill('pemilu');
+  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
+  await page.getByRole('textbox',{name:'Main keywords'}).fill('gibran');
+  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
+  await page.getByRole('textbox',{name:'Secondary keywords'}).fill('wapres');
+  await page.getByRole('textbox',{name:'Secondary keywords'}).press('Enter');
   await page.getByLabel(/Excluded keywords/i).fill('concert');
   await page.getByRole('button',{name:'Save Draft'}).click();
   await expect(page.getByRole('status')).toContainText('Campaign saved as draft');
@@ -157,7 +161,8 @@ test('Campaign schedule panel shows estimates and no automatic paid crawling',as
   const name='QA Schedule '+Date.now();
   await page.getByRole('button',{name:/New Campaign/i}).click();
   await page.getByLabel(/Campaign name/i).fill(name);
-  await page.getByLabel(/Main keywords/i).fill('bawaslu');
+  await page.getByRole('textbox',{name:'Main keywords'}).fill('bawaslu');
+  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
   await page.getByRole('button',{name:'Save Draft'}).click();
   const card=page.locator('article.intel-card').filter({hasText:name});
   await expect(card).toBeVisible();
@@ -168,4 +173,23 @@ test('Campaign schedule panel shows estimates and no automatic paid crawling',as
   await expect(schedule).toContainText('Last successful crawl:');
   await expect(schedule).toContainText('No collection runs recorded for this campaign');
   await expect(schedule).toContainText('Automatic paid crawling disabled pending explicit approval');
+});
+
+
+test('Campaign keyword tags support Enter, deduplication, removal and preserved phrase input',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  const dialog=page.getByRole('dialog');
+  const main=dialog.getByRole('textbox',{name:'Main keywords'});
+  const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
+  await main.fill('money politics');await main.press('Enter');
+  await expect(dialog.getByText('money politics',{exact:true})).toBeVisible();
+  await main.fill('MONEY POLITICS');await main.press('Enter');
+  await expect(dialog.getByRole('button',{name:'Remove money politics from Main keywords'})).toHaveCount(1);
+  await secondary.fill('election oversight');await dialog.getByRole('button',{name:'Add'}).last().click();
+  await expect(dialog.getByText('election oversight',{exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'Remove money politics from Main keywords'}).click();
+  await expect(dialog.getByText('money politics',{exact:true})).toHaveCount(0);
+  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();
 });

@@ -14,7 +14,7 @@ async function uiLogin(page){
 
 test('saved Social Listening search can pause resume and load filters without provider calls',async({page})=>{
   await uiLogin(page);
-  await page.goto('/social-listening');
+  await page.goto('/social-listening?tab=search');
 
   const name='QA Saved Search '+Date.now();
   await page.getByLabel(/keyword/i).fill('bawaslu qa');
@@ -42,7 +42,7 @@ test('saved Social Listening search can pause resume and load filters without pr
 
 test('saved Social Listening search can edit and delete without provider calls',async({page})=>{
   await uiLogin(page);
-  await page.goto('/social-listening');
+  await page.goto('/social-listening?tab=search');
 
   const original='QA Lifecycle '+Date.now();
   const renamed=original+' Renamed';
@@ -73,7 +73,7 @@ test('saved Social Listening search can edit and delete without provider calls',
 
 test('Social Listening date filters are mutually exclusive without provider calls',async({page})=>{
   await uiLogin(page);
-  await page.goto('/social-listening');
+  await page.goto('/social-listening?tab=search');
 
   const lookback=page.getByLabel(/lookback days/i);
   const dateFrom=page.getByLabel(/date from/i);
@@ -117,10 +117,35 @@ test('Review Queue refresh gives visible feedback without resetting filters', as
 
 test('TikTok only displays native one-credit estimate without provider execution',async({page})=>{
   await uiLogin(page);
-  await page.goto('/social-listening');
+  await page.goto('/social-listening?tab=search');
   const sources=['Instagram','Youtube','X / Twitter','Threads','Reddit','Linkedin','Online News'];
   for(const label of sources){const cb=page.getByRole('checkbox',{name:label,exact:true});if(await cb.isChecked())await cb.uncheck();}
   const tiktok=page.getByRole('checkbox',{name:'Tiktok',exact:true});if(!(await tiktok.isChecked()))await tiktok.check();
   await expect(page.getByText(/1 credits?/i).first()).toBeVisible();
   await expect(page.getByRole('button',{name:/Search SocialCrawl.*1 credits?/i})).toBeVisible();
+});
+
+
+// Architecture v2 campaign-first entry point, stored configuration, and no paid crawls.
+test('Monitoring campaigns are saved as drafts and survive reload without provider calls',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+  await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toBeVisible();
+  const name='QA Campaign '+Date.now();
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  await page.getByLabel(/Campaign name/i).fill(name);
+  await page.getByLabel(/Main keywords/i).fill('pemilu, gibran');
+  await page.getByLabel(/Secondary keywords/i).fill('wapres');
+  await page.getByLabel(/Excluded keywords/i).fill('concert');
+  await page.getByRole('button',{name:'Save Draft'}).click();
+  await expect(page.getByRole('status')).toContainText('Campaign saved as draft');
+  await expect(page.locator('article.intel-card').filter({hasText:name})).toBeVisible();
+  await page.reload();
+  const card=page.locator('article.intel-card').filter({hasText:name});
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Draft');
+  await expect(card).toContainText('pemilu, gibran');
+  await expect(card).toContainText('Runs: 0');
+  await card.getByRole('button',{name:'Pause'}).click();
+  await expect(card).toContainText('Paused');
 });

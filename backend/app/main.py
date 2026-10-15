@@ -1,6 +1,6 @@
 import os, shutil, uuid
 from pathlib import Path
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -37,7 +37,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'68.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'68.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -76,9 +76,14 @@ def registry(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(
     except ValueError as e: raise HTTPException(400,str(e))
 
 @app.post('/api/functions/socialListening')
-def social_listening(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
-    try: return social_listening_action(db,p,body.action,body.data,body.id)
+    try:
+        result=social_listening_action(db,p,body.action,body.data,body.id)
+        if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0:
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(body.id))
+        return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
 

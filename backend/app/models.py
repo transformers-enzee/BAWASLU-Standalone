@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
@@ -312,6 +312,13 @@ class SocialListeningResult(Base):
 
 # Architecture v2: preserve collected source evidence independently from campaigns.
 # Tables are additive. No existing SocialListeningResult or Rule row is rewritten.
+class SocialMediaThumbnail(Base):
+    __tablename__='social_media_thumbnails'
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'),primary_key=True)
+    media_type: Mapped[str] = mapped_column(String(40),default='image/jpeg')
+    image_data: Mapped[bytes] = mapped_column(LargeBinary,nullable=False)
+    stored_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
+
 class MonitoringCampaign(Base):
     __tablename__='monitoring_campaigns'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

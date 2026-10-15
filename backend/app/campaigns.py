@@ -392,6 +392,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'can_execute':False,'paid_provider_called':False,
                 'notice':'Preview only. Campaign execution is disabled until a separate authorized release.'}
     if action=='campaignEvidence':
+        from .thumbnail_cache import stored_thumbnail_uri
         from .models import SocialListeningResult
         from .socialcrawl import _result_in_scope
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
@@ -403,7 +404,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not item or not _result_in_scope(db,p,item): continue
             try: match=json.loads(link.matched_fields_json or '[]')
             except (ValueError,TypeError): match=[]
-            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'sentiment':_latest_sentiment(db,c.id,item.id),'sentiment_details':_sentiment_details(db,c.id,item.id),'matched_fields':match})
+            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),'sentiment':_latest_sentiment(db,c.id,item.id),'sentiment_details':_sentiment_details(db,c.id,item.id),'matched_fields':match})
         return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

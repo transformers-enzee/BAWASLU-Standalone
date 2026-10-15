@@ -597,6 +597,10 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                 diagnostics['duplicate_items']+=1
                 continue
             row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row))
+            if len(mapped)<=12 and os.getenv('MEDIA_THUMBNAIL_CACHE_ENABLED','true').lower()=='true':
+                from .campaigns import _existing_thumbnail
+                from .thumbnail_cache import cache_thumbnail
+                cache_thumbnail(db,row,_existing_thumbnail(row))
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
         audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})

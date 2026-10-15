@@ -135,3 +135,18 @@ def test_campaign_credit_preview_is_read_only_and_scoped():
     with pytest.raises(PermissionError):
         action(db,regional,'campaignCostPreview',payload(province='Jawa Barat'))
     db.close()
+
+def test_campaign_keyword_preview_is_no_charge_and_scope_enforced():
+    db=SessionLocal();owner=actor(db,'admin','National Administrator')
+    campaign=action(db,owner,'createCampaign',payload(primary_keywords=['bawaslu','pemilu'],secondary_keywords=['Gibran'],excluded_keywords=['concert']))['campaign']
+    one=action(db,owner,'campaignKeywordPreview',{'text':'Pemilu election news'},campaign['id'])
+    assert one['screening']['matched'] is True
+    assert one['screening']['main_keywords']==['pemilu']
+    assert one['screening']['secondary_keywords']==[]
+    two=action(db,owner,'campaignKeywordPreview',{'text':'Bawaslu Gibran concert'},campaign['id'])
+    assert two['screening']['matched'] is False
+    assert two['screening']['excluded_keywords']==['concert']
+    assert one['paid_provider_called'] is False
+    assert db.query(SocialListeningRun).count()==0
+    assert db.query(CampaignRun).count()==0
+    db.close()

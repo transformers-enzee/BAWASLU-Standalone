@@ -96,6 +96,17 @@ def _editable(p,c):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignKeywordPreview':
+        from .campaign_scheduler import keyword_screen
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not isinstance(data,dict) or not isinstance(data.get('text'),str):
+            raise ValueError('Enter text for the keyword preview')
+        sample=data['text'].strip()
+        if len(sample)>5000: raise ValueError('Keyword preview is limited to 5000 characters')
+        result=keyword_screen(c,{'text_content':sample})
+        return {'screening':result,'paid_provider_called':False,
+                'notice':'Local matching preview only; provider-side OR retrieval has not been verified'}
     if action=='campaignCostPreview':
         from .socialcrawl import estimate_search_cost
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')

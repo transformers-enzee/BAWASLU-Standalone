@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, ImageOff } from 'lucide-react';
+import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
@@ -21,6 +21,12 @@ function ChannelDonut({values}){
  return <div className="flex flex-col sm:flex-row items-center gap-5"><div aria-label="Channel distribution donut" role="img" className="relative w-40 h-40 shrink-0 rounded-full" style={{background:gradient}}><div className="absolute inset-8 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-xl">{total}</strong><span className="text-xs text-slate-500">captured</span></div></div><ul className="text-xs flex-1 space-y-2 w-full">{segments.map(s=><li key={s.name} className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded" style={{background:s.color}}/><span className="flex-1 break-words">{s.name}</span><strong>{s.count} ({s.percent.toFixed(1)}%)</strong></li>)}{!total&&<li>No channel evidence yet</li>}</ul></div>
 }
 
+function SentimentMarker({value}){
+ const key=String(value||'Unclassified').toLowerCase();
+ const config=key==='positive'?{Icon:Smile,cls:'text-green-700',label:'Positive'}:key==='neutral'?{Icon:Meh,cls:'text-amber-600',label:'Neutral'}:key==='negative'?{Icon:Frown,cls:'text-red-700',label:'Negative'}:{Icon:CircleHelp,cls:'text-slate-400',label:'Unclassified'};
+ const Icon=config.Icon;
+ return <span className={config.cls+' flex shrink-0 flex-col items-center gap-1'} title={'Sentiment: '+config.label}><Icon size={24}/><span className="text-[10px]">{config.label}</span></span>;
+}
 function SourceThumbnail({url,platform}){
  const [failed,setFailed]=useState(false);
  return <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
@@ -224,15 +230,23 @@ export default function CampaignPanel({campaignId=null}){
          :<p className="text-xs text-slate-500">No dated evidence in this period</p>}
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Captured posts"><h5 className="font-semibold">Captured posts & sources</h5>{evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-72 overflow-y-auto space-y-2">{evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=><article key={item.id} className="flex gap-3 border-b border-slate-100 py-3 text-xs last:border-0">
-        <SourceThumbnail key={item.thumbnail_url||"none"} url={item.thumbnail_url} platform={item.platform}/>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-start gap-2 justify-between"><p className="font-semibold capitalize text-slate-700">{item.platform} · {item.content_type||'post'} <span className="font-normal text-slate-500">· {item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></p>
-          {/^https:\/\//i.test(item.canonical_url||'')&&<a aria-label="Open original source" title="Open original source" href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-md p-1 text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><ExternalLink size={16}/></a>}</div>
-          <p className="line-clamp-3 whitespace-pre-wrap break-words text-slate-700">{item.text_content||'No source text'}</p>
-        </div>
-      </article>)}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}<p className="text-xs text-slate-500">Showing up to 40 of the latest 200 linked records.</p></section>
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Sentiment analysis"><h5 className="font-semibold">Sentiment analysis</h5><div className="grid grid-cols-2 gap-2 text-xs">{['Positive','Neutral','Negative','Unclassified'].map(name=><div key={name} className="rounded bg-slate-50 p-3"><span>{name}</span><strong className="block text-lg">{dashboard.sentiment?.[name]||0}</strong></div>)}</div><p className="text-xs text-slate-600">AI sentiment classification is not yet active. Existing records remain Unclassified; no sentiment is inferred.</p></section>
+      <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
+ <h5 className="font-semibold">Captured posts & sources</h5>
+ {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
+ {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
+ const valid=/^https:\/\//i.test(item.canonical_url||'');
+ return <a key={item.id} href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
+  <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
+  <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span>{valid&&<ExternalLink size={13} className="text-blue-700"/>}</div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
+  <SentimentMarker value={item.sentiment}/>
+ </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
+ <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
+ </section>
+ <section className="rounded-lg border p-4 space-y-3" aria-label="Audience and geographic insights">
+ <h5 className="font-semibold">Audience & geographic insights</h5>
+ {Object.keys(dashboard.geographies||{}).length?<div className="space-y-2">{Object.entries(dashboard.geographies).sort((a,b)=>b[1]-a[1]).map(([place,count])=><div key={place} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm"><span>{place}</span><strong>{count}</strong></div>)}</div>:<p className="text-sm text-slate-500">No verified geographic metadata available for these posts.</p>}
+ <div className="border-t pt-3"><h6 className="font-semibold text-sm">Audience demographics</h6><p className="text-xs text-slate-600 mt-1">Gender and age are unavailable unless a provider supplies reliable aggregate audience data. They are not inferred from post text or profiles.</p></div>
+ </section>
     </div>
     <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
     {dashboard.truncated&&<p className="text-xs text-amber-800">Statistics cover only the latest 5,000 campaign evidence links.</p>}

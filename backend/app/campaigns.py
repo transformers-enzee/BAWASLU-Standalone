@@ -214,7 +214,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
-        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter()
         visible=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
@@ -230,6 +230,11 @@ def campaign_action(db:Session,p,action,data,id=None):
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
             sentiment['Unclassified']+=1
+            try: geo=json.loads(item.geography_json or '{}')
+            except (ValueError,TypeError): geo={}
+            if isinstance(geo,dict):
+                verified=geo.get('verified_country') or geo.get('source_country')
+                if isinstance(verified,str) and verified.strip(): geographies[verified.strip()]+=1
             states[item.review_state or 'UNKNOWN']+=1
             try: matched=json.loads(link.matched_fields_json or '{}')
             except (ValueError,TypeError): matched={}
@@ -241,6 +246,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'platforms':dict(platforms),'review_states':dict(states),
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
+                'geographies':dict(geographies),
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'limited_to':5000,'truncated':len(links)==5000,
@@ -273,7 +279,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not item or not _result_in_scope(db,p,item): continue
             try: match=json.loads(link.matched_fields_json or '[]')
             except (ValueError,TypeError): match=[]
-            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'matched_fields':match})
+            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'sentiment':'Unclassified','matched_fields':match})
         return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

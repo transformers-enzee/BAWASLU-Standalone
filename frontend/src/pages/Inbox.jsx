@@ -6,7 +6,7 @@ import { PRIORITIES, Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
 
 function SocialEvidenceInbox(){
- const [findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+ const [findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
  .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0)})
@@ -14,6 +14,20 @@ function SocialEvidenceInbox(){
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
  },[campaign]);
+ async function previewBacklog(){
+  if(!campaign){setBacklogStatus('Select a campaign first.');return}
+  setBacklogBusy(true);setBacklogStatus('');setBacklog(null);
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogPreview',id:campaign,data:{}});setBacklog(r.data)}
+  catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
+  finally{setBacklogBusy(false)}
+ }
+ async function startBacklog(){
+  if(!backlog||!window.confirm('Use up to '+backlog.batch_limit+' billable AI requests to assess existing campaign evidence? No SocialCrawl credits will be used.'))return;
+  setBacklogBusy(true);setBacklogStatus('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogStart',id:campaign,data:{confirm_ai_cost:true}});setBacklogStatus('Up to '+r.data.batch_limit+' AI assessments queued. Refresh this page shortly to view completed findings.');setBacklog(null)}
+  catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
+  finally{setBacklogBusy(false)}
+ }
  const filtered=useMemo(()=>findings.filter(x=>{
   if(view==='location'&&!(x.location_signals||[]).length)return false;
   if(view==='candidate'&&!(x.candidate_signals||[]).length)return false;
@@ -25,6 +39,9 @@ function SocialEvidenceInbox(){
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
    <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
   </div>
+  <div className="intel-card p-3 space-y-2"><div className="flex flex-wrap items-center gap-2"><strong className="text-sm">AI backlog · controlled review</strong><button type="button" className="intel-ghost text-xs" disabled={backlogBusy||!campaign} onClick={previewBacklog}>Preview existing posts (free)</button></div>
+  {backlog&&<div className="text-xs space-y-1"><p>{backlog.unassessed} pending links in this campaign · up to {backlog.batch_limit} AI requests this batch · 0 SocialCrawl credits.</p><p>AI provider: {backlog.ai_key_configured?'configured':'not configured'} · AI token costs vary by usage. No assessment is started by preview.</p><button className="intel-button text-xs" type="button" disabled={backlogBusy||!backlog.ai_key_configured||!backlog.batch_limit} onClick={startBacklog}>Confirm and assess up to {backlog.batch_limit} posts</button></div>}
+  {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}</div>
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'intel-button':'intel-ghost'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label} ({findings.filter(x=>key==='all'||key==='location'&&x.location_signals?.length||key==='candidate'&&x.candidate_signals?.length||key==='violation'&&x.potential_issues?.length).length})</button>)}</div>
   <div className="intel-card p-4 space-y-2"><p className="font-semibold">AI brief · {buttons.find(x=>x[0]===view)?.[1]}</p><p className="text-sm text-slate-600">{filtered.length} assessed relevant findings in this view. {view==='violation'?'These are preliminary potential issue signals mapped to active Administration categories, not confirmed violations.':'Only evidence with a recorded contextual relevance assessment appears here.'}</p><p className="text-xs text-amber-800">{unassessed} campaign evidence links are unassessed and excluded from relevant findings. No unsupported AI summary is generated.</p></div>
   <input className="intel-input w-full" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search findings, candidates, locations or issues" aria-label="Search relevant findings"/>

@@ -259,6 +259,37 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
+        from .models import EvidenceAssessment
+        from .socialcrawl import _result_in_scope
+        from .models import SocialListeningResult
+        from .openai_triage import openai_triage_configured
+        campaign_id=str(id or (data or {}).get('campaign_id') or '')
+        if not campaign_id.isdigit(): raise ValueError('Select one campaign')
+        c=db.get(MonitoringCampaign,int(campaign_id))
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
+        links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        pending=0
+        for link in links:
+            item=db.get(SocialListeningResult,link.result_id)
+            if not item or not _result_in_scope(db,p,item): continue
+            if not db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first():pending+=1
+        try:
+            import os
+            configured_limit=max(0,min(25,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
+        except ValueError:configured_limit=12
+        maximum=min(5,configured_limit,pending)
+        preview={'campaign_id':str(c.id),'unassessed':pending,'batch_limit':maximum,
+                 'ai_key_configured':openai_triage_configured(),
+                 'socialcrawl_credits':0,'estimated_ai_requests':maximum,
+                 'ai_token_cost_estimate':'Variable; provider token pricing applies',
+                 'paid_ai_executed':False}
+        if action=='campaignAssessmentBacklogPreview':return preview
+        if (data or {}).get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
+        if not preview['ai_key_configured']:raise ValueError('AI key is not configured')
+        if not maximum:raise ValueError('No pending AI assessments or processing limit is zero')
+        return {**preview,'assessment_job_accepted':True}
     if action=='campaignIntelligenceInbox':
         from .models import SocialListeningResult, EvidenceAssessment, IssueCategory
         from .socialcrawl import _result_in_scope

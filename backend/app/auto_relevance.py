@@ -13,13 +13,14 @@ def _arr(value):
         return x if isinstance(x,list) else []
     except (TypeError,ValueError): return []
 
-def assess_pending_campaign(campaign_id):
+def assess_pending_campaign(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
         return
     try: limit=max(0,min(25,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
     except ValueError: limit=12
+    if requested_limit is not None: limit=min(limit,max(0,int(requested_limit)))
     if not limit:return
     db=SessionLocal()
     try:

@@ -5,7 +5,7 @@ and the download finishes within size/time limits. No SocialCrawl API calls.
 import os
 import base64
 from urllib.parse import urlsplit
-from urllib.request import build_opener, HTTPHandler, HTTPSHandler, Request
+from urllib.request import build_opener, HTTPHandler, HTTPSHandler, HTTPRedirectHandler, Request
 from .models import SocialMediaThumbnail
 
 MAX_THUMBNAIL_BYTES=256000
@@ -19,10 +19,14 @@ def _allowed_image_host(url):
     except ValueError:
         return False
 
+class RejectRedirect(HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        return None
+
 def cache_thumbnail(db,item,url):
     if not _allowed_image_host(url) or db.get(SocialMediaThumbnail,item.id): return False
     try:
-        opener=build_opener(HTTPHandler(),HTTPSHandler())  # Redirects are not installed.
+        opener=build_opener(HTTPHandler(),HTTPSHandler(),RejectRedirect())
         request=Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; BAWASLU-thumbnail/1.0)','Accept':'image/*'})
         with opener.open(request,timeout=2.5) as response:
             if response.status!=200: return False

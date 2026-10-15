@@ -101,6 +101,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         visible=[r for r in rows if allowed(p,r)]
         return {'campaigns':[_view(db,r) for r in visible[:MAX_CAMPAIGNS_PER_LIST]],'total':len(visible),
                 'automatic_paid_crawling_enabled':False}
+    if action in ('campaignSchedulePreview','campaignHistory'):
+        from .campaign_scheduler import campaign_schedule_preview, campaign_history
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if action=='campaignSchedulePreview':
+            return {'schedule':campaign_schedule_preview(db,c)}
+        return {'history':campaign_history(db,c)}
     if action=='getCampaign':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')

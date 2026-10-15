@@ -289,8 +289,8 @@ test('Campaign detail includes four evidence panels without calling paid provide
  await input.fill('pemilu');await input.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Sentiment analysis'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
- await expect(page.getByLabel('Sentiment analysis')).toContainText('Unclassified');
+ for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Audience and geographic insights'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Audience and geographic insights')).toContainText('Audience demographics');
  expect(calls).toEqual([]);
 });
 
@@ -307,7 +307,7 @@ test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
  await expect(page).toHaveURL(/\/social-listening\/campaigns\/\d+/);
  await expect(page.getByLabel('Channel distribution',{exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toHaveCount(0);
- await page.reload();await expect(page.getByLabel('Sentiment analysis')).toBeVisible();
+ await page.reload();await expect(page.getByLabel('Audience and geographic insights')).toBeVisible();
  await page.getByRole('button',{name:/Back to campaigns/i}).click();
  await expect(page).toHaveURL(/\/social-listening\?tab=campaigns/);
 });

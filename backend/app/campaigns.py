@@ -259,6 +259,49 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignIntelligenceInbox':
+        from .models import SocialListeningResult, EvidenceAssessment, IssueCategory
+        from .socialcrawl import _result_in_scope
+        visible=db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc()).limit(200).all()
+        visible=[campaign for campaign in visible if allowed(p,campaign)]
+        campaign_id=str(data.get('campaign_id') or '')
+        if campaign_id:
+            visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
+        active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
+        records=[]; unassessed=0
+        for campaign in visible:
+            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            for link in links:
+                item=db.get(SocialListeningResult,link.result_id)
+                if not item or not _result_in_scope(db,p,item): continue
+                assessment=(db.query(EvidenceAssessment)
+                    .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id)
+                    .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+                if not assessment or assessment.relevance_label.upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+                    if not assessment or assessment.relevance_label.upper()=='UNASSESSED': unassessed+=1
+                    continue
+                def parse_list(value):
+                    try: parsed=json.loads(value or '[]')
+                    except (ValueError,TypeError): return []
+                    return parsed if isinstance(parsed,list) else []
+                issue_signals=[]
+                for signal in parse_list(assessment.potential_issue_signals_json):
+                    if not isinstance(signal,dict): continue
+                    try: category_id=int(signal.get('category_id') or 0)
+                    except (TypeError,ValueError): continue
+                    if category_id in active_categories:
+                        issue_signals.append({'category_id':category_id,'category_name':active_categories[category_id],
+                                              'explanation':str(signal.get('explanation') or '')[:400]})
+                records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
+                    'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
+                    'author_name':item.author_name,'published_at':item.published_at,
+                    'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
+                    'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
+                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
+                    'assessment_version':assessment.assessment_version,'model_version':assessment.model_version})
+        return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
+                'unassessed_count':unassessed,'scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail
         from .socialcrawl import _result_in_scope

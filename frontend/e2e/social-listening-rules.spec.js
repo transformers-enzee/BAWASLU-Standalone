@@ -149,3 +149,23 @@ test('Monitoring campaigns are saved as drafts and survive reload without provid
   await card.getByRole('button',{name:'Pause'}).click();
   await expect(card).toContainText('Paused');
 });
+
+
+test('Campaign schedule panel shows estimates and no automatic paid crawling',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening');
+  const name='QA Schedule '+Date.now();
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  await page.getByLabel(/Campaign name/i).fill(name);
+  await page.getByLabel(/Main keywords/i).fill('bawaslu');
+  await page.getByRole('button',{name:'Save Draft'}).click();
+  const card=page.locator('article.intel-card').filter({hasText:name});
+  await expect(card).toBeVisible();
+  await card.getByRole('button',{name:'View'}).click();
+  const schedule=page.getByLabel('Campaign schedule and crawl history');
+  await expect(schedule).toBeVisible();
+  await expect(schedule).toContainText('Estimated credits per run:');
+  await expect(schedule).toContainText('Last successful crawl:');
+  await expect(schedule).toContainText('No collection runs recorded for this campaign');
+  await expect(schedule).toContainText('Automatic paid crawling disabled pending explicit approval');
+});

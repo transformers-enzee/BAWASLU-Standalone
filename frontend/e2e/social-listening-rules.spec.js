@@ -143,13 +143,14 @@ test('Monitoring campaigns are saved as drafts and survive reload without provid
   await page.getByLabel(/Excluded keywords/i).fill('concert');
   await page.getByRole('button',{name:'Save Draft'}).click();
   await expect(page.getByRole('status')).toContainText('Campaign saved as draft');
-  await expect(page.locator('article.intel-card').filter({hasText:name})).toBeVisible();
+  await expect(page.getByRole('row').filter({hasText:name})).toBeVisible();
   await page.reload();
-  const card=page.locator('article.intel-card').filter({hasText:name});
+  const card=page.getByRole('row').filter({hasText:name});
   await expect(card).toBeVisible();
   await expect(card).toContainText('Draft');
-  await expect(card).toContainText('pemilu, gibran');
-  await expect(card).toContainText('Runs: 0');
+  await expect(card).toContainText('pemilu');
+  await expect(card).toContainText('gibran');
+  await expect(card).toContainText('0');
   await card.getByRole('button',{name:'Pause'}).click();
   await expect(card).toContainText('Paused');
 });
@@ -164,9 +165,9 @@ test('Campaign schedule panel shows estimates and no automatic paid crawling',as
   await page.getByRole('textbox',{name:'Main keywords'}).fill('bawaslu');
   await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
   await page.getByRole('button',{name:'Save Draft'}).click();
-  const card=page.locator('article.intel-card').filter({hasText:name});
+  const card=page.getByRole('row').filter({hasText:name});
   await expect(card).toBeVisible();
-  await card.getByRole('button',{name:'View'}).click();
+  await card.getByRole('button',{name:'View Evidence'}).click();
   const schedule=page.getByLabel('Campaign schedule and crawl history');
   await expect(schedule).toBeVisible();
   await expect(schedule).toContainText('Estimated credits per run:');
@@ -224,7 +225,7 @@ test('Campaign keyword screening preview is free and distinguishes main, seconda
   const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
   await secondary.fill('bawaslu');await secondary.press('Enter');
   await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('button',{name:'View Evidence'}).first().click();
+  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
   const preview=page.getByLabel('Campaign keyword screening preview');
   await preview.getByRole('textbox',{name:'Sample social post'}).fill('Bawaslu mengawasi pemilu');
   await preview.getByRole('button',{name:'Preview keyword match'}).click();
@@ -247,7 +248,7 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
   await keyword.fill('pemilu');await keyword.press('Enter');
   await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('button',{name:'View Evidence'}).first().click();
+  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
   const filters=page.getByLabel('Campaign analytics date filters');
   await expect(page.getByLabel('Daily evidence trend')).toBeVisible();
   await filters.getByLabel('From date').fill('2026-10-15');

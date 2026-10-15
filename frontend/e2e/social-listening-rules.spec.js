@@ -277,3 +277,19 @@ test('Campaign editor explains invalid start/end dates and allows saving after c
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeEnabled();
 });
+
+
+test('Campaign detail includes four evidence panels without calling paid providers',async({page})=>{
+ const calls=[];page.on('request',req=>{if(/socialcrawl\\.dev/i.test(req.url()))calls.push(req.url())});
+ await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
+ await page.getByRole('button',{name:/New Campaign/i}).click();
+ const dialog=page.getByRole('dialog');const name='QA Four Panels '+Date.now();
+ await dialog.getByLabel(/Campaign name/i).fill(name);
+ const input=dialog.getByRole('textbox',{name:'Main keywords'});
+ await input.fill('pemilu');await input.press('Enter');
+ await dialog.getByRole('button',{name:'Save Draft'}).click();
+ await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
+ for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Sentiment analysis'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Sentiment analysis')).toContainText('Unclassified');
+ expect(calls).toEqual([]);
+});

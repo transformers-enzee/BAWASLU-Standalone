@@ -28,6 +28,22 @@ function SocialEvidenceInbox(){
   catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
   finally{setBacklogBusy(false)}
  }
+ const [auditRows,setAuditRows]=useState([]),[auditOpen,setAuditOpen]=useState(false),[auditBusy,setAuditBusy]=useState(false),[auditError,setAuditError]=useState(''),[correctionNotes,setCorrectionNotes]=useState({});
+ async function loadAudit(){
+  setAuditBusy(true);setAuditError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAudit',id:campaign||undefined,data:{}});setAuditRows(r.data.assessments||[]);setAuditOpen(true)}
+  catch(e){setAuditError(e.response?.data?.detail||e.message||'Cannot load audit')}
+  finally{setAuditBusy(false)}
+ }
+ async function correctAssessment(x,decision){
+  const rationale=correctionNotes[x.campaign_id+'-'+x.result_id]||'';
+  if(rationale.trim().length<10){setAuditError('Provide at least 10 characters explaining this correction.');return}
+  if(!window.confirm('Save a human relevance correction while retaining the original AI assessment?'))return;
+  setAuditBusy(true);setAuditError('');
+  try{await base44.functions.invoke('socialListening',{action:'campaignAssessmentCorrection',id:x.campaign_id,data:{result_id:x.result_id,decision,rationale}});await loadAudit()}
+  catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
+  finally{setAuditBusy(false)}
+ }
  const filtered=useMemo(()=>findings.filter(x=>{
   if(view==='location'&&!(x.location_signals||[]).length)return false;
   if(view==='candidate'&&!(x.candidate_signals||[]).length)return false;
@@ -43,6 +59,16 @@ function SocialEvidenceInbox(){
   {backlog&&<div className="text-xs space-y-1"><p>{backlog.unassessed} pending links in this campaign · up to {backlog.batch_limit} AI requests this batch · 0 SocialCrawl credits.</p><p>AI provider: {backlog.ai_key_configured?'configured':'not configured'} · AI token costs vary by usage. No assessment is started by preview.</p><button className="intel-button text-xs" type="button" disabled={backlogBusy||!backlog.ai_key_configured||!backlog.batch_limit} onClick={startBacklog}>Confirm and assess up to {backlog.batch_limit} posts</button></div>}
   {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}</div>
   {assessmentCounts&&<div className="intel-card p-3 space-y-2" aria-label="AI assessment diagnostics"><h3 className="text-sm font-semibold">Assessment diagnostics · stored results</h3><div className="grid grid-cols-2 sm:grid-cols-5 gap-2">{[['Pending','PENDING'],['Relevant','RELEVANT'],['Irrelevant','IRRELEVANT'],['Uncertain','UNCERTAIN'],['Other','OTHER']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{assessmentCounts[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">{processingStatus}. This panel never triggers AI calls; failures cannot yet be counted reliably.</p></div>}
+  <div className="intel-card p-3 space-y-3"><div className="flex flex-wrap gap-2 items-center"><strong className="text-sm">Assessment audit</strong><button type="button" className="intel-ghost text-xs" disabled={auditBusy} onClick={loadAudit}>{auditBusy?'Loading…':'Review AI decisions (free)'}</button></div>
+   {auditError&&<p role="alert" className="text-sm text-red-600">{auditError}</p>}
+   {auditOpen&&<div className="max-h-96 overflow-y-auto space-y-3">{auditRows.map(x=><div key={x.campaign_id+'-'+x.result_id} className="border rounded-lg p-3 space-y-2 text-sm">
+    <p className="text-xs text-slate-500">{x.campaign_name} · {x.relevance_label} · {x.confidence||'No confidence'} · v{x.assessment_version} · {x.model_version}</p>
+    <p className="whitespace-pre-wrap">{x.text_content}</p><p><strong>Reason:</strong> {x.explanation||'No AI explanation recorded'}</p>
+    <p className="text-xs">Main: {(x.main_keywords||[]).join(', ')||'None'} · Secondary: {(x.secondary_keywords||[]).join(', ')||'None'}</p>
+    {x.canonical_url&&<a className="text-blue-700 underline" href={x.canonical_url} target="_blank" rel="noopener noreferrer">Original source</a>}
+    {x.can_correct&&<div className="space-y-2"><textarea className="intel-input w-full" rows={2} placeholder="Reason for human correction (minimum 10 characters)" value={correctionNotes[x.campaign_id+'-'+x.result_id]||''} onChange={e=>setCorrectionNotes(v=>({...v,[x.campaign_id+'-'+x.result_id]:e.target.value}))}/><div className="flex flex-wrap gap-2">{['RELEVANT','IRRELEVANT','UNCERTAIN'].map(d=><button type="button" className="intel-ghost text-xs" disabled={auditBusy} key={d} onClick={()=>correctAssessment(x,d)}>Correct to {d}</button>)}</div></div>}
+   </div>)}{!auditRows.length&&<p className="text-sm text-slate-500">No stored assessments found.</p>}</div>}
+  </div>
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'intel-button':'intel-ghost'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label} ({findings.filter(x=>key==='all'||key==='location'&&x.location_signals?.length||key==='candidate'&&x.candidate_signals?.length||key==='violation'&&x.potential_issues?.length).length})</button>)}</div>
   <div className="intel-card p-4 space-y-2"><p className="font-semibold">AI brief · {buttons.find(x=>x[0]===view)?.[1]}</p><p className="text-sm text-slate-600">{filtered.length} assessed relevant findings in this view. {view==='violation'?'These are preliminary potential issue signals mapped to active Administration categories, not confirmed violations.':'Only evidence with a recorded contextual relevance assessment appears here.'}</p><p className="text-xs text-amber-800">{unassessed} campaign evidence links are unassessed and excluded from relevant findings. No unsupported AI summary is generated.</p></div>
   <input className="intel-input w-full" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search findings, candidates, locations or issues" aria-label="Search relevant findings"/>

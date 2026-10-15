@@ -21,6 +21,12 @@ the and for with from are was were this that have has had not but our your their
 atau pada jadi pun lah sebuah suatu selamat terima kasih yuk mari ayo simak info informasi
 bawaslu pemilu https http www com tiktok video post""".split())
 
+def _safe_json_list(value):
+    try:
+        result=json.loads(value or '[]')
+        return result if isinstance(result,list) else []
+    except (ValueError,TypeError):return []
+
 def _cloud_terms(text,counts):
     import re
     for token in re.findall(r"[^\W\d_][^\W_]*",str(text or '').casefold(),flags=re.UNICODE):
@@ -290,6 +296,55 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not preview['ai_key_configured']:raise ValueError('AI key is not configured')
         if not maximum:raise ValueError('No pending AI assessments or processing limit is zero')
         return {**preview,'assessment_job_accepted':True}
+    if action in ('campaignAssessmentAudit','campaignAssessmentCorrection'):
+        from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        visible=db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc()).limit(200).all()
+        visible=[campaign for campaign in visible if allowed(p,campaign) and (not selected or str(campaign.id)==selected)]
+        if action=='campaignAssessmentCorrection':
+            if not selected or not selected.isdigit():raise ValueError('Select a campaign')
+            campaign=next((x for x in visible if str(x.id)==selected),None)
+            if not campaign or not _editable(p,campaign):raise PermissionError('Not authorized to correct assessment')
+            result_id=str((data or {}).get('result_id') or '')
+            if not result_id.isdigit():raise ValueError('Invalid evidence id')
+            link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(result_id)).first()
+            item=db.get(SocialListeningResult,int(result_id))
+            if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Evidence unavailable')
+            old=db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
+            if not old:raise ValueError('AI assessment required before correction')
+            decision=str((data or {}).get('decision') or '').upper()
+            rationale=str((data or {}).get('rationale') or '').strip()
+            if decision not in ('RELEVANT','IRRELEVANT','UNCERTAIN'):raise ValueError('Invalid relevance correction')
+            if len(rationale)<10:raise ValueError('Correction rationale must contain at least 10 characters')
+            new=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=old.assessment_version+1,
+                model_version='HUMAN_OVERRIDE',relevance_label=decision,relevance_confidence=old.relevance_confidence,
+                sentiment=old.sentiment,candidate_signals_json=old.candidate_signals_json,
+                geographic_signals_json=old.geographic_signals_json,
+                potential_issue_signals_json=old.potential_issue_signals_json,
+                explanation='Human correction: '+rationale[:1100])
+            db.add(new);db.flush()
+            db.add(EvidenceReview(assessment_id=new.id,reviewer_id=str(p['id']),decision=decision,rationale=rationale[:1500]))
+            db.commit()
+            audit(db,p,'EvidenceAssessment',new.id,'HUMAN_RELEVANCE_CORRECTION',{'previous_assessment_id':old.id,'decision':decision})
+            return {'saved':True,'assessment_version':new.assessment_version,'paid_provider_called':False}
+        output=[]
+        for campaign in visible:
+            links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            for link in links:
+                item=db.get(SocialListeningResult,link.result_id)
+                if not item or not _result_in_scope(db,p,item):continue
+                assessment=db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
+                if not assessment:continue
+                output.append({'campaign_id':str(campaign.id),'campaign_name':campaign.name,'result_id':str(item.id),
+                    'text_content':(item.text_content or '')[:5000],'canonical_url':item.canonical_url,
+                    'relevance_label':assessment.relevance_label,'confidence':assessment.relevance_confidence,
+                    'explanation':assessment.explanation,'model_version':assessment.model_version,
+                    'assessment_version':assessment.assessment_version,
+                    'main_keywords':_safe_json_list(campaign.primary_keywords_json),
+                    'secondary_keywords':_safe_json_list(campaign.secondary_keywords_json),
+                    'can_correct':_editable(p,campaign)})
+        return {'assessments':output[:100],'paid_provider_called':False}
     if action=='campaignIntelligenceInbox':
         from .models import SocialListeningResult, EvidenceAssessment, IssueCategory
         from .socialcrawl import _result_in_scope

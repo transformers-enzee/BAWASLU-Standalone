@@ -97,7 +97,8 @@ def test_provincial_campaign_scope_and_visibility():
         action(db,java,'getCampaign',{},created['id'])
     with pytest.raises(PermissionError):
         action(db,bali,'createCampaign',payload(province='Jawa Barat'))
-    with pytest.raises(PermissionError):
+    # Conceal the existence of out-of-scope records, rather than revealing authorization details.
+    with pytest.raises(ValueError,match='not available'):
         action(db,java,'updateCampaign',{'name':'attack'},created['id'])
     db.close()
 

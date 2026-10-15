@@ -265,7 +265,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
-                'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0}}
+                'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0,'payload_shapes':{},'platforms_checked':{}}}
         budget=12
         for link in rows:
             item=db.get(SocialListeningResult,link.result_id)
@@ -278,11 +278,14 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['remaining']+=1
                 continue
             report['checked']+=1
+            report['source_metadata']['platforms_checked'][item.platform]=report['source_metadata']['platforms_checked'].get(item.platform,0)+1
             try:
                 raw=json.loads(item.raw_payload_json or '{}')
             except (ValueError,TypeError):
                 raw={}
                 report['source_metadata']['invalid_payload']+=1
+            shape=(',' .join(sorted(str(k) for k in raw.keys() if str(k) in ('source_items','media','post','image_url','thumbnail_url','items','data','result','metadata','raw','source'))) or 'no recognized media keys') if isinstance(raw,dict) else 'non-object payload'
+            report['source_metadata']['payload_shapes'][shape]=report['source_metadata']['payload_shapes'].get(shape,0)+1
             source_items=raw.get('source_items') if isinstance(raw,dict) else None
             if isinstance(source_items,list) and source_items:
                 report['source_metadata']['source_items']+=1

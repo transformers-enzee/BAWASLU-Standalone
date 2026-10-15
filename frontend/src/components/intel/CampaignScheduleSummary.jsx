@@ -4,9 +4,10 @@ import { base44 } from '@/api/base44Client';
 export default function CampaignScheduleSummary({campaign}){
  const [schedule,setSchedule]=useState(null),[history,setHistory]=useState([]);
  const [busy,setBusy]=useState(true),[error,setError]=useState('');
+ const [readiness,setReadiness]=useState(null),[checking,setChecking]=useState(false),[checkError,setCheckError]=useState('');
  useEffect(()=>{
   let active=true;
-  setBusy(true);setSchedule(null);setHistory([]);setError('');
+  setBusy(true);setSchedule(null);setHistory([]);setError('');setReadiness(null);setCheckError('');
   Promise.all([
    base44.functions.invoke('socialListening',{action:'campaignSchedulePreview',id:campaign.id,data:{}}),
    base44.functions.invoke('socialListening',{action:'campaignHistory',id:campaign.id,data:{}})
@@ -18,6 +19,12 @@ export default function CampaignScheduleSummary({campaign}){
   }).finally(()=>{if(active)setBusy(false)});
   return ()=>{active=false};
  },[campaign.id]);
+ async function previewRun(){
+  setChecking(true);setReadiness(null);setCheckError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignRunReadiness',id:campaign.id,data:{}});setReadiness(r.data)}
+  catch(e){setCheckError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setChecking(false)}
+ }
  if(busy)return <p className="text-xs text-[#77899b]">Checking campaign schedule…</p>;
  if(error)return <p role="alert" className="text-xs text-red-700">{error}</p>;
  if(!schedule)return null;
@@ -31,6 +38,18 @@ export default function CampaignScheduleSummary({campaign}){
    </div>
    <p className="text-xs text-amber-800 font-semibold">Automatic paid crawling disabled pending explicit approval.</p>
    {schedule.blocked_reasons?.length>0&&<p className="text-xs text-[#77899b]">{schedule.blocked_reasons.join(' · ')}</p>}
+   <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Campaign execution readiness">
+     <h4 className="font-semibold text-sm">Manual run readiness — preview only</h4>
+     <p className="text-xs text-slate-600">Check estimated credits, recent duplicate searches and budget restrictions without calling SocialCrawl.</p>
+     <button type="button" className="intel-ghost" disabled={checking} onClick={previewRun}>{checking?'Checking…':'Check run readiness (0 credits)'}</button>
+     {checkError&&<p role="alert" className="text-xs text-red-700">{checkError}</p>}
+     {readiness&&<div role="status" className="text-xs space-y-1">
+       <p>Estimated paid run: <strong>{readiness.estimated_credits} credits</strong></p>
+       <p>Recent identical search: <strong>{readiness.duplicate_recent?'Detected — review before any future paid run':'None detected in the lookback window'}</strong></p>
+       <p>Credits used in last 24h: <strong>{readiness.credits_used_last_24h}</strong></p>
+       <p className="text-amber-800 font-semibold">Execution locked: preview does not authorize or start a crawl.</p>
+     </div>}
+   </div>
    <h4 className="font-semibold text-sm mt-3">Collection history</h4>
    {history.length? <ul className="space-y-1 text-xs">{history.map(run=><li key={run.id}>
       {run.executed_at} · {run.status} · {run.result_count} new records · {run.credits_used} credits

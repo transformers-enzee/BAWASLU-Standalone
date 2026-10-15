@@ -96,6 +96,22 @@ def _editable(p,c):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignRunReadiness':
+        # Dry-run only: calculate scoped cost and duplicate warnings without invoking a provider.
+        from .campaign_scheduler import campaign_query, campaign_schedule_preview
+        from .socialcrawl import search_preflight
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can preview execution')
+        preflight=search_preflight(db,p,campaign_query(c))
+        schedule=campaign_schedule_preview(db,c)
+        return {'campaign_id':str(c.id),'estimated_credits':preflight['estimated_credits'],
+                'components':preflight['components'],
+                'duplicate_recent':preflight.get('duplicate_recent'),
+                'credits_used_last_24h':schedule['credits_used_last_24h'],
+                'blocked_reasons':schedule['blocked_reasons'],
+                'can_execute':False,'paid_provider_called':False,
+                'notice':'Preview only. Campaign execution is disabled until a separate authorized release.'}
     if action=='campaignEvidence':
         from .models import SocialListeningResult
         from .socialcrawl import _result_in_scope

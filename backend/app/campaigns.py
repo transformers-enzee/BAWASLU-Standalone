@@ -319,7 +319,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
-        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
         visible=0
@@ -331,6 +331,13 @@ def campaign_action(db:Session,p,action,data,id=None):
             except ValueError: source_day=''
             if (from_day or to_day) and (not source_day or (from_day and source_day<from_day) or (to_day and source_day>to_day)): continue
             visible+=1
+            if (item.language or '').strip():
+                languages[item.language.strip().lower()]+=1
+                demographic_coverage['language_available']+=1
+            try: parsed_geo=json.loads(item.geography_json or '{}')
+            except (ValueError,TypeError): parsed_geo={}
+            if isinstance(parsed_geo,dict) and any(parsed_geo.get(k) for k in ('verified_country','source_country')):
+                demographic_coverage['country_available']+=1
             # Already-linked campaign evidence is the main-keyword-matched corpus.
             lowered=(item.text_content or '').casefold()
             for keyword in primary_terms+secondary_terms:
@@ -360,6 +367,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),
+                'demographics_coverage':{'records':visible,'language_available':demographic_coverage['language_available'],'country_available':demographic_coverage['country_available'],'age_available':0,'gender_available':0},
+                'source_languages':dict(languages),
                 'word_cloud':[{'word':word,'count':count,'secondary':word.casefold() in {s.casefold() for s in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0],
                 'secondary_word_counts':{word:cloud_terms.get(word,0) for word in secondary_terms if cloud_terms.get(word,0)>0},
                 'date_from':from_day,'date_to':to_day,

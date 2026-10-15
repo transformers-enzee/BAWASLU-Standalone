@@ -275,9 +275,14 @@ export default function CampaignPanel({campaignId=null}){
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">
- <h5 className="font-semibold">Demographics</h5>
- <p className="text-sm text-slate-600">Gender, age, and audience location are not available from the current captured evidence.</p>
- <p className="text-xs text-slate-500">Demographic charts will appear only when reliable source-provided aggregate data is available. Demographics are not inferred from names, posts, or profiles.</p>
+ <h5 className="font-semibold">Demographics & data coverage</h5>
+ <p className="text-xs text-slate-600">Availability of supported metadata in selected campaign evidence, not a demographic profile of viewers or voters.</p>
+ <div className="grid grid-cols-2 gap-2 text-sm">
+ {[['Country metadata','country_available'],['Language metadata','language_available']].map(([label,key])=><div key={key} className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><strong>{dashboard.demographics_coverage?.[key]||0} / {dashboard.demographics_coverage?.records||0}</strong><p className="text-xs text-slate-500">records</p></div>)}
+ </div>
+ {Object.keys(dashboard.geographies||{}).length>0&&<div className="space-y-1 text-xs"><p className="font-semibold">Recorded country signals</p>{Object.entries(dashboard.geographies).map(([key,count])=><p key={key}>{key}: {count}</p>)}</div>}
+ {Object.keys(dashboard.source_languages||{}).length>0&&<div className="space-y-1 text-xs"><p className="font-semibold">Recorded content languages</p>{Object.entries(dashboard.source_languages).map(([key,count])=><p key={key}>{key}: {count}</p>)}</div>}
+ <p className="text-xs text-slate-500">Age and gender: unavailable. Not inferred from names, photos, profiles, or post text.</p>
  </section>
     </div>
 <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">

@@ -168,3 +168,12 @@ def test_campaign_dashboard_word_cloud_without_secondary_keywords():
     assert result['secondary_word_counts']=={}
     assert result['paid_provider_called'] is False
     db.close()
+
+
+def test_demographics_coverage_is_zero_when_provider_metadata_missing():
+    db=SessionLocal(); p=actor(db,'demographicqa','National Administrator')
+    campaign=action(db,p,'createCampaign',payload(primary_keywords=['bawaslu'],secondary_keywords=[]))['campaign']
+    dashboard=action(db,p,'campaignDashboard',{},campaign['id'])
+    assert dashboard['demographics_coverage']=={'records':0,'language_available':0,'country_available':0,'age_available':0,'gender_available':0}
+    assert dashboard['source_languages']=={}
+    db.close()

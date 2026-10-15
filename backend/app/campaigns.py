@@ -126,11 +126,22 @@ def _existing_thumbnail(item):
     from .socialcrawl import _value
     try: raw=json.loads(item.raw_payload_json or '{}')
     except (ValueError,TypeError): return ''
-    url=_value(raw,'post.media.thumbnail_url','post.media.thumbnail','post.media.cover_url',
+    # Read only media references already stored from the provider response.
+    # No supplemental SocialCrawl request is made.
+    candidates=[
+        _value(raw,'post.media.thumbnail_url','post.media.thumbnail','post.media.cover_url',
                'post.video.cover_url','post.thumbnail_url','thumbnail_url','image_url',
-               'post.media.0.thumbnail_url','post.media.0.url',default='')
-    if isinstance(url,str) and url.startswith('https://') and len(url)<=2048:
-        return url
+               'post.media.0.thumbnail_url','post.media.0.url',default=''),
+        _value(raw,'post.media.0.preview_image','post.media.0.thumbnail','post.media.0.cover',
+               'post.video.thumbnail','post.video.cover','post.video.thumbnail_url',
+               'post.image','post.images.0.url','post.images.0.thumbnail',
+               'media.0.thumbnail_url','media.0.url','cover','thumbnail',default='')
+    ]
+    for candidate in candidates:
+        if isinstance(candidate,dict):
+            candidate=candidate.get('url') or candidate.get('src') or candidate.get('thumbnail_url')
+        if isinstance(candidate,str) and candidate.startswith('https://') and len(candidate)<=2048:
+            return candidate
     return ''
 
 def campaign_action(db:Session,p,action,data,id=None):

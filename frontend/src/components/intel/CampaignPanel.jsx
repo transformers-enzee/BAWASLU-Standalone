@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
@@ -217,7 +218,14 @@ export default function CampaignPanel({campaignId=null}){
          :<p className="text-xs text-slate-500">No dated evidence in this period</p>}
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Captured posts"><h5 className="font-semibold">Captured posts & sources</h5>{evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-72 overflow-y-auto space-y-2">{evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=><article key={item.id} className="border-b pb-2 text-xs">{item.thumbnail_url&&<img src={item.thumbnail_url} alt="Source thumbnail" loading="lazy" referrerPolicy="no-referrer" className="w-20 h-20 object-cover rounded float-left mr-3 mb-1" onError={e=>{e.currentTarget.style.display="none"}}/>}<p className="font-semibold">{item.platform} · {item.content_type||'post'} · {item.published_at||'Undated'}</p><p className="line-clamp-3 whitespace-pre-wrap">{item.text_content||'No source text'}</p>{/^https:\/\//i.test(item.canonical_url||'')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">Open original source ↗</a>}</article>)}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}<p className="text-xs text-slate-500">Showing up to 40 of the latest 200 linked records.</p></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Captured posts"><h5 className="font-semibold">Captured posts & sources</h5>{evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-72 overflow-y-auto space-y-2">{evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=><article key={item.id} className="flex gap-3 border-b border-slate-100 py-3 text-xs last:border-0">
+        {item.thumbnail_url&&<img src={item.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-20 w-20 shrink-0 rounded-lg object-cover bg-slate-100" onError={e=>{e.currentTarget.style.display='none'}}/>}
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-start gap-2 justify-between"><p className="font-semibold capitalize text-slate-700">{item.platform} · {item.content_type||'post'} <span className="font-normal text-slate-500">· {item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></p>
+          {/^https:\/\//i.test(item.canonical_url||'')&&<a aria-label="Open original source" title="Open original source" href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-md p-1 text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><ExternalLink size={16}/></a>}</div>
+          <p className="line-clamp-3 whitespace-pre-wrap break-words text-slate-700">{item.text_content||'No source text'}</p>
+        </div>
+      </article>)}}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}<p className="text-xs text-slate-500">Showing up to 40 of the latest 200 linked records.</p></section>
       <section className="rounded-lg border p-4 space-y-2" aria-label="Sentiment analysis"><h5 className="font-semibold">Sentiment analysis</h5><div className="grid grid-cols-2 gap-2 text-xs">{['Positive','Neutral','Negative','Unclassified'].map(name=><div key={name} className="rounded bg-slate-50 p-3"><span>{name}</span><strong className="block text-lg">{dashboard.sentiment?.[name]||0}</strong></div>)}</div><p className="text-xs text-slate-600">AI sentiment classification is not yet active. Existing records remain Unclassified; no sentiment is inferred.</p></section>
     </div>
     <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
@@ -251,20 +259,7 @@ export default function CampaignPanel({campaignId=null}){
     {previewError&&<p role="alert" className="text-red-700 text-sm">{previewError}</p>}
     {keywordPreview&&<div role="status" className="rounded-md bg-slate-50 p-3 text-sm space-y-1"><p className="font-semibold">{keywordPreview.matched?'Matches campaign keywords':'Does not match campaign keywords'}</p><p>Main matches: {(keywordPreview.main_keywords||[]).join(', ')||'None'}</p><p>Secondary context: {(keywordPreview.secondary_keywords||[]).join(', ')||'None'}</p><p>Excluded matches: {(keywordPreview.excluded_keywords||[]).join(', ')||'None'}</p><p className="text-xs text-slate-600">Preliminary literal keyword match only — not evidence of an election violation.</p></div>}
    </div>
-   <h4 className="font-semibold">Campaign evidence</h4>
-   <p className="text-xs text-slate-600">Only already-linked evidence is shown; viewing this page does not trigger SocialCrawl or spend credits.</p>
-   {evidenceLoading&&<p role="status">Loading evidence…</p>}
-   {evidenceError&&<p role="alert" className="text-red-700">{evidenceError}</p>}
-   {!evidenceLoading&&!evidenceError&&!evidence.length&&<p className="text-sm text-slate-600">No evidence linked yet. Saving a campaign does not run paid collection.</p>}
-   {evidence.map(item=><article key={item.id} className="rounded-lg border border-slate-200 p-3 space-y-1 text-sm"><p className="text-xs text-slate-600">{item.platform} · {item.author_name||'Unknown author'} · {item.published_at||'Date unavailable'}</p><p className="whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p>{item.canonical_url&&item.canonical_url.startsWith('https://')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="underline">Open original source</a>}<div className="text-xs space-y-1">
-     {Array.isArray(item.matched_fields)?<p className="text-slate-600">Legacy keyword-match metadata: {item.matched_fields.join(', ')||'Not recorded'}</p>:
-      <div className="flex flex-wrap gap-2 items-center">
-       <span className="font-semibold">Main matches:</span>{(item.matched_fields?.main_keywords||[]).length?item.matched_fields.main_keywords.map(k=><span key={k} className="rounded-full bg-cyan-50 px-2 py-1 text-cyan-900">{k}</span>):<span>Not recorded</span>}
-       {(item.matched_fields?.secondary_keywords||[]).length>0&&<><span className="font-semibold">Context:</span>{item.matched_fields.secondary_keywords.map(k=><span key={k} className="rounded-full bg-amber-50 px-2 py-1 text-amber-900">{k}</span>)}</>}
-      </div>}
-    <p className="text-slate-500">Evidence match is a preliminary signal, not an assessed violation.</p></div></article>)}
-   <p className="text-xs text-[#77899b]">Trend dashboards and AI classification will be enabled in subsequent builds.</p>
-   <button type="button" className="intel-ghost" onClick={()=>{resetKeywordPreview();setSelected(null)}}>Close</button>
+   {evidenceError&&<p role="alert" className="text-red-700 text-sm">{evidenceError}</p>}
   </div>}
  </section>
 }

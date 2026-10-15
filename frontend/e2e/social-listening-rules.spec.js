@@ -328,7 +328,7 @@ test('Campaign trend panel uses a two-series line chart when dated evidence exis
 });
 
 
-test('Campaign word cloud panel replaces demographics and respects no-evidence state',async({page})=>{
+test('Campaign demographics and word cloud handle no-evidence state',async({page})=>{
  await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
  await page.getByRole('button',{name:/New Campaign/i}).click();
  const dialog=page.getByRole('dialog');const name='QA Wordcloud '+Date.now();
@@ -337,7 +337,8 @@ test('Campaign word cloud panel replaces demographics and respects no-evidence s
  await keyword.fill('pemilu');await keyword.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- await expect(page.getByLabel('Campaign demographics')).toContainText('not available');
+ await expect(page.getByLabel('Campaign demographics')).toContainText('unavailable');
+ await expect(page.getByLabel('Campaign word cloud')).toContainText('No configured campaign keywords appear');
  await expect(page.getByLabel('Audience and geographic insights')).toHaveCount(0);
 });
 

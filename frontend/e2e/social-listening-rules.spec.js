@@ -259,3 +259,21 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   await filters.getByRole('button',{name:'Apply date filter'}).click();
   await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated evidence in this period');
 });
+
+
+test('Campaign editor explains invalid start/end dates and allows saving after correction',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=campaigns');
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByLabel(/Campaign name/i).fill('QA date validation '+Date.now());
+  const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
+  await keyword.fill('pemilu');await keyword.press('Enter');
+  await dialog.getByLabel('Start date').fill('2026-10-20');
+  await dialog.getByLabel('End date').fill('2026-10-10');
+  await expect(dialog.getByRole('alert')).toContainText('Start date cannot be after end date');
+  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();
+  await dialog.getByLabel('End date').fill('2026-10-25');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeEnabled();
+});

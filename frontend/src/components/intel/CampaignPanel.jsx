@@ -54,6 +54,7 @@ export default function CampaignPanel(){
   finally{if(requestId===previewRequestId.current)setEstimating(false)}
  }
 
+ const invalidCampaignDates=Boolean(form.date_from&&form.date_to&&form.date_from>form.date_to);
  const set=(key,value)=>{clearEstimate();setForm(x=>({...x,[key]:value}))};
  async function refresh(){
   try{
@@ -74,7 +75,7 @@ export default function CampaignPanel(){
   setEditing(c);setCreating(true);setSelected(null);setError('');setNotice('');
  }
  async function save(e){
-  e.preventDefault();setSaving(true);setError('');setNotice('');
+  e.preventDefault();if(invalidCampaignDates){setError('Start date cannot be after end date. Please correct the campaign dates.');return}setSaving(true);setError('');setNotice('');
   const data={...form,primary_keywords:form.primary_keywords,
    secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)};
   try{
@@ -129,7 +130,8 @@ export default function CampaignPanel(){
        <option value={60}>Every hour</option><option value={180}>Every 3 hours</option><option value={360}>Every 6 hours</option><option value={720}>Every 12 hours</option><option value={1440}>Daily</option>
     </select></label>
     <label className="text-sm">Start date<input className="intel-input mt-1" type="date" value={form.date_from} onChange={e=>set('date_from',e.target.value)}/></label>
-    <label className="text-sm">End date<input className="intel-input mt-1" type="date" value={form.date_to} onChange={e=>set('date_to',e.target.value)}/></label>
+    <label className="text-sm">End date<input className="intel-input mt-1" type="date" aria-invalid={invalidCampaignDates} value={form.date_to} onChange={e=>set('date_to',e.target.value)}/></label>
+    {invalidCampaignDates&&<p role="alert" className="md:col-span-2 text-sm text-red-700">Start date cannot be after end date. Please correct the campaign dates.</p>}
     <label className="text-sm">Province (optional; regional access still applies)<input className="intel-input mt-1" value={form.province} onChange={e=>set('province',e.target.value)}/></label>
     <label className="text-sm">Regency / City<input className="intel-input mt-1" value={form.regency_city} onChange={e=>set('regency_city',e.target.value)}/></label>
    </div>
@@ -149,7 +151,7 @@ export default function CampaignPanel(){
       <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
     </div>}
    </div>
-   <div className="flex gap-2"><button className="intel-button" disabled={saving||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
+   <div className="flex gap-2"><button className="intel-button" disabled={saving||invalidCampaignDates||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>
    </div>

@@ -250,7 +250,7 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   await dialog.getByRole('button',{name:'Save Draft'}).click();
   await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'View Evidence'}).click();
   const filters=page.getByLabel('Campaign analytics date filters');
-  await expect(page.getByLabel('Daily evidence trend')).toBeVisible();
+  await expect(page.getByLabel('Posts and comments trend')).toBeVisible();
   await filters.getByLabel('From date').fill('2026-10-15');
   await filters.getByLabel('To date').fill('2026-10-01');
   await filters.getByRole('button',{name:'Apply date filter'}).click();

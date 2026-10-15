@@ -148,6 +148,10 @@ def _existing_thumbnail(item, include_expired=False):
         'source_items.0.image_url','source_items.0.metadata.thumbnail_url',
         'post.media.thumbnail_url','post.media.cover_url','post.media.poster_url',
         'post.thumbnail_url','post.image_url','post.images.0.url',
+        'post.display_url','post.thumbnail_src','post.image_versions2.candidates.0.url',
+        'post.carousel_media.0.image_versions2.candidates.0.url',
+        'post.video_versions.0.thumbnail_url','post.video_cover_url','post.cover_url',
+        'post.media.thumbnail','post.media.image_url','post.media.image_urls.0',
         'post.media.0.thumbnail_url','post.media.0.url',
         'media.thumbnail_url','media.cover_url','media.image_urls.0',
         'media.0.thumbnail_url','media.0.url','thumbnail_url','thumbnail',
@@ -265,7 +269,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
-                'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0,'payload_shapes':{},'platforms_checked':{}}}
+                'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0,'payload_shapes':{},'platforms_checked':{},'post_fields':{},'post_media_fields':{}}}
         budget=12
         for link in rows:
             item=db.get(SocialListeningResult,link.result_id)
@@ -286,6 +290,16 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['source_metadata']['invalid_payload']+=1
             shape=(',' .join(sorted(str(k) for k in raw.keys() if str(k) in ('source_items','media','post','image_url','thumbnail_url','items','data','result','metadata','raw','source'))) or 'no recognized media keys') if isinstance(raw,dict) else 'non-object payload'
             report['source_metadata']['payload_shapes'][shape]=report['source_metadata']['payload_shapes'].get(shape,0)+1
+            post=raw.get('post') if isinstance(raw,dict) else None
+            if isinstance(post,dict):
+                for key in post:
+                    if key in ('media','thumbnail_url','image_url','images','display_url','thumbnail_src','image_versions2','carousel_media','video_versions','video_cover_url','cover_url','video_url','type'):
+                        report['source_metadata']['post_fields'][key]=report['source_metadata']['post_fields'].get(key,0)+1
+                post_media=post.get('media')
+                if isinstance(post_media,dict):
+                    for key in post_media:
+                        if key in ('thumbnail','thumbnail_url','image_url','image_urls','cover_url','poster_url','url','images'):
+                            report['source_metadata']['post_media_fields'][key]=report['source_metadata']['post_media_fields'].get(key,0)+1
             source_items=raw.get('source_items') if isinstance(raw,dict) else None
             if isinstance(source_items,list) and source_items:
                 report['source_metadata']['source_items']+=1

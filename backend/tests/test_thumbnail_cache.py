@@ -29,3 +29,12 @@ def test_expired_provider_thumbnail_is_visible_to_recovery_diagnostics():
     item=SimpleNamespace(raw_payload_json=json.dumps({'source_items':[{'media':{'thumbnail_url':expired}}]}))
     assert _existing_thumbnail(item)==''
     assert _existing_thumbnail(item,include_expired=True)==expired
+
+
+def test_instagram_post_nested_image_versions_thumbnail():
+    from types import SimpleNamespace
+    from app.campaigns import _existing_thumbnail
+    import json
+    uri='https://instagram.fna.fbcdn.net/photo.jpg'
+    record=SimpleNamespace(raw_payload_json=json.dumps({'post':{'image_versions2':{'candidates':[{'url':uri}]}}}))
+    assert _existing_thumbnail(record)==uri

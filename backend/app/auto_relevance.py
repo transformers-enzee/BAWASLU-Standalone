@@ -13,6 +13,18 @@ def _arr(value):
         return x if isinstance(x,list) else []
     except (TypeError,ValueError): return []
 
+RELEVANCE_SCREENING_INSTRUCTIONS = """You are a neutral, evidence-grounded Indonesian election monitoring screener.
+Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings), candidates (array of short strings), issue_category_ids (array of integer IDs).
+FIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
+SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. No issue signal is a legal finding.
+If captions are vague, hashtags-only, or linked article/video substance is not in the supplied text, use UNCERTAIN rather than confidently excluding a plausibly relevant Indonesian election post. Do not invent linked material, location, people, allegations, or corroboration.
+Explanations must separate what was actually observed from what remains unknown. Be politically neutral and do not infer misconduct from criticism or candidate mentions."""
+VALID_RELEVANCE={'RELEVANT','IRRELEVANT','UNCERTAIN'}
+def normalize_relevance_label(output):
+    """Reject missing or unsupported labels without treating them as reviewed."""
+    label=str(output.get('relevance_label') or '').strip().upper()
+    return label if label in VALID_RELEVANCE else 'UNCERTAIN'
+
 def assess_pending_campaign(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -45,12 +57,11 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                 url=os.getenv('OPENAI_BASE_URL','https://api.openai.com/v1').rstrip('/')+'/chat/completions'
                 response=httpx.post(url,headers={'Authorization':'Bearer '+os.environ['OPENAI_API_KEY']},
                     json={'model':model,'temperature':0,'max_tokens':550,'response_format':{'type':'json_object'},
-                    'messages':[{'role':'system','content':'You are a neutral election monitoring evidence screener. Respond with only JSON object containing relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings), candidates (array of short strings), issue_category_ids (array of integer IDs). Assess the topic context, not keyword occurrence alone. Never declare a violation or infer guilt; issue category flags are preliminary and must be supported by explicit text. Do not invent locations or names.'},
+                    'messages':[{'role':'system','content':RELEVANCE_SCREENING_INSTRUCTIONS},
                     {'role':'user','content':json.dumps(payload,ensure_ascii=False)}]},timeout=30)
                 response.raise_for_status()
                 out=json.loads(response.json()['choices'][0]['message']['content'])
-                label=str(out.get('relevance_label','UNCERTAIN')).upper()
-                if label not in ('RELEVANT','IRRELEVANT','UNCERTAIN'):label='UNCERTAIN'
+                label=normalize_relevance_label(out)
                 confidence=str(out.get('confidence','LOW')).upper()
                 if confidence not in ('LOW','MEDIUM','HIGH'):confidence='LOW'
                 def strings(key):

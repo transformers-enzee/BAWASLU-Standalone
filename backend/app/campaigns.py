@@ -259,6 +259,29 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignMediaCapabilityPreview':
+        from .models import SocialListeningResult, SocialMediaThumbnail
+        from .socialcrawl import _result_in_scope
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(200).all()
+        counts={'instagram_missing':0,'instagram_with_url':0,'already_cached':0,'post_url_available':0}
+        for link in links:
+            item=db.get(SocialListeningResult,link.result_id)
+            if not item or not _result_in_scope(db,p,item) or not (item.platform or '').startswith('instagram'): continue
+            if db.get(SocialMediaThumbnail,item.id):
+                counts['already_cached']+=1
+            elif _existing_thumbnail(item,include_expired=True):
+                counts['instagram_with_url']+=1
+            else:
+                counts['instagram_missing']+=1
+                if (item.canonical_url or '').startswith(('https://www.instagram.com/','https://instagram.com/')):
+                    counts['post_url_available']+=1
+        return {'counts':counts,'endpoint_candidate':'Instagram post-detail endpoint',
+                'credits_per_request_estimate':1,'media_fields_confirmed':False,
+                'post_detail_calls_enabled':False,'potential_calls':counts['post_url_available'],
+                'potential_credit_estimate':counts['post_url_available'],
+                'paid_provider_called':False}
     if action=='campaignThumbnailRecovery':
         from .models import SocialListeningResult, SocialMediaThumbnail
         from .socialcrawl import _result_in_scope

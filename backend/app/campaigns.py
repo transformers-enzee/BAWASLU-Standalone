@@ -123,24 +123,28 @@ def _manual_preflight(db,p,c):
             'manual_only':True,'paid_provider_called':False,'retrieval_mode':'PER_KEYWORD_OR'}
 
 def _existing_thumbnail(item):
+    """Read already-stored image metadata for social posts and news. No network calls."""
     from .socialcrawl import _value
     try: raw=json.loads(item.raw_payload_json or '{}')
     except (ValueError,TypeError): return ''
-    # Read only media references already stored from the provider response.
-    # No supplemental SocialCrawl request is made.
-    candidates=[
-        _value(raw,'post.media.thumbnail_url','post.media.thumbnail','post.media.cover_url',
-               'post.video.cover_url','post.thumbnail_url','thumbnail_url','image_url',
-               'post.media.0.thumbnail_url','post.media.0.url',
-               'source_items.0.media.thumbnail_url','source_items.0.media.image_urls.0',default=''),
-        _value(raw,'post.media.0.preview_image','post.media.0.thumbnail','post.media.0.cover',
-               'post.video.thumbnail','post.video.cover','post.video.thumbnail_url',
-               'post.image','post.images.0.url','post.images.0.thumbnail',
-               'media.0.thumbnail_url','media.0.url','cover','thumbnail',default='')
-    ]
-    for candidate in candidates:
+    paths=(
+        'source_items.0.media.thumbnail_url','source_items.0.media.image_urls.0',
+        'source_items.0.media.cover_url','source_items.0.thumbnail_url',
+        'source_items.0.image_url','source_items.0.metadata.thumbnail_url',
+        'post.media.thumbnail_url','post.media.cover_url','post.media.poster_url',
+        'post.thumbnail_url','post.image_url','post.images.0.url',
+        'post.media.0.thumbnail_url','post.media.0.url',
+        'media.thumbnail_url','media.cover_url','media.image_urls.0',
+        'media.0.thumbnail_url','media.0.url','thumbnail_url','thumbnail',
+        'image_url','images.0.url','featured_image','featured_image_url',
+        'lead_image_url','og_image','metadata.og_image','metadata.image',
+        'article.image_url','article.thumbnail_url','article.images.0.url',
+        'news.image','news.thumbnail_url','urlToImage','enclosure.url','cover')
+    for path in paths:
+        candidate=_value(raw,path,default='')
         if isinstance(candidate,dict):
             candidate=candidate.get('url') or candidate.get('src') or candidate.get('thumbnail_url')
+        if isinstance(candidate,list): candidate=candidate[0] if candidate else ''
         if isinstance(candidate,str) and candidate.startswith('https://') and len(candidate)<=2048:
             return candidate
     return ''

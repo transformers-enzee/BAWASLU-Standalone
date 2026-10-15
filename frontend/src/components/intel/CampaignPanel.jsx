@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ImageOff } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
@@ -21,6 +21,12 @@ function ChannelDonut({values}){
  return <div className="flex flex-col sm:flex-row items-center gap-5"><div aria-label="Channel distribution donut" role="img" className="relative w-40 h-40 shrink-0 rounded-full" style={{background:gradient}}><div className="absolute inset-8 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-xl">{total}</strong><span className="text-xs text-slate-500">captured</span></div></div><ul className="text-xs flex-1 space-y-2 w-full">{segments.map(s=><li key={s.name} className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded" style={{background:s.color}}/><span className="flex-1 break-words">{s.name}</span><strong>{s.count} ({s.percent.toFixed(1)}%)</strong></li>)}{!total&&<li>No channel evidence yet</li>}</ul></div>
 }
 
+function SourceThumbnail({url,platform}){
+ const [failed,setFailed]=useState(false);
+ return <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
+  {url&&!failed?<img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setFailed(true)}/>:<div className="flex flex-col items-center gap-1 text-slate-400" aria-label="Thumbnail unavailable"><ImageOff size={18}/><span className="text-[9px] capitalize">{platform||'Source'}</span></div>}
+ </div>;
+}
 export default function CampaignPanel({campaignId=null}){
  const navigate=useNavigate();
  const [campaigns,setCampaigns]=useState([]);
@@ -219,7 +225,7 @@ export default function CampaignPanel({campaignId=null}){
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
       <section className="rounded-lg border p-4 space-y-2" aria-label="Captured posts"><h5 className="font-semibold">Captured posts & sources</h5>{evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-72 overflow-y-auto space-y-2">{evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=><article key={item.id} className="flex gap-3 border-b border-slate-100 py-3 text-xs last:border-0">
-        {item.thumbnail_url&&<img src={item.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-20 w-20 shrink-0 rounded-lg object-cover bg-slate-100" onError={e=>{e.currentTarget.style.display='none'}}/>}
+        <SourceThumbnail key={item.thumbnail_url||"none"} url={item.thumbnail_url} platform={item.platform}/>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-start gap-2 justify-between"><p className="font-semibold capitalize text-slate-700">{item.platform} · {item.content_type||'post'} <span className="font-normal text-slate-500">· {item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></p>
           {/^https:\/\//i.test(item.canonical_url||'')&&<a aria-label="Open original source" title="Open original source" href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-md p-1 text-blue-700 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><ExternalLink size={16}/></a>}</div>

@@ -140,12 +140,20 @@ def _existing_thumbnail(item):
         'lead_image_url','og_image','metadata.og_image','metadata.image',
         'article.image_url','article.thumbnail_url','article.images.0.url',
         'news.image','news.thumbnail_url','urlToImage','enclosure.url','cover')
+    from urllib.parse import urlsplit, parse_qs
+    from time import time
     for path in paths:
         candidate=_value(raw,path,default='')
         if isinstance(candidate,dict):
             candidate=candidate.get('url') or candidate.get('src') or candidate.get('thumbnail_url')
         if isinstance(candidate,list): candidate=candidate[0] if candidate else ''
         if isinstance(candidate,str) and candidate.startswith('https://') and len(candidate)<=2048:
+            # TikTok and other sources can provide signed image URLs that expire.
+            try:
+                expiry=parse_qs(urlsplit(candidate).query).get('x-expires',[])
+                if expiry and int(expiry[0])<=time()+60: continue
+            except (ValueError,OverflowError):
+                continue
             return candidate
     return ''
 

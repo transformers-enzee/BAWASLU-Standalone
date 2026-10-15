@@ -131,7 +131,8 @@ def _existing_thumbnail(item):
     candidates=[
         _value(raw,'post.media.thumbnail_url','post.media.thumbnail','post.media.cover_url',
                'post.video.cover_url','post.thumbnail_url','thumbnail_url','image_url',
-               'post.media.0.thumbnail_url','post.media.0.url',default=''),
+               'post.media.0.thumbnail_url','post.media.0.url',
+               'source_items.0.media.thumbnail_url','source_items.0.media.image_urls.0',default=''),
         _value(raw,'post.media.0.preview_image','post.media.0.thumbnail','post.media.0.cover',
                'post.video.thumbnail','post.video.cover','post.video.thumbnail_url',
                'post.image','post.images.0.url','post.images.0.thumbnail',

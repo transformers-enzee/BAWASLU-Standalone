@@ -21,15 +21,15 @@ function ChannelDonut({values}){
  return <div className="flex flex-col sm:flex-row items-center gap-5"><div aria-label="Channel distribution donut" role="img" className="relative w-40 h-40 shrink-0 rounded-full" style={{background:gradient}}><div className="absolute inset-8 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-xl">{total}</strong><span className="text-xs text-slate-500">captured</span></div></div><ul className="text-xs flex-1 space-y-2 w-full">{segments.map(s=><li key={s.name} className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded" style={{background:s.color}}/><span className="flex-1 break-words">{s.name}</span><strong>{s.count} ({s.percent.toFixed(1)}%)</strong></li>)}{!total&&<li>No channel evidence yet</li>}</ul></div>
 }
 
-function SentimentMarker({value}){
+function SentimentMarker({value,details}){
  const key=String(value||'Unclassified').toLowerCase();
  const config=key==='positive'?{Icon:Smile,cls:'text-green-700',label:'Positive'}:key==='neutral'?{Icon:Meh,cls:'text-amber-600',label:'Neutral'}:key==='negative'?{Icon:Frown,cls:'text-red-700',label:'Negative'}:{Icon:CircleHelp,cls:'text-slate-400',label:'Unclassified'};
  const Icon=config.Icon;
- return <span className={config.cls+' flex shrink-0 flex-col items-center gap-1'} title={'Sentiment: '+config.label}><Icon size={24}/><span className="text-[10px]">{config.label}</span></span>;
+ return <span className={config.cls+' flex shrink-0 flex-col items-center gap-1'} title={'Sentiment: '+config.label+(details?.confidence?' · Confidence: '+details.confidence:'')+(details?.explanation?' · '+details.explanation:'')+(details?.model?' · Model: '+details.model:'')}><Icon size={24}/><span className="text-[10px]">{config.label}</span></span>;
 }
 function SourceThumbnail({url,platform}){
  const [failed,setFailed]=useState(false);
- return <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
+ return <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
   {url&&!failed?<img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setFailed(true)}/>:<div className="flex flex-col items-center gap-1 text-slate-400" aria-label="Thumbnail unavailable"><ImageOff size={18}/><span className="text-[9px] capitalize">{platform||'Source'}</span></div>}
  </div>;
 }
@@ -48,7 +48,7 @@ export default function CampaignPanel({campaignId=null}){
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
- const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState('');
+ const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
@@ -70,6 +70,22 @@ export default function CampaignPanel({campaignId=null}){
    await refresh();await viewEvidence(selected);
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setManualBusy(false)}
+ }
+ async function checkBatch(){
+  if(!selected)return;
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentBatchPreview',id:selected.id,data:{}});setBatchPreview(r.data);setAiError('')}
+  catch(e){setAiError(e.response?.data?.detail||e.message)}
+ }
+ async function runBatch(){
+  if(!selected||aiBusy||!batchPreview?.estimated_ai_calls)return;
+  if(!window.confirm('Process '+batchPreview.estimated_ai_calls+' posts? OpenAI API charges may apply; exact monetary cost is unknown.'))return;
+  setAiBusy(true);setAiError('');let completed=0;
+  for(const result_id of batchPreview.selected_ids){
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentClassify',id:selected.id,data:{result_id,confirm_ai_cost:true}});completed++;
+      setEvidence(old=>old.map(x=>x.id===result_id?{...x,sentiment:r.data.sentiment,sentiment_details:{confidence:r.data.confidence,explanation:r.data.explanation,model:r.data.model}}:x))}
+   catch(e){setAiError('Batch stopped: '+(e.response?.data?.detail||e.message));break}
+  }
+  setBatchNotice(completed+' post(s) classified.');setBatchPreview(null);setAiBusy(false);
  }
  async function classifyNextPost(){
   if(!selected||aiBusy)return;
@@ -244,14 +260,17 @@ export default function CampaignPanel({campaignId=null}){
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
       <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
- <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div>{aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
+ <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview batch AI</button>
+ {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} possible billable AI calls (max 3). Token costs vary and are not quoted in advance.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm AI batch</button></div>}
+ {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
+ {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
  {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
  const valid=/^https:\/\//i.test(item.canonical_url||'');
- return <a key={item.id} href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
+ return <a key={item.id} href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-2 rounded-xl border border-slate-200 p-2.5 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
   <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
-  <SentimentMarker value={item.sentiment}/>
+  <SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
  </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>

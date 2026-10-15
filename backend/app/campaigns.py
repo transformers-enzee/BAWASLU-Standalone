@@ -164,6 +164,26 @@ def _latest_sentiment(db,campaign_id,result_id):
     label=str(record.sentiment or '').upper() if record else ''
     return label.title() if label in ('POSITIVE','NEGATIVE','NEUTRAL') else 'Unclassified'
 
+def _sentiment_details(db,campaign_id,result_id):
+    from .models import EvidenceAssessment
+    record=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc()).first())
+    if not record or record.sentiment not in ('POSITIVE','NEUTRAL','NEGATIVE'): return None
+    return {'confidence':record.relevance_confidence or '','explanation':record.explanation or '',
+            'model':record.model_version or ''}
+
+def _batch_preview(db,p,c):
+    from .models import SocialListeningResult
+    from .socialcrawl import _result_in_scope
+    links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(200).all()
+    eligible=[]
+    for link in links:
+        item=db.get(SocialListeningResult,link.result_id)
+        if item and _result_in_scope(db,p,item) and _latest_sentiment(db,c.id,item.id)=='Unclassified':
+            eligible.append(str(item.id))
+    return {'unclassified':len(eligible),'selected_ids':eligible[:3],'estimated_ai_calls':min(len(eligible),3),
+            'notice':'OpenAI API token charges vary; no monetary estimate is available. No SocialCrawl credits.'}
+
 def _classify_campaign_sentiment(db,p,c,data):
     """Explicit, single-record AI classification; never invoked during retrieval."""
     import os, httpx
@@ -216,7 +236,7 @@ def _classify_campaign_sentiment(db,p,c,data):
     audit(db,p,'EvidenceAssessment',record.id,'AI_POST_SENTIMENT_CLASSIFIED',
           {'sentiment':{'new':label},'model':{'new':record.model_version}})
     return {'sentiment':label.title() if label!='UNCLASSIFIED' else 'Unclassified',
-            'confidence':record.relevance_confidence,'cached':False,'paid_provider_called':True}
+            'confidence':record.relevance_confidence,'explanation':record.explanation,'model':record.model_version,'cached':False,'paid_provider_called':True}
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
@@ -265,6 +285,11 @@ def campaign_action(db:Session,p,action,data,id=None):
         return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
                 'credits_used':credits_used,'manual_only':True,'estimated_credits':preview['estimated_credits'],
                 'retrieval_mode':'PER_KEYWORD_OR'}
+    if action=='campaignSentimentBatchPreview':
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can preview')
+        return _batch_preview(db,p,c)
     if action=='campaignSentimentClassify':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
@@ -344,7 +369,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not item or not _result_in_scope(db,p,item): continue
             try: match=json.loads(link.matched_fields_json or '[]')
             except (ValueError,TypeError): match=[]
-            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'sentiment':_latest_sentiment(db,c.id,item.id),'matched_fields':match})
+            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':_existing_thumbnail(item),'sentiment':_latest_sentiment(db,c.id,item.id),'sentiment_details':_sentiment_details(db,c.id,item.id),'matched_fields':match})
         return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

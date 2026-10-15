@@ -23,11 +23,20 @@ export default function CampaignPanel(){
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
+ const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setSelected(c);setEvidence([]);setDashboard(null);setDashboardError('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setSelected(c);setEvidence([]);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
+ }
+ async function applyAnalyticsDates(){
+  if(!selected)return;
+  if(analyticsFrom&&analyticsTo&&analyticsFrom>analyticsTo){setDashboardError('Start date must not be after end date.');return}
+  setAnalyticsBusy(true);setDashboardError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo}});setDashboard(r.data)}
+  catch(e){setDashboardError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setAnalyticsBusy(false)}
  }
  const [creditEstimate,setCreditEstimate]=useState(null),[estimating,setEstimating]=useState(false),[estimateError,setEstimateError]=useState('');
  const previewRequestId=useRef(0);
@@ -155,6 +164,9 @@ export default function CampaignPanel(){
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
    {dashboard&&<section aria-label="Campaign monitoring dashboard" className="rounded-lg border border-slate-200 p-4 space-y-3">
     <h4 className="font-semibold">Monitoring dashboard</h4>
+    <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply date filter'}</button></div>
+    <p className="text-xs text-slate-500">Date filtering uses source publication dates. Records without dates are omitted when a date filter is applied.</p>
+    <div aria-label="Daily evidence trend"><h5 className="font-semibold text-sm">Daily evidence trend</h5>{dashboard.daily_trend?.length?<div className="mt-2 space-y-1">{dashboard.daily_trend.map(point=><div key={point.date} className="flex gap-3 items-center text-xs"><span className="w-24">{point.date}</span><div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#285f82]" style={{width:(100*point.count/Math.max(1,...dashboard.daily_trend.map(p=>p.count)))+'%'}} /></div><strong>{point.count}</strong></div>)}</div>:<p className="text-xs text-slate-500">No dated evidence in this period</p>}</div>
     <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
     {dashboard.truncated&&<p className="text-xs text-amber-800">Statistics cover only the latest 5,000 campaign evidence links.</p>}
     {[

@@ -235,3 +235,26 @@ test('Campaign keyword screening preview is free and distinguishes main, seconda
   await preview.getByRole('button',{name:'Preview keyword match'}).click();
   await expect(preview.getByRole('status')).toContainText('Does not match campaign keywords');
 });
+
+
+test('Campaign analytics date filtering uses stored evidence and validates date order',async({page})=>{
+  await uiLogin(page);
+  await page.goto('/social-listening?tab=campaigns');
+  await page.getByRole('button',{name:/New Campaign/i}).click();
+  const dialog=page.getByRole('dialog');
+  const name='QA Analytics '+Date.now();
+  await dialog.getByLabel(/Campaign name/i).fill(name);
+  const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
+  await keyword.fill('pemilu');await keyword.press('Enter');
+  await dialog.getByRole('button',{name:'Save Draft'}).click();
+  await page.getByRole('button',{name:'View Evidence'}).first().click();
+  const filters=page.getByLabel('Campaign analytics date filters');
+  await expect(page.getByLabel('Daily evidence trend')).toBeVisible();
+  await filters.getByLabel('From date').fill('2026-10-15');
+  await filters.getByLabel('To date').fill('2026-10-01');
+  await filters.getByRole('button',{name:'Apply date filter'}).click();
+  await expect(page.getByRole('alert')).toContainText('Start date must not be after end date');
+  await filters.getByLabel('To date').fill('2026-10-15');
+  await filters.getByRole('button',{name:'Apply date filter'}).click();
+  await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated evidence in this period');
+});

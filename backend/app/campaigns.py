@@ -102,13 +102,21 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .socialcrawl import _result_in_scope
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        from_day=_iso_date((data or {}).get('date_from'),'Date from')
+        to_day=_iso_date((data or {}).get('date_to'),'Date to')
+        if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
-        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter()
         visible=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
             if not item or not _result_in_scope(db,p,item): continue
+            source_day=str(item.published_at or '')[:10]
+            try: source_day=date.fromisoformat(source_day).isoformat()
+            except ValueError: source_day=''
+            if (from_day or to_day) and (not source_day or (from_day and source_day<from_day) or (to_day and source_day>to_day)): continue
             visible+=1
+            if source_day: daily[source_day]+=1
             platforms[item.platform or 'unknown']+=1
             states[item.review_state or 'UNKNOWN']+=1
             try: matched=json.loads(link.matched_fields_json or '{}')
@@ -119,6 +127,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
         return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
+                'daily_trend':[{ 'date':day,'count':daily[day]} for day in sorted(daily)],
+                'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'limited_to':5000,'truncated':len(links)==5000,
                 'paid_provider_called':False}

@@ -132,7 +132,7 @@ export default function CampaignPanel(){
     <span><strong>{total}</strong> campaigns</span><span><strong>{campaigns.filter(x=>x.status==='PAUSED').length}</strong> paused</span>
    </div>
    <div className="flex flex-wrap gap-2"><input className="intel-input flex-1" value={query} aria-label="Search campaigns" placeholder="Search campaigns" onChange={e=>setQuery(e.target.value)}/><select className="intel-input" aria-label="Campaign status filter" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option><option value="DRAFT">Draft</option><option value="PAUSED">Paused</option></select></div>
-  </div>
+  </div>}
   {error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
   {creating&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setCreating(false)}}>

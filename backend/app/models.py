@@ -183,6 +183,18 @@ class IssueCategory(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
+class IssueCategoryPhrase(Base):
+    """Version-preserving matching vocabulary managed by national administrators."""
+    __tablename__='issue_category_phrases'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey('issue_categories.id'), index=True)
+    phrase: Mapped[str] = mapped_column(String(160))
+    normalized_phrase: Mapped[str] = mapped_column(String(160))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__=(UniqueConstraint('category_id','normalized_phrase',name='uq_issue_category_phrase'),)
+
 class DataSource(Base):
     __tablename__='data_sources'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -297,6 +309,74 @@ class SocialListeningResult(Base):
     raw_payload_json: Mapped[str] = mapped_column(Text, default='{}')
     content_fingerprint: Mapped[str] = mapped_column(String(128), default='', index=True)
     collected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+# Architecture v2: preserve collected source evidence independently from campaigns.
+# Tables are additive. No existing SocialListeningResult or Rule row is rewritten.
+class MonitoringCampaign(Base):
+    __tablename__='monitoring_campaigns'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    description: Mapped[str] = mapped_column(Text, default='')
+    primary_keywords_json: Mapped[str] = mapped_column(Text, default='[]')
+    secondary_keywords_json: Mapped[str] = mapped_column(Text, default='[]')
+    excluded_keywords_json: Mapped[str] = mapped_column(Text, default='[]')
+    platforms_json: Mapped[str] = mapped_column(Text, default='[]')
+    language: Mapped[str] = mapped_column(String(32), default='')
+    date_from: Mapped[str] = mapped_column(String(32), default='')
+    date_to: Mapped[str] = mapped_column(String(32), default='')
+    province: Mapped[str] = mapped_column(String(128), default='')
+    regency_city: Mapped[str] = mapped_column(String(128), default='')
+    status: Mapped[str] = mapped_column(String(24), default='DRAFT')
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=180)
+    next_run_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True, index=True)
+    last_success_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(128), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class CampaignRun(Base):
+    __tablename__='campaign_runs'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    social_listening_run_id: Mapped[int] = mapped_column(ForeignKey('social_listening_runs.id'), unique=True)
+    triggered_by: Mapped[str] = mapped_column(String(32), default='MANUAL')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class CampaignEvidence(Base):
+    __tablename__='campaign_evidence'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'), index=True)
+    match_method: Mapped[str] = mapped_column(String(48), default='KEYWORD')
+    matched_fields_json: Mapped[str] = mapped_column(Text, default='[]')
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__=(UniqueConstraint('campaign_id','result_id',name='uq_campaign_evidence'),)
+
+class EvidenceAssessment(Base):
+    __tablename__='evidence_assessments'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'), index=True)
+    assessment_version: Mapped[int] = mapped_column(Integer, default=1)
+    model_version: Mapped[str] = mapped_column(String(100), default='')
+    relevance_label: Mapped[str] = mapped_column(String(32), default='UNASSESSED')
+    relevance_confidence: Mapped[str] = mapped_column(String(32), default='')
+    sentiment: Mapped[str] = mapped_column(String(32), default='UNKNOWN')
+    candidate_signals_json: Mapped[str] = mapped_column(Text, default='[]')
+    geographic_signals_json: Mapped[str] = mapped_column(Text, default='[]')
+    potential_issue_signals_json: Mapped[str] = mapped_column(Text, default='[]')
+    explanation: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__=(UniqueConstraint('campaign_id','result_id','assessment_version',name='uq_evidence_assessment_version'),)
+
+class EvidenceReview(Base):
+    __tablename__='evidence_reviews'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_id: Mapped[int] = mapped_column(ForeignKey('evidence_assessments.id'), index=True)
+    reviewer_id: Mapped[str] = mapped_column(String(128), index=True)
+    decision: Mapped[str] = mapped_column(String(40))
+    rationale: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class SocialListeningProviderUsage(Base):
     __tablename__='social_listening_provider_usage'

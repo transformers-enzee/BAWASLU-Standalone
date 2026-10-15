@@ -48,6 +48,7 @@ export default function CampaignPanel({campaignId=null}){
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
+ const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
@@ -69,6 +70,18 @@ export default function CampaignPanel({campaignId=null}){
    await refresh();await viewEvidence(selected);
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setManualBusy(false)}
+ }
+ async function classifyNextPost(){
+  if(!selected||aiBusy)return;
+  const item=evidence.find(x=>!x.sentiment||x.sentiment==='Unclassified');
+  if(!item){setAiError('No unclassified post available in the loaded evidence.');return}
+  if(!window.confirm('Analyze one post with AI? OpenAI API usage may incur a charge.'))return;
+  setAiBusy(true);setAiError('');
+  try{
+   const res=await base44.functions.invoke('socialListening',{action:'campaignSentimentClassify',id:selected.id,data:{result_id:item.id,confirm_ai_cost:true}});
+   setEvidence(old=>old.map(x=>x.id===item.id?{...x,sentiment:res.data.sentiment}:x));
+  }catch(e){setAiError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setAiBusy(false)}
  }
  async function applyAnalyticsDates(){
   if(!selected)return;
@@ -231,13 +244,13 @@ export default function CampaignPanel({campaignId=null}){
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
       <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
- <h5 className="font-semibold">Captured posts & sources</h5>
+ <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div>{aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
  {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
  const valid=/^https:\/\//i.test(item.canonical_url||'');
  return <a key={item.id} href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
-  <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span>{valid&&<ExternalLink size={13} className="text-blue-700"/>}</div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
+  <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
   <SentimentMarker value={item.sentiment}/>
  </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>

@@ -96,6 +96,32 @@ def _editable(p,c):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignDashboard':
+        from collections import Counter
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter()
+        visible=0
+        for link in links:
+            item=db.get(SocialListeningResult,link.result_id)
+            if not item or not _result_in_scope(db,p,item): continue
+            visible+=1
+            platforms[item.platform or 'unknown']+=1
+            states[item.review_state or 'UNKNOWN']+=1
+            try: matched=json.loads(link.matched_fields_json or '{}')
+            except (ValueError,TypeError): matched={}
+            if isinstance(matched,dict):
+                for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
+                for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
+        runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
+        return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
+                'platforms':dict(platforms),'review_states':dict(states),
+                'main_keywords':dict(main),'secondary_keywords':dict(secondary),
+                'limited_to':5000,'truncated':len(links)==5000,
+                'paid_provider_called':False}
     if action=='campaignRunReadiness':
         # Dry-run only: calculate scoped cost and duplicate warnings without invoking a provider.
         from .campaign_scheduler import campaign_query, campaign_schedule_preview

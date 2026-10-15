@@ -22,9 +22,10 @@ export default function CampaignPanel(){
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
+ const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  async function viewEvidence(c){
-  resetKeywordPreview();setSelected(c);setEvidence([]);setEvidenceError('');setEvidenceLoading(true);
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}});setEvidence(r.data.evidence||[])}
+  resetKeywordPreview();setSelected(c);setEvidence([]);setDashboard(null);setDashboardError('');setEvidenceError('');setEvidenceLoading(true);
+  try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
  }
@@ -151,6 +152,19 @@ export default function CampaignPanel(){
    <p className="text-sm">Secondary: {selected.secondary_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Excluded: {selected.excluded_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
+   {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
+   {dashboard&&<section aria-label="Campaign monitoring dashboard" className="rounded-lg border border-slate-200 p-4 space-y-3">
+    <h4 className="font-semibold">Monitoring dashboard</h4>
+    <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
+    {dashboard.truncated&&<p className="text-xs text-amber-800">Statistics cover only the latest 5,000 campaign evidence links.</p>}
+    {[
+     ['Evidence by platform',dashboard.platforms],
+     ['Review status',dashboard.review_states],
+     ['Main keyword matches',dashboard.main_keywords],
+     ['Secondary keyword matches',dashboard.secondary_keywords]
+    ].map(([label,values])=><div key={label}><h5 className="text-sm font-semibold">{label}</h5>{Object.entries(values||{}).length?<div className="space-y-1 mt-2">{Object.entries(values).sort((x,y)=>y[1]-x[1]).map(([name,count])=><div key={name} className="flex gap-3 items-center text-xs"><span className="w-32 break-words">{name}</span><div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#285f82]" style={{width:(100*count/Math.max(1,...Object.values(values)))+'%'}} /></div><strong>{count}</strong></div>)}</div>:<p className="text-xs text-slate-500 mt-1">No evidence yet</p>}</div>)}
+    <p className="text-xs text-slate-500">Based on stored, access-scoped evidence. Keyword matches are not verified election violations. No SocialCrawl credits used.</p>
+   </section>}
    <CampaignScheduleSummary campaign={selected} />
    <div className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Campaign keyword screening preview">
     <h4 className="font-semibold">Test keyword matching (no credits)</h4>

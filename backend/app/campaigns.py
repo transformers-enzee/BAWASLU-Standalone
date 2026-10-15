@@ -96,6 +96,21 @@ def _editable(p,c):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignCostPreview':
+        from .socialcrawl import estimate_search_cost
+        if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
+        values=_normalize(db,p,data)
+        filters={'query':' '.join(json.loads(values['primary_keywords_json'])),
+                 'exclude_terms':json.loads(values['excluded_keywords_json']),
+                 'platforms':json.loads(values['platforms_json']),
+                 'language':values['language'],
+                 'date_from':values['date_from'],'date_to':values['date_to'],
+                 'province':values['province'],'regency_city':values['regency_city']}
+        estimate=estimate_search_cost(filters)
+        return {'estimated_credits':estimate['estimated_credits'],
+                'components':estimate['components'],
+                'billing_warning':'Estimate only. Actual provider credits may vary.',
+                'paid_run_enabled':False,'approval_required':True}
     if action=='listCampaigns':
         rows=db.query(MonitoringCampaign).order_by(MonitoringCampaign.created_at.desc(),MonitoringCampaign.id.desc()).all()
         visible=[r for r in rows if allowed(p,r)]

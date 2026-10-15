@@ -15,7 +15,21 @@ export default function CampaignPanel(){
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [total,setTotal]=useState(0);
- const set=(key,value)=>setForm(x=>({...x,[key]:value}));
+ const [creditEstimate,setCreditEstimate]=useState(null),[estimating,setEstimating]=useState(false),[estimateError,setEstimateError]=useState('');
+ const clearEstimate=()=>{setCreditEstimate(null);setEstimateError('')};
+ async function checkCredits(){
+  setEstimating(true);setEstimateError('');setCreditEstimate(null);
+  try{
+   const r=await base44.functions.invoke('socialListening',{action:'campaignCostPreview',data:{
+     ...form,primary_keywords:split(form.primary_keywords),
+     secondary_keywords:split(form.secondary_keywords),excluded_keywords:split(form.excluded_keywords)
+   }});
+   setCreditEstimate(r.data);
+  }catch(e){setEstimateError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setEstimating(false)}
+ }
+
+ const set=(key,value)=>{clearEstimate();setForm(x=>({...x,[key]:value}))};
  async function refresh(){
   try{
    const r=await base44.functions.invoke('socialListening',{action:'listCampaigns',data:{}});
@@ -24,9 +38,9 @@ export default function CampaignPanel(){
   finally{setLoading(false)}
  }
  useEffect(()=>{refresh()},[]);
- function newCampaign(){setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
+ function newCampaign(){clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
-  setForm({name:c.name,description:c.description||'',
+  clearEstimate();setForm({name:c.name,description:c.description||'',
    primary_keywords:(c.primary_keywords||[]).join(', '),
    secondary_keywords:(c.secondary_keywords||[]).join(', '),
    excluded_keywords:(c.excluded_keywords||[]).join(', '),
@@ -98,6 +112,17 @@ export default function CampaignPanel(){
    <fieldset className="space-y-2"><legend className="text-sm font-semibold">Platforms *</legend>
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{options.map(p=><label key={p} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.platforms.includes(p)} onChange={e=>set('platforms',e.target.checked?[...form.platforms,p]:form.platforms.filter(x=>x!==p))}/>{p}</label>)}</div>
    </fieldset>
+   <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2" aria-label="Campaign credit preflight">
+    <p className="text-sm font-semibold text-amber-950">SocialCrawl credit estimate — before running</p>
+    <p className="text-xs text-amber-900">A cost preview does not call SocialCrawl or use credits. Always review the latest estimate before authorizing a paid run.</p>
+    <button type="button" className="intel-ghost" disabled={estimating||saving||!form.name.trim()||!split(form.primary_keywords).length||!form.platforms.length} onClick={checkCredits}>{estimating?'Calculating…':'Check estimated credits'}</button>
+    {estimateError&&<p role="alert" className="text-xs text-red-700">{estimateError}</p>}
+    {creditEstimate&&<div role="status" className="text-sm text-amber-950">
+      Estimated cost: <strong>{creditEstimate.estimated_credits} credits per run</strong>
+      <p className="text-xs">Estimate, not a guaranteed final charge. Actual provider usage may differ.</p>
+      <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
+    </div>}
+   </div>
    <div className="flex gap-2"><button className="intel-button" disabled={saving}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>

@@ -16,6 +16,14 @@ export default function CampaignPanel(){
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [total,setTotal]=useState(0);
+ const [statusFilter,setStatusFilter]=useState('all');
+ const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
+ async function viewEvidence(c){
+  setSelected(c);setEvidence([]);setEvidenceError('');setEvidenceLoading(true);
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}});setEvidence(r.data.evidence||[])}
+  catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+  finally{setEvidenceLoading(false)}
+ }
  const [creditEstimate,setCreditEstimate]=useState(null),[estimating,setEstimating]=useState(false),[estimateError,setEstimateError]=useState('');
  const clearEstimate=()=>{setCreditEstimate(null);setEstimateError('')};
  async function checkCredits(){
@@ -70,7 +78,7 @@ export default function CampaignPanel(){
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setSaving(false)}
  }
- const visible=campaigns.filter(x=>(x.name+' '+x.description+' '+x.primary_keywords.join(' ')).toLowerCase().includes(query.toLowerCase()));
+ const visible=campaigns.filter(x=>(statusFilter==='all'||x.status===statusFilter)&&(x.name+' '+x.description+' '+x.primary_keywords.join(' ')).toLowerCase().includes(query.toLowerCase()));
  return <section className="space-y-5" aria-label="Monitoring campaigns">
   <div className="intel-card p-5 space-y-3">
    <div className="flex flex-wrap items-center justify-between gap-3">
@@ -82,7 +90,7 @@ export default function CampaignPanel(){
    <div className="flex flex-wrap gap-4 text-sm">
     <span><strong>{total}</strong> campaigns</span><span><strong>{campaigns.filter(x=>x.status==='PAUSED').length}</strong> paused</span>
    </div>
-   <input className="intel-input" value={query} aria-label="Search campaigns" placeholder="Search campaigns" onChange={e=>setQuery(e.target.value)}/>
+   <div className="flex flex-wrap gap-2"><input className="intel-input flex-1" value={query} aria-label="Search campaigns" placeholder="Search campaigns" onChange={e=>setQuery(e.target.value)}/><select className="intel-input" aria-label="Campaign status filter" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option><option value="DRAFT">Draft</option><option value="PAUSED">Paused</option></select></div>
   </div>
   {error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
@@ -129,20 +137,7 @@ export default function CampaignPanel(){
     </form>
    </div>
   </div>}
-  {loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="grid gap-3 md:grid-cols-2">
-   {visible.map(c=><article className="intel-card p-5 space-y-3" key={c.id}>
-    <div className="flex justify-between gap-2"><h3 className="font-semibold">{c.name}</h3><span className="text-xs text-[#77899b]">{displayStatus(c.status)}</span></div>
-    <p className="text-sm text-[#77899b]">{c.description||'No description added'}</p>
-    <p className="text-xs">Main keywords: {(c.primary_keywords||[]).join(', ')}</p>
-    <p className="text-xs">Platforms: {(c.platforms||[]).join(', ')}</p>
-    <p className="text-xs">Evidence: {c.evidence_count} · Runs: {c.run_count} · Last successful crawl: {presentDate(c.last_success_at)}</p>
-    <div className="flex gap-2 flex-wrap"><button type="button" className="intel-ghost" onClick={()=>setSelected(c)}>View</button>
-     <button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>
-     {c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}
-    </div>
-   </article>)}
-   {!visible.length&&<p className="intel-card p-4 text-sm">No campaigns found. Create one to begin organizing monitoring.</p>}
-  </div>}
+  {loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="intel-card overflow-x-auto"><table className="w-full text-left text-sm" aria-label="Campaign list"><thead className="bg-slate-50 text-xs uppercase text-slate-600"><tr><th className="p-3">Campaign</th><th className="p-3">Dates</th><th className="p-3">Status</th><th className="p-3">Evidence</th><th className="p-3">Actions</th></tr></thead><tbody>{visible.map(c=><tr key={c.id} className="border-t border-slate-100"><td className="p-3"><strong>{c.name}</strong><div className="text-xs text-slate-500">{(c.primary_keywords||[]).join(' · ')}</div></td><td className="p-3 text-xs">{c.date_from||'Any'} — {c.date_to||'Any'}</td><td className="p-3">{displayStatus(c.status)}</td><td className="p-3">{c.evidence_count}</td><td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost" onClick={()=>viewEvidence(c)}>View Evidence</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div></td></tr>)}</tbody></table>{!visible.length&&<p className="p-4 text-sm">No campaigns match your filters.</p>}</div>}
   {selected&&!creating&&<div className="intel-card p-5 space-y-2">
    <h3 className="font-semibold">{selected.name} — Campaign Overview</h3>
    <p className="text-sm">Main keywords: {selected.primary_keywords.join(', ')}</p>
@@ -150,6 +145,11 @@ export default function CampaignPanel(){
    <p className="text-sm">Excluded: {selected.excluded_keywords.join(', ')||'None'}</p>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    <CampaignScheduleSummary campaign={selected} />
+   <h4 className="font-semibold">Campaign evidence</h4>
+   {evidenceLoading&&<p role="status">Loading evidence…</p>}
+   {evidenceError&&<p role="alert" className="text-red-700">{evidenceError}</p>}
+   {!evidenceLoading&&!evidenceError&&!evidence.length&&<p className="text-sm text-slate-600">No evidence linked yet. Saving a campaign does not run paid collection.</p>}
+   {evidence.map(item=><article key={item.id} className="rounded-lg border border-slate-200 p-3 space-y-1 text-sm"><p className="text-xs text-slate-600">{item.platform} · {item.author_name||'Unknown author'} · {item.published_at||'Date unavailable'}</p><p className="whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p>{item.canonical_url&&item.canonical_url.startsWith('https://')&&<a href={item.canonical_url} target="_blank" rel="noopener noreferrer" className="underline">Open original source</a>}<p className="text-xs text-slate-600">Keyword match: {JSON.stringify(item.matched_fields||[])}</p></article>)}
    <p className="text-xs text-[#77899b]">Trend dashboards and AI classification will be enabled in subsequent builds.</p>
    <button type="button" className="intel-ghost" onClick={()=>setSelected(null)}>Close</button>
   </div>}

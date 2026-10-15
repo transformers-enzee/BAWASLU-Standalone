@@ -150,3 +150,11 @@ def test_campaign_keyword_preview_is_no_charge_and_scope_enforced():
     assert db.query(SocialListeningRun).count()==0
     assert db.query(CampaignRun).count()==0
     db.close()
+
+def test_campaign_evidence_read_only_no_charge():
+    db=SessionLocal();p=actor(db,'admin','National Administrator')
+    c=action(db,p,'createCampaign',payload())['campaign']
+    result=action(db,p,'campaignEvidence',{},c['id'])
+    assert result['evidence']==[] and result['paid_provider_called'] is False
+    assert db.query(SocialListeningRun).count()==0
+    db.close()

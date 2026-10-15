@@ -96,6 +96,20 @@ def _editable(p,c):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignEvidence':
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.added_at.desc(),CampaignEvidence.id.desc()).limit(200).all()
+        rows=[]
+        for link in links:
+            item=db.get(SocialListeningResult,link.result_id)
+            if not item or not _result_in_scope(db,p,item): continue
+            try: match=json.loads(link.matched_fields_json or '[]')
+            except (ValueError,TypeError): match=[]
+            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'matched_fields':match})
+        return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None

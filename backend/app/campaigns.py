@@ -255,6 +255,35 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignThumbnailRecovery':
+        from .models import SocialListeningResult, SocialMediaThumbnail
+        from .socialcrawl import _result_in_scope
+        from .thumbnail_cache import cache_thumbnail, stored_thumbnail_uri
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can recover thumbnails')
+        rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
+              .order_by(CampaignEvidence.id.desc()).limit(200).all())
+        report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
+                'paid_provider_called':False}
+        budget=12
+        for link in rows:
+            item=db.get(SocialListeningResult,link.result_id)
+            if not item or not _result_in_scope(db,p,item): continue
+            if db.get(SocialMediaThumbnail,item.id):
+                report['already_saved']+=1
+                continue
+            if not (item.platform or '').lower().startswith(('instagram','tiktok')): continue
+            if report['checked']>=budget:
+                report['remaining']+=1
+                continue
+            report['checked']+=1
+            if cache_thumbnail(db,item,_existing_thumbnail(item)):
+                report['recovered']+=1
+            else:
+                report['unavailable']+=1
+        db.commit()
+        return report
     if action in ('campaignManualPreflight','campaignManualRun'):
         from .campaign_scheduler import campaign_query, keyword_screen
         from .socialcrawl import execute_search

@@ -177,3 +177,12 @@ def test_demographics_coverage_is_zero_when_provider_metadata_missing():
     assert dashboard['demographics_coverage']=={'records':0,'language_available':0,'country_available':0,'age_available':0,'gender_available':0}
     assert dashboard['source_languages']=={}
     db.close()
+
+
+def test_thumbnail_recovery_no_existing_evidence_does_not_call_provider():
+    db=SessionLocal(); p=actor(db,'thumbnailrecover','National Administrator')
+    campaign=action(db,p,'createCampaign',payload())['campaign']
+    result=action(db,p,'campaignThumbnailRecovery',{},campaign['id'])
+    assert result['checked']==0 and result['recovered']==0
+    assert result['paid_provider_called'] is False
+    db.close()

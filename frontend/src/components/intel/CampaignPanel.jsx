@@ -47,6 +47,7 @@ export default function CampaignPanel({campaignId=null}){
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [statusFilter,setStatusFilter]=useState('all');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
+ const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
@@ -56,6 +57,18 @@ export default function CampaignPanel({campaignId=null}){
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
+ }
+ async function recoverThumbnails(){
+  if(!selected||thumbnailRecoveryBusy)return;
+  setThumbnailRecoveryBusy(true);setThumbnailRecoveryMessage('');
+  try{
+   const response=await base44.functions.invoke('socialListening',{action:'campaignThumbnailRecovery',id:selected.id,data:{}});
+   const result=response.data;
+   setThumbnailRecoveryMessage(result.recovered+' images saved; '+result.unavailable+' unavailable; '+result.already_saved+' already stored.'+(result.remaining?' Additional records remain; retry to check more.':''));
+   const latest=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{}});
+   setEvidence(latest.data.evidence||[]);
+  }catch(e){setThumbnailRecoveryMessage(e.response?.data?.detail||e.message||'Recovery unavailable')}
+  finally{setThumbnailRecoveryBusy(false)}
  }
  async function previewManualCrawl(){
   if(!selected)return;setManualBusy(true);setManualPreview(null);setManualNotice('');
@@ -260,7 +273,9 @@ export default function CampaignPanel({campaignId=null}){
         <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
       </section>
       <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
- <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview batch AI</button>
+ <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={thumbnailRecoveryBusy} onClick={recoverThumbnails}>{thumbnailRecoveryBusy?'Checking images…':'Recover stored thumbnails (free)'}</button>
+ {thumbnailRecoveryMessage&&<p className="text-xs text-slate-600" role="status">{thumbnailRecoveryMessage}</p>}
+ <button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview batch AI</button>
  {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} possible billable AI calls (max 3). Token costs vary and are not quoted in advance.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm AI batch</button></div>}
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}

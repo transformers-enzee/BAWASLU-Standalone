@@ -7,7 +7,7 @@ from sqlalchemy import update
 from datetime import datetime, timedelta
 import httpx
 from .db import SessionLocal
-from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob
+from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
 
 log=logging.getLogger(__name__)
 _campaign_locks_guard=threading.Lock()
@@ -81,6 +81,43 @@ def campaign_lifetime_budget_remaining(db,campaign_id):
         AIAssessmentJob.attempts>0).all()
     return max(0,ceiling-sum(job.attempts for job in jobs))
 
+def reserve_automatic_ai_request(db,campaign_id):
+    """Atomically reserve both quotas before any paid automatic provider request."""
+    from sqlalchemy import insert
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    try:
+        daily=max(0,min(100,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        lifetime=max(0,min(500,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    except ValueError:return False
+    if not daily or not lifetime:return False
+    period=datetime.utcnow().strftime('%Y-%m-%d')
+    try:
+        dialect=db.bind.dialect.name
+        if dialect not in ('postgresql','sqlite'):return False
+        ins=pg_insert if dialect=='postgresql' else sqlite_insert
+        for key in ('lifetime',period):
+            db.execute(ins(AIBudgetReservation).values(campaign_id=int(campaign_id),
+                       budget_period=key,reserved_requests=0).on_conflict_do_nothing(
+                       index_elements=['campaign_id','budget_period']))
+        db.commit()
+        # Lock the campaign lifetime row to serialize reservations across processes.
+        lifetime_row=db.query(AIBudgetReservation).filter_by(campaign_id=int(campaign_id),
+                            budget_period='lifetime').with_for_update().one()
+        daily_row=db.query(AIBudgetReservation).filter_by(campaign_id=int(campaign_id),
+                         budget_period=period).with_for_update().one()
+        if lifetime_row.reserved_requests>=lifetime or daily_row.reserved_requests>=daily:
+            db.rollback()
+            return False
+        lifetime_row.reserved_requests+=1
+        daily_row.reserved_requests+=1
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        log.exception('AI quota reservation refused')
+        return False
+
 def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -96,7 +133,8 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
         if not campaign:return
         # Automatic jobs require an explicit daily request ceiling.
         if requested_limit is None:
-            limit=min(limit,campaign_daily_budget_remaining(db,campaign.id),campaign_lifetime_budget_remaining(db,campaign.id))
+            # Reservations, not mutable job timestamps, are authoritative for automatic quotas.
+            limit=min(limit,max(0,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))),max(0,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
             if not limit:return
         categories=db.query(IssueCategory).filter(IssueCategory.active==True).order_by(IssueCategory.sort_order).limit(50).all()
         category_names={c.id:c.name for c in categories}
@@ -112,7 +150,6 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if job and job.state in ('COMPLETED','PROCESSING'):continue
             if job and job.attempts>=3:continue
-            if requested_limit is None and (used>=campaign_daily_budget_remaining(db,campaign.id) or used>=campaign_lifetime_budget_remaining(db,campaign.id)):break
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
             if not job:continue
@@ -126,6 +163,9 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
             db.commit()
             if claimed.rowcount!=1:continue
             db.refresh(job)
+            if requested_limit is None and not reserve_automatic_ai_request(db,campaign.id):
+                job.state='PENDING';job.updated_at=datetime.utcnow();db.commit()
+                break
             used+=1
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
             try:

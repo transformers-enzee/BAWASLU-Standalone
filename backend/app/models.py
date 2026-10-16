@@ -409,3 +409,11 @@ class AIAssessmentJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__=(UniqueConstraint('campaign_id','result_id',name='uq_ai_assessment_job_campaign_result'),)
+
+class AIBudgetReservation(Base):
+    __tablename__='ai_budget_reservations'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    budget_period: Mapped[str] = mapped_column(String(24))
+    reserved_requests: Mapped[int] = mapped_column(Integer, default=0)
+    __table_args__=(UniqueConstraint('campaign_id','budget_period',name='uq_ai_budget_campaign_period'),)

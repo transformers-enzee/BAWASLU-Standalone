@@ -3,6 +3,7 @@ import json
 import os
 import logging
 import threading
+from sqlalchemy import update
 from datetime import datetime, timedelta
 import httpx
 from .db import SessionLocal
@@ -114,9 +115,18 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
             if requested_limit is None and (used>=campaign_daily_budget_remaining(db,campaign.id) or used>=campaign_lifetime_budget_remaining(db,campaign.id)):break
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
+            if not job:continue
+            # Atomic state transition prevents a second process from claiming the same row.
+            claimed=db.execute(update(AIAssessmentJob).where(
+                AIAssessmentJob.id==job.id,
+                AIAssessmentJob.state=='PENDING',
+                AIAssessmentJob.attempts<3
+            ).values(state='PROCESSING',attempts=AIAssessmentJob.attempts+1,
+                     updated_at=datetime.utcnow()))
+            db.commit()
+            if claimed.rowcount!=1:continue
+            db.refresh(job)
             used+=1
-            if job:
-                job.state='PROCESSING';job.attempts+=1;job.updated_at=datetime.utcnow();db.commit()
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
             try:
                 model=os.getenv('BAWASLU_RELEVANCE_MODEL','gpt-4o-mini')

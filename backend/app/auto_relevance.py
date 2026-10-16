@@ -72,6 +72,14 @@ def campaign_daily_budget_remaining(db,campaign_id):
         AIAssessmentJob.attempts>0,AIAssessmentJob.updated_at>=today).all()
     return max(0,ceiling-sum(j.attempts for j in billed))
 
+def campaign_lifetime_budget_remaining(db,campaign_id):
+    """Fail-closed lifetime attempt ceiling; avoids unlimited spending across UTC days."""
+    try: ceiling=max(0,min(500,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    except ValueError:ceiling=0
+    jobs=db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==int(campaign_id),
+        AIAssessmentJob.attempts>0).all()
+    return max(0,ceiling-sum(job.attempts for job in jobs))
+
 def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -87,7 +95,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
         if not campaign:return
         # Automatic jobs require an explicit daily request ceiling.
         if requested_limit is None:
-            limit=min(limit,campaign_daily_budget_remaining(db,campaign.id))
+            limit=min(limit,campaign_daily_budget_remaining(db,campaign.id),campaign_lifetime_budget_remaining(db,campaign.id))
             if not limit:return
         categories=db.query(IssueCategory).filter(IssueCategory.active==True).order_by(IssueCategory.sort_order).limit(50).all()
         category_names={c.id:c.name for c in categories}
@@ -103,7 +111,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if job and job.state in ('COMPLETED','PROCESSING'):continue
             if job and job.attempts>=3:continue
-            if requested_limit is None and used>=campaign_daily_budget_remaining(db,campaign.id):break
+            if requested_limit is None and (used>=campaign_daily_budget_remaining(db,campaign.id) or used>=campaign_lifetime_budget_remaining(db,campaign.id)):break
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
             used+=1

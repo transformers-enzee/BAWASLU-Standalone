@@ -362,7 +362,6 @@ def campaign_action(db:Session,p,action,data,id=None):
         per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',25)
         dialect=db.bind.dialect.name
         reservations=db.query(AIBudgetReservation).filter_by(campaign_id=campaign.id).limit(400).all()
-        from datetime import datetime
         today=datetime.utcnow().strftime('%Y-%m-%d')
         used_today=sum(x.reserved_requests for x in reservations if x.budget_period==today)
         used_lifetime=sum(x.reserved_requests for x in reservations if x.budget_period=='lifetime')

@@ -2,12 +2,18 @@
 import json
 import os
 import logging
+import threading
 from datetime import datetime, timedelta
 import httpx
 from .db import SessionLocal
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob
 
 log=logging.getLogger(__name__)
+_campaign_locks_guard=threading.Lock()
+_campaign_locks={}
+def _campaign_lock(campaign_id):
+    with _campaign_locks_guard:
+        return _campaign_locks.setdefault(int(campaign_id),threading.Lock())
 def _arr(value):
     try:
         x=json.loads(value or '[]')
@@ -66,7 +72,7 @@ def campaign_daily_budget_remaining(db,campaign_id):
         AIAssessmentJob.attempts>0,AIAssessmentJob.updated_at>=today).all()
     return max(0,ceiling-sum(j.attempts for j in billed))
 
-def assess_pending_campaign(campaign_id, requested_limit=None):
+def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
@@ -95,8 +101,9 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
             exists=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if exists:continue
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
-            if job and job.state=='COMPLETED':continue
+            if job and job.state in ('COMPLETED','PROCESSING'):continue
             if job and job.attempts>=3:continue
+            if requested_limit is None and used>=campaign_daily_budget_remaining(db,campaign.id):break
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
             used+=1
@@ -149,3 +156,15 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                 break
     finally:
         db.close()
+
+
+def assess_pending_campaign(campaign_id, requested_limit=None):
+    """Allow only one worker per campaign in each process. Multi-process locking is still required."""
+    lock=_campaign_lock(campaign_id)
+    if not lock.acquire(blocking=False):
+        log.info('AI campaign %s already processing in this instance',campaign_id)
+        return
+    try:
+        return _assess_pending_campaign_locked(campaign_id,requested_limit)
+    finally:
+        lock.release()

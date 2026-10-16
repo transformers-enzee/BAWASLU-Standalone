@@ -1,6 +1,6 @@
 import os, shutil, uuid
 from pathlib import Path
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -31,13 +31,33 @@ def startup():
         recover_existing_news_languages(db)
         sync_promoted_news_languages(db)
     finally: db.close()
+    # Opt-in only: do not initiate any paid work unless BOTH controls are enabled.
+    if os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true' and os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true':
+        from .auto_relevance import recover_stale_jobs, assess_pending_campaign
+        from .models import AIAssessmentJob
+        import threading, time
+        def worker_loop():
+            while True:
+                try:
+                    recover_stale_jobs()
+                    session=SessionLocal()
+                    try:
+                        campaign_ids=[row[0] for row in session.query(AIAssessmentJob.campaign_id).filter(
+                            AIAssessmentJob.state=='PENDING').distinct().limit(20).all()]
+                    finally:session.close()
+                    for cid in campaign_ids: assess_pending_campaign(cid)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception('AI worker cycle failed')
+                time.sleep(60)
+        threading.Thread(target=worker_loop,name='bawaslu-ai-worker',daemon=True).start()
 
 class LoginIn(BaseModel): email:str; password:str
 class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'63.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'72.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -76,9 +96,17 @@ def registry(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(
     except ValueError as e: raise HTTPException(400,str(e))
 
 @app.post('/api/functions/socialListening')
-def social_listening(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
-    try: return social_listening_action(db,p,body.action,body.data,body.id)
+    try:
+        result=social_listening_action(db,p,body.action,body.data,body.id)
+        if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0 and os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true':
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(body.id))
+        if body.action=='campaignAssessmentBacklogStart' and result.get('assessment_job_accepted'):
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(result['campaign_id']),int(result['batch_limit']))
+        return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
 

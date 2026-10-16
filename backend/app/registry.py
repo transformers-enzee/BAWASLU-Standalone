@@ -7,6 +7,32 @@ from .serializers import *
 from .access import *
 from .domain import clean
 
+def _category_phrases(db, category_id):
+    return [{'id':str(x.id),'phrase':x.phrase,'active':x.active} for x in db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.category_id==category_id).order_by(IssueCategoryPhrase.id).all()]
+
+def _validated_category_phrases(raw):
+    if not isinstance(raw,list): raise ValueError('Category phrases must be a list')
+    if len(raw)>40: raise ValueError('Maximum 40 phrases per category')
+    phrases={}
+    for item in raw:
+        phrase=clean(item,160).strip()
+        normalized=' '.join(phrase.casefold().split())
+        if not normalized: raise ValueError('Empty category phrase is not allowed')
+        phrases[normalized]=phrase
+    return phrases
+
+def _sync_category_phrases(db,category_id,raw):
+    incoming=_validated_category_phrases(raw)
+    current={x.normalized_phrase:x for x in db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.category_id==category_id).all()}
+    for norm,phrase in incoming.items():
+        if norm in current:
+            current[norm].active=True
+        else:
+            db.add(IssueCategoryPhrase(category_id=category_id,phrase=phrase,normalized_phrase=norm,active=True))
+    for norm,row in current.items():
+        if norm not in incoming: row.active=False
+
+
 WATCHLIST_STATUSES={'Active','Under Review','Inactive'}
 WATCHLIST_PRIORITIES={'Critical','High','Medium','Low'}
 
@@ -60,7 +86,7 @@ def registry_action(db:Session,p,action,data,id=None):
         rels=[x for x in db.query(EntityRelationship).all() if x.from_id in ids and x.to_id in ids]
         sources=[x for x in db.query(DataSource).all() if allowed(p,x)]
         cats=db.query(IssueCategory).order_by(IssueCategory.sort_order,IssueCategory.name).all()
-        return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order} for x in cats]}
+        return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order,'phrases':_category_phrases(db,x.id)} for x in cats]}
 
     if action=='createWatchlist':
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')
@@ -202,8 +228,11 @@ def registry_action(db:Session,p,action,data,id=None):
 
     if action=='category':
         if p.get('role')!='National Administrator' or not has(p,'administration'): raise PermissionError('Not permitted')
-        c=IssueCategory(name=clean(data.get('name'),255),active=bool(data.get('active',True)),sort_order=int(data.get('sort_order') or 0)); db.add(c); db.commit(); db.refresh(c)
-        return {'category':{'id':str(c.id),'name':c.name,'active':c.active,'sort_order':c.sort_order}}
+        c=IssueCategory(name=clean(data.get('name'),255),active=bool(data.get('active',True)),sort_order=int(data.get('sort_order') or 0)); db.add(c); db.flush()
+        if 'phrases' in data: _sync_category_phrases(db,c.id,data['phrases'])
+        db.commit(); db.refresh(c)
+        audit(db,p,'IssueCategory',c.id,'CREATED',{'name':{'new':c.name}})
+        return {'category':{'id':str(c.id),'name':c.name,'active':c.active,'sort_order':c.sort_order,'phrases':_category_phrases(db,c.id)}}
 
     if action=='updateCategory':
         if p.get('role')!='National Administrator' or not has(p,'administration'): raise PermissionError('Not permitted')
@@ -212,7 +241,10 @@ def registry_action(db:Session,p,action,data,id=None):
         if 'name' in data: c.name=clean(data['name'],255)
         if 'active' in data: c.active=bool(data['active'])
         if 'sort_order' in data: c.sort_order=int(data['sort_order'] or 0)
-        db.commit(); return {'ok':True}
+        if 'phrases' in data: _sync_category_phrases(db,c.id,data['phrases'])
+        db.commit()
+        audit(db,p,'IssueCategory',c.id,'UPDATED',{'category':{'new':c.name},'phrases':{'new':_category_phrases(db,c.id)}})
+        return {'ok':True}
 
     if action=='users':
         if not (has(p,'manage_users') and has(p,'administration')): raise PermissionError('Not permitted')

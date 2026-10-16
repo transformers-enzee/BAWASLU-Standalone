@@ -597,6 +597,10 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                 diagnostics['duplicate_items']+=1
                 continue
             row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row))
+            if len(mapped)<=12 and os.getenv('MEDIA_THUMBNAIL_CACHE_ENABLED','true').lower()=='true':
+                from .campaigns import _existing_thumbnail
+                from .thumbnail_cache import cache_thumbnail
+                cache_thumbnail(db,row,_existing_thumbnail(row))
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
         audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})
@@ -652,6 +656,9 @@ def serialize_run(x): return {'id':str(x.id),'rule_id':str(x.rule_id) if x.rule_
 def serialize_result(x): return {'id':str(x.id),'run_id':str(x.run_id),'provider':x.provider,'provider_result_id':x.provider_result_id,'platform':x.platform,'content_type':x.content_type,'canonical_url':x.canonical_url,'author_name':x.author_name,'observed_handle':x.observed_handle,'published_at':x.published_at,'text_content':x.text_content,'language':x.language,'relevance_score':x.relevance_score,'engagement':json.loads(x.engagement_json or '{}'),'geography':json.loads(x.geography_json or '{}'),'source_identity':json.loads(x.source_identity_json or '{}'),'watchlist_matches':json.loads(x.watchlist_matches_json or '[]'),'review_state':x.review_state,'review_notes':x.review_notes,'promoted_intelligence_id':str(x.promoted_intelligence_id) if x.promoted_intelligence_id else None,'collected_at':x.collected_at.isoformat()}
 
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
+    if action in {'listCampaigns','createCampaign','updateCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignThumbnailRecovery','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness'}:
+        from .campaigns import campaign_action
+        return campaign_action(db,p,action,data,id)
     if action=='capabilities': return capabilities()
     if action=='providerStatus': return provider_status()
     if action=='filterOptions': return filter_options(db,p)

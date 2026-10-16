@@ -1,9 +1,201 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import IntelligenceTable from '@/components/intel/IntelligenceTable';
 import { PRIORITIES, Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
 
+function SocialEvidenceInbox(){
+ const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
+ const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
+ const watchBaseline=useRef(null);
+ const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
+ useEffect(()=>{let active=true;setLoading(true);setError('');
+ base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
+ .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
+ .catch(e=>{if(active)setError(e.response?.data?.detail||e.message||'Inbox unavailable')})
+ .finally(()=>{if(active)setLoading(false)});
+ return()=>{active=false}
+ },[campaign]);
+ useEffect(()=>{
+  if(!watchProgress||!campaign)return;
+  let cancelled=false,attempts=0;
+  const refresh=async()=>{
+   try{
+    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}});
+    if(cancelled)return;
+    const payload=response.data||{};
+    setFindings(payload.findings||[]);setAssessmentCounts(payload.assessment_counts||null);setViolationDiagnostics(payload.violation_diagnostics||null);
+    setJobCounts(payload.job_counts||null);setUnassessed(payload.unassessed_count||0);
+    setReconciliation(payload.reconciliation||null);setProcessingStatus(payload.processing_status||'');
+    setWatchSnapshot(payload.job_counts||{});
+    const current=payload.job_counts||{},previous=watchBaseline.current;
+    if(previous&&((current.COMPLETED||0)>(previous.COMPLETED||0)||(current.FAILED||0)>(previous.FAILED||0))){
+     setBacklogStatus('Job status changed. Results refreshed automatically.');watchBaseline.current={...current};
+    }
+   }catch(e){if(!cancelled)setBacklogStatus('Progress refresh failed: '+(e.response?.data?.detail||e.message||'Unknown error'))}
+   attempts++;
+   if(!cancelled&&attempts>=60){setWatchProgress(false);setBacklogStatus('Progress checking paused after five minutes. No assessment completion is implied.')}
+  };
+  refresh();
+  const interval=window.setInterval(refresh,5000);
+  return()=>{cancelled=true;window.clearInterval(interval)};
+ },[watchProgress,campaign]);
+ async function submitFlagReview(){
+  if(!selected||!reviewDecision||reviewRationale.trim().length<10||reviewBusy)return;
+  if(!window.confirm('Save this human review decision to the evidence audit trail?'))return;
+  setReviewBusy(true);setReviewError('');setReviewNotice('');
+  try{
+   const payload={result_id:selected.id,assessment_version:selected.assessment_version,decision:reviewDecision,rationale:reviewRationale.trim()};
+   await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
+   const updated={...selected,flag_review_status:reviewDecision};
+   setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?{...item,flag_review_status:reviewDecision}:item));
+   setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Refresh to retrieve the server audit status.');
+  }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
+  finally{setReviewBusy(false)}
+ }
+ async function previewBacklog(){
+  if(!campaign){setBacklogStatus('Select a campaign first.');return}
+  setBacklogBusy(true);setBacklogStatus('');setBacklog(null);
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogPreview',id:campaign,data:{}});setBacklog(r.data)}
+  catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
+  finally{setBacklogBusy(false)}
+ }
+ async function startBacklog(){
+  if(!backlog||!window.confirm('Use up to '+backlog.batch_limit+' billable AI requests to assess existing campaign evidence? No SocialCrawl credits will be used.'))return;
+  setBacklogBusy(true);setBacklogStatus('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogStart',id:campaign,data:{confirm_ai_cost:true}});setBacklogStatus('Request acknowledged. Tracking stored job status; processing is not guaranteed.');watchBaseline.current={...(jobCounts||{})};setWatchSnapshot(jobCounts||{});setWatchProgress(true);setBacklog(null)}
+  catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
+  finally{setBacklogBusy(false)}
+ }
+ const [auditRows,setAuditRows]=useState([]),[auditOpen,setAuditOpen]=useState(false),[auditBusy,setAuditBusy]=useState(false),[auditError,setAuditError]=useState(''),[correctionNotes,setCorrectionNotes]=useState({});
+ async function loadAudit(){
+  setAuditBusy(true);setAuditError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAudit',id:campaign||undefined,data:{}});setAuditRows(r.data.assessments||[]);setAuditOpen(true)}
+  catch(e){setAuditError(e.response?.data?.detail||e.message||'Cannot load audit')}
+  finally{setAuditBusy(false)}
+ }
+ async function correctAssessment(x,decision){
+  const rationale=correctionNotes[x.campaign_id+'-'+x.result_id]||'';
+  if(rationale.trim().length<10){setAuditError('Provide at least 10 characters explaining this correction.');return}
+  if(!window.confirm('Save a human relevance correction while retaining the original AI assessment?'))return;
+  setAuditBusy(true);setAuditError('');
+  try{await base44.functions.invoke('socialListening',{action:'campaignAssessmentCorrection',id:x.campaign_id,data:{result_id:x.result_id,decision,rationale}});await loadAudit()}
+  catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
+  finally{setAuditBusy(false)}
+ }
+ const [chosenLocation,setChosenLocation]=useState(''),[chosenCandidate,setChosenCandidate]=useState('');
+ const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
+ const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
+ const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
+ const locationsFor=x=>signalNames(x.location_signals).map(normalizedLocation);
+ const candidatesFor=x=>signalNames(x.candidate_signals).filter(name=>!/^@?[a-z0-9._-]+\.[a-z0-9._-]+$/i.test(name)&&!/^@/.test(name));
+ const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
+ const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
+ const filtered=useMemo(()=>findings.filter(x=>{
+  if(view==='location'&&chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
+  if(view==='candidate'&&chosenCandidate&&!candidatesFor(x).includes(chosenCandidate))return false;
+  if(view==='violation'&&!(x.potential_issues||[]).length)return false;
+  return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
+ }),[findings,view,term,chosenLocation,chosenCandidate]);
+ const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
+ const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
+ const buttons=[['all','All Relevant'],['location','Location'],['candidate','Candidate'],['violation','Potential Violation']];
+ return <section className="space-y-4" aria-label="AI intelligence findings">
+  <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
+   <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+  </div>
+  <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_3fr] gap-2">
+   <div className="intel-card p-3"><p className="text-xs text-slate-500">Posts shown</p><p className="text-2xl font-semibold tabular-nums">{filtered.length}</p></div>
+   <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>(x.potential_issues||[]).length>0).length}</p></div>
+   <div className="intel-card col-span-2 md:col-span-1 p-3"><p className="text-xs font-semibold">AI assessment summary</p><p className="mt-1 text-xs text-slate-600 line-clamp-2">{filtered.length===0?'No assessed findings match this selection.':filtered.filter(x=>(x.potential_issues||[]).length).length+' of '+filtered.length+' viewed findings contain AI-flagged potential issues. These are not confirmed violations.'}</p><p className="text-[10px] text-slate-500 mt-1">Summary of stored assessments, not a new AI request</p></div>
+  </div>
+  <div className="intel-card p-3 space-y-2" aria-label="Find and filter intelligence">
+   <div className="flex flex-wrap gap-1.5">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'rounded-full bg-[#176e8e] text-white px-3 py-1.5 text-xs font-semibold':'rounded-full bg-slate-100 text-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label}</button>)}</div>
+   <div className="flex flex-wrap gap-2"><input className="intel-input flex-1 min-w-[190px]" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search posts, candidates, locations or issues" aria-label="Search relevant findings"/>
+    {view==='location'&&<select className="intel-input" aria-label="Select location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All locations</option>{locations.map(name=><option key={name} value={name}>{name}</option>)}</select>}
+    {view==='candidate'&&<select className="intel-input" aria-label="Select candidate" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select>}
+   </div>
+   {(view==='location'||view==='candidate')&&<p className="text-[11px] text-slate-500">AI-extracted entities and locations are unverified signals, not authoritative assignments.</p>}
+  </div>
+  {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
+  {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(185px,1fr)] gap-3 items-stretch">
+   <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2">
+    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
+    <div className="h-[620px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
+     {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}{item.flag_review_status?' · '+item.flag_review_status.replaceAll('_',' '):''}</span>{(item.potential_issues||[]).length>0&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
+      <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
+      <p className="text-xs text-[#146a8b]">View source and assessment →</p>
+     </button>)}
+     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
+    </div>
+   </section>
+   <aside className="intel-card p-3 flex flex-col min-h-[620px] xl:mt-0" aria-label="Platform distribution">
+    <h3 className="text-sm font-semibold text-[#365269]">Platform distribution</h3>
+    <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>
+    <div className="flex justify-center py-6"><div className="w-32 h-32 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-24 h-24 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
+    <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?item.count/filtered.length*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
+    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p>
+   </aside>
+  </div>}
+  {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>
+   <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">
+    <div className="p-4 border-b flex justify-between gap-3 items-center"><h3 className="font-semibold">Post preview · AI assessment</h3><button autoFocus type="button" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button></div>
+    <div className="p-4 overflow-y-auto space-y-3 text-sm"><p className="text-xs text-slate-500">{selected.campaign_name} · {selected.platform}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p><p><strong>Potential issue categories:</strong> {(selected.potential_issues||[]).map(x=>x.category_name).join(', ')||'None flagged'}</p>{selected.canonical_url&&<a className="text-blue-700 underline" href={selected.canonical_url} target="_blank" rel="noopener noreferrer">Open original source ↗</a>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div>
+    {(selected.potential_issues||[]).length>0&&<div className="border-t pt-3 space-y-3">
+     <h4 className="font-semibold">Human flag review</h4>
+     <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
+     <p className="text-xs">Current status: <strong>{selected.flag_review_status||'Awaiting review'}</strong></p>
+     {selected.can_review_flag?<><label className="block text-xs font-semibold" htmlFor="flag-review-decision">Decision</label>
+      <select id="flag-review-decision" className="intel-input w-full" value={reviewDecision} onChange={e=>setReviewDecision(e.target.value)}><option value="">Select a decision</option><option value="FLAG_CONFIRMED">Confirm preliminary flag</option><option value="FLAG_DISMISSED">Dismiss preliminary flag</option><option value="FURTHER_INVESTIGATION">Request further investigation</option></select>
+      <label className="block text-xs font-semibold" htmlFor="flag-review-rationale">Reason for decision (minimum 10 characters)</label>
+      <textarea id="flag-review-rationale" className="intel-input w-full" rows={3} maxLength={1500} value={reviewRationale} onChange={e=>setReviewRationale(e.target.value)} placeholder="Explain the evidence supporting this decision"/>
+      <button type="button" className="intel-button" disabled={reviewBusy||!reviewDecision||reviewRationale.trim().length<10} onClick={submitFlagReview}>{reviewBusy?'Saving…':'Save human review'}</button>
+     </>:<p className="text-xs text-slate-500">Human validation permission is required for review actions.</p>}
+     {reviewError&&<p role="alert" className="text-xs text-red-700">{reviewError}</p>}
+     {reviewNotice&&<p role="status" className="text-xs text-green-700">{reviewNotice}</p>}
+    </div>}
+   </div>
+   </section>
+  </div>}
+  <details className="intel-card p-3" aria-label="AI operations and diagnostics"><summary className="cursor-pointer text-sm font-semibold py-1">AI operations &amp; diagnostics <span className="text-xs font-normal text-slate-500">· Internal tools</span></summary><div className="mt-3 space-y-3">
+  <div className="intel-card p-3 space-y-2"><div className="flex flex-wrap items-center gap-2"><strong className="text-sm">AI backlog · controlled review</strong><button type="button" className="intel-ghost text-xs" disabled={backlogBusy||!campaign} onClick={previewBacklog}>Preview existing posts (free)</button></div>
+  {backlog&&<div className="text-xs space-y-1"><p>{backlog.unassessed} pending links in this campaign · up to {backlog.batch_limit} AI requests this batch · 0 SocialCrawl credits.</p><p>AI provider: {backlog.ai_key_configured?'configured':'not configured'} · AI token costs vary by usage. No assessment is started by preview.</p><button className="intel-button text-xs" type="button" disabled={backlogBusy||!backlog.ai_key_configured||!backlog.batch_limit} onClick={startBacklog}>Confirm and assess up to {backlog.batch_limit} posts</button></div>}
+  {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}
+  {(watchProgress||watchSnapshot)&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2" role="status" aria-live="polite">
+   <div className="flex justify-between gap-2 text-xs"><strong>Manual AI status</strong><span>{watchProgress?'Updating every 5 seconds':'Updates paused'}</span></div>
+   <div className="flex flex-wrap gap-4 text-xs"><span>Pending: {watchSnapshot?.PENDING??'—'}</span><span>Processing: {watchSnapshot?.PROCESSING??'—'}</span><span>Completed: {watchSnapshot?.COMPLETED??'—'}</span><span>Failed: {watchSnapshot?.FAILED??'—'}</span></div>
+   <p className="text-[11px] text-slate-500">Campaign-wide stored job counts, not a batch percentage. Status checks make no paid AI or crawl requests.</p>
+   <button type="button" className="intel-ghost text-xs" onClick={()=>setWatchProgress(v=>!v)}>{watchProgress?'Pause updates':'Resume free updates'}</button>
+  </div>}</div>
+  {campaign&&<div className="intel-card p-3 space-y-2"><div className="flex flex-wrap gap-2 items-center"><strong className="text-sm">Automatic AI worker readiness · free check</strong><button type="button" className="intel-ghost text-xs" disabled={readinessBusy} onClick={async()=>{setReadinessBusy(true);try{const r=await base44.functions.invoke('socialListening',{action:'campaignAIWorkerReadiness',id:campaign,data:{}});setReadiness(r.data)}catch(e){setReadiness({error:e.response?.data?.detail||e.message})}finally{setReadinessBusy(false)}}}>Check readiness (free)</button></div>{readiness&&<p className="text-xs text-slate-600" role="status">{readiness.error||('Auto screening: '+(readiness.automatic_screening_enabled?'ON':'OFF')+' · Worker: '+(readiness.worker_enabled?'ON':'OFF')+' · Provider: '+(readiness.ai_provider_configured?'Configured':'Unavailable')+' · Database reservation: '+(readiness.database_supports_reservations?'Supported':'Unsupported')+' · Daily reserved: '+readiness.daily_reserved+'/'+readiness.daily_request_limit+' · Lifetime reserved: '+readiness.lifetime_reserved+'/'+readiness.lifetime_request_limit+' · '+(readiness.ready_to_process?'Ready if enabled':'Not enabled or limits incomplete'))}</p>}</div>}
+  {jobCounts&&<div className="intel-card p-3 space-y-2" aria-label="AI job progress"><h3 className="text-sm font-semibold">AI job progress · stored status</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{[['Pending','PENDING'],['Processing','PROCESSING'],['Completed','COMPLETED'],['Failed','FAILED']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{jobCounts[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">Job status is read-only and does not initiate provider calls. Reload to refresh.</p></div>}
+  {reconciliation&&reconciliation.unassessed_without_job>0&&campaign&&<div className="intel-card p-3 flex flex-wrap items-center gap-3"><span className="text-xs text-slate-600">{reconciliation.unassessed_without_job} unassessed evidence records lack a job.</span><button type="button" className="intel-ghost text-xs" disabled={reconBusy} onClick={async()=>{setReconBusy(true);setReconNotice('');try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentJobReconcile',id:campaign,data:{}});setReconNotice((r.data.created_pending_jobs||0)+' missing pending job(s) created. Refresh to verify. No AI calls.')}catch(e){setReconNotice(e.response?.data?.detail||e.message)}finally{setReconBusy(false)}}}>Create missing jobs (free)</button>{reconNotice&&<span role="status" className="text-xs">{reconNotice}</span>}</div>}
+  {reconciliation&&<div className="intel-card p-3 space-y-2" aria-label="AI assessment job reconciliation"><h3 className="text-sm font-semibold">Job / assessment reconciliation · read-only</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{[['Unassessed without job','unassessed_without_job'],['Assessed without job','assessed_without_job'],['Pending job already assessed','pending_job_with_assessment'],['Completed job unassessed','completed_job_without_assessment']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{reconciliation[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">Job and assessment counts use different records. These are reconciliation categories, not additional evidence. No data is changed or AI called.</p></div>}
+  {violationDiagnostics&&<div className="intel-card p-3 space-y-2" aria-label="Potential violation diagnostics">
+   <h3 className="text-sm font-semibold">Potential violation diagnostics · read only</h3>
+   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{[['Relevant assessments','assessed_relevant'],['Relevant with no accepted flag','relevant_without_signal'],['Relevant with valid flag','relevant_with_valid_signal'],['Relevant with rejected signals','relevant_with_rejected_signal'],['Raw AI signals','raw_signals'],['Rejected signals','rejected_signals'],['Active issue categories','active_issue_categories']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{violationDiagnostics[key]??0}</p></div>)}</div>
+   {(violationDiagnostics.rejected_signals??0)>0&&<div className="border-t border-slate-200 pt-2"><p className="text-xs font-semibold mb-2">Why AI signals were rejected</p><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{[['Invalid / inactive category','invalid_category'],['Invalid signal type','invalid_signal_type'],['Missing / short quote','missing_or_short_quote'],['Quote not in source','quote_not_in_source'],['Malformed signal','malformed_signal']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{violationDiagnostics.rejection_reasons?.[key]??0}</p></div>)}</div></div>}
+   {Object.keys(violationDiagnostics.rejected_type_values||{}).length>0&&<div className="border-t border-slate-200 pt-2" aria-label="Rejected stored signal types"><strong className="text-xs">Stored rejected signal types</strong><div className="flex flex-wrap gap-2 mt-2">{Object.entries(violationDiagnostics.rejected_type_values||{}).map(([type,count])=><span key={type} className="text-xs rounded-md bg-slate-50 border border-slate-200 px-2 py-1"><code>{type}</code>: {count}</span>)}</div><p className="text-xs text-slate-500 mt-1">Read only. Unknown types stay rejected until a source-supported compatibility rule is verified.</p></div>}
+   <p className="text-xs text-slate-500">{violationDiagnostics.scope}. Unassessed, irrelevant and uncertain evidence is excluded from violation review. Rejected signals may have unsupported quotes or inactive categories. Zero accepted signals does not establish absence of actual violations. No provider credits used.</p>
+  </div>}
+  {assessmentCounts&&<div className="intel-card p-3 space-y-2" aria-label="AI assessment diagnostics"><h3 className="text-sm font-semibold">Assessment diagnostics · stored results</h3><div className="grid grid-cols-2 sm:grid-cols-5 gap-2">{[['Pending','PENDING'],['Relevant','RELEVANT'],['Irrelevant','IRRELEVANT'],['Uncertain','UNCERTAIN'],['Other','OTHER']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{assessmentCounts[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">{processingStatus}. This panel never triggers AI calls.</p></div>}
+  <div className="intel-card p-3 space-y-3"><div className="flex flex-wrap gap-2 items-center"><strong className="text-sm">Assessment audit</strong><button type="button" className="intel-ghost text-xs" disabled={auditBusy} onClick={loadAudit}>{auditBusy?'Loading…':'Review AI decisions (free)'}</button></div>
+   {auditError&&<p role="alert" className="text-sm text-red-600">{auditError}</p>}
+   {auditOpen&&<div className="max-h-96 overflow-y-auto space-y-3">{auditRows.map(x=><div key={x.campaign_id+'-'+x.result_id} className="border rounded-lg p-3 space-y-2 text-sm">
+    <p className="text-xs text-slate-500">{x.campaign_name} · {x.relevance_label} · {x.confidence||'No confidence'} · v{x.assessment_version} · {x.model_version}</p>
+    <p className="whitespace-pre-wrap">{x.text_content}</p><p><strong>Reason:</strong> {x.explanation||'No AI explanation recorded'}</p>
+    <p className="text-xs">Main: {(x.main_keywords||[]).join(', ')||'None'} · Secondary: {(x.secondary_keywords||[]).join(', ')||'None'}</p>
+    {x.canonical_url&&<a className="text-blue-700 underline" href={x.canonical_url} target="_blank" rel="noopener noreferrer">Original source</a>}
+    {x.can_correct&&<div className="space-y-2"><textarea className="intel-input w-full" rows={2} placeholder="Reason for human correction (minimum 10 characters)" value={correctionNotes[x.campaign_id+'-'+x.result_id]||''} onChange={e=>setCorrectionNotes(v=>({...v,[x.campaign_id+'-'+x.result_id]:e.target.value}))}/><div className="flex flex-wrap gap-2">{['RELEVANT','IRRELEVANT','UNCERTAIN'].map(d=><button type="button" className="intel-ghost text-xs" disabled={auditBusy} key={d} onClick={()=>correctAssessment(x,d)}>Correct to {d}</button>)}</div></div>}
+   </div>)}{!auditRows.length&&<p className="text-sm text-slate-500">No stored assessments found.</p>}</div>}
+  </div>
+  <p className="text-xs text-slate-500">Uncertain assessments are retained in Assessment Audit; they are not silently rejected. AI batch status is not yet durable, so accepted requests should not be interpreted as completed until stored counts change.</p>
+
+  </div></details>
+ </section>
+}
 const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
 const validated=x=>x.review_status==='Validated as Relevant Intelligence';
 const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};const state=typeof t==='string'?t:t.state;const generated=typeof t==='object'?t.generated:!!state;return generated&&state&&state!=='REVIEW COMPLETE';};
@@ -26,12 +218,13 @@ export default function Inbox(){
  const activeFilters=Object.entries(f).filter(([k,v])=>k!=='view'&&v),clearOne=key=>setF(v=>({...v,[key]:''})),currentView=quickViews.find(([value])=>value===(f.view||''))?.[1]||t('all_intelligence');
  const recordScope=items.length===1?t('record_authorized_scope'):t('records_authorized_scope');
  return <div className="space-y-6"><div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('collection_triage')}</p><h1 className="intel-heading">{t('intelligence_inbox')}</h1><p className="text-sm text-[#77899b] mt-2">{t('inbox_workspace')} · {currentView} · {sorted.length} {t(sorted.length===1?'result':'results')} · {items.length} {recordScope}</p></div><Notice error={error}/>
- <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_needs_action')}</p><p className="text-2xl font-semibold mt-1">{needsAction}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_pending_review')}</p><p className="text-2xl font-semibold mt-1">{counts['pending-review']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_unresolved_jurisdiction')}</p><p className="text-2xl font-semibold mt-1">{counts['jurisdiction-unresolved']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_triage_pending')}</p><p className="text-2xl font-semibold mt-1">{counts['triage-pending']}</p></div></div><p className="text-xs text-[#8192a3]">{t('inbox_summary_note')}</p>
+ <SocialEvidenceInbox/>
+ <details className="intel-card p-4"><summary className="cursor-pointer font-semibold">Legacy intelligence records and administrative review</summary><div className="mt-4 space-y-4"><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_needs_action')}</p><p className="text-2xl font-semibold mt-1">{needsAction}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_pending_review')}</p><p className="text-2xl font-semibold mt-1">{counts['pending-review']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_unresolved_jurisdiction')}</p><p className="text-2xl font-semibold mt-1">{counts['jurisdiction-unresolved']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_triage_pending')}</p><p className="text-2xl font-semibold mt-1">{counts['triage-pending']}</p></div></div><p className="text-xs text-[#8192a3]">{t('inbox_summary_note')}</p>
  <div className="intel-card p-4"><div className="flex flex-wrap gap-2">{quickViews.map(([value,text])=><button key={value||'all'} type="button" className={(f.view||'')===value?'intel-button':'intel-ghost'} onClick={()=>pick('view',value)}>{text} <span className="opacity-70">({counts[value]||0})</span></button>)}</div></div>
  <div className="intel-card p-5 space-y-4"><div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"><input className="intel-input sm:col-span-2" placeholder={t('search_placeholder')} aria-label={t('filter_search')} value={f.search||''} onChange={e=>pick('search',e.target.value)}/><input className="intel-input" type="date" aria-label={t('filter_date')} value={f.date||''} onChange={e=>pick('date',e.target.value)}/>
  {Object.entries(options).map(([key,values])=><select key={key} className="intel-input" aria-label={labelForKey[key]} value={f[key]||''} onChange={e=>pick(key,e.target.value)}><option value="">{t('all_prefix')} {labelForKey[key].toLowerCase()}</option>{values.map(v=><option key={v} value={v}>{label(v)}</option>)}</select>)}
  <select className="intel-input" aria-label={t('sort_intelligence_aria')} value={sort} onChange={e=>setSort(e.target.value)}><option value="updated-desc">{t('sort_recently_updated')}</option><option value="created-desc">{t('sort_newest_created')}</option><option value="created-asc">{t('sort_oldest_created')}</option><option value="priority">{t('sort_highest_priority')}</option><option value="id">{t('sort_intelligence_id')}</option></select></div>
  {(activeFilters.length>0||f.view)&&<div className="flex flex-wrap items-center gap-2">{f.view&&<span className="rounded-full bg-[#eaf4f7] px-3 py-1 text-xs font-semibold text-[#176e8e]">{t('view')}: {currentView}</span>}{activeFilters.map(([key,value])=><button key={key} type="button" onClick={()=>clearOne(key)} className="rounded-full bg-[#f5f7f9] px-3 py-1 text-xs text-[#536d80] hover:bg-[#edf2f5]">{labelForKey[key]||key}: {label(value)} ×</button>)}<button className="text-xs font-semibold text-[#126b8b]" onClick={()=>setF({})}>{t('clear_all_filters')}</button></div>}</div>
  {new URLSearchParams(window.location.search).get('jurisdiction')==='pending'&&<p role="status" className="text-sm">{t('submitted_jurisdiction')}</p>}
- {loading?<p className="text-sm text-[#77899b]">{t('loading_intelligence')}</p>:error?null:<IntelligenceTable items={sorted}/>}</div>;
+ {loading?<p className="text-sm text-[#77899b]">{t('loading_intelligence')}</p>:error?null:<IntelligenceTable items={sorted}/>}</div></details></div>;
 }

@@ -1,0 +1,53 @@
+name: AI PostgreSQL Concurrency QA
+
+on:
+  push:
+    branches: [architecture-v2-foundation-20261015]
+    paths:
+      - 'backend/app/auto_relevance.py'
+      - 'backend/app/models.py'
+      - 'backend/tests/test_ai_postgres_concurrency.py'
+      - '.github/workflows/ai-postgres-concurrency.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  concurrency-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qa
+          POSTGRES_PASSWORD: qa_local_only
+          POSTGRES_DB: bawaslu_concurrency_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qa -d bawaslu_concurrency_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Validate PostgreSQL concurrent reservations without paid providers
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+          BAWASLU_TEST_DATABASE_URL: 'postgresql+psycopg://qa:qa_local_only@localhost:5432/bawaslu_concurrency_qa'
+          BAWASLU_ALLOW_ISOLATED_DB_TEST: 'YES'
+          BAWASLU_AUTO_AI_SCREENING_ENABLED: 'false'
+          BAWASLU_AI_WORKER_ENABLED: 'false'
+          OPENAI_API_KEY: ''
+          SOCIALCRAWL_API_KEY: ''
+        run: pytest -q tests/test_ai_postgres_concurrency.py -m postgres_concurrency

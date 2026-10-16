@@ -25,3 +25,19 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
                        'explanation':str(signal.get('explanation') or '')[:400],
                        'evidence_quote':quote[:350]})
     return result
+
+def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
+    """Return aggregated rejection reasons without changing the original AI records."""
+    reasons={'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0}
+    if not isinstance(raw_signals,list):return reasons
+    source=str(source_text or '').casefold()
+    for signal in raw_signals:
+        if not isinstance(signal,dict):
+            reasons['malformed_signal']+=1;continue
+        cid=signal.get('category_id')
+        quote=str(signal.get('evidence_quote') or '').strip()
+        if type(cid) is not int or cid not in active_categories:reasons['invalid_category']+=1
+        elif signal.get('signal_type')!='POTENTIAL_VIOLATION':reasons['invalid_signal_type']+=1
+        elif len(quote)<12:reasons['missing_or_short_quote']+=1
+        elif quote.casefold() not in source:reasons['quote_not_in_source']+=1
+    return reasons

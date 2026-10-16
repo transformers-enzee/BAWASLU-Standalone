@@ -330,10 +330,6 @@ def campaign_action(db:Session,p,action,data,id=None):
             return {'saved':True,'assessment_version':new.assessment_version,'paid_provider_called':False}
         output=[]
         for campaign in visible:
-            for job in db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id).limit(500).all():
-                if job.state in job_counts:
-                    item=db.get(SocialListeningResult,job.result_id)
-                    if item and _result_in_scope(db,p,item):job_counts[job.state]+=1
             links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)

@@ -48,21 +48,28 @@ def enqueue_campaign_evidence(campaign_id):
     finally:db.close()
 
 def recover_stale_jobs(campaign_id=None):
-    """Recover stuck processing records without billing. Running jobs get at most three total attempts."""
+    """Conditionally recover stale processing rows; never makes provider requests."""
     db=SessionLocal()
     try:
-        query=db.query(AIAssessmentJob).filter(AIAssessmentJob.state=='PROCESSING',
-             AIAssessmentJob.updated_at < datetime.utcnow()-timedelta(minutes=10))
-        if campaign_id is not None:query=query.filter(AIAssessmentJob.campaign_id==int(campaign_id))
+        cutoff=datetime.utcnow()-timedelta(minutes=10)
+        query=db.query(AIAssessmentJob).filter(
+            AIAssessmentJob.state=='PROCESSING',AIAssessmentJob.updated_at<cutoff)
+        if campaign_id is not None:
+            query=query.filter(AIAssessmentJob.campaign_id==int(campaign_id))
         updated=0
         for job in query.limit(500).all():
-            job.state='FAILED' if job.attempts>=3 else 'PENDING'
-            job.last_error='Recovered stale processing job'
-            job.updated_at=datetime.utcnow()
-            updated+=1
+            new_state='FAILED' if job.attempts>=3 else 'PENDING'
+            changed=db.execute(update(AIAssessmentJob).where(
+                AIAssessmentJob.id==job.id,
+                AIAssessmentJob.state=='PROCESSING',
+                AIAssessmentJob.updated_at<cutoff
+            ).values(state=new_state,last_error='Recovered stale processing job',
+                     updated_at=datetime.utcnow()))
+            updated+=int(changed.rowcount==1)
         db.commit()
         return updated
-    finally:db.close()
+    finally:
+        db.close()
 
 def campaign_daily_budget_remaining(db,campaign_id):
     """Conservative request-count ceiling, not a monetary cost estimate."""

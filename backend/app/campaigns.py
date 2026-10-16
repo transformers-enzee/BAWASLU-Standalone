@@ -345,6 +345,35 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'secondary_keywords':_safe_json_list(campaign.secondary_keywords_json),
                     'can_correct':_editable(p,campaign)})
         return {'assessments':output[:100],'paid_provider_called':False}
+    if action=='campaignAIWorkerReadiness':
+        import os
+        from .models import AIBudgetReservation
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        if not selected.isdigit():raise ValueError('Select a campaign')
+        campaign=db.get(MonitoringCampaign,int(selected))
+        if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
+        def cap(name, maximum):
+            try:return max(0,min(maximum,int(os.getenv(name,'0'))))
+            except (TypeError,ValueError):return 0
+        enabled=os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true'
+        worker=os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true'
+        daily=cap('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN',100)
+        lifetime=cap('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN',500)
+        per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',25)
+        dialect=db.bind.dialect.name
+        reservations=db.query(AIBudgetReservation).filter_by(campaign_id=campaign.id).limit(400).all()
+        from datetime import datetime
+        today=datetime.utcnow().strftime('%Y-%m-%d')
+        used_today=sum(x.reserved_requests for x in reservations if x.budget_period==today)
+        used_lifetime=sum(x.reserved_requests for x in reservations if x.budget_period=='lifetime')
+        return {'worker_enabled':worker,'automatic_screening_enabled':enabled,
+                'database_supports_reservations':dialect=='postgresql',
+                'ai_provider_configured':bool(os.getenv('OPENAI_API_KEY','').strip()),
+                'daily_request_limit':daily,'lifetime_request_limit':lifetime,
+                'per_run_request_limit':per_run,'daily_reserved':used_today,
+                'lifetime_reserved':used_lifetime,
+                'ready_to_process':bool(worker and enabled and dialect=='postgresql' and daily and lifetime and per_run and os.getenv('OPENAI_API_KEY','').strip()),
+                'paid_provider_called':False}
     if action=='campaignAssessmentJobReconcile':
         from .auto_relevance import enqueue_campaign_evidence
         campaign_id=str(id or (data or {}).get('campaign_id') or '')

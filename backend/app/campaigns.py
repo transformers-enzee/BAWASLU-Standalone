@@ -330,6 +330,10 @@ def campaign_action(db:Session,p,action,data,id=None):
             return {'saved':True,'assessment_version':new.assessment_version,'paid_provider_called':False}
         output=[]
         for campaign in visible:
+            for job in db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id).limit(500).all():
+                if job.state in job_counts:
+                    item=db.get(SocialListeningResult,job.result_id)
+                    if item and _result_in_scope(db,p,item):job_counts[job.state]+=1
             links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)
@@ -346,7 +350,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'can_correct':_editable(p,campaign)})
         return {'assessments':output[:100],'paid_provider_called':False}
     if action=='campaignIntelligenceInbox':
-        from .models import SocialListeningResult, EvidenceAssessment, IssueCategory
+        from .models import SocialListeningResult, EvidenceAssessment, IssueCategory, AIAssessmentJob
         from .socialcrawl import _result_in_scope
         visible=db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc()).limit(200).all()
         visible=[campaign for campaign in visible if allowed(p,campaign)]
@@ -354,7 +358,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
         active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
-        records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
+        job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
@@ -389,7 +393,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version})
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
-                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'processing_status':'Not tracked: background jobs do not yet persist processing or failure state','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'job_counts':job_counts,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

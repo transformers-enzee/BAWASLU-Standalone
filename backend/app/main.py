@@ -37,7 +37,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'69.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'69.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -80,7 +80,7 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
     p=profile(db,user)
     try:
         result=social_listening_action(db,p,body.action,body.data,body.id)
-        if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0:
+        if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0 and os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true':
             from .auto_relevance import assess_pending_campaign
             background_tasks.add_task(assess_pending_campaign,int(body.id))
         if body.action=='campaignAssessmentBacklogStart' and result.get('assessment_job_accepted'):

@@ -13,7 +13,7 @@ function initialFilters(){const q=new URLSearchParams(window.location.search),f=
 export default function Inbox(){
  const {t,label}=useLanguage();
  const {items,loading,error}=useIntel(),{items:entities}=useRegistry();
- const [f,setF]=useState(initialFilters),[sort,setSort]=useState('updated-desc');
+ const [f,setF]=useState(initialFilters),[sort,setSort]=useState('updated-desc'),[showAdvanced,setShowAdvanced]=useState(false);
  const pick=(key,value)=>setF(v=>({...v,[key]:value}));
  const unique=key=>[...new Set(items.flatMap(x=>['province','regency_city'].includes(key)?(x.geographic_assignments||[]).map(a=>a[key]).filter(Boolean):[x[key]]).filter(Boolean))].sort();
  const options={province:unique('province'),regency_city:unique('regency_city'),entity:entities.map(x=>x.name),platform:unique('platform'),evidence_type:['OBSERVED','INFERRED'],verification_status:['UNVERIFIED','HUMAN_VERIFIED'],supervision_signal:['NO SIGNAL IDENTIFIED','MONITOR','REVIEW RECOMMENDED','POTENTIAL REGULATORY ISSUE'],priority:PRIORITIES,reviewer:unique('assigned_reviewer'),review_status:unique('review_status'),source_type:unique('source_type')};
@@ -25,13 +25,31 @@ export default function Inbox(){
  const needsAction=useMemo(()=>items.filter(x=>x.jurisdiction_confirmed!==true||(x.geographic_mismatch?.status||x.geographic_mismatch_review?.status)==='pending'||triagePending(x)||pendingReview(x)).length,[items]);
  const activeFilters=Object.entries(f).filter(([k,v])=>k!=='view'&&v),clearOne=key=>setF(v=>({...v,[key]:''})),currentView=quickViews.find(([value])=>value===(f.view||''))?.[1]||t('all_intelligence');
  const recordScope=items.length===1?t('record_authorized_scope'):t('records_authorized_scope');
- return <div className="space-y-6"><div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('collection_triage')}</p><h1 className="intel-heading">{t('intelligence_inbox')}</h1><p className="text-sm text-[#77899b] mt-2">{t('inbox_workspace')} · {currentView} · {sorted.length} {t(sorted.length===1?'result':'results')} · {items.length} {recordScope}</p></div><Notice error={error}/>
- <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_needs_action')}</p><p className="text-2xl font-semibold mt-1">{needsAction}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_pending_review')}</p><p className="text-2xl font-semibold mt-1">{counts['pending-review']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_unresolved_jurisdiction')}</p><p className="text-2xl font-semibold mt-1">{counts['jurisdiction-unresolved']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_triage_pending')}</p><p className="text-2xl font-semibold mt-1">{counts['triage-pending']}</p></div></div><p className="text-xs text-[#8192a3]">{t('inbox_summary_note')}</p>
- <div className="intel-card p-4"><div className="flex flex-wrap gap-2">{quickViews.map(([value,text])=><button key={value||'all'} type="button" className={(f.view||'')===value?'intel-button':'intel-ghost'} onClick={()=>pick('view',value)}>{text} <span className="opacity-70">({counts[value]||0})</span></button>)}</div></div>
- <div className="intel-card p-5 space-y-4"><div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"><input className="intel-input sm:col-span-2" placeholder={t('search_placeholder')} aria-label={t('filter_search')} value={f.search||''} onChange={e=>pick('search',e.target.value)}/><input className="intel-input" type="date" aria-label={t('filter_date')} value={f.date||''} onChange={e=>pick('date',e.target.value)}/>
- {Object.entries(options).map(([key,values])=><select key={key} className="intel-input" aria-label={labelForKey[key]} value={f[key]||''} onChange={e=>pick(key,e.target.value)}><option value="">{t('all_prefix')} {labelForKey[key].toLowerCase()}</option>{values.map(v=><option key={v} value={v}>{label(v)}</option>)}</select>)}
- <select className="intel-input" aria-label={t('sort_intelligence_aria')} value={sort} onChange={e=>setSort(e.target.value)}><option value="updated-desc">{t('sort_recently_updated')}</option><option value="created-desc">{t('sort_newest_created')}</option><option value="created-asc">{t('sort_oldest_created')}</option><option value="priority">{t('sort_highest_priority')}</option><option value="id">{t('sort_intelligence_id')}</option></select></div>
- {(activeFilters.length>0||f.view)&&<div className="flex flex-wrap items-center gap-2">{f.view&&<span className="rounded-full bg-[#eaf4f7] px-3 py-1 text-xs font-semibold text-[#176e8e]">{t('view')}: {currentView}</span>}{activeFilters.map(([key,value])=><button key={key} type="button" onClick={()=>clearOne(key)} className="rounded-full bg-[#f5f7f9] px-3 py-1 text-xs text-[#536d80] hover:bg-[#edf2f5]">{labelForKey[key]||key}: {label(value)} ×</button>)}<button className="text-xs font-semibold text-[#126b8b]" onClick={()=>setF({})}>{t('clear_all_filters')}</button></div>}</div>
+ return <div className="space-y-3">
+ <div className="flex flex-wrap items-center justify-between gap-2">
+  <div><p className="text-[11px] uppercase tracking-[.13em] text-[#9a7e49] font-bold">{t('collection_triage')}</p><h1 className="intel-heading">{t('intelligence_inbox')}</h1></div>
+  <p className="text-xs text-[#77899b]" aria-live="polite">{sorted.length} {t(sorted.length===1?'result':'results')} · {items.length} {recordScope}</p>
+ </div>
+ <Notice error={error}/>
+ <div className="intel-card p-3 space-y-3">
+  <div className="flex items-center gap-2 overflow-x-auto pb-1" role="group" aria-label={t('view')}>
+   {quickViews.map(([value,text])=><button key={value||'all'} type="button" aria-pressed={(f.view||'')===value} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${(f.view||'')===value?'bg-[#176e8e] text-white':'bg-[#f2f5f7] text-[#536d80] hover:bg-[#e7edf0]'}`} onClick={()=>pick('view',value)}>{text} <span className="opacity-70">{counts[value]||0}</span></button>)}
+  </div>
+  <div className="flex flex-wrap items-center gap-2">
+   <input className="intel-input min-w-[180px] flex-[2] !py-2" placeholder={t('search_placeholder')} aria-label={t('filter_search')} value={f.search||''} onChange={e=>pick('search',e.target.value)}/>
+   <select className="intel-input min-w-[155px] flex-1 !py-2" aria-label={t('sort_intelligence_aria')} value={sort} onChange={e=>setSort(e.target.value)}><option value="updated-desc">{t('sort_recently_updated')}</option><option value="created-desc">{t('sort_newest_created')}</option><option value="created-asc">{t('sort_oldest_created')}</option><option value="priority">{t('sort_highest_priority')}</option><option value="id">{t('sort_intelligence_id')}</option></select>
+   <button type="button" className="intel-ghost !py-2 text-xs whitespace-nowrap" aria-expanded={showAdvanced} aria-controls="inbox-advanced-filters" onClick={()=>setShowAdvanced(v=>!v)}>{showAdvanced?'−':'+'} {t('filter_date')} / {t('filter_entity')} {activeFilters.length>0?`(${activeFilters.length})`:''}</button>
+  </div>
+  {showAdvanced&&<div id="inbox-advanced-filters" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 border-t border-[#e8edf0] pt-3">
+   <input className="intel-input" type="date" aria-label={t('filter_date')} value={f.date||''} onChange={e=>pick('date',e.target.value)}/>
+   {Object.entries(options).map(([key,values])=><select key={key} className="intel-input" aria-label={labelForKey[key]} value={f[key]||''} onChange={e=>pick(key,e.target.value)}><option value="">{t('all_prefix')} {labelForKey[key].toLowerCase()}</option>{values.map(v=><option key={v} value={v}>{label(v)}</option>)}</select>)}
+  </div>}
+  {(activeFilters.length>0||f.view)&&<div className="flex flex-wrap items-center gap-1.5">{activeFilters.map(([key,value])=><button key={key} type="button" onClick={()=>clearOne(key)} className="rounded-full bg-[#f5f7f9] px-2.5 py-1 text-xs text-[#536d80] hover:bg-[#edf2f5]">{labelForKey[key]||key}: {label(value)} ×</button>)}<button type="button" className="text-xs font-semibold text-[#126b8b] px-2 py-1" onClick={()=>setF({})}>{t('clear_all_filters')}</button></div>}
+ </div>
+ <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#77899b]">
+  <span>{t('inbox_needs_action')}: <strong className="text-[#415b70]">{needsAction}</strong> <span aria-hidden="true">·</span> {t('inbox_pending_review')}: <strong className="text-[#415b70]">{counts['pending-review']}</strong> <span aria-hidden="true">·</span> {t('inbox_unresolved_jurisdiction')}: <strong className="text-[#415b70]">{counts['jurisdiction-unresolved']}</strong> <span aria-hidden="true">·</span> {t('inbox_triage_pending')}: <strong className="text-[#415b70]">{counts['triage-pending']}</strong></span>
+ </div>
  {new URLSearchParams(window.location.search).get('jurisdiction')==='pending'&&<p role="status" className="text-sm">{t('submitted_jurisdiction')}</p>}
- {loading?<p className="text-sm text-[#77899b]">{t('loading_intelligence')}</p>:error?null:<IntelligenceTable items={sorted}/>}</div>;
+ {loading?<p className="text-sm text-[#77899b]">{t('loading_intelligence')}</p>:error?null:<IntelligenceTable items={sorted}/>}
+ </div>;
 }

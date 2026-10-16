@@ -40,7 +40,8 @@ def enqueue_campaign_evidence(campaign_id):
         linked=db.query(CampaignEvidence).filter_by(campaign_id=campaign_id).limit(500).all()
         added=0
         for link in linked:
-            if db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign_id,result_id=link.result_id).first():continue
+            latest=db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=link.result_id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
+            if latest and str(latest.relevance_label or '').upper() not in ('UNASSESSED',''):continue
             if db.query(AIAssessmentJob.id).filter_by(campaign_id=campaign_id,result_id=link.result_id).first():continue
             db.add(AIAssessmentJob(campaign_id=campaign_id,result_id=link.result_id,state='PENDING'));added+=1
         db.commit()

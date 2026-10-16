@@ -345,6 +345,15 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'secondary_keywords':_safe_json_list(campaign.secondary_keywords_json),
                     'can_correct':_editable(p,campaign)})
         return {'assessments':output[:100],'paid_provider_called':False}
+    if action=='campaignAssessmentJobReconcile':
+        from .auto_relevance import enqueue_campaign_evidence
+        campaign_id=str(id or (data or {}).get('campaign_id') or '')
+        if not campaign_id.isdigit():raise ValueError('Select a campaign')
+        campaign=db.get(MonitoringCampaign,int(campaign_id))
+        if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
+        if not _editable(p,campaign):raise PermissionError('Only a campaign editor may reconcile job records')
+        created=enqueue_campaign_evidence(campaign.id)
+        return {'created_pending_jobs':created,'paid_provider_called':False,'socialcrawl_credits':0}
     if action=='campaignIntelligenceInbox':
         from .models import SocialListeningResult, EvidenceAssessment, IssueCategory, AIAssessmentJob
         from .socialcrawl import _result_in_scope

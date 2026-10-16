@@ -9,12 +9,12 @@ def _session(jobs, updated_rows=1):
     db.execute.return_value.rowcount=updated_rows
     return db
 
-def test_pending_recovery_uses_conditional_atomic_update():
+def test_interrupted_job_is_quarantined_without_auto_retry():
     job=Mock(id=101,state='PROCESSING',attempts=1,updated_at=datetime.utcnow()-timedelta(minutes=15))
     db=_session([job])
     with patch('app.auto_relevance.SessionLocal',return_value=db):
         assert recover_stale_jobs()==1
-    assert db.execute.call_args.args[0].compile().params['state']=='PENDING'
+    assert db.execute.call_args.args[0].compile().params['state']=='FAILED'
     db.commit.assert_called_once()
     db.close.assert_called_once()
 

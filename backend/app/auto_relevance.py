@@ -48,7 +48,7 @@ def enqueue_campaign_evidence(campaign_id):
     finally:db.close()
 
 def recover_stale_jobs(campaign_id=None):
-    """Conditionally recover stale processing rows; never makes provider requests."""
+    """Quarantine interrupted provider calls; avoid unintentional duplicate billing."""
     db=SessionLocal()
     try:
         cutoff=datetime.utcnow()-timedelta(minutes=10)
@@ -58,12 +58,13 @@ def recover_stale_jobs(campaign_id=None):
             query=query.filter(AIAssessmentJob.campaign_id==int(campaign_id))
         updated=0
         for job in query.limit(500).all():
-            new_state='FAILED' if job.attempts>=3 else 'PENDING'
+            # A crashed worker may have sent the paid request already; do not replay automatically.
+            new_state='FAILED'
             changed=db.execute(update(AIAssessmentJob).where(
                 AIAssessmentJob.id==job.id,
                 AIAssessmentJob.state=='PROCESSING',
                 AIAssessmentJob.updated_at<cutoff
-            ).values(state=new_state,last_error='Recovered stale processing job',
+            ).values(state=new_state,last_error='Interrupted assessment: provider call status unknown; manual review required',
                      updated_at=datetime.utcnow()))
             updated+=int(changed.rowcount==1)
         db.commit()

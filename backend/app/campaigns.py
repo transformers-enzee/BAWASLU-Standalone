@@ -354,7 +354,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
         active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
-        job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
+        reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
             # Count only scoped, linked evidence; never trigger processing here.
@@ -363,11 +363,13 @@ def campaign_action(db:Session,p,action,data,id=None):
             for link in campaign_links:
                 item=db.get(SocialListeningResult,link.result_id)
                 if item and _result_in_scope(db,p,item):linked_ids.add(item.id)
+            campaign_job_states={}
             if linked_ids:
                 for job in db.query(AIAssessmentJob).filter(
                     AIAssessmentJob.campaign_id==campaign.id,
                     AIAssessmentJob.result_id.in_(linked_ids)).limit(500).all():
                     if job.state in job_counts:job_counts[job.state]+=1
+                    campaign_job_states[job.result_id]=job.state
             links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)
@@ -376,6 +378,13 @@ def campaign_action(db:Session,p,action,data,id=None):
                     .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id)
                     .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
                 label=str(assessment.relevance_label or 'UNASSESSED').upper() if assessment else 'UNASSESSED'
+                state=campaign_job_states.get(item.id)
+                if state is None:
+                    reconciliation['unassessed_without_job' if label=='UNASSESSED' else 'assessed_without_job']+=1
+                elif state=='PENDING' and label!='UNASSESSED':
+                    reconciliation['pending_job_with_assessment']+=1
+                elif state=='COMPLETED' and label=='UNASSESSED':
+                    reconciliation['completed_job_without_assessment']+=1
                 bucket='PENDING' if label=='UNASSESSED' else 'RELEVANT' if label in ('RELEVANT','HIGHLY_RELEVANT') else label if label in ('IRRELEVANT','UNCERTAIN') else 'OTHER'
                 assessment_counts[bucket]+=1
                 if not assessment or label not in ('RELEVANT','HIGHLY_RELEVANT'):
@@ -401,7 +410,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version})
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
-                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'job_counts':job_counts,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

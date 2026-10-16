@@ -7,6 +7,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 function SocialEvidenceInbox(){
  const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
+ const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
  .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
@@ -14,6 +15,19 @@ function SocialEvidenceInbox(){
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
  },[campaign]);
+ async function submitFlagReview(){
+  if(!selected||!reviewDecision||reviewRationale.trim().length<10||reviewBusy)return;
+  if(!window.confirm('Save this human review decision to the evidence audit trail?'))return;
+  setReviewBusy(true);setReviewError('');setReviewNotice('');
+  try{
+   const payload={result_id:selected.id,assessment_version:selected.assessment_version,decision:reviewDecision,rationale:reviewRationale.trim()};
+   await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
+   const updated={...selected,flag_review_status:reviewDecision};
+   setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?{...item,flag_review_status:reviewDecision}:item));
+   setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Refresh to retrieve the server audit status.');
+  }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
+  finally{setReviewBusy(false)}
+ }
  async function previewBacklog(){
   if(!campaign){setBacklogStatus('Select a campaign first.');return}
   setBacklogBusy(true);setBacklogStatus('');setBacklog(null);
@@ -83,8 +97,8 @@ function SocialEvidenceInbox(){
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2">
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
     <div className="h-[620px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
-     {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>setSelected(item)} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}</span>{(item.potential_issues||[]).length>0&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
+     {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}{item.flag_review_status?' · '+item.flag_review_status.replaceAll('_',' '):''}</span>{(item.potential_issues||[]).length>0&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
       <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
       <p className="text-xs text-[#146a8b]">View source and assessment →</p>
      </button>)}
@@ -102,7 +116,21 @@ function SocialEvidenceInbox(){
   {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>
    <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">
     <div className="p-4 border-b flex justify-between gap-3 items-center"><h3 className="font-semibold">Post preview · AI assessment</h3><button autoFocus type="button" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button></div>
-    <div className="p-4 overflow-y-auto space-y-3 text-sm"><p className="text-xs text-slate-500">{selected.campaign_name} · {selected.platform}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p><p><strong>Potential issue categories:</strong> {(selected.potential_issues||[]).map(x=>x.category_name).join(', ')||'None flagged'}</p>{selected.canonical_url&&<a className="text-blue-700 underline" href={selected.canonical_url} target="_blank" rel="noopener noreferrer">Open original source ↗</a>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div></div>
+    <div className="p-4 overflow-y-auto space-y-3 text-sm"><p className="text-xs text-slate-500">{selected.campaign_name} · {selected.platform}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p><p><strong>Potential issue categories:</strong> {(selected.potential_issues||[]).map(x=>x.category_name).join(', ')||'None flagged'}</p>{selected.canonical_url&&<a className="text-blue-700 underline" href={selected.canonical_url} target="_blank" rel="noopener noreferrer">Open original source ↗</a>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div>
+    {(selected.potential_issues||[]).length>0&&<div className="border-t pt-3 space-y-3">
+     <h4 className="font-semibold">Human flag review</h4>
+     <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
+     <p className="text-xs">Current status: <strong>{selected.flag_review_status||'Awaiting review'}</strong></p>
+     {selected.can_review_flag?<><label className="block text-xs font-semibold" htmlFor="flag-review-decision">Decision</label>
+      <select id="flag-review-decision" className="intel-input w-full" value={reviewDecision} onChange={e=>setReviewDecision(e.target.value)}><option value="">Select a decision</option><option value="FLAG_CONFIRMED">Confirm preliminary flag</option><option value="FLAG_DISMISSED">Dismiss preliminary flag</option><option value="FURTHER_INVESTIGATION">Request further investigation</option></select>
+      <label className="block text-xs font-semibold" htmlFor="flag-review-rationale">Reason for decision (minimum 10 characters)</label>
+      <textarea id="flag-review-rationale" className="intel-input w-full" rows={3} maxLength={1500} value={reviewRationale} onChange={e=>setReviewRationale(e.target.value)} placeholder="Explain the evidence supporting this decision"/>
+      <button type="button" className="intel-button" disabled={reviewBusy||!reviewDecision||reviewRationale.trim().length<10} onClick={submitFlagReview}>{reviewBusy?'Saving…':'Save human review'}</button>
+     </>:<p className="text-xs text-slate-500">Human validation permission is required for review actions.</p>}
+     {reviewError&&<p role="alert" className="text-xs text-red-700">{reviewError}</p>}
+     {reviewNotice&&<p role="status" className="text-xs text-green-700">{reviewNotice}</p>}
+    </div>}
+   </div>
    </section>
   </div>}
   <details className="intel-card p-3" aria-label="AI operations and diagnostics"><summary className="cursor-pointer text-sm font-semibold py-1">AI operations &amp; diagnostics <span className="text-xs font-normal text-slate-500">· Internal tools</span></summary><div className="mt-3 space-y-3">

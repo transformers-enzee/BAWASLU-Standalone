@@ -172,7 +172,10 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
             if claimed.rowcount!=1:continue
             db.refresh(job)
             if requested_limit is None and not reserve_automatic_ai_request(db,campaign.id):
-                job.state='PENDING';job.updated_at=datetime.utcnow();db.commit()
+                # Never bill after a failed reservation; do not leave an ambiguous PROCESSING row.
+                job.state='FAILED' if job.attempts>=3 else 'PENDING'
+                job.last_error='Automatic AI budget reservation unavailable'
+                job.updated_at=datetime.utcnow();db.commit()
                 break
             used+=1
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
@@ -210,7 +213,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
                 db.add(record)
                 if job:job.state='COMPLETED';job.last_error='';job.updated_at=datetime.utcnow()
                 db.commit()
-            except (httpx.HTTPError,KeyError,ValueError,TypeError,IndexError) as exc:
+            except Exception as exc:
                 db.rollback()
                 if job:
                     job=db.get(AIAssessmentJob,job.id)
@@ -218,7 +221,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
                     job.last_error=type(exc).__name__
                     job.updated_at=datetime.utcnow()
                     db.commit()
-                log.warning('AI screening stopped after request error: %s',type(exc).__name__)
+                log.exception('AI screening stopped; assessment job retained for review: %s',type(exc).__name__)
                 break
     finally:
         db.close()

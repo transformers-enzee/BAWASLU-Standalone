@@ -44,3 +44,28 @@ def test_phrase_match_is_not_a_violation_by_itself():
 def test_malformed_model_output_is_safe():
     assert validated_issue_signals(None,{1:'Money politics'},'Any text')==[]
     assert validated_issue_signals([42,None,'bad'],{1:'Money politics'},'Any text')==[]
+
+def test_legacy_missing_type_requires_active_category_and_source_quote():
+    text='Warga melaporkan dugaan pembagian uang kepada pemilih.'
+    legacy={'category_id':1,'evidence_quote':'pembagian uang kepada pemilih'}
+    original=dict(legacy)
+    accepted=validated_issue_signals([legacy],{1:'Money politics'},text)
+    assert len(accepted)==1
+    assert accepted[0]['signal_provenance']=='LEGACY_MISSING_TYPE'
+    assert accepted[0]['requires_human_verification'] is True
+    assert legacy==original
+
+def test_legacy_not_accepted_without_supported_quote_or_category():
+    text='Berita mengenai proses penghitungan suara.'
+    signals=[{'category_id':99,'evidence_quote':'proses penghitungan suara'},
+             {'category_id':1,'evidence_quote':'pembagian uang kepada pemilih'},
+             {'category_id':1,'evidence_quote':'pendek'},
+             {'category_id':1,'signal_type':None,'evidence_quote':'proses penghitungan suara'},
+             {'category_id':1,'signal_type':'TOPIC','evidence_quote':'proses penghitungan suara'}]
+    assert validated_issue_signals(signals,{1:'Money politics'},text)==[]
+
+def test_legacy_accepted_signals_not_counted_as_rejections():
+    from app.issue_signals import rejected_issue_signal_reasons, rejected_issue_type_summary
+    signal={'category_id':1,'evidence_quote':'proses penghitungan suara'}
+    assert sum(rejected_issue_signal_reasons([signal],{1:'Elections'},'proses penghitungan suara').values())==0
+    assert rejected_issue_type_summary([signal],{1:'Elections'},'proses penghitungan suara')=={}

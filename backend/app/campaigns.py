@@ -424,7 +424,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
         active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
-        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
+        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
         reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
@@ -471,6 +471,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 violation_diagnostics['assessed_relevant']+=1
                 violation_diagnostics['raw_signals']+=len(raw_signals)
                 violation_diagnostics['accepted_signals']+=len(issue_signals)
+                violation_diagnostics['legacy_compatible_signals']+=sum(x.get('signal_provenance')=='LEGACY_MISSING_TYPE' for x in issue_signals)
                 violation_diagnostics['rejected_signals']+=max(0,len(raw_signals)-len(issue_signals))
                 for reason,number in rejected_issue_signal_reasons(raw_signals,active_categories,item.text_content).items():
                     violation_diagnostics['rejection_reasons'][reason]+=number

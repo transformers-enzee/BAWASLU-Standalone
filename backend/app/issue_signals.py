@@ -18,12 +18,15 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
         if not isinstance(signal,dict):continue
         cid=signal.get('category_id')
         if type(cid) is not int or cid not in active_categories:continue
-        if signal.get('signal_type')!='POTENTIAL_VIOLATION':continue
+        if signal.get('signal_type') not in ('POTENTIAL_VIOLATION',None):continue
+        if 'signal_type' in signal and signal['signal_type'] is None:continue
         quote=str(signal.get('evidence_quote') or '').strip()
         if len(quote)<12 or quote.casefold() not in content:continue
         result.append({'category_id':cid,'category_name':active_categories[cid],
                        'explanation':str(signal.get('explanation') or '')[:400],
-                       'evidence_quote':quote[:350]})
+                       'evidence_quote':quote[:350],
+                       'signal_provenance':'LEGACY_MISSING_TYPE' if 'signal_type' not in signal else 'EXPLICIT_TYPE',
+                       'requires_human_verification':True})
     return result
 
 def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
@@ -37,7 +40,7 @@ def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
         cid=signal.get('category_id')
         quote=str(signal.get('evidence_quote') or '').strip()
         if type(cid) is not int or cid not in active_categories:reasons['invalid_category']+=1
-        elif signal.get('signal_type')!='POTENTIAL_VIOLATION':reasons['invalid_signal_type']+=1
+        elif signal.get('signal_type')!='POTENTIAL_VIOLATION' and 'signal_type' in signal:reasons['invalid_signal_type']+=1
         elif len(quote)<12:reasons['missing_or_short_quote']+=1
         elif quote.casefold() not in source:reasons['quote_not_in_source']+=1
     return reasons
@@ -52,7 +55,7 @@ def rejected_issue_type_summary(raw_signals, active_categories, source_text):
         cid=signal.get('category_id')
         if type(cid) is not int or cid not in active_categories:continue
         kind=signal.get('signal_type')
-        if kind=='POTENTIAL_VIOLATION':continue
+        if kind=='POTENTIAL_VIOLATION' or 'signal_type' not in signal:continue
         quote=str(signal.get('evidence_quote') or '').strip()
         # Do not imply a safe migration: an invalid type remains rejected.
         key='(missing)' if kind is None or kind=='' else str(kind).strip()[:60]

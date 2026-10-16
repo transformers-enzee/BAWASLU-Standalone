@@ -58,6 +58,8 @@ function SocialEvidenceInbox(){
   if(view==='violation'&&!(x.potential_issues||[]).length)return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
  }),[findings,view,term,chosenLocation,chosenCandidate]);
+ const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
+ const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['location','Location'],['candidate','Candidate'],['violation','Potential Violation']];
  return <section className="space-y-4" aria-label="AI intelligence findings">
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
@@ -77,15 +79,24 @@ function SocialEvidenceInbox(){
    {(view==='location'||view==='candidate')&&<p className="text-[11px] text-slate-500">AI-extracted entities and locations are unverified signals, not authoritative assignments.</p>}
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
-  {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(170px,1fr)] gap-3 items-start">
-   <div className="space-y-2">{filtered.slice(0,80).map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>setSelected(item)} className="w-full text-left intel-card p-3 space-y-1.5 hover:border-sky-300">
-    <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform} · {item.relevance_label}</span>{(item.potential_issues||[]).length>0&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
-    <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
-    <p className="text-xs text-[#146a8b]">View source and assessment →</p>
-   </button>)}{!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}{filtered.length>80&&<p className="text-xs text-slate-500">Showing the first 80 matching posts.</p>}</div>
-   <aside className="intel-card p-3 xl:sticky xl:top-4" aria-label="Post distribution"><h3 className="text-xs font-semibold">Distribution</h3><p className="text-[11px] text-slate-500 mt-1">Current filtered posts</p>
-    <div className="flex justify-center py-3"><div className="w-24 h-24 rounded-full grid place-items-center" role="img" aria-label={filtered.filter(x=>(x.potential_issues||[]).length).length+' potential issue signals out of '+filtered.length+' posts'} style={{background:filtered.length?'conic-gradient(#c18b41 0 '+(filtered.filter(x=>(x.potential_issues||[]).length).length/filtered.length*100)+'%, #dce7ec 0)':'#dce7ec'}}><div className="w-[68px] h-[68px] rounded-full bg-white grid place-items-center"><span className="text-xl font-semibold">{filtered.length}</span></div></div></div>
-    <p className="text-[11px] text-slate-600">Flagged: {filtered.filter(x=>(x.potential_issues||[]).length).length}</p><p className="text-[11px] text-slate-600">Other: {filtered.filter(x=>!(x.potential_issues||[]).length).length}</p><p className="mt-2 text-[10px] text-slate-500">Signals are not confirmed violations.</p>
+  {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(185px,1fr)] gap-3 items-stretch">
+   <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2">
+    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
+    <div className="h-[620px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
+     {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>setSelected(item)} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}</span>{(item.potential_issues||[]).length>0&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
+      <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
+      <p className="text-xs text-[#146a8b]">View source and assessment →</p>
+     </button>)}
+     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
+    </div>
+   </section>
+   <aside className="intel-card p-3 flex flex-col min-h-[620px] xl:mt-0" aria-label="Platform distribution">
+    <h3 className="text-sm font-semibold text-[#365269]">Platform distribution</h3>
+    <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>
+    <div className="flex justify-center py-6"><div className="w-32 h-32 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-24 h-24 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
+    <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?item.count/filtered.length*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
+    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p>
    </aside>
   </div>}
   {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>

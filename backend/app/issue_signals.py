@@ -41,3 +41,22 @@ def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
         elif len(quote)<12:reasons['missing_or_short_quote']+=1
         elif quote.casefold() not in source:reasons['quote_not_in_source']+=1
     return reasons
+
+def rejected_issue_type_summary(raw_signals, active_categories, source_text):
+    """Count actual rejected type values without exposing original post content."""
+    summary={}
+    if not isinstance(raw_signals,list):return summary
+    content=str(source_text or '').casefold()
+    for signal in raw_signals:
+        if not isinstance(signal,dict):continue
+        cid=signal.get('category_id')
+        if type(cid) is not int or cid not in active_categories:continue
+        kind=signal.get('signal_type')
+        if kind=='POTENTIAL_VIOLATION':continue
+        quote=str(signal.get('evidence_quote') or '').strip()
+        # Do not imply a safe migration: an invalid type remains rejected.
+        key='(missing)' if kind is None or kind=='' else str(kind).strip()[:60]
+        if not key:key='(blank)'
+        key=key.replace('<','').replace('>','')
+        summary[key]=summary.get(key,0)+1
+    return summary

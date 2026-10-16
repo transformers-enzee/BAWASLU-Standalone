@@ -2,6 +2,7 @@
 import json
 import os
 import logging
+from datetime import datetime, timedelta
 import httpx
 from .db import SessionLocal
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob
@@ -39,6 +40,32 @@ def enqueue_campaign_evidence(campaign_id):
         return added
     finally:db.close()
 
+def recover_stale_jobs(campaign_id=None):
+    """Recover stuck processing records without billing. Running jobs get at most three total attempts."""
+    db=SessionLocal()
+    try:
+        query=db.query(AIAssessmentJob).filter(AIAssessmentJob.state=='PROCESSING',
+             AIAssessmentJob.updated_at < datetime.utcnow()-timedelta(minutes=10))
+        if campaign_id is not None:query=query.filter(AIAssessmentJob.campaign_id==int(campaign_id))
+        updated=0
+        for job in query.limit(500).all():
+            job.state='FAILED' if job.attempts>=3 else 'PENDING'
+            job.last_error='Recovered stale processing job'
+            job.updated_at=datetime.utcnow()
+            updated+=1
+        db.commit()
+        return updated
+    finally:db.close()
+
+def campaign_daily_budget_remaining(db,campaign_id):
+    """Conservative request-count ceiling, not a monetary cost estimate."""
+    try: ceiling=max(0,min(100,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    except ValueError:ceiling=0
+    today=datetime.utcnow().replace(hour=0,minute=0,second=0,microsecond=0)
+    billed=db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==int(campaign_id),
+        AIAssessmentJob.attempts>0,AIAssessmentJob.updated_at>=today).all()
+    return max(0,ceiling-sum(j.attempts for j in billed))
+
 def assess_pending_campaign(campaign_id, requested_limit=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -52,6 +79,10 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
     try:
         campaign=db.get(MonitoringCampaign,int(campaign_id))
         if not campaign:return
+        # Automatic jobs require an explicit daily request ceiling.
+        if requested_limit is None:
+            limit=min(limit,campaign_daily_budget_remaining(db,campaign.id))
+            if not limit:return
         categories=db.query(IssueCategory).filter(IssueCategory.active==True).order_by(IssueCategory.sort_order).limit(50).all()
         category_names={c.id:c.name for c in categories}
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
@@ -70,7 +101,7 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
             if not item:continue
             used+=1
             if job:
-                job.state='PROCESSING';job.attempts+=1;db.commit()
+                job.state='PROCESSING';job.attempts+=1;job.updated_at=datetime.utcnow();db.commit()
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
             try:
                 model=os.getenv('BAWASLU_RELEVANCE_MODEL','gpt-4o-mini')
@@ -104,7 +135,7 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                     geographic_signals_json=json.dumps(strings('locations')),
                     potential_issue_signals_json=json.dumps(signals))
                 db.add(record)
-                if job:job.state='COMPLETED';job.last_error=''
+                if job:job.state='COMPLETED';job.last_error='';job.updated_at=datetime.utcnow()
                 db.commit()
             except (httpx.HTTPError,KeyError,ValueError,TypeError,IndexError) as exc:
                 db.rollback()
@@ -112,6 +143,7 @@ def assess_pending_campaign(campaign_id, requested_limit=None):
                     job=db.get(AIAssessmentJob,job.id)
                     job.state='FAILED' if job.attempts>=3 else 'PENDING'
                     job.last_error=type(exc).__name__
+                    job.updated_at=datetime.utcnow()
                     db.commit()
                 log.warning('AI screening stopped after request error: %s',type(exc).__name__)
                 break

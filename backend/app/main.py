@@ -31,13 +31,33 @@ def startup():
         recover_existing_news_languages(db)
         sync_promoted_news_languages(db)
     finally: db.close()
+    # Opt-in only: do not initiate any paid work unless BOTH controls are enabled.
+    if os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true' and os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true':
+        from .auto_relevance import recover_stale_jobs, assess_pending_campaign
+        from .models import AIAssessmentJob
+        import threading, time
+        def worker_loop():
+            while True:
+                try:
+                    recover_stale_jobs()
+                    session=SessionLocal()
+                    try:
+                        campaign_ids=[row[0] for row in session.query(AIAssessmentJob.campaign_id).filter(
+                            AIAssessmentJob.state=='PENDING').distinct().limit(20).all()]
+                    finally:session.close()
+                    for cid in campaign_ids: assess_pending_campaign(cid)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception('AI worker cycle failed')
+                time.sleep(60)
+        threading.Thread(target=worker_loop,name='bawaslu-ai-worker',daemon=True).start()
 
 class LoginIn(BaseModel): email:str; password:str
 class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'69.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'69.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):

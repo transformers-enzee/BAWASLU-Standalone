@@ -356,6 +356,18 @@ def campaign_action(db:Session,p,action,data,id=None):
         active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
         job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
+            # Job-state counters are separate from assessment-label counters.
+            # Count only scoped, linked evidence; never trigger processing here.
+            campaign_links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            linked_ids=set()
+            for link in campaign_links:
+                item=db.get(SocialListeningResult,link.result_id)
+                if item and _result_in_scope(db,p,item):linked_ids.add(item.id)
+            if linked_ids:
+                for job in db.query(AIAssessmentJob).filter(
+                    AIAssessmentJob.campaign_id==campaign.id,
+                    AIAssessmentJob.result_id.in_(linked_ids)).limit(500).all():
+                    if job.state in job_counts:job_counts[job.state]+=1
             links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)

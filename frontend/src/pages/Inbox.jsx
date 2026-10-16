@@ -44,12 +44,16 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
+ const [chosenLocation,setChosenLocation]=useState(''),[chosenCandidate,setChosenCandidate]=useState('');
+ const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).filter(Boolean);
+ const locations=useMemo(()=>[...new Set(findings.flatMap(x=>signalNames(x.location_signals)))].sort((a,b)=>a.localeCompare(b)),[findings]);
+ const candidates=useMemo(()=>[...new Set(findings.flatMap(x=>signalNames(x.candidate_signals)))].sort((a,b)=>a.localeCompare(b)),[findings]);
  const filtered=useMemo(()=>findings.filter(x=>{
-  if(view==='location'&&!(x.location_signals||[]).length)return false;
-  if(view==='candidate'&&!(x.candidate_signals||[]).length)return false;
+  if(view==='location'&&chosenLocation&&!signalNames(x.location_signals).includes(chosenLocation))return false;
+  if(view==='candidate'&&chosenCandidate&&!signalNames(x.candidate_signals).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.potential_issues||[]).length)return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term]);
+ }),[findings,view,term,chosenLocation,chosenCandidate]);
  const buttons=[['all','All Relevant'],['location','Location'],['candidate','Candidate'],['violation','Potential Violation']];
  return <section className="space-y-4" aria-label="AI intelligence findings">
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
@@ -70,6 +74,8 @@ function SocialEvidenceInbox(){
    </div>)}{!auditRows.length&&<p className="text-sm text-slate-500">No stored assessments found.</p>}</div>}
   </div>
   <p className="text-xs text-slate-500">Uncertain assessments are retained in Assessment Audit; they are not silently rejected. AI batch status is not yet durable, so accepted requests should not be interpreted as completed until stored counts change.</p>
+  {view==='location'&&<div className="intel-card p-3 space-y-2"><label className="text-sm font-semibold" htmlFor="inbox-location-filter">Select location</label><select id="inbox-location-filter" className="intel-input w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All locations</option>{locations.map(name=><option key={name} value={name}>{name}</option>)}</select><p className="text-xs text-slate-500">Locations are AI-extracted signals, not confirmed jurisdiction assignments.</p></div>}
+  {view==='candidate'&&<div className="intel-card p-3 space-y-2"><label className="text-sm font-semibold" htmlFor="inbox-candidate-filter">Select candidate</label><select id="inbox-candidate-filter" className="intel-input w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select><p className="text-xs text-slate-500">Candidates are extracted from assessed evidence.</p></div>}
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'intel-button':'intel-ghost'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label} ({findings.filter(x=>key==='all'||key==='location'&&x.location_signals?.length||key==='candidate'&&x.candidate_signals?.length||key==='violation'&&x.potential_issues?.length).length})</button>)}</div>
   <div className="intel-card p-4 space-y-2"><p className="font-semibold">AI brief · {buttons.find(x=>x[0]===view)?.[1]}</p><p className="text-sm text-slate-600">{filtered.length} assessed relevant findings in this view. {view==='violation'?'These are preliminary potential issue signals mapped to active Administration categories, not confirmed violations.':'Only evidence with a recorded contextual relevance assessment appears here.'}</p><p className="text-xs text-amber-800">{unassessed} campaign evidence links are unassessed and excluded from relevant findings. No unsupported AI summary is generated.</p></div>
   <input className="intel-input w-full" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search findings, candidates, locations or issues" aria-label="Search relevant findings"/>

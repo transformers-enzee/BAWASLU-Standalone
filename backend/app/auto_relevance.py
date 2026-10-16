@@ -83,19 +83,18 @@ def campaign_lifetime_budget_remaining(db,campaign_id):
 
 def reserve_automatic_ai_request(db,campaign_id):
     """Atomically reserve both quotas before any paid automatic provider request."""
-    from sqlalchemy import insert
     from sqlalchemy.dialects.postgresql import insert as pg_insert
-    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
     try:
         daily=max(0,min(100,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
         lifetime=max(0,min(500,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
-    except ValueError:return False
+    except (ValueError,TypeError):return False
     if not daily or not lifetime:return False
     period=datetime.utcnow().strftime('%Y-%m-%d')
     try:
         dialect=db.bind.dialect.name
-        if dialect not in ('postgresql','sqlite'):return False
-        ins=pg_insert if dialect=='postgresql' else sqlite_insert
+        # SQLite ignores SELECT FOR UPDATE; refuse unattended billing unless PostgreSQL provides row locks.
+        if dialect!='postgresql':return False
+        ins=pg_insert
         for key in ('lifetime',period):
             db.execute(ins(AIBudgetReservation).values(campaign_id=int(campaign_id),
                        budget_period=key,reserved_requests=0).on_conflict_do_nothing(

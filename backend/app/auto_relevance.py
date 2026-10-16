@@ -7,6 +7,7 @@ from sqlalchemy import update
 from datetime import datetime, timedelta
 import httpx
 from .db import SessionLocal
+from .issue_signals import active_issue_taxonomy, validated_issue_signals
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
 
 log=logging.getLogger(__name__)
@@ -147,7 +148,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
         categories=db.query(IssueCategory).filter(IssueCategory.active==True).order_by(IssueCategory.sort_order).limit(50).all()
         category_names={c.id:c.name for c in categories}
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
-        taxonomy=[{'id':c.id,'name':c.name,'phrases':[p.phrase for p in phrases if p.category_id==c.id][:12]} for c in categories]
+        taxonomy=active_issue_taxonomy(categories,phrases)
         enqueue_campaign_evidence(campaign.id)
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         used=0
@@ -197,15 +198,17 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
                     return [str(x)[:160] for x in v[:12] if isinstance(x,str)] if isinstance(v,list) else []
                 issue_ids=out.get('issue_category_ids',[])
                 issue_ids=[x for x in issue_ids if type(x) is int and x in category_names] if isinstance(issue_ids,list) else []
-                signals=[]
-                raw_signals=out.get('potential_violation_signals')
-                if isinstance(raw_signals,list):
-                    for signal in raw_signals[:8]:
-                        if not isinstance(signal,dict):continue
-                        cid=signal.get('category_id')
-                        quote=str(signal.get('evidence_quote') or '').strip()
-                        if type(cid) is int and cid in category_names and len(quote)>=12 and quote.casefold() in (item.text_content or '').casefold():
-                            signals.append({'category_id':cid,'explanation':'Preliminary AI concern based on source excerpt','evidence_quote':quote[:350],'signal_type':'POTENTIAL_VIOLATION'})
+                signals=[{'category_id':signal['category_id'],
+                          'explanation':signal['explanation'] or 'Preliminary AI concern based on source excerpt',
+                          'evidence_quote':signal['evidence_quote'],'signal_type':'POTENTIAL_VIOLATION'}
+                         for signal in validated_issue_signals(
+                             [{'category_id':x.get('category_id'),
+                               'evidence_quote':x.get('evidence_quote'),
+                               'signal_type':'POTENTIAL_VIOLATION',
+                               'explanation':'Preliminary AI concern based on source excerpt'}
+                              for x in out.get('potential_violation_signals',[])[:8] if isinstance(x,dict)]
+                             if isinstance(out.get('potential_violation_signals'),list) else [],
+                             category_names,item.text_content)]
                 record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=1,
                     model_version=model,relevance_label=label,relevance_confidence=confidence,
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),

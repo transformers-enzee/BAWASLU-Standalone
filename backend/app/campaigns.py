@@ -464,14 +464,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                     try: parsed=json.loads(value or '[]')
                     except (ValueError,TypeError): return []
                     return parsed if isinstance(parsed,list) else []
-                issue_signals=[]
-                for signal in parse_list(assessment.potential_issue_signals_json):
-                    if not isinstance(signal,dict): continue
-                    try: category_id=int(signal.get('category_id') or 0)
-                    except (TypeError,ValueError): continue
-                    if category_id in active_categories and signal.get('signal_type')=='POTENTIAL_VIOLATION' and len(str(signal.get('evidence_quote') or ''))>=12 and str(signal.get('evidence_quote')).casefold() in (item.text_content or '').casefold():
-                        issue_signals.append({'category_id':category_id,'category_name':active_categories[category_id],
-                                              'explanation':str(signal.get('explanation') or '')[:400],'evidence_quote':str(signal.get('evidence_quote') or '')[:350]})
+                from .issue_signals import validated_issue_signals
+                issue_signals=validated_issue_signals(
+                    parse_list(assessment.potential_issue_signals_json),
+                    active_categories,item.text_content)
                 latest_review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
                     .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id,
                             EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))

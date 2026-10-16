@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import IntelligenceTable from '@/components/intel/IntelligenceTable';
@@ -7,6 +7,8 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 function SocialEvidenceInbox(){
  const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
+ const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
+ const watchBaseline=useRef(null);
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
@@ -15,6 +17,30 @@ function SocialEvidenceInbox(){
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
  },[campaign]);
+ useEffect(()=>{
+  if(!watchProgress||!campaign)return;
+  let cancelled=false,attempts=0;
+  const refresh=async()=>{
+   try{
+    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}});
+    if(cancelled)return;
+    const payload=response.data||{};
+    setFindings(payload.findings||[]);setAssessmentCounts(payload.assessment_counts||null);
+    setJobCounts(payload.job_counts||null);setUnassessed(payload.unassessed_count||0);
+    setReconciliation(payload.reconciliation||null);setProcessingStatus(payload.processing_status||'');
+    setWatchSnapshot(payload.job_counts||{});
+    const current=payload.job_counts||{},previous=watchBaseline.current;
+    if(previous&&((current.COMPLETED||0)>(previous.COMPLETED||0)||(current.FAILED||0)>(previous.FAILED||0))){
+     setBacklogStatus('Job status changed. Results refreshed automatically.');watchBaseline.current={...current};
+    }
+   }catch(e){if(!cancelled)setBacklogStatus('Progress refresh failed: '+(e.response?.data?.detail||e.message||'Unknown error'))}
+   attempts++;
+   if(!cancelled&&attempts>=60){setWatchProgress(false);setBacklogStatus('Progress checking paused after five minutes. No assessment completion is implied.')}
+  };
+  refresh();
+  const interval=window.setInterval(refresh,5000);
+  return()=>{cancelled=true;window.clearInterval(interval)};
+ },[watchProgress,campaign]);
  async function submitFlagReview(){
   if(!selected||!reviewDecision||reviewRationale.trim().length<10||reviewBusy)return;
   if(!window.confirm('Save this human review decision to the evidence audit trail?'))return;
@@ -38,7 +64,7 @@ function SocialEvidenceInbox(){
  async function startBacklog(){
   if(!backlog||!window.confirm('Use up to '+backlog.batch_limit+' billable AI requests to assess existing campaign evidence? No SocialCrawl credits will be used.'))return;
   setBacklogBusy(true);setBacklogStatus('');
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogStart',id:campaign,data:{confirm_ai_cost:true}});setBacklogStatus('Up to '+r.data.batch_limit+' AI assessments queued. Refresh this page shortly to view completed findings.');setBacklog(null)}
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentBacklogStart',id:campaign,data:{confirm_ai_cost:true}});setBacklogStatus('Request acknowledged. Tracking stored job status; processing is not guaranteed.');watchBaseline.current={...(jobCounts||{})};setWatchSnapshot(jobCounts||{});setWatchProgress(true);setBacklog(null)}
   catch(e){setBacklogStatus(e.response?.data?.detail||e.message)}
   finally{setBacklogBusy(false)}
  }
@@ -136,7 +162,13 @@ function SocialEvidenceInbox(){
   <details className="intel-card p-3" aria-label="AI operations and diagnostics"><summary className="cursor-pointer text-sm font-semibold py-1">AI operations &amp; diagnostics <span className="text-xs font-normal text-slate-500">· Internal tools</span></summary><div className="mt-3 space-y-3">
   <div className="intel-card p-3 space-y-2"><div className="flex flex-wrap items-center gap-2"><strong className="text-sm">AI backlog · controlled review</strong><button type="button" className="intel-ghost text-xs" disabled={backlogBusy||!campaign} onClick={previewBacklog}>Preview existing posts (free)</button></div>
   {backlog&&<div className="text-xs space-y-1"><p>{backlog.unassessed} pending links in this campaign · up to {backlog.batch_limit} AI requests this batch · 0 SocialCrawl credits.</p><p>AI provider: {backlog.ai_key_configured?'configured':'not configured'} · AI token costs vary by usage. No assessment is started by preview.</p><button className="intel-button text-xs" type="button" disabled={backlogBusy||!backlog.ai_key_configured||!backlog.batch_limit} onClick={startBacklog}>Confirm and assess up to {backlog.batch_limit} posts</button></div>}
-  {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}</div>
+  {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}
+  {(watchProgress||watchSnapshot)&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2" role="status" aria-live="polite">
+   <div className="flex justify-between gap-2 text-xs"><strong>Manual AI status</strong><span>{watchProgress?'Updating every 5 seconds':'Updates paused'}</span></div>
+   <div className="flex flex-wrap gap-4 text-xs"><span>Pending: {watchSnapshot?.PENDING??'—'}</span><span>Processing: {watchSnapshot?.PROCESSING??'—'}</span><span>Completed: {watchSnapshot?.COMPLETED??'—'}</span><span>Failed: {watchSnapshot?.FAILED??'—'}</span></div>
+   <p className="text-[11px] text-slate-500">Campaign-wide stored job counts, not a batch percentage. Status checks make no paid AI or crawl requests.</p>
+   <button type="button" className="intel-ghost text-xs" onClick={()=>setWatchProgress(v=>!v)}>{watchProgress?'Pause updates':'Resume free updates'}</button>
+  </div>}</div>
   {campaign&&<div className="intel-card p-3 space-y-2"><div className="flex flex-wrap gap-2 items-center"><strong className="text-sm">Automatic AI worker readiness · free check</strong><button type="button" className="intel-ghost text-xs" disabled={readinessBusy} onClick={async()=>{setReadinessBusy(true);try{const r=await base44.functions.invoke('socialListening',{action:'campaignAIWorkerReadiness',id:campaign,data:{}});setReadiness(r.data)}catch(e){setReadiness({error:e.response?.data?.detail||e.message})}finally{setReadinessBusy(false)}}}>Check readiness (free)</button></div>{readiness&&<p className="text-xs text-slate-600" role="status">{readiness.error||('Auto screening: '+(readiness.automatic_screening_enabled?'ON':'OFF')+' · Worker: '+(readiness.worker_enabled?'ON':'OFF')+' · Provider: '+(readiness.ai_provider_configured?'Configured':'Unavailable')+' · Database reservation: '+(readiness.database_supports_reservations?'Supported':'Unsupported')+' · Daily reserved: '+readiness.daily_reserved+'/'+readiness.daily_request_limit+' · Lifetime reserved: '+readiness.lifetime_reserved+'/'+readiness.lifetime_request_limit+' · '+(readiness.ready_to_process?'Ready if enabled':'Not enabled or limits incomplete'))}</p>}</div>}
   {jobCounts&&<div className="intel-card p-3 space-y-2" aria-label="AI job progress"><h3 className="text-sm font-semibold">AI job progress · stored status</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{[['Pending','PENDING'],['Processing','PROCESSING'],['Completed','COMPLETED'],['Failed','FAILED']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{jobCounts[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">Job status is read-only and does not initiate provider calls. Reload to refresh.</p></div>}
   {reconciliation&&reconciliation.unassessed_without_job>0&&campaign&&<div className="intel-card p-3 flex flex-wrap items-center gap-3"><span className="text-xs text-slate-600">{reconciliation.unassessed_without_job} unassessed evidence records lack a job.</span><button type="button" className="intel-ghost text-xs" disabled={reconBusy} onClick={async()=>{setReconBusy(true);setReconNotice('');try{const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentJobReconcile',id:campaign,data:{}});setReconNotice((r.data.created_pending_jobs||0)+' missing pending job(s) created. Refresh to verify. No AI calls.')}catch(e){setReconNotice(e.response?.data?.detail||e.message)}finally{setReconBusy(false)}}}>Create missing jobs (free)</button>{reconNotice&&<span role="status" className="text-xs">{reconNotice}</span>}</div>}

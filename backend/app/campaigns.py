@@ -485,10 +485,14 @@ def campaign_action(db:Session,p,action,data,id=None):
                 else:violation_diagnostics['relevant_without_signal']+=1
                 if len(raw_signals)>len(issue_signals):
                     violation_diagnostics['relevant_with_rejected_signal']+=1
-                latest_review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                review_rows=(db.query(EvidenceReview,EvidenceAssessment.assessment_version).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
                     .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id,
                             EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
-                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).limit(10).all())
+                latest_review=review_rows[0][0] if review_rows else None
+                review_history=[{'decision':review.decision,'reviewed_at':review.created_at.isoformat() if review.created_at else None,
+                                 'assessment_version':assessment_version,'reviewer_id':review.reviewer_id,'rationale':review.rationale}
+                                for review,assessment_version in review_rows]
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
                     'author_name':item.author_name,'published_at':item.published_at,
@@ -498,6 +502,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,
                     'flag_review_status':latest_review.decision if latest_review else None,
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,
+                    'flag_review_history':review_history,
                     'can_review_flag':has(p,'human_validation')})
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',

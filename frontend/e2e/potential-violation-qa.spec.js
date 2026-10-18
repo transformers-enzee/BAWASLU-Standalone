@@ -74,7 +74,7 @@ test('historical review decisions render in the collapsed drawer on demand',asyn
  await expect(drawer.getByText('Insufficient independent source evidence')).toBeVisible();
  await expect(drawer.getByText('Additional corroboration required')).toBeVisible();
  await expect(drawer.getByText('Assessment v2')).toBeVisible();
- await expect(drawer.getByText('Assessment v1')).toBeVisible();
+ await expect(drawer.locator('details[open] li').filter({hasText:'Assessment v1'})).toHaveCount(1);
  expect(paidCalls).toBe(0);
 });
 

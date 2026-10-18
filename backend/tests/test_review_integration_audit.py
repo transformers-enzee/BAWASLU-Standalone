@@ -39,9 +39,10 @@ def test_authorized_review_is_appended_and_audited(decision):
     assert review.decision==decision
     assert assessment.potential_issue_signals_json==original
     assert db.commit.call_count==1
-    assert audit.call_args.args[3]=='POTENTIAL_FLAG_REVIEW'
-    details=audit.call_args.args[4]
+    assert audit.call_args.args[4]=='POTENTIAL_FLAG_REVIEW'
+    details=audit.call_args.args[5]
     assert details['assessment_version']==1 and details['legacy_signal_present'] is True
+    assert audit.call_args.args[3]==77
 
 def test_unauthorized_review_never_writes():
     db,profile,_,_=setup_review(permission=False)

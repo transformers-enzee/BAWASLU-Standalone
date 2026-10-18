@@ -41,6 +41,43 @@ async function setup(page){
  return ()=>providerCalls;
 }
 
+test('historical review decisions render in the collapsed drawer on demand',async({page})=>{
+ const withHistory={...payload,findings:findings.map((item,index)=>index===0?{...item,
+  flag_review_status:'FLAG_DISMISSED',
+  flag_review_history:[
+   {decision:'FLAG_DISMISSED',assessment_version:2,reviewer_id:'officer-2',
+    rationale:'Insufficient independent source evidence',reviewed_at:'2026-10-18T10:00:00'},
+   {decision:'FURTHER_INVESTIGATION',assessment_version:1,reviewer_id:'officer-1',
+    rationale:'Additional corroboration required',reviewed_at:'2026-10-17T10:00:00'}
+  ]}:item)};
+ await page.goto('/login');
+ await page.getByLabel(/email/i).fill('admin@bawaslu.local');
+ await page.getByLabel(/^password$/i).fill(PASSWORD);
+ await page.getByRole('button',{name:/log in|masuk/i}).click();
+ await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+ let paidCalls=0;
+ await page.route('**/api/functions/socialListening',async route=>{
+  if(route.request().postDataJSON().action==='campaignIntelligenceInbox'){
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(withHistory)});
+  }else{
+   paidCalls++;
+   await route.fulfill({status:400,contentType:'application/json',body:'{}'});
+  }
+ });
+ await page.goto('/inbox');
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer.getByText('Review history (2 most recent)')).toBeVisible();
+ await expect(drawer.getByText('Insufficient independent source evidence')).not.toBeVisible();
+ await drawer.getByText('Review history (2 most recent)').click();
+ await expect(drawer.getByText('Insufficient independent source evidence')).toBeVisible();
+ await expect(drawer.getByText('Additional corroboration required')).toBeVisible();
+ await expect(drawer.getByText('Assessment v2')).toBeVisible();
+ await expect(drawer.getByText('Assessment v1')).toBeVisible();
+ expect(paidCalls).toBe(0);
+});
+
 test('flag count and category filter stay consistent with the evidence list',async({page})=>{
  const paidCalls=await setup(page);
  await expect(page.getByText('Potential violations · signals only')).toBeVisible();

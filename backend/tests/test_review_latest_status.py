@@ -1,0 +1,31 @@
+from datetime import datetime, timedelta
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from app.db import Base
+from app.models import EvidenceAssessment, EvidenceReview
+
+def test_latest_review_is_current_while_prior_decisions_remain_auditable():
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            assessment=EvidenceAssessment(id=930001,campaign_id=931001,result_id=932001,
+               assessment_version=1,relevance_label='RELEVANT',
+               model_version='test-engine',potential_issue_signals_json='[]')
+            db.add(assessment);db.flush()
+            before=assessment.potential_issue_signals_json
+            first=EvidenceReview(assessment_id=assessment.id,reviewer_id='officer-a',
+               decision='FURTHER_INVESTIGATION',rationale='Evidence requires verification',
+               created_at=datetime(2026,10,1,10,0))
+            second=EvidenceReview(assessment_id=assessment.id,reviewer_id='officer-b',
+               decision='FLAG_DISMISSED',rationale='No supporting evidence available',
+               created_at=datetime(2026,10,2,10,0))
+            db.add_all([first,second]);db.commit()
+            latest=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
+                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+            assert latest.decision=='FLAG_DISMISSED'
+            assert db.query(EvidenceReview).filter_by(assessment_id=assessment.id).count()==2
+            assert db.get(EvidenceAssessment,assessment.id).potential_issue_signals_json==before
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()

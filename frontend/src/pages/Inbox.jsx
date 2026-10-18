@@ -50,7 +50,7 @@ function SocialEvidenceInbox(){
    await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
    const updated={...selected,flag_review_status:reviewDecision};
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?{...item,flag_review_status:reviewDecision}:item));
-   setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Refresh to retrieve the server audit status.');
+   setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
   finally{setReviewBusy(false)}
  }

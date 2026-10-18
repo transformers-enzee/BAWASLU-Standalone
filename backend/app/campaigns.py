@@ -320,9 +320,12 @@ def campaign_action(db:Session,p,action,data,id=None):
         if str(payload.get('assessment_version') or '')!=str(assessment.assessment_version):
             raise ValueError('Assessment changed; refresh before reviewing')
         from .models import IssueCategory
-        categories=json.loads(assessment.potential_issue_signals_json or '[]')
-        category_ids={int(x.get('category_id')) for x in categories if isinstance(x,dict) and str(x.get('category_id') or '').isdigit() and x.get('signal_type')=='POTENTIAL_VIOLATION'}
-        if not category_ids:raise ValueError('No AI potential violation signal exists for review')
+        from .issue_signals import validated_issue_signals
+        active_categories={row.id:row.name for row in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
+        try: raw_signals=json.loads(assessment.potential_issue_signals_json or '[]')
+        except (TypeError,ValueError): raw_signals=[]
+        valid_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
+        if not valid_signals:raise ValueError('No evidence-validated potential violation signal exists for review')
         review=EvidenceReview(assessment_id=assessment.id,reviewer_id=str(p['id']),decision=decision,rationale=rationale)
         db.add(review);db.flush()
         review_id=review.id

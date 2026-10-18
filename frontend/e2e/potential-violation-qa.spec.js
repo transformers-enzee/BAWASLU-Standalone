@@ -7,7 +7,7 @@ const source='Seorang warga melaporkan dugaan pembagian uang kepada pemilih di l
 const findings=[
  {id:'101',campaign_id:'1',campaign_name:'QA Campaign',platform:'instagram',text_content:source,
   relevance_label:'RELEVANT',relevance_confidence:'HIGH',explanation:'Preliminary allegation in source content; requires independent verification.',
-  location_signals:['Jakarta'],candidate_signals:[],potential_issues:[{category_id:7,category_name:'Politik Uang',evidence_quote:'pembagian uang kepada pemilih',explanation:'Preliminary signal only'}],
+  location_signals:['Jakarta'],candidate_signals:[],potential_issues:[{category_id:7,category_name:'Politik Uang',evidence_quote:'pembagian uang kepada pemilih',explanation:'Preliminary signal only',signal_provenance:'LEGACY_MISSING_TYPE',requires_human_verification:true}],
   assessment_version:1,model_version:'mock-fixture',canonical_url:'https://example.org/source/101',can_review_flag:false},
  {id:'102',campaign_id:'1',campaign_name:'QA Campaign',platform:'x',text_content:'Diskusi kebijakan publik tanpa dugaan pelanggaran.',
   relevance_label:'RELEVANT',relevance_confidence:'HIGH',explanation:'Relevant policy discussion, no violation evidence.',
@@ -71,5 +71,16 @@ test('flag detail presents the configured category as preliminary evidence, not 
  await expect(drawer.getByText('Politik Uang')).toBeVisible();
  await expect(drawer.getByText(/Human verification required/)).toBeVisible();
  await expect(drawer.getByRole('link',{name:/Open original source/})).toHaveAttribute('href','https://example.org/source/101');
+ expect(paidCalls()).toBe(0);
+});
+
+
+test('legacy source-supported flag is disclosed without treating it as a verdict',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer.getByRole('note')).toContainText('Legacy AI signal (original type missing)');
+ await expect(drawer.getByRole('note')).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });

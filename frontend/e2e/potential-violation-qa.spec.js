@@ -69,7 +69,7 @@ test('flag detail presents the configured category as preliminary evidence, not 
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer).toBeVisible();
  await expect(drawer.getByText('Politik Uang')).toBeVisible();
- await expect(drawer.getByText(/Human verification required/)).toBeVisible();
+ await expect(drawer.getByRole('note')).toContainText('Human verification required');
  await expect(drawer.getByRole('link',{name:/Open original source/})).toHaveAttribute('href','https://example.org/source/101');
  expect(paidCalls()).toBe(0);
 });
@@ -81,6 +81,18 @@ test('legacy source-supported flag is disclosed without treating it as a verdict
  await page.getByRole('button',{name:/View source and assessment/}).click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByRole('note')).toContainText('Legacy AI signal (original type missing)');
+ await expect(drawer.getByRole('note')).toContainText('Human verification required');
+ expect(paidCalls()).toBe(0);
+});
+
+
+test('users without human validation authority see review guidance but no decision controls',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer.getByText('Human validation permission is required for review actions.')).toBeVisible();
+ await expect(drawer.getByRole('button',{name:'Save human review'})).toHaveCount(0);
  await expect(drawer.getByRole('note')).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });

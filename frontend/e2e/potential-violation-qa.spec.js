@@ -96,3 +96,14 @@ test('users without human validation authority see review guidance but no decisi
  await expect(drawer.getByRole('note')).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });
+
+
+test('review history absent for unreviewed evidence without paid calls',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer).toBeVisible();
+ await expect(drawer.getByText('Review history (', {exact:false})).toHaveCount(0);
+ expect(paidCalls()).toBe(0);
+});

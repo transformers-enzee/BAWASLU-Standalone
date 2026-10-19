@@ -207,3 +207,12 @@ test('location selection distinguishes country, province and unlocated records',
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
+
+
+test('location coverage reconciles the selected relevant post count',async({page})=>{
+ const paidCalls=await setup(page);
+ await expect(page.getByRole('note',{name:'Location coverage'})).toContainText('1 with extracted location · 2 without location · 3 posts total');
+ await page.getByLabel('Select location').selectOption('__unlocated__');
+ await expect(page.getByRole('note',{name:'Location coverage'})).toContainText('0 with extracted location · 2 without location · 2 posts total');
+ expect(paidCalls()).toBe(0);
+});

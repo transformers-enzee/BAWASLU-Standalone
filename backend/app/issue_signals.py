@@ -81,8 +81,8 @@ def validated_actor_issue_signals(raw_signals, active_categories, source_text):
             continue
         if actor.casefold() not in quote.casefold():
             continue
-        if activity.casefold() not in quote.casefold():
-            continue
+        # The activity is an analyst description; require a source-grounded
+        # attribution quote rather than an exact wording match of that description.
         for signal in validated_issue_signals([raw],active_categories,source_text):
             confirmed.append({**signal,'alleged_actor':actor,'alleged_activity':activity,
                               'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'})

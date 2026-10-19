@@ -216,3 +216,15 @@ test('location coverage reconciles the selected relevant post count',async({page
  await expect(page.getByRole('note',{name:'Location coverage'})).toContainText('0 with extracted location · 2 without location · 2 posts total');
  expect(paidCalls()).toBe(0);
 });
+
+
+test('candidate filter retains posts with no extracted candidate',async({page})=>{
+ const paidCalls=await setup(page);
+ const selector=page.getByLabel('Select candidate');
+ await expect(selector.locator('option[value="__no_candidate__"]')).toHaveCount(1);
+ await selector.selectOption('__no_candidate__');
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await selector.selectOption('');
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ expect(paidCalls()).toBe(0);
+});

@@ -96,3 +96,34 @@ def test_review_history_latest_ten_and_equal_timestamp_order():
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+def test_review_history_never_leaks_across_campaigns_or_evidence():
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            snapshots=[
+                EvidenceAssessment(id=970001,campaign_id=971001,result_id=972001,assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]'),
+                EvidenceAssessment(id=970002,campaign_id=971002,result_id=972001,assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]'),
+                EvidenceAssessment(id=970003,campaign_id=971001,result_id=972002,assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]'),
+            ]
+            db.add_all(snapshots);db.flush()
+            for assessment,decision in zip(snapshots,['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']):
+                db.add(EvidenceReview(assessment_id=assessment.id,reviewer_id='reviewer',
+                    decision=decision,rationale='Review for isolated scope only'))
+            db.commit()
+            def history(campaign_id,result_id):
+                return (db.query(EvidenceReview,EvidenceAssessment.assessment_version)
+                    .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                    .filter(EvidenceAssessment.campaign_id==campaign_id,
+                            EvidenceAssessment.result_id==result_id,
+                            EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc())
+                    .limit(10).all())
+            assert [x.decision for x,_ in history(971001,972001)]==['FLAG_CONFIRMED']
+            assert [x.decision for x,_ in history(971002,972001)]==['FLAG_DISMISSED']
+            assert [x.decision for x,_ in history(971001,972002)]==['FURTHER_INVESTIGATION']
+            assert history(971002,972002)==[]
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()

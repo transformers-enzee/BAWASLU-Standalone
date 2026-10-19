@@ -200,7 +200,13 @@ def test_search_everywhere_campaign_preview_is_safe_for_schedule_and_manual():
     assert preview['estimated_credits']==20 and preview['can_run'] is False
     schedule=action(db,p,'campaignSchedulePreview',{},campaign['id'])
     assert schedule['schedule']['estimated_credits_per_run']==20
-    with pytest.raises(ValueError,match='disabled'):
+    with pytest.raises(ValueError,match='explicit Search Everywhere query'):
         action(db,p,'campaignManualRun',{'confirm_cost':True,'confirmed_credits':20},campaign['id'])
+    approved=action(db,p,'campaignManualPreflight',{'everywhere_query':'bawaslu pemilu'},campaign['id'])
+    assert approved['estimated_credits']==20 and approved['can_run'] is True
+    with pytest.raises(ValueError,match='Explicit credit confirmation'):
+        action(db,p,'campaignManualRun',{'everywhere_query':'bawaslu pemilu'},campaign['id'])
+    with pytest.raises(ValueError,match='Search query changed'):
+        action(db,p,'campaignManualRun',{'everywhere_query':'bawaslu pemilu','confirmed_query':'different','confirm_cost':True,'confirmed_credits':20},campaign['id'])
     assert db.query(SocialListeningRun).count()==0
     db.close()

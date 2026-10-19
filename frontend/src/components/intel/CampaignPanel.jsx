@@ -69,11 +69,18 @@ export default function CampaignPanel({campaignId=null}){
   if(!selected||!evidence.length)return;
   const fields=['id','platform','content_type','published_at','author_name','text_content','canonical_url','review_state','sentiment','engagement_total','views','likes','comments','shares'];
   const escape=v=>'"'+String(v??'').replace(/^[=+@-]/,'\t$&').replace(/"/g,'""')+'"';
+  const content=[fields.join(','),...evidence.map(x=>fields.map(k=>escape(x[k])).join(','))].join('\r\n');
+  const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');
+  link.href=url;link.download='bawaslu-campaign-'+selected.id+'-evidence.csv';link.click();
+  URL.revokeObjectURL(url);
+ }
+ async function changePostSort(sort){
   if(!selected||postSortBusy||sort===postSort)return;
   setPostSortBusy(true);setEvidenceError('');
   try{
-    const response=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{sort}});
-    setEvidence(response.data.evidence||[]);setPostSort(sort);
+   const response=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{sort}});
+   setEvidence(response.data.evidence||[]);setPostSort(sort);
   }catch(e){setEvidenceError(e.response?.data?.detail||e.message||'Could not sort posts')}
   finally{setPostSortBusy(false)}
  }
@@ -82,16 +89,10 @@ export default function CampaignPanel({campaignId=null}){
   setChartDay({date:day,loading:true,posts:[],error:'',truncated:false,total:0});
   setChartDaySort(sort);
   try{
-    const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day,sort}});
-    setChartDay({date:day,loading:false,posts:response.data.evidence||[],total:response.data.total||0,
-                 truncated:Boolean(response.data.truncated),error:''});
+   const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day,sort}});
+   setChartDay({date:day,loading:false,posts:response.data.evidence||[],total:response.data.total||0,
+                truncated:Boolean(response.data.truncated),error:''});
   }catch(e){setChartDay({date:day,loading:false,posts:[],error:e.response?.data?.detail||e.message||'Could not load posts',total:0,truncated:false})}
- }
- async function previewSingle(item,reanalysis=false){').replace(/"/g,'""')+'"';
-  const content=[fields.join(','),...evidence.map(x=>fields.map(k=>escape(x[k])).join(','))].join('\r\n');
-  const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);const link=document.createElement('a');
-  link.href=url;link.download='bawaslu-campaign-'+selected.id+'-evidence.csv';link.click();URL.revokeObjectURL(url);
  }
  async function previewSingle(item,reanalysis=false){
   if(!selected||singleBusy)return;

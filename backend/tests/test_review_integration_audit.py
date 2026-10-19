@@ -53,3 +53,31 @@ def test_unauthorized_review_never_writes():
                 'rationale':'Officer requests evidence-based review.'},id='1')
     db.add.assert_not_called()
     db.commit.assert_not_called()
+
+@pytest.mark.parametrize('campaign_allowed,permission',[(False,True),(True,False),(False,False)])
+def test_review_denied_if_campaign_or_permission_missing(campaign_allowed,permission):
+    db,profile,assessment,original=setup_review(permission=permission)
+    with patch.object(campaigns,'allowed',return_value=campaign_allowed),patch.object(campaigns,'has',side_effect=lambda p,k:p['permissions'].get(k,False)),patch.object(campaigns,'audit') as audit_mock:
+        with pytest.raises(PermissionError,match='Human review permission and campaign access required'):
+            campaigns.campaign_action(db,profile,'campaignFlagReview',{
+                'result_id':'2','assessment_version':1,'decision':'FLAG_CONFIRMED',
+                'rationale':'Officer reviewed primary evidence.'},id='1')
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    audit_mock.assert_not_called()
+    assert assessment.potential_issue_signals_json==original
+
+@pytest.mark.parametrize('linked,in_scope',[(False,True),(True,False)])
+def test_review_denied_for_unlinked_or_out_of_scope_evidence(linked,in_scope):
+    db,profile,assessment,original=setup_review()
+    if not linked:
+        db.query(CampaignEvidence).filter_by.return_value.first.return_value=None
+    with patch.object(campaigns,'allowed',return_value=True),patch.object(campaigns,'has',return_value=True),patch('app.socialcrawl._result_in_scope',return_value=in_scope),patch.object(campaigns,'audit') as audit_mock:
+        with pytest.raises(ValueError,match='Evidence unavailable'):
+            campaigns.campaign_action(db,profile,'campaignFlagReview',{
+                'result_id':'2','assessment_version':1,'decision':'FLAG_DISMISSED',
+                'rationale':'Officer reviewed primary evidence.'},id='1')
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    audit_mock.assert_not_called()
+    assert assessment.potential_issue_signals_json==original

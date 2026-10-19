@@ -6,7 +6,7 @@ import threading
 from sqlalchemy import update
 from datetime import datetime, timedelta
 import httpx
-from .geography import province_code_for, province_name_for, regency_code_for, regency_name_for, REGENCY_BY_CODE
+from .geography import province_code_for, regency_code_for, REGENCY_BY_CODE
 from .db import SessionLocal
 from .issue_signals import active_issue_taxonomy, validated_issue_signals
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
@@ -37,18 +37,18 @@ def structured_location_signals(values):
             name=raw.strip()[:160]
             if not name:continue
             code=province_code_for(name)
-            result.append({'name':name,'province':province_name_for(code)} if code else name)
+            result.append({'name':name,'province':name} if code else name)
         elif isinstance(raw,dict):
             province=str(raw.get('province') or '').strip()[:160]
             regency=str(raw.get('regency_city') or '').strip()[:160]
             code=province_code_for(province)
             if not code:continue
-            name=province_name_for(code)
+            name=province
             area={'name':name,'province':name}
             if regency:
                 rcode=regency_code_for(regency,code)
                 if rcode and str(REGENCY_BY_CODE.get(rcode,{}).get('province_code'))==code:
-                    area['regency_city']=regency_name_for(rcode)
+                    area['regency_city']=regency
             result.append(area)
     return result
 

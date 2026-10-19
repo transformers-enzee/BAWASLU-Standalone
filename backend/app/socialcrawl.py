@@ -41,7 +41,9 @@ def _normalize_filters(filters):
         if not f['platforms']: raise ValueError('Select at least one platform or Online News')
     else:
         f['platforms']=DEFAULT_PLATFORMS
-    invalid=[x for x in f['platforms'] if x not in AVAILABLE_PLATFORMS]
+    invalid=[x for x in f['platforms'] if x not in AVAILABLE_PLATFORMS+['search_everywhere']]
+    if 'search_everywhere' in f['platforms'] and f['platforms']!=['search_everywhere']:
+        raise ValueError('Search Everywhere cannot be combined with individual platform selections')
     if invalid: raise ValueError('Unsupported Social Listening platform: '+', '.join(invalid))
     if 'limit' not in f: f['limit']=50
     f['limit']=max(1,min(int(f['limit']),200))
@@ -132,6 +134,11 @@ def _scope_filters(p,filters):
 def estimate_search_cost(filters):
     f=_normalize_filters(filters)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
+    if selected==['search_everywhere']:
+        return {'estimated_credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,
+                'components':[{'endpoint':'/v1/search/everywhere','credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,
+                'label':'Search Everywhere: one cross-platform query'}],
+                'result_limit':f.get('limit',50),'result_limit_affects_cost':False,'filters':f}
     social_sources=[x for x in selected if x!='online_news']
     wants_news='online_news' in selected
     components=[]
@@ -516,6 +523,8 @@ def ensure_result_id_sequence_ready(db):
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_scope_filters(p,filters)
+    if f.get('platforms')==['search_everywhere']:
+        raise ValueError('Search Everywhere collection remains disabled pending validated multi-keyword query handling and result mapping. Preview only; no credits charged.')
     estimate=estimate_search_cost(f)
     if provider_client is None and estimate['estimated_credits']>0 and confirmed_cost:
         ensure_result_id_sequence_ready(db)

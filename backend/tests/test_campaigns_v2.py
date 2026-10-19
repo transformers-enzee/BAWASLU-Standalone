@@ -190,3 +190,17 @@ def test_thumbnail_recovery_no_existing_evidence_does_not_call_provider():
     assert result['checked']==0 and result['recovered']==0
     assert result['paid_provider_called'] is False
     db.close()
+
+def test_search_everywhere_campaign_preview_is_safe_for_schedule_and_manual():
+    db=SessionLocal();p=actor(db,'everywhere_admin','National Administrator')
+    campaign=action(db,p,'createCampaign',payload(platforms=['search_everywhere']))['campaign']
+    cost=action(db,p,'campaignCostPreview',payload(platforms=['search_everywhere']))
+    assert cost['estimated_credits']==20
+    preview=action(db,p,'campaignManualPreflight',{},campaign['id'])
+    assert preview['estimated_credits']==20 and preview['can_run'] is False
+    schedule=action(db,p,'campaignSchedulePreview',{},campaign['id'])
+    assert schedule['schedule']['estimated_credits_per_run']==20
+    with pytest.raises(ValueError,match='disabled'):
+        action(db,p,'campaignManualRun',{'confirm_cost':True,'confirmed_credits':20},campaign['id'])
+    assert db.query(SocialListeningRun).count()==0
+    db.close()

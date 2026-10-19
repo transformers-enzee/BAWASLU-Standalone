@@ -394,7 +394,7 @@ export default function CampaignPanel({campaignId=null}){
    </section>}
    <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
     <h4 className="font-semibold">Manual SocialCrawl collection</h4>
-    <p className="text-xs text-slate-600">Manual runs only. Maximum estimated charge: 5 credits per run. Scheduled crawling remains disabled.</p>
+    <p className="text-xs text-slate-600">Manual runs only. Native search limit: 5 estimated credits per run. Search Everywhere: 20 credits per query (preview only, execution disabled). Scheduled crawling remains disabled.</p>
     <button type="button" className="intel-ghost" disabled={manualBusy||selected.status!=='DRAFT'} onClick={previewManualCrawl}>Check manual crawl cost (free)</button>
     {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">{manualPreview.retrieval_mode==='SEARCH_EVERYWHERE_PREVIEW'?'Search Everywhere uses a single cross-platform query. Multi-keyword interpretation has not yet been verified.':`Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. ${manualPreview.keyword_searches?.length||0} searches planned.`}</p>
       {(manualPreview.components||[]).map((x,i)=><p key={i} className="text-xs">{x.label}: {x.credits} credits</p>)}

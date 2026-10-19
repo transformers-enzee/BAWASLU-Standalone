@@ -4,7 +4,7 @@ import pytest
 from app import campaigns
 from app.models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, EvidenceReview
 
-def setup_review(permission=True):
+def setup_review(permission=True, linked=True):
     db=MagicMock()
     campaign=MonitoringCampaign(id=1,name='Test campaign')
     item=SocialListeningResult(id=2,text_content='Warga melaporkan dugaan pembagian uang kepada pemilih.')
@@ -14,7 +14,7 @@ def setup_review(permission=True):
     db.get.side_effect=lambda cls,id:campaign if cls is MonitoringCampaign else item
     def query(cls):
         q=MagicMock()
-        if cls is CampaignEvidence:q.filter_by.return_value.first.return_value=object()
+        if cls is CampaignEvidence:q.filter_by.return_value.first.return_value=object() if linked else None
         if cls is EvidenceAssessment:q.filter_by.return_value.order_by.return_value.first.return_value=assessment
         if cls is IssueCategory:q.filter.return_value.all.return_value=[IssueCategory(id=7,name='Politik Uang',active=True)]
         return q
@@ -69,9 +69,7 @@ def test_review_denied_if_campaign_or_permission_missing(campaign_allowed,permis
 
 @pytest.mark.parametrize('linked,in_scope',[(False,True),(True,False)])
 def test_review_denied_for_unlinked_or_out_of_scope_evidence(linked,in_scope):
-    db,profile,assessment,original=setup_review()
-    if not linked:
-        db.query(CampaignEvidence).filter_by.return_value.first.return_value=None
+    db,profile,assessment,original=setup_review(linked=linked)
     with patch.object(campaigns,'allowed',return_value=True),patch.object(campaigns,'has',return_value=True),patch('app.socialcrawl._result_in_scope',return_value=in_scope),patch.object(campaigns,'audit') as audit_mock:
         with pytest.raises(ValueError,match='Evidence unavailable'):
             campaigns.campaign_action(db,profile,'campaignFlagReview',{

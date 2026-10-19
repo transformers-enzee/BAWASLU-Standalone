@@ -10,6 +10,36 @@ from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
 from .access import has, allowed, audit
 from .socialcrawl import _scope_filters, AVAILABLE_PLATFORMS
 
+def _captured_post_metrics(raw):
+    """Engagement totals use only reported likes, comments and shares (no estimates)."""
+    try:
+        data=json.loads(raw or '{}')
+    except (TypeError,ValueError):
+        data={}
+    if not isinstance(data,dict):data={}
+    def count(*names):
+        for name in names:
+            v=data.get(name)
+            if isinstance(v,bool):continue
+            if isinstance(v,(int,float)) and 0<=v<10**15:
+                return int(v)
+        return None
+    likes=count('likes','like_count')
+    comments=count('comments','comment_count')
+    shares=count('shares','share_count')
+    views=count('views','view_count','plays','play_count')
+    return {'likes':likes,'comments':comments,'shares':shares,'views':views,
+            'engagement_total':sum(x or 0 for x in (likes,comments,shares)) if any(x is not None for x in (likes,comments,shares)) else None}
+
+
+def _captured_post_sort(row,order='engagement'):
+    """Default hottest order = engagement first, then views; missing counts last."""
+    primary='views' if order=='views' else 'engagement_total'
+    secondary='engagement_total' if order=='views' else 'views'
+    return (row.get(primary) is None,-(row.get(primary) or 0),
+            row.get(secondary) is None,-(row.get(secondary) or 0),
+            -int(row.get('id') or 0))
+
 MAX_KEYWORDS=30
 MAX_CAMPAIGNS_PER_LIST=200
 MAX_NAME=255
@@ -829,21 +859,45 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'blocked_reasons':schedule['blocked_reasons'],
                 'can_execute':False,'paid_provider_called':False,
                 'notice':'Preview only. Campaign execution is disabled until a separate authorized release.'}
-    if action=='campaignEvidence':
+    if action in ('campaignEvidence','campaignDateTopPosts'):
         from .thumbnail_cache import stored_thumbnail_uri
         from .models import SocialListeningResult
         from .socialcrawl import _result_in_scope
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
-        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.added_at.desc(),CampaignEvidence.id.desc()).limit(200).all()
+        opts=data or {}
+        order=str(opts.get('sort') or 'engagement')
+        if order not in ('engagement','views'):raise ValueError('Unsupported post ranking')
+        on_day=None
+        if action=='campaignDateTopPosts':
+            on_day=_iso_date(opts.get('date'),'Selected chart date')
+            if not on_day:raise ValueError('Select a date from the chart')
+        q=(db.query(CampaignEvidence,SocialListeningResult)
+           .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
+           .filter(CampaignEvidence.campaign_id==c.id))
+        if on_day:q=q.filter(SocialListeningResult.published_at.like(on_day+'%'))
+        links=q.order_by(CampaignEvidence.id.desc()).limit(5000).all()
+        candidates=[]
+        for link,item in links:
+            if not _result_in_scope(db,p,item):continue
+            try:matched=json.loads(link.matched_fields_json or '[]')
+            except (ValueError,TypeError):matched=[]
+            candidates.append({'id':str(item.id),'platform':item.platform,
+                'text_content':item.text_content,'canonical_url':item.canonical_url,
+                'author_name':item.author_name,'published_at':item.published_at,
+                'review_state':item.review_state,'content_type':item.content_type,
+                'matched_fields':matched,**_captured_post_metrics(item.engagement_json)})
+        candidates.sort(key=lambda row:_captured_post_sort(row,order))
+        max_return=15 if on_day else 200
         rows=[]
-        for link in links:
-            item=db.get(SocialListeningResult,link.result_id)
-            if not item or not _result_in_scope(db,p,item): continue
-            try: match=json.loads(link.matched_fields_json or '[]')
-            except (ValueError,TypeError): match=[]
-            rows.append({'id':str(item.id),'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,'author_name':item.author_name,'published_at':item.published_at,'review_state':item.review_state,'content_type':item.content_type,'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),'sentiment':_latest_sentiment(db,c.id,item.id),'sentiment_details':_sentiment_details(db,c.id,item.id),'matched_fields':match})
-        return {'evidence':rows,'total':len(rows),'limited_to':200,'paid_provider_called':False}
+        for row in candidates[:max_return]:
+            item=db.get(SocialListeningResult,int(row['id']))
+            rows.append({**row,'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
+                         'sentiment':_latest_sentiment(db,c.id,item.id),
+                         'sentiment_details':_sentiment_details(db,c.id,item.id)})
+        return {'evidence':rows,'total':len(candidates),'limited_to':max_return,
+                'scan_limit':5000,'truncated':len(links)==5000,'sort':order,
+                'date':on_day,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None

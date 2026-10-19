@@ -1,3 +1,4 @@
+import re
 """Deterministic, credit-free validation of preliminary election issue signals.
 
 Category phrases provide model context, not proof of a violation.
@@ -81,8 +82,18 @@ def validated_actor_issue_signals(raw_signals, active_categories, source_text):
             continue
         if actor.casefold() not in quote.casefold():
             continue
-        # The activity is an analyst description; require a source-grounded
-        # attribution quote rather than an exact wording match of that description.
+        # Require a direct, source-visible concern in the SAME cited excerpt.
+        # This is a conservative screening gate, not verification of the allegation.
+        allegation=re.compile(r'\\b(?:alleged|allegedly|accused|bribery|bribed|violat(?:ion|ions|ed|ing)|'
+                              r'misconduct|vote.buying|dugaan|diduga|dituduh|pelanggaran|'
+                              r'penyuapan|suap|menyuap|politik uang|penghambatan|'
+                              r'intimidasi|manipulasi|kecurangan)\\b',re.IGNORECASE)
+        if not allegation.search(quote):continue
+        # The cited person can be the reporter, not the accused actor.
+        after=quote.casefold().split(actor.casefold(),1)[1].lstrip(' ,:')
+        if re.match(r'^(reports?|reported|says?|said|claims?|claimed|alleges?|'
+                    r'melaporkan|mengadukan|menyatakan|mengatakan|menilai)\\b',after):
+            continue
         for signal in validated_issue_signals([raw],active_categories,source_text):
             confirmed.append({**signal,'alleged_actor':actor,'alleged_activity':activity,
                               'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'})

@@ -265,7 +265,7 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
-    if action in ('campaignSingleAssessmentPreview','campaignSingleAssessmentStart'):
+    if action in ('campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart'):
         from .models import EvidenceAssessment, SocialListeningResult
         from .socialcrawl import _result_in_scope
         from .openai_triage import openai_triage_configured
@@ -280,15 +280,17 @@ def campaign_action(db:Session,p,action,data,id=None):
         item=db.get(SocialListeningResult,int(rid))
         if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Post unavailable')
         assessed=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=item.id).first()
-        if assessed:raise ValueError('Already assessed; reanalysis needs a separate versioned workflow')
+        reanalysis=action in ('campaignSingleReanalysisPreview','campaignSingleReanalysisStart')
+        if assessed and not reanalysis:raise ValueError('Already assessed; choose Reanalyze with AI')
+        if not assessed and reanalysis:raise ValueError('No previous assessment; choose Analyze with AI')
         preview={'campaign_id':str(campaign.id),'result_id':str(item.id),
                  'estimated_ai_requests':1,'socialcrawl_credits':0,
                  'estimated_ai_cost':'Variable; one model request, token-based provider pricing',
-                 'ai_key_configured':openai_triage_configured(),'paid_ai_executed':False}
-        if action=='campaignSingleAssessmentPreview':return preview
+                 'ai_key_configured':openai_triage_configured(),'paid_ai_executed':False,'reanalysis':reanalysis}
+        if action in ('campaignSingleAssessmentPreview','campaignSingleReanalysisPreview'):return preview
         if payload.get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
         if not preview['ai_key_configured']:raise ValueError('AI provider not configured')
-        return {**preview,'single_assessment_accepted':True}
+        return {**preview,'single_assessment_accepted':True,'reanalysis':reanalysis}
     if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
         from .models import EvidenceAssessment
         from .socialcrawl import _result_in_scope

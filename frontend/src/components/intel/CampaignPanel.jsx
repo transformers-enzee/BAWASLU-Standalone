@@ -60,10 +60,10 @@ export default function CampaignPanel({campaignId=null}){
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
  }
- async function previewSingle(item){
+ async function previewSingle(item,reanalysis=false){
   if(!selected||singleBusy)return;
   setSingleBusy(true);setSingleNotice('');setSinglePreview(null);
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSingleAssessmentPreview',id:selected.id,data:{result_id:item.id}});setSinglePreview(r.data)}
+  try{const r=await base44.functions.invoke('socialListening',{action:reanalysis?'campaignSingleReanalysisPreview':'campaignSingleAssessmentPreview',id:selected.id,data:{result_id:item.id}});setSinglePreview(r.data)}
   catch(e){setSingleNotice(e.response?.data?.detail||e.message||'Preview unavailable')}
   finally{setSingleBusy(false)}
  }
@@ -72,7 +72,7 @@ export default function CampaignPanel({campaignId=null}){
   if(!window.confirm('Confirm exactly one billable AI assessment for post #'+singlePreview.result_id+'? SocialCrawl credits: 0.'))return;
   setSingleBusy(true);setSingleNotice('');
   try{
-   await base44.functions.invoke('socialListening',{action:'campaignSingleAssessmentStart',id:selected.id,data:{result_id:singlePreview.result_id,confirm_ai_cost:true}});
+   await base44.functions.invoke('socialListening',{action:singlePreview.reanalysis?'campaignSingleReanalysisStart':'campaignSingleAssessmentStart',id:selected.id,data:{result_id:singlePreview.result_id,confirm_ai_cost:true}});
    setSingleNotice('Single-post assessment accepted for post #'+singlePreview.result_id+'. Check Intelligence Inbox after processing.');
    setSinglePreview(null);
   }catch(e){setSingleNotice(e.response?.data?.detail||e.message||'Start failed')}
@@ -323,8 +323,8 @@ export default function CampaignPanel({campaignId=null}){
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
   <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
   <SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
- </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item)}>Analyze with AI · Post #{item.id}</button></div>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
- {singlePreview&&<div className="rounded-lg border border-amber-300 p-3 space-y-2 text-xs" role="status"><strong>Post #{singlePreview.result_id} · AI cost preview</strong><p>Exactly {singlePreview.estimated_ai_requests} AI request · SocialCrawl credits: {singlePreview.socialcrawl_credits} · {singlePreview.estimated_ai_cost}.</p><button type="button" className="intel-button" disabled={singleBusy||!singlePreview.ai_key_configured} onClick={startSingle}>Confirm paid AI analysis for this post</button><button type="button" className="intel-ghost ml-2" onClick={()=>setSinglePreview(null)}>Cancel</button>{!singlePreview.ai_key_configured&&<p>AI provider key not configured.</p>}</div>}
+ </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,true)}>Reanalyze with AI · Post #{item.id}</button></div>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
+ {singlePreview&&<div className="rounded-lg border border-amber-300 p-3 space-y-2 text-xs" role="status"><strong>Post #{singlePreview.result_id} · {singlePreview.reanalysis?'Versioned AI reanalysis':'AI analysis'} cost preview</strong><p>Exactly {singlePreview.estimated_ai_requests} AI request · SocialCrawl credits: {singlePreview.socialcrawl_credits} · {singlePreview.estimated_ai_cost}.</p><button type="button" className="intel-button" disabled={singleBusy||!singlePreview.ai_key_configured} onClick={startSingle}>Confirm paid AI analysis for this post</button><button type="button" className="intel-ghost ml-2" onClick={()=>setSinglePreview(null)}>Cancel</button>{!singlePreview.ai_key_configured&&<p>AI provider key not configured.</p>}</div>}
  {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>

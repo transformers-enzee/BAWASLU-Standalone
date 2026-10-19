@@ -151,7 +151,7 @@ def reserve_automatic_ai_request(db,campaign_id):
         log.exception('AI quota reservation refused')
         return False
 
-def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None):
+def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
@@ -180,10 +180,10 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             if target_result_id is not None and link.result_id!=int(target_result_id):continue
             if used>=limit: break
             exists=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
-            if exists:continue
+            if (exists and not reanalysis) or (reanalysis and not exists):continue
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
-            if job and job.state in ('COMPLETED','PROCESSING'):continue
-            if job and job.attempts>=3:continue
+            if job and (job.state=='PROCESSING' or (job.state=='COMPLETED' and not reanalysis)):continue
+            if job and job.attempts>=3 and not reanalysis:continue
             item=db.get(SocialListeningResult,link.result_id)
             if not item:continue
             if not job:continue
@@ -191,8 +191,8 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             # Atomic state transition prevents a second process from claiming the same row.
             claimed=db.execute(update(AIAssessmentJob).where(
                 AIAssessmentJob.id==job.id,
-                AIAssessmentJob.state=='PENDING',
-                AIAssessmentJob.attempts<3
+                AIAssessmentJob.state==('COMPLETED' if reanalysis else 'PENDING'),
+                *(([AIAssessmentJob.attempts<3]) if not reanalysis else [])
             ).values(state='PROCESSING',attempts=AIAssessmentJob.attempts+1,
                      updated_at=datetime.utcnow()))
             db.commit()
@@ -200,7 +200,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             db.refresh(job)
             if requested_limit is None and not reserve_automatic_ai_request(db,campaign.id):
                 # Never bill after a failed reservation; do not leave an ambiguous PROCESSING row.
-                job.state='FAILED' if job.attempts>=3 else 'PENDING'
+                job.state='COMPLETED' if reanalysis else ('FAILED' if job.attempts>=3 else 'PENDING')
                 job.last_error='Automatic AI budget reservation unavailable'
                 job.updated_at=datetime.utcnow();db.commit()
                 break
@@ -235,7 +235,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                               for x in out.get('potential_violation_signals',[])[:8] if isinstance(x,dict)]
                              if isinstance(out.get('potential_violation_signals'),list) else [],
                              category_names,item.text_content)]
-                record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=1,
+                record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=(db.query(EvidenceAssessment.assessment_version).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc()).first()[0]+1 if reanalysis else 1),
                     model_version=model,relevance_label=label,relevance_confidence=confidence,
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),
                     geographic_signals_json=json.dumps(structured_location_signals(out.get('locations'))),
@@ -257,13 +257,13 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         db.close()
 
 
-def assess_pending_campaign(campaign_id, requested_limit=None, target_result_id=None):
+def assess_pending_campaign(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False):
     """Allow only one worker per campaign in each process. Multi-process locking is still required."""
     lock=_campaign_lock(campaign_id)
     if not lock.acquire(blocking=False):
         log.info('AI campaign %s already processing in this instance',campaign_id)
         return
     try:
-        return _assess_pending_campaign_locked(campaign_id,requested_limit,target_result_id)
+        return _assess_pending_campaign_locked(campaign_id,requested_limit,target_result_id,reanalysis)
     finally:
         lock.release()

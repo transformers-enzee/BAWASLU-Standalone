@@ -223,3 +223,18 @@ test('nationwide jurisdiction retains unlocated posts and province narrows only 
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
+
+
+test('Inbox shows two primary views while jurisdiction and candidate remain filters',async({page})=>{
+ const paidCalls=await setup(page);
+ const filters=page.getByRole('region',{name:'Find and filter intelligence'});
+ await expect(page.getByRole('button',{name:'All Relevant',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Potential Violation',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Location',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Candidate',exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Jurisdiction')).toBeVisible();
+ await expect(page.getByLabel('Select candidate')).toBeVisible();
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ expect(paidCalls()).toBe(0);
+});

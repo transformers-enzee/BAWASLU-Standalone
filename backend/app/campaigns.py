@@ -79,7 +79,7 @@ def _normalize(db,p,data):
     start=_iso_date(data.get('date_from'),'Start date')
     end=_iso_date(data.get('date_to'),'End date')
     if start and end and start>end: raise ValueError('Start date must be before end date')
-    interval=120  # Fixed future cadence; paid automatic scheduling remains disabled
+    interval=data.get('interval_minutes',180)  # New-campaign UI defaults to 120; stored schedules remain valid
     if type(interval) is not int or not 60<=interval<=10080:
         raise ValueError('Monitoring interval must be 60–10080 minutes')
     # Reuse established regional scope validation before persisting.
@@ -731,7 +731,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
-        visible=0
+        visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
             if not item or not _result_in_scope(db,p,item): continue
@@ -753,6 +753,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                 if not keyword.strip(): continue
                 occurrences=lowered.count(keyword.casefold())
                 if occurrences: cloud_terms[keyword]+=occurrences
+            if any(w.casefold() in lowered for w in primary_terms if w.strip()):primary_message_count+=1
+            if any(w.casefold() in lowered for w in secondary_terms if w.strip()):secondary_message_count+=1
+            else:secondary_absent_count+=1
             if source_day: daily[source_day]+=1
             platform=item.platform or 'unknown'
             platforms[platform]+=1
@@ -796,7 +799,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
                 'statistics':{'messages':visible,'engagement':total_engagement,'views':total_views,
-                    'accounts':len(accounts),'main_keyword_messages':sum(1 for x in []),
+                    'accounts':len(accounts),'main_keyword_messages':primary_message_count,'secondary_keyword_messages':secondary_message_count,'secondary_not_found_messages':secondary_absent_count,
                     'metrics_available':dict(metrics_available)},
                 'daily_platform_trend':[{'date':day,**{platform+'__'+metric:daily_platform[day].get(platform+'__'+metric,0) for platform in platforms for metric in ('posts','engagement','views')}} for day in sorted(daily_platform)],
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],

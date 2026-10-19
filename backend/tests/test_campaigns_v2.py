@@ -125,7 +125,11 @@ def test_viewer_cannot_create_campaign():
 def test_campaign_credit_preview_is_read_only_and_scoped():
     db=SessionLocal();p=actor(db,'admin','National Administrator')
     result=action(db,p,'campaignCostPreview',payload(platforms=['tiktok','linkedin','online_news']))
-    assert result['estimated_credits']==7
+    assert result['estimated_credits']==14  # 2 keywords * (TikTok 1 + LinkedIn 5 + news 1)
+    all_sources=action(db,p,'campaignCostPreview',payload(platforms=['search_everywhere']))
+    assert all_sources['estimated_credits']==20
+    assert all_sources['paid_run_enabled'] is False
+    assert all_sources['retrieval_mode']=='SEARCH_EVERYWHERE_PREVIEW'
     assert result['paid_run_enabled'] is False
     assert result['approval_required'] is True
     assert db.query(MonitoringCampaign).count()==0

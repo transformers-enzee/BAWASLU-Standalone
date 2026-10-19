@@ -250,14 +250,14 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   await dialog.getByRole('button',{name:'Save Draft'}).click();
   await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
   const filters=page.getByLabel('Campaign analytics date filters');
-  await expect(page.getByLabel('Posts and comments trend')).toBeVisible();
+  await expect(page.getByLabel('Campaign trend by platform')).toBeVisible();
   await filters.getByLabel('From date').fill('2026-10-15');
   await filters.getByLabel('To date').fill('2026-10-01');
   await filters.getByRole('button',{name:'Apply date filter'}).click();
   await expect(page.getByRole('alert')).toContainText('Start date must not be after end date');
   await filters.getByLabel('To date').fill('2026-10-15');
   await filters.getByRole('button',{name:'Apply date filter'}).click();
-  await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated evidence in this period');
+  await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated posts in this period');
 });
 
 
@@ -289,7 +289,7 @@ test('Campaign detail includes four evidence panels without calling paid provide
  await input.fill('pemilu');await input.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- for(const label of ['Channel distribution','Posts and comments trend','Captured posts','Campaign demographics'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
+ for(const label of ['Channel distribution','Campaign trend by platform','Captured posts','Campaign demographics'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
  await expect(page.getByLabel('Campaign demographics')).toContainText('Demographics');
  expect(calls).toEqual([]);
 });
@@ -313,7 +313,7 @@ test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
 });
 
 
-test('Campaign trend panel uses a two-series line chart when dated evidence exists',async({page})=>{
+test('Campaign trend panel spans the full row and supports metric toggling',async({page})=>{
  await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
  const name='QA Line Trend '+Date.now();
  await page.getByRole('button',{name:/New Campaign/i}).click();
@@ -322,9 +322,15 @@ test('Campaign trend panel uses a two-series line chart when dated evidence exis
  await keyword.fill('pemilu');await keyword.press('Enter');
  await dialog.getByRole('button',{name:'Save Draft'}).click();
  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- const panel=page.getByLabel('Posts and comments trend');
+ const panel=page.getByLabel('Campaign trend by platform');
  await expect(panel).toBeVisible();
- await expect(panel).toContainText('No dated evidence in this period');
+ await expect(panel).toHaveClass(/lg:col-span-2/);
+ await expect(panel.getByRole('group',{name:'Trend metric'})).toBeVisible();
+ for (const metric of ['Posts','Engagement','Views']) {
+  await panel.getByRole('button',{name:metric,exact:true}).click();
+  await expect(panel.getByRole('button',{name:metric,exact:true})).toHaveAttribute('aria-pressed','true');
+ }
+ await expect(panel).toContainText('No dated posts in this period');
 });
 
 

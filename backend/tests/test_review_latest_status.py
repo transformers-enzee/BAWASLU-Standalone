@@ -159,3 +159,42 @@ def test_review_history_excludes_other_campaign_and_unknown_decision():
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+def test_release_review_history_latest_status_across_versions_and_empty_case():
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            old=EvidenceAssessment(id=990101,campaign_id=990201,result_id=990301,
+                assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]')
+            current=EvidenceAssessment(id=990102,campaign_id=990201,result_id=990301,
+                assessment_version=2,relevance_label='RELEVANT',potential_issue_signals_json='[]')
+            empty=EvidenceAssessment(id=990103,campaign_id=990201,result_id=990302,
+                assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]')
+            db.add_all([old,current,empty]);db.flush()
+            db.add_all([
+                EvidenceReview(assessment_id=old.id,reviewer_id='first',
+                    decision='FLAG_CONFIRMED',rationale='Preliminary officer signal only',
+                    created_at=datetime(2026,10,17,8,0)),
+                EvidenceReview(assessment_id=current.id,reviewer_id='second',
+                    decision='FLAG_DISMISSED',rationale='Evidence not independently confirmed',
+                    created_at=datetime(2026,10,18,8,0))
+            ]);db.commit()
+            def rows(result_id):
+                return (db.query(EvidenceReview,EvidenceAssessment.assessment_version)
+                    .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                    .filter(EvidenceAssessment.campaign_id==990201,
+                            EvidenceAssessment.result_id==result_id,
+                            EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc())
+                    .limit(10).all())
+            history=rows(990301)
+            assert len(history)==2
+            assert history[0][0].decision=='FLAG_DISMISSED' and history[0][1]==2
+            assert history[1][0].decision=='FLAG_CONFIRMED' and history[1][1]==1
+            assert rows(990302)==[]
+            assert db.get(EvidenceAssessment,old.id).assessment_version==1
+            assert db.get(EvidenceAssessment,current.id).assessment_version==2
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()

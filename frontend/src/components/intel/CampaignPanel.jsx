@@ -266,7 +266,8 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    <label className="block text-sm">Description<textarea rows={2} className="intel-input mt-1 w-full" value={form.description} onChange={e=>set('description',e.target.value)}/></label>
    <fieldset className="space-y-2"><legend className="text-sm font-semibold">Platforms *</legend>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{options.map(p=><label key={p} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.platforms.includes(p)} onChange={e=>set('platforms',e.target.checked?[...form.platforms,p]:form.platforms.filter(x=>x!==p))}/>{p}</label>)}</div>
+    <label className="flex gap-2 items-center rounded-lg border p-3 text-sm font-medium"><input type="checkbox" aria-label="All platforms - Search Everywhere" checked={form.platforms.includes("search_everywhere")} onChange={e=>set("platforms",e.target.checked?["search_everywhere"]:["tiktok"])}/> All platforms · Search Everywhere <span className="text-xs font-normal text-slate-600">20 credits per query · preview only for now</span></label>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{options.map(p=><label key={p} className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={form.platforms.includes("search_everywhere")} checked={form.platforms.includes(p)} onChange={e=>set('platforms',e.target.checked?[...form.platforms,p]:form.platforms.filter(x=>x!==p))}/>{p}</label>)}</div>
    </fieldset>
    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2" aria-label="Campaign credit preflight">
     <p className="text-sm font-semibold text-amber-950">SocialCrawl credit estimate — before running</p>
@@ -276,7 +277,7 @@ export default function CampaignPanel({campaignId=null}){
     {creditEstimate&&<div role="status" className="text-sm text-amber-950">
       Estimated cost: <strong>{creditEstimate.estimated_credits} credits per run</strong>
       {Array.isArray(creditEstimate.components)&&creditEstimate.components.length>0&&<ul className="mt-2 space-y-1 text-xs" aria-label="Estimated credits by source">{creditEstimate.components.map((part,index)=><li key={part.endpoint||index} className="flex justify-between gap-3"><span>{part.label||part.endpoint}</span><strong>{part.credits} credits</strong></li>)}</ul>}
-      <p className="text-xs">Estimate, not a guaranteed final charge. Actual provider usage may differ.</p>
+      <p className="text-xs">{creditEstimate.billing_warning||"Estimate, not a guaranteed final charge. Actual provider usage may differ."}</p>
       <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
     </div>}
    </div>
@@ -395,11 +396,11 @@ export default function CampaignPanel({campaignId=null}){
     <h4 className="font-semibold">Manual SocialCrawl collection</h4>
     <p className="text-xs text-slate-600">Manual runs only. Maximum estimated charge: 5 credits per run. Scheduled crawling remains disabled.</p>
     <button type="button" className="intel-ghost" disabled={manualBusy||selected.status!=='DRAFT'} onClick={previewManualCrawl}>Check manual crawl cost (free)</button>
-    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. {manualPreview.keyword_searches?.length||0} searches planned.</p>
+    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">{manualPreview.retrieval_mode==='SEARCH_EVERYWHERE_PREVIEW'?'Search Everywhere uses a single cross-platform query. Multi-keyword interpretation has not yet been verified.':`Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. ${manualPreview.keyword_searches?.length||0} searches planned.`}</p>
       {(manualPreview.components||[]).map((x,i)=><p key={i} className="text-xs">{x.label}: {x.credits} credits</p>)}
       {manualPreview.duplicate_recent&&<label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={manualDuplicate} onChange={e=>setManualDuplicate(e.target.checked)}/> I understand this repeats a recent search</label>}
       <button type="button" className="intel-button" disabled={manualBusy||!manualPreview.can_run||(manualPreview.duplicate_recent&&!manualDuplicate)} onClick={executeManualCrawl}>Confirm and run paid crawl ({manualPreview.estimated_credits} estimated credits)</button>
-      {!manualPreview.can_run&&<p role="alert" className="text-red-700">Credit limit exceeded; reduce selected platforms.</p>}
+      {!manualPreview.can_run&&<p role="alert" className="text-red-700">{manualPreview.blocked_reason||"Credit limit exceeded; reduce selected platforms."}</p>}
     </div>}
     {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
    </section>

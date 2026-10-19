@@ -115,7 +115,7 @@ def _normalize(db,p,data):
     if not isinstance(platforms,list) or not platforms: raise ValueError('Select at least one platform')
     if len(platforms)>len(AVAILABLE_PLATFORMS): raise ValueError('Too many platforms')
     platforms=list(dict.fromkeys(platforms))
-    if any(not isinstance(x,str) or x not in AVAILABLE_PLATFORMS for x in platforms):
+    if any(not isinstance(x,str) or x not in AVAILABLE_PLATFORMS+['search_everywhere'] for x in platforms) or ('search_everywhere' in platforms and len(platforms)!=1):
         raise ValueError('Invalid Social Listening platform')
     language=data.get('language','') or ''
     if language not in ('','id','en','ms'): raise ValueError('Unsupported language')
@@ -126,7 +126,7 @@ def _normalize(db,p,data):
     if type(interval) is not int or not 60<=interval<=10080:
         raise ValueError('Monitoring interval must be 60–10080 minutes')
     # Reuse established regional scope validation before persisting.
-    filters=_scope_filters(p,{'query':' '.join(primary),'platforms':platforms,
+    filters=_scope_filters(p,{'query':' '.join(primary),'platforms':AVAILABLE_PLATFORMS if platforms==['search_everywhere'] else platforms,
        'province':data.get('province') or '', 'regency_city':data.get('regency_city') or ''})
     return {'name':name,'description':description,
        'primary_keywords_json':json.dumps(primary,ensure_ascii=False),
@@ -174,6 +174,12 @@ def _keyword_search_plan(db,p,c):
     return searches
 
 def _manual_preflight(db,p,c):
+    if json.loads(c.platforms_json or '[]')==['search_everywhere']:
+        return {'estimated_credits':20,'components':[{'label':'Search Everywhere: one cross-platform query (not 20 per platform)','credits':20}],
+                'duplicate_recent':None,'keyword_searches':[],
+                'credit_limit':20,'can_run':False,'manual_only':True,'paid_provider_called':False,
+                'retrieval_mode':'SEARCH_EVERYWHERE_PREVIEW',
+                'blocked_reason':'Search Everywhere execution is disabled pending verified multi-keyword query semantics and result mapping. No credits will be charged.'}
     searches=_keyword_search_plan(db,p,c)
     cost=sum(s['credits'] for s in searches)
     return {'estimated_credits':cost,'components':[
@@ -718,7 +724,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if c.status!='DRAFT': raise ValueError('Only draft campaigns can be crawled manually')
         preview=_manual_preflight(db,p,c)
         if action=='campaignManualPreflight': return preview
-        if not preview['can_run']: raise ValueError('Estimated crawl exceeds the 5-credit manual limit')
+        if not preview['can_run']: raise ValueError(preview.get('blocked_reason') or 'Estimated crawl exceeds the 5-credit manual limit')
         if (data or {}).get('confirm_cost') is not True: raise ValueError('Explicit credit confirmation required')
         if int((data or {}).get('confirmed_credits',-1))!=preview['estimated_credits']:
             raise ValueError('Credit estimate changed; request a new preview')
@@ -931,7 +937,14 @@ def campaign_action(db:Session,p,action,data,id=None):
                  'language':values['language'],
                  'date_from':values['date_from'],'date_to':values['date_to'],
                  'province':values['province'],'regency_city':values['regency_city']}
+        if filters['platforms']==['search_everywhere']:
+            return {'estimated_credits':20,'components':[{'endpoint':'/v1/search/everywhere','credits':20,'label':'Search Everywhere · one query across supported sources'}],
+                    'billing_warning':'20 credits per API call, not per platform. Multiple keywords in one query are not yet verified; paid execution is disabled.',
+                    'paid_run_enabled':False,'approval_required':True,'retrieval_mode':'SEARCH_EVERYWHERE_PREVIEW'}
         estimate=estimate_search_cost(filters)
+        estimate['estimated_credits']*=len(json.loads(values['primary_keywords_json']))
+        estimate['components']=[{'label':keyword+' · '+part['label'],'credits':part['credits'],'endpoint':part['endpoint']}
+              for keyword in json.loads(values['primary_keywords_json']) for part in estimate['components']]
         return {'estimated_credits':estimate['estimated_credits'],
                 'components':estimate['components'],
                 'billing_warning':'Estimate only. Actual provider credits may vary.',

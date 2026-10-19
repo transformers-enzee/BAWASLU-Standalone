@@ -194,3 +194,16 @@ test('location and candidate filters compose with potential violation selection'
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
+
+
+test('location selection distinguishes country, province and unlocated records',async({page})=>{
+ const paidCalls=await setup(page);
+ const location=page.getByLabel('Select location');
+ await expect(location.locator('optgroup[label="Province (AI-extracted)"]')).toHaveCount(1);
+ await expect(location.locator('option[value="__unlocated__"]')).toHaveCount(1);
+ await location.selectOption('__unlocated__');
+ await expect(page.getByText('Posts · 2 results')).toBeVisible();
+ await location.selectOption('');
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ expect(paidCalls()).toBe(0);
+});

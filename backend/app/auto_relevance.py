@@ -6,6 +6,7 @@ import threading
 from sqlalchemy import update
 from datetime import datetime, timedelta
 import httpx
+from .geography import province_code_for, province_name_for, regency_code_for, regency_name_for, REGENCY_BY_CODE
 from .db import SessionLocal
 from .issue_signals import active_issue_taxonomy, validated_issue_signals
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
@@ -23,11 +24,34 @@ def _arr(value):
     except (TypeError,ValueError): return []
 
 RELEVANCE_SCREENING_INSTRUCTIONS = """You are a neutral, evidence-grounded Indonesian election monitoring screener.
-Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings), candidates (array of short strings), issue_category_ids (array of integer IDs), potential_violation_signals (array of objects each containing category_id integer and evidence_quote string from the provided source text).
+Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings or objects with explicit province and optional regency_city fields; do not infer geography), candidates (array of short strings), issue_category_ids (array of integer IDs), potential_violation_signals (array of objects each containing category_id integer and evidence_quote string from the provided source text).
 FIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
 SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. Category association does not imply a violation. Only propose a potential_violation_signals entry when a concrete concern is supported by a verbatim source excerpt; ordinary campaigning or political opinion alone never qualifies. No issue signal is a legal finding.
 If captions are vague, hashtags-only, or linked article/video substance is not in the supplied text, use UNCERTAIN rather than confidently excluding a plausibly relevant Indonesian election post. Do not invent linked material, location, people, allegations, or corroboration.
 Explanations must separate what was actually observed from what remains unknown. Be politically neutral and do not infer misconduct from criticism or candidate mentions."""
+def structured_location_signals(values):
+    """Preserve AI locations; only structure officially recognized provinces."""
+    result=[]
+    for raw in (values if isinstance(values,list) else [])[:12]:
+        if isinstance(raw,str):
+            name=raw.strip()[:160]
+            if not name:continue
+            code=province_code_for(name)
+            result.append({'name':name,'province':province_name_for(code)} if code else name)
+        elif isinstance(raw,dict):
+            province=str(raw.get('province') or '').strip()[:160]
+            regency=str(raw.get('regency_city') or '').strip()[:160]
+            code=province_code_for(province)
+            if not code:continue
+            name=province_name_for(code)
+            area={'name':name,'province':name}
+            if regency:
+                rcode=regency_code_for(regency,code)
+                if rcode and str(REGENCY_BY_CODE.get(rcode,{}).get('province_code'))==code:
+                    area['regency_city']=regency_name_for(rcode)
+            result.append(area)
+    return result
+
 VALID_RELEVANCE={'RELEVANT','IRRELEVANT','UNCERTAIN'}
 def normalize_relevance_label(output):
     """Reject missing or unsupported labels without treating them as reviewed."""
@@ -212,7 +236,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
                 record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=1,
                     model_version=model,relevance_label=label,relevance_confidence=confidence,
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),
-                    geographic_signals_json=json.dumps(strings('locations')),
+                    geographic_signals_json=json.dumps(structured_location_signals(out.get('locations'))),
                     potential_issue_signals_json=json.dumps(signals))
                 db.add(record)
                 if job:job.state='COMPLETED';job.last_error='';job.updated_at=datetime.utcnow()

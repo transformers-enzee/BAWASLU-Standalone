@@ -188,8 +188,13 @@ test('Campaign keyword tags support Enter, deduplication, removal and preserved 
   await expect(dialog.getByText('money politics',{exact:true})).toBeVisible();
   await main.fill('MONEY POLITICS');await main.press('Enter');
   await expect(dialog.getByRole('button',{name:'Remove money politics from Main keywords'})).toHaveCount(1);
-  await secondary.fill('election oversight');await dialog.getByRole('button',{name:'Add'}).last().click();
+  await secondary.fill('election oversight');await secondary.locator('..').getByRole('button',{name:'Add'}).click();
   await expect(dialog.getByText('election oversight',{exact:true})).toBeVisible();
+  const excluded=dialog.getByRole('textbox',{name:'Excluded keywords'});
+  await excluded.fill('irrelevant');await excluded.press('Enter');
+  await expect(dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'})).toHaveCount(1);
+  await dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'}).click();
+  await expect(dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'})).toHaveCount(0);
   await dialog.getByRole('button',{name:'Remove money politics from Main keywords'}).click();
   await expect(dialog.getByText('money politics',{exact:true})).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();

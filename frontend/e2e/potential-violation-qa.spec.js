@@ -186,36 +186,17 @@ test('authorized officer can save a review and see the updated status without re
 
 test('location and candidate filters compose with potential violation selection',async({page})=>{
  const paidCalls=await setup(page);
+ await page.getByLabel('Jurisdiction').selectOption('province');
  await page.getByLabel('Select location').selectOption('DKI Jakarta');
  await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await page.getByLabel('Select candidate').selectOption({index:0});
- await page.getByLabel('Select location').selectOption('');
+ await page.getByLabel('Jurisdiction').selectOption('national');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
 
-test('location selection distinguishes country, province and unlocated records',async({page})=>{
- const paidCalls=await setup(page);
- const location=page.getByLabel('Select location');
- await expect(location.locator('optgroup[label="Province (AI-extracted)"]')).toHaveCount(1);
- await expect(location.locator('option[value="__unlocated__"]')).toHaveCount(1);
- await location.selectOption('__unlocated__');
- await expect(page.getByText('Posts · 2 results')).toBeVisible();
- await location.selectOption('');
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
- expect(paidCalls()).toBe(0);
-});
-
-
-test('location coverage reconciles the selected relevant post count',async({page})=>{
- const paidCalls=await setup(page);
- await expect(page.getByRole('note',{name:'Location coverage'})).toContainText('1 with extracted location · 2 without location · 3 posts total');
- await page.getByLabel('Select location').selectOption('__unlocated__');
- await expect(page.getByRole('note',{name:'Location coverage'})).toContainText('0 with extracted location · 2 without location · 2 posts total');
- expect(paidCalls()).toBe(0);
-});
 
 
 test('candidate filter retains posts with no extracted candidate',async({page})=>{
@@ -226,5 +207,19 @@ test('candidate filter retains posts with no extracted candidate',async({page})=
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
  await selector.selectOption('');
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ expect(paidCalls()).toBe(0);
+});
+
+
+test('nationwide jurisdiction retains unlocated posts and province narrows only supported signals',async({page})=>{
+ const paidCalls=await setup(page);
+ const jurisdiction=page.getByLabel('Jurisdiction');
+ await expect(jurisdiction).toHaveValue('national');
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await jurisdiction.selectOption('unresolved');
+ await expect(page.getByText('Posts · 2 results')).toBeVisible();
+ await jurisdiction.selectOption('province');
+ await page.getByLabel('Select location').selectOption('DKI Jakarta');
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });

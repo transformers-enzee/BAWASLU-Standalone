@@ -84,7 +84,7 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
- const [chosenLocation,setChosenLocation]=useState(''),[chosenCandidate,setChosenCandidate]=useState('');
+ const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenCandidate,setChosenCandidate]=useState('');
  const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
  const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
@@ -98,13 +98,14 @@ function SocialEvidenceInbox(){
  const uncategorizedCandidateCount=useMemo(()=>findings.filter(x=>candidatesFor(x).length===0).length,[findings]);
  const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
  const filtered=useMemo(()=>findings.filter(x=>{
-  if(chosenLocation==='__unlocated__'&&locationsFor(x).length>0)return false;
-  if(chosenLocation&&chosenLocation!=='__unlocated__'&&!locationsFor(x).includes(chosenLocation))return false;
+  if(jurisdiction==='unresolved'&&locationsFor(x).length>0)return false;
+  if(jurisdiction==='province'&&chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
+  if(jurisdiction==='other'&&chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
   if(chosenCandidate==='__no_candidate__'&&candidatesFor(x).length>0)return false;
   if(chosenCandidate&&chosenCandidate!=='__no_candidate__'&&!candidatesFor(x).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.potential_issues||[]).length)return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term,chosenLocation,chosenCandidate]);
+ }),[findings,view,term,jurisdiction,chosenLocation,chosenCandidate]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['location','Location'],['candidate','Candidate'],['violation','Potential Violation']];
@@ -121,10 +122,12 @@ function SocialEvidenceInbox(){
   <div className="intel-card p-3 space-y-2" aria-label="Find and filter intelligence">
    <div className="flex flex-wrap gap-1.5">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'rounded-full bg-[#176e8e] text-white px-3 py-1.5 text-xs font-semibold':'rounded-full bg-slate-100 text-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label}</button>)}</div>
    <div className="flex flex-wrap gap-2"><input className="intel-input flex-1 min-w-[190px]" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search posts, candidates, locations or issues" aria-label="Search relevant findings"/>
-    {<select className="intel-input" aria-label="Select location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All locations</option>{groupedLocations.country.length>0&&<optgroup label="Country (AI-extracted)">{groupedLocations.country.map(name=><option key={name} value={name}>{name}</option>)}</optgroup>}{groupedLocations.provinces.length>0&&<optgroup label="Province (AI-extracted)">{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</optgroup>}{groupedLocations.other.length>0&&<optgroup label="Other location signals (unverified)">{groupedLocations.other.map(name=><option key={name} value={name}>{name}</option>)}</optgroup>}{unlocatedCount>0&&<option value="__unlocated__">No location identified ({unlocatedCount})</option>}</select>}
+    <select className="intel-input" aria-label="Jurisdiction" value={jurisdiction} onChange={e=>{setJurisdiction(e.target.value);setChosenLocation('');setSelected(null)}}><option value="national">Indonesia · Nationwide (all relevant posts)</option><option value="province">Province (AI-extracted)</option><option value="other">Other location signals</option><option value="unresolved">Unresolved jurisdiction ({unlocatedCount})</option></select>
+    {jurisdiction==='province'&&<select className="intel-input" aria-label="Select location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All identified provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select>}
+    {jurisdiction==='other'&&<select className="intel-input" aria-label="Select other location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All other extracted locations</option>{groupedLocations.other.map(name=><option key={name} value={name}>{name}</option>)}</select>}
     {<select className="intel-input" aria-label="Select candidate" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}{uncategorizedCandidateCount>0&&<option value="__no_candidate__">No candidate identified ({uncategorizedCandidateCount})</option>}</select>}
    </div>
-   {<p className="text-[11px] text-slate-500">Location choices show only AI-extracted signals. Posts with no location remain in All Relevant and can be viewed under No location identified. Country and province choices are grouped, not inferred from one another. Candidate aliases are grouped, and posts without candidate signals remain in All Relevant.</p>}
+   {<p className="text-[11px] text-slate-500">Nationwide includes all relevant posts, including those with unresolved geography. Province and other locations require explicit AI-extracted evidence; no subnational jurisdiction is inferred. Candidate aliases are grouped, and posts without candidate signals remain in All Relevant.</p>}
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(185px,1fr)] gap-3 items-stretch">

@@ -54,6 +54,7 @@ export default function CampaignPanel({campaignId=null}){
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [singlePreview,setSinglePreview]=useState(null),[singleBusy,setSingleBusy]=useState(false),[singleNotice,setSingleNotice]=useState('');
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
+ const [everywhereQuery,setEverywhereQuery]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
@@ -122,13 +123,13 @@ export default function CampaignPanel({campaignId=null}){
  }
  async function previewManualCrawl(){
   if(!selected)return;setManualBusy(true);setManualPreview(null);setManualNotice('');
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualPreflight',id:selected.id,data:{}});setManualPreview(r.data);setManualDuplicate(false)}
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualPreflight',id:selected.id,data:{everywhere_query:everywhereQuery}});setManualPreview(r.data);setManualDuplicate(false)}
   catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setManualBusy(false)}
  }
  async function executeManualCrawl(){
   if(!selected||!manualPreview?.can_run)return;setManualBusy(true);setManualNotice('');
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate}});
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate,everywhere_query:manualPreview.query,confirmed_query:manualPreview.query}});
    setManualPreview(null);setManualNotice('Completed: '+r.data.result_count+' new results, '+r.data.linked_evidence+' linked campaign evidence. Actual credits: '+r.data.credits_used+'.');
    await refresh();await viewEvidence(selected);
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
@@ -394,9 +395,10 @@ export default function CampaignPanel({campaignId=null}){
    </section>}
    <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
     <h4 className="font-semibold">Manual SocialCrawl collection</h4>
-    <p className="text-xs text-slate-600">Manual runs only. Native search limit: 5 estimated credits per run. Search Everywhere: 20 credits per query (preview only, execution disabled). Scheduled crawling remains disabled.</p>
+    <p className="text-xs text-slate-600">Manual runs only. Native search limit: 5 estimated credits per run. Search Everywhere: 20 credits per confirmed query. Scheduled crawling remains disabled.</p>
+    {selected.platforms?.includes('search_everywhere')&&<label className="block text-sm">Search Everywhere query (one request, 20 credits)<input className="intel-input mt-1 w-full" value={everywhereQuery} maxLength={512} placeholder={selected.primary_keywords?.length===1?selected.primary_keywords[0]:'Enter the exact topic query for all keywords'} onChange={e=>{setEverywhereQuery(e.target.value);setManualPreview(null)}}/><span className="text-xs text-slate-500">A single query does not guarantee every keyword is covered. Review this text before authorizing payment.</span></label>}
     <button type="button" className="intel-ghost" disabled={manualBusy||selected.status!=='DRAFT'} onClick={previewManualCrawl}>Check manual crawl cost (free)</button>
-    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">{manualPreview.retrieval_mode==='SEARCH_EVERYWHERE_PREVIEW'?'Search Everywhere uses a single cross-platform query. Multi-keyword interpretation has not yet been verified.':`Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. ${manualPreview.keyword_searches?.length||0} searches planned.`}</p>
+    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">{manualPreview.retrieval_mode==='SEARCH_EVERYWHERE_PREVIEW'?'One Search Everywhere request for: '+manualPreview.query+'. Multi-keyword coverage is not guaranteed.':`Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. ${manualPreview.keyword_searches?.length||0} searches planned.`}</p>
       {(manualPreview.components||[]).map((x,i)=><p key={i} className="text-xs">{x.label}: {x.credits} credits</p>)}
       {manualPreview.duplicate_recent&&<label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={manualDuplicate} onChange={e=>setManualDuplicate(e.target.checked)}/> I understand this repeats a recent search</label>}
       <button type="button" className="intel-button" disabled={manualBusy||!manualPreview.can_run||(manualPreview.duplicate_recent&&!manualDuplicate)} onClick={executeManualCrawl}>Confirm and run paid crawl ({manualPreview.estimated_credits} estimated credits)</button>

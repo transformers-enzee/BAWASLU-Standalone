@@ -523,8 +523,9 @@ def ensure_result_id_sequence_ready(db):
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_scope_filters(p,filters)
-    if f.get('platforms')==['search_everywhere']:
-        raise ValueError('Search Everywhere collection remains disabled pending validated multi-keyword query handling and result mapping. Preview only; no credits charged.')
+    everywhere=f.get('platforms')==['search_everywhere']
+    if everywhere and (not str(f.get('query') or '').strip() or len(str(f['query']))>512):
+        raise ValueError('Search Everywhere query must be 1–512 characters')
     estimate=estimate_search_cost(f)
     if provider_client is None and estimate['estimated_credits']>0 and confirmed_cost:
         ensure_result_id_sequence_ready(db)
@@ -533,8 +534,9 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
     run=SocialListeningRun(rule_id=rule_id,query_json=_json(f),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
     wants_news='online_news' in selected
-    social_sources=[x for x in selected if x!='online_news']
+    social_sources=[x for x in selected if x!='online_news' and x!='search_everywhere']
     endpoint='/v1/search/multi + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/multi'
+    if everywhere: endpoint='/v1/search/everywhere'
     try:
         if provider_client:
             envelope=provider_client(f)
@@ -556,6 +558,8 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                         if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
                         raise ValueError(f'SocialCrawl request failed: {detail}')
                     return env
+            if everywhere:
+                envelopes.append(call_provider('/v1/search/everywhere',_provider_params(f)))
             if social_sources:
                 sf=dict(f); sf['platforms']=social_sources
                 envelopes.append(call_provider('/v1/search/multi',_multi_provider_params(sf)))
@@ -592,7 +596,14 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0,'sample_item_keys':sample_keys,'sample_nested_keys':nested_keys}
         default_platform='online_news' if wants_news and not social_sources else ''
         for raw in items:
-            if len(mapped) >= f['limit']: break
+            if not everywhere and len(mapped) >= f['limit']: break
+            if everywhere and isinstance(raw,dict):
+                origins=raw.get('source_items')
+                origin=origins[0] if isinstance(origins,list) and origins and isinstance(origins[0],dict) else {}
+                if origin:
+                    raw={**raw,'platform':origin.get('platform') or origin.get('source') or raw.get('platform') or 'unknown',
+                         'url':origin.get('url') or origin.get('canonical_url') or raw.get('url'),
+                         'published_at':origin.get('date') or origin.get('published_at') or raw.get('published_at')}
             m=_map_result(db,raw,default_platform=default_platform)
             if not (m.get('text_content') or m.get('canonical_url') or m.get('author_name')):
                 diagnostics['empty_items']+=1

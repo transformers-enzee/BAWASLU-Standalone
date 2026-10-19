@@ -173,13 +173,18 @@ def _keyword_search_plan(db,p,c):
                          'components':pre['components'],'duplicate_recent':pre.get('duplicate_recent')})
     return searches
 
-def _manual_preflight(db,p,c):
+def _manual_preflight(db,p,c,everywhere_query=''):
     if json.loads(c.platforms_json or '[]')==['search_everywhere']:
+        query=str(everywhere_query or '').strip()
+        primary=json.loads(c.primary_keywords_json or '[]')
+        query=query or (primary[0] if len(primary)==1 else '')
+        query_valid=bool(query and len(query)<=512)
         return {'estimated_credits':20,'components':[{'label':'Search Everywhere: one cross-platform query (not 20 per platform)','credits':20}],
                 'duplicate_recent':None,'keyword_searches':[],
-                'credit_limit':20,'can_run':False,'manual_only':True,'paid_provider_called':False,
+                'credit_limit':20,'can_run':query_valid,'manual_only':True,'paid_provider_called':False,'query':query,
                 'retrieval_mode':'SEARCH_EVERYWHERE_PREVIEW',
-                'blocked_reason':'Search Everywhere execution is disabled pending verified multi-keyword query semantics and result mapping. No credits will be charged.'}
+                'blocked_reason':None if query_valid else 'Enter one explicit Search Everywhere query (1–512 characters). Multiple keywords are not automatically combined.',
+                'query_warning':'One provider query, not guaranteed to retrieve every campaign keyword or every social post.'}
     searches=_keyword_search_plan(db,p,c)
     cost=sum(s['credits'] for s in searches)
     return {'estimated_credits':cost,'components':[
@@ -722,7 +727,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can run collection')
         if c.status!='DRAFT': raise ValueError('Only draft campaigns can be crawled manually')
-        preview=_manual_preflight(db,p,c)
+        selected_everywhere=json.loads(c.platforms_json or '[]')==['search_everywhere']
+        preview=_manual_preflight(db,p,c,(data or {}).get('everywhere_query',''))
         if action=='campaignManualPreflight': return preview
         if not preview['can_run']: raise ValueError(preview.get('blocked_reason') or 'Estimated crawl exceeds the 5-credit manual limit')
         if (data or {}).get('confirm_cost') is not True: raise ValueError('Explicit credit confirmation required')
@@ -730,10 +736,15 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Credit estimate changed; request a new preview')
         if preview['duplicate_recent'] and (data or {}).get('acknowledge_duplicate') is not True:
             raise ValueError('Recent duplicate search requires acknowledgement')
+        if selected_everywhere and str((data or {}).get('confirmed_query') or '').strip()!=preview['query']:
+            raise ValueError('Search query changed; review the 20-credit preview again')
         runs=[]; linked=0; new_results=0; credits_used=0
         # Independent searches ensure each main keyword can retrieve content.
         # Existing fingerprints and CampaignEvidence uniqueness deduplicate overlap.
-        for search in _keyword_search_plan(db,p,c):
+        searches=([{'filters':{**__import__('app.campaign_scheduler',fromlist=['campaign_query']).campaign_query(c),
+                              'platforms':['search_everywhere'],'query':preview['query']}}]
+                  if selected_everywhere else _keyword_search_plan(db,p,c))
+        for search in searches:
             response=execute_search(db,p,search['filters'],confirmed_cost=True)
             run_id=int(response['run']['id'])
             runs.append(response['run'])
@@ -757,7 +768,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'runs':{'new':len(runs)},'linked_evidence':{'new':linked}})
         return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
                 'credits_used':credits_used,'manual_only':True,'estimated_credits':preview['estimated_credits'],
-                'retrieval_mode':'PER_KEYWORD_OR'}
+                'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else 'PER_KEYWORD_OR'}
     if action=='campaignSentimentBatchPreview':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')

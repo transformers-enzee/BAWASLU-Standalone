@@ -376,6 +376,16 @@ class EvidenceAssessment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__=(UniqueConstraint('campaign_id','result_id','assessment_version',name='uq_evidence_assessment_version'),)
 
+class AssessmentSignalDiagnostic(Base):
+    """Non-sensitive AI candidate and validation counts, never raw model output."""
+    __tablename__='assessment_signal_diagnostics'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_id: Mapped[int] = mapped_column(ForeignKey('evidence_assessments.id'), unique=True, index=True)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    accepted_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_reasons_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 class EvidenceReview(Base):
     __tablename__='evidence_reviews'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

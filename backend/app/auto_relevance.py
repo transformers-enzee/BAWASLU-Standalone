@@ -223,6 +223,10 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                     return [str(x)[:160] for x in v[:12] if isinstance(x,str)] if isinstance(v,list) else []
                 issue_ids=out.get('issue_category_ids',[])
                 issue_ids=[x for x in issue_ids if type(x) is int and x in category_names] if isinstance(issue_ids,list) else []
+                raw_issue_signals=out.get('potential_violation_signals',[])
+                from .issue_signals import actor_signal_diagnostic
+                from .models import AssessmentSignalDiagnostic
+                diag=actor_signal_diagnostic(raw_issue_signals,category_names,item.text_content)
                 signals=[{'category_id':signal['category_id'],
                           'explanation':signal['explanation'] or 'Source allegation requires human verification',
                           'evidence_quote':signal['evidence_quote'],
@@ -241,6 +245,10 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                     geographic_signals_json=json.dumps(structured_location_signals(out.get('locations'))),
                     potential_issue_signals_json=json.dumps(signals))
                 db.add(record)
+                db.flush()
+                db.add(AssessmentSignalDiagnostic(assessment_id=record.id,
+                    candidate_count=diag['candidate_count'],accepted_count=diag['accepted_count'],
+                    rejected_reasons_json=json.dumps(diag['rejected_reasons'])))
                 if job:job.state='COMPLETED';job.last_error='';job.updated_at=datetime.utcnow()
                 db.commit()
             except Exception as exc:

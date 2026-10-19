@@ -98,3 +98,23 @@ def validated_actor_issue_signals(raw_signals, active_categories, source_text):
             confirmed.append({**signal,'alleged_actor':actor,'alleged_activity':activity,
                               'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'})
     return confirmed
+
+def actor_signal_diagnostic(raw_signals, active_categories, source_text):
+    """Counts only; no raw source, identities, quotations, or model text stored."""
+    candidates=raw_signals if isinstance(raw_signals,list) else []
+    reasons={}
+    for raw in candidates[:8]:
+        if not isinstance(raw,dict):
+            reason='malformed'
+        elif type(raw.get('category_id')) is not int or raw['category_id'] not in active_categories:
+            reason='inactive_or_unknown_category'
+        elif not str(raw.get('alleged_actor') or '').strip() or not str(raw.get('alleged_activity') or '').strip():
+            reason='missing_actor_or_activity'
+        elif not str(raw.get('evidence_quote') or '').strip() or str(raw['evidence_quote']).casefold() not in str(source_text or '').casefold():
+            reason='quote_missing_from_source'
+        elif not validated_actor_issue_signals([raw],active_categories,source_text):
+            reason='actor_attribution_or_allegation_gate'
+        else:
+            continue
+        reasons[reason]=reasons.get(reason,0)+1
+    return {'candidate_count':min(len(candidates),8),'accepted_count':len(validated_actor_issue_signals(candidates,active_categories,source_text)),'rejected_reasons':reasons}

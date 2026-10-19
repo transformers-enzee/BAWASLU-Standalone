@@ -93,8 +93,8 @@ function SocialEvidenceInbox(){
  const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
  const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
  const filtered=useMemo(()=>findings.filter(x=>{
-  if(view==='location'&&chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
-  if(view==='candidate'&&chosenCandidate&&!candidatesFor(x).includes(chosenCandidate))return false;
+  if(chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
+  if(chosenCandidate&&!candidatesFor(x).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.potential_issues||[]).length)return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
  }),[findings,view,term,chosenLocation,chosenCandidate]);
@@ -113,10 +113,10 @@ function SocialEvidenceInbox(){
   <div className="intel-card p-3 space-y-2" aria-label="Find and filter intelligence">
    <div className="flex flex-wrap gap-1.5">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'rounded-full bg-[#176e8e] text-white px-3 py-1.5 text-xs font-semibold':'rounded-full bg-slate-100 text-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label}</button>)}</div>
    <div className="flex flex-wrap gap-2"><input className="intel-input flex-1 min-w-[190px]" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search posts, candidates, locations or issues" aria-label="Search relevant findings"/>
-    {view==='location'&&<select className="intel-input" aria-label="Select location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All locations</option>{locations.map(name=><option key={name} value={name}>{name}</option>)}</select>}
-    {view==='candidate'&&<select className="intel-input" aria-label="Select candidate" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select>}
+    {<select className="intel-input" aria-label="Select location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All locations</option>{locations.map(name=><option key={name} value={name}>{name}</option>)}</select>}
+    {<select className="intel-input" aria-label="Select candidate" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select>}
    </div>
-   {(view==='location'||view==='candidate')&&<p className="text-[11px] text-slate-500">AI-extracted entities and locations are unverified signals, not authoritative assignments.</p>}
+   {<p className="text-[11px] text-slate-500">AI-extracted entities and locations are unverified signals, not authoritative assignments.</p>}
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(185px,1fr)] gap-3 items-stretch">

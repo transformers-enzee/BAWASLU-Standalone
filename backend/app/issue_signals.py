@@ -26,7 +26,7 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
                        'explanation':str(signal.get('explanation') or '')[:400],
                        'evidence_quote':quote[:350],
                        'signal_provenance':'LEGACY_MISSING_TYPE' if 'signal_type' not in signal else 'EXPLICIT_TYPE',
-                       'requires_human_verification':True})
+                       'requires_human_verification':True,**({'alleged_actor':str(signal.get('alleged_actor'))[:160], 'alleged_activity':str(signal.get('alleged_activity'))[:160], 'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'} if signal.get('alleged_actor') and signal.get('alleged_activity') else {})})
     return result
 
 def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
@@ -63,3 +63,27 @@ def rejected_issue_type_summary(raw_signals, active_categories, source_text):
         key=key.replace('<','').replace('>','')
         summary[key]=summary.get(key,0)+1
     return summary
+
+
+def validated_actor_issue_signals(raw_signals, active_categories, source_text):
+    """Conservative actor-specific AI triage; never establishes guilt.
+
+    Both named alleged actor and activity must appear in the cited source excerpt.
+    Legacy category-only flags are intentionally not promoted to actor findings.
+    """
+    confirmed=[]
+    for raw in (raw_signals if isinstance(raw_signals,list) else [])[:8]:
+        if not isinstance(raw,dict):continue
+        actor=str(raw.get('alleged_actor') or '').strip()[:160]
+        activity=str(raw.get('alleged_activity') or '').strip()[:160]
+        quote=str(raw.get('evidence_quote') or '').strip()
+        if not actor or not activity or len(actor)<3 or len(activity)<4:
+            continue
+        if actor.casefold() not in quote.casefold():
+            continue
+        if activity.casefold() not in quote.casefold():
+            continue
+        for signal in validated_issue_signals([raw],active_categories,source_text):
+            confirmed.append({**signal,'alleged_actor':actor,'alleged_activity':activity,
+                              'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'})
+    return confirmed

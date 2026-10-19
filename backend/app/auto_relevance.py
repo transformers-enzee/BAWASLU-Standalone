@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import httpx
 from .geography import province_code_for, regency_code_for, REGENCY_BY_CODE
 from .db import SessionLocal
-from .issue_signals import active_issue_taxonomy, validated_issue_signals
+from .issue_signals import active_issue_taxonomy, validated_issue_signals, validated_actor_issue_signals
 from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
 
 log=logging.getLogger(__name__)
@@ -24,9 +24,9 @@ def _arr(value):
     except (TypeError,ValueError): return []
 
 RELEVANCE_SCREENING_INSTRUCTIONS = """You are a neutral, evidence-grounded Indonesian election monitoring screener.
-Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings or objects with explicit province and optional regency_city fields; do not infer geography), candidates (array of short strings), issue_category_ids (array of integer IDs), potential_violation_signals (array of objects each containing category_id integer and evidence_quote string from the provided source text).
+Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings or objects with explicit province and optional regency_city fields; do not infer geography), candidates (array of short strings), issue_category_ids (array of integer IDs), potential_violation_signals (array of objects each containing category_id integer, alleged_actor, alleged_activity, and verbatim evidence_quote from source text explicitly naming that actor and describing that activity).
 FIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
-SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. Category association does not imply a violation. Only propose a potential_violation_signals entry when a concrete concern is supported by a verbatim source excerpt; ordinary campaigning or political opinion alone never qualifies. No issue signal is a legal finding.
+SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. No flagged category does NOT make a post irrelevant. Category association does not imply a violation. Only propose a potential_violation_signals entry when the source excerpt directly alleges a particular identifiable actor performed a specific potentially improper activity. The alleged_actor and alleged_activity must both be present verbatim within the supporting quote. The post author is not the alleged actor unless the post explicitly says so. Do not label people as guilty. Never infer attribution from hashtags, mere name mentions, criticism, or adjacency. Do not flag general campaign discussion. Only propose an entry when a concrete concern is supported by a verbatim source excerpt; ordinary campaigning or political opinion alone never qualifies. No issue signal is a legal finding.
 If captions are vague, hashtags-only, or linked article/video substance is not in the supplied text, use UNCERTAIN rather than confidently excluding a plausibly relevant Indonesian election post. Do not invent linked material, location, people, allegations, or corroboration.
 Explanations must separate what was actually observed from what remains unknown. Be politically neutral and do not infer misconduct from criticism or candidate mentions."""
 def structured_location_signals(values):
@@ -223,13 +223,14 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
                 issue_ids=out.get('issue_category_ids',[])
                 issue_ids=[x for x in issue_ids if type(x) is int and x in category_names] if isinstance(issue_ids,list) else []
                 signals=[{'category_id':signal['category_id'],
-                          'explanation':signal['explanation'] or 'Preliminary AI concern based on source excerpt',
-                          'evidence_quote':signal['evidence_quote'],'signal_type':'POTENTIAL_VIOLATION'}
-                         for signal in validated_issue_signals(
-                             [{'category_id':x.get('category_id'),
-                               'evidence_quote':x.get('evidence_quote'),
-                               'signal_type':'POTENTIAL_VIOLATION',
-                               'explanation':'Preliminary AI concern based on source excerpt'}
+                          'explanation':signal['explanation'] or 'Source allegation requires human verification',
+                          'evidence_quote':signal['evidence_quote'],
+                          'signal_type':'POTENTIAL_VIOLATION',
+                          'alleged_actor':signal['alleged_actor'],
+                          'alleged_activity':signal['alleged_activity'],
+                          'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'}
+                         for signal in validated_actor_issue_signals(
+                             [{**x,'signal_type':'POTENTIAL_VIOLATION'}
                               for x in out.get('potential_violation_signals',[])[:8] if isinstance(x,dict)]
                              if isinstance(out.get('potential_violation_signals'),list) else [],
                              category_names,item.text_content)]

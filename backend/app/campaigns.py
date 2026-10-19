@@ -296,6 +296,51 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not preview['ai_key_configured']:raise ValueError('AI key is not configured')
         if not maximum:raise ValueError('No pending AI assessments or processing limit is zero')
         return {**preview,'assessment_job_accepted':True}
+    if action=='campaignManualFlag':
+        from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult, IssueCategory
+        from .socialcrawl import _result_in_scope
+        payload=data or {}
+        campaign_id=str(id or payload.get('campaign_id') or '')
+        result_id=str(payload.get('result_id') or '')
+        category_id=str(payload.get('category_id') or '')
+        if not (campaign_id.isdigit() and result_id.isdigit() and category_id.isdigit()):
+            raise ValueError('Select campaign, evidence and issue category')
+        campaign=db.get(MonitoringCampaign,int(campaign_id))
+        if not campaign or not allowed(p,campaign) or not has(p,'human_validation'):
+            raise PermissionError('Human review permission and campaign access required')
+        link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(result_id)).first()
+        item=db.get(SocialListeningResult,int(result_id))
+        if not link or not item or not _result_in_scope(db,p,item):
+            raise ValueError('Evidence unavailable')
+        assessment=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=item.id)
+                    .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+        if not assessment or assessment.relevance_label.upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+            raise ValueError('Relevant AI-assessed evidence required')
+        if str(payload.get('assessment_version') or '')!=str(assessment.assessment_version):
+            raise ValueError('Assessment changed; refresh before flagging')
+        category=db.get(IssueCategory,int(category_id))
+        if not category or not category.active:
+            raise ValueError('Active issue category required')
+        rationale=str(payload.get('rationale') or '').strip()
+        if not 10<=len(rationale)<=1500:
+            raise ValueError('Rationale must contain 10 to 1500 characters')
+        latest=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
+                .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+        if latest and latest.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION'):
+            raise ValueError('Existing active flag must be reviewed before flagging again')
+        review=EvidenceReview(assessment_id=assessment.id,reviewer_id=str(p['id']),
+                              decision='FURTHER_INVESTIGATION',
+                              rationale='[Manual flag: '+category.name+'] '+rationale)
+        db.add(review);db.flush()
+        review_id=review.id
+        db.commit()
+        audit(db,p,'EvidenceReview',review_id,'MANUAL_POTENTIAL_FLAG',
+              {'campaign_id':campaign.id,'result_id':item.id,'assessment_id':assessment.id,
+               'assessment_version':assessment.assessment_version,'category_id':category.id,
+               'category_name':category.name,'decision':'FURTHER_INVESTIGATION',
+               'source':'HUMAN','legal_finding':False})
+        return {'saved':True,'review_id':str(review_id),'decision':'FURTHER_INVESTIGATION',
+                'paid_provider_called':False}
     if action=='campaignFlagReview':
         from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult
         from .socialcrawl import _result_in_scope
@@ -498,14 +543,14 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'author_name':item.author_name,'published_at':item.published_at,
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
-                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
+                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,
                     'flag_review_status':latest_review.decision if latest_review else None,
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,
                     'flag_review_history':review_history,
-                    'can_review_flag':has(p,'human_validation')})
+                    'can_review_flag':has(p,'human_validation'),'active_issue_categories':active_categories})
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
-                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

@@ -9,10 +9,11 @@ function SocialEvidenceInbox(){
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const watchBaseline=useRef(null);
+ const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
- .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
+ .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setIssueCategories(r.data.issue_categories||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
  .catch(e=>{if(active)setError(e.response?.data?.detail||e.message||'Inbox unavailable')})
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
@@ -52,6 +53,21 @@ function SocialEvidenceInbox(){
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?{...item,flag_review_status:reviewDecision}:item));
    setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
+  finally{setReviewBusy(false)}
+ }
+ async function submitManualFlag(){
+  if(!selected||!manualCategory||manualRationale.trim().length<10||reviewBusy)return;
+  if(!window.confirm('Create a human-origin preliminary flag requiring further investigation?'))return;
+  setReviewBusy(true);setReviewError('');setReviewNotice('');
+  try{
+   await base44.functions.invoke('socialListening',{action:'campaignManualFlag',id:selected.campaign_id,
+     data:{result_id:selected.id,assessment_version:selected.assessment_version,category_id:manualCategory,rationale:manualRationale.trim()}});
+   const updated={...selected,flag_review_status:'FURTHER_INVESTIGATION',is_flagged:true};
+   setSelected(updated);
+   setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
+   setManualCategory('');setManualRationale('');
+   setReviewNotice('Human-origin preliminary flag saved for further investigation; AI evidence unchanged.');
+  }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save manual flag')}
   finally{setReviewBusy(false)}
  }
  async function previewBacklog(){
@@ -107,7 +123,7 @@ function SocialEvidenceInbox(){
   if(jurisdiction==='other'&&chosenLocation&&!locationsFor(x).includes(chosenLocation))return false;
   if(chosenCandidate==='__no_candidate__'&&candidatesFor(x).length>0)return false;
   if(chosenCandidate&&chosenCandidate!=='__no_candidate__'&&!candidatesFor(x).includes(chosenCandidate))return false;
-  if(view==='violation'&&!(x.potential_issues||[]).length)return false;
+  if(view==='violation'&&!(x.is_flagged??((x.potential_issues||[]).length>0)))return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
  }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
@@ -119,7 +135,7 @@ function SocialEvidenceInbox(){
   </div>
   <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_3fr] gap-2">
    <div className="intel-card p-3"><p className="text-xs text-slate-500">Posts shown</p><p className="text-2xl font-semibold tabular-nums">{filtered.length}</p></div>
-   <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>(x.potential_issues||[]).length>0).length}</p></div>
+   <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</p></div>
    <div className="intel-card col-span-2 md:col-span-1 p-3"><p className="text-xs font-semibold">AI assessment summary</p><p className="mt-1 text-xs text-slate-600 line-clamp-2">{filtered.length===0?'No assessed findings match this selection.':filtered.filter(x=>(x.potential_issues||[]).length).length+' of '+filtered.length+' viewed findings contain AI-flagged potential issues. These are not confirmed violations.'}</p><p className="text-[10px] text-slate-500 mt-1">Summary of stored assessments, not a new AI request</p></div>
   </div>
   <p className="text-xs text-slate-500" role="note" aria-label="Location coverage">Location coverage for current view: {filtered.filter(x=>locationsFor(x).length>0).length} with extracted location · {filtered.filter(x=>locationsFor(x).length===0).length} without location · {filtered.length} posts total. Locations may overlap across posts and are not confirmed jurisdictions.</p>
@@ -164,6 +180,7 @@ function SocialEvidenceInbox(){
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
      <p className="text-xs">Current status: <strong>{selected.flag_review_status||'Awaiting review'}</strong></p>
      {(selected.flag_review_history||[]).length>0&&<details className="text-xs"><summary className="cursor-pointer font-semibold">Review history ({selected.flag_review_history.length} most recent)</summary><ol className="mt-2 space-y-2">{selected.flag_review_history.map((entry,index)=><li key={index} className="border-l-2 border-slate-200 pl-2"><strong>{entry.decision.replaceAll('_',' ')}</strong> · Assessment v{entry.assessment_version} · {entry.reviewed_at?new Date(entry.reviewed_at).toLocaleString():'Date unavailable'}<p className="text-slate-500">{entry.rationale}</p></li>)}</ol></details>}
+     {selected.can_review_flag&&!(selected.potential_issues||[]).length&&!selected.is_flagged&&<div className="border border-amber-200 rounded-lg p-3 space-y-2"><p className="text-xs font-semibold">Flag this relevant post manually</p><p className="text-xs text-slate-500">Preliminary human concern only — not a legal finding.</p><label htmlFor="manual-issue-category" className="text-xs">Issue category</label><select id="manual-issue-category" className="intel-input w-full" value={manualCategory} onChange={e=>setManualCategory(e.target.value)}><option value="">Select active category</option>{issueCategories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select><label htmlFor="manual-flag-rationale" className="text-xs">Reason (at least 10 characters)</label><textarea id="manual-flag-rationale" className="intel-input w-full" value={manualRationale} onChange={e=>setManualRationale(e.target.value)} maxLength={1500}/><button type="button" className="intel-button" disabled={reviewBusy||!manualCategory||manualRationale.trim().length<10} onClick={submitManualFlag}>Flag for investigation</button></div>}
      {selected.can_review_flag?<><label className="block text-xs font-semibold" htmlFor="flag-review-decision">Decision</label>
       <select id="flag-review-decision" className="intel-input w-full" value={reviewDecision} onChange={e=>setReviewDecision(e.target.value)}><option value="">Select a decision</option><option value="FLAG_CONFIRMED">Confirm preliminary flag</option><option value="FLAG_DISMISSED">Dismiss preliminary flag</option><option value="FURTHER_INVESTIGATION">Request further investigation</option></select>
       <label className="block text-xs font-semibold" htmlFor="flag-review-rationale">Reason for decision (minimum 10 characters)</label>

@@ -21,7 +21,10 @@ test('release navigation exposes every completed administrator module',async({pa
     'Validation','Administration'
   ];
   for(const name of modules){
-    await expect(nav.getByRole('link',{name:new RegExp('^'+name+'
+    await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
+  }
+  await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
+  await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();
 });
 
 test('completed module routes remain authenticated after direct navigation',async({page})=>{

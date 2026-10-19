@@ -238,3 +238,36 @@ test('Inbox shows two primary views while jurisdiction and candidate remain filt
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
+
+
+test('authorized officer sees manual flag form for relevant evidence without AI flags',async({page})=>{
+ const manual={...payload,issue_categories:[{id:7,name:'Politik Uang'}],findings:findings.map((x,i)=>i===1?{...x,can_review_flag:true,is_flagged:false}:x)};
+ await page.goto('/login');
+ await page.getByLabel(/email/i).fill('admin@bawaslu.local');
+ await page.getByLabel(/^password$/i).fill(PASSWORD);
+ await page.getByRole('button',{name:/log in|masuk/i}).click();
+ await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+ let flags=0;
+ await page.route('**/api/functions/socialListening',async route=>{
+  const req=route.request().postDataJSON();
+  if(req.action==='campaignIntelligenceInbox')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(manual)});
+  if(req.action==='campaignManualFlag'){
+   flags++;
+   expect(req.data.result_id).toBe('102');
+   expect(String(req.data.category_id)).toBe('7');
+   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true,decision:'FURTHER_INVESTIGATION',paid_provider_called:false})});
+  }
+  throw new Error('Unexpected provider request: '+req.action);
+ });
+ await page.goto('/inbox');
+ await page.getByRole('button',{name:/View source and assessment/}).nth(1).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer.getByText('Flag this relevant post manually')).toBeVisible();
+ await expect(drawer.getByRole('button',{name:'Save human review'})).toHaveCount(0);
+ await drawer.locator('#manual-issue-category').selectOption('7');
+ await drawer.locator('#manual-flag-rationale').fill('Requires additional source verification');
+ page.once('dialog',dialog=>dialog.accept());
+ await drawer.getByRole('button',{name:'Flag for investigation'}).click();
+ await expect(drawer.getByText(/Human-origin preliminary flag saved/)).toBeVisible();
+ expect(flags).toBe(1);
+});

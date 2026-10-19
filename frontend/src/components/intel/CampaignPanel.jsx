@@ -7,7 +7,7 @@ import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary'
 import KeywordTags from '@/components/intel/KeywordTags';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
-const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:'',platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:180,province:'',regency_city:''};
+const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
 const split=v=>String(v||'').split(',').map(s=>s.trim()).filter(Boolean);
 const presentDate=v=>v?new Date(v).toLocaleString('en-GB'):'Not scheduled';
 const displayStatus=s=>s==='PAUSED'?'Paused':'Draft';
@@ -46,6 +46,7 @@ export default function CampaignPanel({campaignId=null}){
  function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [statusFilter,setStatusFilter]=useState('all');
+ const [trendMetric,setTrendMetric]=useState('posts');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
@@ -59,6 +60,15 @@ export default function CampaignPanel({campaignId=null}){
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
+ }
+ function exportEvidenceCsv(){
+  if(!selected||!evidence.length)return;
+  const fields=['id','platform','content_type','published_at','author_name','text_content','canonical_url','review_state','sentiment'];
+  const escape=v=>'"'+String(v??'').replace(/^[=+@-]/,'\tasync function previewSingle(item,reanalysis=false){').replace(/"/g,'""')+'"';
+  const content=[fields.join(','),...evidence.map(x=>fields.map(k=>escape(x[k])).join(','))].join('\r\n');
+  const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');
+  link.href=url;link.download='bawaslu-campaign-'+selected.id+'-evidence.csv';link.click();URL.revokeObjectURL(url);
  }
  async function previewSingle(item,reanalysis=false){
   if(!selected||singleBusy)return;
@@ -158,7 +168,7 @@ export default function CampaignPanel({campaignId=null}){
   try{
    const r=await base44.functions.invoke('socialListening',{action:'campaignCostPreview',data:{
      ...form,primary_keywords:form.primary_keywords,
-     secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)
+     secondary_keywords:form.secondary_keywords,excluded_keywords:form.excluded_keywords
    }});
    if(requestId===previewRequestId.current)setCreditEstimate(r.data);
   }catch(e){if(requestId===previewRequestId.current)setEstimateError(e.response?.data?.detail||e.response?.data?.error||e.message)}
@@ -180,15 +190,15 @@ export default function CampaignPanel({campaignId=null}){
   resetKeywordPreview();clearEstimate();setForm({name:c.name,description:c.description||'',
    primary_keywords:[...(c.primary_keywords||[])],
    secondary_keywords:[...(c.secondary_keywords||[])],
-   excluded_keywords:(c.excluded_keywords||[]).join(', '),
+   excluded_keywords:[...(c.excluded_keywords||[])],
    platforms:[...(c.platforms||[])],language:c.language||'',date_from:c.date_from||'',date_to:c.date_to||'',
-   interval_minutes:c.interval_minutes||180,province:c.province||'',regency_city:c.regency_city||''});
+   interval_minutes:120,province:c.province||'',regency_city:c.regency_city||''});
   setEditing(c);setCreating(true);setSelected(null);setError('');setNotice('');
  }
  async function save(e){
   e.preventDefault();if(invalidCampaignDates){setError('Start date cannot be after end date. Please correct the campaign dates.');return}setSaving(true);setError('');setNotice('');
   const data={...form,primary_keywords:form.primary_keywords,
-   secondary_keywords:form.secondary_keywords,excluded_keywords:split(form.excluded_keywords)};
+   secondary_keywords:form.secondary_keywords,excluded_keywords:form.excluded_keywords};
   try{
    const action=editing?'updateCampaign':'createCampaign';
    const r=await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
@@ -236,10 +246,7 @@ export default function CampaignPanel({campaignId=null}){
     </select></label>
     <KeywordTags label="Main keywords" required items={form.primary_keywords} onChange={tags=>set('primary_keywords',tags)} />
     <KeywordTags label="Secondary keywords" items={form.secondary_keywords} onChange={tags=>set('secondary_keywords',tags)} />
-    <label className="text-sm">Excluded keywords<input className="intel-input mt-1" value={form.excluded_keywords} onChange={e=>set('excluded_keywords',e.target.value)} placeholder="music, concert"/></label>
-    <label className="text-sm">Monitoring interval<select className="intel-input mt-1" value={form.interval_minutes} onChange={e=>set('interval_minutes',Number(e.target.value))}>
-       <option value={60}>Every hour</option><option value={180}>Every 3 hours</option><option value={360}>Every 6 hours</option><option value={720}>Every 12 hours</option><option value={1440}>Daily</option>
-    </select></label>
+    <KeywordTags label="Excluded keywords" items={form.excluded_keywords} onChange={tags=>set('excluded_keywords',tags)}/>
     <label className="text-sm">Start date<input className="intel-input mt-1" type="date" value={form.date_from} onChange={e=>set('date_from',e.target.value)}/></label>
     <label className="text-sm">End date<input className="intel-input mt-1" type="date" aria-invalid={invalidCampaignDates} value={form.date_to} onChange={e=>set('date_to',e.target.value)}/></label>
     {invalidCampaignDates&&<p role="alert" className="md:col-span-2 text-sm text-red-700">Start date cannot be after end date. Please correct the campaign dates.</p>}
@@ -281,26 +288,17 @@ export default function CampaignPanel({campaignId=null}){
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply date filter'}</button></div>
     <p className="text-xs text-slate-500">Date filtering uses source publication dates. Records without dates are omitted when a date filter is applied.</p>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Posts and comments trend">
-        <h5 className="font-semibold">Posts & comments over time</h5>
-        {dashboard.daily_trend?.length?
-          <div role="img" aria-label="Daily posts and comments line chart" className="h-80 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dashboard.daily_trend} margin={{top:12,right:14,left:-18,bottom:12}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
-                <XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/>
-                <YAxis allowDecimals={false} tick={{fontSize:11}}/>
-                <Tooltip/>
-                <Legend verticalAlign="bottom"/>
-                <Line type="monotone" dataKey="posts" name="Posts" stroke="#285f82" strokeWidth={2.5} dot={false} activeDot={{r:4}} connectNulls/>
-                <Line type="monotone" dataKey="comments" name="Comments" stroke="#bc9b62" strokeWidth={2.5} dot={false} activeDot={{r:4}} connectNulls/>
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-         :<p className="text-xs text-slate-500">No dated evidence in this period</p>}
-        <p className="text-xs text-slate-500">Counts reflect stored posts and comments by publication date.</p>
-      </section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="rounded-lg border p-3"><strong className="text-xl">{Number(value||0).toLocaleString()}</strong><p className="text-xs text-slate-500">{label}</p></div>)}</div><p className="text-xs text-slate-500">Based on stored evidence. Views and engagements may be incomplete when platforms do not supply them.</p></section>
+<section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Campaign trend by platform">
+<h5 className="font-semibold">Social Listening by platform</h5>
+<div className="flex gap-2" role="group" aria-label="Trend metric">{['posts','engagement','views'].map(k=><button key={k} type="button" aria-pressed={trendMetric===k} className={trendMetric===k?'intel-button':'intel-ghost'} onClick={()=>setTrendMetric(k)}>{k==='posts'?'Posts':k==='engagement'?'Engagement':'Views'}</button>)}</div>
+{dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%"><LineChart data={dashboard.daily_platform_trend} margin={{top:12,right:14,left:-18,bottom:12}}>
+<CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
+{Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platform} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={false} connectNulls/>)}
+</LineChart></ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
+<p className="text-xs text-slate-500">Only metrics available in stored provider metadata are counted; missing view or engagement data is not estimated.</p>
+</section>
       <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
  <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={mediaPreviewBusy} onClick={previewMediaCapability}>{mediaPreviewBusy?'Checking media options…':'Check Instagram media options (free)'}</button>
  {mediaPreviewError&&<p className="text-xs text-red-600" role="alert">{mediaPreviewError}</p>}
@@ -316,6 +314,7 @@ export default function CampaignPanel({campaignId=null}){
  {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} possible billable AI calls (max 3). Token costs vary and are not quoted in advance.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm AI batch</button></div>}
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
+ <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export stored posts to CSV (latest 200)</button>
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
  {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
  const valid=/^https:\/\//i.test(item.canonical_url||'');

@@ -79,7 +79,7 @@ def _normalize(db,p,data):
     start=_iso_date(data.get('date_from'),'Start date')
     end=_iso_date(data.get('date_to'),'End date')
     if start and end and start>end: raise ValueError('Start date must be before end date')
-    interval=data.get('interval_minutes',180)
+    interval=120  # Fixed future cadence; paid automatic scheduling remains disabled
     if type(interval) is not int or not 60<=interval<=10080:
         raise ValueError('Monitoring interval must be 60–10080 minutes')
     # Reuse established regional scope validation before persisting.
@@ -728,7 +728,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
-        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter()
+        platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
         visible=0
@@ -754,7 +754,29 @@ def campaign_action(db:Session,p,action,data,id=None):
                 occurrences=lowered.count(keyword.casefold())
                 if occurrences: cloud_terms[keyword]+=occurrences
             if source_day: daily[source_day]+=1
-            platforms[item.platform or 'unknown']+=1
+            platform=item.platform or 'unknown'
+            platforms[platform]+=1
+            if item.author_name:accounts.add((platform,item.author_name.casefold()))
+            try: eng=json.loads(item.engagement_json or '{}')
+            except (ValueError,TypeError):eng={}
+            if not isinstance(eng,dict):eng={}
+            def metric(*keys):
+                for key in keys:
+                    value=eng.get(key)
+                    if isinstance(value,(int,float)) and not isinstance(value,bool) and value>=0:return int(value),True
+                return 0,False
+            likes,has_likes=metric('likes','like_count')
+            comments,has_comments=metric('comments','comment_count')
+            shares,has_shares=metric('shares','share_count')
+            views,has_views=metric('views','view_count','plays','play_count')
+            engagement=likes+comments+shares
+            total_engagement+=engagement;total_views+=views
+            if has_likes or has_comments or has_shares:metrics_available['engagement']+=1
+            if has_views:metrics_available['views']+=1
+            if source_day:
+                bucket=daily_platform.setdefault(source_day,{})
+                for kind,value in (('posts',1),('engagement',engagement),('views',views)):
+                    key=platform+'__'+kind;bucket[key]=bucket.get(key,0)+value
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
@@ -773,6 +795,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
         return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
+                'statistics':{'messages':visible,'engagement':total_engagement,'views':total_views,
+                    'accounts':len(accounts),'main_keyword_messages':sum(1 for x in []),
+                    'metrics_available':dict(metrics_available)},
+                'daily_platform_trend':[{'date':day,**{platform+'__'+metric:daily_platform[day].get(platform+'__'+metric,0) for platform in platforms for metric in ('posts','engagement','views')}} for day in sorted(daily_platform)],
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),

@@ -144,3 +144,42 @@ test('review history absent for unreviewed evidence without paid calls',async({p
  await expect(drawer.getByText('Review history (', {exact:false})).toHaveCount(0);
  expect(paidCalls()).toBe(0);
 });
+
+test('authorized officer can save a review and see the updated status without reloading',async({page})=>{
+ const reviewable={...payload,findings:findings.map((item,index)=>index===0?{...item,can_review_flag:true}:item)};
+ await page.goto('/login');
+ await page.getByLabel(/email/i).fill('admin@bawaslu.local');
+ await page.getByLabel(/^password$/i).fill(PASSWORD);
+ await page.getByRole('button',{name:/log in|masuk/i}).click();
+ await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+ let reviewCalls=0,unexpectedCalls=0;
+ await page.route('**/api/functions/socialListening',async route=>{
+  const request=route.request().postDataJSON();
+  if(request.action==='campaignIntelligenceInbox'){
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(reviewable)});
+  }else if(request.action==='campaignFlagReview'){
+   reviewCalls++;
+   expect(request.id).toBe('1');
+   expect(request.data.result_id).toBe('101');
+   expect(request.data.assessment_version).toBe(1);
+   expect(request.data.decision).toBe('FURTHER_INVESTIGATION');
+   expect(request.data.rationale).toContain('Further source verification');
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true,decision:request.data.decision,review_id:'77',paid_provider_called:false})});
+  }else{
+   unexpectedCalls++;
+   await route.fulfill({status:400,contentType:'application/json',body:'{}'});
+  }
+ });
+ await page.goto('/inbox');
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await drawer.getByLabel('Decision').selectOption('FURTHER_INVESTIGATION');
+ await drawer.getByLabel(/Reason for decision/).fill('Further source verification is required.');
+ page.once('dialog',dialog=>dialog.accept());
+ await drawer.getByRole('button',{name:'Save human review'}).click();
+ await expect(drawer.getByText('Current status:').locator('..')).toContainText('FURTHER_INVESTIGATION');
+ await expect(drawer.getByRole('status')).toContainText('Human review decision saved');
+ expect(reviewCalls).toBe(1);
+ expect(unexpectedCalls).toBe(0);
+});

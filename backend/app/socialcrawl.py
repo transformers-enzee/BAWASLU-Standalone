@@ -219,7 +219,7 @@ def _query_text(f):
 def _provider_params(filters):
     f=_normalize_filters(filters)
     params={'query':_query_text(f)}
-    social_sources=[x for x in f.get('platforms',[]) if x!='online_news']
+    social_sources=[x for x in f.get('platforms',[]) if x not in ('online_news','search_everywhere')]
     if social_sources:
         params['sources']=','.join(_provider_source_name(x) for x in social_sources)
     if f.get('exclude_sources'):

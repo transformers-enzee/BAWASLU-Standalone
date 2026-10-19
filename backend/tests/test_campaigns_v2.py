@@ -210,3 +210,10 @@ def test_search_everywhere_campaign_preview_is_safe_for_schedule_and_manual():
         action(db,p,'campaignManualRun',{'everywhere_query':'bawaslu pemilu','confirmed_query':'different','confirm_cost':True,'confirmed_credits':20},campaign['id'])
     assert db.query(SocialListeningRun).count()==0
     db.close()
+
+def test_search_everywhere_does_not_send_internal_platform_as_provider_source():
+    from app.socialcrawl import _provider_params
+    params=_provider_params({'query':'iphone','platforms':['search_everywhere']})
+    assert params['query']=='iphone'
+    assert 'sources' not in params
+    assert 'search_everywhere' not in str(params)

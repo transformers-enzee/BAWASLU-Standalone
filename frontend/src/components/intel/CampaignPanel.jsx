@@ -47,10 +47,7 @@ export default function CampaignPanel({campaignId=null}){
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [statusFilter,setStatusFilter]=useState('all');
  const [trendMetric,setTrendMetric]=useState('posts');
- const [postSort,setPostSort]=useState('engagement');
- const [postSortBusy,setPostSortBusy]=useState(false);
  const [chartDay,setChartDay]=useState(null);
- const [chartDaySort,setChartDaySort]=useState('engagement');
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
@@ -60,7 +57,7 @@ export default function CampaignPanel({campaignId=null}){
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setEvidence([]);setChartDay(null);setPostSort('engagement');setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
@@ -75,21 +72,11 @@ export default function CampaignPanel({campaignId=null}){
   link.href=url;link.download='bawaslu-campaign-'+selected.id+'-evidence.csv';link.click();
   URL.revokeObjectURL(url);
  }
- async function changePostSort(sort){
-  if(!selected||postSortBusy||sort===postSort)return;
-  setPostSortBusy(true);setEvidenceError('');
-  try{
-   const response=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{sort}});
-   setEvidence(response.data.evidence||[]);setPostSort(sort);
-  }catch(e){setEvidenceError(e.response?.data?.detail||e.message||'Could not sort posts')}
-  finally{setPostSortBusy(false)}
- }
- async function openChartDate(day,sort='engagement'){
+ async function openChartDate(day){
   if(!selected||!day)return;
   setChartDay({date:day,loading:true,posts:[],error:'',truncated:false,total:0});
-  setChartDaySort(sort);
   try{
-   const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day,sort}});
+   const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day}});
    setChartDay({date:day,loading:false,posts:response.data.evidence||[],total:response.data.total||0,
                 truncated:Boolean(response.data.truncated),error:''});
   }catch(e){setChartDay({date:day,loading:false,posts:[],error:e.response?.data?.detail||e.message||'Could not load posts',total:0,truncated:false})}
@@ -321,7 +308,7 @@ export default function CampaignPanel({campaignId=null}){
 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
 {Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platform} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={false} connectNulls/>)}
 </LineChart></ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
-<p className="text-xs text-slate-500">Click a date on the chart to see its most engaging posts. Only stored provider metrics are counted; missing data is not estimated.</p>
+<p className="text-xs text-slate-500">Click a date on the chart to see its hottest posts. Only stored provider metrics are counted; missing data is not estimated.</p>
 </section>
 {chartDay&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setChartDay(null)}}>
  <div className="w-full max-w-xl max-h-[85vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col" role="dialog" aria-modal="true" aria-label={'Top posts for '+chartDay.date}>
@@ -329,10 +316,7 @@ export default function CampaignPanel({campaignId=null}){
    <div><h5 className="font-semibold">Top posts · {chartDay.date}</h5><p className="text-xs text-slate-500">{chartDay.total} stored posts on this date</p></div>
    <button type="button" className="intel-ghost text-sm" aria-label="Close date posts" onClick={()=>setChartDay(null)}>Close ×</button>
   </div>
-  <div className="flex items-center gap-2 border-b px-4 py-2 text-xs" role="group" aria-label="Date post order">
-   <button type="button" className={chartDaySort==='engagement'?'intel-button':'intel-ghost'} aria-pressed={chartDaySort==='engagement'} onClick={()=>openChartDate(chartDay.date,'engagement')}>Top engagements</button>
-   <button type="button" className={chartDaySort==='views'?'intel-button':'intel-ghost'} aria-pressed={chartDaySort==='views'} onClick={()=>openChartDate(chartDay.date,'views')}>Top views</button>
-  </div>
+  <p className="px-4 py-2 border-b text-xs text-slate-500">Ranked automatically using engagement and views.</p>
   <div className="overflow-y-auto p-4 space-y-3">
    {chartDay.loading?<p className="text-sm">Loading saved posts…</p>:chartDay.error?<p role="alert" className="text-sm text-red-700">{chartDay.error}</p>:chartDay.posts.length?chartDay.posts.map((post,index)=><div key={post.id} className="rounded-lg border p-3 space-y-2 text-sm">
     <div className="flex justify-between gap-3"><strong className="capitalize">{index+1}. {post.platform} · {post.author_name||'Author unknown'}</strong><span className="text-xs text-slate-500">Post #{post.id}</span></div>
@@ -367,11 +351,7 @@ export default function CampaignPanel({campaignId=null}){
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button>
- <div className="flex flex-wrap items-center gap-2 text-xs" role="group" aria-label="Captured post order">
- <span className="text-slate-600">Sort posts:</span>
- <button type="button" className={postSort==='engagement'?'intel-button':'intel-ghost'} aria-pressed={postSort==='engagement'} disabled={postSortBusy} onClick={()=>changePostSort('engagement')}>Hottest · engagements first</button>
- <button type="button" className={postSort==='views'?'intel-button':'intel-ghost'} aria-pressed={postSort==='views'} disabled={postSortBusy} onClick={()=>changePostSort('views')}>Most viewed</button>
- </div>
+ <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>
  {evidenceError&&<p role="alert" className="text-xs text-red-700">{evidenceError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
  {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
@@ -379,11 +359,11 @@ export default function CampaignPanel({campaignId=null}){
  return <div key={item.id} className="space-y-1"><a href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-2 rounded-xl border border-slate-200 p-2.5 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
   <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
-  <div className="text-right text-xs text-slate-600 shrink-0"><div>{item.engagement_total==null?'—':Number(item.engagement_total).toLocaleString()} engagements</div><div>{item.views==null?'—':Number(item.views).toLocaleString()} views</div></div><SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
+  <SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
  </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,true)}>Reanalyze with AI · Post #{item.id}</button></div>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  {singlePreview&&<div className="rounded-lg border border-amber-300 p-3 space-y-2 text-xs" role="status"><strong>Post #{singlePreview.result_id} · {singlePreview.reanalysis?'Versioned AI reanalysis':'AI analysis'} cost preview</strong><p>Exactly {singlePreview.estimated_ai_requests} AI request · SocialCrawl credits: {singlePreview.socialcrawl_credits} · {singlePreview.estimated_ai_cost}.</p><button type="button" className="intel-button" disabled={singleBusy||!singlePreview.ai_key_configured} onClick={startSingle}>Confirm paid AI analysis for this post</button><button type="button" className="intel-ghost ml-2" onClick={()=>setSinglePreview(null)}>Cancel</button>{!singlePreview.ai_key_configured&&<p>AI provider key not configured.</p>}</div>}
  {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
- <p className="text-xs text-slate-500">Top 40 displayed from the 200 highest-ranked stored posts (up to 5,000 scanned). Ties are broken by views and then recency. Unavailable metrics are shown as —.</p>
+ <p className="text-xs text-slate-500">Top 40 displayed from the 200 hottest stored posts (up to 5,000 scanned). Engagement and views are combined automatically; missing metrics are not estimated.</p>
  </section>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">
  <h5 className="font-semibold">Demographics & data coverage</h5>

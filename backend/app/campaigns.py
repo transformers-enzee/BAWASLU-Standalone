@@ -4,6 +4,7 @@ A campaign is a persistent plan, distinct from any provider run. All actions
 are enforced in the existing authenticated Social Listening API.
 """
 import json
+import math
 from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
@@ -32,13 +33,25 @@ def _captured_post_metrics(raw):
             'engagement_total':sum(x or 0 for x in (likes,comments,shares)) if any(x is not None for x in (likes,comments,shares)) else None}
 
 
-def _captured_post_sort(row,order='engagement'):
-    """Default hottest order = engagement first, then views; missing counts last."""
-    primary='views' if order=='views' else 'engagement_total'
-    secondary='engagement_total' if order=='views' else 'views'
-    return (row.get(primary) is None,-(row.get(primary) or 0),
-            row.get(secondary) is None,-(row.get(secondary) or 0),
-            -int(row.get('id') or 0))
+def _rank_captured_posts(rows):
+    """One hottest-first order: 60% engagements + 40% views, log normalized.
+
+    The logarithm stops viral outliers from monopolizing the list. Both
+    metrics are scaled to the maximum observed in this authorized result
+    set. Missing provider fields contribute zero; no metrics are invented.
+    """
+    max_engagement=max((row.get('engagement_total') or 0 for row in rows),default=0)
+    max_views=max((row.get('views') or 0 for row in rows),default=0)
+    eng_scale=math.log1p(max_engagement) if max_engagement else 0
+    view_scale=math.log1p(max_views) if max_views else 0
+    def key(row):
+        engagement=row.get('engagement_total') or 0
+        views=row.get('views') or 0
+        e=math.log1p(engagement)/eng_scale if eng_scale else 0
+        v=math.log1p(views)/view_scale if view_scale else 0
+        hotness=.60*e+.40*v
+        return (-hotness,-engagement,-views,-int(row.get('id') or 0))
+    return sorted(rows,key=key)
 
 MAX_KEYWORDS=30
 MAX_CAMPAIGNS_PER_LIST=200
@@ -866,8 +879,6 @@ def campaign_action(db:Session,p,action,data,id=None):
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         opts=data or {}
-        order=str(opts.get('sort') or 'engagement')
-        if order not in ('engagement','views'):raise ValueError('Unsupported post ranking')
         on_day=None
         if action=='campaignDateTopPosts':
             on_day=_iso_date(opts.get('date'),'Selected chart date')
@@ -887,7 +898,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'author_name':item.author_name,'published_at':item.published_at,
                 'review_state':item.review_state,'content_type':item.content_type,
                 'matched_fields':matched,**_captured_post_metrics(item.engagement_json)})
-        candidates.sort(key=lambda row:_captured_post_sort(row,order))
+        candidates=_rank_captured_posts(candidates)
         max_return=15 if on_day else 200
         rows=[]
         for row in candidates[:max_return]:
@@ -896,7 +907,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                          'sentiment':_latest_sentiment(db,c.id,item.id),
                          'sentiment_details':_sentiment_details(db,c.id,item.id)})
         return {'evidence':rows,'total':len(candidates),'limited_to':max_return,
-                'scan_limit':5000,'truncated':len(links)==5000,'sort':order,
+                'scan_limit':5000,'truncated':len(links)==5000,
+                'ranking':'combined_log_engagement_60_views_40',
                 'date':on_day,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

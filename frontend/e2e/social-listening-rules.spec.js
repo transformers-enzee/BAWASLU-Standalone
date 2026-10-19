@@ -331,6 +331,10 @@ test('Campaign trend panel spans the full row and supports metric toggling',asyn
  await expect(panel).toBeVisible();
  await expect(panel).toHaveClass(/lg:col-span-2/);
  await expect(panel.getByRole('group',{name:'Trend metric'})).toBeVisible();
+ const captured=page.getByLabel('Captured posts',{exact:true});
+ await expect(captured).toContainText('Hottest posts first');
+ await expect(captured.getByRole('group',{name:'Captured post order'})).toHaveCount(0);
+ await expect(captured.getByRole('button',{name:'Most viewed'})).toHaveCount(0);
  for (const metric of ['Posts','Engagement','Views']) {
   await panel.getByRole('button',{name:metric,exact:true}).click();
   await expect(panel.getByRole('button',{name:metric,exact:true})).toHaveAttribute('aria-pressed','true');

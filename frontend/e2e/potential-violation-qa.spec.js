@@ -174,7 +174,7 @@ test('authorized officer can save a review and see the updated status without re
  await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
  await page.getByRole('button',{name:/View source and assessment/}).click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
- await drawer.getByLabel('Decision').selectOption('FURTHER_INVESTIGATION');
+ await drawer.locator('#flag-review-decision').selectOption('FURTHER_INVESTIGATION');
  await drawer.getByLabel(/Reason for decision/).fill('Further source verification is required.');
  page.once('dialog',dialog=>dialog.accept());
  await drawer.getByRole('button',{name:'Save human review'}).click();
@@ -182,4 +182,15 @@ test('authorized officer can save a review and see the updated status without re
  await expect(drawer.getByRole('status')).toContainText('Human review decision saved');
  expect(reviewCalls).toBe(1);
  expect(unexpectedCalls).toBe(0);
+});
+
+test('location and candidate filters compose with potential violation selection',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByLabel('Select location').selectOption('DKI Jakarta');
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await page.getByLabel('Select candidate').selectOption({index:0});
+ await page.getByLabel('Select location').selectOption('');
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ expect(paidCalls()).toBe(0);
 });

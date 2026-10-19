@@ -34,3 +34,9 @@ def test_provider_metric_parser_keeps_zero_and_missing_distinct():
     assert metrics['engagement_total']==20 and metrics['views']==800
     absent=_captured_post_metrics('{}')
     assert absent['engagement_total'] is None and absent['views'] is None
+
+def test_engagement_gets_higher_weight_than_views():
+    # With equally normalized extremes, 75/25 favors engagement.
+    rows=[{'id':'10','engagement_total':1000,'views':0},
+          {'id':'11','engagement_total':0,'views':1000000}]
+    assert _rank_captured_posts(rows)[0]['id']=='10'

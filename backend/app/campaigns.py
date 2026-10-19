@@ -34,7 +34,7 @@ def _captured_post_metrics(raw):
 
 
 def _rank_captured_posts(rows):
-    """One hottest-first order: 60% engagements + 40% views, log normalized.
+    """One hottest-first order: 75% engagements + 25% views, log normalized.
 
     The logarithm stops viral outliers from monopolizing the list. Both
     metrics are scaled to the maximum observed in this authorized result
@@ -49,7 +49,7 @@ def _rank_captured_posts(rows):
         views=row.get('views') or 0
         e=math.log1p(engagement)/eng_scale if eng_scale else 0
         v=math.log1p(views)/view_scale if view_scale else 0
-        hotness=.60*e+.40*v
+        hotness=.75*e+.25*v
         return (-hotness,-engagement,-views,-int(row.get('id') or 0))
     return sorted(rows,key=key)
 
@@ -908,7 +908,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                          'sentiment_details':_sentiment_details(db,c.id,item.id)})
         return {'evidence':rows,'total':len(candidates),'limited_to':max_return,
                 'scan_limit':5000,'truncated':len(links)==5000,
-                'ranking':'combined_log_engagement_60_views_40',
+                'ranking':'combined_log_engagement_75_views_25',
                 'date':on_day,'paid_provider_called':False}
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen

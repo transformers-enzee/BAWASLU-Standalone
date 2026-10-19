@@ -151,7 +151,7 @@ def reserve_automatic_ai_request(db,campaign_id):
         log.exception('AI quota reservation refused')
         return False
 
-def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
+def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
@@ -177,6 +177,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         used=0
         for link in links:
+            if target_result_id is not None and link.result_id!=int(target_result_id):continue
             if used>=limit: break
             exists=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if exists:continue
@@ -256,13 +257,13 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None):
         db.close()
 
 
-def assess_pending_campaign(campaign_id, requested_limit=None):
+def assess_pending_campaign(campaign_id, requested_limit=None, target_result_id=None):
     """Allow only one worker per campaign in each process. Multi-process locking is still required."""
     lock=_campaign_lock(campaign_id)
     if not lock.acquire(blocking=False):
         log.info('AI campaign %s already processing in this instance',campaign_id)
         return
     try:
-        return _assess_pending_campaign_locked(campaign_id,requested_limit)
+        return _assess_pending_campaign_locked(campaign_id,requested_limit,target_result_id)
     finally:
         lock.release()

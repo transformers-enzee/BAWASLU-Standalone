@@ -265,6 +265,30 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action in ('campaignSingleAssessmentPreview','campaignSingleAssessmentStart'):
+        from .models import EvidenceAssessment, SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        from .openai_triage import openai_triage_configured
+        payload=data or {}
+        cid=str(id or payload.get('campaign_id') or '')
+        rid=str(payload.get('result_id') or '')
+        if not cid.isdigit() or not rid.isdigit():raise ValueError('Select a campaign and one post')
+        campaign=db.get(MonitoringCampaign,int(cid))
+        if not campaign or not allowed(p,campaign):raise PermissionError('Campaign access required')
+        if not _editable(p,campaign):raise PermissionError('Campaign editing permission required')
+        link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(rid)).first()
+        item=db.get(SocialListeningResult,int(rid))
+        if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Post unavailable')
+        assessed=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=item.id).first()
+        if assessed:raise ValueError('Already assessed; reanalysis needs a separate versioned workflow')
+        preview={'campaign_id':str(campaign.id),'result_id':str(item.id),
+                 'estimated_ai_requests':1,'socialcrawl_credits':0,
+                 'estimated_ai_cost':'Variable; one model request, token-based provider pricing',
+                 'ai_key_configured':openai_triage_configured(),'paid_ai_executed':False}
+        if action=='campaignSingleAssessmentPreview':return preview
+        if payload.get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
+        if not preview['ai_key_configured']:raise ValueError('AI provider not configured')
+        return {**preview,'single_assessment_accepted':True}
     if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
         from .models import EvidenceAssessment
         from .socialcrawl import _result_in_scope

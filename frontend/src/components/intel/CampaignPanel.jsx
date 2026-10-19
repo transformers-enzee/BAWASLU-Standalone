@@ -50,6 +50,7 @@ export default function CampaignPanel({campaignId=null}){
  const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
+ const [singlePreview,setSinglePreview]=useState(null),[singleBusy,setSingleBusy]=useState(false),[singleNotice,setSingleNotice]=useState('');
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
@@ -58,6 +59,24 @@ export default function CampaignPanel({campaignId=null}){
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
+ }
+ async function previewSingle(item){
+  if(!selected||singleBusy)return;
+  setSingleBusy(true);setSingleNotice('');setSinglePreview(null);
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSingleAssessmentPreview',id:selected.id,data:{result_id:item.id}});setSinglePreview(r.data)}
+  catch(e){setSingleNotice(e.response?.data?.detail||e.message||'Preview unavailable')}
+  finally{setSingleBusy(false)}
+ }
+ async function startSingle(){
+  if(!selected||!singlePreview||singleBusy)return;
+  if(!window.confirm('Confirm exactly one billable AI assessment for post #'+singlePreview.result_id+'? SocialCrawl credits: 0.'))return;
+  setSingleBusy(true);setSingleNotice('');
+  try{
+   await base44.functions.invoke('socialListening',{action:'campaignSingleAssessmentStart',id:selected.id,data:{result_id:singlePreview.result_id,confirm_ai_cost:true}});
+   setSingleNotice('Single-post assessment accepted for post #'+singlePreview.result_id+'. Check Intelligence Inbox after processing.');
+   setSinglePreview(null);
+  }catch(e){setSingleNotice(e.response?.data?.detail||e.message||'Start failed')}
+  finally{setSingleBusy(false)}
  }
  async function previewMediaCapability(){
   if(!selected||mediaPreviewBusy)return;
@@ -300,11 +319,13 @@ export default function CampaignPanel({campaignId=null}){
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
  {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
  const valid=/^https:\/\//i.test(item.canonical_url||'');
- return <a key={item.id} href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-2 rounded-xl border border-slate-200 p-2.5 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
+ return <div key={item.id} className="space-y-1"><a href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-2 rounded-xl border border-slate-200 p-2.5 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
   <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{item.platform} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
   <SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
- </a>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
+ </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item)}>Analyze with AI · Post #{item.id}</button></div>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
+ {singlePreview&&<div className="rounded-lg border border-amber-300 p-3 space-y-2 text-xs" role="status"><strong>Post #{singlePreview.result_id} · AI cost preview</strong><p>Exactly {singlePreview.estimated_ai_requests} AI request · SocialCrawl credits: {singlePreview.socialcrawl_credits} · {singlePreview.estimated_ai_cost}.</p><button type="button" className="intel-button" disabled={singleBusy||!singlePreview.ai_key_configured} onClick={startSingle}>Confirm paid AI analysis for this post</button><button type="button" className="intel-ghost ml-2" onClick={()=>setSinglePreview(null)}>Cancel</button>{!singlePreview.ai_key_configured&&<p>AI provider key not configured.</p>}</div>}
+ {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
  <p className="text-xs text-slate-500">Up to 40 of the latest 200 stored records. Sentiment remains unclassified until assessed.</p>
  </section>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">

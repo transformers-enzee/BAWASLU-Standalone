@@ -63,3 +63,36 @@ def test_review_history_is_scoped_to_current_assessment_version():
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+def test_review_history_latest_ten_and_equal_timestamp_order():
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            assessment=EvidenceAssessment(id=960001,campaign_id=961001,result_id=962001,
+                assessment_version=1,relevance_label='RELEVANT',
+                potential_issue_signals_json='[]')
+            db.add(assessment);db.flush()
+            shared_time=datetime(2026,10,19,8,0)
+            for index in range(12):
+                db.add(EvidenceReview(assessment_id=assessment.id,
+                    reviewer_id=f'officer-{index}',
+                    decision='FURTHER_INVESTIGATION',
+                    rationale=f'Review iteration {index} with supporting notes',
+                    created_at=shared_time))
+            db.commit()
+            ordered=(db.query(EvidenceReview,EvidenceAssessment.assessment_version)
+                .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                .filter(EvidenceAssessment.campaign_id==961001,
+                        EvidenceAssessment.result_id==962001,
+                        EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc())
+                .limit(10).all())
+            assert len(ordered)==10
+            assert [review.reviewer_id for review,_ in ordered]==[
+                f'officer-{index}' for index in range(11,1,-1)]
+            assert all(version==1 for _,version in ordered)
+            assert db.query(EvidenceReview).filter_by(assessment_id=assessment.id).count()==12
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()

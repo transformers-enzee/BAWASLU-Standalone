@@ -370,7 +370,12 @@ def campaign_action(db:Session,p,action,data,id=None):
         try: raw_signals=json.loads(assessment.potential_issue_signals_json or '[]')
         except (TypeError,ValueError): raw_signals=[]
         valid_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
-        if not valid_signals:raise ValueError('No evidence-validated potential violation signal exists for review')
+        latest_manual=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
+                       .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+        manual_pending=bool(latest_manual and latest_manual.decision=='FURTHER_INVESTIGATION'
+                            and (latest_manual.rationale or '').startswith('[Manual flag: '))
+        if not valid_signals and not manual_pending:
+            raise ValueError('No validated AI signal or pending manual flag exists for review')
         review=EvidenceReview(assessment_id=assessment.id,reviewer_id=str(p['id']),decision=decision,rationale=rationale)
         db.add(review);db.flush()
         review_id=review.id

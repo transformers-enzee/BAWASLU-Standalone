@@ -127,3 +127,35 @@ def test_review_history_never_leaks_across_campaigns_or_evidence():
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+def test_review_history_excludes_other_campaign_and_unknown_decision():
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            own=EvidenceAssessment(id=980001,campaign_id=981001,result_id=982001,
+                assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]')
+            other=EvidenceAssessment(id=980002,campaign_id=981002,result_id=982001,
+                assessment_version=1,relevance_label='RELEVANT',potential_issue_signals_json='[]')
+            db.add_all([own,other]);db.flush()
+            db.add_all([
+                EvidenceReview(assessment_id=own.id,reviewer_id='authorized',
+                    decision='FLAG_DISMISSED',rationale='No independently corroborated evidence'),
+                EvidenceReview(assessment_id=own.id,reviewer_id='legacy',
+                    decision='UNSUPPORTED_DECISION',rationale='Legacy unrelated status'),
+                EvidenceReview(assessment_id=other.id,reviewer_id='other-campaign',
+                    decision='FLAG_CONFIRMED',rationale='Other campaign confidential review')])
+            db.commit()
+            rows=(db.query(EvidenceReview,EvidenceAssessment.assessment_version)
+                .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                .filter(EvidenceAssessment.campaign_id==981001,
+                        EvidenceAssessment.result_id==982001,
+                        EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).limit(10).all())
+            assert len(rows)==1
+            assert rows[0][0].reviewer_id=='authorized'
+            assert rows[0][0].decision=='FLAG_DISMISSED'
+            assert db.query(EvidenceReview).count()==3
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()

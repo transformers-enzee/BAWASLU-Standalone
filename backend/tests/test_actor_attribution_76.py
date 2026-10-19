@@ -11,8 +11,8 @@ def test_actor_allegation_is_provisional():
     assert out[0]['attribution_status']=='SOURCE_ALLEGATION_UNVERIFIED'
 
 def test_author_is_not_assigned_from_source():
-    source='Person A reports campaign violations by an unnamed person.'
-    signal={'category_id':4,'signal_type':'POTENTIAL_VIOLATION','evidence_quote':source,'alleged_actor':'Person A','alleged_activity':'campaign violations'}
+    source='Person A reports alleged bribery by an unnamed individual.'
+    signal={'category_id':4,'signal_type':'POTENTIAL_VIOLATION','evidence_quote':source,'alleged_actor':'Person A','alleged_activity':'distributed money'}
     assert validated_actor_issue_signals([signal],CATEGORIES,source)==[]
 
 def test_no_actor_no_flag():

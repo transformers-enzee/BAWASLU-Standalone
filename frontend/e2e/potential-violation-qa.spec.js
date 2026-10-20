@@ -271,3 +271,13 @@ test('authorized officer sees manual flag form for relevant evidence without AI 
  await expect(drawer.getByText(/Human-origin preliminary flag saved/)).toBeVisible();
  expect(flags).toBe(1);
 });
+
+test('Potential issue category filters evidence and shows quotes without paid calls',async({page})=>{
+ const paidCalls=await setup(page);
+ const issue=page.getByLabel('Potential issue category');
+ await issue.selectOption('Politik Uang');
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await page.getByRole('button',{name:/View source and assessment/}).click();
+ await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
+ expect(paidCalls()).toBe(0);
+});

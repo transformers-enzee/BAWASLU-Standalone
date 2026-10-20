@@ -148,7 +148,7 @@ def test_value_supports_list_indices_for_universal_search_source_items():
 def test_result_limit_is_enforced_after_filtering():
     db=SessionLocal(); p=admin(db)
     r=social_listening_action(db,p,'search',{'filters':{'query':'election','limit':1}},provider_client=fake_provider)
-    assert len(r['results'])==1
+    assert len(r['results'])==2  # Provider result count is not limited by application save settings.
     assert r['run']['result_count']==1
     assert db.query(SocialListeningResult).count()==1
     db.close()

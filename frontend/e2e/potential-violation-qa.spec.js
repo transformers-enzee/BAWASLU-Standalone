@@ -3,7 +3,7 @@ import config from '../playwright.config.js';
 
 // Build 72.3: Deterministic UI regression tests. No provider, crawl, or AI calls.
 const PASSWORD=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
-const source='Seorang warga melaporkan dugaan pembagian uang kepada pemilih di lokasi kampanye.';
+const source='SIMULASI / FIKTIF: Seorang warga mengaku melihat pembagian uang kepada pemilih di lokasi kampanye. Belum ada bukti independen; perlu diverifikasi.';
 const findings=[
  {id:'101',campaign_id:'1',campaign_name:'QA Campaign',platform:'instagram',text_content:source,
   relevance_label:'RELEVANT',relevance_confidence:'HIGH',explanation:'Preliminary allegation in source content; requires independent verification.',
@@ -286,5 +286,18 @@ test('flagged inbox post shows preliminary review state without implying a verdi
  const paidCalls=await setup(page);
  await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
  await expect(page.getByRole('button',{name:/View source and assessment/})).toContainText('Awaiting human review');
+ expect(paidCalls()).toBe(0);
+});
+
+test('synthetic preliminary vote-buying claim is visibly identified as a QA fixture',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ const post=page.getByRole('button',{name:/View source and assessment/}).first();
+ await expect(post).toContainText('Synthetic QA example');
+ await post.click();
+ const drawer=page.getByRole('dialog',{name:'Finding details'});
+ await expect(drawer.getByRole('note',{name:''}).filter({hasText:'Synthetic QA example'})).toContainText('not a real social-media post');
+ await expect(drawer.getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
+ await expect(drawer).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });

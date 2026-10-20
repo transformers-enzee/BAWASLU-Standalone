@@ -738,7 +738,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Recent duplicate search requires acknowledgement')
         if selected_everywhere and str((data or {}).get('confirmed_query') or '').strip()!=preview['query']:
             raise ValueError('Search query changed; review the 20-credit preview again')
-        runs=[]; linked=0; new_results=0; credits_used=0
+        runs=[]; linked=0; new_results=0; credits_used=0; provider_received=0; reused_results=0
         # Independent searches ensure each main keyword can retrieve content.
         # Existing fingerprints and CampaignEvidence uniqueness deduplicate overlap.
         searches=([{'filters':{**__import__('app.campaign_scheduler',fromlist=['campaign_query']).campaign_query(c),
@@ -749,7 +749,10 @@ def campaign_action(db:Session,p,action,data,id=None):
             run_id=int(response['run']['id'])
             runs.append(response['run'])
             credits_used+=int(response['run'].get('credits_used') or 0)
-            new_results+=len(response.get('results') or [])
+            diagnostics=response.get('diagnostics') or {}
+            new_results+=int(diagnostics.get('new_rows',len(response.get('results') or [])))
+            provider_received+=int(diagnostics.get('provider_items',len(response.get('results') or [])))
+            reused_results+=int(diagnostics.get('reused_rows',0))
             db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run_id,triggered_by='MANUAL'))
             for item in response.get('results') or []:
                 row=db.get(SocialListeningResult,int(item['id']))
@@ -767,7 +770,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         db.commit()
         audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'runs':{'new':len(runs)},'linked_evidence':{'new':linked}})
         return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
-                'credits_used':credits_used,'manual_only':True,'estimated_credits':preview['estimated_credits'],
+                'credits_used':credits_used,'provider_received':provider_received,'reused_results':reused_results,
+                'manual_only':True,'estimated_credits':preview['estimated_credits'],
                 'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else 'PER_KEYWORD_OR'}
     if action=='campaignSentimentBatchPreview':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None

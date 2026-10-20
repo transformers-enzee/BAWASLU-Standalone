@@ -595,8 +595,10 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                     nested_keys[str(key)]=sorted(list(value.keys()))[:20]
         diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0,'sample_item_keys':sample_keys,'sample_nested_keys':nested_keys}
         default_platform='online_news' if wants_news and not social_sources else ''
+        seen_fingerprints=set()
+        new_rows=0
+        reused_rows=0
         for raw in items:
-            if not everywhere and len(mapped) >= f['limit']: break
             if everywhere and isinstance(raw,dict):
                 origins=raw.get('source_items')
                 origin=origins[0] if isinstance(origins,list) and origins and isinstance(origins[0],dict) else {}
@@ -612,18 +614,28 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
             if not _matches_local_filters(m,f):
                 diagnostics['filtered_items']+=1
                 continue
+            if m['content_fingerprint'] in seen_fingerprints:
+                diagnostics['duplicate_items']+=1
+                continue
+            seen_fingerprints.add(m['content_fingerprint'])
             existing=db.query(SocialListeningResult).filter(SocialListeningResult.content_fingerprint==m['content_fingerprint']).first()
             if existing:
                 diagnostics['duplicate_items']+=1
+                reused_rows+=1
+                mapped.append(serialize_result(existing))
                 continue
-            row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row))
+            row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row)); new_rows+=1
             if len(mapped)<=12 and os.getenv('MEDIA_THUMBNAIL_CACHE_ENABLED','true').lower()=='true':
                 from .campaigns import _existing_thumbnail
                 from .thumbnail_cache import cache_thumbnail
                 cache_thumbnail(db,row,_existing_thumbnail(row))
+        diagnostics['new_rows']=new_rows
+        diagnostics['reused_rows']=reused_rows
+        diagnostics['linked_candidates']=len(mapped)
+        diagnostics['provider_page_only']=True
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
-        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})
+        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':new_rows,'reused':reused_rows},'diagnostics':{'new':diagnostics}})
         return {'run':serialize_run(run),'results':mapped,'provider':capabilities(),'diagnostics':diagnostics}
     except Exception as e:
         # A failed INSERT invalidates the SQLAlchemy transaction. Roll it back before

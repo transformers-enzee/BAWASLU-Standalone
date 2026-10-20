@@ -63,12 +63,20 @@ export default function CampaignPanel({campaignId=null}){
   finally{setLookupBusy(false)}
  }
 
+ const [externalFile,setExternalFile]=useState(null),[externalPreview,setExternalPreview]=useState(null),[externalBusy,setExternalBusy]=useState(false),[externalError,setExternalError]=useState('');
+ async function previewExternalFile(){
+  if(!selected||!externalFile||externalBusy)return;
+  setExternalBusy(true);setExternalError('');setExternalPreview(null);
+  try{const data=await base44.externalImport.preview(selected.id,externalFile);setExternalPreview(data)}
+  catch(e){setExternalError(e.response?.data?.error||e.message||'Import preview failed')}
+  finally{setExternalBusy(false)}
+ }
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [everywhereQuery,setEverywhereQuery]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
@@ -377,6 +385,22 @@ export default function CampaignPanel({campaignId=null}){
    <div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={singleBusy||lookupPost.assessment_status==='ASSESSED'} onClick={()=>previewSingle(lookupPost,false)}>Analyze with AI</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy||lookupPost.assessment_status!=='ASSESSED'} onClick={()=>previewSingle(lookupPost,true)}>Reanalyze with AI</button></div>
   </div>}
  </div>
+ <details className="rounded-lg border border-slate-200 p-3 text-xs space-y-3" aria-label="External provider import preview">
+  <summary className="font-semibold cursor-pointer">Admin · External provider Excel/CSV import (preview only)</summary>
+  <p className="mt-2 text-slate-600">Upload an export from ZocialEye for this campaign. Preview only: no crawl, AI processing, or database import occurs.</p>
+  <input type="file" aria-label="ZocialEye Excel or CSV file" accept=".xlsx,.csv" onChange={e=>{setExternalFile(e.target.files?.[0]||null);setExternalPreview(null);setExternalError('')}}/>
+  <button type="button" className="intel-ghost text-xs" disabled={!externalFile||externalBusy} onClick={previewExternalFile}>{externalBusy?'Inspecting workbook…':'Preview columns and counts'}</button>
+  {externalError&&<p role="alert" className="text-red-700">{externalError}</p>}
+  {externalPreview&&<div className="border rounded-lg bg-slate-50 p-3 space-y-2">
+    <strong>Preview only · {externalPreview.records_inserted} records imported · {externalPreview.socialcrawl_credits} SocialCrawl credits</strong>
+    <p>Recommended sheet: {externalPreview.recommended_sheet||'N/A'} · Available source rows: {externalPreview.estimated_rows_in_recommended_sheet?.toLocaleString()||0}</p>
+    <p className="text-amber-800">{externalPreview.warning}</p>
+    <div className="max-h-52 overflow-y-auto space-y-1">{(externalPreview.sheets||[]).map(sheet=><p key={sheet.name}>{sheet.name}: {sheet.data_rows.toLocaleString()} rows · {sheet.columns.length} columns</p>)}</div>
+    <p>Mapped fields: {Object.entries(externalPreview.mapped_fields||{}).map(([target,source])=>target+' ← '+source).join(' · ')||'None identified'}</p>
+    <p>Sample source rows checked: {externalPreview.sampled_rows||0} · Missing URL: {externalPreview.sample_missing_url||0} · Missing content: {externalPreview.sample_missing_text||0}</p>
+    <p className="text-slate-600">Commit/import is intentionally unavailable in this build pending mapping and duplicate QA.</p>
+  </div>}
+ </details>
  <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>
  {evidenceError&&<p role="alert" className="text-xs text-red-700">{evidenceError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">

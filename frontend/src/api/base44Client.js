@@ -32,6 +32,12 @@ export const base44 = {
     resetPasswordRequest:async()=>{ throw new Error('Password reset email is not configured in standalone v0.1. Contact an administrator.'); },
     resetPassword:async()=>{ throw new Error('Password reset is not configured in standalone v0.1. Contact an administrator.'); },
   },
+  externalImport:{
+    async preview(campaignId,file){
+      const form=new FormData();form.append('file',file);
+      return request('/api/social-listening/external-import/preview?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});
+    }
+  },
   functions:{
     async invoke(name,payload={}){
       const path = ['intelligence','registry'].includes(name) ? `/api/functions/${name}` : `/api/functions/${name}`;

@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'81.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -112,6 +112,38 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
         return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
+
+
+@app.post('/api/social-listening/external-import/preview')
+def preview_external_campaign_import(campaign_id:int,file:UploadFile=File(...),user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Admin-only, read-only preview. Never saves imported evidence."""
+    from .access import has, allowed
+    from .models import MonitoringCampaign
+    from .external_import_preview import preview_workbook
+    from .campaigns import _editable
+    p=profile(db,user)
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):
+        raise HTTPException(404,'Campaign unavailable')
+    if not (p.get('role')=='National Administrator' and has(p,'administration')):
+        raise HTTPException(403,'National administrator permission required for external provider imports')
+    if Path(file.filename or '').suffix.lower() not in ('.xlsx','.csv'):
+        raise HTTPException(400,'Upload a ZocialEye Excel or CSV export')
+    import tempfile
+    from fastapi.concurrency import run_in_threadpool
+    import shutil
+    with tempfile.TemporaryDirectory(prefix='bawaslu_import_preview_') as folder:
+        path=Path(folder)/('source'+Path(file.filename or '').suffix.lower())
+        with path.open('wb') as dest:
+            shutil.copyfileobj(file.file,dest)
+        if path.stat().st_size>100*1024*1024:
+            raise HTTPException(413,'Preview file limit is 100 MB')
+        try:
+            result=preview_workbook(path)
+        except ValueError as exc:
+            raise HTTPException(400,str(exc))
+    return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,'provider':'ZOCIALEYE',
+            'preview_only':True,'records_inserted':0,'socialcrawl_credits':0,**result}
 
 @app.post('/api/upload')
 def upload(file:UploadFile=File(...),user:User=Depends(current_user)):

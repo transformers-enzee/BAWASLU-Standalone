@@ -53,12 +53,22 @@ export default function CampaignPanel({campaignId=null}){
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [singlePreview,setSinglePreview]=useState(null),[singleBusy,setSingleBusy]=useState(false),[singleNotice,setSingleNotice]=useState('');
+ const [postLookup,setPostLookup]=useState(''),[lookupBusy,setLookupBusy]=useState(false),[lookupError,setLookupError]=useState(''),[lookupPost,setLookupPost]=useState(null);
+ async function findPostById(){
+  if(!selected||lookupBusy)return;
+  setLookupBusy(true);setLookupError('');setLookupPost(null);setSinglePreview(null);
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignEvidenceById',id:selected.id,data:{result_id:postLookup.trim()}});
+   if(r.data.found)setLookupPost(r.data.post);else setLookupError('Post not found in this campaign or unavailable to your account.');
+  }catch(e){setLookupError(e.response?.data?.detail||e.message||'Post lookup failed')}
+  finally{setLookupBusy(false)}
+ }
+
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [everywhereQuery,setEverywhereQuery]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
@@ -353,6 +363,20 @@ export default function CampaignPanel({campaignId=null}){
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button>
+ <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find campaign post by ID">
+  <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any campaign post by Post ID</label>
+  <form onSubmit={e=>{e.preventDefault();findPostById()}} className="flex gap-2">
+   <input id="campaign-post-lookup" className="intel-input min-w-0 flex-1" inputMode="numeric" pattern="[0-9]+" placeholder="e.g. 649" value={postLookup} onChange={e=>setPostLookup(e.target.value)}/>
+   <button type="submit" className="intel-button text-xs" disabled={lookupBusy||!/^\d+$/.test(postLookup.trim())}>{lookupBusy?'Finding…':'Find post'}</button>
+  </form>
+  {lookupError&&<p role="alert" className="text-xs text-amber-700">{lookupError}</p>}
+  {lookupPost&&<div className="rounded-lg bg-slate-50 border p-3 text-xs space-y-2">
+   <div className="flex flex-wrap items-center gap-2"><strong>Post #{lookupPost.id} · {lookupPost.platform}</strong><span className="text-slate-600">{lookupPost.assessment_status==='ASSESSED'?'Previously assessed':'Unassessed'}</span></div>
+   <p className="whitespace-pre-wrap break-words max-h-44 overflow-y-auto">{lookupPost.text_content||'No source text available'}</p>
+   {/^https:\/\//i.test(lookupPost.canonical_url||'')&&<a href={lookupPost.canonical_url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">Open original source ↗</a>}
+   <div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={singleBusy||lookupPost.assessment_status==='ASSESSED'} onClick={()=>previewSingle(lookupPost,false)}>Analyze with AI</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy||lookupPost.assessment_status!=='ASSESSED'} onClick={()=>previewSingle(lookupPost,true)}>Reanalyze with AI</button></div>
+  </div>}
+ </div>
  <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>
  {evidenceError&&<p role="alert" className="text-xs text-red-700">{evidenceError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">

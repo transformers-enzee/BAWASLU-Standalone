@@ -898,6 +898,28 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'blocked_reasons':schedule['blocked_reasons'],
                 'can_execute':False,'paid_provider_called':False,
                 'notice':'Preview only. Campaign execution is disabled until a separate authorized release.'}
+    if action=='campaignEvidenceById':
+        from .models import SocialListeningResult, EvidenceAssessment
+        from .socialcrawl import _result_in_scope
+        from .thumbnail_cache import stored_thumbnail_uri
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c):raise ValueError('Campaign not available')
+        rid=str((data or {}).get('result_id') or '').strip()
+        if not rid.isdigit():raise ValueError('Enter a numeric post ID')
+        item=db.get(SocialListeningResult,int(rid))
+        link=db.query(CampaignEvidence.id).filter_by(campaign_id=c.id,result_id=int(rid)).first()
+        if not item or not link or not _result_in_scope(db,p,item):
+            return {'found':False,'post':None,'paid_provider_called':False}
+        prior=db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first()
+        row={'id':str(item.id),'platform':item.platform,'content_type':item.content_type,
+             'published_at':item.published_at,'author_name':item.author_name,
+             'text_content':item.text_content,'canonical_url':item.canonical_url,
+             'review_state':item.review_state,**_captured_post_metrics(item.engagement_json),
+             'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
+             'sentiment':_latest_sentiment(db,c.id,item.id),
+             'sentiment_details':_sentiment_details(db,c.id,item.id),
+             'assessment_status':'ASSESSED' if prior else 'UNASSESSED'}
+        return {'found':True,'post':row,'paid_provider_called':False}
     if action in ('campaignEvidence','campaignDateTopPosts'):
         from .thumbnail_cache import stored_thumbnail_uri
         from .models import SocialListeningResult

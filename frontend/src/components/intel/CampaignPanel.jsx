@@ -63,6 +63,20 @@ export default function CampaignPanel({campaignId=null}){
   finally{setLookupBusy(false)}
  }
 
+ const [externalRun,setExternalRun]=useState(null),[externalImportBusy,setExternalImportBusy]=useState(false),[externalImportError,setExternalImportError]=useState('');
+ async function startExternalImport(){
+  if(!selected||!externalFile||externalImportBusy||!externalPreview?.validation)return;
+  if(!window.confirm('Import this ZocialEye file into '+selected.name+'? This adds provider records and links them to this campaign. No SocialCrawl credits are used.'))return;
+  setExternalImportBusy(true);setExternalImportError('');
+  try{setExternalRun(await base44.externalImport.start(selected.id,externalFile))}
+  catch(e){setExternalImportError(e.response?.data?.error||e.message)}
+  finally{setExternalImportBusy(false)}
+ }
+ async function refreshExternalImport(){
+  if(!externalRun)return;
+  try{setExternalRun(await base44.externalImport.status(externalRun.run_id))}
+  catch(e){setExternalImportError(e.message)}
+ }
  const [externalFile,setExternalFile]=useState(null),[externalPreview,setExternalPreview]=useState(null),[externalBusy,setExternalBusy]=useState(false),[externalError,setExternalError]=useState('');
  async function previewExternalFile(){
   if(!selected||!externalFile||externalBusy)return;
@@ -76,7 +90,7 @@ export default function CampaignPanel({campaignId=null}){
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
+  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setEvidenceError('');setEvidenceLoading(true);
   try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
   catch(e){setEvidenceError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setEvidenceLoading(false)}
@@ -386,7 +400,7 @@ export default function CampaignPanel({campaignId=null}){
   </div>}
  </div>
  <details className="rounded-lg border border-slate-200 p-3 text-xs space-y-3" aria-label="External provider import preview">
-  <summary className="font-semibold cursor-pointer">Admin · External provider Excel/CSV import (preview only)</summary>
+  <summary className="font-semibold cursor-pointer">Admin · External provider Excel/CSV import</summary>
   <p className="mt-2 text-slate-600">Upload an export from ZocialEye for this campaign. Preview only: no crawl, AI processing, or database import occurs.</p>
   <input type="file" aria-label="ZocialEye Excel or CSV file" accept=".xlsx,.csv" onChange={e=>{setExternalFile(e.target.files?.[0]||null);setExternalPreview(null);setExternalError('')}}/>
   <button type="button" className="intel-ghost text-xs" disabled={!externalFile||externalBusy} onClick={previewExternalFile}>{externalBusy?'Inspecting workbook…':'Preview columns and counts'}</button>
@@ -406,7 +420,10 @@ export default function CampaignPanel({campaignId=null}){
      <p>Platforms: {Object.entries(externalPreview.platform_distribution||{}).map(([name,count])=>name+' '+count.toLocaleString()).join(' · ')}</p>
      <p className="text-amber-800">{externalPreview.duplicate_note}</p>
     </div>}
-    <p className="text-slate-600">Commit/import is intentionally unavailable in this build pending mapping and duplicate QA.</p>
+    <p className="text-slate-600">Provider IDs identify unique source records. Repeated URLs are not automatically discarded. Empty-content records will be skipped.</p>
+    <button type="button" className="intel-ghost text-xs" disabled={externalImportBusy||!externalFile} onClick={startExternalImport}>{externalImportBusy?'Starting import…':'Confirm & start admin import'}</button>
+    {externalImportError&&<p role="alert" className="text-red-700">{externalImportError}</p>}
+    {externalRun&&<div role="status"><p>Import #{externalRun.run_id} · {externalRun.status} · Processed: {externalRun.progress?.processed||0} · Inserted: {externalRun.progress?.inserted||0} · Linked: {externalRun.progress?.linked||0} · Skipped: {externalRun.progress?.skipped||0}</p><button type="button" className="intel-ghost text-xs" onClick={refreshExternalImport}>Refresh import progress</button>{externalRun.error&&<p className="text-red-700">{externalRun.error}</p>}</div>}
   </div>}
  </details>
  <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>

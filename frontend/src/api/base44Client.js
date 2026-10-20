@@ -33,6 +33,11 @@ export const base44 = {
     resetPassword:async()=>{ throw new Error('Password reset is not configured in standalone v0.1. Contact an administrator.'); },
   },
   externalImport:{
+    async start(campaignId,file){
+      const form=new FormData();form.append('file',file);
+      return request('/api/social-listening/external-import/start?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});
+    },
+    async status(runId){return request('/api/social-listening/external-import/status/'+encodeURIComponent(runId));},
     async preview(campaignId,file){
       const form=new FormData();form.append('file',file);
       return request('/api/social-listening/external-import/preview?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});

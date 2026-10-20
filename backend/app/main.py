@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -148,6 +148,62 @@ def preview_external_campaign_import(campaign_id:int,file:UploadFile=File(...),u
             raise HTTPException(400,str(exc))
     return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,'provider':'ZOCIALEYE',
             'preview_only':True,'records_inserted':0,'socialcrawl_credits':0,**result}
+
+
+@app.post('/api/social-listening/external-import/start')
+def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTasks,file:UploadFile=File(...),user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Explicit admin-only ingestion; no SocialCrawl calls or AI screening."""
+    from .access import has, allowed
+    from .models import MonitoringCampaign,SocialListeningRun
+    from .external_import_ingest import run_import
+    import json
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    p=profile(db,user)
+    if not campaign or not allowed(p,campaign):
+        raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'National administrator permission required')
+    ext=Path(file.filename or '').suffix.lower()
+    if ext not in ('.xlsx','.csv'):raise HTTPException(400,'Excel or CSV required')
+    import tempfile
+    from .external_import_preview import preview_workbook
+    temp=Path(tempfile.mkstemp(suffix=ext,prefix='bawaslu_external_')[1])
+    try:
+        with temp.open('wb') as target:
+            total=0
+            while True:
+                chunk=file.file.read(1024*1024)
+                if not chunk:break
+                total+=len(chunk)
+                if total>100*1024*1024:raise HTTPException(413,'100 MB maximum')
+                target.write(chunk)
+        result=preview_workbook(temp)
+        if not result['mapped_fields'].get('provider_result_id') or not result['mapped_fields'].get('text_content'):
+            raise HTTPException(400,'Provider ID and message columns required')
+        run=SocialListeningRun(provider='ZOCIALEYE',provider_request_id=uuid.uuid4().hex,
+            query_json=json.dumps({'campaign_id':campaign_id,'source_filename':Path(file.filename or '').name,
+                                    'provider':'ZOCIALEYE','processed':0,'inserted':0,'linked':0,'skipped':0}),
+            credits_used=0,credits_remaining=0,result_count=0,status='QUEUED',
+            executed_by=str(user.id))
+        db.add(run);db.commit();db.refresh(run)
+        background_tasks.add_task(run_import,run.id,campaign_id,str(temp))
+        return {'run_id':run.id,'status':'QUEUED','campaign_id':campaign_id,'provider':'ZOCIALEYE','socialcrawl_credits':0}
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+@app.get('/api/social-listening/external-import/status/{run_id}')
+def external_campaign_import_status(run_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .access import has
+    from .models import SocialListeningRun
+    import json
+    p=profile(db,user)
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'Administrator permission required')
+    run=db.get(SocialListeningRun,run_id)
+    if not run or run.provider!='ZOCIALEYE':raise HTTPException(404,'Import not found')
+    return {'run_id':run.id,'status':run.status,'progress':json.loads(run.query_json or '{}'),
+            'error':run.error_text if run.status=='FAILED' else '', 'socialcrawl_credits':0}
 
 @app.post('/api/upload')
 def upload(file:UploadFile=File(...),user:User=Depends(current_user)):

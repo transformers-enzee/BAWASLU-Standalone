@@ -142,7 +142,7 @@ def phrase_screening_candidates(source_text, categories, phrases):
         term=str(phrase.phrase or '').strip()
         if len(term)<5:
             continue
-        pattern=r'(?<!\\w)'+re.escape(term.casefold())+r'(?!\\w)'
+        pattern=r'(?<!\w)'+re.escape(term.casefold())+r'(?!\w)'
         hit=re.search(pattern,lower)
         if not hit:
             continue

@@ -423,7 +423,7 @@ export default function CampaignPanel({campaignId=null}){
     <p className="text-slate-600">Provider IDs identify unique source records. Repeated URLs are not automatically discarded. Empty-content records will be skipped.</p>
     <button type="button" className="intel-ghost text-xs" disabled={externalImportBusy||!externalFile} onClick={startExternalImport}>{externalImportBusy?'Starting import…':'Confirm & start admin import'}</button>
     {externalImportError&&<p role="alert" className="text-red-700">{externalImportError}</p>}
-    {externalRun&&<div role="status"><p>Import #{externalRun.run_id} · {externalRun.status} · Processed: {externalRun.progress?.processed||0} · Inserted: {externalRun.progress?.inserted||0} · Linked: {externalRun.progress?.linked||0} · Skipped: {externalRun.progress?.skipped||0}</p><button type="button" className="intel-ghost text-xs" onClick={refreshExternalImport}>Refresh import progress</button>{externalRun.error&&<p className="text-red-700">{externalRun.error}</p>}</div>}
+    {externalRun&&<div role="status"><p>Import #{externalRun.run_id} · {externalRun.status} · Processed: {externalRun.progress?.processed||0} · Inserted: {externalRun.progress?.inserted||0} · Linked: {externalRun.progress?.linked||0} · Skipped: {externalRun.progress?.skipped||0} · Already present: {externalRun.progress?.already_present||0}</p><button type="button" className="intel-ghost text-xs" onClick={refreshExternalImport}>Refresh import progress</button>{externalRun.error&&<p className="text-red-700">{externalRun.error}</p>}</div>}
   </div>}
  </details>
  <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>

@@ -51,7 +51,7 @@ def run_import(run_id,campaign_id,source_path):
     run=db.get(SocialListeningRun,run_id)
     if not run:
         db.close();path.unlink(missing_ok=True);return
-    count=0;skipped=0;linked=0
+    count=0;skipped=0;linked=0;processed=0;existing_count=0
     try:
         prior=db.execute(select(SocialListeningResult.platform,SocialListeningResult.provider_result_id,SocialListeningResult.id).where(SocialListeningResult.provider=='ZOCIALEYE')).all()
         known={(platform,pid):rid for platform,pid,rid in prior if pid}
@@ -59,6 +59,7 @@ def run_import(run_id,campaign_id,source_path):
         unique=set()
         run.status='RUNNING';db.commit()
         for number,row in enumerate(iter_rows(path),1):
+            processed=number
             item=parse_row(row)
             if not item:
                 skipped+=1;continue
@@ -67,6 +68,7 @@ def run_import(run_id,campaign_id,source_path):
                 skipped+=1;continue
             unique.add(key)
             rid=known.get(key)
+            if rid:existing_count+=1
             if not rid:
                 raw=item['raw'].copy()
                 raw['_enzee_external_import']={'provider':'ZOCIALEYE','parent_url':item['parent_url'],'import_run_id':run_id}
@@ -86,15 +88,15 @@ def run_import(run_id,campaign_id,source_path):
                 already.add(rid);linked+=1
             if number%250==0:
                 run.result_count=count
-                run.query_json=json.dumps({'campaign_id':campaign_id,'processed':number,'inserted':count,'linked':linked,'skipped':skipped,'provider':'ZOCIALEYE'})
+                run.query_json=json.dumps({'campaign_id':campaign_id,'processed':number,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE'})
                 db.commit()
         run.result_count=count;run.status='COMPLETED'
-        run.query_json=json.dumps({'campaign_id':campaign_id,'processed':len(unique)+skipped,'inserted':count,'linked':linked,'skipped':skipped,'provider':'ZOCIALEYE'})
+        run.query_json=json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE'})
         db.commit()
     except Exception as exc:
         db.rollback()
         run=db.get(SocialListeningRun,run_id)
         if run:
-            run.status='FAILED';run.error_text=str(exc)[:800];db.commit()
+            run.status='FAILED';run.error_text=str(exc)[:800];run.query_json=json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE','partial_commit':True});db.commit()
     finally:
         db.close();path.unlink(missing_ok=True)

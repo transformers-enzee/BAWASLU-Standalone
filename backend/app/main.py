@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -163,6 +163,12 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
         raise HTTPException(404,'Campaign unavailable')
     if p.get('role')!='National Administrator' or not has(p,'administration'):
         raise HTTPException(403,'National administrator permission required')
+    from sqlalchemy import select
+    active_runs=db.execute(select(SocialListeningRun).where(SocialListeningRun.provider=='ZOCIALEYE',SocialListeningRun.status.in_(['QUEUED','RUNNING']))).scalars().all()
+    for active in active_runs:
+        import json
+        if str(json.loads(active.query_json or '{}').get('campaign_id'))==str(campaign_id):
+            raise HTTPException(409,'Another ZocialEye import is already active for this campaign')
     ext=Path(file.filename or '').suffix.lower()
     if ext not in ('.xlsx','.csv'):raise HTTPException(400,'Excel or CSV required')
     import tempfile

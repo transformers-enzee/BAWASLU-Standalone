@@ -137,12 +137,11 @@ function SocialEvidenceInbox(){
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
    <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
   </div>
-  <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_3fr] gap-2">
+  <div className="grid grid-cols-2 gap-2">
    <div className="intel-card p-3"><p className="text-xs text-slate-500">Posts shown</p><p className="text-2xl font-semibold tabular-nums">{filtered.length}</p></div>
    <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</p></div>
-   <div className="intel-card col-span-2 md:col-span-1 p-3"><p className="text-xs font-semibold">AI assessment summary</p><p className="mt-1 text-xs text-slate-600 line-clamp-2">{filtered.length===0?'No assessed findings match this selection.':filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length+' of '+filtered.length+' viewed findings carry a preliminary flag. These are not confirmed violations.'}</p><p className="text-[10px] text-slate-500 mt-1">Summary of stored assessments, not a new AI request</p></div>
   </div>
-  <p className="text-xs text-slate-500" role="note" aria-label="Location coverage">Location coverage for current view: {filtered.filter(x=>locationsFor(x).length>0).length} with extracted location · {filtered.filter(x=>locationsFor(x).length===0).length} without location · {filtered.length} posts total. Locations may overlap across posts and are not confirmed jurisdictions.</p>
+  <details className="text-xs text-slate-500"><summary className="cursor-pointer">Location coverage details</summary><p role="note" aria-label="Location coverage">Location coverage for current view: {filtered.filter(x=>locationsFor(x).length>0).length} with extracted location · {filtered.filter(x=>locationsFor(x).length===0).length} without location · {filtered.length} posts total. Locations may overlap across posts and are not confirmed jurisdictions.</p></details>
   <div className="intel-card p-3 space-y-2" aria-label="Find and filter intelligence">
    <div className="flex flex-wrap gap-1.5">{buttons.map(([key,label])=><button type="button" key={key} className={view===key?'rounded-full bg-[#176e8e] text-white px-3 py-1.5 text-xs font-semibold':'rounded-full bg-slate-100 text-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200'} aria-pressed={view===key} onClick={()=>{setView(key);setSelected(null)}}>{label}</button>)}</div>
    <div className="flex flex-wrap gap-2"><input className="intel-input flex-1 min-w-[190px]" value={term} onChange={e=>setTerm(e.target.value)} placeholder="Search posts, candidates, locations or issues" aria-label="Search relevant findings"/>
@@ -156,10 +155,10 @@ function SocialEvidenceInbox(){
    {<p className="text-[11px] text-slate-500">Nationwide includes all relevant posts, including those with unresolved geography. Province and other locations require explicit AI-extracted evidence; regency/city filtering appears only when both geographic levels are supplied; no subnational jurisdiction is inferred. Candidate aliases are grouped, and posts without candidate signals remain in All Relevant.</p>}
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
-  {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(185px,1fr)] gap-3 items-stretch">
+  {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2">
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
-    <div className="h-[620px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
+    <div className="max-h-[680px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
      {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
       <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}</span>{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
       <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
@@ -168,13 +167,13 @@ function SocialEvidenceInbox(){
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
     </div>
    </section>
-   <aside className="intel-card p-3 flex flex-col min-h-[620px] xl:mt-0" aria-label="Platform distribution">
-    <h3 className="text-sm font-semibold text-[#365269]">Platform distribution</h3>
+   <details className="intel-card p-3" aria-label="Platform distribution"><summary className="cursor-pointer text-sm font-semibold text-[#365269]">Platform distribution · {filtered.length} posts</summary><div className="mt-3">
+    
     <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>
     <div className="flex justify-center py-6"><div className="w-32 h-32 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-24 h-24 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
     <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?item.count/filtered.length*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
-    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p>
-   </aside>
+    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p></div>
+   </details>
   </div>}
   {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>
    <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">

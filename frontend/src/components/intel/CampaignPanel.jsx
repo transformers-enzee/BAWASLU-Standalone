@@ -398,6 +398,14 @@ export default function CampaignPanel({campaignId=null}){
     <div className="max-h-52 overflow-y-auto space-y-1">{(externalPreview.sheets||[]).map(sheet=><p key={sheet.name}>{sheet.name}: {sheet.data_rows.toLocaleString()} rows · {sheet.columns.length} columns</p>)}</div>
     <p>Mapped fields: {Object.entries(externalPreview.mapped_fields||{}).map(([target,source])=>target+' ← '+source).join(' · ')||'None identified'}</p>
     <p>Sample source rows checked: {externalPreview.sampled_rows||0} · Missing URL: {externalPreview.sample_missing_url||0} · Missing content: {externalPreview.sample_missing_text||0}</p>
+    {externalPreview.validation&&<div className="border-t pt-2 space-y-1">
+     <strong>Full-file validation · {externalPreview.validation.total_rows?.toLocaleString()||0} records scanned</strong>
+     <p>Missing content: {externalPreview.validation.missing_content||0} · Missing URLs: {externalPreview.validation.missing_url||0} · Invalid URLs: {externalPreview.validation.invalid_url||0} · Missing dates: {externalPreview.validation.missing_date||0}</p>
+     <p>Repeated provider IDs: {externalPreview.validation.duplicate_provider_ids||0} · Repeated URLs: {externalPreview.validation.repeated_urls||0} · URL matches in current database: {externalPreview.validation.url_matches_existing_database||0}</p>
+     <p>Comments identified: {externalPreview.validation.comment||0} · Posts/unknown: {externalPreview.validation.post_or_unknown||0} · Comments without parent post URL: {externalPreview.validation.comment_missing_parent_url||0}</p>
+     <p>Platforms: {Object.entries(externalPreview.platform_distribution||{}).map(([name,count])=>name+' '+count.toLocaleString()).join(' · ')}</p>
+     <p className="text-amber-800">{externalPreview.duplicate_note}</p>
+    </div>}
     <p className="text-slate-600">Commit/import is intentionally unavailable in this build pending mapping and duplicate QA.</p>
   </div>}
  </details>

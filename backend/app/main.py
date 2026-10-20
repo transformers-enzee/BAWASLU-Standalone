@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -140,6 +140,10 @@ def preview_external_campaign_import(campaign_id:int,file:UploadFile=File(...),u
             raise HTTPException(413,'Preview file limit is 100 MB')
         try:
             result=preview_workbook(path)
+            from .external_import_preview import validate_all_rows
+            from .models import SocialListeningResult
+            existing=(url for (url,) in db.query(SocialListeningResult.canonical_url).filter(SocialListeningResult.canonical_url!='').all())
+            result.update(validate_all_rows(path,existing))
         except ValueError as exc:
             raise HTTPException(400,str(exc))
     return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,'provider':'ZOCIALEYE',

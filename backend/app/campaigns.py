@@ -556,7 +556,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign_id=str(data.get('campaign_id') or '')
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
-        active_categories={x.id:x.name for x in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
+        active_category_rows=db.query(IssueCategory).filter(IssueCategory.active==True).all()
+        active_categories={x.id:x.name for x in active_category_rows}
+        from .models import IssueCategoryPhrase
+        active_phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True).all()
         violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
         reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
@@ -598,9 +601,11 @@ def campaign_action(db:Session,p,action,data,id=None):
                     try: parsed=json.loads(value or '[]')
                     except (ValueError,TypeError): return []
                     return parsed if isinstance(parsed,list) else []
-                from .issue_signals import validated_issue_signals, rejected_issue_signal_reasons, rejected_issue_type_summary
+                from .issue_signals import validated_issue_signals, rejected_issue_signal_reasons, rejected_issue_type_summary, phrase_screening_candidates
                 raw_signals=parse_list(assessment.potential_issue_signals_json)
                 issue_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
+                if not issue_signals:
+                    issue_signals=phrase_screening_candidates(item.text_content,active_category_rows,active_phrases)
                 violation_diagnostics['assessed_relevant']+=1
                 violation_diagnostics['raw_signals']+=len(raw_signals)
                 violation_diagnostics['accepted_signals']+=len(issue_signals)

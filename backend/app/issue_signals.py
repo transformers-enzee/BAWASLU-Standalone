@@ -118,3 +118,48 @@ def actor_signal_diagnostic(raw_signals, active_categories, source_text):
             continue
         reasons[reason]=reasons.get(reason,0)+1
     return {'candidate_count':min(len(candidates),8),'accepted_count':len(validated_actor_issue_signals(candidates,active_categories,source_text)),'rejected_reasons':reasons}
+
+
+def phrase_screening_candidates(source_text, categories, phrases):
+    """Unverified keyword leads for human review, not adjudicated violations.
+
+    Only administrator-configured active phrases are used. A bare mention of a
+    phrase is insufficient: require nearby allegation/reporting context. This
+    does not invoke AI or modify stored assessments.
+    """
+    text=str(source_text or '')
+    if not text.strip():
+        return []
+    lower=text.casefold()
+    active={c.id:c.name for c in categories if c.active}
+    markers=('dugaan', 'diduga', 'dilaporkan', 'melaporkan',
+             'pengaduan', 'mengadukan', 'terjadi', 'indikasi',
+             'alleged', 'allegation', 'reported', 'accused')
+    matches=[]
+    for phrase in phrases:
+        if not phrase.active or phrase.category_id not in active:
+            continue
+        term=str(phrase.phrase or '').strip()
+        if len(term)<5:
+            continue
+        pattern=r'(?<!\\w)'+re.escape(term.casefold())+r'(?!\\w)'
+        hit=re.search(pattern,lower)
+        if not hit:
+            continue
+        left=max(0,hit.start()-115)
+        right=min(len(text),hit.end()+115)
+        excerpt=text[left:right].strip()
+        if not any(marker in excerpt.casefold() for marker in markers):
+            continue
+        # Avoid treating historic court verdict reporting as a new allegation.
+        if re.search(r'(majelis hakim|putusan pengadilan|diputus bersalah|vonis)',excerpt,re.IGNORECASE):
+            continue
+        matches.append({'category_id':phrase.category_id,
+                        'category_name':active[phrase.category_id],
+                        'evidence_quote':excerpt[:350],
+                        'explanation':'Administrator phrase with allegation context; needs independent human verification.',
+                        'signal_provenance':'KEYWORD_SCREENING',
+                        'requires_human_verification':True})
+        if len(matches)>=4:
+            break
+    return matches

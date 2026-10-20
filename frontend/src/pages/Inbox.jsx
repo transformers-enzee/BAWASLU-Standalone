@@ -132,6 +132,7 @@ function SocialEvidenceInbox(){
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
+ const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
    <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -160,7 +161,7 @@ function SocialEvidenceInbox(){
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
     <div className="h-[620px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
      {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[112px] text-left intel-card p-3 space-y-1.5 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}{item.flag_review_status?' · '+item.flag_review_status.replaceAll('_',' '):''}</span>{(item.is_flagged??((item.potential_issues||[]).length>0))&&<span className="text-amber-700 font-semibold">Potential issue · unverified</span>}</div>
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {item.platform||'Unknown platform'} · {item.relevance_label}</span>{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
       <p className="line-clamp-3 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
       <p className="text-xs text-[#146a8b]">View source and assessment →</p>
      </button>)}

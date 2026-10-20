@@ -105,7 +105,7 @@ test('flag detail presents the configured category as preliminary evidence, not 
  await page.getByRole('button',{name:/View source and assessment/}).click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer).toBeVisible();
- await expect(drawer.getByText('Politik Uang')).toBeVisible();
+ await expect(drawer.getByLabel('Potential issue evidence')).toContainText('Politik Uang');
  await expect(drawer.getByRole('note')).toContainText('Human verification required');
  await expect(drawer.getByRole('link',{name:/Open original source/})).toHaveAttribute('href','https://example.org/source/101');
  expect(paidCalls()).toBe(0);
@@ -279,5 +279,12 @@ test('Potential issue category filters evidence and shows quotes without paid ca
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await page.getByRole('button',{name:/View source and assessment/}).click();
  await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
+ expect(paidCalls()).toBe(0);
+});
+
+test('flagged inbox post shows preliminary review state without implying a verdict',async({page})=>{
+ const paidCalls=await setup(page);
+ await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await expect(page.getByRole('button',{name:/View source and assessment/})).toContainText('Awaiting human review');
  expect(paidCalls()).toBe(0);
 });

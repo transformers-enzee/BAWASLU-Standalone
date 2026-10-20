@@ -107,7 +107,7 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
- const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState('');
+ const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
  const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
  const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
@@ -131,14 +131,16 @@ function SocialEvidenceInbox(){
   if(chosenCandidate==='__no_candidate__'&&candidatesFor(x).length>0)return false;
   if(chosenCandidate&&chosenCandidate!=='__no_candidate__'&&!candidatesFor(x).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.is_flagged??((x.potential_issues||[]).length>0)))return false;
+  if(reviewStatusFilter==='AWAITING_REVIEW'&&(x.flag_review_status||((x.is_flagged??((x.potential_issues||[]).length>0))?'AWAITING_REVIEW':'NONE'))!=='AWAITING_REVIEW')return false;
+  if(reviewStatusFilter&&reviewStatusFilter!=='AWAITING_REVIEW'&&x.flag_review_status!==reviewStatusFilter)return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate]);
+ }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=raw?raw.charAt(0).toUpperCase()+raw.slice(1).toLowerCase():'Unknown';grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
  const [showAdvancedFilters,setShowAdvancedFilters]=useState(false);
  const issueGroups=signals=>Object.entries((signals||[]).reduce((groups,signal)=>{const category=String(signal.category_name||'Uncategorized potential issue');(groups[category] ||= []).push(signal);return groups;},{}));
- const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate)].filter(Boolean).length;
+ const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter)].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
   <div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="text-xl font-semibold">AI-screened intelligence findings</h2><p className="text-sm text-slate-500">Campaign evidence assessed for contextual relevance · no manual promotion required</p></div>
@@ -159,6 +161,7 @@ function SocialEvidenceInbox(){
     {jurisdiction==='province'&&chosenLocation&&regencies.length>0&&<select className="intel-input" aria-label="Select regency or city" value={chosenRegency} onChange={e=>{setChosenRegency(e.target.value);setSelected(null)}}><option value="">All regencies/cities with explicit evidence</option>{regencies.map(name=><option key={name} value={name}>{name}</option>)}</select>}
     {jurisdiction==='other'&&<select className="intel-input" aria-label="Select other location" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setSelected(null)}}><option value="">All other extracted locations</option>{groupedLocations.other.map(name=><option key={name} value={name}>{name}</option>)}</select>}
      {<select className="intel-input" aria-label="Select candidate" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}{uncategorizedCandidateCount>0&&<option value="__no_candidate__">No candidate identified ({uncategorizedCandidateCount})</option>}</select>}
+     <select className="intel-input" aria-label="Review status" value={reviewStatusFilter} onChange={e=>{setReviewStatusFilter(e.target.value);setSelected(null)}}><option value="">All review statuses</option><option value="AWAITING_REVIEW">Awaiting review</option><option value="FURTHER_INVESTIGATION">Further investigation</option><option value="FLAG_CONFIRMED">Preliminary flag confirmed</option><option value="FLAG_DISMISSED">Dismissed</option></select>
    </div>}
    {showAdvancedFilters&&<p className="text-[11px] text-slate-500">Nationwide includes all relevant posts, including those with unresolved geography. Province and other locations require explicit AI-extracted evidence; regency/city filtering appears only when both geographic levels are supplied; no subnational jurisdiction is inferred. Candidate aliases are grouped, and posts without candidate signals remain in All Relevant.</p>}
   </div>

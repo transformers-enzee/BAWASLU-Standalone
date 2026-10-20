@@ -52,7 +52,7 @@ def preview_workbook(path):
 def validate_all_rows(path, existing_urls=None):
     """Read only the selected combined sheet; counts are informational, not legal findings."""
     from collections import Counter
-    from datetime import datetime
+    from .external_import_ingest import parse_row, detect_platform, source_url
     from urllib.parse import urlparse
     existing_urls=set(existing_urls or ())
     path=Path(path)
@@ -81,10 +81,14 @@ def validate_all_rows(path, existing_urls=None):
             if not any(v not in (None,'') for v in row):continue
             counts['total_rows']+=1
             content=field(row,'Message')
-            url=field(row,'Direct URL') or field(row,'Comment URL') or field(row,'Reply comment URL') or field(row,'Post URL')
+            as_dict={header:row[i] if i<len(row) else None for i,header in enumerate(headers)}
+            url=source_url(as_dict)
             provider_id=field(row,'_id')
-            source=field(row,'Source').casefold() or 'unknown'
+            source=detect_platform(as_dict) or 'unknown'
             platforms[source]+=1
+            if parse_row(as_dict):counts['eligible_rows']+=1
+            else:counts['ineligible_rows']+=1
+            if source=='unknown':counts['unknown_platform']+=1
             if not content:counts['missing_content']+=1
             if not url:counts['missing_url']+=1
             elif urlparse(url).scheme not in ('http','https') or not urlparse(url).netloc:counts['invalid_url']+=1

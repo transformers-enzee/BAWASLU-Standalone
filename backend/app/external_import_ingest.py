@@ -28,11 +28,28 @@ def iter_rows(path):
 def clean(value):
     return str(value).strip() if value is not None else ''
 
+def source_url(row):
+    return clean(row.get('Direct URL') or row.get('Reply comment URL') or row.get('Comment URL') or row.get('Post URL') or row.get('Video URL') or row.get('Topic URL'))
+
+def detect_platform(row):
+    from urllib.parse import urlparse
+    declared=clean(row.get('Source') or row.get('Platform')).lower()
+    aliases={'twitter':'x','twitter.com':'x','x.com':'x','fb':'facebook','yt':'youtube'}
+    if declared in ('facebook','instagram','youtube','tiktok','threads','x'):
+        return declared
+    if declared in aliases:return aliases[declared]
+    host=urlparse(source_url(row)).hostname or ''
+    host=host.lower().removeprefix('www.').removeprefix('m.')
+    sites={'facebook.com':'facebook','fb.watch':'facebook','instagram.com':'instagram',
+           'x.com':'x','twitter.com':'x','tiktok.com':'tiktok',
+           'youtube.com':'youtube','youtu.be':'youtube','threads.net':'threads'}
+    return next((name for domain,name in sites.items() if host==domain or host.endswith('.'+domain)),'')
+
 def parse_row(row):
-    platform=clean(row.get('Source')).lower()
+    platform=detect_platform(row)
     ident=clean(row.get('_id'))
     text=clean(row.get('Message'))
-    url=clean(row.get('Direct URL') or row.get('Comment URL') or row.get('Reply comment URL') or row.get('Post URL'))
+    url=source_url(row)
     parent=clean(row.get('Post URL'))
     comment=bool(clean(row.get('Comment URL')) or clean(row.get('Reply comment URL')))
     if not ident or not platform or not url or not text:return None

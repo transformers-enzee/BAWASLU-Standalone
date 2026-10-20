@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -184,6 +184,10 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
                 if total>100*1024*1024:raise HTTPException(413,'100 MB maximum')
                 target.write(chunk)
         result=preview_workbook(temp)
+        from .external_import_preview import validate_all_rows
+        result.update(validate_all_rows(temp))
+        if not result['validation'].get('eligible_rows'):
+            raise HTTPException(400,'No eligible rows: verify IDs, messages, platform URLs and source fields')
         if not result['mapped_fields'].get('provider_result_id') or not result['mapped_fields'].get('text_content'):
             raise HTTPException(400,'Provider ID and message columns required')
         run=SocialListeningRun(provider='ZOCIALEYE',provider_request_id=uuid.uuid4().hex,

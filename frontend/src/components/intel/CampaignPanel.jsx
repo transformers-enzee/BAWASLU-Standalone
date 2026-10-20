@@ -415,6 +415,7 @@ export default function CampaignPanel({campaignId=null}){
     {externalPreview.validation&&<div className="border-t pt-2 space-y-1">
      <strong>Full-file validation · {externalPreview.validation.total_rows?.toLocaleString()||0} records scanned</strong>
      <p>Missing content: {externalPreview.validation.missing_content||0} · Missing URLs: {externalPreview.validation.missing_url||0} · Invalid URLs: {externalPreview.validation.invalid_url||0} · Missing dates: {externalPreview.validation.missing_date||0}</p>
+     <p className="font-semibold">Eligible records: {externalPreview.validation.eligible_rows||0} · Ineligible: {externalPreview.validation.ineligible_rows||0} · Unknown platforms: {externalPreview.validation.unknown_platform||0}</p>
      <p>Repeated provider IDs: {externalPreview.validation.duplicate_provider_ids||0} · Repeated URLs: {externalPreview.validation.repeated_urls||0} · URL matches in current database: {externalPreview.validation.url_matches_existing_database||0}</p>
      <p>Comments identified: {externalPreview.validation.comment||0} · Posts/unknown: {externalPreview.validation.post_or_unknown||0} · Comments without parent post URL: {externalPreview.validation.comment_missing_parent_url||0}</p>
      <p>Platforms: {Object.entries(externalPreview.platform_distribution||{}).map(([name,count])=>name+' '+count.toLocaleString()).join(' · ')}</p>

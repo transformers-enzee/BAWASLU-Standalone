@@ -19,7 +19,7 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
         if not isinstance(signal,dict):continue
         cid=signal.get('category_id')
         if type(cid) is not int or cid not in active_categories:continue
-        if signal.get('signal_type') not in ('POTENTIAL_VIOLATION',None):continue
+        if signal.get('signal_type') not in ('POTENTIAL_VIOLATION','REPORTED_INCIDENT',None):continue
         if 'signal_type' in signal and signal['signal_type'] is None:continue
         quote=str(signal.get('evidence_quote') or '').strip()
         if len(quote)<12 or quote.casefold() not in content:continue
@@ -27,7 +27,7 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
                        'explanation':str(signal.get('explanation') or '')[:400],
                        'evidence_quote':quote[:350],
                        'signal_provenance':'LEGACY_MISSING_TYPE' if 'signal_type' not in signal else 'EXPLICIT_TYPE',
-                       'requires_human_verification':True,**({'alleged_actor':str(signal.get('alleged_actor'))[:160], 'alleged_activity':str(signal.get('alleged_activity'))[:160], 'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'} if signal.get('alleged_actor') and signal.get('alleged_activity') else {})})
+                       'requires_human_verification':True,'signal_type':signal.get('signal_type') or 'POTENTIAL_VIOLATION','time_context':signal.get('time_context','UNKNOWN'),**({'alleged_actor':str(signal.get('alleged_actor'))[:160], 'alleged_activity':str(signal.get('alleged_activity'))[:160], 'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'} if signal.get('alleged_actor') and signal.get('alleged_activity') else {})})
     return result
 
 def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
@@ -41,7 +41,7 @@ def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
         cid=signal.get('category_id')
         quote=str(signal.get('evidence_quote') or '').strip()
         if type(cid) is not int or cid not in active_categories:reasons['invalid_category']+=1
-        elif signal.get('signal_type')!='POTENTIAL_VIOLATION' and 'signal_type' in signal:reasons['invalid_signal_type']+=1
+        elif signal.get('signal_type') not in ('POTENTIAL_VIOLATION','REPORTED_INCIDENT') and 'signal_type' in signal:reasons['invalid_signal_type']+=1
         elif len(quote)<12:reasons['missing_or_short_quote']+=1
         elif quote.casefold() not in source:reasons['quote_not_in_source']+=1
     return reasons
@@ -56,7 +56,7 @@ def rejected_issue_type_summary(raw_signals, active_categories, source_text):
         cid=signal.get('category_id')
         if type(cid) is not int or cid not in active_categories:continue
         kind=signal.get('signal_type')
-        if kind=='POTENTIAL_VIOLATION' or 'signal_type' not in signal:continue
+        if kind in ('POTENTIAL_VIOLATION','REPORTED_INCIDENT') or 'signal_type' not in signal:continue
         quote=str(signal.get('evidence_quote') or '').strip()
         # Do not imply a safe migration: an invalid type remains rejected.
         key='(missing)' if kind is None or kind=='' else str(kind).strip()[:60]
@@ -163,3 +163,25 @@ def phrase_screening_candidates(source_text, categories, phrases):
         if len(matches)>=4:
             break
     return matches
+
+def validated_reported_incident_signals(raw_signals, active_categories, source_text):
+    """Validate source-quoted reported incidents, without assigning actor guilt.
+
+    AI must explicitly propose these leads; keyword matching alone cannot flag.
+    """
+    if not isinstance(raw_signals,list):return []
+    source=str(source_text or '')
+    result=[]
+    for raw in raw_signals[:8]:
+        if not isinstance(raw,dict):continue
+        cid=raw.get('category_id')
+        quote=str(raw.get('evidence_quote') or '').strip()
+        if type(cid) is not int or cid not in active_categories:continue
+        if len(quote)<20 or len(quote)>350 or quote.casefold() not in source.casefold():continue
+        context=str(raw.get('time_context') or '').upper()
+        if context not in ('HISTORICAL','CURRENT','UNKNOWN'):continue
+        result.append({'category_id':cid,'category_name':active_categories[cid],
+            'signal_type':'REPORTED_INCIDENT','signal_provenance':'AI_REPORTED_INCIDENT',
+            'evidence_quote':quote,'explanation':str(raw.get('explanation') or '')[:400],
+            'time_context':context,'requires_human_verification':True})
+    return result

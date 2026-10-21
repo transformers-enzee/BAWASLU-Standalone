@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -333,15 +333,22 @@ export default function CampaignPanel({campaignId=null}){
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply date filter'}</button></div>
     <p className="text-xs text-slate-500">Date filtering uses source publication dates. Records without dates are omitted when a date filter is applied.</p>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Main keyword messages',dashboard.statistics?.main_keyword_messages],['Sub keyword messages',dashboard.statistics?.secondary_keyword_messages],['Sub keyword not found',dashboard.statistics?.secondary_not_found_messages],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="rounded-lg border p-3"><strong className="text-xl">{Number(value||0).toLocaleString()}</strong><p className="text-xs text-slate-500">{label}</p></div>)}</div><p className="text-xs text-slate-500">Based on stored evidence. Views and engagements may be incomplete when platforms do not supply them.</p></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="rounded-lg border p-3"><strong className="text-xl">{Number(value||0).toLocaleString()}</strong><p className="text-xs text-slate-500">{label}</p></div>)}</div><p className="text-xs text-slate-500">Based on stored evidence. Views and engagements may be incomplete when platforms do not supply them.</p></section>
 <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
       <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Campaign trend by platform">
 <h5 className="font-semibold">Social Listening by platform</h5>
 <div className="flex gap-2" role="group" aria-label="Trend metric">{['posts','engagement','views'].map(k=><button key={k} type="button" aria-pressed={trendMetric===k} className={trendMetric===k?'intel-button':'intel-ghost'} onClick={()=>setTrendMetric(k)}>{k==='posts'?'Posts':k==='engagement'?'Engagement':'Views'}</button>)}</div>
-{dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%"><LineChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
+{dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
+{dashboard.daily_platform_trend.length===1?
+<BarChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}} barCategoryGap="55%">
+<CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
+{Object.keys(dashboard.platforms||{}).map((platform,index)=><Bar key={platform} dataKey={platform+'__'+trendMetric} name={platform} fill={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} maxBarSize={100}/>)}
+</BarChart>:
+<LineChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
-{Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platform} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={false} connectNulls/>)}
-</LineChart></ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
+{Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platform} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={{r:3}} activeDot={{r:6}} connectNulls/>)}
+</LineChart>}
+</ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
 <p className="text-xs text-slate-500">Click a date on the chart to see its hottest posts. Only stored provider metrics are counted; missing data is not estimated.</p>
 </section>
 {chartDay&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setChartDay(null)}}>

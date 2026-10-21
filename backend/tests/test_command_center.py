@@ -128,3 +128,57 @@ def test_manual_inbox_records_are_included_without_inflating_social_metrics():
     assert dashboard['latest_intelligence'][0]['record_type']=='INTELLIGENCE_ITEM'
     assert dashboard['latest_intelligence'][0]['campaign_name']=='INTEL-CC-1'
     db.close()
+
+def test_location_briefing_compiles_captured_activity_and_flagged_review_work():
+    db=SessionLocal()
+    national=_actor(db,'national-snapshot@test.local','National Administrator','Nationwide')
+    regional=_actor(db,'regional-snapshot@test.local','Provincial Analyst','Province','Jawa Barat')
+    db.add(IssueCategory(id=1,name='Potensi Politik Uang',active=True));db.commit()
+    campaign,post,_=_evidence(db,'Jawa Barat',
+        'Allegation of election vote buying in local campaign, unverified.',True,'snap-post-01')
+    extra=SocialListeningResult(run_id=post.run_id,provider='TEST',
+        provider_result_id='snap-post-02',platform='tiktok',
+        canonical_url='https://www.tiktok.com/@public/video/snap-post-02',
+        published_at=datetime.utcnow().date().isoformat()+'T10:30:00',
+        text_content='Unassessed new video')
+    db.add(extra);db.flush()
+    db.add(CampaignEvidence(campaign_id=campaign.id,result_id=extra.id));db.commit()
+    out=build_command_center(db,regional)
+    assert out['activity']['captured_mentions']==2
+    assert out['indicators']['relevant_mentions']==1
+    assert out['indicators']['potential_alerts']==1
+    assert out['coverage']['unassessed_posts_in_period']==1
+    assert out['attention_actions'][0]['kind']=='POTENTIAL_ISSUE'
+    assert out['attention_actions'][0]['result_id']==str(post.id)
+    assert any(a['kind']=='ASSESSMENT_COVERAGE' for a in out['attention_actions'])
+    assert 'Jawa Barat' in out['briefing']['text']
+    assert '2 distinct social posts were captured' in out['briefing']['text']
+    assert {x['platform']:x['count'] for x in out['activity']['top_platforms']}=={'instagram':1,'tiktok':1}
+    assert len(out['activity']['daily'])==7
+    assert sum(x['count'] for x in out['activity']['daily'])==2
+    assert out['regions'][0]['count']==2
+    assert out['regions'][0]['flagged']==1
+    assert out['paid_provider_called'] is False
+    db.close()
+
+def test_unassessed_posts_do_not_create_fabricated_violation_alerts():
+    db=SessionLocal()
+    p=_actor(db,'regional-unassessed@test.local','Provincial Analyst','Province','Jawa Barat')
+    campaign=MonitoringCampaign(name='Jawa Barat campaign',province='Jawa Barat',
+        status='DRAFT',created_by='test')
+    run=SocialListeningRun(query_json=json.dumps({'province':'Jawa Barat'}),
+        executed_by='test',status='COMPLETED')
+    db.add_all([campaign,run]);db.flush()
+    post=SocialListeningResult(run_id=run.id,provider='TEST',platform='facebook',
+        canonical_url='https://www.facebook.com/example',
+        published_at=datetime.utcnow().date().isoformat()+'T10:00:00',
+        text_content='A post containing an unverified allegation that has not been assessed')
+    db.add(post);db.flush()
+    db.add(CampaignEvidence(campaign_id=campaign.id,result_id=post.id));db.commit()
+    out=build_command_center(db,p)
+    assert out['activity']['captured_mentions']==1
+    assert out['indicators']['potential_alerts']==0
+    assert out['attention_actions'][0]['kind']=='ASSESSMENT_COVERAGE'
+    assert out['briefing']['kind']=='LOCATION_EVIDENCE_BRIEFING'
+    assert 'no undismissed preliminary issue alerts' in out['briefing']['text'].lower()
+    db.close()

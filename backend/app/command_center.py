@@ -127,6 +127,11 @@ def build_command_center(db,p,data=None):
     relevant={}
     alerts_by_post={}
     region_posts=defaultdict(set)
+    region_captured=defaultdict(set)
+    region_unknown_captured=set()
+    platform_counts=Counter()
+    day_counts=Counter()
+    latest_captured=[]
     region_flags=defaultdict(set)
     unknown_posts=set()
     evidence_checked=0
@@ -188,24 +193,50 @@ def build_command_center(db,p,data=None):
     captured_ids=set()
     if campaigns_ids:
         from types import SimpleNamespace
-        captured_query=(db.query(SocialListeningResult.id,SocialListeningResult.run_id)
-            .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+        captured_query=(db.query(CampaignEvidence.campaign_id,
+                                  SocialListeningResult.id,SocialListeningResult.run_id,
+                                  SocialListeningResult.platform,SocialListeningResult.published_at)
+            .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
             .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
                     func.substr(SocialListeningResult.published_at,1,10)>=start,
                     func.substr(SocialListeningResult.published_at,1,10)<=end)
             .yield_per(600))
-        for post_id,run_id in captured_query:
-            if post_id in captured_ids:continue
-            if _result_in_scope(db,p,SimpleNamespace(run_id=run_id)):
-                captured_ids.add(post_id)
+        for campaign_id,post_id,run_id,platform,published_at in captured_query:
+            if not _result_in_scope(db,p,SimpleNamespace(run_id=run_id)):
+                continue
+            code=_region_code(campaigns_by_id[campaign_id])
+            if code:region_captured[code].add(post_id)
+            else:region_unknown_captured.add(post_id)
+            if post_id in captured_ids:
+                continue
+            captured_ids.add(post_id)
+            platform_counts[str(platform or 'Unknown').strip() or 'Unknown']+=1
+            day_counts[_day(published_at)]+=1
+            latest_captured.append({
+                'result_id':str(post_id),'platform':platform or 'Unknown',
+                'published_at':published_at})
+    latest_captured.sort(key=lambda row:row['published_at'] or '',reverse=True)
+    latest_captured=latest_captured[:3]
+    # Hydrate source details only for the small visible highlights.
+    for entry in latest_captured:
+        original=db.get(SocialListeningResult,int(entry['result_id']))
+        if original:
+            entry.update({'source_url':original.canonical_url,
+                          'author':original.author_name or 'Unknown author',
+                          'preview':str(original.text_content or '').strip()[:170]})
+    # Include zero-activity dates; missing bars would overstate continuity.
+    daily_series=[{'date':(date.fromisoformat(start)+timedelta(days=n)).isoformat(),
+                   'count':day_counts.get((date.fromisoformat(start)+timedelta(days=n)).isoformat(),0)}
+                  for n in range((date.fromisoformat(end)-date.fromisoformat(start)).days+1)]
     assessed_coverage=len(captured_ids.intersection(assessed_ids))
     unassessed_coverage=len(captured_ids)-assessed_coverage
 
     alerts=list(alerts_by_post.values())
     alerts.sort(key=lambda a:(a['priority_order'],a['detected_at'] or ''),reverse=True)
     by_region=[{'province':_province_name(code),'count':len(posts),
+                'relevant_count':len(region_posts.get(code,set())),
                 'flagged':len(region_flags.get(code,set())),
-                'province_code':code} for code,posts in region_posts.items()]
+                'province_code':code} for code,posts in region_captured.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
     # Combine assessed social posts with traditional/manual Intelligence Inbox
     # records. These are presented as recent records, NOT counted again in
@@ -257,12 +288,43 @@ def build_command_center(db,p,data=None):
                 'platform':post.platform,'handle':account.handle,'last_post_at':post.published_at,
                 'last_post_url':post.canonical_url,'summary':(post.text_content or '')[:170]})
             # Keep scanning to count all scoped linked posts, not only highlights.
+    waiting=sum(a['review_status']=='AWAITING_REVIEW' for a in alerts)
     briefing=_briefing(list(relevant.values()),alerts,
-                       sum(a['review_status']=='AWAITING_REVIEW' for a in alerts),
-                       by_region,len(watch_count_ids),start,end)
-    if not relevant and captured_ids:
-        briefing['text']+=(' '+str(unassessed_coverage)+' of '+str(len(captured_ids))+
-            ' captured, campaign-linked post(s) in the period have not received an AI assessment.')
+                       waiting,by_region,len(watch_count_ids),start,end)
+    # The scope-specific executive snapshot includes ACTUAL captured mentions,
+    # not just posts already assessed by AI.
+    location_phrase=('Across authorized national monitoring campaigns' if not selected_code
+                     else 'Within monitoring campaigns covering '+scope_label)
+    activity_text=(location_phrase+', '+str(len(captured_ids))+
+                   ' distinct social posts were captured from '+start+' to '+end+'.')
+    if platform_counts:
+        activity_text+=(' Most captured activity came from '+
+            ', '.join(name+' ('+str(count)+')' for name,count in platform_counts.most_common(2))+'.')
+    if assessed_coverage<len(captured_ids):
+        activity_text+=(' '+str(unassessed_coverage)+' of these posts have not yet received AI assessment.')
+    activity_text+=(' '+str(len(relevant))+' distinct posts were assessed as relevant.')
+    if alerts:
+        activity_text+=(' '+str(len(alerts))+' preliminary issue alert(s) remain on record; '+str(waiting)+' await human review.')
+    else:
+        activity_text+=' No undismissed preliminary issue alerts were identified among the assessed relevant posts in this period.'
+    briefing['text']=activity_text
+    briefing['kind']='LOCATION_EVIDENCE_BRIEFING' if captured_ids else 'DATA_COVERAGE_NOTICE'
+    briefing['limitation']=('Compiled from captured campaign-linked posts and existing assessments only. '
+        'Selected geography means monitoring campaign coverage, not verified post origin. '
+        'Potential violations are preliminary and require authorized BAWASLU review.')
+    attention=[]
+    for issue in alerts[:3]:
+        attention.append({
+            'kind':'POTENTIAL_ISSUE','title':issue['category'],
+            'description':issue['description'][:150],
+            'review_status':issue['review_status'],
+            'recommended_action':'Verify source evidence and assess whether further investigation is warranted.',
+            'campaign_id':issue['campaign_id'],'result_id':issue['result_id']})
+    if unassessed_coverage:
+        attention.append({'kind':'ASSESSMENT_COVERAGE','title':'Evidence still awaiting AI assessment',
+            'description':str(unassessed_coverage)+' captured post(s) have no AI assessment in this period.',
+            'review_status':'NOT_ASSESSED',
+            'recommended_action':'Open Social Listening to review captured evidence and its assessment status.'})
 
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
             'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
@@ -272,11 +334,17 @@ def build_command_center(db,p,data=None):
             'latest_evidence_at':source_updated.isoformat()+'Z' if source_updated else None,
             'indicators':{'relevant_mentions':len(relevant),
                 'potential_alerts':len(alerts),
-                'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in alerts),
+                'awaiting_review':waiting,
                 'emerging_issues':None},
-            'briefing':briefing,'alerts':alerts[:5], 'latest_intelligence':recent,
+            'briefing':briefing,'attention_actions':attention[:4],
+            'alerts':alerts[:5], 'latest_intelligence':recent,
+            'activity':{'captured_mentions':len(captured_ids),
+                        'top_platforms':[{'platform':k,'count':v} for k,v in platform_counts.most_common(5)],
+                        'daily':daily_series,
+                        'recent_captured':latest_captured,
+                        'data_basis':'CAMPAIGN_LINKED_CAPTURED_POSTS'},
             'regions':by_region[:38],
-            'unknown_region_mentions':len(unknown_posts),
+            'unknown_region_mentions':len(region_unknown_captured),
             'region_method':'CAMPAIGN_MONITORING_SCOPE_NOT_POST_ORIGIN',
             'watchlist':{'entries':watch_rows,'captured_posts_in_period':len(watch_count_ids),
                          'monitored_profiles':len(watch_items)},
@@ -285,7 +353,7 @@ def build_command_center(db,p,data=None):
                         'unassessed_posts_in_period':unassessed_coverage,
                         'assessed_pairs_in_period':evidence_checked,'relevant_distinct_posts':len(relevant),
                         'distinct_campaigns_in_scope':len(campaigns_by_id),
-                        'warning':'Only AI-assessed, campaign-linked posts meeting the current filters are counted. Most stored posts may not yet have assessments. Province indicates monitoring scope, not verified author location.'},
+                        'warning':'Captured activity counts distinct campaign-linked posts; relevant mentions and issue alerts come only from stored assessments. Province indicates campaign monitoring scope, not verified author location.'},
             'capabilities':{'emerging_issues':False,'ai_generated_new_summary':False,
                             'cross_module_assistant':False},
             'paid_provider_called':False}

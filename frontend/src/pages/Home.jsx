@@ -67,9 +67,12 @@ export default function Home(){
   return()=>{live=false};
  },[params,version]);
  const metrics=data?.indicators||{};
+ const activity=data?.activity||{};
+ const trend=(activity.daily||[]).slice(-14);
+ const trendMax=Math.max(1,...trend.map(x=>Number(x.count)||0));
  const canNational=access?.geographic_scope==='Nationwide';
  const regions=data?.regions||[];
- const regionalDistribution=regions.map(x=>({...x,percentage:data?.indicators?.relevant_mentions?100*x.count/data.indicators.relevant_mentions:0}));
+ const regionalDistribution=regions.map(x=>({...x,percentage:activity.captured_mentions?100*x.count/activity.captured_mentions:0}));
  const statusDescription=data?.coverage?.warning;
  return <div className="space-y-4 md:space-y-5" aria-label="BAWASLU Intelligence Command Center">
   <div className="flex flex-wrap gap-3 items-start justify-between">
@@ -96,24 +99,56 @@ export default function Home(){
   {error&&<div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Unable to load intelligence overview.</strong><p className="mt-1">{error}</p><button className="mt-2 underline" onClick={()=>setVersion(x=>x+1)}>Retry</button></div>}
   {loading&&<div role="status" className="intel-card p-8 text-sm text-slate-500">Loading authorized intelligence and monitoring coverage…</div>}
   {!loading&&data&&<>
-   <Panel title="Executive Intelligence Briefing" subtitle={'Based on stored assessments · '+data.period.date_from+' to '+data.period.date_to}>
-    <div className="flex gap-3">
-     <Sparkles size={18} className="shrink-0 text-[#126d91] mt-0.5"/>
-     <div className="space-y-3 min-w-0">
-      <p className="text-sm leading-6 text-[#283f52]">{data.briefing.text}</p>
-      <p className="text-[11px] text-slate-500">{data.briefing.limitation}</p>
-      <div className="flex flex-wrap items-center gap-3">
+   <Panel title={'Executive Situation Briefing · '+data.scope.label} subtitle={'Location-specific monitoring · '+data.period.date_from+' to '+data.period.date_to}>
+    <div className="grid lg:grid-cols-[1.35fr_1fr] gap-4">
+     <div className="space-y-3">
+      <div className="flex gap-3">
+       <Sparkles size={18} className="shrink-0 text-[#126d91] mt-0.5"/>
+       <div className="min-w-0">
+        <p className="text-sm leading-6 text-[#283f52]">{data.briefing.text}</p>
+        <p className="text-[11px] text-slate-500 mt-2">{data.briefing.limitation}</p>
+       </div>
+      </div>
+      <div className="flex flex-wrap gap-2 items-center">
+       <span className="text-[11px] font-semibold text-slate-600">Active platforms</span>
+       {(activity.top_platforms||[]).length?activity.top_platforms.slice(0,3).map(x=><span key={x.platform} className="rounded-full bg-[#edf4f8] px-2 py-1 text-[11px] text-[#355b71]">{x.platform}: {fmtNumber(x.count)}</span>):<span className="text-xs text-slate-500">No captured posts for this period</span>}
+      </div>
+      {trend.length>0&&<div className="rounded-lg border border-[#e2e9ef] p-3" aria-label="Captured social activity trend">
+       <div className="flex justify-between items-center gap-3"><strong className="text-xs text-[#29485d]">Captured social activity</strong><Link to="/social-listening" className="text-[11px] text-[#126d91] font-semibold">Explore posts →</Link></div>
+       <div className="flex h-16 items-end gap-1 mt-3" role="img" aria-label={'Captured posts by day: '+trend.map(x=>x.date+': '+x.count).join('; ')}>
+        {trend.map(x=><div key={x.date} className="flex-1 min-w-0 rounded-t-sm bg-[#167b9f]" style={{height:Math.max(2,(Number(x.count||0)/trendMax)*100)+'%'}} title={x.date+': '+x.count+' captured post(s)'}/>)}
+       </div>
+       <div className="flex justify-between text-[10px] text-slate-500 mt-1"><span>{trend[0]?.date}</span><span>{trend[trend.length-1]?.date}</span></div>
+       <p className="text-[10px] text-slate-500 mt-1">Daily count of distinct campaign-linked captured posts in the selected location scope.</p>
+      </div>}
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
        {(data.briefing.sources||[]).map((x,i)=><Link key={x.campaign_id+'-'+x.result_id} to={evidenceLink(x)} className="text-xs text-[#126d91] font-semibold">Supporting record {i+1} ↗</Link>)}
-       {data.briefing.kind==='DATA_COVERAGE_NOTICE'&&<Link to="/social-listening" className="text-xs text-[#126d91] font-semibold">Explore collected evidence ↗</Link>}
+       {data.briefing.kind==='DATA_COVERAGE_NOTICE'&&<Link to="/social-listening" className="text-xs text-[#126d91] font-semibold">Explore captured evidence ↗</Link>}
       </div>
      </div>
+     <section className="rounded-lg bg-[#f4f7fa] p-3 md:p-4 space-y-3" aria-label="BAWASLU representative review actions">
+      <div>
+       <h3 className="text-sm font-semibold text-[#173952]">For BAWASLU Representative</h3>
+       <p className="text-xs text-slate-500 mt-1">Preliminary indicators and evidence work requiring review</p>
+      </div>
+      {(data.attention_actions||[]).length?(data.attention_actions||[]).map((x,i)=><div key={x.kind+'-'+i} className="bg-white rounded-md border border-[#e0e8ee] p-3 space-y-1.5">
+       <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold text-[#263e51]">{x.title}</p>
+        <span className="text-[10px] shrink-0 text-amber-800">{x.kind==='POTENTIAL_ISSUE'?'Preliminary alert':'Data coverage'}</span>
+       </div>
+       <p className="text-xs text-slate-600 line-clamp-2">{x.description}</p>
+       <p className="text-[11px] text-slate-500">{x.recommended_action}</p>
+       <Link to={x.kind==='POTENTIAL_ISSUE'?evidenceLink(x):'/social-listening'} className="inline-block text-xs font-semibold text-[#126d91]">Review supporting evidence →</Link>
+      </div>):<p className="text-xs text-slate-600">No outstanding preliminary issue alerts or unassessed captured campaign posts were identified for the selected period. This is not a determination that no violations occurred.</p>}
+      <Link to="/inbox" className="text-xs font-semibold text-[#126d91] inline-block">Open Intelligence Inbox →</Link>
+     </section>
     </div>
    </Panel>
    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3" aria-label="Intelligence indicators">
-    <Stat label="Relevant mentions" value={metrics.relevant_mentions} description="Distinct AI-assessed posts" to="/inbox"/>
+    <Stat label="Captured social posts" value={activity.captured_mentions} description="Distinct monitored posts" to="/social-listening"/>
+    <Stat label="Relevant assessed posts" value={metrics.relevant_mentions} description="AI-assessed as relevant" to="/inbox"/>
     <Stat label="Potential issue alerts" value={metrics.potential_alerts} description="Preliminary, not confirmed" to="/inbox"/>
-    <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Requires human assessment" to="/inbox"/>
-    <Stat label="Emerging issues" value={metrics.emerging_issues} description="Clustering not yet enabled" to="/social-listening"/>
+    <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Human assessment required" to="/inbox"/>
    </div>
    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d]" role="note">
     <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} captured campaign-linked posts in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
@@ -130,10 +165,10 @@ export default function Home(){
    <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4">
     <Panel title="Regional Intelligence Overview" subtitle="Categorized by campaign monitoring scope—not confirmed post origin" to="/social-listening">
      {regions.length?<div className="space-y-2">
-      <div className="overflow-x-auto"><table className="text-sm w-full"><thead><tr className="text-[11px] text-slate-500 text-left border-b"><th className="py-2">Province</th><th className="py-2 text-right">Relevant posts</th><th className="py-2 text-right">Issue alerts</th></tr></thead><tbody>{regions.slice(0,8).map(r=><tr key={r.province_code} className="border-b last:border-b-0 border-slate-100"><td className="py-2">{canNational?<button type="button" className="text-[#126d91] hover:underline" onClick={()=>setProvince(r.province)}>{r.province}</button>:r.province}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.count)}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.flagged)}</td></tr>)}</tbody></table></div>
-      <details className="text-xs text-[#126d91]"><summary className="cursor-pointer font-semibold">View province map</summary><div className="mt-2"><ProvinceHeatmap distribution={regionalDistribution} totalPosts={metrics.relevant_mentions||0} title="Campaign monitoring coverage" subtitle="AI-assessed posts by campaign target province" footnote="Shading is based on campaign monitoring coverage, not post origin or proven electoral risk. Campaigns may overlap. Unknown / unclassified records are omitted from the map."/></div></details>
+      <div className="overflow-x-auto"><table className="text-sm w-full"><thead><tr className="text-[11px] text-slate-500 text-left border-b"><th className="py-2">Province</th><th className="py-2 text-right">Captured posts</th><th className="py-2 text-right">Issue alerts</th></tr></thead><tbody>{regions.slice(0,8).map(r=><tr key={r.province_code} className="border-b last:border-b-0 border-slate-100"><td className="py-2">{canNational?<button type="button" className="text-[#126d91] hover:underline" onClick={()=>setProvince(r.province)}>{r.province}</button>:r.province}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.count)}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.flagged)}</td></tr>)}</tbody></table></div>
+      <details className="text-xs text-[#126d91]"><summary className="cursor-pointer font-semibold">View province map</summary><div className="mt-2"><ProvinceHeatmap distribution={regionalDistribution} totalPosts={activity.captured_mentions||0} title="Campaign monitoring coverage" subtitle="Captured posts by monitored campaign province" footnote="Shading is based on campaign monitoring coverage, not post origin or proven electoral risk. Campaigns may overlap. Unknown / unclassified records are omitted from the map."/></div></details>
      </div>:<p className="text-sm text-slate-500 py-2">No reliable campaign-scoped province breakdown is available for the selected period.</p>}
-     <p className="text-xs text-slate-500">{fmtNumber(data.unknown_region_mentions)} relevant post(s) associated with campaigns without a classified monitoring province. No inferred publisher locations are displayed. Unusual activity trends require a validated historical baseline and are not yet shown.</p>
+     <p className="text-xs text-slate-500">{fmtNumber(data.unknown_region_mentions)} captured post(s) associated with campaigns without a classified monitoring province. No inferred publisher locations are displayed. Unusual activity trends require a validated historical baseline and are not yet shown.</p>
     </Panel>
     <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
      {(data.watchlist?.entries||[]).length?data.watchlist.entries.map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">

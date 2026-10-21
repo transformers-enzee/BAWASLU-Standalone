@@ -109,9 +109,16 @@ export default function CampaignPanel({campaignId=null}){
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsKeyword,setAnalyticsKeyword]=useState(''),[appliedKeyword,setAppliedKeyword]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
   resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
-  try{const [r,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})]);setEvidence(r.data.evidence||[]);setDashboard(d.data)}
-  catch(e){const message=e.response?.data?.detail||e.response?.data?.error||e.message||'Dashboard request failed';setEvidenceError(message);setDashboardError(message)}
-  finally{setEvidenceLoading(false)}
+  try{
+   const results=await Promise.allSettled([
+    base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
+    base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})
+   ]);
+   if(results[0].status==='fulfilled')setEvidence(results[0].value.data.evidence||[]);
+   else setEvidenceError(results[0].reason?.response?.data?.detail||results[0].reason?.message||'Unable to load evidence');
+   if(results[1].status==='fulfilled')setDashboard(results[1].value.data);
+   else setDashboardError(results[1].reason?.response?.data?.detail||results[1].reason?.message||'Dashboard request failed');
+  }finally{setEvidenceLoading(false)}
  }
  function exportEvidenceCsv(){
   if(!selected||!evidence.length)return;
@@ -346,6 +353,8 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
+   {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
+   {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Campaign data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
    {dashboard&&<section aria-label="Campaign monitoring dashboard" className="rounded-lg border border-slate-200 p-4 space-y-3">
     <h4 className="font-semibold">Monitoring dashboard</h4>
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>

@@ -108,29 +108,108 @@ def registry_action(db:Session,p,action,data,id=None):
         return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order,'phrases':_category_phrases(db,x.id)} for x in cats]}
 
     if action=='watchlistCapturedFeed':
-        # Read-only matching of evidence already stored; no provider calls or credits.
+        # Paginated, read-only evidence matching. Never call a crawl provider here.
+        from datetime import date as _date
+        from sqlalchemy import and_, or_, func
         from .socialcrawl import _result_in_scope
+        from .campaigns import _captured_post_metrics
         w=_require_watchlist(db,p,id)
-        accounts=db.query(SourceAccount).filter(SourceAccount.watchlist_id==w.id).all()
-        found={}
+        accounts=db.query(SourceAccount).filter(SourceAccount.watchlist_id==w.id).order_by(SourceAccount.id).all()
+        payload=data if isinstance(data,dict) else {}
+        try:
+            page=max(1,min(10000,int(payload.get('page') or 1)))
+            page_size=max(1,min(50,int(payload.get('page_size') or 20)))
+        except (ValueError,TypeError): raise ValueError('Invalid pagination')
+        platform_filter=str(payload.get('platform') or '').strip().casefold()
+        account_filter=str(payload.get('account_id') or '').strip()
+        search=str(payload.get('search') or '').strip()[:120]
+        def valid_day(key):
+            value=str(payload.get(key) or '').strip()
+            if not value:return ''
+            try:return _date.fromisoformat(value).isoformat()
+            except ValueError:raise ValueError(key+' must be YYYY-MM-DD')
+        from_day=valid_day('date_from');to_day=valid_day('date_to')
+        if from_day and to_day and from_day>to_day:raise ValueError('Date from must not exceed date to')
+        def platform_key(value):
+            value=str(value or '').casefold().strip()
+            return 'x' if value=='twitter' else value
+        def inferred_handle(account):
+            supplied=str(account.handle or '').strip().lstrip('@').casefold()
+            if supplied:return supplied
+            parsed=urlparse(account.url or '')
+            host=(parsed.hostname or '').lower()
+            parts=[part for part in parsed.path.strip('/').split('/') if part]
+            platform=platform_key(account.platform)
+            allowed=ACCOUNT_PLATFORM_HOSTS.get(platform)
+            if not allowed or not any(host==h or host.endswith('.'+h) for h in allowed):return ''
+            if not parts:return ''
+            first=parts[0]
+            if platform in ('instagram','x','threads','tiktok'):
+                if first.lower() in ('p','reel','reels','video','status','stories','explore','search'):return ''
+                if platform=='tiktok' and not first.startswith('@'):return ''
+                return first.lstrip('@').casefold()
+            if platform=='youtube' and first.startswith('@'):return first[1:].casefold()
+            if platform=='facebook' and first.lower() not in ('posts','groups','watch','reel','share','profile.php','story.php'):
+                return first.casefold()
+            if platform=='reddit' and len(parts)>=2 and first.lower() in ('user','u'):
+                return parts[1].casefold()
+            if platform=='linkedin' and len(parts)>=2 and first.lower() in ('in','company'):
+                return parts[1].casefold()
+            return ''
+        specs={}
         for account in accounts:
-            platform=str(account.platform or '').strip().casefold()
-            handle=str(account.handle or '').strip().lstrip('@').casefold()
-            if not handle:
-                continue
-            matches=(db.query(SocialListeningResult)
-                     .filter(SocialListeningResult.platform.ilike(platform))
-                     .filter(SocialListeningResult.observed_handle.ilike(handle) |
-                             SocialListeningResult.observed_handle.ilike('@'+handle))
-                     .order_by(SocialListeningResult.id.desc()).limit(250).all())
-            for post in matches:
-                if not _result_in_scope(db,p,post):continue
-                found[post.id]={'id':str(post.id),'platform':post.platform,
-                    'account':account.handle,'text':(post.text_content or '')[:900],
-                    'published_at':post.published_at,'url':post.canonical_url}
-        return {'posts':sorted(found.values(),key=lambda x:x['published_at'] or '',reverse=True)[:100],
-                'linked_accounts':len(accounts),'status':'Captured posts only. No scheduled monitoring or paid API calls.',
-                'paid_provider_called':False}
+            platform=platform_key(account.platform)
+            if platform_filter and platform_filter!=platform:continue
+            if account_filter and account_filter!=str(account.id):continue
+            handle=inferred_handle(account)
+            if platform and handle:
+                specs.setdefault((platform,handle),account)
+        base={'linked_accounts':len(accounts),'matchable_accounts':len(specs),
+              'paid_provider_called':False,
+              'status':'Stored captured evidence only. No automatic monitoring or provider requests.'}
+        if not specs:return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
+        match_conditions=[]
+        for (platform,handle),account in specs.items():
+            platform_condition=func.lower(SocialListeningResult.platform).in_(
+                ['x','twitter'] if platform=='x' else [platform])
+            observed=func.lower(func.trim(SocialListeningResult.observed_handle))
+            author=func.lower(func.trim(SocialListeningResult.author_name))
+            matching=or_(observed.in_([handle,'@'+handle]),
+                and_(or_(SocialListeningResult.observed_handle.is_(None),
+                         func.trim(SocialListeningResult.observed_handle)==''),
+                     author.in_([handle,'@'+handle])))
+            match_conditions.append(and_(platform_condition,matching))
+        query=db.query(SocialListeningResult).filter(or_(*match_conditions))
+        if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
+        if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
+        if search:
+            escaped=search.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+            query=query.filter(SocialListeningResult.text_content.ilike('%'+escaped+'%',escape='\\'))
+        query=query.order_by(SocialListeningResult.published_at.desc(),SocialListeningResult.id.desc())
+        # Regional users must not learn the existence/count of out-of-scope records.
+        if p.get('geographic_scope')=='Nationwide':
+            total=query.order_by(None).count()
+            rows=query.offset((page-1)*page_size).limit(page_size).all()
+        else:
+            total=0;rows=[];start=(page-1)*page_size
+            for item in query.yield_per(200):
+                if not _result_in_scope(db,p,item):continue
+                if start<=total<start+page_size:rows.append(item)
+                total+=1
+        def serialize_post(item):
+            platform=platform_key(item.platform)
+            observed=str(item.observed_handle or '').strip().lstrip('@').casefold()
+            author=str(item.author_name or '').strip().lstrip('@').casefold()
+            matched=specs.get((platform,observed)) if observed else specs.get((platform,author))
+            metrics=_captured_post_metrics(item.engagement_json)
+            return {'id':str(item.id),'platform':item.platform,'account':matched.handle or '@'+inferred_handle(matched) if matched else '',
+                'text':(item.text_content or '')[:5000],
+                'published_at':item.published_at,'url':item.canonical_url,
+                'author_name':item.author_name,'content_type':item.content_type,
+                'match_method':'observed_handle' if observed else 'author_name_unverified',
+                **metrics}
+        return {**base,'posts':[serialize_post(item) for item in rows],
+                'page':page,'page_size':page_size,'total':total}
 
     if action=='createWatchlist':
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')

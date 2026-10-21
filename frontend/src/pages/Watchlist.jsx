@@ -22,15 +22,6 @@ export default function Watchlist(){
   const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
   const [q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState(''),[typeFilter,setTypeFilter]=useState(''),[priorityFilter,setPriorityFilter]=useState(''),[geoFilter,setGeoFilter]=useState('');
   const formRef=useRef(null);
-  const [feedId,setFeedId]=useState(null),[feed,setFeed]=useState([]),[feedBusy,setFeedBusy]=useState(false),[feedError,setFeedError]=useState('');
-  async function toggleFeed(id){
-    if(feedId===id){setFeedId(null);return}
-    setFeedId(id);setFeed([]);setFeedError('');setFeedBusy(true);
-    try{const result=await registry('watchlistCapturedFeed',{},id);setFeed(result.posts||[])}
-    catch(e){setFeedError(err(e))}finally{setFeedBusy(false)}
-  }
-
-
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const revealForm=()=>setTimeout(()=>formRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);
   const startCreate=()=>{setForm(blankItem());setMessage('');revealForm()};
@@ -133,7 +124,7 @@ export default function Watchlist(){
         <div className="text-xs text-[#7f91a1] mt-3">{[x.regency_city,x.province].filter(Boolean).join(', ')||t('nationwide')} · {x.related_election||t('election_not_specified')}</div>
         <div className="text-xs text-[#7f91a1] mt-2">{t('created')} {new Date(x.created_date).toLocaleDateString('en-GB')} · {t('updated')} {new Date(x.updated_date).toLocaleDateString('en-GB')}</div>
         <div className="flex flex-wrap gap-3 mt-4">
-          <button type="button" className="text-xs font-semibold text-[#126b8b]" onClick={()=>toggleFeed(x.id)}>{feedId===x.id?'Hide captured posts':'View captured account posts'} →</button>
+          <Link to={'/watchlist/'+x.id+'/posts'} className="text-xs font-semibold text-[#126b8b]">View captured posts →</Link>
           <Link to={'/inbox?entity='+encodeURIComponent(x.name)} className="text-xs font-semibold text-[#126b8b]">{t('view_related_intelligence')} →</Link>
           {canManage&&<button className="text-xs font-semibold text-[#126b8b]" onClick={()=>startEdit(x)}><Pencil size={13} className="inline mr-1"/>{t('edit')}</button>}
           {canManage&&x.status!=='Active'&&<button className="text-xs font-semibold text-[#126b8b]" disabled={busy} onClick={()=>setStatus(x,'Active')}>{t('activate')}</button>}
@@ -141,11 +132,6 @@ export default function Watchlist(){
           {canManage&&x.status!=='Inactive'&&<button className="text-xs font-semibold text-[#7a5960]" disabled={busy} onClick={()=>setStatus(x,'Inactive')}>{t('deactivate')}</button>}
         </div>
 
-        {feedId===x.id&&<section aria-label="Captured account posts" className="mt-4 rounded-lg border bg-slate-50 p-3 space-y-2">
-          <p className="text-xs font-semibold">Captured account posts</p>
-          <p className="text-[11px] text-slate-500">Only previously stored posts matching an exact registered account handle. No automatic crawl is running.</p>
-          {feedBusy?<p className="text-xs">Loading captured posts…</p>:feedError?<p className="text-xs text-red-700">{feedError}</p>:feed.length?feed.map(post=><div key={post.id} className="rounded-lg bg-white border p-2 text-xs space-y-1"><p className="text-slate-500">{post.platform} · {post.account} · {post.published_at||'Date unknown'}</p><p className="line-clamp-3 whitespace-pre-wrap">{post.text||'No text available'}</p>{/^https:\/\//i.test(post.url||'')&&<a href={post.url} target="_blank" rel="noreferrer" className="text-[#126b8b]">Open source ↗</a>}</div>):<p className="text-xs text-slate-500">No matching captured posts yet. A registered URL does not automatically collect posts.</p>}
-        </section>}
         <div className="border-t border-[#edf1f5] mt-5 pt-4">
           <div className="text-xs font-bold text-[#536d80] mb-2">{t('public_accounts_urls')}</div>
           {accounts.filter(a=>a.watchlist_id===x.id).map(a=><div key={a.id} className="flex items-center justify-between gap-3 py-1.5">

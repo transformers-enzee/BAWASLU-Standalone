@@ -18,6 +18,7 @@ import Home from '@/pages/Home';
 import CommandCenter from '@/pages/CommandCenter';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
+import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
 import AddIntelligence from '@/pages/AddIntelligence';
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/watchlist/:id" element={<WatchlistProfile />} />
+          <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />

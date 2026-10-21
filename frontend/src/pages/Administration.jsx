@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
 import { registry, useRegistry } from '@/components/intel/useIntel';
 import { Notice, err } from '@/components/intel/Fields';
@@ -6,6 +7,15 @@ import CategoryManager from '@/components/intel/CategoryManager';
 import AccessAssignmentForm from '@/components/intel/AccessAssignmentForm';
 import { useLanguage } from '@/lib/LanguageContext';
 
+function RelevanceGateManager(){
+ const [questions,setQuestions]=useState([]),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ async function load(){try{const data=await base44.relevanceGates.list();setQuestions(data.questions||[])}catch(e){setMessage(e.message)}}
+ useEffect(()=>{load()},[]);
+ async function add(){if(!draft.trim())return;setBusy(true);setMessage('');try{await base44.relevanceGates.create({question:draft.trim(),active:true});setDraft('');await load()}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ async function update(q,changes){setBusy(true);setMessage('');try{await base44.relevanceGates.update(q.id,{question:q.question,...changes});await load()}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ async function remove(q){if(!window.confirm('Delete gate question? Existing assessment answers remain in the audit history.'))return;setBusy(true);try{await base44.relevanceGates.remove(q.id);await load()}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ return <section className="intel-card p-5 space-y-3"><h2 className="font-semibold">AI Relevance Gates</h2><p className="text-sm text-slate-600">Admin-controlled Yes/No gates for future AI relevance assessments. The AI can answer Uncertain if evidence is insufficient. No means Irrelevant, and Uncertain prevents automatic Relevant classification. Updating gates does not rerun past assessments or spend AI credits.</p>{message&&<p role="alert" className="text-sm text-red-600">{message}</p>}<div className="flex flex-wrap gap-2"><input className="intel-input flex-1 min-w-[230px]" value={draft} onChange={e=>setDraft(e.target.value)} maxLength={400} placeholder="Does the post involve or affect the Indonesian community?"/><button type="button" className="intel-button" disabled={busy||draft.trim().length<12} onClick={add}>Add question</button></div><div className="space-y-2">{questions.map(q=><div key={q.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-3"><label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={q.active} disabled={busy} onChange={e=>update(q,{active:e.target.checked})}/>Active</label><input className="intel-input flex-1 min-w-[250px]" aria-label={'Gate question '+q.id} value={q.question} maxLength={400} onChange={e=>setQuestions(prev=>prev.map(x=>x.id===q.id?{...x,question:e.target.value}:x))}/><button type="button" className="intel-ghost" disabled={busy||q.question.trim().length<12} onClick={()=>update(q,{question:q.question.trim()})}>Save</button><button type="button" className="intel-ghost" disabled={busy} onClick={()=>remove(q)}>Delete</button></div>)}</div><p className="text-xs text-slate-500">{questions.length} / 20 questions configured. National administrators only.</p></section>
+}
 export default function Administration(){
  const {t,label}=useLanguage();
  const {access}=useOutletContext();const mayManage=access.permissions?.manage_users===true;
@@ -31,6 +41,7 @@ export default function Administration(){
    </tr>)}</tbody></table>{!visible.length&&<p className="p-5 text-sm text-muted-foreground">{t('no_users_found')}</p>}
   </section>}
   {mayManage&&edit&&<AccessAssignmentForm key={edit.id} edit={edit} setEdit={setEdit} adminRole={adminRole} adminProvince={adminProvince} users={users} roles={roles} labels={labels} busy={busy} onSave={save} onCancel={()=>setEdit(null)}/>}
+  {access.role==='National Administrator'&&access.permissions?.administration===true&&<RelevanceGateManager/>}
   <CategoryManager categories={categories} refresh={refresh} authorized={access.role==='National Administrator'&&access.permissions?.administration===true}/>
  </div>;
 }

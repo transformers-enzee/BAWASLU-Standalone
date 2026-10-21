@@ -9,7 +9,7 @@ import httpx
 from .geography import province_code_for, regency_code_for, REGENCY_BY_CODE
 from .db import SessionLocal
 from .issue_signals import active_issue_taxonomy, validated_issue_signals, validated_actor_issue_signals, validated_reported_incident_signals
-from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation
+from .models import MonitoringCampaign, CampaignEvidence, SocialListeningResult, EvidenceAssessment, IssueCategory, IssueCategoryPhrase, AIAssessmentJob, AIBudgetReservation, RelevanceGateQuestion, RelevanceGateAnswer
 
 log=logging.getLogger(__name__)
 _campaign_locks_guard=threading.Lock()
@@ -24,8 +24,8 @@ def _arr(value):
     except (TypeError,ValueError): return []
 
 RELEVANCE_SCREENING_INSTRUCTIONS = """You are a neutral, evidence-grounded Indonesian election monitoring screener.
-Return ONLY a JSON object with relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings or objects with explicit province and optional regency_city fields; do not infer geography), candidates (array of short strings), issue_category_ids (array of integer IDs), reported_incident_signals (array of objects with category_id integer, evidence_quote copied exactly from supplied text, explanation, and time_context set to HISTORICAL or CURRENT or UNKNOWN), potential_violation_signals (array of objects each containing category_id integer, alleged_actor, alleged_activity, and verbatim evidence_quote from source text explicitly naming that actor and describing that activity).
-FIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
+Return ONLY a JSON object with gate_answers (one item per supplied relevance_gates: id integer, answer YES/NO/UNCERTAIN, explanation), relevance_label (RELEVANT, IRRELEVANT, UNCERTAIN), confidence (LOW, MEDIUM, HIGH), explanation, locations (array of short strings or objects with explicit province and optional regency_city fields; do not infer geography), candidates (array of short strings), issue_category_ids (array of integer IDs), reported_incident_signals (array of objects with category_id integer, evidence_quote copied exactly from supplied text, explanation, and time_context set to HISTORICAL or CURRENT or UNKNOWN), potential_violation_signals (array of objects each containing category_id integer, alleged_actor, alleged_activity, and verbatim evidence_quote from source text explicitly naming that actor and describing that activity).
+Answer every provided gate independently using only supplied evidence. A NO on any active gate requires IRRELEVANT; an UNCERTAIN gate prevents a confident RELEVANT answer. Do not guess.\nFIRST assess topical relevance to the actual campaign objective using available caption and surrounding context, main and secondary keywords, and the Indonesian BAWASLU electoral oversight remit. A keyword or hashtag by itself is NOT evidence of topic relevance. Indonesian election news, credible election-administration activities, legitimate political discussion and public-order oversight can be RELEVANT even where there is no violation. Foreign elections unrelated to the campaign are IRRELEVANT.
 SECOND, independently consider potential election-supervision issues, using ONLY configured active category IDs. Reported incidents are distinct from accusations against named actors: when supplied source text explicitly reports a concrete alleged election-related incident (for example suspected vote buying, intimidation, tampering or a formal oversight complaint), include a reported_incident_signals entry even if no accused actor is named. Quote a contiguous exact span of source text (at least 20 characters) documenting the incident. Use HISTORICAL for past-event news or court cases, CURRENT only with explicit current-event source wording, otherwise UNKNOWN. Do not include mere discussion, preventive advice, generic political criticism, or keyword mentions. Never fabricate details from linked media not in supplied source text. These are leads for human review, not established violations.  No flagged category does NOT make a post irrelevant. Category association does not imply a violation. Only propose a potential_violation_signals entry when the source excerpt directly alleges a particular identifiable actor performed a specific potentially improper activity. Use a contiguous verbatim evidence_quote showing that the source attributes a specific allegation to the alleged_actor. Set alleged_actor to the actor's exact name as written in the quote. Set alleged_activity to a concise description grounded in that quotation; it does not need to be an exact substring, but must not add details not stated in the text. Formal complaints alleging specific misconduct by identified officials can be preliminary signals, not established guilt. If the alleged actor and activity are not explicitly connected in the source, do not produce a signal. The post author is not the alleged actor unless the post explicitly says so. Do not label people as guilty. Never infer attribution from hashtags, mere name mentions, criticism, or adjacency. Do not flag general campaign discussion. Only propose an entry when a concrete concern is supported by a verbatim source excerpt; ordinary campaigning or political opinion alone never qualifies. No issue signal is a legal finding.
 If captions are vague, hashtags-only, or linked article/video substance is not in the supplied text, use UNCERTAIN rather than confidently excluding a plausibly relevant Indonesian election post. Do not invent linked material, location, people, allegations, or corroboration.
 Explanations must separate what was actually observed from what remains unknown. Be politically neutral and do not infer misconduct from criticism or candidate mentions."""
@@ -173,6 +173,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         category_names={c.id:c.name for c in categories}
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
         taxonomy=active_issue_taxonomy(categories,phrases)
+        active_gates=db.query(RelevanceGateQuestion).filter(RelevanceGateQuestion.active==True).order_by(RelevanceGateQuestion.id).limit(20).all()
         enqueue_campaign_evidence(campaign.id)
         links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         used=0
@@ -205,17 +206,28 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 job.updated_at=datetime.utcnow();db.commit()
                 break
             used+=1
-            payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy}
+            payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy,'relevance_gates':[{'id':q.id,'question':q.question} for q in active_gates]}
             try:
                 model=os.getenv('BAWASLU_RELEVANCE_MODEL','gpt-4o-mini')
                 url=os.getenv('OPENAI_BASE_URL','https://api.openai.com/v1').rstrip('/')+'/chat/completions'
                 response=httpx.post(url,headers={'Authorization':'Bearer '+os.environ['OPENAI_API_KEY']},
-                    json={'model':model,'temperature':0,'max_tokens':550,'response_format':{'type':'json_object'},
+                    json={'model':model,'temperature':0,'max_tokens':900,'response_format':{'type':'json_object'},
                     'messages':[{'role':'system','content':RELEVANCE_SCREENING_INSTRUCTIONS},
                     {'role':'user','content':json.dumps(payload,ensure_ascii=False)}]},timeout=30)
                 response.raise_for_status()
                 out=json.loads(response.json()['choices'][0]['message']['content'])
                 label=normalize_relevance_label(out)
+                by_id={}
+                for val in out.get('gate_answers',[]) if isinstance(out.get('gate_answers'),list) else []:
+                    if isinstance(val,dict) and type(val.get('id')) is int:by_id[val['id']]=val
+                gate_results=[]
+                for gate in active_gates:
+                    val=by_id.get(gate.id,{})
+                    answer=str(val.get('answer','UNCERTAIN')).strip().upper()
+                    if answer not in ('YES','NO','UNCERTAIN'):answer='UNCERTAIN'
+                    gate_results.append((gate,answer,str(val.get('explanation') or '')[:500]))
+                if any(answer=='NO' for _,answer,_ in gate_results):label='IRRELEVANT'
+                elif label=='RELEVANT' and any(answer=='UNCERTAIN' for _,answer,_ in gate_results):label='UNCERTAIN'
                 confidence=str(out.get('confidence','LOW')).upper()
                 if confidence not in ('LOW','MEDIUM','HIGH'):confidence='LOW'
                 def strings(key):
@@ -251,6 +263,8 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                     potential_issue_signals_json=json.dumps(signals))
                 db.add(record)
                 db.flush()
+                for gate,answer,reason in gate_results:
+                    db.add(RelevanceGateAnswer(assessment_id=record.id,question_id=gate.id,question_snapshot=gate.question,answer=answer,explanation=reason))
                 db.add(AssessmentSignalDiagnostic(assessment_id=record.id,
                     candidate_count=diag['candidate_count'],accepted_count=diag['accepted_count'],
                     rejected_reasons_json=json.dumps(diag['rejected_reasons'])))

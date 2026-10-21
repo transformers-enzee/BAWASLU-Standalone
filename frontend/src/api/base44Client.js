@@ -52,6 +52,12 @@ export const base44 = {
       return request('/api/social-listening/external-import/preview?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});
     }
   },
+  relevanceGates:{
+    list:()=>request('/api/relevance-gates'),
+    create:data=>request('/api/relevance-gates',{method:'POST',body:JSON.stringify(data)}),
+    update:(id,data)=>request('/api/relevance-gates/'+id,{method:'PUT',body:JSON.stringify(data)}),
+    remove:id=>request('/api/relevance-gates/'+id,{method:'DELETE'})
+  },
   functions:{
     async invoke(name,payload={}){
       const path = ['intelligence','registry'].includes(name) ? `/api/functions/${name}` : `/api/functions/${name}`;

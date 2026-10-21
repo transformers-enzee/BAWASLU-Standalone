@@ -427,3 +427,20 @@ class AIBudgetReservation(Base):
     budget_period: Mapped[str] = mapped_column(String(24))
     reserved_requests: Mapped[int] = mapped_column(Integer, default=0)
     __table_args__=(UniqueConstraint('campaign_id','budget_period',name='uq_ai_budget_campaign_period'),)
+
+class RelevanceGateQuestion(Base):
+    __tablename__='relevance_gate_questions'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class RelevanceGateAnswer(Base):
+    __tablename__='relevance_gate_answers'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_id: Mapped[int] = mapped_column(ForeignKey('evidence_assessments.id'), index=True, nullable=False)
+    question_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(String(16), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

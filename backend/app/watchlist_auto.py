@@ -145,10 +145,13 @@ def sync_account(account_id,client=None):
         try:
             api_key=os.getenv('SOCIALCRAWL_API_KEY','')
             if not api_key and client is None:raise RuntimeError('SocialCrawl API key is not configured')
-            payload={'include':'posts','items':[{'platform':platform,'handle':handle}]}
+            last_known=(db.get(WatchlistAccountSync,account_id).last_post_id or '').strip()
+            item_request={'platform':platform,'handle':handle}
+            if last_known:item_request['stop_at_id']=last_known
+            payload={'include':'posts','items':[item_request]}
             # Idempotency for the same reserved worker attempt; retries never
             # repeat a billable request within the provider's 24-hour window.
-            request_key='watchlist-'+str(account_id)+'-'+str(run.id)
+            request_key='watchlist-'+str(account_id)+'-'+now.strftime('%Y%m%d%H')+'-'+str(now.minute//15)
             if client:
                 env=client(payload)
             else:

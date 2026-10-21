@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -339,15 +339,10 @@ export default function CampaignPanel({campaignId=null}){
 <h5 className="font-semibold">Social Listening by platform</h5>
 <div className="flex gap-2" role="group" aria-label="Trend metric">{['posts','engagement','views'].map(k=><button key={k} type="button" aria-pressed={trendMetric===k} className={trendMetric===k?'intel-button':'intel-ghost'} onClick={()=>setTrendMetric(k)}>{k==='posts'?'Posts':k==='engagement'?'Engagement':'Views'}</button>)}</div>
 {dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
-{dashboard.daily_platform_trend.length===1?
-<BarChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}} barCategoryGap="55%">
-<CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
-{Object.keys(dashboard.platforms||{}).map((platform,index)=><Bar key={platform} dataKey={platform+'__'+trendMetric} name={platform} fill={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} maxBarSize={100}/>)}
-</BarChart>:
 <LineChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
 {Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platform} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={{r:3}} activeDot={{r:6}} connectNulls/>)}
-</LineChart>}
+</LineChart>
 </ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
 <p className="text-xs text-slate-500">Click a date on the chart to see its hottest posts. Only stored provider metrics are counted; missing data is not estimated.</p>
 </section>

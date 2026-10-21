@@ -357,8 +357,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
         links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         pending=0
-        for link in links:
-            item=db.get(SocialListeningResult,link.result_id)
+        for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue
             if not db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first():pending+=1
         try:
@@ -797,9 +796,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         keyword=str((data or {}).get('keyword') or '').strip()[:120].casefold()
-        query=db.query(CampaignEvidence).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
+        query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
         if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
-        links=query.order_by(CampaignEvidence.id.desc()).limit(5000).all()
+        links=query.order_by(CampaignEvidence.id.desc()).yield_per(500)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
@@ -883,7 +882,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'secondary_word_counts':{word:cloud_terms.get(word,0) for word in secondary_terms if cloud_terms.get(word,0)>0},
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
-                'limited_to':5000,'truncated':len(links)==5000,
+                'limited_to':None,'truncated':False,
                 'paid_provider_called':False}
     if action=='campaignRunReadiness':
         # Dry-run only: calculate scoped cost and duplicate warnings without invoking a provider.

@@ -842,7 +842,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             return re.compile('|'.join(re.escape(term) for term in terms)) if terms else None
         primary_pattern=keyword_pattern(primary_terms)
         secondary_pattern=keyword_pattern(secondary_terms)
-        visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
+        province_counts=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
@@ -884,6 +884,22 @@ def campaign_action(db:Session,p,action,data,id=None):
             views,has_views=metric('views','view_count','plays','play_count')
             engagement=metric('engagement_total')[0] if metric('engagement_total')[1] else likes+comments+shares
             total_engagement+=engagement;total_views+=views
+            account=str(item.author_name or '').strip()
+            if account:
+                identity=(platform,account.casefold())
+                entry=top_accounts.setdefault(identity,{'account':account,'platform':platform,'engagement':0,'posts':0,'followers':None})
+                entry['engagement']+=engagement
+                entry['posts']+=1
+                try:raw=json.loads(item.raw_payload_json or '{}')
+                except (ValueError,TypeError):raw={}
+                if isinstance(raw,dict):
+                    for field in ('Followers','Follower','Follower count','Followers Count','followers','follower_count'):
+                        value=raw.get(field)
+                        if value is None:continue
+                        parsed=str(value).strip().replace(',','')
+                        if parsed.isdigit():
+                            entry['followers']=max(entry['followers'] or 0,int(parsed))
+                            break
             if has_likes or has_comments or has_shares:metrics_available['engagement']+=1
             if has_views:metrics_available['views']+=1
             if source_day:
@@ -897,6 +913,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             try: geo=json.loads(item.geography_json or '{}')
             except (ValueError,TypeError): geo={}
             if isinstance(geo,dict):
+                province=str(geo.get('verified_province') or geo.get('source_province') or '').strip()
+                if province:province_counts[province]+=1
                 verified=geo.get('verified_country') or geo.get('source_country')
                 if isinstance(verified,str) and verified.strip(): geographies[verified.strip()]+=1
             states[item.review_state or 'UNKNOWN']+=1
@@ -915,6 +933,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
                 'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
                 'geographies':dict(geographies),
+                'province_distribution': [{'province':name,'count':count,'percentage':round(count*100/sum(province_counts.values()),1)} for name,count in province_counts.most_common()],
+                'province_coverage':sum(province_counts.values()),
+                'top_accounts_engagement':sorted(top_accounts.values(),key=lambda a:(-a['engagement'],-a['posts'],a['account']))[:15],
+                'top_accounts_followers':sorted((a for a in top_accounts.values() if a['followers'] is not None),key=lambda a:(-a['followers'],-a['engagement'],a['account']))[:15],
                 'demographics_coverage':{'records':visible,'language_available':demographic_coverage['language_available'],'country_available':demographic_coverage['country_available'],'age_available':0,'gender_available':0},
                 'source_languages':dict(languages),
                 'word_cloud':[{'word':word,'count':count,'secondary':word in {t.casefold() for t in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0], 'word_cloud_sample_size':min(visible,1000),

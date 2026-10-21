@@ -16,7 +16,7 @@ from time import monotonic
 # Short-lived, process-local dashboard cache. Authorization is checked on every request.
 _DASH_CACHE={}
 _DASH_LOCK=Lock()
-_DASH_TTL_SECONDS=30
+_DASH_TTL_SECONDS=600
 _DASH_MAX_ENTRIES=60
 
 def _dashboard_cache_get(key):
@@ -386,8 +386,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         province_names=["Aceh","Sumatera Utara","Sumatera Barat","Riau","Kepulauan Riau","Jambi","Bengkulu","Sumatera Selatan","Kepulauan Bangka Belitung","Lampung","Banten","DKI Jakarta","Jawa Barat","Jawa Tengah","DI Yogyakarta","Jawa Timur","Bali","Nusa Tenggara Barat","Nusa Tenggara Timur","Kalimantan Barat","Kalimantan Tengah","Kalimantan Selatan","Kalimantan Timur","Kalimantan Utara","Sulawesi Utara","Gorontalo","Sulawesi Tengah","Sulawesi Barat","Sulawesi Selatan","Sulawesi Tenggara","Maluku","Maluku Utara","Papua","Papua Barat","Papua Selatan","Papua Tengah","Papua Pegunungan","Papua Barat Daya"]
         province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(x) for x in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
         province_lookup={x.casefold():x for x in province_names}
-        for link,item in links:
-            if not item or not _result_in_scope(db,p,item): continue
+        for record in links:
+            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state)=record
+            item=SimpleNamespace(run_id=run_id,published_at=published_at,language=language,geography_json=geography_json,text_content=text_content,platform=platform,author_name=author_name,engagement_json=engagement_json,raw_payload_json=raw_payload_json,content_type=content_type,review_state=review_state)
+            if not _result_in_scope(db,p,item): continue
             if not db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first():pending+=1
         try:
             import os
@@ -848,7 +850,17 @@ def campaign_action(db:Session,p,action,data,id=None):
         if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
         if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
-        links=query.order_by(CampaignEvidence.id.desc()).yield_per(500)
+        # Stream only dashboard columns, not full ORM entities and their large payloads.
+        # The original full-entity query was expensive on 40k+ evidence rows.
+        from types import SimpleNamespace
+        columns=(CampaignEvidence.matched_fields_json,
+            SocialListeningResult.run_id,SocialListeningResult.published_at,
+            SocialListeningResult.language,SocialListeningResult.geography_json,
+            SocialListeningResult.text_content,SocialListeningResult.platform,
+            SocialListeningResult.author_name,SocialListeningResult.engagement_json,
+            SocialListeningResult.raw_payload_json,SocialListeningResult.content_type,
+            SocialListeningResult.review_state)
+        links=query.with_entities(*columns).order_by(CampaignEvidence.id.desc()).yield_per(1000)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
@@ -945,7 +957,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 verified=geo.get('verified_country') or geo.get('source_country')
                 if isinstance(verified,str) and verified.strip(): geographies[verified.strip()]+=1
             states[item.review_state or 'UNKNOWN']+=1
-            try: matched=json.loads(link.matched_fields_json or '{}')
+            try: matched=json.loads(matched_fields or '{}')
             except (ValueError,TypeError): matched={}
             if isinstance(matched,dict):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1

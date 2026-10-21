@@ -845,6 +845,10 @@ def campaign_action(db:Session,p,action,data,id=None):
             return re.compile('|'.join(re.escape(term) for term in terms)) if terms else None
         primary_pattern=keyword_pattern(primary_terms)
         secondary_pattern=keyword_pattern(secondary_terms)
+        # Match province mentions in campaign posts, never treat mentions as proven origin.
+        province_names=('Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya')
+        province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(name) for name in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
+        province_lookup={name.casefold():name for name in province_names}
         province_counts=Counter(); province_mentions=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue

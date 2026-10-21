@@ -4,6 +4,7 @@ import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-re
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import KeywordTags from '@/components/intel/KeywordTags';
+import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
@@ -487,11 +488,7 @@ export default function CampaignPanel({campaignId=null}){
  <p className="text-xs text-slate-500">Age and gender: unavailable. Not inferred from names, photos, profiles, or post text.</p>
  </section>
     </div>
-<section className="rounded-lg border p-4 space-y-3" aria-label="Province distribution heatmap">
- <div className="flex flex-wrap justify-between gap-2"><h5 className="font-semibold">Posts by province</h5><span className="text-xs text-slate-500">Connected to or originated from a province</span></div>
- {dashboard.province_connected_distribution?.length?<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{dashboard.province_connected_distribution.map(entry=><div key={entry.province} className="rounded-lg border p-3" style={{backgroundColor:'rgba(13,148,136,'+(0.08+0.72*entry.count/Math.max(1,...dashboard.province_connected_distribution.map(x=>x.count)))+')'}}><p className="text-xs font-medium">{entry.province}</p><strong className="text-lg tabular-nums">{entry.count.toLocaleString()}</strong><p className="text-xs text-slate-600">{entry.percentage.toFixed(1)}% of selected posts</p></div>)}</div>:<p className="text-sm text-slate-500">No province-linked posts in this selection.</p>}
- <p className="text-xs text-slate-500">Each post counts once per province when the province is explicitly mentioned or provided as source location. Mentions do not prove post origin. Posts can relate to multiple provinces, so percentages may exceed 100% in total.</p>
- </section>
+<ProvinceHeatmap distribution={dashboard.province_connected_distribution||[]} totalPosts={dashboard.statistics?.messages||0}/>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
  <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
  {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured campaign keywords appear in the selected evidence.</p>}

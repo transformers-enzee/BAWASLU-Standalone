@@ -835,6 +835,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
+        # Compile once: avoid 516 individual substring scans per evidence record.
+        import re
+        def keyword_pattern(terms):
+            terms=sorted({str(term).strip().casefold() for term in terms if str(term).strip()},key=len,reverse=True)
+            return re.compile('|'.join(re.escape(term) for term in terms)) if terms else None
+        primary_pattern=keyword_pattern(primary_terms)
+        secondary_pattern=keyword_pattern(secondary_terms)
         visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue
@@ -852,12 +859,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                 demographic_coverage['country_available']+=1
             # Already-linked campaign evidence is the main-keyword-matched corpus.
             lowered=(item.text_content or '').casefold()
-            for keyword in primary_terms+secondary_terms:
-                if not keyword.strip(): continue
-                occurrences=lowered.count(keyword.casefold())
-                if occurrences: cloud_terms[keyword]+=occurrences
-            if any(w.casefold() in lowered for w in primary_terms if w.strip()):primary_message_count+=1
-            if any(w.casefold() in lowered for w in secondary_terms if w.strip()):secondary_message_count+=1
+            # Keyword cloud uses a bounded sample; the message counters cover all records.
+            if visible<=1000:
+                for word in set((primary_pattern.findall(lowered) if primary_pattern else [])+(secondary_pattern.findall(lowered) if secondary_pattern else [])):
+                    cloud_terms[word]+=1
+            if primary_pattern and primary_pattern.search(lowered):primary_message_count+=1
+            if secondary_pattern and secondary_pattern.search(lowered):secondary_message_count+=1
             else:secondary_absent_count+=1
             if source_day: daily[source_day]+=1
             platform=item.platform or 'unknown'
@@ -910,7 +917,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'geographies':dict(geographies),
                 'demographics_coverage':{'records':visible,'language_available':demographic_coverage['language_available'],'country_available':demographic_coverage['country_available'],'age_available':0,'gender_available':0},
                 'source_languages':dict(languages),
-                'word_cloud':[{'word':word,'count':count,'secondary':word.casefold() in {s.casefold() for s in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0],
+                'word_cloud':[{'word':word,'count':count,'secondary':word in {t.casefold() for t in secondary_terms}} for word,count in sorted(cloud_terms.items(),key=lambda x:(-x[1],x[0])) if count>0], 'word_cloud_sample_size':min(visible,1000),
                 'secondary_word_counts':{word:cloud_terms.get(word,0) for word in secondary_terms if cloud_terms.get(word,0)>0},
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),

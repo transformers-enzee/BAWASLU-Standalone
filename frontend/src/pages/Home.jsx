@@ -115,6 +115,10 @@ export default function Home(){
     <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Requires human assessment" to="/inbox"/>
     <Stat label="Emerging issues" value={metrics.emerging_issues} description="Clustering not yet enabled" to="/social-listening"/>
    </div>
+   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d]" role="note">
+    <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} captured campaign-linked posts in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
+    <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
+   </div>
    <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4">
     <Panel title="Needs BAWASLU Attention" subtitle="Prioritized preliminary indicators from actual assessed evidence" to="/inbox" action="Open Intelligence Inbox">
      {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}

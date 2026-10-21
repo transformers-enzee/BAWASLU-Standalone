@@ -56,6 +56,7 @@ def test_empty_dashboard_is_clear_and_zero_cost():
     assert out['indicators']['relevant_mentions']==0
     assert out['indicators']['emerging_issues'] is None
     assert out['alerts']==[] and out['briefing']['kind']=='DATA_COVERAGE_NOTICE'
+    assert out['coverage']['captured_posts_in_period']==0
     assert out['paid_provider_called'] is False
     assert db.query(SocialListeningProviderUsage).count()==0
     db.close()
@@ -73,6 +74,8 @@ def test_region_restriction_applies_to_counts_alerts_and_filters():
     assert both['indicators']['potential_alerts']==2
     assert scoped['indicators']['relevant_mentions']==1
     assert scoped['indicators']['potential_alerts']==1
+    assert scoped['coverage']['captured_posts_in_period']==1
+    assert scoped['coverage']['assessed_posts_in_period']==1
     assert scoped['alerts'][0]['province']=='Jawa Barat'
     with pytest.raises(PermissionError):
         build_command_center(db,west,{'province':'Jawa Tengah'})
@@ -95,6 +98,7 @@ def test_latest_assessment_version_is_counted_once_and_dismissed_alert_omitted()
     result=build_command_center(db,p)
     assert result['indicators']['relevant_mentions']==1
     assert result['indicators']['potential_alerts']==0
+    assert result['coverage']['unassessed_posts_in_period']==0
     assert result['alerts']==[]
     db.close()
 

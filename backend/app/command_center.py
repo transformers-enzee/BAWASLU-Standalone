@@ -130,11 +130,13 @@ def build_command_center(db,p,data=None):
     region_flags=defaultdict(set)
     unknown_posts=set()
     evidence_checked=0
+    assessed_ids=set()
     source_updated=None
     for assessment,post in assessed_rows:
         campaign=campaigns_by_id[assessment.campaign_id]
         if not _result_in_scope(db,p,post):continue
         evidence_checked+=1
+        assessed_ids.add(post.id)
         if source_updated is None or post.collected_at and post.collected_at>source_updated:
             source_updated=post.collected_at
         if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
@@ -180,6 +182,25 @@ def build_command_center(db,p,data=None):
         prior=alerts_by_post.get(post.id)
         if prior is None or alert['priority_order']>prior['priority_order']:
             alerts_by_post[post.id]=alert
+    # Complete coverage denominator: all campaign-linked, authorized captured
+    # posts in the period, including posts that have not received AI screening.
+    # Use narrow columns to avoid loading large raw-payload JSON records.
+    captured_ids=set()
+    if campaigns_ids:
+        from types import SimpleNamespace
+        captured_query=(db.query(SocialListeningResult.id,SocialListeningResult.run_id)
+            .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+            .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                    func.substr(SocialListeningResult.published_at,1,10)>=start,
+                    func.substr(SocialListeningResult.published_at,1,10)<=end)
+            .yield_per(600))
+        for post_id,run_id in captured_query:
+            if post_id in captured_ids:continue
+            if _result_in_scope(db,p,SimpleNamespace(run_id=run_id)):
+                captured_ids.add(post_id)
+    assessed_coverage=len(captured_ids.intersection(assessed_ids))
+    unassessed_coverage=len(captured_ids)-assessed_coverage
+
     alerts=list(alerts_by_post.values())
     alerts.sort(key=lambda a:(a['priority_order'],a['detected_at'] or ''),reverse=True)
     by_region=[{'province':_province_name(code),'count':len(posts),
@@ -239,6 +260,10 @@ def build_command_center(db,p,data=None):
     briefing=_briefing(list(relevant.values()),alerts,
                        sum(a['review_status']=='AWAITING_REVIEW' for a in alerts),
                        by_region,len(watch_count_ids),start,end)
+    if not relevant and captured_ids:
+        briefing['text']+=(' '+str(unassessed_coverage)+' of '+str(len(captured_ids))+
+            ' captured, campaign-linked post(s) in the period have not received an AI assessment.')
+
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
             'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
             'scope':{'label':scope_label,'geographic_scope':p.get('geographic_scope'),
@@ -255,7 +280,10 @@ def build_command_center(db,p,data=None):
             'region_method':'CAMPAIGN_MONITORING_SCOPE_NOT_POST_ORIGIN',
             'watchlist':{'entries':watch_rows,'captured_posts_in_period':len(watch_count_ids),
                          'monitored_profiles':len(watch_items)},
-            'coverage':{'assessed_pairs_in_period':evidence_checked,'relevant_distinct_posts':len(relevant),
+            'coverage':{'captured_posts_in_period':len(captured_ids),
+                        'assessed_posts_in_period':assessed_coverage,
+                        'unassessed_posts_in_period':unassessed_coverage,
+                        'assessed_pairs_in_period':evidence_checked,'relevant_distinct_posts':len(relevant),
                         'distinct_campaigns_in_scope':len(campaigns_by_id),
                         'warning':'Only AI-assessed, campaign-linked posts meeting the current filters are counted. Most stored posts may not yet have assessments. Province indicates monitoring scope, not verified author location.'},
             'capabilities':{'emerging_issues':False,'ai_generated_new_summary':False,

@@ -584,6 +584,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         visible=db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc()).limit(200).all()
         visible=[campaign for campaign in visible if allowed(p,campaign)]
         campaign_id=str(data.get('campaign_id') or '')
+        requested_result=str(data.get('result_id') or '').strip()
+        if requested_result and not requested_result.isdigit():
+            raise ValueError('Invalid requested evidence ID')
         if campaign_id:
             visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
         active_category_rows=db.query(IssueCategory).filter(IssueCategory.active==True).all()
@@ -608,6 +611,14 @@ def campaign_action(db:Session,p,action,data,id=None):
                     if job.state in job_counts:job_counts[job.state]+=1
                     campaign_job_states[job.result_id]=job.state
             links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            # Home deep links must resolve even when the normal Inbox window
+            # (300 latest campaign links) has moved past the referenced record.
+            if requested_result:
+                exact=db.query(CampaignEvidence).filter(
+                    CampaignEvidence.campaign_id==campaign.id,
+                    CampaignEvidence.result_id==int(requested_result)).first()
+                if exact and not any(link.result_id==exact.result_id for link in links):
+                    links.append(exact)
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)
                 if not item or not _result_in_scope(db,p,item): continue

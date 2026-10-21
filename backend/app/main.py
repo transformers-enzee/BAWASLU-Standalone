@@ -72,7 +72,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'88.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'88.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -160,6 +160,15 @@ def registry(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(
         return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
+
+@app.post('/api/functions/commandCenter')
+def executive_command_center(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    # The dashboard is a scoped compilation, never an independent evidence store.
+    from .command_center import build_command_center
+    p=profile(db,user)
+    try:return build_command_center(db,p,body)
+    except PermissionError as e:raise HTTPException(403,str(e))
+    except ValueError as e:raise HTTPException(400,str(e))
 
 @app.post('/api/functions/socialListening')
 def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):

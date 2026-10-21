@@ -9,14 +9,22 @@ import { useLanguage } from '@/lib/LanguageContext';
 const platformLabel=value=>({youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',facebook:'Facebook',threads:'Threads',x:'X',twitter:'X',reddit:'Reddit',linkedin:'LinkedIn'}[String(value||'').toLowerCase()]||String(value||'Unknown'));
 const DEMO_VIOLATION={id:'synthetic-demo',campaign_id:'synthetic-demo',campaign_name:'DEMO ONLY',platform:'instagram',model_version:'mock-fixture',assessment_version:1,text_content:'SIMULASI / FIKTIF: Seorang warga mengaku melihat pembagian uang kepada pemilih di lokasi kampanye. Belum ada bukti independen; perlu diverifikasi.',explanation:'Fictional allegation for interface testing, not independently verified.',relevance_label:'RELEVANT',relevance_confidence:'MEDIUM',potential_issues:[{category_name:'Politik Uang',evidence_quote:'pembagian uang kepada pemilih',explanation:'Preliminary allegation only; independent verification required.'}],location_signals:[],candidate_signals:[],can_review_flag:true,flag_review_history:[]};
 function SocialEvidenceInbox(){
- const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(''),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
+ const deepLink=new URLSearchParams(window.location.search);
+ const requestedCampaign=deepLink.get('campaign_id')||'';
+ const requestedPost=deepLink.get('result_id')||'';
+ const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const watchBaseline=useRef(null);
  const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
- base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}})
- .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setIssueCategories(r.data.issue_categories||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
+ base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost}})
+ .then(r=>{if(!active)return;setFindings(r.data.findings||[]);
+ if(requestedPost&&campaign===requestedCampaign){
+  const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
+  if(found)setSelected(found);
+ }
+ setIssueCategories(r.data.issue_categories||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
  .catch(e=>{if(active)setError(e.response?.data?.detail||e.message||'Inbox unavailable')})
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}

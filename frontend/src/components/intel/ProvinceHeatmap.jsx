@@ -6,13 +6,13 @@ const project=point=>[(point[0]-94)*21.25,(7.7-point[1])*21.25];
 const ringPath=ring=>ring.map((point,index)=>{const [x,y]=project(point);return (index?'L':'M')+x.toFixed(1)+','+y.toFixed(1)}).join(' ')+'Z';
 const geoPath=geometry=>{const polygons=geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates||[];return polygons.map(polygon=>polygon.map(ringPath).join(' ')).join(' ')};
 
-export default function ProvinceHeatmap({distribution=[],totalPosts=0}){
+export default function ProvinceHeatmap({distribution=[],totalPosts=0,title='Posts by province',subtitle='Posts associated with provinces · current campaign filters',footnote='A post is counted once per province where the province is explicitly mentioned or provided as a source location; mentioning a province does not prove origin. Posts may connect to more than one province. Unresolved origins are not assigned to a map region.'}){
  const [geo,setGeo]=useState(null),[error,setError]=useState(false),[selected,setSelected]=useState(null);
  useEffect(()=>{let cancelled=false;fetch('/indonesia-provinces.geojson').then(r=>{if(!r.ok)throw Error('Map unavailable');return r.json()}).then(data=>{if(!cancelled)setGeo(data)}).catch(()=>{if(!cancelled)setError(true)});return ()=>{cancelled=true}},[]);
  const values=useMemo(()=>new Map(distribution.map(d=>[normalize(d.province),d])),[distribution]);
  const max=Math.max(1,...distribution.map(d=>Number(d.count)||0));
- return <section className="rounded-lg border p-4 space-y-3" aria-label="Posts by province choropleth map">
-  <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">Posts by province</h5><span className="text-xs text-slate-500">Posts associated with provinces · current campaign filters</span></div>
+ return <section className="rounded-lg border p-4 space-y-3" aria-label={title}>
+  <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">{title}</h5><span className="text-xs text-slate-500">{subtitle}</span></div>
   {error?<p className="text-sm text-red-600">Indonesia map boundaries could not be loaded.</p>:!geo?<p className="text-sm text-slate-500">Loading Indonesia province map…</p>:<>
    <div className="w-full overflow-x-auto rounded-lg bg-[#f6fafb]">
     <svg viewBox="0 0 1050 460" className="w-full min-w-[580px] h-auto" role="img" aria-label="Map of Indonesia with 38 provinces shaded by associated post count">
@@ -21,7 +21,7 @@ export default function ProvinceHeatmap({distribution=[],totalPosts=0}){
    </div>
    <div className="flex flex-wrap items-center justify-between gap-3 text-xs"><p className="text-slate-600">{selected?<><strong>{selected.name}</strong> · {selected.count.toLocaleString()} posts · {Number(selected.percentage).toFixed(1)}%</>:'Hover over a province to see its post count and percentage.'}</p><div className="flex items-center gap-2"><span>Low</span><div className="h-3 w-28 rounded-sm" style={{background:'linear-gradient(to right,#fff4c2,#fbd56b,#f59e35,#e85a2a,#bd2026)'}}/><span>High · {max.toLocaleString()}</span></div></div>
   </>}
-  <p className="text-xs text-slate-500">A post is counted once per province where the province is explicitly mentioned or provided as a source location; mentioning a province does not prove origin. Posts may connect to more than one province. Unresolved origins are not assigned to a map region.</p>
+  <p className="text-xs text-slate-500">{footnote}</p>
   <p className="text-[10px] text-slate-400">Province boundary source: denyherianto/indonesia-geojson-topojson-maps-with-38-provinces (CC BY 4.0).</p>
  </section>;
 }

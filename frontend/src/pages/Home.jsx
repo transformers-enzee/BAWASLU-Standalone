@@ -1,52 +1,154 @@
-import { Link, useOutletContext } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Inbox, BadgeCheck, ShieldAlert, MapPin, Sparkles, Radio, ListFilter, Clock3, AlertTriangle } from 'lucide-react';
-import { useIntel, useRegistry, intel } from '@/components/intel/useIntel';
-import { auditTitle } from '@/components/intel/auditLabels';
-import { Notice } from '@/components/intel/Fields';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { ArrowRight, ArrowUpRight, Clock3, Globe2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import Status from '@/components/intel/Status';
-import { useLanguage } from '@/lib/LanguageContext';
+import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 
-const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
-const validated=x=>x.review_status==='Validated as Relevant Intelligence';
-const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};const state=typeof t==='string'?t:t.state;const generated=typeof t==='object'?t.generated:!!state;return generated&&state&&state!=='REVIEW COMPLETE';};
-const mismatchPending=x=>(x.geographic_mismatch_review?.status||x.geographic_mismatch?.status)==='pending';
-const fmtDate=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('en-GB')};
+const fmtTime=value=>{if(!value)return 'Not available';const d=new Date(value);return Number.isNaN(d.getTime())?'Not available':d.toLocaleString('en-GB')};
+const fmtNumber=value=>typeof value==='number'?value.toLocaleString():'Not available';
+const evidenceLink=row=>'/inbox?campaign_id='+encodeURIComponent(row.campaign_id)+'&result_id='+encodeURIComponent(row.result_id);
+const day=(offset=0)=>{const d=new Date();d.setDate(d.getDate()+offset);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+const cleanSource=url=>{try{const x=new URL(url);return ['https:','http:'].includes(x.protocol)?x.href:null}catch{return null}};
 
-function attentionReasons(x,t){const r=[];if(mismatchPending(x))r.push({label:t('geographic_mismatch'),weight:70});if(triagePending(x))r.push({label:t('ai_triage_review'),weight:60});if(pendingReview(x))r.push({label:t('pending_human_review'),weight:55});if(x.jurisdiction_confirmed!==true)r.push({label:t('jurisdiction_unresolved'),weight:50});if(x.priority==='Critical')r.push({label:t('critical_priority'),weight:45});else if(x.priority==='High'&&!validated(x))r.push({label:t('high_priority'),weight:35});return r;}
-function reasonScore(x,t){return attentionReasons(x,t).reduce((n,r)=>n+r.weight,0)}
-
-function MetricCard({label,value,detail,to,Icon,permission,access,openLabel}){if(permission&&access.permissions?.[permission]!==true)return null;return <Link to={to} className="intel-card p-5 group hover:border-[#abc7d5] transition-colors"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#75899a]">{label}</p><strong className="block mt-2 text-3xl font-semibold text-[#163750]">{value}</strong><p className="text-xs text-[#8192a3] mt-2 leading-5">{detail}</p></div><div className="rounded-lg bg-[#eef5f7] p-2.5 text-[#176e8e]"><Icon size={18}/></div></div><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#176e8e]">{openLabel} <ArrowUpRight size={13}/></span></Link>}
-
-function AttentionList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_immediate_attention')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><div key={x.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-3"><div className="min-w-0 flex-1"><Link to={'/intelligence/'+x.id} className="text-xs font-semibold text-[#146a8b] hover:underline">{x.intelligence_id}</Link><Link to={'/intelligence/'+x.id} className="block mt-1 font-semibold text-[#1e354b] hover:underline truncate">{x.title||t('untitled_intelligence')}</Link><div className="mt-2 flex flex-wrap gap-1.5">{attentionReasons(x,t).map(r=><span key={r.label} className="rounded-full bg-[#fff5e9] px-2 py-1 text-[11px] font-semibold text-[#8a5d27]">{r.label}</span>)}</div></div><div className="lg:w-[250px] text-xs text-[#718398]"><div>{x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</div><div className="mt-1">{x.jurisdiction_confirmed===true?(x.jurisdiction_type==='National'?t('national'):[x.regency_city,x.province].filter(Boolean).join(', ')||t('confirmed')):t('jurisdiction_not_confirmed')}</div></div><div className="flex flex-wrap gap-1.5 lg:w-[220px]"><Status value={x.priority}/><Status value={x.review_status}/><Status value={x.verification_status}/></div></div>)}</div>}
-
-function ValidatedList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_validated_scope')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><Link key={x.id} to={'/intelligence/'+x.id} className="block p-4 hover:bg-[#fafcfd]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold text-[#146a8b]">{x.intelligence_id}</p><p className="font-semibold text-[#1e354b] mt-1 line-clamp-2">{x.title||t('untitled_intelligence')}</p></div><Status value={x.priority}/></div><div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs text-[#718398]"><span>{t('validated_label')}: {fmtDate(x.validated_at||x.updated_date)}</span><span>{t('source_label')}: {x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</span><span>{t('verification_label')}: {x.verification_status||'UNVERIFIED'}</span></div></Link>)}</div>}
+function Panel({title,subtitle,children,to,action='View all'}){
+ return <section className="intel-card p-4 md:p-5 space-y-3 min-w-0">
+  <div className="flex flex-wrap items-start justify-between gap-2">
+   <div><h2 className="text-base font-semibold text-[#173952]">{title}</h2>{subtitle&&<p className="text-xs text-slate-500 mt-1">{subtitle}</p>}</div>
+   {to&&<Link to={to} className="text-xs font-semibold text-[#126d91] inline-flex items-center gap-1 hover:underline">{action}<ArrowUpRight size={13}/></Link>}
+  </div>
+  {children}
+ </section>
+}
+function Stat({label,value,description,to}){
+ return <Link to={to} className="intel-card px-3 py-3 md:px-4 md:py-4 min-w-0 hover:border-sky-300 transition-colors">
+  <p className="text-xs text-[#607788] leading-snug min-h-[30px]">{label}</p>
+  <p className="text-2xl md:text-3xl font-semibold tracking-tight tabular-nums text-[#173952] mt-1">{fmtNumber(value)}</p>
+  <p className="text-[11px] text-slate-500 mt-1">{description}</p>
+ </Link>
+}
+function MiniRecord({record,alert=false}){
+ return <article className="border-t first:border-t-0 border-slate-100 py-3 first:pt-0 last:pb-0 space-y-1.5">
+  <div className="flex flex-wrap gap-2 justify-between items-start">
+   <p className="text-xs font-semibold text-[#173952]">{alert?record.category:record.campaign_name}</p>
+   {alert&&<span className={'text-[10px] font-semibold rounded-full px-2 py-1 '+(record.review_status==='FURTHER_INVESTIGATION'?'bg-amber-100 text-amber-900':'bg-slate-100 text-slate-600')}>{record.review_status==='AWAITING_REVIEW'?'Awaiting human review':record.review_status==='FURTHER_INVESTIGATION'?'Further investigation':'Human flag retained'}</span>}
+  </div>
+  <p className="text-sm text-slate-700 line-clamp-2">{alert?(record.description||record.evidence_quote):record.summary||'AI assessment contains no written explanation.'}</p>
+  <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+   <span>{record.platform||'Unknown platform'}</span>
+   <span>{record.author||'Unclassified author'}</span>
+   {alert&&<span>{record.province} <span className="text-slate-400">(campaign scope)</span></span>}
+   <span>{fmtTime(alert?record.detected_at:record.published_at)}</span>
+  </div>
+  <div className="flex flex-wrap items-center gap-3">
+   <Link to={evidenceLink(record)} className="text-xs font-semibold text-[#126d91] hover:underline">Open evidence in Inbox <ArrowUpRight size={12} className="inline"/></Link>
+   {cleanSource(record.source_url)&&<a href={cleanSource(record.source_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-600 hover:underline">Original source ↗</a>}
+  </div>
+ </article>;
+}
 
 export default function Home(){
- const {access}=useOutletContext();const {t}=useLanguage();
- const [activity,setActivity]=useState([]),[activityError,setActivityError]=useState(''),[socialCounts,setSocialCounts]=useState(null),[socialError,setSocialError]=useState('');
- const {items,loading,error}=useIntel();const registryState=useRegistry();const watch=registryState.items||[];
- useEffect(()=>{intel('activity').then(r=>setActivity(r.events||[])).catch(()=>setActivityError(t('recent_activity_unavailable')));base44.functions.invoke('socialListening',{action:'queue',data:{state:''}}).then(r=>setSocialCounts(r.data?.counts||{})).catch(()=>setSocialError(t('social_queue_unavailable')))},[t]);
- const metrics=useMemo(()=>({pending:items.filter(pendingReview).length,validatedCount:items.filter(validated).length,unverified:items.filter(x=>x.verification_status==='UNVERIFIED').length,unresolved:items.filter(x=>x.jurisdiction_confirmed!==true).length,triage:items.filter(triagePending).length,socialPending:socialCounts?['DISCOVERED','RELEVANT','MONITOR'].reduce((n,k)=>n+Number(socialCounts[k]||0),0):null}),[items,socialCounts]);
- const attention=useMemo(()=>items.filter(x=>attentionReasons(x,t).length).sort((a,b)=>reasonScore(b,t)-reasonScore(a,t)||new Date(b.updated_date||b.created_date||0)-new Date(a.updated_date||a.created_date||0)).slice(0,6),[items,t]);
- const recentValidated=useMemo(()=>items.filter(validated).sort((a,b)=>new Date(b.validated_at||b.updated_date||b.created_date||0)-new Date(a.validated_at||a.updated_date||a.created_date||0)).slice(0,5),[items]);
- const watchCounts={Active:watch.filter(x=>x.status==='Active').length,'Under Review':watch.filter(x=>x.status==='Under Review').length,Inactive:watch.filter(x=>x.status==='Inactive').length};
- const cards=[
- {label:t('pending_intelligence_review'),value:metrics.pending,detail:t('pending_intelligence_detail'),to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},
- {label:t('validated_intelligence'),value:metrics.validatedCount,detail:t('validated_intelligence_detail'),to:'/inbox?review_status=Validated%20as%20Relevant%20Intelligence',Icon:BadgeCheck},
- {label:t('unverified_evidence'),value:metrics.unverified,detail:t('unverified_evidence_detail'),to:'/inbox?verification_status=UNVERIFIED',Icon:ShieldAlert},
- {label:t('jurisdiction_unresolved'),value:metrics.unresolved,detail:t('jurisdiction_unresolved_detail'),to:'/inbox?view=jurisdiction-unresolved',Icon:MapPin},
- {label:t('ai_triage_awaiting_review'),value:metrics.triage,detail:t('ai_triage_detail'),to:'/inbox?view=triage-pending',Icon:Sparkles},
- {label:t('social_review_queue'),value:metrics.socialPending===null?'—':metrics.socialPending,detail:t('social_review_detail'),to:'/social-listening?tab=queue&pending=1',Icon:Radio}
- ];
- return <div className="space-y-8"><div><div className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('workspace_overview')}</div><h1 className="intel-heading">{t('intelligence_situation')}</h1><p className="text-[#75879a] text-sm mt-2">{t('home_intro')}</p></div><Notice error={error}/>{loading?<p className="text-sm text-[#73869a]">{t('loading_intelligence')}</p>:error?null:<>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">1. {t('operational_metrics')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('authorized_scope_note')}</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{cards.map(c=><MetricCard key={c.label} {...c} access={access} openLabel={t('open')}/>)}</div></section>
- <section><div className="flex justify-between items-end gap-4 mb-4"><div><h2 className="text-lg font-semibold">2. {t('attention_now')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('attention_rank_note')}</p></div><Link to="/inbox" className="text-sm text-[#176e8e] font-semibold flex items-center gap-1">{t('open_inbox')} <ArrowUpRight size={15}/></Link></div><AttentionList items={attention} t={t}/></section>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">3. {t('validated_monitoring')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('validated_monitoring_note')}</p></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-6"><div><div className="flex justify-between items-center mb-3"><h3 className="font-semibold">{t('latest_validated')}</h3><Link to="/inbox" className="text-xs text-[#176e8e] font-semibold">{t('view_all')} →</Link></div><ValidatedList items={recentValidated} t={t}/></div><div className="space-y-4">
- <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><ListFilter size={16}/>{t('watchlist')}</h3><Link to="/watchlist" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{registryState.error?<p className="text-xs text-[#8a5d27] mt-3">{t('watchlist_summary_unavailable')}</p>:registryState.loading?<p className="text-xs text-[#8192a3] mt-3">{t('loading_watchlist_summary')}</p>:<div className="grid grid-cols-3 gap-2 mt-4">{Object.entries(watchCounts).map(([label,value])=><div key={label} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{value}</strong><p className="text-[11px] text-[#718398] mt-1">{label==='Active'?t('active'):label==='Under Review'?t('under_review'):t('inactive')}</p></div>)}</div>}</div>
- <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><Radio size={16}/>{t('social_review_queue')}</h3><Link to="/social-listening" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{socialError?<p className="text-xs text-[#8a5d27] mt-3">{socialError} {t('no_socialcrawl_search')}</p>:socialCounts?<div className="grid grid-cols-3 gap-2 mt-4">{[['discovered','DISCOVERED'],['relevant','RELEVANT'],['monitor','MONITOR']].map(([label,key])=><div key={key} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{t(label)}</p></div>)}</div>:<p className="text-xs text-[#8192a3] mt-3">{t('loading_social_queue')}</p>}</div>
- </div></div></section>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">4. {t('recent_activity')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('recent_activity_note')}</p></div><div className="intel-card p-5">{activityError?<p className="text-sm text-[#8a5d27]">{activityError}</p>:activity.length?<div>{activity.slice(0,8).map((x,i)=><div key={x.id} className={'flex gap-3 py-3 '+(i?'border-t border-[#edf1f5]':'')}><div className="mt-0.5 rounded-full bg-[#eef5f7] p-2 text-[#176e8e]"><Clock3 size={14}/></div><div className="min-w-0"><p className="text-sm"><span className="font-semibold">{auditTitle(x,undefined,undefined,t)}</span> <span className="text-[#718398]">· {x.subject_type}</span></p><p className="text-xs text-[#8293a4] mt-1">{x.actor_name||t('system')} · {new Date(x.occurred_at||x.created_date).toLocaleString('en-GB')}</p></div></div>)}</div>:<div className="flex items-center gap-2 text-sm text-[#8293a4]"><AlertTriangle size={15}/>{t('no_recent_activity')}</div>}</div></section>
- </>}</div>;
+ const {access}=useOutletContext();
+ const navigate=useNavigate();
+ const [period,setPeriod]=useState('7d'),[dateFrom,setDateFrom]=useState(day(-6)),[dateTo,setDateTo]=useState(day());
+ const [province,setProvince]=useState('');
+ const [version,setVersion]=useState(0),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [question,setQuestion]=useState('');
+ const effectiveProvince=data?.scope?.can_select_national?province:'';
+ const params=useMemo(()=>({period,province:effectiveProvince,...(period==='custom'?{date_from:dateFrom,date_to:dateTo}:{})}),[period,effectiveProvince,dateFrom,dateTo]);
+ useEffect(()=>{
+  let live=true;
+  setLoading(true);setError('');
+  base44.functions.invoke('commandCenter',params)
+   .then(res=>{if(live)setData(res.data)})
+   .catch(err=>{if(live){setError(err.response?.data?.error||err.message||'Command Center unavailable');setData(null)}})
+   .finally(()=>{if(live)setLoading(false)});
+  return()=>{live=false};
+ },[params,version]);
+ const metrics=data?.indicators||{};
+ const canNational=access?.geographic_scope==='Nationwide';
+ const regions=data?.regions||[];
+ const regionalDistribution=regions.map(x=>({...x,percentage:data?.indicators?.relevant_mentions?100*x.count/data.indicators.relevant_mentions:0}));
+ const statusDescription=data?.coverage?.warning;
+ return <div className="space-y-4 md:space-y-5" aria-label="BAWASLU Intelligence Command Center">
+  <div className="flex flex-wrap gap-3 items-start justify-between">
+   <div>
+    <p className="text-[11px] uppercase tracking-[.18em] font-bold text-[#9a7e49]">Executive intelligence overview</p>
+    <h1 className="intel-heading mt-1">Intelligence Command Center</h1>
+    <p className="text-xs text-slate-500 mt-1">What is happening · What needs attention · Where to investigate</p>
+   </div>
+   <button type="button" onClick={()=>setVersion(x=>x+1)} disabled={loading} className="intel-ghost text-xs flex gap-2 items-center"><RefreshCw size={14}/> Refresh briefing</button>
+  </div>
+  <section className="intel-card p-3 flex flex-wrap gap-3 items-end" aria-label="Dashboard-wide filters">
+   <label className="block text-xs min-w-[125px] flex-1"><span className="font-semibold text-slate-600">Monitoring period</span>
+    <select className="intel-input mt-1 w-full" value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today (UTC)</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="custom">Custom dates</option></select>
+   </label>
+   {period==='custom'&&<><label className="block text-xs"><span>From (UTC)</span><input type="date" max={dateTo} className="intel-input mt-1" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label><label className="block text-xs"><span>To (UTC)</span><input type="date" min={dateFrom} max={day()} className="intel-input mt-1" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label></>}
+   <label className="block text-xs min-w-[165px] flex-1"><span className="font-semibold text-slate-600">Geographic coverage</span>
+    <select className="intel-input mt-1 w-full" value={canNational?province:''} disabled={!canNational||!data} onChange={e=>setProvince(e.target.value)}>
+     <option value="">{canNational?'National · Indonesia':data?.scope?.label||'Your assigned region'}</option>
+     {canNational&&(data?.available_provinces||[]).map(x=><option key={x.code} value={x.name}>{x.name}</option>)}
+    </select>
+   </label>
+   <div className="text-[11px] text-slate-500 min-w-0"><p><Globe2 className="inline mr-1" size={12}/> {data?.scope?.label||'Authorized coverage'}</p><p className="mt-1"><Clock3 className="inline mr-1" size={12}/> Updated {fmtTime(data?.generated_at)}</p></div>
+  </section>
+  {error&&<div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Unable to load intelligence overview.</strong><p className="mt-1">{error}</p><button className="mt-2 underline" onClick={()=>setVersion(x=>x+1)}>Retry</button></div>}
+  {loading&&<div role="status" className="intel-card p-8 text-sm text-slate-500">Loading authorized intelligence and monitoring coverage…</div>}
+  {!loading&&data&&<>
+   <Panel title="Executive Intelligence Briefing" subtitle={'Based on stored assessments · '+data.period.date_from+' to '+data.period.date_to}>
+    <div className="flex gap-3">
+     <Sparkles size={18} className="shrink-0 text-[#126d91] mt-0.5"/>
+     <div className="space-y-3 min-w-0">
+      <p className="text-sm leading-6 text-[#283f52]">{data.briefing.text}</p>
+      <p className="text-[11px] text-slate-500">{data.briefing.limitation}</p>
+      <div className="flex flex-wrap items-center gap-3">
+       {(data.briefing.sources||[]).map((x,i)=><Link key={x.campaign_id+'-'+x.result_id} to={evidenceLink(x)} className="text-xs text-[#126d91] font-semibold">Supporting record {i+1} ↗</Link>)}
+       {data.briefing.kind==='DATA_COVERAGE_NOTICE'&&<Link to="/social-listening" className="text-xs text-[#126d91] font-semibold">Explore collected evidence ↗</Link>}
+      </div>
+     </div>
+    </div>
+   </Panel>
+   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3" aria-label="Intelligence indicators">
+    <Stat label="Relevant mentions" value={metrics.relevant_mentions} description="Distinct AI-assessed posts" to="/inbox"/>
+    <Stat label="Potential issue alerts" value={metrics.potential_alerts} description="Preliminary, not confirmed" to="/inbox"/>
+    <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Requires human assessment" to="/inbox"/>
+    <Stat label="Emerging issues" value={metrics.emerging_issues} description="Clustering not yet enabled" to="/social-listening"/>
+   </div>
+   <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4">
+    <Panel title="Needs BAWASLU Attention" subtitle="Prioritized preliminary indicators from actual assessed evidence" to="/inbox" action="Open Intelligence Inbox">
+     {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}
+    </Panel>
+    <Panel title="Latest Intelligence" subtitle="Most recently published posts with relevant AI assessments" to="/inbox">
+     {(data.latest_intelligence||[]).length?data.latest_intelligence.map(row=><MiniRecord key={row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
+    </Panel>
+   </div>
+   <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4">
+    <Panel title="Regional Intelligence Overview" subtitle="Categorized by campaign monitoring scope—not confirmed post origin" to="/social-listening">
+     {regions.length?<div className="space-y-2">
+      <div className="overflow-x-auto"><table className="text-sm w-full"><thead><tr className="text-[11px] text-slate-500 text-left border-b"><th className="py-2">Province</th><th className="py-2 text-right">Relevant posts</th><th className="py-2 text-right">Issue alerts</th></tr></thead><tbody>{regions.slice(0,8).map(r=><tr key={r.province_code} className="border-b last:border-b-0 border-slate-100"><td className="py-2">{canNational?<button type="button" className="text-[#126d91] hover:underline" onClick={()=>setProvince(r.province)}>{r.province}</button>:r.province}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.count)}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.flagged)}</td></tr>)}</tbody></table></div>
+      <details className="text-xs text-[#126d91]"><summary className="cursor-pointer font-semibold">View province map</summary><div className="mt-2"><ProvinceHeatmap distribution={regionalDistribution} totalPosts={metrics.relevant_mentions||0} title="Campaign monitoring coverage" subtitle="AI-assessed posts by campaign target province" footnote="Shading is based on campaign monitoring coverage, not post origin or proven electoral risk. Campaigns may overlap. Unknown / unclassified records are omitted from the map."/></div></details>
+     </div>:<p className="text-sm text-slate-500 py-2">No reliable campaign-scoped province breakdown is available for the selected period.</p>}
+     <p className="text-xs text-slate-500">{fmtNumber(data.unknown_region_mentions)} relevant post(s) associated with campaigns without a classified monitoring province. No inferred publisher locations are displayed.</p>
+    </Panel>
+    <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
+     {(data.watchlist?.entries||[]).length?data.watchlist.entries.map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
+      <div className="flex justify-between gap-2"><p className="font-semibold text-sm">{x.name}</p><span className="text-[11px] text-slate-500">{x.platform}</span></div>
+      <p className="text-xs text-slate-600 line-clamp-2">{x.summary||'Post text unavailable'}</p>
+      <p className="text-[11px] text-slate-500">{x.province} · {fmtTime(x.last_post_at)}</p>
+      <Link className="text-xs text-[#126d91] font-semibold" to={'/watchlist/'+x.watchlist_id+'/posts'}>View captured account posts →</Link>
+     </article>):<div className="text-sm text-slate-500 py-2 space-y-2"><p>No matching posts from registered Watchlist accounts were captured in this period.</p><p>{fmtNumber(data.watchlist?.monitored_profiles)} profiles are visible in your authorized scope. Registered accounts do not imply successful collection.</p></div>}
+    </Panel>
+   </div>
+   <Panel title="AI Assistant · Quick Investigation" subtitle="Ask questions grounded in authorized system records" to="/assistant" action="Open full assistant">
+    <form onSubmit={e=>{e.preventDefault();if(question.trim())navigate('/assistant?q='+encodeURIComponent(question.trim()))}} className="flex flex-col sm:flex-row gap-2">
+     <input className="intel-input flex-1 min-w-0" maxLength={400} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask about recent evidence or pending intelligence…" aria-label="Question for Intelligence Assistant"/>
+     <button type="submit" className="intel-button" disabled={!question.trim()}>Investigate <ArrowRight size={14}/></button>
+    </form>
+    <div className="flex flex-wrap gap-2 text-xs">{['What are the latest validated records?','What important evidence needs review?'].map(q=><Link key={q} className="intel-ghost text-xs" to={'/assistant?q='+encodeURIComponent(q)}>{q}</Link>)}</div>
+    <p className="text-[11px] text-slate-500">Current Assistant covers accessible intelligence records; comprehensive cross-module synthesis is planned. It does not determine legal violations.</p>
+   </Panel>
+   <div className="flex items-start gap-2 text-[11px] text-slate-500 px-1">
+    <ShieldCheck size={15} className="shrink-0 mt-0.5"/><div><p>{statusDescription}</p><p className="mt-1">Most recently collected assessed evidence: {fmtTime(data.latest_evidence_at)}. Identified signals and regional monitoring coverage are not conclusions of electoral misconduct. All findings require BAWASLU review.</p></div>
+   </div>
+  </>}
+ </div>;
 }

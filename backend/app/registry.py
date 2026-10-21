@@ -88,6 +88,31 @@ def registry_action(db:Session,p,action,data,id=None):
         cats=db.query(IssueCategory).order_by(IssueCategory.sort_order,IssueCategory.name).all()
         return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order,'phrases':_category_phrases(db,x.id)} for x in cats]}
 
+    if action=='watchlistCapturedFeed':
+        # Read-only matching of evidence already stored; no provider calls or credits.
+        from .socialcrawl import _result_in_scope
+        w=_require_watchlist(db,p,id)
+        accounts=db.query(SourceAccount).filter(SourceAccount.watchlist_id==w.id).all()
+        found={}
+        for account in accounts:
+            platform=str(account.platform or '').strip().casefold()
+            handle=str(account.handle or '').strip().lstrip('@').casefold()
+            if not handle:
+                continue
+            matches=(db.query(SocialListeningResult)
+                     .filter(SocialListeningResult.platform.ilike(platform))
+                     .filter(SocialListeningResult.observed_handle.ilike(handle) |
+                             SocialListeningResult.observed_handle.ilike('@'+handle))
+                     .order_by(SocialListeningResult.id.desc()).limit(250).all())
+            for post in matches:
+                if not _result_in_scope(db,p,post):continue
+                found[post.id]={'id':str(post.id),'platform':post.platform,
+                    'account':account.handle,'text':(post.text_content or '')[:900],
+                    'published_at':post.published_at,'url':post.canonical_url}
+        return {'posts':sorted(found.values(),key=lambda x:x['published_at'] or '',reverse=True)[:100],
+                'linked_accounts':len(accounts),'status':'Captured posts only. No scheduled monitoring or paid API calls.',
+                'paid_provider_called':False}
+
     if action=='createWatchlist':
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')
         name=clean(data.get('name'),255); type_=clean(data.get('type'),100)

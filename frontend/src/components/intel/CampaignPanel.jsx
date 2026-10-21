@@ -77,6 +77,15 @@ export default function CampaignPanel({campaignId=null}){
   try{setExternalRun(await base44.externalImport.status(externalRun.run_id))}
   catch(e){setExternalImportError(e.message)}
  }
+ useEffect(()=>{
+  if(!externalRun?.run_id||!['QUEUED','RUNNING'].includes(externalRun.status))return;
+  const interval=setInterval(async()=>{
+   try{const status=await base44.externalImport.status(externalRun.run_id);setExternalRun(status);
+    if(status.status==='COMPLETED'&&selected){const response=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{}})]);setEvidence(response[0].data.evidence||[]);setDashboard(response[1].data)}}
+   catch(e){setExternalImportError(e.message||'Import status unavailable')}
+  },5000);
+  return()=>clearInterval(interval);
+ },[externalRun?.run_id,externalRun?.status,selected?.id]);
  const [externalFile,setExternalFile]=useState(null),[externalPreview,setExternalPreview]=useState(null),[externalBusy,setExternalBusy]=useState(false),[externalError,setExternalError]=useState('');
  async function previewExternalFile(){
   if(!selected||!externalFile||externalBusy)return;

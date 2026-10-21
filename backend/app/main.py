@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -182,7 +182,9 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
     if ext not in ('.xlsx','.csv'):raise HTTPException(400,'Excel or CSV required')
     import tempfile
     from .external_import_preview import preview_workbook
-    temp=Path(tempfile.mkstemp(suffix=ext,prefix='bawaslu_external_')[1])
+    fd,temporary_path=tempfile.mkstemp(suffix=ext,prefix='bawaslu_external_')
+    os.close(fd)
+    temp=Path(temporary_path)
     try:
         with temp.open('wb') as target:
             total=0

@@ -849,7 +849,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         province_names=('Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya')
         province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(name) for name in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
         province_lookup={name.casefold():name for name in province_names}
-        province_counts=Counter(); province_mentions=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
+        province_counts=Counter(); province_mentions=Counter(); province_connected=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
@@ -866,7 +866,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 demographic_coverage['country_available']+=1
             # Already-linked campaign evidence is the main-keyword-matched corpus.
             lowered=(item.text_content or '').casefold()
-            for province in {province_lookup[x.casefold()] for x in province_pattern.findall(item.text_content or '')}:
+            mentioned_provinces={province_lookup[x.casefold()] for x in province_pattern.findall(item.text_content or '')}
+            for province in mentioned_provinces:
                 province_mentions[province]+=1
             # Keyword cloud uses a bounded sample; the message counters cover all records.
             if visible<=1000:
@@ -924,6 +925,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             if isinstance(geo,dict):
                 province=str(geo.get('verified_province') or geo.get('source_province') or '').strip()
                 if province:province_counts[province]+=1
+                connected=set(mentioned_provinces)
+                if province:connected.add(province)
+                for province_name in connected:province_connected[province_name]+=1
                 verified=geo.get('verified_country') or geo.get('source_country')
                 if isinstance(verified,str) and verified.strip(): geographies[verified.strip()]+=1
             states[item.review_state or 'UNKNOWN']+=1
@@ -944,6 +948,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'geographies':dict(geographies),
                 'province_distribution': [{'province':name,'count':count,'percentage':round(count*100/sum(province_counts.values()),1)} for name,count in province_counts.most_common()],
                 'province_coverage':sum(province_counts.values()),
+                'province_connected_distribution':[{'province':name,'count':count,'percentage':round(count*100/max(visible,1),1)} for name,count in province_connected.most_common()],
                 'province_mentions_distribution':[{'province':name,'count':count,'percentage':round(count*100/sum(province_mentions.values()),1)} for name,count in province_mentions.most_common()],
                 'top_accounts_engagement':sorted(top_accounts.values(),key=lambda a:(-a['engagement'],-a['posts'],a['account']))[:15],
                 'top_accounts_followers':sorted((a for a in top_accounts.values() if a['followers'] is not None),key=lambda a:(-a['followers'],-a['engagement'],a['account']))[:15],

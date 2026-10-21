@@ -384,7 +384,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         pending=0
         province_names=["Aceh","Sumatera Utara","Sumatera Barat","Riau","Kepulauan Riau","Jambi","Bengkulu","Sumatera Selatan","Kepulauan Bangka Belitung","Lampung","Banten","DKI Jakarta","Jawa Barat","Jawa Tengah","DI Yogyakarta","Jawa Timur","Bali","Nusa Tenggara Barat","Nusa Tenggara Timur","Kalimantan Barat","Kalimantan Tengah","Kalimantan Selatan","Kalimantan Timur","Kalimantan Utara","Sulawesi Utara","Gorontalo","Sulawesi Tengah","Sulawesi Barat","Sulawesi Selatan","Sulawesi Tenggara","Maluku","Maluku Utara","Papua","Papua Barat","Papua Selatan","Papua Tengah","Papua Pegunungan","Papua Barat Daya"]
-        province_pattern=re.compile(r'(?<!\\w)(?:'+'|'.join(re.escape(x) for x in sorted(province_names,key=len,reverse=True))+r')(?!\\w)',re.IGNORECASE)
+        province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(x) for x in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
         province_lookup={x.casefold():x for x in province_names}
         for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue

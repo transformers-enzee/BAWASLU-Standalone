@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -258,6 +258,7 @@ def repair_external_metrics(campaign_id:int,user:User=Depends(current_user),db:S
     from .access import allowed,has
     from .models import MonitoringCampaign,CampaignEvidence,SocialListeningResult
     from .external_import_ingest import provider_metrics
+    import json
     p=profile(db,user);campaign=db.get(MonitoringCampaign,campaign_id)
     if not campaign or not allowed(p,campaign):raise HTTPException(404,'Campaign unavailable')
     if p.get('role')!='National Administrator' or not has(p,'administration'):

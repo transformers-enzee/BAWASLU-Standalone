@@ -142,6 +142,7 @@ function SocialEvidenceInbox(){
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
  }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
  const ordered=useMemo(()=>[...filtered].sort((a,b)=>{const da=Date.parse(a.published_at||a.post_time||a.created_at||0)||0,db=Date.parse(b.published_at||b.post_time||b.created_at||0)||0;return sortDate==='newest'?db-da:da-db}),[filtered,sortDate]);
+ const summary=useMemo(()=>{const counts={POSITIVE:0,NEGATIVE:0,NEUTRAL:0,UNCLASSIFIED:0};let engagement=0,views=0,engagementAvailable=0,viewsAvailable=0;for(const item of filtered){if(typeof item.engagement_total==='number'){engagement+=item.engagement_total;engagementAvailable++}if(typeof item.views==='number'){views+=item.views;viewsAvailable++}const raw=String(item.sentiment||'').toUpperCase();counts[['POSITIVE','NEGATIVE','NEUTRAL'].includes(raw)?raw:'UNCLASSIFIED']++}return {engagement,views,engagementAvailable,viewsAvailable,counts}},[filtered]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
@@ -169,6 +170,7 @@ function SocialEvidenceInbox(){
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
+   <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-start">
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2">
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
     <div className="max-h-[680px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
@@ -180,6 +182,16 @@ function SocialEvidenceInbox(){
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
     </div>
    </section>
+   <aside className="intel-card p-4 space-y-4 xl:sticky xl:top-4" aria-label="Inbox statistics">
+    <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered assessed posts</p></div>
+    <div className="grid grid-cols-2 gap-2">
+      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
+      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>
+    </div>
+    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#0d9488'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706'],['UNCLASSIFIED','Unclassified','#cbd5e1']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
+    <p className="text-[11px] text-slate-500">Metrics are summed only where providers reported them. Missing values are not treated as zero. Sentiment is based on stored assessments.</p>
+   </aside>
+   </div>
    <details className="intel-card p-3" aria-label="Platform distribution"><summary className="cursor-pointer text-sm font-semibold text-[#365269]">Platform distribution · {filtered.length} posts</summary><div className="mt-3">
     
     <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>

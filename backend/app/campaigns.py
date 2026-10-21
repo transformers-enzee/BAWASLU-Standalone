@@ -656,9 +656,23 @@ def campaign_action(db:Session,p,action,data,id=None):
                 review_history=[{'decision':review.decision,'reviewed_at':review.created_at.isoformat() if review.created_at else None,
                                  'assessment_version':assessment_version,'reviewer_id':review.reviewer_id,'rationale':review.rationale}
                                 for review,assessment_version in review_rows]
+                try:engagement_metrics=json.loads(item.engagement_json or '{}')
+                except (TypeError,ValueError):engagement_metrics={}
+                if not isinstance(engagement_metrics,dict):engagement_metrics={}
+                def recorded_metric(*keys):
+                    for key in keys:
+                        value=engagement_metrics.get(key)
+                        if isinstance(value,(int,float)) and not isinstance(value,bool) and value>=0:return int(value)
+                    return None
+                captured_engagement=recorded_metric('engagement_total')
+                if captured_engagement is None:
+                    components=[recorded_metric('likes','like_count'),recorded_metric('comments','comment_count'),recorded_metric('shares','share_count')]
+                    captured_engagement=sum(v for v in components if v is not None) if any(v is not None for v in components) else None
+                captured_views=recorded_metric('views','view_count','plays','play_count')
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
                     'author_name':item.author_name,'published_at':item.published_at,
+                    'engagement_total':captured_engagement,'views':captured_views,'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
                     'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),

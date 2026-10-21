@@ -87,6 +87,7 @@ export default function CampaignPanel({campaignId=null}){
  }
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
  const [everywhereQuery,setEverywhereQuery]=useState('');
+ const [metricRepairBusy,setMetricRepairBusy]=useState(false),[metricRepairNotice,setMetricRepairNotice]=useState(''),[metricRepairError,setMetricRepairError]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
@@ -387,7 +388,9 @@ export default function CampaignPanel({campaignId=null}){
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button> <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{await base44.externalImport.downloadCampaign(selected.id)}catch(e){setEvidenceError(e.message)}}}>Export all campaign records (CSV)</button>
- <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{const r=await base44.externalImport.repairMetrics(selected.id);setManualNotice('Restored recorded metrics for '+r.repaired+' external records. Refresh campaign to update charts.')}catch(e){setEvidenceError(e.message)}}}>Admin: restore imported metrics</button>
+ <button type="button" className="intel-ghost text-xs" disabled={metricRepairBusy} onClick={async()=>{setMetricRepairBusy(true);setMetricRepairError('');setMetricRepairNotice('');try{const response=await base44.externalImport.repairMetrics(selected.id);setMetricRepairNotice('Metrics restored for '+response.repaired+' records. Dashboard refreshed.');const [ev,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{}})]);setEvidence(ev.data.evidence||[]);setDashboard(d.data)}catch(e){setMetricRepairError(e.response?.data?.error||e.message||'Metric repair failed')}finally{setMetricRepairBusy(false)}}}>{metricRepairBusy?'Restoring metrics…':'Admin: restore imported metrics'}</button>
+ {metricRepairNotice&&<p role="status" className="text-xs text-teal-700">{metricRepairNotice}</p>}
+ {metricRepairError&&<p role="alert" className="text-xs text-red-700">{metricRepairError}</p>
  <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find campaign post by ID">
   <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any campaign post by Post ID</label>
   <form onSubmit={e=>{e.preventDefault();findPostById()}} className="flex gap-2">

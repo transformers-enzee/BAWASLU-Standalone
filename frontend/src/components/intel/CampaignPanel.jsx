@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
-import CampaignScheduleSummary from '@/components/intel/CampaignScheduleSummary';
 import KeywordTags from '@/components/intel/KeywordTags';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
@@ -514,15 +513,6 @@ export default function CampaignPanel({campaignId=null}){
     </div>}
     {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
    </section>
-   <CampaignScheduleSummary campaign={selected} />
-   <div className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Campaign keyword screening preview">
-    <h4 className="font-semibold">Test keyword matching (no credits)</h4>
-    <p className="text-xs text-slate-600">Paste sample source text. At least one main keyword must appear, and excluded keywords block the match. Secondary keywords add context but are not required. This local preview does not call SocialCrawl.</p>
-    <label className="block text-sm">Sample social post<textarea className="intel-input mt-1 w-full" rows={3} maxLength={5000} value={sampleText} onChange={e=>{keywordPreviewRequest.current+=1;setSampleText(e.target.value);setKeywordPreview(null);setPreviewBusy(false);setPreviewError('')}} /></label>
-    <button type="button" className="intel-ghost" disabled={previewBusy||!sampleText.trim()} onClick={checkKeywordPreview}>{previewBusy?'Checking…':'Preview keyword match'}</button>
-    {previewError&&<p role="alert" className="text-red-700 text-sm">{previewError}</p>}
-    {keywordPreview&&<div role="status" className="rounded-md bg-slate-50 p-3 text-sm space-y-1"><p className="font-semibold">{keywordPreview.matched?'Matches campaign keywords':'Does not match campaign keywords'}</p><p>Main matches: {(keywordPreview.main_keywords||[]).join(', ')||'None'}</p><p>Secondary context: {(keywordPreview.secondary_keywords||[]).join(', ')||'None'}</p><p>Excluded matches: {(keywordPreview.excluded_keywords||[]).join(', ')||'None'}</p><p className="text-xs text-slate-600">Preliminary literal keyword match only — not evidence of an election violation.</p></div>}
-   </div>
    {evidenceError&&<p role="alert" className="text-red-700 text-sm">{evidenceError}</p>}
   </div>}
  </section>

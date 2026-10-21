@@ -588,7 +588,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         if requested_result and not requested_result.isdigit():
             raise ValueError('Invalid requested evidence ID')
         if campaign_id:
-            visible=[campaign for campaign in visible if str(campaign.id)==campaign_id]
+            if not campaign_id.isdigit():raise ValueError('Invalid campaign ID')
+            requested=db.get(MonitoringCampaign,int(campaign_id))
+            visible=[requested] if requested and allowed(p,requested) else []
         active_category_rows=db.query(IssueCategory).filter(IssueCategory.active==True).all()
         active_categories={x.id:x.name for x in active_category_rows}
         from .models import IssueCategoryPhrase
@@ -694,6 +696,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,
                     'flag_review_history':review_history,
                     'can_review_flag':has(p,'human_validation'),'active_issue_categories':active_categories})
+        if requested_result and campaign_id:
+            records.sort(key=lambda row:int(str(row['id'])==requested_result and str(row['campaign_id'])==campaign_id),reverse=True)
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'paid_provider_called':False}

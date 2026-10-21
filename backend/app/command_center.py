@@ -16,7 +16,7 @@ def _province_name(code):
 from .issue_signals import validated_issue_signals, phrase_screening_candidates
 from .models import (MonitoringCampaign, CampaignEvidence, EvidenceAssessment,
     EvidenceReview, SocialListeningResult, IssueCategory, IssueCategoryPhrase,
-    WatchlistItem, SourceAccount, WatchlistAccountEvidence, WatchlistAccountSync)
+    WatchlistItem, SourceAccount, WatchlistAccountEvidence, WatchlistAccountSync, IntelligenceItem)
 from .socialcrawl import _result_in_scope
 
 def _as_list(raw):
@@ -186,7 +186,30 @@ def build_command_center(db,p,data=None):
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_posts.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
-    recent=sorted(relevant.values(),key=lambda x:x['published_at'] or '',reverse=True)[:5]
+    # Combine assessed social posts with traditional/manual Intelligence Inbox
+    # records. These are presented as recent records, NOT counted again in
+    # the distinct AI-assessed social indicators above.
+    manual_recent=[]
+    for record in db.query(IntelligenceItem).all():
+        if not allowed(p,record):continue
+        if selected_code and province_code_for(record.province,record.province_code)!=selected_code:
+            continue
+        date_text=record.publication_datetime or record.publication_date or ''
+        display_date=date_text if _day(date_text) else record.created_at.isoformat() if record.created_at else ''
+        if not start<=_day(display_date)<=end:continue
+        manual_recent.append({
+            'record_type':'INTELLIGENCE_ITEM','id':str(record.id),
+            'campaign_name':record.intelligence_id or 'Intelligence Inbox record',
+            'platform':record.platform or record.source_type or 'Recorded source',
+            'author':record.observed_publisher_handle or record.author or record.source_name or 'Unknown source',
+            'source_url':record.source_url,
+            'published_at':display_date,
+            'summary':(record.ai_summary or record.title or record.original_content or '').strip()[:260],
+            'review_status':record.review_status,
+            'date_basis':'SOURCE_PUBLICATION' if _day(date_text) else 'RECORD_CREATED'
+        })
+    recent=sorted(list(relevant.values())+manual_recent,
+                  key=lambda x:x['published_at'] or '',reverse=True)[:5]
     # Watchlist highlights use only evidence explicitly linked to registered
     # accounts, not noisy substring matches against people's names.
     watch_items=[w for w in db.query(WatchlistItem).all() if allowed(p,w)]

@@ -6,7 +6,9 @@ import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 
 const fmtTime=value=>{if(!value)return 'Not available';const d=new Date(value);return Number.isNaN(d.getTime())?'Not available':d.toLocaleString('en-GB')};
 const fmtNumber=value=>typeof value==='number'?value.toLocaleString():'Not available';
-const evidenceLink=row=>'/inbox?campaign_id='+encodeURIComponent(row.campaign_id)+'&result_id='+encodeURIComponent(row.result_id);
+const evidenceLink=row=>row.record_type==='INTELLIGENCE_ITEM'
+ ? '/intelligence/'+encodeURIComponent(row.id)
+ : '/inbox?campaign_id='+encodeURIComponent(row.campaign_id)+'&result_id='+encodeURIComponent(row.result_id);
 const day=(offset=0)=>{const d=new Date();d.setDate(d.getDate()+offset);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const cleanSource=url=>{try{const x=new URL(url);return ['https:','http:'].includes(x.protocol)?x.href:null}catch{return null}};
 
@@ -37,7 +39,7 @@ function MiniRecord({record,alert=false}){
    <span>{record.platform||'Unknown platform'}</span>
    <span>{record.author||'Unclassified author'}</span>
    {alert&&<span>{record.province} <span className="text-slate-400">(campaign scope)</span></span>}
-   <span>{fmtTime(alert?record.detected_at:record.published_at)}</span>
+   <span>{fmtTime(alert?record.detected_at:record.published_at)}{record.date_basis==='RECORD_CREATED'?' (recorded)':''}</span>
   </div>
   <div className="flex flex-wrap items-center gap-3">
    <Link to={evidenceLink(record)} className="text-xs font-semibold text-[#126d91] hover:underline">Open evidence in Inbox <ArrowUpRight size={12} className="inline"/></Link>
@@ -117,8 +119,8 @@ export default function Home(){
     <Panel title="Needs BAWASLU Attention" subtitle="Prioritized preliminary indicators from actual assessed evidence" to="/inbox" action="Open Intelligence Inbox">
      {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}
     </Panel>
-    <Panel title="Latest Intelligence" subtitle="Most recently published posts with relevant AI assessments" to="/inbox">
-     {(data.latest_intelligence||[]).length?data.latest_intelligence.map(row=><MiniRecord key={row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
+    <Panel title="Latest Intelligence" subtitle="Recent assessed social evidence and recorded Intelligence Inbox items" to="/inbox">
+     {(data.latest_intelligence||[]).length?data.latest_intelligence.map(row=><MiniRecord key={row.record_type==='INTELLIGENCE_ITEM'?'intel-'+row.id:row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
     </Panel>
    </div>
    <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4">
@@ -127,7 +129,7 @@ export default function Home(){
       <div className="overflow-x-auto"><table className="text-sm w-full"><thead><tr className="text-[11px] text-slate-500 text-left border-b"><th className="py-2">Province</th><th className="py-2 text-right">Relevant posts</th><th className="py-2 text-right">Issue alerts</th></tr></thead><tbody>{regions.slice(0,8).map(r=><tr key={r.province_code} className="border-b last:border-b-0 border-slate-100"><td className="py-2">{canNational?<button type="button" className="text-[#126d91] hover:underline" onClick={()=>setProvince(r.province)}>{r.province}</button>:r.province}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.count)}</td><td className="py-2 text-right tabular-nums">{fmtNumber(r.flagged)}</td></tr>)}</tbody></table></div>
       <details className="text-xs text-[#126d91]"><summary className="cursor-pointer font-semibold">View province map</summary><div className="mt-2"><ProvinceHeatmap distribution={regionalDistribution} totalPosts={metrics.relevant_mentions||0} title="Campaign monitoring coverage" subtitle="AI-assessed posts by campaign target province" footnote="Shading is based on campaign monitoring coverage, not post origin or proven electoral risk. Campaigns may overlap. Unknown / unclassified records are omitted from the map."/></div></details>
      </div>:<p className="text-sm text-slate-500 py-2">No reliable campaign-scoped province breakdown is available for the selected period.</p>}
-     <p className="text-xs text-slate-500">{fmtNumber(data.unknown_region_mentions)} relevant post(s) associated with campaigns without a classified monitoring province. No inferred publisher locations are displayed.</p>
+     <p className="text-xs text-slate-500">{fmtNumber(data.unknown_region_mentions)} relevant post(s) associated with campaigns without a classified monitoring province. No inferred publisher locations are displayed. Unusual activity trends require a validated historical baseline and are not yet shown.</p>
     </Panel>
     <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
      {(data.watchlist?.entries||[]).length?data.watchlist.entries.map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">

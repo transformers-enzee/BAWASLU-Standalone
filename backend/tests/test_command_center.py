@@ -7,7 +7,7 @@ os.environ['DATABASE_URL']='sqlite:///:memory:'
 from app.db import Base, engine, SessionLocal
 from app.models import (User, AccessGrant, MonitoringCampaign, CampaignEvidence,
     SocialListeningRun, SocialListeningResult, EvidenceAssessment, EvidenceReview,
-    IssueCategory, SocialListeningProviderUsage)
+    IssueCategory, SocialListeningProviderUsage, IntelligenceItem)
 from app.access import profile, default_permissions
 from app.command_center import build_command_center, _period
 from app.auth import hash_password
@@ -105,4 +105,22 @@ def test_date_window_validation_and_unknown_province_rejected():
     with pytest.raises(ValueError): build_command_center(db,p,{'period':'custom','date_from':'2026-01-05','date_to':'2025-12-05'})
     with pytest.raises(ValueError): build_command_center(db,p,{'period':'custom','date_from':'bad','date_to':'2026-01-01'})
     assert _period({'period':'7d'})[2]=='7d'
+    db.close()
+
+def test_manual_inbox_records_are_included_without_inflating_social_metrics():
+    db=SessionLocal()
+    regional=_actor(db,'regional@test.local','Provincial Analyst','Province','Jawa Barat')
+    today=datetime.utcnow().date().isoformat()
+    db.add(IntelligenceItem(intelligence_id='INTEL-CC-1',
+        title='Manually recorded observation',publication_date=today,
+        province='Jawa Barat',source_url='https://example.org/source'))
+    db.add(IntelligenceItem(intelligence_id='INTEL-CC-2',
+        title='Other province observation',publication_date=today,
+        province='Jawa Tengah',source_url='https://example.org/other'))
+    db.commit()
+    dashboard=build_command_center(db,regional)
+    assert dashboard['indicators']['relevant_mentions']==0
+    assert len(dashboard['latest_intelligence'])==1
+    assert dashboard['latest_intelligence'][0]['record_type']=='INTELLIGENCE_ITEM'
+    assert dashboard['latest_intelligence'][0]['campaign_name']=='INTEL-CC-1'
     db.close()

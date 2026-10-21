@@ -19,7 +19,7 @@ function SentimentBar({values}){
  return <div className="pt-2 space-y-2" aria-label="Sentiment overview"><div className="flex items-center justify-between gap-2"><h6 className="text-xs font-semibold">Sentiment overview</h6><span className="text-[11px] text-slate-500">{total?total.toLocaleString()+' classified':'No classified sentiment yet'}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={total?counts.map(x=>x.name+': '+x.count).join(', '):'No sentiment data available'}>{counts.filter(x=>x.count>0).map(x=><div key={x.name} style={{width:(x.count/total*100)+'%',backgroundColor:x.color}} title={x.name+': '+x.count}/>)}</div><div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">{counts.map(x=><span key={x.name} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{backgroundColor:x.color}}/>{x.name} {x.count.toLocaleString()}{total?' ('+(x.count/total*100).toFixed(1)+'%)':''}</span>)}</div></div>;
 }
 function ChannelDonut({values}){
- const entries=Object.entries(values||{}).filter(([,n])=>n>0);
+ const entries=Object.entries(values||{}).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
  const total=entries.reduce((n,[,v])=>n+v,0);
  const palette=['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'];
  let offset=0;

@@ -796,7 +796,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         from_day=_iso_date((data or {}).get('date_from'),'Date from')
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
-        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(5000).all()
+        keyword=str((data or {}).get('keyword') or '').strip()[:120].casefold()
+        query=db.query(CampaignEvidence).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
+        if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
+        links=query.order_by(CampaignEvidence.id.desc()).limit(5000).all()
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
@@ -935,6 +938,8 @@ def campaign_action(db:Session,p,action,data,id=None):
            .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
            .filter(CampaignEvidence.campaign_id==c.id))
         if on_day:q=q.filter(SocialListeningResult.published_at.like(on_day+'%'))
+        evidence_keyword=str(opts.get('keyword') or '').strip()[:120]
+        if evidence_keyword:q=q.filter(SocialListeningResult.text_content.ilike('%'+evidence_keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
         links=q.order_by(CampaignEvidence.id.desc()).limit(5000).all()
         candidates=[]
         for link,item in links:

@@ -8,7 +8,11 @@ from collections import defaultdict, Counter
 from datetime import date, datetime, timedelta
 from sqlalchemy import and_, func
 from .access import allowed, has
-from .geography import province_code_for, province_name_for, PROVINCES
+from .geography import province_code_for, province_name_for, PROVINCES, INDONESIAN_PROVINCE_ALIASES
+
+def _province_name(code):
+    names=INDONESIAN_PROVINCE_ALIASES.get(str(code),[])
+    return names[0] if names else province_name_for(code)
 from .issue_signals import validated_issue_signals, phrase_screening_candidates
 from .models import (MonitoringCampaign, CampaignEvidence, EvidenceAssessment,
     EvidenceReview, SocialListeningResult, IssueCategory, IssueCategoryPhrase,
@@ -51,7 +55,7 @@ def _scope(p,data):
     if scope=='Nationwide':
         if selected and not province_code_for(selected):
             raise ValueError('Unknown province')
-        return selected, 'Nationwide' if not selected else province_name_for(province_code_for(selected))
+        return selected, 'Nationwide' if not selected else _province_name(province_code_for(selected))
     assigned=str(p.get('province') or '').strip()
     assigned_code=province_code_for(assigned,p.get('province_code'))
     if not assigned_code:
@@ -167,7 +171,7 @@ def build_command_center(db,p,data=None):
             candidate_name=str(first.get('name') or first.get('value') or '') if isinstance(first,dict) else str(first)
         alert={**note,'category':signal['category_name'],'evidence_quote':signal.get('evidence_quote','')[:280],
                'description':signal.get('explanation') or note['summary'],
-               'candidate':candidate_name[:120], 'province':province_name_for(code) if code else 'Unknown / Unclassified',
+               'candidate':candidate_name[:120], 'province':_province_name(code) if code else 'Unknown / Unclassified',
                'province_basis':'CAMPAIGN_MONITORING_SCOPE' if code else 'UNCLASSIFIED',
                'review_status':decision,
                'signal_provenance':signal.get('signal_provenance',''),
@@ -178,7 +182,7 @@ def build_command_center(db,p,data=None):
             alerts_by_post[post.id]=alert
     alerts=list(alerts_by_post.values())
     alerts.sort(key=lambda a:(a['priority_order'],a['detected_at'] or ''),reverse=True)
-    by_region=[{'province':province_name_for(code),'count':len(posts),
+    by_region=[{'province':_province_name(code),'count':len(posts),
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_posts.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
@@ -213,7 +217,7 @@ def build_command_center(db,p,data=None):
                        sum(a['review_status']=='AWAITING_REVIEW' for a in alerts),
                        by_region,len(watch_count_ids),start,end)
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
-            'available_provinces':[{'name':row['name'],'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
+            'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
             'scope':{'label':scope_label,'geographic_scope':p.get('geographic_scope'),
                      'selected_province':selected,'can_select_national':p.get('geographic_scope')=='Nationwide'},
             'generated_at':datetime.utcnow().isoformat()+'Z',

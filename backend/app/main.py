@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -223,8 +223,14 @@ def external_campaign_import_status(run_id:int,user:User=Depends(current_user),d
         raise HTTPException(403,'Administrator permission required')
     run=db.get(SocialListeningRun,run_id)
     if not run or run.provider!='ZOCIALEYE':raise HTTPException(404,'Import not found')
-    return {'run_id':run.id,'status':run.status,'progress':json.loads(run.query_json or '{}'),
-            'error':run.error_text if run.status=='FAILED' else '', 'socialcrawl_credits':0}
+    from datetime import datetime, timezone
+    progress=json.loads(run.query_json or '{}')
+    try:heartbeat=datetime.fromisoformat(progress.get('heartbeat_utc',''))
+    except (TypeError,ValueError):heartbeat=None
+    if heartbeat and heartbeat.tzinfo is None:heartbeat=heartbeat.replace(tzinfo=timezone.utc)
+    stalled=bool(run.status=='RUNNING' and heartbeat and (datetime.now(timezone.utc)-heartbeat).total_seconds()>180)
+    return {'run_id':run.id,'status':run.status,'progress':progress,'stalled':stalled,
+            'error':run.error_text if run.status in ('FAILED','INTERRUPTED') else '', 'socialcrawl_credits':0}
 
 
 @app.get('/api/social-listening/campaign/{campaign_id}/export.csv')

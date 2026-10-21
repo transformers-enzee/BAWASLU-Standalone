@@ -172,7 +172,7 @@ function SocialEvidenceInbox(){
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
     <div className="max-h-[680px] overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
      {filtered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {platformLabel(item.platform)} · {item.relevance_label}</span>{item.model_version==='mock-fixture'&&<span className="text-xs font-semibold text-violet-700">Synthetic QA example</span>}{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {platformLabel(item.platform)}</span>{item.model_version==='mock-fixture'&&<span className="text-xs font-semibold text-violet-700">Synthetic QA example</span>}{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
       <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
       <p className="text-xs text-[#146a8b]">View source and assessment →</p>
      </button>)}

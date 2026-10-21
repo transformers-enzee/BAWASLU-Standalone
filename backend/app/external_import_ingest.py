@@ -49,7 +49,7 @@ def parse_metric(value):
     import re
     raw=clean(value).replace(',','').replace(' ','').lower()
     if not raw or raw in ('-','n/a','none','nan'):return None
-    match=re.fullmatch(r'(\\d+(?:\\.\\d+)?)([kmb]?)',raw)
+    match=re.fullmatch(r'([0-9]+(?:[.][0-9]+)?)([kmb]?)',raw)
     if not match:return None
     factor={'':1,'k':1000,'m':1000000,'b':1000000000}[match.group(2)]
     value=int(float(match.group(1))*factor)

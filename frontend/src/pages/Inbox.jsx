@@ -150,7 +150,7 @@ function SocialEvidenceInbox(){
  const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter)].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
-  <div className="flex flex-wrap justify-end gap-3 items-center"><div>
+  <div className="flex flex-wrap justify-end gap-3 items-center">
    <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
   </div>
   <details className="text-xs text-slate-500"><summary className="cursor-pointer">QA tools</summary><button type="button" className="intel-ghost text-xs mt-2" onClick={()=>{setSelected({...DEMO_VIOLATION,flag_review_history:[]});setReviewDecision('');setReviewRationale('');setReviewNotice('');setReviewError('')}}>Open synthetic Potential Violation demo</button></details>

@@ -16,3 +16,10 @@ def test_platform_from_short_url():
     assert parse_row({'_id':'b','Message':'text','Post URL':'https://youtu.be/abc'})['platform']=='youtube'
 def test_reject_undetected_platform():
     assert parse_row({'_id':'c','Message':'text','Post URL':'https://example.com/a'}) is None
+
+
+def test_zocialeye_type_comment_without_comment_url():
+    from app.external_import_ingest import parse_row
+    item=parse_row({'Source':'instagram','_id':'comment-a','Message':'reply','Type':'comment','Post URL':'https://instagram.com/p/abc'})
+    assert item['content_type']=='COMMENT'
+    assert item['parent_url']=='https://instagram.com/p/abc'

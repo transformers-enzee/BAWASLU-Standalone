@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'83.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -165,10 +165,19 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
         raise HTTPException(403,'National administrator permission required')
     from sqlalchemy import select
     active_runs=db.execute(select(SocialListeningRun).where(SocialListeningRun.provider=='ZOCIALEYE',SocialListeningRun.status.in_(['QUEUED','RUNNING']))).scalars().all()
+    from datetime import datetime, timezone, timedelta
     for active in active_runs:
-        import json
-        if str(json.loads(active.query_json or '{}').get('campaign_id'))==str(campaign_id):
-            raise HTTPException(409,'Another ZocialEye import is already active for this campaign')
+        try:details=json.loads(active.query_json or '{}')
+        except (ValueError,TypeError):details={}
+        if str(details.get('campaign_id'))!=str(campaign_id):continue
+        try:heartbeat=datetime.fromisoformat(details.get('heartbeat_utc',''))
+        except (ValueError,TypeError):heartbeat=active.executed_at.replace(tzinfo=timezone.utc) if active.executed_at else datetime.now(timezone.utc)
+        if heartbeat.tzinfo is None:heartbeat=heartbeat.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc)-heartbeat > timedelta(minutes=45):
+            active.status='INTERRUPTED'
+            active.error_text='Import worker stopped responding. Reupload the same file to resume safely using provider IDs.'
+            db.commit()
+        else:raise HTTPException(409,'Another ZocialEye import is active. Refresh its progress before starting another.')
     ext=Path(file.filename or '').suffix.lower()
     if ext not in ('.xlsx','.csv'):raise HTTPException(400,'Excel or CSV required')
     import tempfile
@@ -192,7 +201,7 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
             raise HTTPException(400,'Provider ID and message columns required')
         run=SocialListeningRun(provider='ZOCIALEYE',provider_request_id=uuid.uuid4().hex,
             query_json=json.dumps({'campaign_id':campaign_id,'source_filename':Path(file.filename or '').name,
-                                    'provider':'ZOCIALEYE','processed':0,'inserted':0,'linked':0,'skipped':0}),
+                                    'provider':'ZOCIALEYE','processed':0,'inserted':0,'linked':0,'skipped':0,'heartbeat_utc':datetime.now(timezone.utc).isoformat()}),
             credits_used=0,credits_remaining=0,result_count=0,status='QUEUED',
             executed_by=str(user.id))
         db.add(run);db.commit();db.refresh(run)

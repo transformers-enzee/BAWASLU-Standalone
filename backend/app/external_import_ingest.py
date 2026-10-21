@@ -76,7 +76,7 @@ def parse_row(row):
     text=clean(row.get('Message'))
     url=source_url(row)
     parent=clean(row.get('Post URL'))
-    comment=bool(clean(row.get('Comment URL')) or clean(row.get('Reply comment URL')))
+    comment=bool(clean(row.get('Comment URL')) or clean(row.get('Reply comment URL')) or clean(row.get('Type')).lower() in ('comment','reply'))
     if not ident or not platform or not url or not text:return None
     return {'platform':platform,'provider_result_id':ident,'text_content':text,'canonical_url':url,
         'content_type':'COMMENT' if comment else 'POST','parent_url':parent if comment else '',
@@ -94,6 +94,9 @@ def run_import(run_id,campaign_id,source_path):
     if not run:
         db.close();path.unlink(missing_ok=True);return
     count=0;skipped=0;linked=0;processed=0;existing_count=0
+    from datetime import datetime,timezone
+    def progress():
+        return json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE','heartbeat_utc':datetime.now(timezone.utc).isoformat(),'resume_method':'reupload_same_file'})
     try:
         prior=db.execute(select(SocialListeningResult.platform,SocialListeningResult.provider_result_id,SocialListeningResult.id).where(SocialListeningResult.provider=='ZOCIALEYE')).all()
         known={(platform,pid):rid for platform,pid,rid in prior if pid}
@@ -130,15 +133,15 @@ def run_import(run_id,campaign_id,source_path):
                 already.add(rid);linked+=1
             if number%250==0:
                 run.result_count=count
-                run.query_json=json.dumps({'campaign_id':campaign_id,'processed':number,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE'})
+                run.query_json=progress()
                 db.commit()
         run.result_count=count;run.status='COMPLETED'
-        run.query_json=json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE'})
+        run.query_json=progress()
         db.commit()
     except Exception as exc:
         db.rollback()
         run=db.get(SocialListeningRun,run_id)
         if run:
-            run.status='FAILED';run.error_text=str(exc)[:800];run.query_json=json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE','partial_commit':True});db.commit()
+            run.status='FAILED';run.error_text=str(exc)[:800];run.query_json=progress();db.commit()
     finally:
         db.close();path.unlink(missing_ok=True)

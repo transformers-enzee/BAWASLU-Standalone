@@ -137,7 +137,7 @@ def sync_account(account_id,client=None):
         platform,handle=identity(account)
         now=datetime.utcnow()
         query={'watchlist_id':watch.id,'account_id':account.id,'platform':platform,
-               'handle':handle,'province':watch.province,'regency_city':watch.regency_city}
+               'handle':handle,'province':'','regency_city':''}
         run=SocialListeningRun(query_json=json.dumps(query),executed_by='watchlist-auto',
                                status='RUNNING')
         db.add(run);db.commit();db.refresh(run)
@@ -232,8 +232,11 @@ def sync_account(account_id,client=None):
             db.rollback()
             row=db.get(WatchlistAccountSync,account_id)
             if row:
-                row.state='ERROR';row.started_at=None
-                row.last_checked_at=now;row.next_check_at=now+timedelta(minutes=30)
+                fatal='unsupported' in str(exc).lower()
+                row.state='UNSUPPORTED' if fatal else 'ERROR'
+                row.started_at=None
+                row.last_checked_at=now
+                row.next_check_at=None if fatal else now+timedelta(minutes=30)
                 row.last_error=str(exc)[:350]
             db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',
                 endpoint='/v1/prism/profiles?include=posts',credits_used=credits,

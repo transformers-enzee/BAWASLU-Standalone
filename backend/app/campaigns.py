@@ -10,6 +10,32 @@ from sqlalchemy.orm import Session
 from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
 from .access import has, allowed, audit
 from .socialcrawl import _scope_filters, AVAILABLE_PLATFORMS
+from threading import Lock
+from time import monotonic
+
+# Short-lived, process-local dashboard cache. Authorization is checked on every request.
+_DASH_CACHE={}
+_DASH_LOCK=Lock()
+_DASH_TTL_SECONDS=30
+_DASH_MAX_ENTRIES=60
+
+def _dashboard_cache_get(key):
+    with _DASH_LOCK:
+        entry=_DASH_CACHE.get(key)
+        if entry and entry[0]>monotonic():
+            return entry[1].copy()
+        if entry:_DASH_CACHE.pop(key,None)
+    return None
+
+def _dashboard_cache_put(key,value):
+    with _DASH_LOCK:
+        now=monotonic()
+        for old,entry in list(_DASH_CACHE.items()):
+            if entry[0]<=now:_DASH_CACHE.pop(old,None)
+        if len(_DASH_CACHE)>=_DASH_MAX_ENTRIES:
+            _DASH_CACHE.pop(next(iter(_DASH_CACHE)))
+        _DASH_CACHE[key]=(now+_DASH_TTL_SECONDS,value.copy())
+
 
 def _captured_post_metrics(raw):
     """Engagement totals use only reported likes, comments and shares (no estimates)."""
@@ -796,6 +822,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         to_day=_iso_date((data or {}).get('date_to'),'Date to')
         if from_day and to_day and from_day>to_day: raise ValueError('Date from cannot be after date to')
         keyword=str((data or {}).get('keyword') or '').strip()[:120].casefold()
+        # Keep authorization-sensitive responses isolated to the requesting principal and filters.
+        principal=str(p.get('id') or p.get('user_id') or '')
+        if not principal:
+            principal=json.dumps(p,sort_keys=True,default=str)
+        cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword)
+        cached=_dashboard_cache_get(cache_key)
+        if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
         if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
         links=query.order_by(CampaignEvidence.id.desc()).yield_per(500)
@@ -866,7 +899,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
                 for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
-        return {'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
+        result={'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
                 'statistics':{'messages':visible,'engagement':total_engagement,'views':total_views,
                     'accounts':len(accounts),'main_keyword_messages':primary_message_count,'secondary_keyword_messages':secondary_message_count,'secondary_not_found_messages':secondary_absent_count,
@@ -883,6 +916,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'limited_to':None,'truncated':False,
                 'paid_provider_called':False}
+        _dashboard_cache_put(cache_key,result)
+        return result
     if action=='campaignRunReadiness':
         # Dry-run only: calculate scoped cost and duplicate warnings without invoking a provider.
         from .campaign_scheduler import campaign_query, campaign_schedule_preview

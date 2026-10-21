@@ -131,6 +131,25 @@ class SourceAccount(Base):
     province: Mapped[str] = mapped_column(String(128), default='')
     regency_city: Mapped[str] = mapped_column(String(128), default='')
 
+class WatchlistAccountSync(Base):
+    __tablename__ = 'watchlist_account_sync'
+    account_id: Mapped[int] = mapped_column(ForeignKey('source_accounts.id'), primary_key=True)
+    state: Mapped[str] = mapped_column(String(32), default='PENDING', index=True)
+    last_checked_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    next_check_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True, index=True)
+    started_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str] = mapped_column(Text, default='')
+    last_credits: Mapped[int] = mapped_column(Integer, default=0)
+    last_new_posts: Mapped[int] = mapped_column(Integer, default=0)
+    total_posts: Mapped[int] = mapped_column(Integer, default=0)
+    last_post_id: Mapped[str] = mapped_column(String(255), default='')
+
+class WatchlistAccountEvidence(Base):
+    __tablename__ = 'watchlist_account_evidence'
+    account_id: Mapped[int] = mapped_column(ForeignKey('source_accounts.id'), primary_key=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'), primary_key=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 class EntityRelationship(Base):
     __tablename__='entity_relationships'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

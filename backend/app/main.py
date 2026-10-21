@@ -31,6 +31,21 @@ def startup():
         recover_existing_news_languages(db)
         sync_promoted_news_languages(db)
     finally: db.close()
+    # Optional Watchlist worker: on registration it fetches immediately, then
+    # periodically while this web instance stays awake. Never start without a
+    # positive administrator-controlled SocialCrawl credit budget.
+    from .watchlist_auto import readiness as watchlist_readiness
+    if watchlist_readiness()['enabled']:
+        import logging, threading, time
+        from .watchlist_auto import run_due_cycle
+        def watchlist_worker_loop():
+            while True:
+                try:run_due_cycle()
+                except Exception:logging.getLogger(__name__).exception('Watchlist sync cycle failed')
+                time.sleep(60)
+        threading.Thread(target=watchlist_worker_loop,
+                         name='bawaslu-watchlist-worker',daemon=True).start()
+
     # Opt-in only: do not initiate any paid work unless BOTH controls are enabled.
     if os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true' and os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true':
         from .auto_relevance import recover_stale_jobs, assess_pending_campaign
@@ -57,7 +72,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'87.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'87.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -134,9 +149,15 @@ def intelligence(body:FunctionIn,user:User=Depends(current_user),db:Session=Depe
     except ValueError as e: raise HTTPException(400,str(e))
 
 @app.post('/api/functions/registry')
-def registry(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+def registry(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
-    try: return registry_action(db,p,body.action,body.data,body.id)
+    try:
+        result=registry_action(db,p,body.action,body.data,body.id)
+        if body.action in ('addAccount','updateAccount') and result.get('account'):
+            from .watchlist_auto import readiness, sync_account
+            if readiness()['enabled']:
+                background_tasks.add_task(sync_account,int(result['account']['id']))
+        return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
 

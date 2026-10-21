@@ -107,6 +107,11 @@ def registry_action(db:Session,p,action,data,id=None):
         cats=db.query(IssueCategory).order_by(IssueCategory.sort_order,IssueCategory.name).all()
         return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order,'phrases':_category_phrases(db,x.id)} for x in cats]}
 
+    if action=='watchlistSyncStatus':
+        from .watchlist_auto import status_for
+        watch=_require_watchlist(db,p,id)
+        return status_for(db,watch.id)
+
     if action=='watchlistCapturedFeed':
         # Paginated, read-only evidence matching. Never call a crawl provider here.
         from datetime import date as _date
@@ -167,7 +172,7 @@ def registry_action(db:Session,p,action,data,id=None):
         base={'linked_accounts':len(accounts),'matchable_accounts':len(specs),
               'paid_provider_called':False,
               'status':'Stored captured evidence only. No automatic monitoring or provider requests.'}
-        if not specs:return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
+        if not specs and not accounts:return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
         match_conditions=[]
         for (platform,handle),account in specs.items():
             platform_condition=func.lower(SocialListeningResult.platform).in_(
@@ -179,6 +184,14 @@ def registry_action(db:Session,p,action,data,id=None):
                          func.trim(SocialListeningResult.observed_handle)==''),
                      author.in_([handle,'@'+handle])))
             match_conditions.append(and_(platform_condition,matching))
+        explicit_account_ids=[a.id for a in accounts if (not platform_filter or
+            a.platform.casefold()==platform_filter) and
+            (not account_filter or str(a.id)==account_filter)]
+        from .models import WatchlistAccountEvidence
+        if explicit_account_ids:
+            explicit=db.query(WatchlistAccountEvidence.result_id).filter(
+                WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
+            match_conditions.append(SocialListeningResult.id.in_(explicit))
         query=db.query(SocialListeningResult).filter(or_(*match_conditions))
         if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
         if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
@@ -201,12 +214,17 @@ def registry_action(db:Session,p,action,data,id=None):
             observed=str(item.observed_handle or '').strip().lstrip('@').casefold()
             author=str(item.author_name or '').strip().lstrip('@').casefold()
             matched=specs.get((platform,observed)) if observed else specs.get((platform,author))
+            linked=db.query(SourceAccount).join(WatchlistAccountEvidence,
+                WatchlistAccountEvidence.account_id==SourceAccount.id).filter(
+                WatchlistAccountEvidence.result_id==item.id,
+                SourceAccount.id.in_(explicit_account_ids)).first() if explicit_account_ids else None
+            matched=linked or matched
             metrics=_captured_post_metrics(item.engagement_json)
             return {'id':str(item.id),'platform':item.platform,'account':matched.handle or '@'+inferred_handle(matched) if matched else '',
                 'text':(item.text_content or '')[:5000],
                 'published_at':item.published_at,'url':item.canonical_url,
                 'author_name':item.author_name,'content_type':item.content_type,
-                'match_method':'observed_handle' if observed else 'author_name_unverified',
+                'match_method':'registered_account' if linked else 'observed_handle' if observed else 'author_name_unverified',
                 **metrics}
         return {**base,'posts':[serialize_post(item) for item in rows],
                 'page':page,'page_size':page_size,'total':total}
@@ -264,6 +282,8 @@ def registry_action(db:Session,p,action,data,id=None):
         if _account_duplicate(db,w.id,url,platform,handle): raise ValueError('This public account / URL is already registered for this watchlist item')
         a=SourceAccount(watchlist_id=w.id,platform=platform,url=url,handle=handle,province=w.province,regency_city=w.regency_city)
         db.add(a); db.commit(); db.refresh(a)
+        from .watchlist_auto import mark_pending
+        mark_pending(db,a.id)
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_ADDED',{'account_id':{'new':str(a.id)},'url':{'new':a.url}})
         return {'account':source_account(a)}
 
@@ -278,6 +298,8 @@ def registry_action(db:Session,p,action,data,id=None):
         previous=source_account(a)
         a.url=url; a.platform=platform; a.handle=handle; a.province=w.province; a.regency_city=w.regency_city
         db.commit(); db.refresh(a)
+        from .watchlist_auto import mark_pending
+        mark_pending(db,a.id)
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_UPDATED',{'account_id':str(a.id),'previous':previous,'new':source_account(a)})
         return {'account':source_account(a)}
 
@@ -286,6 +308,11 @@ def registry_action(db:Session,p,action,data,id=None):
         a=db.get(SourceAccount,int(id)) if str(id or '').isdigit() else None
         if not a: raise ValueError('Public account unavailable')
         w=_require_watchlist(db,p,a.watchlist_id); previous=source_account(a)
+        from .models import WatchlistAccountSync, WatchlistAccountEvidence
+        db.query(WatchlistAccountEvidence).filter(
+            WatchlistAccountEvidence.account_id==a.id).delete(synchronize_session=False)
+        db.query(WatchlistAccountSync).filter(
+            WatchlistAccountSync.account_id==a.id).delete(synchronize_session=False)
         db.delete(a); db.commit()
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_REMOVED',{'account':previous})
         return {'ok':True}

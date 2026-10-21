@@ -803,8 +803,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         primary_terms=json.loads(c.primary_keywords_json or '[]')
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
         visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
-        for link in links:
-            item=db.get(SocialListeningResult,link.result_id)
+        for link,item in links:
             if not item or not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
             try: source_day=date.fromisoformat(source_day).isoformat()

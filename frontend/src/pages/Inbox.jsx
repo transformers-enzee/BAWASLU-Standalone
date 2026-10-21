@@ -115,8 +115,8 @@ function SocialEvidenceInbox(){
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
  const locationsFor=x=>signalNames(x.location_signals).map(normalizedLocation);
  const structuredPlaces=x=>(x.location_signals||[]).filter(s=>s&&typeof s==='object'&&s.province&&s.regency_city).map(s=>({province:normalizedLocation(s.province),regency:String(s.regency_city).trim()}));
- const canonicalCandidate=name=>({'prabowo':'Prabowo Subianto','prabowo subianto':'Prabowo Subianto'}[String(name||'').trim().toLocaleLowerCase('id-ID')]||String(name||'').trim());
- const candidatesFor=x=>[...new Set(signalNames(x.candidate_signals).filter(name=>!/^@?[a-z0-9._-]+\\.[a-z0-9._-]+$/i.test(name)&&!/^@/.test(name)).map(canonicalCandidate))];
+ const canonicalCandidate=name=>{const raw=String(name||'').trim(),key=raw.toLocaleLowerCase('id-ID');return {'prabowo':'Prabowo Subianto','prabowo subianto':'Prabowo Subianto','gibran':'Gibran Rakabuming Raka','gibran rakabuming':'Gibran Rakabuming Raka','gibran rakabuming raka':'Gibran Rakabuming Raka','cindymonica.id':'Cindy Monica','cindy monica':'Cindy Monica'}[key]||raw};
+ const candidatesFor=x=>[...new Set(signalNames(x.candidate_signals).map(canonicalCandidate).filter(name=>name&&!name.startsWith('@')&&(!/^[a-z0-9_-]+[.][a-z0-9._-]+$/i.test(name)||name==='Cindy Monica')))];
  const unlocatedCount=useMemo(()=>findings.filter(x=>locationsFor(x).length===0).length,[findings]);
  const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
  const provinceNames=new Set(['Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya']);
@@ -126,8 +126,8 @@ function SocialEvidenceInbox(){
  const uncategorizedCandidateCount=useMemo(()=>findings.filter(x=>candidatesFor(x).length===0).length,[findings]);
  const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
   const filtered=useMemo(()=>findings.filter(x=>{
-  if(jurisdiction==='location'&&chosenLocation==='__unresolved__'&&locationsFor(x).length>0)return false;
-  if(jurisdiction==='location'&&chosenLocation&&chosenLocation!=='__unresolved__'&&!locationsFor(x).includes(chosenLocation))return false;
+  if(jurisdiction==='location'&&chosenLocation==='__unresolved__'&&provinceFor(x).length>0)return false;
+  if(jurisdiction==='location'&&chosenLocation&&chosenLocation!=='__unresolved__'&&!provinceFor(x).includes(chosenLocation))return false;
   if(jurisdiction==='unresolved'&&locationsFor(x).length>0)return false;
   if(jurisdiction==='province'&&(!provinceFor(x).length||(chosenLocation&&!provinceFor(x).includes(chosenLocation))))return false;
   if(jurisdiction==='province'&&chosenRegency&&!structuredPlaces(x).some(s=>s.province===chosenLocation&&s.regency===chosenRegency))return false;
@@ -160,7 +160,7 @@ function SocialEvidenceInbox(){
   </div>
   <div className="intel-card px-3 py-2" aria-label="Filter intelligence">
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">
-    <label className="text-xs flex-1 min-w-[125px]">Location<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All locations</option><option value="__unresolved__">Location unknown</option>{locations.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
+    <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
     <label className="text-xs flex-1 min-w-[130px]">From<input type="date" className="intel-input mt-1 w-full" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>

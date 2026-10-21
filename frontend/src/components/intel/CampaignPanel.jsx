@@ -491,15 +491,6 @@ export default function CampaignPanel({campaignId=null}){
  {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured campaign keywords appear in the selected evidence.</p>}
  <p className="text-xs text-slate-500">Only configured main and secondary keywords are shown. Sizes reflect recorded mentions in the selected date range. Gold indicates secondary keywords. No additional SocialCrawl or AI calls.</p>
  </section>
-    <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-md bg-slate-50 p-3">Evidence records <strong className="block text-xl">{dashboard.evidence_count}</strong></div><div className="rounded-md bg-slate-50 p-3">Collection runs <strong className="block text-xl">{dashboard.run_count}</strong></div></div>
-    {dashboard.truncated&&<p className="text-xs text-amber-800">Statistics cover only the latest 5,000 campaign evidence links.</p>}
-    {[
-     ['Evidence by platform',dashboard.platforms],
-     ['Review status',dashboard.review_states],
-     ['Main keyword matches',dashboard.main_keywords],
-     ['Secondary keyword matches',dashboard.secondary_keywords]
-    ].map(([label,values])=><div key={label}><h5 className="text-sm font-semibold">{label}</h5>{Object.entries(values||{}).length?<div className="space-y-1 mt-2">{Object.entries(values).sort((x,y)=>y[1]-x[1]).map(([name,count])=><div key={name} className="flex gap-3 items-center text-xs"><span className="w-32 break-words">{name}</span><div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#285f82]" style={{width:(100*count/Math.max(1,...Object.values(values)))+'%'}} /></div><strong>{count}</strong></div>)}</div>:<p className="text-xs text-slate-500 mt-1">No evidence yet</p>}</div>)}
-    <p className="text-xs text-slate-500">Based on stored, access-scoped evidence. Keyword matches are not verified election violations. No SocialCrawl credits used.</p>
    </section>}
    <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
     <h4 className="font-semibold">Manual SocialCrawl collection</h4>

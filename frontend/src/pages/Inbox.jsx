@@ -150,10 +150,11 @@ function SocialEvidenceInbox(){
  const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter)].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
-  <div className="flex flex-wrap justify-end gap-3 items-center">
-   <select className="intel-input" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+  <div className="flex flex-wrap lg:flex-nowrap items-end gap-2" aria-label="Campaign and date filters">
+   <label className="text-xs flex-[2] min-w-[200px]">Campaign<select className="intel-input mt-1 w-full" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+   <label className="text-xs flex-1 min-w-[145px]">From date<input type="date" className="intel-input mt-1 w-full" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
+   <label className="text-xs flex-1 min-w-[145px]">To date<input type="date" className="intel-input mt-1 w-full" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
   </div>
-  <details className="text-xs text-slate-500"><summary className="cursor-pointer">QA tools</summary><button type="button" className="intel-ghost text-xs mt-2" onClick={()=>{setSelected({...DEMO_VIOLATION,flag_review_history:[]});setReviewDecision('');setReviewRationale('');setReviewNotice('');setReviewError('')}}>Open synthetic Potential Violation demo</button></details>
   <div className="grid grid-cols-2 gap-2">
    <div className="intel-card p-3"><p className="text-xs text-slate-500">Posts shown</p><p className="text-2xl font-semibold tabular-nums">{filtered.length}</p></div>
    <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</p></div>
@@ -163,8 +164,6 @@ function SocialEvidenceInbox(){
     <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-    <label className="text-xs flex-1 min-w-[130px]">From<input type="date" className="intel-input mt-1 w-full" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
-    <label className="text-xs flex-1 min-w-[130px]">To<input type="date" className="intel-input mt-1 w-full" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
     <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>

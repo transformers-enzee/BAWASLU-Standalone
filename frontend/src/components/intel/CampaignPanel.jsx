@@ -391,7 +391,8 @@ export default function CampaignPanel({campaignId=null}){
  {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} possible billable AI calls (max 3). Token costs vary and are not quoted in advance.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm AI batch</button></div>}
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
- <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button>
+ <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button> <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{await base44.externalImport.downloadCampaign(selected.id)}catch(e){setEvidenceError(e.message)}}}>Export all campaign records (CSV)</button>
+ <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{const r=await base44.externalImport.repairMetrics(selected.id);setManualNotice('Restored recorded metrics for '+r.repaired+' external records. Refresh campaign to update charts.')}catch(e){setEvidenceError(e.message)}}}>Admin: restore imported metrics</button>
  <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find campaign post by ID">
   <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any campaign post by Post ID</label>
   <form onSubmit={e=>{e.preventDefault();findPostById()}} className="flex gap-2">

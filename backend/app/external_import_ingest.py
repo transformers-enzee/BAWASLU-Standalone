@@ -45,6 +45,31 @@ def detect_platform(row):
            'youtube.com':'youtube','youtu.be':'youtube','threads.net':'threads'}
     return next((name for domain,name in sites.items() if host==domain or host.endswith('.'+domain)),'')
 
+def parse_metric(value):
+    import re
+    raw=clean(value).replace(',','').replace(' ','').lower()
+    if not raw or raw in ('-','n/a','none','nan'):return None
+    match=re.fullmatch(r'(\\d+(?:\\.\\d+)?)([kmb]?)',raw)
+    if not match:return None
+    factor={'':1,'k':1000,'m':1000000,'b':1000000000}[match.group(2)]
+    value=int(float(match.group(1))*factor)
+    return value if value<10**15 else None
+
+def provider_metrics(row):
+    result={}
+    for output,keys in {'likes':['Like','Likes'],'comments':['Comment','Comments'],
+                        'shares':['Share','Shares'],'views':['View','Views','Play','Plays']}.items():
+        for key in keys:
+            value=parse_metric(row.get(key))
+            if value is not None:
+                result[output]=value
+                break
+    total=parse_metric(row.get('Engagement'))
+    if total is not None:result['engagement_total']=total
+    elif any(k in result for k in ('likes','comments','shares')):
+        result['engagement_total']=sum(result.get(k,0) for k in ('likes','comments','shares'))
+    return result
+
 def parse_row(row):
     platform=detect_platform(row)
     ident=clean(row.get('_id'))
@@ -57,7 +82,7 @@ def parse_row(row):
         'content_type':'COMMENT' if comment else 'POST','parent_url':parent if comment else '',
         'published_at':clean(row.get('Post time'))[:64],
         'author_name':clean(row.get('Account'))[:255],
-        'engagement':clean(row.get('Engagement')),
+        'engagement':provider_metrics(row),
         'sentiment':clean(row.get('Sentiment')),
         'raw':{str(k):clean(v)[:20000] for k,v in row.items() if k is not None}}
 
@@ -93,7 +118,7 @@ def run_import(run_id,campaign_id,source_path):
                     provider_result_id=item['provider_result_id'],platform=item['platform'],
                     content_type=item['content_type'],canonical_url=item['canonical_url'],
                     author_name=item['author_name'],published_at=item['published_at'],
-                    text_content=item['text_content'],engagement_json=json.dumps({'raw_engagement':item['engagement']}),
+                    text_content=item['text_content'],engagement_json=json.dumps(item['engagement']),
                     source_identity_json=json.dumps({'external_provider':'ZOCIALEYE','parent_url':item['parent_url']}),
                     raw_payload_json=json.dumps(raw,ensure_ascii=False),
                     content_fingerprint=hashlib.sha256((item['platform']+'|'+item['provider_result_id']).encode()).hexdigest())

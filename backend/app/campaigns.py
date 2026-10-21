@@ -30,7 +30,7 @@ def _captured_post_metrics(raw):
     shares=count('shares','share_count')
     views=count('views','view_count','plays','play_count')
     return {'likes':likes,'comments':comments,'shares':shares,'views':views,
-            'engagement_total':sum(x or 0 for x in (likes,comments,shares)) if any(x is not None for x in (likes,comments,shares)) else None}
+            'engagement_total':count('engagement_total') if count('engagement_total') is not None else (sum(x or 0 for x in (likes,comments,shares)) if any(x is not None for x in (likes,comments,shares)) else None)}
 
 
 def _rank_captured_posts(rows):
@@ -841,7 +841,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             comments,has_comments=metric('comments','comment_count')
             shares,has_shares=metric('shares','share_count')
             views,has_views=metric('views','view_count','plays','play_count')
-            engagement=likes+comments+shares
+            engagement=metric('engagement_total')[0] if metric('engagement_total')[1] else likes+comments+shares
             total_engagement+=engagement;total_views+=views
             if has_likes or has_comments or has_shares:metrics_available['engagement']+=1
             if has_views:metrics_available['views']+=1

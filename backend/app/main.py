@@ -57,7 +57,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'82.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -214,6 +214,65 @@ def external_campaign_import_status(run_id:int,user:User=Depends(current_user),d
     if not run or run.provider!='ZOCIALEYE':raise HTTPException(404,'Import not found')
     return {'run_id':run.id,'status':run.status,'progress':json.loads(run.query_json or '{}'),
             'error':run.error_text if run.status=='FAILED' else '', 'socialcrawl_credits':0}
+
+
+@app.get('/api/social-listening/campaign/{campaign_id}/export.csv')
+def export_campaign_evidence_csv(campaign_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Stream all campaign evidence without a browser-side row cap."""
+    import csv,io,json
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy import select
+    from .access import allowed
+    from .models import MonitoringCampaign,CampaignEvidence,SocialListeningResult
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(profile(db,user),campaign):raise HTTPException(404,'Campaign unavailable')
+    fields=['id','provider','provider_result_id','platform','content_type','published_at','author_name',
+            'canonical_url','text_content','engagement_total','likes','comments','shares','views','parent_url']
+    def stream():
+        output=io.StringIO()
+        writer=csv.writer(output)
+        writer.writerow(fields);yield '\\ufeff'+output.getvalue();output.seek(0);output.truncate(0)
+        with SessionLocal() as read_db:
+            statement=(select(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+                       .where(CampaignEvidence.campaign_id==campaign_id).order_by(SocialListeningResult.id))
+            for record in read_db.execute(statement.execution_options(yield_per=500)).scalars():
+                from .campaigns import _captured_post_metrics
+                metrics=_captured_post_metrics(record.engagement_json)
+                try:identity=json.loads(record.source_identity_json or '{}')
+                except (ValueError,TypeError):identity={}
+                data={'id':record.id,'provider':record.provider,'provider_result_id':record.provider_result_id,
+                      'platform':record.platform,'content_type':record.content_type,'published_at':record.published_at,
+                      'author_name':record.author_name,'canonical_url':record.canonical_url,'text_content':record.text_content,
+                      'parent_url':identity.get('parent_url',''),**metrics}
+                writer.writerow([data.get(key,'') for key in fields])
+                yield output.getvalue();output.seek(0);output.truncate(0)
+    from .db import SessionLocal
+    return StreamingResponse(stream(),media_type='text/csv; charset=utf-8',
+        headers={'Content-Disposition':f'attachment; filename="bawaslu_campaign_{campaign_id}_evidence.csv"',
+                 'Cache-Control':'no-store'})
+
+@app.post('/api/social-listening/campaign/{campaign_id}/repair-external-metrics')
+def repair_external_metrics(campaign_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Admin-only restoration from provider raw payload; never estimates missing values."""
+    from sqlalchemy import select
+    from .access import allowed,has
+    from .models import MonitoringCampaign,CampaignEvidence,SocialListeningResult
+    from .external_import_ingest import provider_metrics
+    p=profile(db,user);campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'Administrator permission required')
+    statement=(select(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+        .where(CampaignEvidence.campaign_id==campaign_id,SocialListeningResult.provider=='ZOCIALEYE'))
+    repaired=0
+    for record in db.execute(statement).scalars():
+        try:raw=json.loads(record.raw_payload_json or '{}')
+        except (ValueError,TypeError):continue
+        metrics=provider_metrics(raw)
+        if metrics and json.loads(record.engagement_json or '{}')!=metrics:
+            record.engagement_json=json.dumps(metrics);repaired+=1
+    db.commit()
+    return {'repaired':repaired,'campaign_id':campaign_id,'no_estimated_metrics':True}
 
 @app.post('/api/upload')
 def upload(file:UploadFile=File(...),user:User=Depends(current_user)):

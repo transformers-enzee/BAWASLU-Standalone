@@ -33,6 +33,15 @@ export const base44 = {
     resetPassword:async()=>{ throw new Error('Password reset is not configured in standalone v0.1. Contact an administrator.'); },
   },
   externalImport:{
+    async downloadCampaign(campaignId){
+      const token=window.localStorage.getItem(TOKEN_KEY)||'';
+      const response=await fetch(API+'/api/social-listening/campaign/'+encodeURIComponent(campaignId)+'/export.csv',{headers:{Authorization:'Bearer '+token}});
+      if(!response.ok)throw apiError(response.status,await response.json().catch(()=>({})));
+      const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');
+      a.href=url;a.download='bawaslu_campaign_'+campaignId+'_evidence.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+    },
+    async repairMetrics(campaignId){return request('/api/social-listening/campaign/'+encodeURIComponent(campaignId)+'/repair-external-metrics',{method:'POST'});},
     async start(campaignId,file){
       const form=new FormData();form.append('file',file);
       return request('/api/social-listening/external-import/start?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});

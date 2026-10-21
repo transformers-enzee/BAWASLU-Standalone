@@ -41,7 +41,7 @@ export default function Home(){
  const attention=useMemo(()=>scopedItems.filter(x=>attentionReasons(x,t).length).sort((a,b)=>reasonScore(b,t)-reasonScore(a,t)||new Date(b.updated_date||b.created_date||0)-new Date(a.updated_date||a.created_date||0)).slice(0,6) ,[scopedItems,t]);
  const potentialViolations=useMemo(()=>scopedItems.filter(x=>violationSignal(x)).sort((a,b)=>Number(b.priority==='Critical')-Number(a.priority==='Critical')||Number(b.priority==='High')-Number(a.priority==='High')||new Date(b.updated_date||0)-new Date(a.updated_date||0)).slice(0,5),[scopedItems]);
  const confirmedLocations=useMemo(()=>new Set(scopedItems.filter(x=>x.jurisdiction_confirmed===true).map(locationLabel)).size,[scopedItems]);
- const recentValidated=useMemo(()=>scopedItems.filter(validated).sort((a,b)=>new Date(b.validated_at||b.updated_date||b.created_date||0)-new Date(a.validated_at||a.updated_date||a.created_date||0)).slice(0,5),[items]);
+ const recentValidated=useMemo(()=>scopedItems.filter(validated).sort((a,b)=>new Date(b.validated_at||b.updated_date||b.created_date||0)-new Date(a.validated_at||a.updated_date||a.created_date||0)).slice(0,5),[scopedItems]);
  const watchCounts={Active:scopedWatch.filter(x=>x.status==='Active').length,'Under Review':scopedWatch.filter(x=>x.status==='Under Review').length,Inactive:scopedWatch.filter(x=>x.status==='Inactive').length};
  const cards=[
  {label:t('pending_intelligence_review'),value:metrics.pending,detail:t('pending_intelligence_detail'),to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},

@@ -430,6 +430,7 @@ class AIBudgetReservation(Base):
 
 class RelevanceGateQuestion(Base):
     __tablename__='relevance_gate_questions'
+    required_answer: Mapped[str] = mapped_column(String(3), default='YES', nullable=False)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

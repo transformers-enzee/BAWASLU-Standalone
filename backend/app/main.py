@@ -57,11 +57,12 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'85.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'86.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
     active:bool=True
+    required_answer:str='YES'
 
 def _gate_admin(p):
     return p.get('status')=='Active' and p.get('role')=='National Administrator' and p.get('permissions',{}).get('administration') is True
@@ -70,7 +71,7 @@ def _gate_admin(p):
 def list_relevance_gates(user:User=Depends(current_user),db:Session=Depends(get_db)):
     from .models import RelevanceGateQuestion
     if not _gate_admin(profile(db,user)):raise HTTPException(403,'National administrator required')
-    return {'questions':[{'id':q.id,'question':q.question,'active':q.active} for q in db.query(RelevanceGateQuestion).order_by(RelevanceGateQuestion.id).all()]}
+    return {'questions':[{'id':q.id,'question':q.question,'active':q.active,'required_answer':q.required_answer} for q in db.query(RelevanceGateQuestion).order_by(RelevanceGateQuestion.id).all()]}
 
 @app.post('/api/relevance-gates')
 def add_relevance_gate(body:GateIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -79,8 +80,9 @@ def add_relevance_gate(body:GateIn,user:User=Depends(current_user),db:Session=De
     question=body.question.strip()
     if not 12<=len(question)<=400:raise HTTPException(400,'Question must contain 12 to 400 characters')
     if db.query(RelevanceGateQuestion).count()>=20:raise HTTPException(400,'Maximum 20 gate questions')
-    item=RelevanceGateQuestion(question=question,active=body.active)
-    db.add(item);db.commit();return {'id':item.id,'question':item.question,'active':item.active}
+    if body.required_answer not in ('YES','NO'):raise HTTPException(400,'Required answer must be YES or NO')
+    item=RelevanceGateQuestion(question=question,active=body.active,required_answer=body.required_answer)
+    db.add(item);db.commit();return {'id':item.id,'question':item.question,'active':item.active,'required_answer':item.required_answer}
 
 @app.put('/api/relevance-gates/{question_id}')
 def edit_relevance_gate(question_id:int,body:GateIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -90,8 +92,9 @@ def edit_relevance_gate(question_id:int,body:GateIn,user:User=Depends(current_us
     if not item:raise HTTPException(404,'Question not found')
     question=body.question.strip()
     if not 12<=len(question)<=400:raise HTTPException(400,'Question must contain 12 to 400 characters')
-    item.question=question;item.active=body.active;db.commit()
-    return {'id':item.id,'question':item.question,'active':item.active}
+    if body.required_answer not in ('YES','NO'):raise HTTPException(400,'Required answer must be YES or NO')
+    item.question=question;item.active=body.active;item.required_answer=body.required_answer;db.commit()
+    return {'id':item.id,'question':item.question,'active':item.active,'required_answer':item.required_answer}
 
 @app.delete('/api/relevance-gates/{question_id}')
 def delete_relevance_gate(question_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):

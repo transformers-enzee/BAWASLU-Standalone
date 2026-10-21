@@ -55,6 +55,25 @@ def _normalize_url(value):
     path=(parsed.path or '').rstrip('/')
     return urlunparse((parsed.scheme.lower(),host+port,path,'',parsed.query,''))
 
+ACCOUNT_PLATFORM_HOSTS={
+    'instagram':('instagram.com',),
+    'tiktok':('tiktok.com',),
+    'youtube':('youtube.com',),
+    'facebook':('facebook.com','fb.com','fb.me'),
+    'x':('x.com','twitter.com'),
+    'twitter':('x.com','twitter.com'),
+    'threads':('threads.net','threads.com'),
+    'reddit':('reddit.com',),
+    'linkedin':('linkedin.com',),
+}
+
+def _validate_account_domain(platform,url):
+    allowed=ACCOUNT_PLATFORM_HOSTS.get(str(platform or '').strip().casefold())
+    if not allowed:return
+    hostname=(urlparse(url).hostname or '').lower()
+    if not any(hostname==domain or hostname.endswith('.'+domain) for domain in allowed):
+        raise ValueError('The public account URL must match the selected '+platform+' platform')
+
 def _normalize_handle(value):
     raw=clean(value,255).replace(' ','')
     if not raw: return ''
@@ -162,6 +181,7 @@ def registry_action(db:Session,p,action,data,id=None):
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')
         w=_require_watchlist(db,p,id)
         url=_normalize_url(data.get('url')); platform=clean(data.get('platform') or 'Web',100); handle=_normalize_handle(data.get('handle'))
+        _validate_account_domain(platform,url)
         if _account_duplicate(db,w.id,url,platform,handle): raise ValueError('This public account / URL is already registered for this watchlist item')
         a=SourceAccount(watchlist_id=w.id,platform=platform,url=url,handle=handle,province=w.province,regency_city=w.regency_city)
         db.add(a); db.commit(); db.refresh(a)
@@ -174,6 +194,7 @@ def registry_action(db:Session,p,action,data,id=None):
         if not a: raise ValueError('Public account unavailable')
         w=_require_watchlist(db,p,a.watchlist_id)
         url=_normalize_url(data.get('url',a.url)); platform=clean(data.get('platform',a.platform) or 'Web',100); handle=_normalize_handle(data.get('handle',a.handle))
+        _validate_account_domain(platform,url)
         if _account_duplicate(db,w.id,url,platform,handle,a.id): raise ValueError('This public account / URL is already registered for this watchlist item')
         previous=source_account(a)
         a.url=url; a.platform=platform; a.handle=handle; a.province=w.province; a.regency_city=w.regency_city

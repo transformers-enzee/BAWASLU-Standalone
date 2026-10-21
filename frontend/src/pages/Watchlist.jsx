@@ -7,6 +7,8 @@ import Status from '@/components/intel/Status';
 import { useLanguage } from '@/lib/LanguageContext';
 
 const STATUSES=['Active','Under Review','Inactive'];
+const ACCOUNT_PLATFORMS=['TikTok','YouTube','Instagram','Facebook','X','Threads','Reddit','LinkedIn','Web'];
+const ACCOUNT_URL_EXAMPLES={TikTok:'https://www.tiktok.com/@username',YouTube:'https://www.youtube.com/@channel',Instagram:'https://www.instagram.com/username',Facebook:'https://www.facebook.com/username',X:'https://x.com/username',Threads:'https://www.threads.net/@username',Reddit:'https://www.reddit.com/user/username',LinkedIn:'https://www.linkedin.com/in/username',Web:'https://example.com/profile'};
 const RELATIONSHIP_TYPES=['Associated with','Member of','Campaign relationship','Publicly linked to','Other observed relationship'];
 const blankItem=()=>({priority:'Medium',status:'Active',related_topics:''});
 const topicText=v=>Array.isArray(v)?v.join(', '):(v||'');
@@ -152,9 +154,10 @@ export default function Watchlist(){
           </div>)}
           {!accounts.some(a=>a.watchlist_id===x.id)&&<p className="text-xs text-[#8192a3]">{t('no_public_account')}</p>}
           {account?.watchlist_id===x.id?<form onSubmit={saveAccount} className="grid sm:grid-cols-3 gap-2 mt-3">
-            <Field label={t('platform')} value={account.platform} onChange={v=>setAccount({...account,platform:v})}/>
-            <Field label={t('public_url')} type="url" value={account.url} onChange={v=>setAccount({...account,url:v})} required/>
+            <Field label={t('platform')} options={account.platform&&!ACCOUNT_PLATFORMS.includes(account.platform)?[account.platform,...ACCOUNT_PLATFORMS]:ACCOUNT_PLATFORMS} value={account.platform} onChange={v=>setAccount({...account,platform:v})} required/>
+            <Field label={t('public_url')} type="url" placeholder={ACCOUNT_URL_EXAMPLES[account.platform]||'https://...'} value={account.url} onChange={v=>setAccount({...account,url:v})} required/>
             <Field label={t('handle')} value={account.handle} onChange={v=>setAccount({...account,handle:v})}/>
+            <p className="sm:col-span-3 text-[11px] text-slate-500">Enter the public account profile URL, not an individual post URL. The handle is optional but recommended for matching previously captured posts.</p>
             <button disabled={busy} className="intel-button">{account.account_id?t('save_account'):t('add_account')}</button>
             <button type="button" className="intel-ghost" onClick={()=>setAccount(null)}>{t('cancel')}</button>
           </form>:canManage&&<button className="text-xs font-semibold text-[#126b8b] mt-2" onClick={()=>setAccount({watchlist_id:x.id})}>{t('add_public_account')}</button>}

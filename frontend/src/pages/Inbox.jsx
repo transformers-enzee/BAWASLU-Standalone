@@ -182,7 +182,8 @@ function SocialEvidenceInbox(){
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
     </div>
    </section>
-   <aside className="intel-card p-4 space-y-4 xl:sticky xl:top-4" aria-label="Inbox statistics">
+   <div className="space-y-3 xl:sticky xl:top-4 min-w-0">
+   <aside className="intel-card p-4 space-y-4" aria-label="Inbox statistics">
     <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered assessed posts</p></div>
     <div className="grid grid-cols-2 gap-2">
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
@@ -191,14 +192,16 @@ function SocialEvidenceInbox(){
     <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#0d9488'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706'],['UNCLASSIFIED','Unclassified','#cbd5e1']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
     <p className="text-[11px] text-slate-500">Metrics are summed only where providers reported them. Missing values are not treated as zero. Sentiment is based on stored assessments.</p>
    </aside>
-   </div>
-   <details className="intel-card p-3" aria-label="Platform distribution"><summary className="cursor-pointer text-sm font-semibold text-[#365269]">Platform distribution · {filtered.length} posts</summary><div className="mt-3">
+   <section className="intel-card p-3" aria-label="Channel distribution"><h4 className="text-sm font-semibold text-[#365269]">Channel distribution</h4><div className="mt-3">
     
     <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>
-    <div className="flex justify-center py-6"><div className="w-32 h-32 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-24 h-24 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
+    <div className="flex justify-center py-3"><div className="w-28 h-28 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-20 h-20 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
     <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?item.count/filtered.length*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
     <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p></div>
-   </details>
+   </section>
+   </div>
+   </div>
+
   </div>}
   {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>
    <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">

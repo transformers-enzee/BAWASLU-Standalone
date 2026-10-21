@@ -151,14 +151,12 @@ function SocialEvidenceInbox(){
  const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter)].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
-  <div className="flex flex-wrap lg:flex-nowrap items-end gap-2" aria-label="Campaign and date filters">
+  <div className="grid grid-cols-2 md:grid-cols-6 xl:grid-cols-[minmax(180px,2fr)_minmax(125px,1fr)_minmax(125px,1fr)_minmax(110px,.7fr)_minmax(140px,.9fr)] gap-2 items-end" aria-label="Campaign dates and totals">
    <label className="text-xs flex-[2] min-w-[200px]">Campaign<select className="intel-input mt-1 w-full" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
    <label className="text-xs flex-1 min-w-[145px]">From date<input type="date" className="intel-input mt-1 w-full" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
    <label className="text-xs flex-1 min-w-[145px]">To date<input type="date" className="intel-input mt-1 w-full" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
-  </div>
-  <div className="grid grid-cols-2 gap-2">
-   <div className="intel-card p-3"><p className="text-xs text-slate-500">Posts shown</p><p className="text-2xl font-semibold tabular-nums">{filtered.length}</p></div>
-   <div className="intel-card p-3"><p className="text-xs text-slate-500">Potential violations · signals only</p><p className="text-2xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</p></div>
+   <div className="intel-card px-3 py-2 min-h-[62px] flex flex-col justify-center"><p className="text-[11px] text-slate-500">Posts shown</p><p className="text-xl font-semibold tabular-nums">{filtered.length}</p></div>
+   <div className="intel-card px-3 py-2 min-h-[62px] flex flex-col justify-center"><p className="text-[11px] text-slate-500">Potential violations</p><p className="text-xl font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</p><p className="text-[10px] text-slate-500">Signals only</p></div>
   </div>
   <div className="intel-card px-3 py-2" aria-label="Filter intelligence">
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">

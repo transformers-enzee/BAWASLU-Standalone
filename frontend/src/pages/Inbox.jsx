@@ -170,8 +170,8 @@ function SocialEvidenceInbox(){
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-stretch">
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2 xl:relative xl:min-h-[680px]">
-    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span><span>Scroll to browse</span></div>
-    <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2" tabIndex={0} aria-label="Post list, scroll to see more">
+    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span></div>
+    <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" tabIndex={0} aria-label="Post list, scroll to see more">
      {ordered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
       <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {platformLabel(item.platform)}</span>{item.model_version==='mock-fixture'&&<span className="text-xs font-semibold text-violet-700">Synthetic QA example</span>}{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
       <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>

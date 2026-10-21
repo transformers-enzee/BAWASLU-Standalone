@@ -876,8 +876,11 @@ def campaign_action(db:Session,p,action,data,id=None):
         province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(name) for name in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
         province_lookup={name.casefold():name for name in province_names}
         province_counts=Counter(); province_mentions=Counter(); province_connected=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
-        for link,item in links:
-            if not item or not _result_in_scope(db,p,item): continue
+        from types import SimpleNamespace
+        for record in links:
+            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state)=record
+            item=SimpleNamespace(run_id=run_id,published_at=published_at,language=language,geography_json=geography_json,text_content=text_content,platform=platform,author_name=author_name,engagement_json=engagement_json,raw_payload_json=raw_payload_json,content_type=content_type,review_state=review_state)
+            if not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
             try: source_day=date.fromisoformat(source_day).isoformat()
             except ValueError: source_day=''

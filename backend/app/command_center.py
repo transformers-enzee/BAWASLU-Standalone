@@ -418,7 +418,7 @@ def build_command_center(db,p,data=None):
     for item in manual_recent:
         item['inbox_at']=item.get('published_at') or ''
     recent=sorted(latest_assessed+manual_recent,
-                  key=lambda x:x.get('detected_at') or x.get('inbox_at') or '',reverse=True)[:8]
+                  key=lambda x:x.get('detected_at') or x.get('inbox_at') or '',reverse=True)[:3]
     # Watchlist highlights use only evidence explicitly linked to registered
     # accounts, not noisy substring matches against people's names.
     watch_items=[w for w in db.query(WatchlistItem).all() if allowed(p,w)]

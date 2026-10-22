@@ -65,8 +65,8 @@ test('historical review decisions render in the collapsed drawer on demand',asyn
   }
  });
  await page.goto('/inbox');
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByText('Review history (2 most recent)')).toBeVisible();
  await expect(drawer.getByText('Insufficient independent source evidence')).not.toBeVisible();
@@ -83,26 +83,26 @@ test('flag count and category filter stay consistent with the evidence list',asy
  await expect(page.getByText('Potential violations',{exact:true})).toBeVisible();
  await expect(page.getByText('Posts shown').locator('..')).toContainText('3');
  await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
- await expect(page.getByRole('button',{name:/View source and assessment/})).toHaveCount(1);
+ await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(1);
  await expect(page.getByText('Potential violations · signals only').locator('..')).toContainText('1');
  expect(paidCalls()).toBe(0);
 });
 
 test('non-flagged political discussion is not labeled a potential violation',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'All Relevant'}).click();
- await expect(page.getByRole('button',{name:/View source and assessment/})).toHaveCount(3);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).uncheck();
+ await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(3);
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Diskusi kebijakan publik tanpa dugaan pelanggaran.')).toHaveCount(0);
  expect(paidCalls()).toBe(0);
 });
 
 test('flag detail presents the configured category as preliminary evidence, not a verdict',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer).toBeVisible();
  await expect(drawer.getByLabel('Potential issue evidence')).toContainText('Politik Uang');
@@ -114,8 +114,8 @@ test('flag detail presents the configured category as preliminary evidence, not 
 
 test('legacy source-supported flag is disclosed without treating it as a verdict',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByRole('note')).toContainText('Legacy AI signal (original type missing)');
  await expect(drawer.getByRole('note')).toContainText('Human verification required');
@@ -125,8 +125,8 @@ test('legacy source-supported flag is disclosed without treating it as a verdict
 
 test('users without human validation authority see review guidance but no decision controls',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByText('Human validation permission is required for review actions.')).toBeVisible();
  await expect(drawer.getByRole('button',{name:'Save human review'})).toHaveCount(0);
@@ -137,8 +137,8 @@ test('users without human validation authority see review guidance but no decisi
 
 test('review history absent for unreviewed evidence without paid calls',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer).toBeVisible();
  await expect(drawer.getByText('Review history (', {exact:false})).toHaveCount(0);
@@ -171,8 +171,8 @@ test('authorized officer can save a review and see the updated status without re
   }
  });
  await page.goto('/inbox');
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await drawer.locator('#flag-review-decision').selectOption('FURTHER_INVESTIGATION');
  await drawer.getByLabel(/Reason for decision/).fill('Further source verification is required.');
@@ -188,7 +188,7 @@ test('location and candidate filters compose with potential violation selection'
  const paidCalls=await setup(page);
  await page.getByLabel('Jurisdiction').selectOption('province');
  await page.getByLabel('Select location').selectOption('DKI Jakarta');
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await page.getByLabel('Select candidate').selectOption({index:0});
  await page.getByLabel('Jurisdiction').selectOption('national');
@@ -234,7 +234,7 @@ test('Inbox shows two primary views while jurisdiction and candidate remain filt
  await expect(page.getByRole('button',{name:'Candidate',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Jurisdiction')).toBeVisible();
  await expect(page.getByLabel('Select candidate')).toBeVisible();
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
@@ -260,7 +260,7 @@ test('authorized officer sees manual flag form for relevant evidence without AI 
   throw new Error('Unexpected provider request: '+req.action);
  });
  await page.goto('/inbox');
- await page.getByRole('button',{name:/View source and assessment/}).nth(1).click();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').nth(1).click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByText('Flag this relevant post manually')).toBeVisible();
  await expect(drawer.getByRole('button',{name:'Save human review'})).toHaveCount(0);
@@ -277,22 +277,22 @@ test('Potential issue category filters evidence and shows quotes without paid ca
  const issue=page.getByLabel('Potential issue category');
  await issue.selectOption('Politik Uang');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
- await page.getByRole('button',{name:/View source and assessment/}).click();
+ await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
  expect(paidCalls()).toBe(0);
 });
 
 test('flagged inbox post shows preliminary review state without implying a verdict',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- await expect(page.getByRole('button',{name:/View source and assessment/})).toContainText('Awaiting human review');
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toContainText('Awaiting human review');
  expect(paidCalls()).toBe(0);
 });
 
 test('synthetic preliminary vote-buying claim is visibly identified as a QA fixture',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
- const post=page.getByRole('button',{name:/View source and assessment/}).first();
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ const post=page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first();
  await expect(post).toContainText('Synthetic QA example');
  await post.click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});

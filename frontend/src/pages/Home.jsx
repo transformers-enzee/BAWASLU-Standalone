@@ -11,11 +11,13 @@ const verified=x=>x.review_status==='Validated as Relevant Intelligence';
 const stamp=x=>new Date(x.publication_datetime||x.collection_datetime||x.updated_date||x.created_date||0).getTime()||0;
 const place=x=>x.jurisdiction_confirmed===true?([x.regency_city,x.province].filter(Boolean).join(', ')||'National'):'Lokasi belum dikonfirmasi';
 const signal=x=>{
-  const approved=x.supervision_screening||{};
-  const human=String(approved.supervision_signal||approved.signal||'').toUpperCase();
+  const approved=x.human_approved_triage?.values?.supervision_signal;
+  const human=String(approved||x.supervision_screening?.supervision_signal||'').toUpperCase();
+  if(human==='POTENTIAL REGULATORY ISSUE')return {kind:'reviewed',label:'Sinyal ditinjau petugas'};
   const proposed=String(x.ai_suggestions?.supervision_signal||'').toUpperCase();
-  if(human==='POTENTIAL REGULATORY ISSUE')return {kind:'reviewed',label:'Indikasi tercatat'};
-  if(['POTENTIAL REGULATORY ISSUE','REVIEW RECOMMENDED'].includes(proposed))return {kind:'ai',label:'Saran AI • belum diverifikasi'};
+  const decision=x.ai_suggestions?._decisions?.supervision_signal?.status;
+  if(decision==='Human Rejected')return null;
+  if(!approved&&['POTENTIAL REGULATORY ISSUE','REVIEW RECOMMENDED'].includes(proposed))return {kind:'ai',label:'Saran AI • belum diverifikasi'};
   return null;
 };
 const high=x=>x.priority==='Critical'||x.priority==='High';
@@ -64,8 +66,8 @@ export default function Home(){
     <Section title="Pemantauan akun & kandidat" subtitle="Ringkasan Watchlist dalam cakupan wilayah" to="/watchlist">{watchState.loading?<p className="text-sm text-[#718398]">Memuat Watchlist...</p>:watchState.error?<p className="text-sm text-[#9a5a1e]">Data Watchlist tidak tersedia.</p>:<div className="flex justify-between items-end"><div><strong className="text-2xl text-[#163750]">{relevantWatch.filter(x=>x.status==='Active').length}</strong><p className="text-xs text-[#72879a] mt-1">Pemantauan aktif</p></div><div className="text-right"><strong className="text-2xl text-[#163750]">{relevantWatch.filter(x=>x.status==='Under Review').length}</strong><p className="text-xs text-[#72879a] mt-1">Dalam peninjauan</p></div></div>}</Section>
    </div>
   </div>
-  <Section title="Social Listening · antrean hasil tersimpan" subtitle={scopeActive?'Cakupan seluruh akun yang diizinkan; hasil belum dapat diatribusikan secara pasti ke filter wilayah ini':'Percakapan yang sudah dikumpulkan; tidak menjalankan crawling baru'} to="/social-listening">{socialLoading?<p className="text-sm text-[#718398]">Memuat hasil Social Listening...</p>:socialError?<p role="alert" className="text-sm text-[#9a5a1e]">{socialError}</p>:<div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-5"><div className="grid grid-cols-3 gap-2">{[['DISCOVERED','Ditemukan'],['RELEVANT','Relevan'],['MONITOR','Dipantau']].map(([key,label])=><div key={key} className="rounded-lg bg-[#f5f9fb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{label}</p></div>)}</div><div className="min-w-0">{socialItems.length?socialItems.map(x=><div key={x.id} className="border-b border-[#edf2f5] last:border-0 py-2"><p className="text-sm text-[#244358] line-clamp-2">{x.text_content||'Konten tanpa teks'}</p><p className="text-xs text-[#8192a3] mt-1">{x.platform||x.provider} · {x.review_state} · {ago(x.published_at||x.collected_at)}</p></div>):<Empty>Belum ada hasil dalam antrean review.</Empty>}</div></div>}</Section>
-  <p className="text-xs text-[#8394a4] leading-5"><AlertTriangle size={13} className="inline mr-1"/>Data berasal dari modul yang sudah tersedia dan mengikuti cakupan akses pengguna. Filter lokasi hanya mencakup intelijen berlokasi terkonfirmasi. Indikasi AI, bukti belum terverifikasi, dan hasil Social Listening tidak boleh dianggap sebagai temuan pelanggaran yang telah diputuskan.</p>
+  <Section title="Social Listening · antrean hasil tersimpan" subtitle={scopeActive?'Hasil tersimpan pada cakupan akun Anda; bagian ini tidak mengikuti filter wilayah':'Hasil tersimpan yang dapat diakses; maksimal 500 hasil terbaru, tanpa crawling baru'} to="/social-listening">{socialLoading?<p className="text-sm text-[#718398]">Memuat hasil Social Listening...</p>:socialError?<p role="alert" className="text-sm text-[#9a5a1e]">{socialError}</p>:<div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-5"><div className="grid grid-cols-3 gap-2">{[['DISCOVERED','Ditemukan'],['RELEVANT','Relevan'],['MONITOR','Dipantau']].map(([key,label])=><div key={key} className="rounded-lg bg-[#f5f9fb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{label}</p></div>)}</div><div className="min-w-0">{socialItems.length?socialItems.map(x=><div key={x.id} className="border-b border-[#edf2f5] last:border-0 py-2"><p className="text-sm text-[#244358] line-clamp-2">{x.text_content||'Konten tanpa teks'}</p><p className="text-xs text-[#8192a3] mt-1">{x.platform||x.provider} · {x.review_state} · {ago(x.published_at||x.collected_at)}</p></div>):<Empty>Belum ada hasil dalam antrean review.</Empty>}</div></div>}</Section>
+  <p className="text-xs text-[#8394a4] leading-5"><AlertTriangle size={13} className="inline mr-1"/>Ringkasan intelijen memakai hingga 500 catatan terbaru yang dapat diakses; Social Listening memakai hingga 500 hasil tersimpan terbaru. Angka bukan total sepanjang waktu. Filter lokasi hanya mencakup intelijen berlokasi terkonfirmasi. Indikasi AI, bukti belum terverifikasi, dan hasil Social Listening tidak boleh dianggap sebagai temuan pelanggaran yang telah diputuskan.</p>
   </>}
  </div>;
 }

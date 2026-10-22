@@ -5,7 +5,7 @@ const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
 
 test('40-50 post assessment pilot previews stored evidence without provider calls',async({page})=>{
  const paid=[];
- page.on('request',req=>{if(/socialcrawl\\.dev|api\\.openai\\.com/i.test(req.url()))paid.push(req.url())});
+ page.on('request',req=>{if(req.url().includes('socialcrawl.dev')||req.url().includes('api.openai.com'))paid.push(req.url())});
  await page.goto('/login');
  await page.getByLabel(/email/i).fill('admin@bawaslu.local');
  await page.getByLabel(/^password$/i).fill(password);

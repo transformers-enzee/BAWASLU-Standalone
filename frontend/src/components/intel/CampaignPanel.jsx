@@ -266,15 +266,23 @@ export default function CampaignPanel({campaignId=null}){
   setEditing(c);setCreating(true);setSelected(null);setError('');setNotice('');
  }
  async function save(e){
-  e.preventDefault();if(invalidCampaignDates){setError('Start date cannot be after end date. Please correct the campaign dates.');return}setSaving(true);setError('');setNotice('');
-  const data={...form,primary_keywords:form.primary_keywords,
-   secondary_keywords:form.secondary_keywords,excluded_keywords:form.excluded_keywords};
+  e.preventDefault();
+  if(invalidCampaignDates){setError('Start date cannot be after end date. Please correct the campaign dates.');return}
+  setSaving(true);setError('');setNotice('');
+  const fields=['name','description','primary_keywords','secondary_keywords','excluded_keywords','platforms','language','date_from','date_to','province','regency_city'];
+  const data=editing
+   ? Object.fromEntries(fields.filter(key=>JSON.stringify(form[key])!==JSON.stringify(editing[key]??(Array.isArray(form[key])?[]:''))).map(key=>[key,form[key]]))
+   : {...form};
   try{
+   if(editing&&!Object.keys(data).length){
+    setNotice('No campaign changes to save.');setCreating(false);setEditing(null);return;
+   }
    const action=editing?'updateCampaign':'createCampaign';
-   const r=await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
-   setNotice('Campaign saved as draft. Automatic paid crawls remain disabled until scheduling is approved.');
-   setSelected(null);setCreating(false);setEditing(null);await refresh();
-  }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
+   await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
+   await refresh();
+   setNotice('Campaign saved successfully. Automatic paid crawls remain disabled.');
+   setSelected(null);setCreating(false);setEditing(null);
+  }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Campaign save failed')}
   finally{setSaving(false)}
  }
  async function pause(c){
@@ -300,7 +308,7 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    <div className="flex flex-wrap gap-2"><input className="intel-input flex-1" value={query} aria-label="Search campaigns" placeholder="Search campaigns" onChange={e=>setQuery(e.target.value)}/><select className="intel-input" aria-label="Campaign status filter" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option><option value="DRAFT">Draft</option><option value="PAUSED">Paused</option></select></div>
   </div>}
-  {error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
+  {!creating&&error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
   {creating&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setCreating(false)}}>
    <div role="dialog" aria-modal="true" aria-labelledby="campaign-modal-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
@@ -340,6 +348,8 @@ export default function CampaignPanel({campaignId=null}){
       <p className="text-xs">Scheduled paid crawling is disabled. This preview is not approval to run.</p>
     </div>}
    </div>
+   {editing&&(form.primary_keywords.length>30||form.secondary_keywords.length>30||form.excluded_keywords.length>30)&&<p className="text-xs text-amber-800">Legacy imported keywords are preserved when unchanged. You can save the campaign description without deleting them; newly modified keyword lists must meet the 30-keyword limit.</p>}
+   {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
    <div className="flex gap-2"><button className="intel-button" disabled={saving||invalidCampaignDates||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>

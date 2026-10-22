@@ -120,21 +120,28 @@ def _keywords(value,label,mandatory=False):
     if mandatory and not found: raise ValueError(label+' requires at least one keyword')
     return list(found.values())
 
+def _campaign_edit_keywords(value,label,mandatory,existing_json=None):
+    """Preserve untouched imported legacy lists without weakening new-edit limits."""
+    if existing_json is not None and value==_safe_json_list(existing_json):
+        return value
+    return _keywords(value,label,mandatory)
+
+
 def _iso_date(value,label):
     if not value: return ''
     if not isinstance(value,str): raise ValueError(label+' must be a date')
     try: return date.fromisoformat(value).isoformat()
     except ValueError: raise ValueError(label+' must be YYYY-MM-DD')
 
-def _normalize(db,p,data):
+def _normalize(db,p,data,existing=None):
     if not isinstance(data,dict): raise ValueError('Campaign configuration must be an object')
     name=str(data.get('name') or '').strip()
     if not name or len(name)>MAX_NAME: raise ValueError('Campaign name must be 1–255 characters')
     description=str(data.get('description') or '').strip()
     if len(description)>2000: raise ValueError('Campaign description must not exceed 2000 characters')
-    primary=_keywords(data.get('primary_keywords',[]),'Main keywords',True)
-    secondary=_keywords(data.get('secondary_keywords',[]),'Secondary keywords')
-    excluded=_keywords(data.get('excluded_keywords',[]),'Excluded keywords')
+    primary=_campaign_edit_keywords(data.get('primary_keywords',[]),'Main keywords',True,existing.primary_keywords_json if existing else None)
+    secondary=_campaign_edit_keywords(data.get('secondary_keywords',[]),'Secondary keywords',False,existing.secondary_keywords_json if existing else None)
+    excluded=_campaign_edit_keywords(data.get('excluded_keywords',[]),'Excluded keywords',False,existing.excluded_keywords_json if existing else None)
     overlap={x.casefold() for x in primary}&{x.casefold() for x in excluded}
     if overlap: raise ValueError('Main keywords cannot also be excluded')
     platforms=data.get('platforms',[])
@@ -1155,7 +1162,28 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can edit')
         if c.status not in ('DRAFT','PAUSED'): raise ValueError('Campaign cannot be edited in its current state')
-        values=_normalize(db,p,{**_view(db,c),**(data or {})})
+        payload=data or {}
+        if not isinstance(payload,dict): raise ValueError('Campaign changes must be an object')
+        # Legacy imported campaigns can exceed current new-campaign keyword limits.
+        # Description-only and pause-only edits must never rewrite keyword arrays.
+        if payload and set(payload).issubset({'description','status'}):
+            old_description=c.description or ''
+            if 'description' in payload:
+                description=payload['description']
+                if not isinstance(description,str) or len(description.strip())>2000:
+                    raise ValueError('Campaign description must be text of at most 2000 characters')
+                c.description=description.strip()
+            desired=payload.get('status',c.status)
+            if desired not in ('DRAFT','PAUSED'): raise ValueError('Scheduled campaign activation is not yet available')
+            previous_status=c.status
+            c.status=desired
+            c.updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            db.commit()
+            audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_UPDATED',{
+                'status':{'old':previous_status,'new':c.status},
+                'description_changed':{'new':old_description!=c.description}})
+            return {'campaign':_view(db,c)}
+        values=_normalize(db,p,{**_view(db,c),**payload},existing=c)
         for k,v in values.items(): setattr(c,k,v)
         # PAUSED is a configuration state, not a scheduler activation.
         desired=(data or {}).get('status',c.status)

@@ -509,6 +509,18 @@ export default function CampaignPanel({campaignId=null}){
   <p className="text-xs text-slate-500">Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.</p>
  </section>
    </section>}
+   <details className="rounded-lg border border-slate-200 p-4 space-y-3">
+    <summary className="cursor-pointer font-semibold text-sm">Keyword screening preview (free)</summary>
+    <div className="mt-3 space-y-3 text-sm" aria-label="Campaign keyword screening preview">
+      <p className="text-xs text-slate-600">Test saved campaign keywords against example text. Local keyword matching only; no paid crawl or AI assessment.</p>
+      <label className="block text-xs font-medium">Sample social post
+        <textarea className="intel-input w-full mt-1" aria-label="Sample social post" rows={3} value={sampleText} onChange={e=>{setSampleText(e.target.value);setKeywordPreview(null);setPreviewError('')}}/>
+      </label>
+      <button type="button" className="intel-ghost text-xs" disabled={previewBusy||!sampleText.trim()} onClick={checkKeywordPreview}>{previewBusy?'Checking…':'Preview keyword match'}</button>
+      {keywordPreview&&<p role="status" className="text-xs text-slate-700">{keywordPreview.matched?'Matches campaign keywords':'Does not match campaign keywords'} · Secondary context: {(keywordPreview.secondary_keywords||[]).join(', ')||'None'} · Excluded terms: {(keywordPreview.excluded_keywords||[]).join(', ')||'None'}</p>}
+      {previewError&&<p role="alert" className="text-xs text-red-700">{previewError}</p>}
+    </div>
+   </details>
    <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
     <h4 className="font-semibold">Manual SocialCrawl collection</h4>
     <p className="text-xs text-slate-600">Manual runs only. Native search limit: 5 estimated credits per run. Search Everywhere: 20 credits per confirmed query. Scheduled crawling remains disabled.</p>

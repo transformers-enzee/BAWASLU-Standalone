@@ -16,7 +16,7 @@ test('release navigation exposes every completed administrator module',async({pa
   await uiLogin(page);
   const nav=page.getByRole('navigation');
   const modules=[
-    'Home','Command Center','Watchlist','Social Listening','Intelligence Inbox',
+    'Home','Watchlist','Social Listening','Intelligence Inbox',
     'BAWASLU Intelligence Assistant','Data Sources',
     'Validation','Administration'
   ];

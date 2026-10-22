@@ -168,12 +168,11 @@ test('Campaign schedule panel shows estimates and no automatic paid crawling',as
   const card=page.getByRole('row').filter({hasText:name});
   await expect(card).toBeVisible();
   await card.getByRole('button',{name:'Open Dashboard'}).click();
-  const schedule=page.getByLabel('Campaign schedule and crawl history');
-  await expect(schedule).toBeVisible();
-  await expect(schedule).toContainText('Estimated credits per run:');
-  await expect(schedule).toContainText('Last successful crawl:');
-  await expect(schedule).toContainText('No collection runs recorded for this campaign');
-  await expect(schedule).toContainText('Automatic paid crawling disabled pending explicit approval');
+  const manual=page.getByLabel('Manual campaign crawl');
+  await expect(manual).toBeVisible();
+  await expect(manual).toContainText('Scheduled crawling remains disabled.');
+  await manual.getByRole('button',{name:'Check manual crawl cost (free)'}).click();
+  await expect(manual.getByRole('status')).toContainText('Estimated cost:');
 });
 
 
@@ -231,6 +230,7 @@ test('Campaign keyword screening preview is free and distinguishes main, seconda
   await secondary.fill('bawaslu');await secondary.press('Enter');
   await dialog.getByRole('button',{name:'Save Draft'}).click();
   await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
+  await page.getByText('Keyword screening preview (free)',{exact:true}).click();
   const preview=page.getByLabel('Campaign keyword screening preview');
   await preview.getByRole('textbox',{name:'Sample social post'}).fill('Bawaslu mengawasi pemilu');
   await preview.getByRole('button',{name:'Preview keyword match'}).click();

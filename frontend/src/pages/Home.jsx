@@ -1,7 +1,7 @@
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, AlertTriangle, MapPin, Radio, ShieldAlert, Eye, Inbox, RefreshCw } from 'lucide-react';
-import { useIntel, useRegistry, intel } from '@/components/intel/useIntel';
+import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import { base44 } from '@/api/base44Client';
 import { Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -25,7 +25,7 @@ function Empty({children}){return <div className="rounded-lg border border-dashe
 function Record({item,detail}){return <Link to={'/intelligence/'+item.id} className="flex items-start justify-between gap-3 py-3 border-b border-[#edf2f5] last:border-0 hover:bg-[#fafcfd]"><div className="min-w-0"><p className="text-sm font-semibold text-[#1f3c50] line-clamp-2">{item.title||'Intelijen tanpa judul'}</p><p className="text-xs text-[#77899a] mt-1">{place(item)} · {ago(item.publication_datetime||item.updated_date||item.created_date)}</p>{detail&&<p className="text-xs text-[#97642b] mt-1">{detail}</p>}</div><ArrowUpRight size={15} className="shrink-0 mt-1 text-[#176e8e]"/></Link>}
 
 export default function Home(){
- const {access}=useOutletContext();const {t}=useLanguage();
+ const {t}=useLanguage();
  const {items,loading,error,refresh}=useIntel();const watchState=useRegistry();
  const [province,setProvince]=useState(''),[regency,setRegency]=useState('');
  const [social,setSocial]=useState(null),[socialError,setSocialError]=useState(''),[socialLoading,setSocialLoading]=useState(true);

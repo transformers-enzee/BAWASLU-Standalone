@@ -280,7 +280,7 @@ export default function CampaignPanel({campaignId=null}){
    const action=editing?'updateCampaign':'createCampaign';
    await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
    await refresh();
-   setNotice('Campaign saved successfully. Automatic paid crawls remain disabled.');
+   setNotice('Campaign saved as draft. Automatic paid crawls remain disabled until scheduling is approved.');
    setSelected(null);setCreating(false);setEditing(null);
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Campaign save failed')}
   finally{setSaving(false)}

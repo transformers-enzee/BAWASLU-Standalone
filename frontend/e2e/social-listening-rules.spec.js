@@ -258,10 +258,10 @@ test('Campaign analytics date filtering uses stored evidence and validates date 
   await expect(page.getByLabel('Campaign trend by platform')).toBeVisible();
   await filters.getByLabel('From date').fill('2026-10-15');
   await filters.getByLabel('To date').fill('2026-10-01');
-  await filters.getByRole('button',{name:'Apply date filter'}).click();
+  await filters.getByRole('button',{name:'Apply filters'}).click();
   await expect(page.getByRole('alert')).toContainText('Start date must not be after end date');
   await filters.getByLabel('To date').fill('2026-10-15');
-  await filters.getByRole('button',{name:'Apply date filter'}).click();
+  await filters.getByRole('button',{name:'Apply filters'}).click();
   await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated posts in this period');
 });
 

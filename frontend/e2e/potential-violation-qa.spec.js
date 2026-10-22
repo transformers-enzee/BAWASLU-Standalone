@@ -86,7 +86,7 @@ test('flag count and category filter stay consistent with the evidence list',asy
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(1);
- await expect(page.getByText('Potential violations · signals only').locator('..')).toContainText('1');
+ await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  expect(paidCalls()).toBe(0);
 });
 
@@ -106,7 +106,7 @@ test('flag detail presents the configured category as preliminary evidence, not 
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer).toBeVisible();
  await expect(drawer.getByLabel('Potential issue evidence')).toContainText('Politik Uang');
- await expect(drawer.getByRole('note')).toContainText('Human verification required');
+ await expect(drawer.getByRole('note').filter({hasText:'Human verification required'})).toContainText('Human verification required');
  await expect(drawer.getByRole('link',{name:/Open original source/})).toHaveAttribute('href','https://example.org/source/101');
  expect(paidCalls()).toBe(0);
 });
@@ -117,8 +117,8 @@ test('legacy source-supported flag is disclosed without treating it as a verdict
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  const drawer=page.getByRole('dialog',{name:'Finding details'});
- await expect(drawer.getByRole('note')).toContainText('Legacy AI signal (original type missing)');
- await expect(drawer.getByRole('note')).toContainText('Human verification required');
+ await expect(drawer.getByRole('note').filter({hasText:'Human verification required'})).toContainText('Legacy AI signal (original type missing)');
+ await expect(drawer.getByRole('note').filter({hasText:'Human verification required'})).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });
 
@@ -130,7 +130,7 @@ test('users without human validation authority see review guidance but no decisi
  const drawer=page.getByRole('dialog',{name:'Finding details'});
  await expect(drawer.getByText('Human validation permission is required for review actions.')).toBeVisible();
  await expect(drawer.getByRole('button',{name:'Save human review'})).toHaveCount(0);
- await expect(drawer.getByRole('note')).toContainText('Human verification required');
+ await expect(drawer.getByRole('note').filter({hasText:'Human verification required'})).toContainText('Human verification required');
  expect(paidCalls()).toBe(0);
 });
 

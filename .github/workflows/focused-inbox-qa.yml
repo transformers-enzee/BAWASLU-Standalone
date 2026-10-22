@@ -1,0 +1,58 @@
+name: Focused Intelligence Inbox QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [architecture-v2-foundation-20261015]
+    paths:
+      - 'backend/app/auto_relevance.py'
+      - 'backend/tests/test_assessment_readiness_contract.py'
+      - 'frontend/src/pages/Inbox.jsx'
+      - 'frontend/e2e/potential-violation-qa.spec.js'
+      - '.github/workflows/focused-inbox-qa.yml'
+permissions:
+  contents: read
+jobs:
+  assessment-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s backend/tests -p 'test_assessment_readiness_contract.py' -v
+  focused-inbox-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Focused Inbox tests (fail fast, no retries)
+        working-directory: frontend
+        env:
+          OPENAI_API_KEY: ''
+          SOCIALCRAWL_API_KEY: ''
+        run: npx playwright test e2e/potential-violation-qa.spec.js --workers=1 --retries=0 --max-failures=3 --reporter=line,html
+      - name: Upload failure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-inbox-playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore

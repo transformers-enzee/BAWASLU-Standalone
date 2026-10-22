@@ -83,7 +83,7 @@ export default function Home(){
   </div>
   <section className="intel-card p-3 flex flex-wrap gap-3 items-end" aria-label="Dashboard-wide filters">
    <label className="block text-xs min-w-[125px] flex-1"><span className="font-semibold text-slate-600">Monitoring period</span>
-    <select className="intel-input mt-1 w-full" value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today (UTC)</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="custom">Custom dates</option></select>
+    <select className="intel-input mt-1 w-full" value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today (UTC)</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All dates</option><option value="custom">Custom dates</option></select>
    </label>
    {period==='custom'&&<><label className="block text-xs"><span>From (UTC)</span><input type="date" max={dateTo} className="intel-input mt-1" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label><label className="block text-xs"><span>To (UTC)</span><input type="date" min={dateFrom} max={day()} className="intel-input mt-1" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label></>}
    <label className="block text-xs min-w-[165px] flex-1"><span className="font-semibold text-slate-600">Geographic coverage</span>

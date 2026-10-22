@@ -110,9 +110,17 @@ def pilot_readiness(db,campaign):
     per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',25)
     reserved={x.budget_period:x.reserved_requests for x in db.query(AIBudgetReservation).filter(
         AIBudgetReservation.campaign_id==campaign.id,AIBudgetReservation.budget_period.in_(['lifetime',today])).all()}
-    remaining=min(max(0,daily-reserved.get(today,0)),max(0,lifetime-reserved.get('lifetime',0)))
+    daily_remaining=max(0,daily-reserved.get(today,0))
+    lifetime_remaining=max(0,lifetime-reserved.get('lifetime',0))
+    remaining=min(daily_remaining,lifetime_remaining)
     configured=bool(os.getenv('OPENAI_API_KEY','').strip())
     return {'ai_provider_configured':configured,'request_budget_remaining':remaining,
+            'daily_request_limit':daily,'lifetime_request_limit':lifetime,
+            'daily_requests_reserved':reserved.get(today,0),
+            'lifetime_requests_reserved':reserved.get('lifetime',0),
+            'daily_requests_remaining':daily_remaining,
+            'lifetime_requests_remaining':lifetime_remaining,
+            'per_run_limit':per_run,
             'per_request_worker_enabled':per_run>0,
             'database_supports_reservations':db.bind.dialect.name=='postgresql',
             'billing_model':'One model request per post, variable token charges; no SocialCrawl credits'}
@@ -172,7 +180,15 @@ def start_assessment_pilot(db, principal, payload, campaign_id):
         if not target:
             raise ValueError('No unassessed posts to enqueue')
     if readiness['request_budget_remaining']<len(target):
-        raise ValueError('AI request budget is insufficient for the selected batch')
+        raise ValueError(
+            f"AI request budget: {readiness['request_budget_remaining']} available, "
+            f"{len(target)} requested. Daily: {readiness['daily_requests_reserved']}/"
+            f"{readiness['daily_request_limit']}; lifetime: "
+            f"{readiness['lifetime_requests_reserved']}/"
+            f"{readiness['lifetime_request_limit']}. "
+            "Select a smaller batch or wait for the daily allowance to reset; "
+            "do not retry paid requests automatically."
+        )
     # Database row lock + unique constraint keep start idempotent.
     for rid in target:
         if not resume:

@@ -47,19 +47,10 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
     if anchor is None:anchor=newest[0].link_id if newest else 0
     visible=[row for row in newest if _result_in_scope(db,principal,SimpleNamespace(run_id=row.run_id))]
     if limit==10:
-        # A fresh batch deliberately excludes completed and previously enqueued work.
-        # Snapshot anchor preserves the user's approved exact selection.
-        candidate_ids=[row.result_id for row in visible]
-        done=set()
-        occupied=set()
-        if candidate_ids:
-            done={rid for (rid,) in db.query(EvidenceAssessment.result_id).filter(
-                EvidenceAssessment.campaign_id==c.id,
-                EvidenceAssessment.result_id.in_(candidate_ids)).distinct().all()}
-            occupied={rid for (rid,) in db.query(AIAssessmentJob.result_id).filter(
-                AIAssessmentJob.campaign_id==c.id,
-                AIAssessmentJob.result_id.in_(candidate_ids)).distinct().all()}
-        chosen=[row for row in visible if row.result_id not in done and row.result_id not in occupied][:limit]
+        # Ten newest campaign-linked posts form a stable, anchored cohort.
+        # Completed records remain visible for progress, and the start
+        # endpoint enqueues only NOT_QUEUED records (never bills them again).
+        chosen=visible[:limit]
     else:
         chosen=choose_platform_sample(visible,limit)
     ids=[row.result_id for row in chosen]

@@ -186,12 +186,12 @@ test('authorized officer can save a review and see the updated status without re
 
 test('province and candidate filters compose with potential violation selection',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByLabel('Province').selectOption('DKI Jakarta');
+ await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('DKI Jakarta');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await page.getByLabel('Candidate').selectOption('');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
- await page.getByLabel('Province').selectOption('');
+ await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('');
  await page.getByRole('checkbox',{name:'Potential violation only'}).uncheck();
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
@@ -210,7 +210,7 @@ test('candidate filtering narrows posts without labeling untagged posts as candi
 
 test('province selection excludes unlocated posts and clearing restores them',async({page})=>{
  const paidCalls=await setup(page);
- const selector=page.getByLabel('Province');
+ const selector=page.locator('[aria-label="Filter intelligence"] select').first();
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
  await selector.selectOption('DKI Jakarta');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();

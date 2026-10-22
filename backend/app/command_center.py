@@ -4,6 +4,7 @@ Derived entirely from existing campaign evidence, assessments, reviews,
 watchlists and linked account posts. No paid provider or AI calls.
 """
 import json
+import re
 from collections import defaultdict, Counter
 from datetime import date, datetime, timedelta
 from sqlalchemy import and_, func
@@ -70,6 +71,19 @@ def _scope(p,data):
 def _region_code(c):
     # A monitoring campaign's targeted region is NOT proof of the post's origin.
     return province_code_for(c.province)
+
+def _explicit_province_mentions(text):
+    # Surface observed province references as thematic associations, not incident locations.
+    # Match known aliases as whole phrases; do not infer geography from author identity.
+    normalized=' '+re.sub(r'[^a-z0-9]+',' ',str(text or '').lower()).strip()+' '
+    found=set()
+    for code,names in INDONESIAN_PROVINCE_ALIASES.items():
+        for name in names:
+            term=' '+re.sub(r'[^a-z0-9]+',' ',name.lower()).strip()+' '
+            if len(term.strip())>=4 and term in normalized:
+                found.add(code)
+                break
+    return found
 
 def _briefing(relevant, alerts, waiting, provinces, watch_count, from_day, to_day):
     if not relevant and not alerts:
@@ -242,7 +256,7 @@ def build_command_center(db,p,data=None):
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
     # Regional Intelligence Inbox heatmap is an all-time authorized inventory.
     # It is independent of the campaign-post monitoring date window.
-    regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set()})
+    regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set(),'mentioned':set()})
     unclassified_intel=0
     national_intel=0
     mapped_intel_ids=set()
@@ -260,6 +274,21 @@ def build_command_center(db,p,data=None):
             if not isinstance(area,dict):continue
             code=province_code_for(area.get('province') or area.get('province_name'),area.get('province_code'))
             if code and (not selected_code or code==selected_code):codes.add(code)
+        # If no explicit assigned province exists, allow source-supported associations.
+        # Never overwrite jurisdiction fields or claim these are verified locations.
+        mention_codes=set()
+        if not codes:
+            for raw in (record.location_text,record.ai_summary,record.title,record.original_content):
+                mention_codes.update(_explicit_province_mentions(str(raw or '')[:6000]))
+            for field in (record.ai_geography_json,record.proposed_geography_json):
+                try: structured=json.loads(field or '{}')
+                except (TypeError,ValueError):structured={}
+                if isinstance(structured,dict):
+                    province_value=structured.get('province') or structured.get('province_name')
+                    candidate=province_code_for(province_value,structured.get('province_code'))
+                    if candidate:mention_codes.add(candidate)
+            if selected_code:mention_codes={code for code in mention_codes if code==selected_code}
+            codes=mention_codes
         if not codes:
             unclassified_intel+=1
             continue
@@ -275,11 +304,12 @@ def build_command_center(db,p,data=None):
         for code in codes:
             mapped_intel_ids.add(record.id)
             entry=regional_intel[code];entry['records'].add(record.id)
-            if record.jurisdiction_confirmed is True:entry['confirmed'].add(record.id)
+            if code in mention_codes:entry['mentioned'].add(record.id)
+            if record.jurisdiction_confirmed is True and code not in mention_codes:entry['confirmed'].add(record.id)
             if record.review_status in ('Pending Review','Awaiting Validation'):entry['pending'].add(record.id)
             if flagged:entry['potential'].add(record.id)
     regional_intelligence=[{'province':_province_name(code),'province_code':code,
-        'records':len(v['records']),'confirmed':len(v['confirmed']),'pending':len(v['pending']),
+        'records':len(v['records']),'confirmed':len(v['confirmed']),'associated':len(v['mentioned']),'pending':len(v['pending']),
         'potential_signals':len(v['potential'])} for code,v in regional_intel.items()]
     regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
     # Combine assessed social posts with traditional/manual Intelligence Inbox

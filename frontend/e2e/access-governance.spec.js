@@ -116,5 +116,5 @@ test('language toggle switches app-owned navigation labels', async ({ page }) =>
   await expect(page.getByRole('navigation').getByRole('link', { name: /kotak masuk intelijen/i })).toBeVisible();
 
   await page.getByRole('button', { name: 'EN' }).click();
-  await expect(page.getByRole('link', { name: /intelligence inbox/i })).toBeVisible();
+  await expect(page.locator('aside').getByRole('link', { name: 'Intelligence Inbox', exact: true })).toBeVisible();
 });

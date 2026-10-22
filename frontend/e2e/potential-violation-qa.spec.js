@@ -14,7 +14,7 @@ const findings=[
   location_signals:[],candidate_signals:[],potential_issues:[],assessment_version:1,model_version:'mock-fixture',can_review_flag:false},
  {id:'103',campaign_id:'1',campaign_name:'QA Campaign',platform:'instagram',text_content:'Komentar mengenai pemilihan dan debat kandidat.',
   relevance_label:'RELEVANT',relevance_confidence:'MEDIUM',explanation:'Topically relevant only.',
-  location_signals:[],candidate_signals:[],potential_issues:[],assessment_version:1,model_version:'mock-fixture',can_review_flag:false},
+  location_signals:[],candidate_signals:['Prabowo Subianto'],potential_issues:[],assessment_version:1,model_version:'mock-fixture',can_review_flag:false},
 ];
 const payload={findings,campaigns:[{id:'1',name:'QA Campaign'}],unassessed_count:0,
  assessment_counts:{PENDING:0,RELEVANT:3,IRRELEVANT:0,UNCERTAIN:0,OTHER:0},
@@ -146,7 +146,7 @@ test('review history absent for unreviewed evidence without paid calls',async({p
 });
 
 test('authorized officer can save a review and see the updated status without reloading',async({page})=>{
- const reviewable={...payload,findings:findings.map((item,index)=>index===0?{...item,can_review_flag:true}:item)};
+ const reviewable={...payload,findings:findings.map((item,index)=>index===0?{...item,can_review_flag:true,model_version:'qa-stored-assessment'}:item)};
  await page.goto('/login');
  await page.getByLabel(/email/i).fill('admin@bawaslu.local');
  await page.getByLabel(/^password$/i).fill(PASSWORD);
@@ -184,61 +184,51 @@ test('authorized officer can save a review and see the updated status without re
  expect(unexpectedCalls).toBe(0);
 });
 
-test('location and candidate filters compose with potential violation selection',async({page})=>{
+test('province and candidate filters compose with potential violation selection',async({page})=>{
  const paidCalls=await setup(page);
- await page.getByLabel('Jurisdiction').selectOption('province');
- await page.getByLabel('Select location').selectOption('DKI Jakarta');
+ await page.getByLabel('Province').selectOption('DKI Jakarta');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
- await page.getByLabel('Select candidate').selectOption({index:0});
- await page.getByLabel('Jurisdiction').selectOption('national');
+ await page.getByLabel('Candidate').selectOption('');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await page.getByLabel('Province').selectOption('');
+ await page.getByRole('checkbox',{name:'Potential violation only'}).uncheck();
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
-
-
-
-test('candidate filter retains posts with no extracted candidate',async({page})=>{
+test('candidate filtering narrows posts without labeling untagged posts as candidates',async({page})=>{
  const paidCalls=await setup(page);
- const selector=page.getByLabel('Select candidate');
- await expect(selector.locator('option[value="__no_candidate__"]')).toHaveCount(1);
- await selector.selectOption('__no_candidate__');
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ const selector=page.getByLabel('Candidate');
+ await expect(selector.locator('option[value="Prabowo Subianto"]')).toHaveCount(1);
+ await selector.selectOption('Prabowo Subianto');
+ await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await selector.selectOption('');
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
-
-test('nationwide jurisdiction retains unlocated posts and province narrows only supported signals',async({page})=>{
+test('province selection excludes unlocated posts and clearing restores them',async({page})=>{
  const paidCalls=await setup(page);
- const jurisdiction=page.getByLabel('Jurisdiction');
- await expect(jurisdiction).toHaveValue('national');
+ const selector=page.getByLabel('Province');
  await expect(page.getByText('Posts · 3 results')).toBeVisible();
- await jurisdiction.selectOption('unresolved');
- await expect(page.getByText('Posts · 2 results')).toBeVisible();
- await jurisdiction.selectOption('province');
- await page.getByLabel('Select location').selectOption('DKI Jakarta');
+ await selector.selectOption('DKI Jakarta');
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await selector.selectOption('');
+ await expect(page.getByText('Posts · 3 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
-
-test('Inbox shows two primary views while jurisdiction and candidate remain filters',async({page})=>{
+test('compact Inbox exposes province and candidate filters and a violation toggle',async({page})=>{
  const paidCalls=await setup(page);
- const filters=page.getByRole('region',{name:'Find and filter intelligence'});
- await expect(page.getByRole('button',{name:'All Relevant',exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'Potential Violation',exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'Location',exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Candidate',exact:true})).toHaveCount(0);
- await expect(page.getByLabel('Jurisdiction')).toBeVisible();
- await expect(page.getByLabel('Select candidate')).toBeVisible();
- await page.getByRole('checkbox',{name:'Potential violation only'}).check();
+ const filters=page.locator('[aria-label="Filter intelligence"]');
+ await expect(filters.getByLabel('Province')).toBeVisible();
+ await expect(filters.getByLabel('Candidate')).toBeVisible();
+ await expect(filters.getByRole('checkbox',{name:'Potential violation only'})).toBeVisible();
+ await filters.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
-
 
 test('authorized officer sees manual flag form for relevant evidence without AI flags',async({page})=>{
  const manual={...payload,issue_categories:[{id:7,name:'Politik Uang'}],findings:findings.map((x,i)=>i===1?{...x,can_review_flag:true,is_flagged:false}:x)};
@@ -272,10 +262,9 @@ test('authorized officer sees manual flag form for relevant evidence without AI 
  expect(flags).toBe(1);
 });
 
-test('Potential issue category filters evidence and shows quotes without paid calls',async({page})=>{
+test('potential violation filter shows source evidence quotes without paid calls',async({page})=>{
  const paidCalls=await setup(page);
- const issue=page.getByLabel('Potential issue category');
- await issue.selectOption('Politik Uang');
+ await page.getByRole('checkbox',{name:'Potential violation only'}).check();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');

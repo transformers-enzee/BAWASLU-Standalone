@@ -1,0 +1,20 @@
+name: Build Version Contract
+on:
+  push:
+    branches: [architecture-v2-foundation-20261015]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require new synchronized build version on every commit
+        run: python backend/tests/check_build_version.py

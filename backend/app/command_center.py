@@ -9,7 +9,7 @@ from collections import defaultdict, Counter
 from datetime import date, datetime, timedelta
 from sqlalchemy import and_, func
 from .access import allowed, has
-from .geography import province_code_for, province_name_for, PROVINCES, INDONESIAN_PROVINCE_ALIASES
+from .geography import province_code_for, province_name_for, regency_code_for, REGENCY_BY_CODE, PROVINCES, INDONESIAN_PROVINCE_ALIASES
 
 def _province_name(code):
     names=INDONESIAN_PROVINCE_ALIASES.get(str(code),[])
@@ -254,6 +254,35 @@ def build_command_center(db,p,data=None):
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_captured.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
+    # Social Evidence Inbox location_signals derive from geographic_signals_json.
+    # Mirror that source in the homepage map, independently of short-period charts.
+    regional_assessed=defaultdict(set)
+    scoped_ids=[c.id for c in db.query(MonitoringCampaign).all() if allowed(p,c)]
+    if scoped_ids:
+        latest_geo=(db.query(EvidenceAssessment.campaign_id.label('cid'),
+                 EvidenceAssessment.result_id.label('rid'),
+                 func.max(EvidenceAssessment.assessment_version).label('ver'))
+              .filter(EvidenceAssessment.campaign_id.in_(scoped_ids))
+              .group_by(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id).subquery())
+        geo_rows=(db.query(EvidenceAssessment)
+            .join(latest_geo,and_(EvidenceAssessment.campaign_id==latest_geo.c.cid,
+                 EvidenceAssessment.result_id==latest_geo.c.rid,
+                 EvidenceAssessment.assessment_version==latest_geo.c.ver)).all())
+        for assessment in geo_rows:
+            codes=set()
+            for signal in _as_list(assessment.geographic_signals_json):
+                value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''
+                value=str(value or '').strip()
+                code=province_code_for(value)
+                if not code:
+                    city=regency_code_for(value)
+                    if city:code=str(REGENCY_BY_CODE[city].get('province_code') or '')
+                if not code and value.lower().replace(' ','') in ('sumbar','sumaterabarat'):code='13'
+                if code and (not selected_code or code==selected_code):codes.add(code)
+            for code in codes:regional_assessed[code].add(assessment.result_id)
+    regional_inbox_signals=[{'province':_province_name(code),'province_code':code,'records':len(ids)}
+        for code,ids in regional_assessed.items()]
+    regional_inbox_signals.sort(key=lambda item:item['records'],reverse=True)
     # Regional Intelligence Inbox heatmap is an all-time authorized inventory.
     # It is independent of the campaign-post monitoring date window.
     regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set(),'mentioned':set()})
@@ -420,6 +449,7 @@ def build_command_center(db,p,data=None):
             'regions':by_region[:38],
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
+            'regional_inbox_signals':regional_inbox_signals,
             'mapped_intelligence':len(mapped_intel_ids),
             'unclassified_intelligence':unclassified_intel,
             'national_intelligence':national_intel,

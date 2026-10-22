@@ -112,9 +112,9 @@ test('logout returns the user to login and clears authenticated access', async (
 test('language toggle switches app-owned navigation labels', async ({ page }) => {
   await uiLogin(page, ANALYST_EMAIL, ANALYST_PASSWORD);
 
-  await page.getByRole('button', { name: 'ID' }).click();
+  await page.getByRole('button', { name: 'ID', exact: true }).click();
   await expect(page.getByRole('navigation').getByRole('link', { name: /kotak masuk intelijen/i })).toBeVisible();
 
-  await page.getByRole('button', { name: 'EN' }).click();
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
   await expect(page.locator('aside').getByRole('link', { name: 'Intelligence Inbox', exact: true })).toBeVisible();
 });

@@ -240,16 +240,15 @@ def build_command_center(db,p,data=None):
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
     # Regional Intelligence Inbox records are reported separately from campaign
     # monitoring scope. Only confirmed geographic assignments count here.
-    regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set()})
+    regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set()})
     unclassified_intel=0
     for record in db.query(IntelligenceItem).all():
         if not allowed(p,record):continue
         dated=record.publication_datetime or record.publication_date or ''
         when=_day(dated) or _day(record.created_at.isoformat() if record.created_at else '')
         if not (start<=when<=end):continue
-        if record.jurisdiction_confirmed is not True:
-            unclassified_intel+=1
-            continue
+        # Match the recorded province fields used in the Intelligence Inbox.
+        # Keep human-confirmed jurisdictions distinguishable from recorded but unconfirmed ones.
         areas=_as_list(record.geographic_assignments_json) if record.jurisdiction_type=='Multi-Region' else [{'province':record.province,'province_code':record.province_code}]
         codes=set()
         for area in areas:
@@ -270,10 +269,11 @@ def build_command_center(db,p,data=None):
                  (decisions.get('supervision_signal',{}).get('status')!='Human Rejected' and ai_signal in ('POTENTIAL REGULATORY ISSUE','REVIEW RECOMMENDED')))
         for code in codes:
             entry=regional_intel[code];entry['records'].add(record.id)
+            if record.jurisdiction_confirmed is True:entry['confirmed'].add(record.id)
             if record.review_status in ('Pending Review','Awaiting Validation'):entry['pending'].add(record.id)
             if flagged:entry['potential'].add(record.id)
     regional_intelligence=[{'province':_province_name(code),'province_code':code,
-        'records':len(v['records']),'pending':len(v['pending']),
+        'records':len(v['records']),'confirmed':len(v['confirmed']),'pending':len(v['pending']),
         'potential_signals':len(v['potential'])} for code,v in regional_intel.items()]
     regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
     # Combine assessed social posts with traditional/manual Intelligence Inbox

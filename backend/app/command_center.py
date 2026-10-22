@@ -29,9 +29,11 @@ def _as_list(raw):
 def _period(data):
     today=datetime.utcnow().date()
     preset=str(data.get('period') or '7d')
-    if preset not in ('today','7d','30d','custom'):
+    if preset not in ('today','7d','30d','custom','all'):
         raise ValueError('Unknown date range')
-    if preset=='custom':
+    if preset=='all':
+        start=date(1970,1,1);end=today
+    elif preset=='custom':
         try:
             start=date.fromisoformat(str(data.get('date_from') or ''))
             end=date.fromisoformat(str(data.get('date_to') or ''))
@@ -40,7 +42,7 @@ def _period(data):
     else:
         days={'today':1,'7d':7,'30d':30}[preset]
         start=today-timedelta(days=days-1);end=today
-    if start>end or (end-start).days>366 or end>today:
+    if start>end or (preset!='all' and (end-start).days>366) or end>today:
         raise ValueError('Date range must be valid, no more than 367 days, and not in the future')
     return start.isoformat(),end.isoformat(),preset
 
@@ -227,7 +229,7 @@ def build_command_center(db,p,data=None):
     # Include zero-activity dates; missing bars would overstate continuity.
     daily_series=[{'date':(date.fromisoformat(start)+timedelta(days=n)).isoformat(),
                    'count':day_counts.get((date.fromisoformat(start)+timedelta(days=n)).isoformat(),0)}
-                  for n in range((date.fromisoformat(end)-date.fromisoformat(start)).days+1)]
+                  for n in range((date.fromisoformat(end)-date.fromisoformat(start)).days+1)] if preset!='all' else []
     assessed_coverage=len(captured_ids.intersection(assessed_ids))
     unassessed_coverage=len(captured_ids)-assessed_coverage
 

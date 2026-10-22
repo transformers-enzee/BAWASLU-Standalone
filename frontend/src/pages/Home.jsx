@@ -12,8 +12,8 @@ const evidenceLink=row=>row.record_type==='INTELLIGENCE_ITEM'
 const day=(offset=0)=>{const d=new Date();d.setDate(d.getDate()+offset);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const cleanSource=url=>{try{const x=new URL(url);return ['https:','http:'].includes(x.protocol)?x.href:null}catch{return null}};
 
-function Panel({title,subtitle,children,to,action='View all'}){
- return <section className="intel-card p-4 md:p-5 space-y-3 min-w-0">
+function Panel({title,subtitle,children,to,action='View all',fillHeight=false}){
+ return <section className={"intel-card p-4 md:p-5 space-y-3 min-w-0 "+(fillHeight?"h-full":"")}>
   <div className="flex flex-wrap items-start justify-between gap-2">
    <div><h2 className="text-base font-semibold text-[#173952]">{title}</h2>{subtitle&&<p className="text-xs text-slate-500 mt-1">{subtitle}</p>}</div>
    {to&&<Link to={to} className="text-xs font-semibold text-[#126d91] inline-flex items-center gap-1 hover:underline">{action}<ArrowUpRight size={13}/></Link>}
@@ -155,22 +155,15 @@ export default function Home(){
     <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} campaign-linked posts <strong>published</strong> in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
     <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
    </div>
-   <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4 items-start">
-    <Panel title="Needs BAWASLU Attention" subtitle="Most recent undismissed preliminary issue signals from saved AI assessments · all dates" to="/inbox" action="Open Intelligence Inbox">
+   <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Needs BAWASLU Attention" subtitle="Most recent undismissed preliminary issue signals from saved AI assessments · all dates" to="/inbox" action="Open Intelligence Inbox">
      {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}
     </Panel>
-    <Panel title="Latest Intelligence" subtitle="Latest saved AI-assessed posts and recorded Inbox items · all dates" to="/inbox">
+    <Panel fillHeight title="Latest Intelligence" subtitle="Latest saved AI-assessed posts and recorded Inbox items · all dates" to="/inbox">
      {(data.latest_intelligence||[]).length?data.latest_intelligence.slice(0,3).map(row=><MiniRecord key={row.record_type==='INTELLIGENCE_ITEM'?'intel-'+row.id:row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
     </Panel>
    </div>
-   <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4">
-    <Panel title="Recently Published Social Evidence" subtitle="Actual captured posts, including posts not yet assessed by AI" to="/social-listening" action="Open Social Listening">
-     {(activity.recent_captured||[]).length?(activity.recent_captured||[]).map(post=><article key={post.result_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
-      <div className="flex items-center justify-between gap-2"><strong className="text-xs text-[#173952]">{post.platform}</strong><span className="text-[11px] text-slate-500">{fmtTime(post.published_at)} · Published</span></div>
-      <p className="text-sm text-slate-700 line-clamp-2">{post.preview||'No source text available'}</p>
-      <div className="flex items-center flex-wrap gap-3 text-xs"><Link to="/social-listening" className="font-semibold text-[#126d91]">View Social Listening →</Link>{cleanSource(post.source_url)&&<a href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:underline">Original source ↗</a>}</div>
-     </article>):<p className="text-sm text-slate-500">No posts with publication dates in this period. Older posts may still have been newly collected; see the collection indicator above.</p>}
-    </Panel>
+   <div className="space-y-3 md:space-y-4">
     <Panel title="Regional Intelligence Overview" subtitle={effectiveMapSource==='social'?'Social Evidence Inbox · date-filtered geographic signals':effectiveMapSource==='coverage'?'Social Listening · campaign monitoring coverage':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
      <div className="flex gap-2 text-xs" aria-label="Regional map data source">
       <button type="button" onClick={()=>setMapSource('social')} aria-pressed={effectiveMapSource==='social'} className={effectiveMapSource==='social'?'intel-button text-xs':'intel-ghost text-xs'}>Assessed social evidence</button>
@@ -183,6 +176,15 @@ export default function Home(){
       <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={effectiveMapSource==='social'?'AI assessment geographic signals · selected period':effectiveMapSource==='coverage'?'Campaign monitoring jurisdiction · selected period':'Recorded intelligence geographic associations · all time'} footnote={effectiveMapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':effectiveMapSource==='coverage'?'Based on campaign monitoring province, not verified source location or incident location. Nationwide campaigns have no provincial assignment.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/>
       {!rows.length&&<p className="text-xs text-slate-500">No {effectiveMapSource==='social'?'assessed posts with recognized provincial location signals in this period':effectiveMapSource==='coverage'?'captured posts linked to province-scoped campaigns':'recorded intelligence with recognized provincial associations'}. This does not imply the area has no monitored activity.</p>}
      </div>})()}
+    </Panel>
+   </div>
+   <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4 items-start">
+    <Panel title="Recently Published Social Evidence" subtitle="Actual captured posts, including posts not yet assessed by AI" to="/social-listening" action="Open Social Listening">
+     {(activity.recent_captured||[]).length?(activity.recent_captured||[]).map(post=><article key={post.result_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
+      <div className="flex items-center justify-between gap-2"><strong className="text-xs text-[#173952]">{post.platform}</strong><span className="text-[11px] text-slate-500">{fmtTime(post.published_at)} · Published</span></div>
+      <p className="text-sm text-slate-700 line-clamp-2">{post.preview||'No source text available'}</p>
+      <div className="flex items-center flex-wrap gap-3 text-xs"><Link to="/social-listening" className="font-semibold text-[#126d91]">View Social Listening →</Link>{cleanSource(post.source_url)&&<a href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:underline">Original source ↗</a>}</div>
+     </article>):<p className="text-sm text-slate-500">No posts with publication dates in this period. Older posts may still have been newly collected; see the collection indicator above.</p>}
     </Panel>
     <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
      {(data.watchlist?.entries||[]).length?data.watchlist.entries.map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">

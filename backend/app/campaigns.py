@@ -864,6 +864,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         cached=_dashboard_cache_get(cache_key)
         if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
+        # Push date limits down to SQL before transferring large post payloads.
+        # Values are ISO dates and published_at begins with YYYY-MM-DD.
+        if from_day:query=query.filter(SocialListeningResult.published_at>=from_day)
+        if to_day:query=query.filter(SocialListeningResult.published_at<=(to_day+'T23:59:59.999999Z'))
         if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
         # Stream only dashboard columns, not full ORM entities and their large payloads.
         # The original full-entity query was expensive on 40k+ evidence rows.

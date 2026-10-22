@@ -5,6 +5,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { base44 } from '@/api/base44Client';
 import KeywordTags from '@/components/intel/KeywordTags';
 import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
+import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
@@ -355,6 +356,7 @@ export default function CampaignPanel({campaignId=null}){
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
    {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
    {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Campaign data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
+   <AssessmentPilotPreview campaign={selected}/>
    {dashboard&&<section aria-label="Campaign monitoring dashboard" className="rounded-lg border border-slate-200 p-4 space-y-3">
     <h4 className="font-semibold">Monitoring dashboard</h4>
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>

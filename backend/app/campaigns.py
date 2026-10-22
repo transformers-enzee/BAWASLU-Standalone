@@ -345,6 +345,9 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action=='campaignAssessmentPilotPreview':
+        from .assessment_pilot import assessment_pilot_preview
+        return assessment_pilot_preview(db,p,data,id)
     if action in ('campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart'):
         from .models import EvidenceAssessment, SocialListeningResult
         from .socialcrawl import _result_in_scope

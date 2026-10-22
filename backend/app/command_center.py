@@ -244,8 +244,13 @@ def build_command_center(db,p,data=None):
     # It is independent of the campaign-post monitoring date window.
     regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set()})
     unclassified_intel=0
+    national_intel=0
     for record in db.query(IntelligenceItem).all():
         if not allowed(p,record):continue
+        # National records have no province by design; do not mark them as unmapped.
+        if record.jurisdiction_type=='National':
+            national_intel+=1
+            continue
         # Match the recorded province fields used in the Intelligence Inbox.
         # Keep human-confirmed jurisdictions distinguishable from recorded but unconfirmed ones.
         areas=_as_list(record.geographic_assignments_json) if record.jurisdiction_type=='Multi-Region' else [{'province':record.province,'province_code':record.province_code}]
@@ -384,6 +389,7 @@ def build_command_center(db,p,data=None):
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'unclassified_intelligence':unclassified_intel,
+            'national_intelligence':national_intel,
             'unknown_region_mentions':len(region_unknown_captured),
             'region_method':'CAMPAIGN_MONITORING_SCOPE_NOT_POST_ORIGIN',
             'watchlist':{'entries':watch_rows,'captured_posts_in_period':len(watch_count_ids),

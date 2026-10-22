@@ -122,9 +122,18 @@ export default function Home(){
     <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
    </div>
    <div className="grid lg:grid-cols-2 gap-3 md:gap-4 items-stretch" aria-label="Signal Intelligence">
-    <Panel fillHeight title="Candidate Mention Monitor" subtitle="Named entities appearing in saved relevant AI assessments · alphabetical, not a suspicion ranking" to="/inbox" action="Review source records">
-     {(data.signal_intelligence?.candidate_mentions||[]).length?(data.signal_intelligence.candidate_mentions.map(item=><div key={item.name} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-xs"><span className="font-medium text-[#173952]">{item.name}</span><span className="tabular-nums text-slate-600">{item.mentions} assessed post(s)</span></div>)):<p className="text-xs text-slate-500">No named candidate signals are recorded in current saved assessments.</p>}
-     <p className="text-[11px] text-slate-500">Mentions do not imply wrongdoing. Only stored, authorized source evidence is counted.</p>
+    <Panel fillHeight title="Candidate Mention Monitor" subtitle="Ranked by mention volume in relevant AI-assessed posts · highest first" to="/inbox" action="Review source records">
+     {(data.signal_intelligence?.candidate_mentions||[]).length?(()=>{
+      const ranked=[...data.signal_intelligence.candidate_mentions].sort((a,b)=>Number(b.mentions||0)-Number(a.mentions||0)||String(a.name||'').localeCompare(String(b.name||'')));
+      const max=Math.max(1,...ranked.map(item=>Number(item.mentions||0)));
+      return <div className="space-y-3" role="img" aria-label="Candidate mentions ranked from highest to lowest">
+       {ranked.map((item,index)=><div key={item.name} className="space-y-1">
+        <div className="flex items-center justify-between gap-3 text-xs"><span className="min-w-0 truncate font-medium text-[#173952]" title={item.name}>{index+1}. {item.name}</span><span className="shrink-0 tabular-nums font-semibold text-[#173952]">{Number(item.mentions||0).toLocaleString()} posts</span></div>
+        <div className="h-3 w-full overflow-hidden rounded bg-slate-100"><div className="h-full rounded bg-[#1687a7]" style={{width:(Math.max(0,Number(item.mentions||0))/max*100)+'%'}}/></div>
+       </div>)}
+      </div>;
+     })():<p className="text-xs text-slate-500">No named candidate signals are recorded in current saved assessments.</p>}
+     <p className="text-[11px] text-slate-500">Ranking measures mention volume only, not suspicion or wrongdoing. Only stored, authorized source evidence is counted.</p>
     </Panel>
     <Panel fillHeight title="Potential Violation Signal Volume" subtitle="Up to 10 evidence-backed issue categories · preliminary, not proven" to="/inbox" action="Investigate evidence">
      <p className="text-xs text-slate-600">Monitoring level: <strong>{data.signal_intelligence?.volume_band||'UNKNOWN'}</strong> · {fmtNumber(data.signal_intelligence?.flagged_assessment_volume)} flagged assessed posts</p>

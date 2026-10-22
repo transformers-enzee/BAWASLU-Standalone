@@ -10,7 +10,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Run Playwright QA
         working-directory: frontend
-        run: npx playwright test --grep-invert "provincial analyst only sees permitted navigation|Data Sources create and edit persists|unresolved jurisdiction blocks final validation"
+        run: npx playwright test --grep-invert "provincial analyst only sees permitted navigation|Data Sources create and edit persists|unresolved jurisdiction blocks final validation" --max-failures=5 --retries=0 --reporter=line,html
 
       - name: Upload Playwright report
         if: always()

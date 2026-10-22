@@ -1,6 +1,6 @@
 import os, shutil, uuid
 from pathlib import Path
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -31,13 +31,93 @@ def startup():
         recover_existing_news_languages(db)
         sync_promoted_news_languages(db)
     finally: db.close()
+    # Optional Watchlist worker: on registration it fetches immediately, then
+    # periodically while this web instance stays awake. Never start without a
+    # positive administrator-controlled SocialCrawl credit budget.
+    from .watchlist_auto import readiness as watchlist_readiness
+    if watchlist_readiness()['enabled']:
+        import logging, threading, time
+        from .watchlist_auto import run_due_cycle
+        def watchlist_worker_loop():
+            while True:
+                try:run_due_cycle()
+                except Exception:logging.getLogger(__name__).exception('Watchlist sync cycle failed')
+                time.sleep(60)
+        threading.Thread(target=watchlist_worker_loop,
+                         name='bawaslu-watchlist-worker',daemon=True).start()
+
+    # Opt-in only: do not initiate any paid work unless BOTH controls are enabled.
+    if os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true' and os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true':
+        from .auto_relevance import recover_stale_jobs, assess_pending_campaign
+        from .models import AIAssessmentJob
+        import threading, time
+        def worker_loop():
+            while True:
+                try:
+                    recover_stale_jobs()
+                    session=SessionLocal()
+                    try:
+                        campaign_ids=[row[0] for row in session.query(AIAssessmentJob.campaign_id).filter(
+                            AIAssessmentJob.state=='PENDING').distinct().limit(20).all()]
+                    finally:session.close()
+                    for cid in campaign_ids: assess_pending_campaign(cid)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception('AI worker cycle failed')
+                time.sleep(60)
+        threading.Thread(target=worker_loop,name='bawaslu-ai-worker',daemon=True).start()
 
 class LoginIn(BaseModel): email:str; password:str
 class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'63.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'92.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+
+class GateIn(BaseModel):
+    question:str
+    active:bool=True
+    required_answer:str='YES'
+
+def _gate_admin(p):
+    return p.get('status')=='Active' and p.get('role')=='National Administrator' and p.get('permissions',{}).get('administration') is True
+
+@app.get('/api/relevance-gates')
+def list_relevance_gates(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .models import RelevanceGateQuestion
+    if not _gate_admin(profile(db,user)):raise HTTPException(403,'National administrator required')
+    return {'questions':[{'id':q.id,'question':q.question,'active':q.active,'required_answer':q.required_answer} for q in db.query(RelevanceGateQuestion).order_by(RelevanceGateQuestion.id).all()]}
+
+@app.post('/api/relevance-gates')
+def add_relevance_gate(body:GateIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .models import RelevanceGateQuestion
+    if not _gate_admin(profile(db,user)):raise HTTPException(403,'National administrator required')
+    question=body.question.strip()
+    if not 12<=len(question)<=400:raise HTTPException(400,'Question must contain 12 to 400 characters')
+    if db.query(RelevanceGateQuestion).count()>=20:raise HTTPException(400,'Maximum 20 gate questions')
+    if body.required_answer not in ('YES','NO'):raise HTTPException(400,'Required answer must be YES or NO')
+    item=RelevanceGateQuestion(question=question,active=body.active,required_answer=body.required_answer)
+    db.add(item);db.commit();return {'id':item.id,'question':item.question,'active':item.active,'required_answer':item.required_answer}
+
+@app.put('/api/relevance-gates/{question_id}')
+def edit_relevance_gate(question_id:int,body:GateIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .models import RelevanceGateQuestion
+    if not _gate_admin(profile(db,user)):raise HTTPException(403,'National administrator required')
+    item=db.get(RelevanceGateQuestion,question_id)
+    if not item:raise HTTPException(404,'Question not found')
+    question=body.question.strip()
+    if not 12<=len(question)<=400:raise HTTPException(400,'Question must contain 12 to 400 characters')
+    if body.required_answer not in ('YES','NO'):raise HTTPException(400,'Required answer must be YES or NO')
+    item.question=question;item.active=body.active;item.required_answer=body.required_answer;db.commit()
+    return {'id':item.id,'question':item.question,'active':item.active,'required_answer':item.required_answer}
+
+@app.delete('/api/relevance-gates/{question_id}')
+def delete_relevance_gate(question_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .models import RelevanceGateQuestion
+    if not _gate_admin(profile(db,user)):raise HTTPException(403,'National administrator required')
+    item=db.get(RelevanceGateQuestion,question_id)
+    if not item:raise HTTPException(404,'Question not found')
+    db.delete(item);db.commit();return {'deleted':True}
 
 @app.post('/api/auth/login')
 def login(body:LoginIn,db:Session=Depends(get_db)):
@@ -69,18 +149,226 @@ def intelligence(body:FunctionIn,user:User=Depends(current_user),db:Session=Depe
     except ValueError as e: raise HTTPException(400,str(e))
 
 @app.post('/api/functions/registry')
-def registry(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+def registry(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
-    try: return registry_action(db,p,body.action,body.data,body.id)
+    try:
+        result=registry_action(db,p,body.action,body.data,body.id)
+        if body.action in ('addAccount','updateAccount') and result.get('account'):
+            from .watchlist_auto import readiness, sync_account
+            if readiness()['enabled']:
+                background_tasks.add_task(sync_account,int(result['account']['id']))
+        return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
 
-@app.post('/api/functions/socialListening')
-def social_listening(body:FunctionIn,user:User=Depends(current_user),db:Session=Depends(get_db)):
+@app.post('/api/functions/commandCenter')
+def executive_command_center(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    # The dashboard is a scoped compilation, never an independent evidence store.
+    from .command_center import build_command_center
     p=profile(db,user)
-    try: return social_listening_action(db,p,body.action,body.data,body.id)
+    try:return build_command_center(db,p,body)
+    except PermissionError as e:raise HTTPException(403,str(e))
+    except ValueError as e:raise HTTPException(400,str(e))
+
+@app.post('/api/functions/socialListening')
+def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    p=profile(db,user)
+    try:
+        result=social_listening_action(db,p,body.action,body.data,body.id)
+        if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0 and os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true':
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(body.id))
+        if body.action in ('campaignSingleAssessmentStart','campaignSingleReanalysisStart') and result.get('single_assessment_accepted'):
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(result['campaign_id']),1,int(result['result_id']),bool(result.get('reanalysis')))
+        if body.action=='campaignAssessmentBacklogStart' and result.get('assessment_job_accepted'):
+            from .auto_relevance import assess_pending_campaign
+            background_tasks.add_task(assess_pending_campaign,int(result['campaign_id']),int(result['batch_limit']))
+        if body.action=='campaignAssessmentPilotStart' and result.get('started'):
+            from .assessment_pilot import execute_assessment_pilot
+            background_tasks.add_task(execute_assessment_pilot,int(result['campaign_id']),result['batch_result_ids'])
+        return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
+
+
+@app.post('/api/social-listening/external-import/preview')
+def preview_external_campaign_import(campaign_id:int,file:UploadFile=File(...),user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Admin-only, read-only preview. Never saves imported evidence."""
+    from .access import has, allowed
+    from .models import MonitoringCampaign
+    from .external_import_preview import preview_workbook
+    from .campaigns import _editable
+    p=profile(db,user)
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):
+        raise HTTPException(404,'Campaign unavailable')
+    if not (p.get('role')=='National Administrator' and has(p,'administration')):
+        raise HTTPException(403,'National administrator permission required for external provider imports')
+    if Path(file.filename or '').suffix.lower() not in ('.xlsx','.csv'):
+        raise HTTPException(400,'Upload a ZocialEye Excel or CSV export')
+    import tempfile
+    from fastapi.concurrency import run_in_threadpool
+    import shutil
+    with tempfile.TemporaryDirectory(prefix='bawaslu_import_preview_') as folder:
+        path=Path(folder)/('source'+Path(file.filename or '').suffix.lower())
+        with path.open('wb') as dest:
+            shutil.copyfileobj(file.file,dest)
+        if path.stat().st_size>100*1024*1024:
+            raise HTTPException(413,'Preview file limit is 100 MB')
+        try:
+            result=preview_workbook(path)
+            from .external_import_preview import validate_all_rows
+            from .models import SocialListeningResult
+            existing=(url for (url,) in db.query(SocialListeningResult.canonical_url).filter(SocialListeningResult.canonical_url!='').all())
+            result.update(validate_all_rows(path,existing))
+        except ValueError as exc:
+            raise HTTPException(400,str(exc))
+    return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,'provider':'ZOCIALEYE',
+            'preview_only':True,'records_inserted':0,'socialcrawl_credits':0,**result}
+
+
+@app.post('/api/social-listening/external-import/start')
+def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTasks,file:UploadFile=File(...),user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Explicit admin-only ingestion; no SocialCrawl calls or AI screening."""
+    from .access import has, allowed
+    from .models import MonitoringCampaign,SocialListeningRun
+    from .external_import_ingest import run_import
+    import json
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    p=profile(db,user)
+    if not campaign or not allowed(p,campaign):
+        raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'National administrator permission required')
+    from sqlalchemy import select
+    active_runs=db.execute(select(SocialListeningRun).where(SocialListeningRun.provider=='ZOCIALEYE',SocialListeningRun.status.in_(['QUEUED','RUNNING']))).scalars().all()
+    from datetime import datetime, timezone, timedelta
+    for active in active_runs:
+        try:details=json.loads(active.query_json or '{}')
+        except (ValueError,TypeError):details={}
+        if str(details.get('campaign_id'))!=str(campaign_id):continue
+        try:heartbeat=datetime.fromisoformat(details.get('heartbeat_utc',''))
+        except (ValueError,TypeError):heartbeat=active.executed_at.replace(tzinfo=timezone.utc) if active.executed_at else datetime.now(timezone.utc)
+        if heartbeat.tzinfo is None:heartbeat=heartbeat.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc)-heartbeat > timedelta(minutes=45):
+            active.status='INTERRUPTED'
+            active.error_text='Import worker stopped responding. Reupload the same file to resume safely using provider IDs.'
+            db.commit()
+        else:raise HTTPException(409,'Another ZocialEye import is active. Refresh its progress before starting another.')
+    ext=Path(file.filename or '').suffix.lower()
+    if ext not in ('.xlsx','.csv'):raise HTTPException(400,'Excel or CSV required')
+    import tempfile
+    from .external_import_preview import preview_workbook
+    fd,temporary_path=tempfile.mkstemp(suffix=ext,prefix='bawaslu_external_')
+    os.close(fd)
+    temp=Path(temporary_path)
+    try:
+        with temp.open('wb') as target:
+            total=0
+            while True:
+                chunk=file.file.read(1024*1024)
+                if not chunk:break
+                total+=len(chunk)
+                if total>100*1024*1024:raise HTTPException(413,'100 MB maximum')
+                target.write(chunk)
+        result=preview_workbook(temp)
+        from .external_import_preview import validate_all_rows
+        result.update(validate_all_rows(temp))
+        if not result['validation'].get('eligible_rows'):
+            raise HTTPException(400,'No eligible rows: verify IDs, messages, platform URLs and source fields')
+        if not result['mapped_fields'].get('provider_result_id') or not result['mapped_fields'].get('text_content'):
+            raise HTTPException(400,'Provider ID and message columns required')
+        run=SocialListeningRun(provider='ZOCIALEYE',provider_request_id=uuid.uuid4().hex,
+            query_json=json.dumps({'campaign_id':campaign_id,'source_filename':Path(file.filename or '').name,
+                                    'provider':'ZOCIALEYE','processed':0,'inserted':0,'linked':0,'skipped':0,'heartbeat_utc':datetime.now(timezone.utc).isoformat()}),
+            credits_used=0,credits_remaining=0,result_count=0,status='QUEUED',
+            executed_by=str(user.id))
+        db.add(run);db.commit();db.refresh(run)
+        background_tasks.add_task(run_import,run.id,campaign_id,str(temp))
+        return {'run_id':run.id,'status':'QUEUED','campaign_id':campaign_id,'provider':'ZOCIALEYE','socialcrawl_credits':0}
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+@app.get('/api/social-listening/external-import/status/{run_id}')
+def external_campaign_import_status(run_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .access import has
+    from .models import SocialListeningRun
+    import json
+    p=profile(db,user)
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'Administrator permission required')
+    run=db.get(SocialListeningRun,run_id)
+    if not run or run.provider!='ZOCIALEYE':raise HTTPException(404,'Import not found')
+    from datetime import datetime, timezone
+    progress=json.loads(run.query_json or '{}')
+    try:heartbeat=datetime.fromisoformat(progress.get('heartbeat_utc',''))
+    except (TypeError,ValueError):heartbeat=None
+    if heartbeat and heartbeat.tzinfo is None:heartbeat=heartbeat.replace(tzinfo=timezone.utc)
+    stalled=bool(run.status=='RUNNING' and heartbeat and (datetime.now(timezone.utc)-heartbeat).total_seconds()>180)
+    return {'run_id':run.id,'status':run.status,'progress':progress,'stalled':stalled,
+            'error':run.error_text if run.status in ('FAILED','INTERRUPTED') else '', 'socialcrawl_credits':0}
+
+
+@app.get('/api/social-listening/campaign/{campaign_id}/export.csv')
+def export_campaign_evidence_csv(campaign_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Stream all campaign evidence without a browser-side row cap."""
+    import csv,io,json
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy import select
+    from .access import allowed
+    from .models import MonitoringCampaign,CampaignEvidence,SocialListeningResult
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(profile(db,user),campaign):raise HTTPException(404,'Campaign unavailable')
+    fields=['id','provider','provider_result_id','platform','content_type','published_at','author_name',
+            'canonical_url','text_content','engagement_total','likes','comments','shares','views','parent_url']
+    def stream():
+        output=io.StringIO()
+        writer=csv.writer(output)
+        writer.writerow(fields);yield '\\ufeff'+output.getvalue();output.seek(0);output.truncate(0)
+        with SessionLocal() as read_db:
+            statement=(select(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+                       .where(CampaignEvidence.campaign_id==campaign_id).order_by(SocialListeningResult.id))
+            for record in read_db.execute(statement.execution_options(yield_per=500)).scalars():
+                from .campaigns import _captured_post_metrics
+                metrics=_captured_post_metrics(record.engagement_json)
+                try:identity=json.loads(record.source_identity_json or '{}')
+                except (ValueError,TypeError):identity={}
+                data={'id':record.id,'provider':record.provider,'provider_result_id':record.provider_result_id,
+                      'platform':record.platform,'content_type':record.content_type,'published_at':record.published_at,
+                      'author_name':record.author_name,'canonical_url':record.canonical_url,'text_content':record.text_content,
+                      'parent_url':identity.get('parent_url',''),**metrics}
+                writer.writerow([data.get(key,'') for key in fields])
+                yield output.getvalue();output.seek(0);output.truncate(0)
+    from .db import SessionLocal
+    return StreamingResponse(stream(),media_type='text/csv; charset=utf-8',
+        headers={'Content-Disposition':f'attachment; filename="bawaslu_campaign_{campaign_id}_evidence.csv"',
+                 'Cache-Control':'no-store'})
+
+@app.post('/api/social-listening/campaign/{campaign_id}/repair-external-metrics')
+def repair_external_metrics(campaign_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Admin-only restoration from provider raw payload; never estimates missing values."""
+    from sqlalchemy import select
+    from .access import allowed,has
+    from .models import MonitoringCampaign,CampaignEvidence,SocialListeningResult
+    from .external_import_ingest import provider_metrics
+    import json
+    p=profile(db,user);campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'Administrator permission required')
+    statement=(select(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+        .where(CampaignEvidence.campaign_id==campaign_id,SocialListeningResult.provider=='ZOCIALEYE'))
+    repaired=0
+    for record in db.execute(statement).scalars():
+        try:raw=json.loads(record.raw_payload_json or '{}')
+        except (ValueError,TypeError):continue
+        metrics=provider_metrics(raw)
+        if metrics and json.loads(record.engagement_json or '{}')!=metrics:
+            record.engagement_json=json.dumps(metrics);repaired+=1
+    db.commit()
+    return {'repaired':repaired,'campaign_id':campaign_id,'no_estimated_metrics':True}
 
 @app.post('/api/upload')
 def upload(file:UploadFile=File(...),user:User=Depends(current_user)):

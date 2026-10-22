@@ -41,7 +41,9 @@ def _normalize_filters(filters):
         if not f['platforms']: raise ValueError('Select at least one platform or Online News')
     else:
         f['platforms']=DEFAULT_PLATFORMS
-    invalid=[x for x in f['platforms'] if x not in AVAILABLE_PLATFORMS]
+    invalid=[x for x in f['platforms'] if x not in AVAILABLE_PLATFORMS+['search_everywhere']]
+    if 'search_everywhere' in f['platforms'] and f['platforms']!=['search_everywhere']:
+        raise ValueError('Search Everywhere cannot be combined with individual platform selections')
     if invalid: raise ValueError('Unsupported Social Listening platform: '+', '.join(invalid))
     if 'limit' not in f: f['limit']=50
     f['limit']=max(1,min(int(f['limit']),200))
@@ -132,6 +134,11 @@ def _scope_filters(p,filters):
 def estimate_search_cost(filters):
     f=_normalize_filters(filters)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
+    if selected==['search_everywhere']:
+        return {'estimated_credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,
+                'components':[{'endpoint':'/v1/search/everywhere','credits':SEARCH_EVERYWHERE_ESTIMATED_CREDITS,
+                'label':'Search Everywhere: one cross-platform query'}],
+                'result_limit':f.get('limit',50),'result_limit_affects_cost':False,'filters':f}
     social_sources=[x for x in selected if x!='online_news']
     wants_news='online_news' in selected
     components=[]
@@ -212,7 +219,7 @@ def _query_text(f):
 def _provider_params(filters):
     f=_normalize_filters(filters)
     params={'query':_query_text(f)}
-    social_sources=[x for x in f.get('platforms',[]) if x!='online_news']
+    social_sources=[x for x in f.get('platforms',[]) if x not in ('online_news','search_everywhere')]
     if social_sources:
         params['sources']=','.join(_provider_source_name(x) for x in social_sources)
     if f.get('exclude_sources'):
@@ -516,6 +523,9 @@ def ensure_result_id_sequence_ready(db):
 def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_scope_filters(p,filters)
+    everywhere=f.get('platforms')==['search_everywhere']
+    if everywhere and (not str(f.get('query') or '').strip() or len(str(f['query']))>512):
+        raise ValueError('Search Everywhere query must be 1–512 characters')
     estimate=estimate_search_cost(f)
     if provider_client is None and estimate['estimated_credits']>0 and confirmed_cost:
         ensure_result_id_sequence_ready(db)
@@ -524,8 +534,9 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
     run=SocialListeningRun(rule_id=rule_id,query_json=_json(f),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
     wants_news='online_news' in selected
-    social_sources=[x for x in selected if x!='online_news']
+    social_sources=[x for x in selected if x!='online_news' and x!='search_everywhere']
     endpoint='/v1/search/multi + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/multi'
+    if everywhere: endpoint='/v1/search/everywhere'
     try:
         if provider_client:
             envelope=provider_client(f)
@@ -547,6 +558,8 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                         if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
                         raise ValueError(f'SocialCrawl request failed: {detail}')
                     return env
+            if everywhere:
+                envelopes.append(call_provider('/v1/search/everywhere',_provider_params(f)))
             if social_sources:
                 sf=dict(f); sf['platforms']=social_sources
                 envelopes.append(call_provider('/v1/search/multi',_multi_provider_params(sf)))
@@ -582,8 +595,17 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                     nested_keys[str(key)]=sorted(list(value.keys()))[:20]
         diagnostics={'provider_items':len(items),'mapped_items':0,'filtered_items':0,'duplicate_items':0,'empty_items':0,'sample_item_keys':sample_keys,'sample_nested_keys':nested_keys}
         default_platform='online_news' if wants_news and not social_sources else ''
+        seen_fingerprints=set()
+        new_rows=0
+        reused_rows=0
         for raw in items:
-            if len(mapped) >= f['limit']: break
+            if everywhere and isinstance(raw,dict):
+                origins=raw.get('source_items')
+                origin=origins[0] if isinstance(origins,list) and origins and isinstance(origins[0],dict) else {}
+                if origin:
+                    raw={**raw,'platform':origin.get('platform') or origin.get('source') or raw.get('platform') or 'unknown',
+                         'url':origin.get('url') or origin.get('canonical_url') or raw.get('url'),
+                         'published_at':origin.get('date') or origin.get('published_at') or raw.get('published_at')}
             m=_map_result(db,raw,default_platform=default_platform)
             if not (m.get('text_content') or m.get('canonical_url') or m.get('author_name')):
                 diagnostics['empty_items']+=1
@@ -592,14 +614,28 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
             if not _matches_local_filters(m,f):
                 diagnostics['filtered_items']+=1
                 continue
+            if m['content_fingerprint'] in seen_fingerprints:
+                diagnostics['duplicate_items']+=1
+                continue
+            seen_fingerprints.add(m['content_fingerprint'])
             existing=db.query(SocialListeningResult).filter(SocialListeningResult.content_fingerprint==m['content_fingerprint']).first()
             if existing:
                 diagnostics['duplicate_items']+=1
+                reused_rows+=1
+                mapped.append(serialize_result(existing))
                 continue
-            row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row))
+            row=SocialListeningResult(run_id=run.id,provider_result_id=m['provider_result_id'],platform=m['platform'],content_type=m['content_type'],canonical_url=m['canonical_url'],author_name=m['author_name'],observed_handle=m['observed_handle'],published_at=m['published_at'],text_content=m['text_content'],language=m['language'],relevance_score=m['relevance_score'],engagement_json=_json(m['engagement']),geography_json=_json(m['geography']),source_identity_json=_json(m['source_identity']),watchlist_matches_json='[]',review_state='DISCOVERED',raw_payload_json=_json(m['raw']),content_fingerprint=m['content_fingerprint']); db.add(row); db.flush(); mapped.append(serialize_result(row)); new_rows+=1
+            if len(mapped)<=12 and os.getenv('MEDIA_THUMBNAIL_CACHE_ENABLED','true').lower()=='true':
+                from .campaigns import _existing_thumbnail
+                from .thumbnail_cache import cache_thumbnail
+                cache_thumbnail(db,row,_existing_thumbnail(row))
+        diagnostics['new_rows']=new_rows
+        diagnostics['reused_rows']=reused_rows
+        diagnostics['linked_candidates']=len(mapped)
+        diagnostics['provider_page_only']=True
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
-        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':len(mapped)},'diagnostics':{'new':diagnostics}})
+        audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':new_rows,'reused':reused_rows},'diagnostics':{'new':diagnostics}})
         return {'run':serialize_run(run),'results':mapped,'provider':capabilities(),'diagnostics':diagnostics}
     except Exception as e:
         # A failed INSERT invalidates the SQLAlchemy transaction. Roll it back before
@@ -652,6 +688,9 @@ def serialize_run(x): return {'id':str(x.id),'rule_id':str(x.rule_id) if x.rule_
 def serialize_result(x): return {'id':str(x.id),'run_id':str(x.run_id),'provider':x.provider,'provider_result_id':x.provider_result_id,'platform':x.platform,'content_type':x.content_type,'canonical_url':x.canonical_url,'author_name':x.author_name,'observed_handle':x.observed_handle,'published_at':x.published_at,'text_content':x.text_content,'language':x.language,'relevance_score':x.relevance_score,'engagement':json.loads(x.engagement_json or '{}'),'geography':json.loads(x.geography_json or '{}'),'source_identity':json.loads(x.source_identity_json or '{}'),'watchlist_matches':json.loads(x.watchlist_matches_json or '[]'),'review_state':x.review_state,'review_notes':x.review_notes,'promoted_intelligence_id':str(x.promoted_intelligence_id) if x.promoted_intelligence_id else None,'collected_at':x.collected_at.isoformat()}
 
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
+    if action in {'listCampaigns','createCampaign','updateCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignThumbnailRecovery','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart'}:
+        from .campaigns import campaign_action
+        return campaign_action(db,p,action,data,id)
     if action=='capabilities': return capabilities()
     if action=='providerStatus': return provider_status()
     if action=='filterOptions': return filter_options(db,p)

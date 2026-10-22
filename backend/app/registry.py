@@ -7,6 +7,32 @@ from .serializers import *
 from .access import *
 from .domain import clean
 
+def _category_phrases(db, category_id):
+    return [{'id':str(x.id),'phrase':x.phrase,'active':x.active} for x in db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.category_id==category_id).order_by(IssueCategoryPhrase.id).all()]
+
+def _validated_category_phrases(raw):
+    if not isinstance(raw,list): raise ValueError('Category phrases must be a list')
+    if len(raw)>40: raise ValueError('Maximum 40 phrases per category')
+    phrases={}
+    for item in raw:
+        phrase=clean(item,160).strip()
+        normalized=' '.join(phrase.casefold().split())
+        if not normalized: raise ValueError('Empty category phrase is not allowed')
+        phrases[normalized]=phrase
+    return phrases
+
+def _sync_category_phrases(db,category_id,raw):
+    incoming=_validated_category_phrases(raw)
+    current={x.normalized_phrase:x for x in db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.category_id==category_id).all()}
+    for norm,phrase in incoming.items():
+        if norm in current:
+            current[norm].active=True
+        else:
+            db.add(IssueCategoryPhrase(category_id=category_id,phrase=phrase,normalized_phrase=norm,active=True))
+    for norm,row in current.items():
+        if norm not in incoming: row.active=False
+
+
 WATCHLIST_STATUSES={'Active','Under Review','Inactive'}
 WATCHLIST_PRIORITIES={'Critical','High','Medium','Low'}
 
@@ -28,6 +54,25 @@ def _normalize_url(value):
     port=f':{parsed.port}' if parsed.port else ''
     path=(parsed.path or '').rstrip('/')
     return urlunparse((parsed.scheme.lower(),host+port,path,'',parsed.query,''))
+
+ACCOUNT_PLATFORM_HOSTS={
+    'instagram':('instagram.com',),
+    'tiktok':('tiktok.com',),
+    'youtube':('youtube.com',),
+    'facebook':('facebook.com','fb.com','fb.me'),
+    'x':('x.com','twitter.com'),
+    'twitter':('x.com','twitter.com'),
+    'threads':('threads.net','threads.com'),
+    'reddit':('reddit.com',),
+    'linkedin':('linkedin.com',),
+}
+
+def _validate_account_domain(platform,url):
+    allowed=ACCOUNT_PLATFORM_HOSTS.get(str(platform or '').strip().casefold())
+    if not allowed:return
+    hostname=(urlparse(url).hostname or '').lower()
+    if not any(hostname==domain or hostname.endswith('.'+domain) for domain in allowed):
+        raise ValueError('The public account URL must match the selected '+platform+' platform')
 
 def _normalize_handle(value):
     raw=clean(value,255).replace(' ','')
@@ -60,7 +105,129 @@ def registry_action(db:Session,p,action,data,id=None):
         rels=[x for x in db.query(EntityRelationship).all() if x.from_id in ids and x.to_id in ids]
         sources=[x for x in db.query(DataSource).all() if allowed(p,x)]
         cats=db.query(IssueCategory).order_by(IssueCategory.sort_order,IssueCategory.name).all()
-        return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order} for x in cats]}
+        return {'items':[watchlist(x) for x in items],'accounts':[source_account(x) for x in accounts],'relationships':[relationship(x) for x in rels],'sources':[{'id':str(x.id),'name':x.name,'source_type':x.source_type,'description':x.description,'status':x.status,'province':x.province,'regency_city':x.regency_city} for x in sources],'categories':[{'id':str(x.id),'name':x.name,'active':x.active,'sort_order':x.sort_order,'phrases':_category_phrases(db,x.id)} for x in cats]}
+
+    if action=='watchlistSyncStatus':
+        from .watchlist_auto import status_for
+        watch=_require_watchlist(db,p,id)
+        return status_for(db,watch.id)
+
+    if action=='watchlistCapturedFeed':
+        # Paginated, read-only evidence matching. Never call a crawl provider here.
+        from datetime import date as _date
+        from sqlalchemy import and_, or_, func
+        from .socialcrawl import _result_in_scope
+        from .campaigns import _captured_post_metrics
+        w=_require_watchlist(db,p,id)
+        accounts=db.query(SourceAccount).filter(SourceAccount.watchlist_id==w.id).order_by(SourceAccount.id).all()
+        payload=data if isinstance(data,dict) else {}
+        try:
+            page=max(1,min(10000,int(payload.get('page') or 1)))
+            page_size=max(1,min(50,int(payload.get('page_size') or 20)))
+        except (ValueError,TypeError): raise ValueError('Invalid pagination')
+        platform_filter=str(payload.get('platform') or '').strip().casefold()
+        account_filter=str(payload.get('account_id') or '').strip()
+        search=str(payload.get('search') or '').strip()[:120]
+        def valid_day(key):
+            value=str(payload.get(key) or '').strip()
+            if not value:return ''
+            try:return _date.fromisoformat(value).isoformat()
+            except ValueError:raise ValueError(key+' must be YYYY-MM-DD')
+        from_day=valid_day('date_from');to_day=valid_day('date_to')
+        if from_day and to_day and from_day>to_day:raise ValueError('Date from must not exceed date to')
+        def platform_key(value):
+            value=str(value or '').casefold().strip()
+            return 'x' if value=='twitter' else value
+        def inferred_handle(account):
+            supplied=str(account.handle or '').strip().lstrip('@').casefold()
+            if supplied:return supplied
+            parsed=urlparse(account.url or '')
+            host=(parsed.hostname or '').lower()
+            parts=[part for part in parsed.path.strip('/').split('/') if part]
+            platform=platform_key(account.platform)
+            allowed=ACCOUNT_PLATFORM_HOSTS.get(platform)
+            if not allowed or not any(host==h or host.endswith('.'+h) for h in allowed):return ''
+            if not parts:return ''
+            first=parts[0]
+            if platform in ('instagram','x','threads','tiktok'):
+                if first.lower() in ('p','reel','reels','video','status','stories','explore','search'):return ''
+                if platform=='tiktok' and not first.startswith('@'):return ''
+                return first.lstrip('@').casefold()
+            if platform=='youtube' and first.startswith('@'):return first[1:].casefold()
+            if platform=='facebook' and first.lower() not in ('posts','groups','watch','reel','share','profile.php','story.php'):
+                return first.casefold()
+            if platform=='reddit' and len(parts)>=2 and first.lower() in ('user','u'):
+                return parts[1].casefold()
+            if platform=='linkedin' and len(parts)>=2 and first.lower() in ('in','company'):
+                return parts[1].casefold()
+            return ''
+        specs={}
+        for account in accounts:
+            platform=platform_key(account.platform)
+            if platform_filter and platform_filter!=platform:continue
+            if account_filter and account_filter!=str(account.id):continue
+            handle=inferred_handle(account)
+            if platform and handle:
+                specs.setdefault((platform,handle),account)
+        base={'linked_accounts':len(accounts),'matchable_accounts':len(specs),
+              'paid_provider_called':False,
+              'status':'Stored captured evidence only. No automatic monitoring or provider requests.'}
+        if not specs and not accounts:return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
+        match_conditions=[]
+        for (platform,handle),account in specs.items():
+            platform_condition=func.lower(SocialListeningResult.platform).in_(
+                ['x','twitter'] if platform=='x' else [platform])
+            observed=func.lower(func.trim(SocialListeningResult.observed_handle))
+            author=func.lower(func.trim(SocialListeningResult.author_name))
+            matching=or_(observed.in_([handle,'@'+handle]),
+                and_(or_(SocialListeningResult.observed_handle.is_(None),
+                         func.trim(SocialListeningResult.observed_handle)==''),
+                     author.in_([handle,'@'+handle])))
+            match_conditions.append(and_(platform_condition,matching))
+        explicit_account_ids=[a.id for a in accounts if (not platform_filter or
+            a.platform.casefold()==platform_filter) and
+            (not account_filter or str(a.id)==account_filter)]
+        from .models import WatchlistAccountEvidence
+        if explicit_account_ids:
+            explicit=db.query(WatchlistAccountEvidence.result_id).filter(
+                WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
+            match_conditions.append(SocialListeningResult.id.in_(explicit))
+        query=db.query(SocialListeningResult).filter(or_(*match_conditions))
+        if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
+        if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
+        if search:
+            escaped=search.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+            query=query.filter(SocialListeningResult.text_content.ilike('%'+escaped+'%',escape='\\'))
+        query=query.order_by(SocialListeningResult.published_at.desc(),SocialListeningResult.id.desc())
+        # Regional users must not learn the existence/count of out-of-scope records.
+        if p.get('geographic_scope')=='Nationwide':
+            total=query.order_by(None).count()
+            rows=query.offset((page-1)*page_size).limit(page_size).all()
+        else:
+            total=0;rows=[];start=(page-1)*page_size
+            for item in query.yield_per(200):
+                if not _result_in_scope(db,p,item):continue
+                if start<=total<start+page_size:rows.append(item)
+                total+=1
+        def serialize_post(item):
+            platform=platform_key(item.platform)
+            observed=str(item.observed_handle or '').strip().lstrip('@').casefold()
+            author=str(item.author_name or '').strip().lstrip('@').casefold()
+            matched=specs.get((platform,observed)) if observed else specs.get((platform,author))
+            linked=db.query(SourceAccount).join(WatchlistAccountEvidence,
+                WatchlistAccountEvidence.account_id==SourceAccount.id).filter(
+                WatchlistAccountEvidence.result_id==item.id,
+                SourceAccount.id.in_(explicit_account_ids)).first() if explicit_account_ids else None
+            matched=linked or matched
+            metrics=_captured_post_metrics(item.engagement_json)
+            return {'id':str(item.id),'platform':item.platform,'account':matched.handle or '@'+inferred_handle(matched) if matched else '',
+                'text':(item.text_content or '')[:5000],
+                'published_at':item.published_at,'url':item.canonical_url,
+                'author_name':item.author_name,'content_type':item.content_type,
+                'match_method':'registered_account' if linked else 'observed_handle' if observed else 'author_name_unverified',
+                **metrics}
+        return {**base,'posts':[serialize_post(item) for item in rows],
+                'page':page,'page_size':page_size,'total':total}
 
     if action=='createWatchlist':
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')
@@ -111,9 +278,12 @@ def registry_action(db:Session,p,action,data,id=None):
         if not has(p,'manage_watchlist'): raise PermissionError('Not permitted')
         w=_require_watchlist(db,p,id)
         url=_normalize_url(data.get('url')); platform=clean(data.get('platform') or 'Web',100); handle=_normalize_handle(data.get('handle'))
+        _validate_account_domain(platform,url)
         if _account_duplicate(db,w.id,url,platform,handle): raise ValueError('This public account / URL is already registered for this watchlist item')
         a=SourceAccount(watchlist_id=w.id,platform=platform,url=url,handle=handle,province=w.province,regency_city=w.regency_city)
         db.add(a); db.commit(); db.refresh(a)
+        from .watchlist_auto import mark_pending
+        mark_pending(db,a.id)
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_ADDED',{'account_id':{'new':str(a.id)},'url':{'new':a.url}})
         return {'account':source_account(a)}
 
@@ -123,10 +293,13 @@ def registry_action(db:Session,p,action,data,id=None):
         if not a: raise ValueError('Public account unavailable')
         w=_require_watchlist(db,p,a.watchlist_id)
         url=_normalize_url(data.get('url',a.url)); platform=clean(data.get('platform',a.platform) or 'Web',100); handle=_normalize_handle(data.get('handle',a.handle))
+        _validate_account_domain(platform,url)
         if _account_duplicate(db,w.id,url,platform,handle,a.id): raise ValueError('This public account / URL is already registered for this watchlist item')
         previous=source_account(a)
         a.url=url; a.platform=platform; a.handle=handle; a.province=w.province; a.regency_city=w.regency_city
         db.commit(); db.refresh(a)
+        from .watchlist_auto import mark_pending
+        mark_pending(db,a.id)
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_UPDATED',{'account_id':str(a.id),'previous':previous,'new':source_account(a)})
         return {'account':source_account(a)}
 
@@ -135,6 +308,11 @@ def registry_action(db:Session,p,action,data,id=None):
         a=db.get(SourceAccount,int(id)) if str(id or '').isdigit() else None
         if not a: raise ValueError('Public account unavailable')
         w=_require_watchlist(db,p,a.watchlist_id); previous=source_account(a)
+        from .models import WatchlistAccountSync, WatchlistAccountEvidence
+        db.query(WatchlistAccountEvidence).filter(
+            WatchlistAccountEvidence.account_id==a.id).delete(synchronize_session=False)
+        db.query(WatchlistAccountSync).filter(
+            WatchlistAccountSync.account_id==a.id).delete(synchronize_session=False)
         db.delete(a); db.commit()
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_REMOVED',{'account':previous})
         return {'ok':True}
@@ -202,8 +380,11 @@ def registry_action(db:Session,p,action,data,id=None):
 
     if action=='category':
         if p.get('role')!='National Administrator' or not has(p,'administration'): raise PermissionError('Not permitted')
-        c=IssueCategory(name=clean(data.get('name'),255),active=bool(data.get('active',True)),sort_order=int(data.get('sort_order') or 0)); db.add(c); db.commit(); db.refresh(c)
-        return {'category':{'id':str(c.id),'name':c.name,'active':c.active,'sort_order':c.sort_order}}
+        c=IssueCategory(name=clean(data.get('name'),255),active=bool(data.get('active',True)),sort_order=int(data.get('sort_order') or 0)); db.add(c); db.flush()
+        if 'phrases' in data: _sync_category_phrases(db,c.id,data['phrases'])
+        db.commit(); db.refresh(c)
+        audit(db,p,'IssueCategory',c.id,'CREATED',{'name':{'new':c.name}})
+        return {'category':{'id':str(c.id),'name':c.name,'active':c.active,'sort_order':c.sort_order,'phrases':_category_phrases(db,c.id)}}
 
     if action=='updateCategory':
         if p.get('role')!='National Administrator' or not has(p,'administration'): raise PermissionError('Not permitted')
@@ -212,7 +393,10 @@ def registry_action(db:Session,p,action,data,id=None):
         if 'name' in data: c.name=clean(data['name'],255)
         if 'active' in data: c.active=bool(data['active'])
         if 'sort_order' in data: c.sort_order=int(data['sort_order'] or 0)
-        db.commit(); return {'ok':True}
+        if 'phrases' in data: _sync_category_phrases(db,c.id,data['phrases'])
+        db.commit()
+        audit(db,p,'IssueCategory',c.id,'UPDATED',{'category':{'new':c.name},'phrases':{'new':_category_phrases(db,c.id)}})
+        return {'ok':True}
 
     if action=='users':
         if not (has(p,'manage_users') and has(p,'administration')): raise PermissionError('Not permitted')

@@ -30,6 +30,7 @@ export default function WatchlistProfile(){
    <div><span className="intel-label">{t('registry_relationships')}</span>{relationships.filter(r=>r.from_id===id).map(r=><p key={r.id} className="text-sm">{label(r.relationship_type)} · {items.find(w=>w.id===r.to_id)?.name||t('watchlist_entry')}</p>)}{!relationships.some(r=>r.from_id===id)&&<p className="text-sm">{t('none_recorded')}</p>}</div>
    <p className="text-xs text-[#607b8a]">{t('watchlist_disclaimer')}</p>
   </section>
+  <Link to={'/watchlist/'+id+'/posts'} className="intel-button inline-flex">View captured account posts →</Link>
   <ActorIntelligence actorId={id} accounts={accounts}/>
  </div>
 }

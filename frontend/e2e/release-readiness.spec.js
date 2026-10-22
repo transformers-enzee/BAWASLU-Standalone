@@ -16,13 +16,15 @@ test('release navigation exposes every completed administrator module',async({pa
   await uiLogin(page);
   const nav=page.getByRole('navigation');
   const modules=[
-    'Home','Command Center','Watchlist','Social Listening','Intelligence Inbox',
-    'BAWASLU Intelligence Assistant','Add Intelligence','Data Sources',
+    'Home','Watchlist','Social Listening','Intelligence Inbox',
+    'BAWASLU Intelligence Assistant','Data Sources',
     'Validation','Administration'
   ];
   for(const name of modules){
     await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
   }
+  await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
+  await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();
 });
 
 test('completed module routes remain authenticated after direct navigation',async({page})=>{

@@ -1,52 +1,218 @@
-import { Link, useOutletContext } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Inbox, BadgeCheck, ShieldAlert, MapPin, Sparkles, Radio, ListFilter, Clock3, AlertTriangle } from 'lucide-react';
-import { useIntel, useRegistry, intel } from '@/components/intel/useIntel';
-import { auditTitle } from '@/components/intel/auditLabels';
-import { Notice } from '@/components/intel/Fields';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { ArrowRight, ArrowUpRight, Clock3, Globe2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import Status from '@/components/intel/Status';
-import { useLanguage } from '@/lib/LanguageContext';
+import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 
-const pendingReview=x=>['Pending Review','Awaiting Validation'].includes(x.review_status);
-const validated=x=>x.review_status==='Validated as Relevant Intelligence';
-const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};const state=typeof t==='string'?t:t.state;const generated=typeof t==='object'?t.generated:!!state;return generated&&state&&state!=='REVIEW COMPLETE';};
-const mismatchPending=x=>(x.geographic_mismatch_review?.status||x.geographic_mismatch?.status)==='pending';
-const fmtDate=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('en-GB')};
+const fmtTime=value=>{if(!value)return 'Not available';const d=new Date(value);return Number.isNaN(d.getTime())?'Not available':d.toLocaleString('en-GB')};
+const fmtNumber=value=>typeof value==='number'?value.toLocaleString():'Not available';
+const evidenceLink=row=>row.record_type==='INTELLIGENCE_ITEM'
+ ? '/intelligence/'+encodeURIComponent(row.id)
+ : '/inbox?campaign_id='+encodeURIComponent(row.campaign_id)+'&result_id='+encodeURIComponent(row.result_id);
+const day=(offset=0)=>{const d=new Date();d.setDate(d.getDate()+offset);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+const cleanSource=url=>{try{const x=new URL(url);return ['https:','http:'].includes(x.protocol)?x.href:null}catch{return null}};
 
-function attentionReasons(x,t){const r=[];if(mismatchPending(x))r.push({label:t('geographic_mismatch'),weight:70});if(triagePending(x))r.push({label:t('ai_triage_review'),weight:60});if(pendingReview(x))r.push({label:t('pending_human_review'),weight:55});if(x.jurisdiction_confirmed!==true)r.push({label:t('jurisdiction_unresolved'),weight:50});if(x.priority==='Critical')r.push({label:t('critical_priority'),weight:45});else if(x.priority==='High'&&!validated(x))r.push({label:t('high_priority'),weight:35});return r;}
-function reasonScore(x,t){return attentionReasons(x,t).reduce((n,r)=>n+r.weight,0)}
-
-function MetricCard({label,value,detail,to,Icon,permission,access,openLabel}){if(permission&&access.permissions?.[permission]!==true)return null;return <Link to={to} className="intel-card p-5 group hover:border-[#abc7d5] transition-colors"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#75899a]">{label}</p><strong className="block mt-2 text-3xl font-semibold text-[#163750]">{value}</strong><p className="text-xs text-[#8192a3] mt-2 leading-5">{detail}</p></div><div className="rounded-lg bg-[#eef5f7] p-2.5 text-[#176e8e]"><Icon size={18}/></div></div><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#176e8e]">{openLabel} <ArrowUpRight size={13}/></span></Link>}
-
-function AttentionList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_immediate_attention')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><div key={x.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-3"><div className="min-w-0 flex-1"><Link to={'/intelligence/'+x.id} className="text-xs font-semibold text-[#146a8b] hover:underline">{x.intelligence_id}</Link><Link to={'/intelligence/'+x.id} className="block mt-1 font-semibold text-[#1e354b] hover:underline truncate">{x.title||t('untitled_intelligence')}</Link><div className="mt-2 flex flex-wrap gap-1.5">{attentionReasons(x,t).map(r=><span key={r.label} className="rounded-full bg-[#fff5e9] px-2 py-1 text-[11px] font-semibold text-[#8a5d27]">{r.label}</span>)}</div></div><div className="lg:w-[250px] text-xs text-[#718398]"><div>{x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</div><div className="mt-1">{x.jurisdiction_confirmed===true?(x.jurisdiction_type==='National'?t('national'):[x.regency_city,x.province].filter(Boolean).join(', ')||t('confirmed')):t('jurisdiction_not_confirmed')}</div></div><div className="flex flex-wrap gap-1.5 lg:w-[220px]"><Status value={x.priority}/><Status value={x.review_status}/><Status value={x.verification_status}/></div></div>)}</div>}
-
-function ValidatedList({items,t}){if(!items.length)return <div className="intel-card p-8 text-center text-sm text-[#73869a]">{t('no_validated_scope')}</div>;return <div className="intel-card divide-y divide-[#edf1f5]">{items.map(x=><Link key={x.id} to={'/intelligence/'+x.id} className="block p-4 hover:bg-[#fafcfd]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold text-[#146a8b]">{x.intelligence_id}</p><p className="font-semibold text-[#1e354b] mt-1 line-clamp-2">{x.title||t('untitled_intelligence')}</p></div><Status value={x.priority}/></div><div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs text-[#718398]"><span>{t('validated_label')}: {fmtDate(x.validated_at||x.updated_date)}</span><span>{t('source_label')}: {x.observed_publisher_handle||x.source_name||x.platform||x.source_type||t('source_not_recorded')}</span><span>{t('verification_label')}: {x.verification_status||'UNVERIFIED'}</span></div></Link>)}</div>}
+function Panel({title,subtitle,children,to,action='View all',fillHeight=false}){
+ return <section className={"intel-card p-4 md:p-5 space-y-3 min-w-0 "+(fillHeight?"h-full":"")}>
+  <div className="flex flex-wrap items-start justify-between gap-2">
+   <div><h2 className="text-base font-semibold text-[#173952]">{title}</h2>{subtitle&&<p className="text-xs text-slate-500 mt-1">{subtitle}</p>}</div>
+   {to&&<Link to={to} className="text-xs font-semibold text-[#126d91] inline-flex items-center gap-1 hover:underline">{action}<ArrowUpRight size={13}/></Link>}
+  </div>
+  {children}
+ </section>
+}
+function Stat({label,value,description,to}){
+ return <Link to={to} className="intel-card px-3 py-3 md:px-4 md:py-4 min-w-0 hover:border-sky-300 transition-colors">
+  <p className="text-xs text-[#607788] leading-snug min-h-[30px]">{label}</p>
+  <p className="text-2xl md:text-3xl font-semibold tracking-tight tabular-nums text-[#173952] mt-1">{fmtNumber(value)}</p>
+  <p className="text-[11px] text-slate-500 mt-1">{description}</p>
+ </Link>
+}
+function MiniRecord({record,alert=false}){
+ return <article className="border-t first:border-t-0 border-slate-100 py-3 first:pt-0 last:pb-0 space-y-1.5">
+  <div className="flex flex-wrap gap-2 justify-between items-start">
+   <p className="text-xs font-semibold text-[#173952]">{alert?record.category:record.campaign_name}</p>
+   {alert&&<span className={'text-[10px] font-semibold rounded-full px-2 py-1 '+(record.review_status==='FURTHER_INVESTIGATION'?'bg-amber-100 text-amber-900':'bg-slate-100 text-slate-600')}>{record.review_status==='AWAITING_REVIEW'?'Awaiting human review':record.review_status==='FURTHER_INVESTIGATION'?'Further investigation':'Human flag retained'}</span>}
+  </div>
+  <p className="text-sm text-slate-700 line-clamp-2">{alert?(record.description||record.evidence_quote):record.summary||'AI assessment contains no written explanation.'}</p>
+  <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+   <span>{record.platform||'Unknown platform'}</span>
+   <span>{record.author||'Unclassified author'}</span>
+   {alert&&<span>{record.province} <span className="text-slate-400">(campaign scope)</span></span>}
+   <span>{fmtTime(alert?record.detected_at:record.published_at)}{record.date_basis==='RECORD_CREATED'?' (recorded)':''}</span>
+  </div>
+  <div className="flex flex-wrap items-center gap-3">
+   <Link to={evidenceLink(record)} className="text-xs font-semibold text-[#126d91] hover:underline">Open evidence in Inbox <ArrowUpRight size={12} className="inline"/></Link>
+   {cleanSource(record.source_url)&&<a href={cleanSource(record.source_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-600 hover:underline">Original source ↗</a>}
+  </div>
+ </article>;
+}
 
 export default function Home(){
- const {access}=useOutletContext();const {t}=useLanguage();
- const [activity,setActivity]=useState([]),[activityError,setActivityError]=useState(''),[socialCounts,setSocialCounts]=useState(null),[socialError,setSocialError]=useState('');
- const {items,loading,error}=useIntel();const registryState=useRegistry();const watch=registryState.items||[];
- useEffect(()=>{intel('activity').then(r=>setActivity(r.events||[])).catch(()=>setActivityError(t('recent_activity_unavailable')));base44.functions.invoke('socialListening',{action:'queue',data:{state:''}}).then(r=>setSocialCounts(r.data?.counts||{})).catch(()=>setSocialError(t('social_queue_unavailable')))},[t]);
- const metrics=useMemo(()=>({pending:items.filter(pendingReview).length,validatedCount:items.filter(validated).length,unverified:items.filter(x=>x.verification_status==='UNVERIFIED').length,unresolved:items.filter(x=>x.jurisdiction_confirmed!==true).length,triage:items.filter(triagePending).length,socialPending:socialCounts?['DISCOVERED','RELEVANT','MONITOR'].reduce((n,k)=>n+Number(socialCounts[k]||0),0):null}),[items,socialCounts]);
- const attention=useMemo(()=>items.filter(x=>attentionReasons(x,t).length).sort((a,b)=>reasonScore(b,t)-reasonScore(a,t)||new Date(b.updated_date||b.created_date||0)-new Date(a.updated_date||a.created_date||0)).slice(0,6),[items,t]);
- const recentValidated=useMemo(()=>items.filter(validated).sort((a,b)=>new Date(b.validated_at||b.updated_date||b.created_date||0)-new Date(a.validated_at||a.updated_date||a.created_date||0)).slice(0,5),[items]);
- const watchCounts={Active:watch.filter(x=>x.status==='Active').length,'Under Review':watch.filter(x=>x.status==='Under Review').length,Inactive:watch.filter(x=>x.status==='Inactive').length};
- const cards=[
- {label:t('pending_intelligence_review'),value:metrics.pending,detail:t('pending_intelligence_detail'),to:'/inbox?view=pending-review',Icon:Inbox,permission:'human_validation'},
- {label:t('validated_intelligence'),value:metrics.validatedCount,detail:t('validated_intelligence_detail'),to:'/inbox?review_status=Validated%20as%20Relevant%20Intelligence',Icon:BadgeCheck},
- {label:t('unverified_evidence'),value:metrics.unverified,detail:t('unverified_evidence_detail'),to:'/inbox?verification_status=UNVERIFIED',Icon:ShieldAlert},
- {label:t('jurisdiction_unresolved'),value:metrics.unresolved,detail:t('jurisdiction_unresolved_detail'),to:'/inbox?view=jurisdiction-unresolved',Icon:MapPin},
- {label:t('ai_triage_awaiting_review'),value:metrics.triage,detail:t('ai_triage_detail'),to:'/inbox?view=triage-pending',Icon:Sparkles},
- {label:t('social_review_queue'),value:metrics.socialPending===null?'—':metrics.socialPending,detail:t('social_review_detail'),to:'/social-listening?tab=queue&pending=1',Icon:Radio}
- ];
- return <div className="space-y-8"><div><div className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('workspace_overview')}</div><h1 className="intel-heading">{t('intelligence_situation')}</h1><p className="text-[#75879a] text-sm mt-2">{t('home_intro')}</p></div><Notice error={error}/>{loading?<p className="text-sm text-[#73869a]">{t('loading_intelligence')}</p>:error?null:<>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">1. {t('operational_metrics')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('authorized_scope_note')}</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{cards.map(c=><MetricCard key={c.label} {...c} access={access} openLabel={t('open')}/>)}</div></section>
- <section><div className="flex justify-between items-end gap-4 mb-4"><div><h2 className="text-lg font-semibold">2. {t('attention_now')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('attention_rank_note')}</p></div><Link to="/inbox" className="text-sm text-[#176e8e] font-semibold flex items-center gap-1">{t('open_inbox')} <ArrowUpRight size={15}/></Link></div><AttentionList items={attention} t={t}/></section>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">3. {t('validated_monitoring')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('validated_monitoring_note')}</p></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-6"><div><div className="flex justify-between items-center mb-3"><h3 className="font-semibold">{t('latest_validated')}</h3><Link to="/inbox" className="text-xs text-[#176e8e] font-semibold">{t('view_all')} →</Link></div><ValidatedList items={recentValidated} t={t}/></div><div className="space-y-4">
- <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><ListFilter size={16}/>{t('watchlist')}</h3><Link to="/watchlist" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{registryState.error?<p className="text-xs text-[#8a5d27] mt-3">{t('watchlist_summary_unavailable')}</p>:registryState.loading?<p className="text-xs text-[#8192a3] mt-3">{t('loading_watchlist_summary')}</p>:<div className="grid grid-cols-3 gap-2 mt-4">{Object.entries(watchCounts).map(([label,value])=><div key={label} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{value}</strong><p className="text-[11px] text-[#718398] mt-1">{label==='Active'?t('active'):label==='Under Review'?t('under_review'):t('inactive')}</p></div>)}</div>}</div>
- <div className="intel-card p-5"><div className="flex justify-between items-center"><h3 className="font-semibold flex items-center gap-2"><Radio size={16}/>{t('social_review_queue')}</h3><Link to="/social-listening" className="text-xs text-[#176e8e] font-semibold">{t('open')} →</Link></div>{socialError?<p className="text-xs text-[#8a5d27] mt-3">{socialError} {t('no_socialcrawl_search')}</p>:socialCounts?<div className="grid grid-cols-3 gap-2 mt-4">{[['discovered','DISCOVERED'],['relevant','RELEVANT'],['monitor','MONITOR']].map(([label,key])=><div key={key} className="rounded-lg bg-[#f7fafb] p-3"><strong className="text-xl text-[#163750]">{Number(socialCounts[key]||0)}</strong><p className="text-[11px] text-[#718398] mt-1">{t(label)}</p></div>)}</div>:<p className="text-xs text-[#8192a3] mt-3">{t('loading_social_queue')}</p>}</div>
- </div></div></section>
- <section><div className="mb-4"><h2 className="text-lg font-semibold">4. {t('recent_activity')}</h2><p className="text-xs text-[#7a8b9e] mt-1">{t('recent_activity_note')}</p></div><div className="intel-card p-5">{activityError?<p className="text-sm text-[#8a5d27]">{activityError}</p>:activity.length?<div>{activity.slice(0,8).map((x,i)=><div key={x.id} className={'flex gap-3 py-3 '+(i?'border-t border-[#edf1f5]':'')}><div className="mt-0.5 rounded-full bg-[#eef5f7] p-2 text-[#176e8e]"><Clock3 size={14}/></div><div className="min-w-0"><p className="text-sm"><span className="font-semibold">{auditTitle(x,undefined,undefined,t)}</span> <span className="text-[#718398]">· {x.subject_type}</span></p><p className="text-xs text-[#8293a4] mt-1">{x.actor_name||t('system')} · {new Date(x.occurred_at||x.created_date).toLocaleString('en-GB')}</p></div></div>)}</div>:<div className="flex items-center gap-2 text-sm text-[#8293a4]"><AlertTriangle size={15}/>{t('no_recent_activity')}</div>}</div></section>
- </>}</div>;
+ const {access}=useOutletContext();
+ const navigate=useNavigate();
+ const [period,setPeriod]=useState('7d'),[dateFrom,setDateFrom]=useState(day(-6)),[dateTo,setDateTo]=useState(day());
+ const [province,setProvince]=useState('');
+ const [version,setVersion]=useState(0),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [question,setQuestion]=useState('');
+ const [mapSource,setMapSource]=useState('social');
+ const effectiveProvince=data?.scope?.can_select_national?province:'';
+ const params=useMemo(()=>({period,province:effectiveProvince,...(period==='custom'?{date_from:dateFrom,date_to:dateTo}:{})}),[period,effectiveProvince,dateFrom,dateTo]);
+ useEffect(()=>{
+  let live=true;
+  setLoading(true);setError('');
+  base44.functions.invoke('commandCenter',params)
+   .then(res=>{if(live)setData(res.data)})
+   .catch(err=>{if(live){setError(err.response?.data?.error||err.message||'Command Center unavailable');setData(null)}})
+   .finally(()=>{if(live)setLoading(false)});
+  return()=>{live=false};
+ },[params,version]);
+ const metrics=data?.indicators||{};
+ const activity=data?.activity||{};
+ const trend=(activity.daily||[]).slice(-14);
+ const trendMax=Math.max(1,...trend.map(x=>Number(x.count)||0));
+ const canNational=access?.geographic_scope==='Nationwide';
+ const statusDescription=data?.coverage?.warning;
+ const effectiveMapSource=mapSource==='auto'?(data?.regional_intelligence?.length?'recorded':data?.regional_monitoring_coverage?.length?'coverage':data?.regional_inbox_signals?.length?'social':'recorded'):mapSource;
+ return <div className="space-y-4 md:space-y-5" aria-label="BAWASLU Intelligence Command Center">
+  <div className="flex flex-wrap gap-3 items-start justify-between">
+   <div>
+    <p className="text-[11px] uppercase tracking-[.18em] font-bold text-[#9a7e49]">Executive intelligence overview</p>
+    <h1 className="intel-heading mt-1">Intelligence Command Center</h1>
+    <p className="text-xs text-slate-500 mt-1">What is happening · What needs attention · Where to investigate</p>
+   </div>
+   <button type="button" onClick={()=>setVersion(x=>x+1)} disabled={loading} className="intel-ghost text-xs flex gap-2 items-center"><RefreshCw size={14}/> Refresh briefing</button>
+  </div>
+  <section className="intel-card p-3 flex flex-wrap gap-3 items-end" aria-label="Dashboard-wide filters">
+   <label className="block text-xs min-w-[125px] flex-1"><span className="font-semibold text-slate-600">Monitoring period</span>
+    <select className="intel-input mt-1 w-full" value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today (UTC)</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All dates</option><option value="custom">Custom dates</option></select>
+   </label>
+   {period==='custom'&&<><label className="block text-xs"><span>From (UTC)</span><input type="date" max={dateTo} className="intel-input mt-1" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label><label className="block text-xs"><span>To (UTC)</span><input type="date" min={dateFrom} max={day()} className="intel-input mt-1" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label></>}
+   <label className="block text-xs min-w-[165px] flex-1"><span className="font-semibold text-slate-600">Geographic coverage</span>
+    <select className="intel-input mt-1 w-full" value={canNational?province:''} disabled={!canNational||!data} onChange={e=>setProvince(e.target.value)}>
+     <option value="">{canNational?'National · Indonesia':data?.scope?.label||'Your assigned region'}</option>
+     {canNational&&(data?.available_provinces||[]).map(x=><option key={x.code} value={x.name}>{x.name}</option>)}
+    </select>
+   </label>
+   <div className="text-[11px] text-slate-500 min-w-0"><p><Globe2 className="inline mr-1" size={12}/> {data?.scope?.label||'Authorized coverage'}</p><p className="mt-1"><Clock3 className="inline mr-1" size={12}/> Updated {fmtTime(data?.generated_at)}</p></div>
+  </section>
+  {error&&<div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Unable to load intelligence overview.</strong><p className="mt-1">{error}</p><button className="mt-2 underline" onClick={()=>setVersion(x=>x+1)}>Retry</button></div>}
+  {loading&&<div role="status" className="intel-card p-8 text-sm text-slate-500">Loading authorized intelligence and monitoring coverage…</div>}
+  {!loading&&data&&<>
+   <Panel title={'BAWASLU · Operational Focus · '+data.scope.label} subtitle={'Evidence-based direction · '+data.period.date_from+' to '+data.period.date_to}>
+    <div className="space-y-3">
+     <p className="text-sm text-[#283f52]">Start with the following actions, prioritized from stored assessments and authorized monitoring evidence.</p>
+     {(data.focus_actions||[]).map((item,i)=><div key={i} className="rounded-lg border border-[#e0e8ee] p-3 space-y-1.5">
+      <p className="text-sm font-semibold text-[#173952]">{item.title}</p>
+      <p className="text-xs text-slate-600">{item.detail}</p>
+      <Link to={item.kind==='REVIEW_EVIDENCE'?evidenceLink(item):item.kind==='COVERAGE_GAP'?'/social-listening':'/inbox'} className="text-xs text-[#126d91] font-semibold">Open supporting records →</Link>
+     </div>)}
+     <p className="text-[11px] text-slate-500">Generated from stored evidence and review status at refresh time. This is not live streaming analysis or a determination of electoral misconduct.</p>
+    </div>
+   </Panel>
+   <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3" aria-label="Intelligence indicators">
+    <Stat label="Published social posts" value={activity.captured_mentions} description="Source publication in selected period" to="/social-listening"/>
+    <Stat label="Newly collected posts" value={activity.newly_collected_mentions} description="Added to Social Listening in period" to="/social-listening"/>
+    <Stat label="Relevant assessed posts" value={metrics.relevant_mentions} description="AI-assessed as relevant" to="/inbox"/>
+    <Stat label="Potential issue alerts" value={metrics.potential_alerts} description="Preliminary, not confirmed" to="/inbox"/>
+    <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Human assessment required" to="/inbox"/>
+   </div>
+   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d]" role="note">
+    <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} campaign-linked posts <strong>published</strong> in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
+    <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
+   </div>
+   <div className="grid lg:grid-cols-2 gap-3 md:gap-4 items-stretch" aria-label="Signal Intelligence">
+    <Panel fillHeight title="Candidate Mention Monitor" subtitle="Ranked by mention volume in relevant AI-assessed posts · highest first" to="/inbox" action="Review source records">
+     {(data.signal_intelligence?.candidate_mentions||[]).length?(()=>{
+      const ranked=[...data.signal_intelligence.candidate_mentions].sort((a,b)=>Number(b.mentions||0)-Number(a.mentions||0)||String(a.name||'').localeCompare(String(b.name||'')));
+      const max=Math.max(1,...ranked.map(item=>Number(item.mentions||0)));
+      return <div className="space-y-3" role="img" aria-label="Candidate mentions ranked from highest to lowest">
+       {ranked.map((item,index)=><div key={item.name} className="space-y-1">
+        <div className="flex items-center justify-between gap-3 text-xs"><span className="min-w-0 truncate font-medium text-[#173952]" title={item.name}>{index+1}. {item.name}</span><span className="shrink-0 tabular-nums font-semibold text-[#173952]">{Number(item.mentions||0).toLocaleString()} posts</span></div>
+        <div className="h-3 w-full overflow-hidden rounded bg-slate-100"><div className="h-full rounded bg-[#1687a7]" style={{width:(Math.max(0,Number(item.mentions||0))/max*100)+'%'}}/></div>
+       </div>)}
+      </div>;
+     })():<p className="text-xs text-slate-500">No named candidate signals are recorded in current saved assessments.</p>}
+     <p className="text-[11px] text-slate-500">Ranking measures mention volume only, not suspicion or wrongdoing. Only stored, authorized source evidence is counted.</p>
+    </Panel>
+    <Panel fillHeight title="Potential Violation Signal Volume" subtitle="Up to 10 evidence-backed issue categories · preliminary, not proven" to="/inbox" action="Investigate evidence">
+     <p className="text-xs text-slate-600">Monitoring level: <strong>{data.signal_intelligence?.volume_band||'UNKNOWN'}</strong> · {fmtNumber(data.signal_intelligence?.flagged_assessment_volume)} flagged assessed posts</p>
+     <p className="text-[11px] text-slate-500">Volume bands: 1–4 low, 5–19 elevated, 20+ high. These are operational counts, not legal risk assessments.</p>
+     {(data.signal_intelligence?.issue_categories||[]).length?data.signal_intelligence.issue_categories.map(item=><div key={item.category} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-xs"><span className="font-medium text-[#173952]">{item.category}</span><span className="tabular-nums text-slate-600">{item.posts} post(s)</span></div>):<p className="text-xs text-slate-500">No validated potential-issue category signals available in saved assessments.</p>}
+    </Panel>
+   </div>
+   <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Needs BAWASLU Attention" subtitle="Most recent undismissed preliminary issue signals from saved AI assessments · all dates" to="/inbox" action="Open Intelligence Inbox">
+     {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}
+    </Panel>
+    <Panel fillHeight title="Latest Intelligence" subtitle="Latest saved AI-assessed posts and recorded Inbox items · all dates" to="/inbox">
+     {(data.latest_intelligence||[]).length?data.latest_intelligence.slice(0,3).map(row=><MiniRecord key={row.record_type==='INTELLIGENCE_ITEM'?'intel-'+row.id:row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
+    </Panel>
+   </div>
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Captured Social Activity" subtitle="Published-post activity · selected monitoring period" to="/social-listening" action="Open Social Listening">
+     <div className="flex flex-wrap gap-3 text-xs text-slate-600"><span><strong>{fmtNumber(activity.captured_mentions)}</strong> published in period</span><span><strong>{fmtNumber(activity.newly_collected_mentions)}</strong> newly collected</span></div>
+     <div className="flex h-28 items-end gap-1 rounded-lg bg-slate-50 px-3 py-2" aria-label="Captured social activity daily trend">
+      {trend.length?trend.map((point,i)=><div key={i} className="flex-1 min-w-0 rounded-t bg-[#4384a3]" style={{height:Math.max(3,Math.round(100*(Number(point.count)||0)/trendMax))+'%'}} title={String(point.date||'')+': '+(point.count||0)+' posts'}/>):<span className="text-xs text-slate-500">No daily activity recorded</span>}
+     </div>
+     <p className="text-xs font-semibold text-slate-600">Top platforms</p>
+     <div className="flex flex-wrap gap-2 text-xs">{(activity.top_platforms||[]).length?activity.top_platforms.slice(0,4).map(p=><span key={p.platform} className="rounded-full bg-slate-100 px-2 py-1">{p.platform} · {p.count}</span>):<span className="text-slate-500">No platform activity in this period</span>}</div>
+     <p className="text-xs font-semibold text-slate-600">Recent captured evidence</p>
+     {(activity.recent_captured||[]).slice(0,3).map(post=><article key={post.result_id} className="border-t border-slate-100 py-2 text-xs">
+      <div className="flex justify-between gap-2"><strong>{post.platform}</strong><span className="text-slate-500">{fmtTime(post.published_at)}</span></div>
+      <p className="mt-1 line-clamp-2">{post.preview||'No source text available'}</p>
+      {cleanSource(post.source_url)&&<a className="text-[#126d91]" href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer">Original post ↗</a>}
+     </article>)}
+    </Panel>
+    <Panel fillHeight title="Regional Intelligence Overview" subtitle={effectiveMapSource==='social'?'Social Evidence Inbox · all-time authorized AI geographic signals':effectiveMapSource==='coverage'?'Social Listening · campaign monitoring coverage':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
+     <div className="flex gap-2 text-xs" aria-label="Regional map data source">
+      <button type="button" onClick={()=>setMapSource('social')} aria-pressed={effectiveMapSource==='social'} className={effectiveMapSource==='social'?'intel-button text-xs':'intel-ghost text-xs'}>Assessed social evidence</button>
+      <button type="button" onClick={()=>setMapSource('coverage')} aria-pressed={effectiveMapSource==='coverage'} className={effectiveMapSource==='coverage'?'intel-button text-xs':'intel-ghost text-xs'}>Campaign coverage</button>
+      <button type="button" onClick={()=>setMapSource('recorded')} aria-pressed={effectiveMapSource==='recorded'} className={effectiveMapSource==='recorded'?'intel-button text-xs':'intel-ghost text-xs'}>Recorded intelligence</button>
+     </div>
+     {effectiveMapSource==='coverage'&&!(data.regional_monitoring_coverage||[]).length&&<p role="note" className="text-xs text-amber-800">No selected campaigns have a provincial monitoring assignment in this period. National and unassigned posts cannot be placed on a province map. Choose Recorded intelligence to view known jurisdictions.</p>}
+     {(()=>{const rows=effectiveMapSource==='social'?(data.regional_inbox_signals||[]):effectiveMapSource==='coverage'?(data.regional_monitoring_coverage||[]):(data.regional_intelligence||[]);const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,province_code:x.province_code,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
+      <p className="text-xs text-slate-600">{total} province-associated {effectiveMapSource==='social'?'AI-assessed social post signal(s) from all saved assessments':effectiveMapSource==='coverage'?'captured posts linked to region-scoped campaigns in the period':'recorded intelligence association(s), all time'} across {rows.length} province(s). Separate sources are never added together or treated as confirmed violation locations.</p>
+      <div className="max-w-[720px] mx-auto"><ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={effectiveMapSource==='social'?'AI assessment geographic signals · all dates':effectiveMapSource==='coverage'?'Campaign monitoring jurisdiction · selected period':'Recorded intelligence geographic associations · all time'} footnote={effectiveMapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':effectiveMapSource==='coverage'?'Based on campaign monitoring province, not verified source location or incident location. Nationwide campaigns have no provincial assignment.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/></div>
+      {!rows.length&&<p className="text-xs text-slate-500">No {effectiveMapSource==='social'?'assessed posts with recognized provincial location signals in this period':effectiveMapSource==='coverage'?'captured posts linked to province-scoped campaigns':'recorded intelligence with recognized provincial associations'}. This does not imply the area has no monitored activity.</p>}
+     </div>})()}
+    </Panel>
+   </div>
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
+     {(data.watchlist?.entries||[]).length?data.watchlist.entries.slice(0,3).map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
+      <div className="flex justify-between gap-2"><p className="font-semibold text-sm">{x.name}</p><span className="text-[11px] text-slate-500">{x.platform}</span></div>
+      <p className="text-xs text-slate-600 line-clamp-2">{x.summary||'Post text unavailable'}</p>
+      <p className="text-[11px] text-slate-500">{x.province} · {fmtTime(x.last_post_at)}</p>
+      <Link className="text-xs text-[#126d91] font-semibold" to={'/watchlist/'+x.watchlist_id+'/posts'}>View captured account posts →</Link>
+     </article>):<div className="text-sm text-slate-500 py-2 space-y-2"><p>No matching posts from registered Watchlist accounts were captured in this period.</p><p>{fmtNumber(data.watchlist?.monitored_profiles)} profiles are visible in your authorized scope. Registered accounts do not imply successful collection.</p></div>}
+    </Panel>
+   
+    <Panel fillHeight title="Channel Distribution" subtitle="Captured posts by social platform · selected publication period" to="/social-listening" action="View Social Listening">
+     {(activity.top_platforms||[]).length?<div className="space-y-3">
+      {(activity.top_platforms||[]).slice(0,5).map(channel=><div key={channel.platform} className="space-y-1">
+       <div className="flex justify-between gap-3 text-xs"><span className="font-semibold text-[#173952]">{channel.platform}</span><span className="tabular-nums text-slate-600">{fmtNumber(channel.count)} · {activity.captured_mentions?Math.round(100*channel.count/activity.captured_mentions):0}%</span></div>
+       <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#4384a3] rounded-full" style={{width:(activity.captured_mentions?Math.min(100,100*channel.count/activity.captured_mentions):0)+'%'}}/></div>
+      </div>)}
+      <p className="text-xs text-slate-500">Platform shares use captured posts published in the selected period. They do not indicate confirmed violations.</p>
+     </div>:<p className="text-sm text-slate-500 py-3">No captured social platform data for this period.</p>}
+    </Panel>
+   </div>
+   <div className="rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d] flex flex-wrap justify-between gap-2" aria-label="Review workload summary">
+    <span><strong>Review workload:</strong> {fmtNumber(metrics.awaiting_review)} awaiting human review · {fmtNumber(metrics.potential_alerts)} preliminary issue alerts · {fmtNumber(data.coverage?.unassessed_posts_in_period)} published posts awaiting assessment</span>
+    <Link to="/inbox" className="text-[#126d91] font-semibold">Open Intelligence Inbox →</Link>
+   </div>
+   <Panel title="AI Assistant · Quick Investigation" subtitle="Ask questions grounded in authorized system records" to="/assistant" action="Open full assistant">
+    <form onSubmit={e=>{e.preventDefault();if(question.trim())navigate('/assistant?q='+encodeURIComponent(question.trim()))}} className="flex flex-col sm:flex-row gap-2">
+     <input className="intel-input flex-1 min-w-0" maxLength={400} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask about recent evidence or pending intelligence…" aria-label="Question for Intelligence Assistant"/>
+     <button type="submit" className="intel-button" disabled={!question.trim()}>Investigate <ArrowRight size={14}/></button>
+    </form>
+    <div className="flex flex-wrap gap-2 text-xs">{['What are the latest validated records?','What important evidence needs review?'].map(q=><Link key={q} className="intel-ghost text-xs" to={'/assistant?q='+encodeURIComponent(q)}>{q}</Link>)}</div>
+    <p className="text-[11px] text-slate-500">Current Assistant covers accessible intelligence records; comprehensive cross-module synthesis is planned. It does not determine legal violations.</p>
+   </Panel>
+   <div className="flex items-start gap-2 text-[11px] text-slate-500 px-1">
+    <ShieldCheck size={15} className="shrink-0 mt-0.5"/><div><p>{statusDescription}</p><p className="mt-1">Most recently collected assessed evidence: {fmtTime(data.latest_evidence_at)}. Identified signals and regional monitoring coverage are not conclusions of electoral misconduct. All findings require BAWASLU review.</p></div>
+   </div>
+  </>}
+ </div>;
 }

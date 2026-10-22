@@ -15,15 +15,18 @@ import ResetPassword from '@/pages/ResetPassword';
 import Shell from '@/components/intel/Shell';
 import AccessGate from '@/components/intel/AccessGate';
 import Home from '@/pages/Home';
-import CommandCenter from '@/pages/CommandCenter';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
+import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
 import AddIntelligence from '@/pages/AddIntelligence';
 import IntelligenceDetail from '@/pages/IntelligenceDetail';
 import DataSources from '@/pages/DataSources';
 import SocialListening from '@/pages/SocialListening';
+import CampaignPanel from '@/components/intel/CampaignPanel';
+import { useParams } from 'react-router-dom';
+const CampaignDashboardPage=()=>{const {id}=useParams();return <CampaignPanel campaignId={id}/>};
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
 import { LanguageProvider } from '@/lib/LanguageContext';
@@ -58,10 +61,11 @@ const AuthenticatedApp = () => {
         <Route element={<Shell />}>
           <Route path="/" element={<Home />} />
           <Route element={<AccessGate permission="view_intelligence" />}>
-            <Route path="/command-center" element={<CommandCenter />} />
+            <Route path="/command-center" element={<Home />} />
           </Route>
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/watchlist/:id" element={<WatchlistProfile />} />
+          <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />
@@ -73,6 +77,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/social-listening" element={<SocialListening />} />
+            <Route path="/social-listening/campaigns/:id" element={<CampaignDashboardPage />} />
           </Route>
           <Route element={<AccessGate permission="human_validation" />}>
             <Route path="/validation" element={<Validation />} />

@@ -93,7 +93,9 @@ def test_deduplication_prevents_repeat_imports():
     a=social_listening_action(db,p,'search',{'filters':{'query':'election'}},provider_client=fake_provider)
     b=social_listening_action(db,p,'search',{'filters':{'query':'election'}},provider_client=fake_provider)
     assert len(a['results'])==2
-    assert len(b['results'])==0
+    assert len(b['results'])==2  # Existing rows remain reusable; no extra stored copies.
+    assert b['diagnostics']['reused_rows']==2
+    assert b['diagnostics']['new_rows']==0
     assert db.query(SocialListeningResult).count()==2
     db.close()
 
@@ -146,9 +148,9 @@ def test_value_supports_list_indices_for_universal_search_source_items():
 def test_result_limit_is_enforced_after_filtering():
     db=SessionLocal(); p=admin(db)
     r=social_listening_action(db,p,'search',{'filters':{'query':'election','limit':1}},provider_client=fake_provider)
-    assert len(r['results'])==1
-    assert r['run']['result_count']==1
-    assert db.query(SocialListeningResult).count()==1
+    assert len(r['results'])==2  # Provider result count is not limited by application save settings.
+    assert r['run']['result_count']==2
+    assert db.query(SocialListeningResult).count()==2
     db.close()
 
 
@@ -807,3 +809,18 @@ def test_native_multi_route_estimate_and_parameters():
     assert estimate_search_cost({'query':'BAWASLU','platforms':['linkedin','tiktok']})['estimated_credits']==6
     assert estimate_search_cost({'query':'BAWASLU','platforms':['tiktok','online_news']})['estimated_credits']==2
     assert _multi_provider_params({'query':'BAWASLU','platforms':['tiktok']})=={'query':'BAWASLU','platforms':'tiktok'}
+
+def test_multi_platform_provider_items_above_fifty_are_not_capped():
+    db=SessionLocal();p=admin(db)
+    def sixty_items(filters):
+        return {'success':True,'request_id':'req-sixty','credits_used':2,'credits_remaining':100,
+            'data':{'items':[{'id':str(i),'platform':'tiktok' if i%2==0 else 'instagram',
+                             'url':'https://example.org/post/'+str(i),'text':'iphone review '+str(i)}
+                             for i in range(60)]}}
+    result=social_listening_action(db,p,'search',{'filters':{'query':'iphone',
+         'platforms':['tiktok','instagram'],'limit':50}},provider_client=sixty_items)
+    assert result['diagnostics']['provider_items']==60
+    assert result['diagnostics']['new_rows']==60
+    assert len(result['results'])==60
+    assert db.query(SocialListeningResult).count()==60
+    db.close()

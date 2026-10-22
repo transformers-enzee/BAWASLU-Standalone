@@ -31,8 +31,8 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
     if not c or not allowed(principal,c):raise PermissionError('Campaign not available')
     data=data if isinstance(data,dict) else {}
     try:limit=int(data.get('sample_size',40))
-    except (TypeError,ValueError):raise ValueError('Select 40 or 50 posts') from None
-    if limit not in (40,50):raise ValueError('Select 40 or 50 posts')
+    except (TypeError,ValueError):raise ValueError('Select 10, 40 or 50 posts') from None
+    if limit not in (10,40,50):raise ValueError('Select 10, 40 or 50 posts')
     try:anchor=int(data['anchor_id']) if data.get('anchor_id') is not None else None
     except (TypeError,ValueError):raise ValueError('Invalid sample anchor') from None
     if anchor is not None and anchor<=0:raise ValueError('Invalid sample anchor')
@@ -46,7 +46,22 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
     newest=query.order_by(CampaignEvidence.id.desc()).limit(500).all()
     if anchor is None:anchor=newest[0].link_id if newest else 0
     visible=[row for row in newest if _result_in_scope(db,principal,SimpleNamespace(run_id=row.run_id))]
-    chosen=choose_platform_sample(visible,limit)
+    if limit==10:
+        # A fresh batch deliberately excludes completed and previously enqueued work.
+        # Snapshot anchor preserves the user's approved exact selection.
+        candidate_ids=[row.result_id for row in visible]
+        done=set()
+        occupied=set()
+        if candidate_ids:
+            done={rid for (rid,) in db.query(EvidenceAssessment.result_id).filter(
+                EvidenceAssessment.campaign_id==c.id,
+                EvidenceAssessment.result_id.in_(candidate_ids)).distinct().all()}
+            occupied={rid for (rid,) in db.query(AIAssessmentJob.result_id).filter(
+                AIAssessmentJob.campaign_id==c.id,
+                AIAssessmentJob.result_id.in_(candidate_ids)).distinct().all()}
+        chosen=[row for row in visible if row.result_id not in done and row.result_id not in occupied][:limit]
+    else:
+        chosen=choose_platform_sample(visible,limit)
     ids=[row.result_id for row in chosen]
     assessments={};jobs={}
     if ids:
@@ -79,7 +94,7 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
             'campaign_id':str(c.id),'campaign_name':c.name,'requested':limit,
             'sample_anchor_id':anchor,'total':total,'records':rows,'counts':counts,
             'progress_percent':round(100*counts['completed']/total) if total else 0,
-            'sampling_method':'Newest posts balanced across platforms (stable snapshot anchor)',
+            'sampling_method':('Newest unassessed posts only (stable snapshot anchor)' if limit==10 else 'Newest posts balanced across platforms (stable snapshot anchor)'),
             'has_campaign_description':description,'active_admin_gates':active_gates,
             'main_keyword_count':len(json.loads(c.primary_keywords_json or '[]')),
             'secondary_keyword_count':len(json.loads(c.secondary_keywords_json or '[]')),

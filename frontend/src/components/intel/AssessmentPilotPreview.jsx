@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 
 export default function AssessmentPilotPreview({ campaign }) {
- const [sampleSize,setSampleSize]=useState(40);
+ const [sampleSize,setSampleSize]=useState(10);
  const [plan,setPlan]=useState(null);
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState('');
@@ -76,13 +76,13 @@ export default function AssessmentPilotPreview({ campaign }) {
   ['Not queued',plan.counts.not_queued],
  ]:[];
  return <details className="rounded-lg border border-slate-200 p-4" aria-label="AI assessment pilot">
-  <summary className="cursor-pointer font-semibold text-sm">AI assessment pilot · 40–50 stored posts</summary>
+  <summary className="cursor-pointer font-semibold text-sm">AI assessment pilot · 10 new or 40–50 stored posts</summary>
   <div className="mt-3 space-y-3">
    <p className="text-xs text-slate-600">Sample preview is free. After checking the campaign objective, gate questions, and selected sources, you can authorize a paid AI assessment of these exact posts. No SocialCrawl credits are used.</p>
    <div className="flex gap-3 flex-wrap items-end">
     <label className="text-xs font-medium">Sample size
      <select className="intel-input mt-1 block" value={sampleSize} onChange={e=>{setSampleSize(Number(e.target.value));setPlan(null)}}>
-      <option value={40}>40 records</option><option value={50}>50 records</option>
+      <option value={10}>10 unassessed posts only</option><option value={40}>40 records (mixed progress)</option><option value={50}>50 records (mixed progress)</option>
      </select>
     </label>
     <button type="button" className="intel-ghost text-xs" disabled={loading} onClick={()=>load(sampleSize)}>{loading?'Preparing…':'Preview sample (free)'}</button>

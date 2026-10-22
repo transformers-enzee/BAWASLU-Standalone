@@ -37,7 +37,7 @@ async function setup(page){
   }
  });
  await page.goto('/inbox');
- await expect(page.getByRole('heading',{name:'AI-screened intelligence findings'})).toBeVisible();
+ await expect(page.getByRole('region',{name:'AI intelligence findings'})).toBeVisible();
  return ()=>providerCalls;
 }
 
@@ -80,9 +80,9 @@ test('historical review decisions render in the collapsed drawer on demand',asyn
 
 test('flag count and category filter stay consistent with the evidence list',async({page})=>{
  const paidCalls=await setup(page);
- await expect(page.getByText('Potential violations · signals only')).toBeVisible();
+ await expect(page.getByText('Potential violations',{exact:true})).toBeVisible();
  await expect(page.getByText('Posts shown').locator('..')).toContainText('3');
- await expect(page.getByText('Potential violations · signals only').locator('..')).toContainText('1');
+ await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  await page.getByRole('button',{name:'Potential Violation',exact:true}).click();
  await expect(page.getByText('Posts · 1 results')).toBeVisible();
  await expect(page.getByRole('button',{name:/View source and assessment/})).toHaveCount(1);

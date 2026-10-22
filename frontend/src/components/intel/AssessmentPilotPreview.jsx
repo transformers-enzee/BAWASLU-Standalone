@@ -87,11 +87,13 @@ export default function AssessmentPilotPreview({ campaign }) {
     </label>
     <button type="button" className="intel-ghost text-xs" disabled={loading} onClick={()=>load(sampleSize)}>{loading?'Preparing…':'Preview sample (free)'}</button>
     {plan&&<button type="button" className="intel-ghost text-xs" disabled={loading} onClick={()=>load(plan.requested,plan.sample_anchor_id)}>Refresh progress</button>}
+    {plan&&plan.next_anchor_id>0&&<button type="button" className="intel-ghost text-xs" disabled={loading||starting||plan.counts.queued>0||plan.counts.processing>0} onClick={()=>{setCostAcknowledged(false);load(plan.requested,plan.next_anchor_id)}}>Next {plan.requested} older posts →</button>}
    </div>
    {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
    {notice&&<p role="status" className="text-xs font-semibold text-teal-700">{notice}</p>}
    {plan&&<section className="space-y-3" aria-label="Assessment pilot progress">
     <p className="text-xs font-semibold">{plan.total} of {plan.requested} records selected · {plan.sampling_method}</p>
+    <p className="text-xs text-slate-500">To assess further unassessed posts, use “Next {plan.requested} older posts”. Completed records remain visible when you return to a previous batch; they are not billed again. A new batch always needs separate payment approval.</p>
     <div className="flex items-center justify-between text-xs"><span>Stored AI assessments completed</span><strong>{plan.progress_percent}%</strong></div>
     <div role="progressbar" aria-label="Pilot assessment completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={plan.progress_percent} className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
      <div className="h-full bg-teal-600" style={{width:plan.progress_percent+'%'}}/>

@@ -53,6 +53,9 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
         chosen=visible[:limit]
     else:
         chosen=choose_platform_sample(visible,limit)
+    # Cursor points below the oldest evidence link in this fixed snapshot.
+    # Changing the cursor is explicit; refresh/start retain the current anchor.
+    next_anchor_id=min(row.link_id for row in chosen)-1 if chosen else None
     ids=[row.result_id for row in chosen]
     assessments={};jobs={}
     if ids:
@@ -83,7 +86,7 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
     readiness=pilot_readiness(db,c)
     return {'readiness':readiness,
             'campaign_id':str(c.id),'campaign_name':c.name,'requested':limit,
-            'sample_anchor_id':anchor,'total':total,'records':rows,'counts':counts,
+            'sample_anchor_id':anchor,'next_anchor_id':next_anchor_id,'total':total,'records':rows,'counts':counts,
             'progress_percent':round(100*counts['completed']/total) if total else 0,
             'sampling_method':('Newest unassessed posts only (stable snapshot anchor)' if limit==10 else 'Newest posts balanced across platforms (stable snapshot anchor)'),
             'has_campaign_description':description,'active_admin_gates':active_gates,

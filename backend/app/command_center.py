@@ -407,6 +407,37 @@ def build_command_center(db,p,data=None):
         'records':len(v['records']),'confirmed':len(v['confirmed']),'associated':len(v['mentioned']),'pending':len(v['pending']),
         'potential_signals':len(v['potential'])} for code,v in regional_intel.items()]
     regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
+    # Read-only signal volume inventory. Only authorized saved assessments are
+    # counted; a source mention is not a legal finding or suspicion of a person.
+    candidate_inventory={}
+    category_post_ids=defaultdict(set)
+    seen_signal_posts=set()
+    for assessment,post in (all_recent if campaigns_ids else []):
+        if post.id in seen_signal_posts or not _result_in_scope(db,p,post):continue
+        seen_signal_posts.add(post.id)
+        if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):continue
+        for item in _as_list(assessment.candidate_signals_json):
+            name=(item.get('name') or item.get('value') or '') if isinstance(item,dict) else item
+            name=str(name or '').strip()[:120]
+            if len(name)<3:continue
+            key=name.casefold()
+            entry=candidate_inventory.setdefault(key,{'name':name,'posts':set()})
+            entry['posts'].add(post.id)
+        signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
+        if not signals:signals=phrase_screening_candidates(post.text_content,categories,phrases)
+        for signal in signals:
+            category_post_ids[str(signal['category_name'])].add(post.id)
+    candidate_coverage=sorted(
+        [{'name':v['name'],'mentions':len(v['posts'])} for v in candidate_inventory.values()],
+        key=lambda row:row['name'].casefold())[:10]
+    issue_volume=sorted(
+        [{'category':name,'posts':len(ids)} for name,ids in category_post_ids.items()],
+        key=lambda row:(-row['posts'],row['category']))[:10]
+    # Descriptive operational queue size only, NEVER a person's guilt score.
+    review_volume=len(latest_alerts)
+    activity_band=('HIGH VOLUME' if review_volume>=20 else
+                   'ELEVATED VOLUME' if review_volume>=5 else
+                   'LOW VOLUME' if review_volume>0 else 'NO FLAGS')
     # Combine assessed social posts with traditional/manual Intelligence Inbox
     # records. These are presented as recent records, NOT counted again in
     # the distinct AI-assessed social indicators above.
@@ -522,6 +553,11 @@ def build_command_center(db,p,data=None):
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'regional_inbox_signals':regional_inbox_signals,
             'regional_inbox_signals_period':'ALL_TIME_AUTHORIZED',
+            'signal_intelligence':{'candidate_mentions':candidate_coverage,
+                'issue_categories':issue_volume,'flagged_assessment_volume':review_volume,
+                'volume_band':activity_band,'thresholds':{'elevated':5,'high':20},
+                'basis':'LATEST_SAVED_ASSESSMENTS_UNDER_AUTHORIZED_CAMPAIGNS',
+                'legal_determination':False},
             'regional_monitoring_coverage':by_region[:38],
             'mapped_intelligence':len(mapped_intel_ids),
             'unclassified_intelligence':unclassified_intel,

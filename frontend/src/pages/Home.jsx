@@ -143,6 +143,17 @@ export default function Home(){
     <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} campaign-linked posts <strong>published</strong> in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
     <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
    </div>
+   <div className="grid lg:grid-cols-2 gap-3 md:gap-4 items-stretch" aria-label="Signal Intelligence">
+    <Panel fillHeight title="Candidate Mention Monitor" subtitle="Named entities appearing in saved relevant AI assessments · alphabetical, not a suspicion ranking" to="/inbox" action="Review source records">
+     {(data.signal_intelligence?.candidate_mentions||[]).length?(data.signal_intelligence.candidate_mentions.map(item=><div key={item.name} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-xs"><span className="font-medium text-[#173952]">{item.name}</span><span className="tabular-nums text-slate-600">{item.mentions} assessed post(s)</span></div>)):<p className="text-xs text-slate-500">No named candidate signals are recorded in current saved assessments.</p>}
+     <p className="text-[11px] text-slate-500">Mentions do not imply wrongdoing. Only stored, authorized source evidence is counted.</p>
+    </Panel>
+    <Panel fillHeight title="Potential Violation Signal Volume" subtitle="Up to 10 evidence-backed issue categories · preliminary, not proven" to="/inbox" action="Investigate evidence">
+     <p className="text-xs text-slate-600">Monitoring level: <strong>{data.signal_intelligence?.volume_band||'UNKNOWN'}</strong> · {fmtNumber(data.signal_intelligence?.flagged_assessment_volume)} flagged assessed posts</p>
+     <p className="text-[11px] text-slate-500">Volume bands: 1–4 low, 5–19 elevated, 20+ high. These are operational counts, not legal risk assessments.</p>
+     {(data.signal_intelligence?.issue_categories||[]).length?data.signal_intelligence.issue_categories.map(item=><div key={item.category} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-xs"><span className="font-medium text-[#173952]">{item.category}</span><span className="tabular-nums text-slate-600">{item.posts} post(s)</span></div>):<p className="text-xs text-slate-500">No validated potential-issue category signals available in saved assessments.</p>}
+    </Panel>
+   </div>
    <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4 items-stretch">
     <Panel fillHeight title="Needs BAWASLU Attention" subtitle="Most recent undismissed preliminary issue signals from saved AI assessments · all dates" to="/inbox" action="Open Intelligence Inbox">
      {(data.alerts||[]).length?data.alerts.map(row=><MiniRecord key={row.result_id} record={row} alert/>):<p className="text-sm text-slate-500 py-3">No undismissed evidence-backed issue alerts were found in the selected period. This does not establish that no violations occurred.</p>}

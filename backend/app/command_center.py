@@ -245,6 +245,7 @@ def build_command_center(db,p,data=None):
     regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set()})
     unclassified_intel=0
     national_intel=0
+    mapped_intel_ids=set()
     for record in db.query(IntelligenceItem).all():
         if not allowed(p,record):continue
         # National records have no province by design; do not mark them as unmapped.
@@ -272,6 +273,7 @@ def build_command_center(db,p,data=None):
         flagged=(raw_signal=='POTENTIAL REGULATORY ISSUE' or
                  (decisions.get('supervision_signal',{}).get('status')!='Human Rejected' and ai_signal in ('POTENTIAL REGULATORY ISSUE','REVIEW RECOMMENDED')))
         for code in codes:
+            mapped_intel_ids.add(record.id)
             entry=regional_intel[code];entry['records'].add(record.id)
             if record.jurisdiction_confirmed is True:entry['confirmed'].add(record.id)
             if record.review_status in ('Pending Review','Awaiting Validation'):entry['pending'].add(record.id)
@@ -388,6 +390,7 @@ def build_command_center(db,p,data=None):
             'regions':by_region[:38],
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
+            'mapped_intelligence':len(mapped_intel_ids),
             'unclassified_intelligence':unclassified_intel,
             'national_intelligence':national_intel,
             'unknown_region_mentions':len(region_unknown_captured),

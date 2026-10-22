@@ -240,6 +240,27 @@ def build_command_center(db,p,data=None):
             entry.update({'source_url':original.canonical_url,
                           'author':original.author_name or 'Unknown author',
                           'preview':str(original.text_content or '').strip()[:170]})
+    # Distinguish when a post was published from when it entered Social Listening.
+    # The normal activity trend uses publication date, but an older post can
+    # still have been collected today. Aggregate ingestion in SQL (not by
+    # transferring potentially 40k+ full evidence rows to the API process).
+    collected_query=(db.query(func.count(func.distinct(SocialListeningResult.id)))
+        .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+        .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                SocialListeningResult.collected_at>=datetime.fromisoformat(start),
+                SocialListeningResult.collected_at<datetime.combine(date.fromisoformat(end)+timedelta(days=1),datetime.min.time()))) if campaigns_ids else None
+    if collected_query is not None and p.get('geographic_scope')!='Nationwide':
+        from types import SimpleNamespace
+        run_query=(db.query(SocialListeningResult.run_id)
+            .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+            .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                    SocialListeningResult.collected_at>=datetime.fromisoformat(start),
+                    SocialListeningResult.collected_at<datetime.combine(date.fromisoformat(end)+timedelta(days=1),datetime.min.time()))
+            .distinct())
+        authorized_runs=[run_id for (run_id,) in run_query
+                         if _result_in_scope(db,p,SimpleNamespace(run_id=run_id))]
+        collected_query=collected_query.filter(SocialListeningResult.run_id.in_(authorized_runs))
+    newly_collected=int(collected_query.scalar() or 0) if collected_query is not None else 0
     # Include zero-activity dates; missing bars would overstate continuity.
     daily_series=[{'date':(date.fromisoformat(start)+timedelta(days=n)).isoformat(),
                    'count':day_counts.get((date.fromisoformat(start)+timedelta(days=n)).isoformat(),0)}
@@ -254,32 +275,24 @@ def build_command_center(db,p,data=None):
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_captured.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
-    # Social Evidence Inbox location_signals derive from geographic_signals_json.
-    # Mirror that source in the homepage map, independently of short-period charts.
+    # Use the same period, campaign authorization and source-run scope as
+    # the Social Evidence Inbox summary. Old code independently fetched all
+    # assessments from all dates, giving a stale province map after filtering.
     regional_assessed=defaultdict(set)
-    scoped_ids=[c.id for c in db.query(MonitoringCampaign).all() if allowed(p,c)]
-    if scoped_ids:
-        latest_geo=(db.query(EvidenceAssessment.campaign_id.label('cid'),
-                 EvidenceAssessment.result_id.label('rid'),
-                 func.max(EvidenceAssessment.assessment_version).label('ver'))
-              .filter(EvidenceAssessment.campaign_id.in_(scoped_ids))
-              .group_by(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id).subquery())
-        geo_rows=(db.query(EvidenceAssessment)
-            .join(latest_geo,and_(EvidenceAssessment.campaign_id==latest_geo.c.cid,
-                 EvidenceAssessment.result_id==latest_geo.c.rid,
-                 EvidenceAssessment.assessment_version==latest_geo.c.ver)).all())
-        for assessment in geo_rows:
-            codes=set()
-            for signal in _as_list(assessment.geographic_signals_json):
-                value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''
-                value=str(value or '').strip()
-                code=province_code_for(value)
-                if not code:
-                    city=regency_code_for(value)
-                    if city:code=str(REGENCY_BY_CODE[city].get('province_code') or '')
-                if not code and value.lower().replace(' ','') in ('sumbar','sumaterabarat'):code='13'
-                if code and (not selected_code or code==selected_code):codes.add(code)
-            for code in codes:regional_assessed[code].add(assessment.result_id)
+    for assessment,post in assessed_rows:
+        if not _result_in_scope(db,p,post):
+            continue
+        codes=set()
+        for signal in _as_list(assessment.geographic_signals_json):
+            value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''
+            value=str(value or '').strip()
+            code=province_code_for(value)
+            if not code:
+                city=regency_code_for(value)
+                if city:code=str(REGENCY_BY_CODE[city].get('province_code') or '')
+            if not code and value.lower().replace(' ','') in ('sumbar','sumaterabarat'):code='13'
+            if code and (not selected_code or code==selected_code):codes.add(code)
+        for code in codes:regional_assessed[code].add(assessment.result_id)
     regional_inbox_signals=[{'province':_province_name(code),'province_code':code,'records':len(ids)}
         for code,ids in regional_assessed.items()]
     regional_inbox_signals.sort(key=lambda item:item['records'],reverse=True)
@@ -442,6 +455,9 @@ def build_command_center(db,p,data=None):
             'briefing':briefing,'attention_actions':attention[:4],
             'alerts':alerts[:5], 'latest_intelligence':recent,
             'activity':{'captured_mentions':len(captured_ids),
+                        'newly_collected_mentions':newly_collected,
+                        'published_date_basis':'SOURCE_PUBLISHED_AT',
+                        'ingestion_date_basis':'SOURCE_COLLECTED_AT',
                         'top_platforms':[{'platform':k,'count':v} for k,v in platform_counts.most_common(5)],
                         'daily':daily_series,
                         'recent_captured':latest_captured,
@@ -462,7 +478,7 @@ def build_command_center(db,p,data=None):
                         'unassessed_posts_in_period':unassessed_coverage,
                         'assessed_pairs_in_period':evidence_checked,'relevant_distinct_posts':len(relevant),
                         'distinct_campaigns_in_scope':len(campaigns_by_id),
-                        'warning':'Captured activity counts distinct campaign-linked posts; relevant mentions and issue alerts come only from stored assessments. Province indicates campaign monitoring scope, not verified author location.'},
+                        'warning':'Publication-date counts and newly collected counts are different measures. AI relevance and potential alerts require stored assessments. Province indicates campaign monitoring scope, not verified author location.'},
             'capabilities':{'emerging_issues':False,'ai_generated_new_summary':False,
                             'cross_module_assistant':False},
             'paid_provider_called':False}

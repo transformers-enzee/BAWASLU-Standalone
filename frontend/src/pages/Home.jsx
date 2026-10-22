@@ -55,6 +55,7 @@ export default function Home(){
  const [province,setProvince]=useState('');
  const [version,setVersion]=useState(0),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [question,setQuestion]=useState('');
+ const [mapSource,setMapSource]=useState('social');
  const effectiveProvince=data?.scope?.can_select_national?province:'';
  const params=useMemo(()=>({period,province:effectiveProvince,...(period==='custom'?{date_from:dateFrom,date_to:dateTo}:{})}),[period,effectiveProvince,dateFrom,dateTo]);
  useEffect(()=>{
@@ -142,14 +143,15 @@ export default function Home(){
      </section>
     </div>
    </Panel>
-   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3" aria-label="Intelligence indicators">
-    <Stat label="Captured social posts" value={activity.captured_mentions} description="Distinct monitored posts" to="/social-listening"/>
+   <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3" aria-label="Intelligence indicators">
+    <Stat label="Published social posts" value={activity.captured_mentions} description="Source publication in selected period" to="/social-listening"/>
+    <Stat label="Newly collected posts" value={activity.newly_collected_mentions} description="Added to Social Listening in period" to="/social-listening"/>
     <Stat label="Relevant assessed posts" value={metrics.relevant_mentions} description="AI-assessed as relevant" to="/inbox"/>
     <Stat label="Potential issue alerts" value={metrics.potential_alerts} description="Preliminary, not confirmed" to="/inbox"/>
     <Stat label="Awaiting BAWASLU review" value={metrics.awaiting_review} description="Human assessment required" to="/inbox"/>
    </div>
    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d]" role="note">
-    <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} captured campaign-linked posts in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
+    <span><strong>Assessment coverage:</strong> {fmtNumber(data.coverage?.assessed_posts_in_period)} of {fmtNumber(data.coverage?.captured_posts_in_period)} campaign-linked posts <strong>published</strong> in this period have an AI assessment. {Number(data.coverage?.unassessed_posts_in_period||0)>0?'Unassessed does not mean no risk.':''}</span>
     <Link to="/social-listening" className="text-[#126d91] font-semibold hover:underline">Explore captured posts →</Link>
    </div>
    <div className="grid xl:grid-cols-[1.35fr_1fr] gap-3 md:gap-4">
@@ -161,12 +163,22 @@ export default function Home(){
     </Panel>
    </div>
    <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4">
-    <Panel title="Regional Intelligence Overview" subtitle="Social Evidence Inbox · AI-detected province associations" to="/inbox" action="Open Intelligence Inbox">
-     {(()=>{const rows=data.regional_inbox_signals||[];const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
-      <p className="text-xs text-slate-600">{total} province-associated assessed post(s) across {rows.length} province(s). Separate manual intelligence jurisdiction counts are not included in this map.</p>
-      <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Social Evidence Inbox distribution" subtitle="AI-assessed post location signals" footnote="Based on AI assessment location signals used by the Social Evidence Inbox. City signals are mapped to their province when recognized; counts indicate associated assessed posts, not verified incident locations."/>
-      {!rows.length&&<p className="text-xs text-slate-500">No assessed Inbox posts have recognized provincial location signals. Unrecognized signals are not mapped.</p>}
-
+    <Panel title="Recently Published Social Evidence" subtitle="Actual captured posts, including posts not yet assessed by AI" to="/social-listening" action="Open Social Listening">
+     {(activity.recent_captured||[]).length?(activity.recent_captured||[]).map(post=><article key={post.result_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
+      <div className="flex items-center justify-between gap-2"><strong className="text-xs text-[#173952]">{post.platform}</strong><span className="text-[11px] text-slate-500">{fmtTime(post.published_at)} · Published</span></div>
+      <p className="text-sm text-slate-700 line-clamp-2">{post.preview||'No source text available'}</p>
+      <div className="flex items-center flex-wrap gap-3 text-xs"><Link to="/social-listening" className="font-semibold text-[#126d91]">View Social Listening →</Link>{cleanSource(post.source_url)&&<a href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:underline">Original source ↗</a>}</div>
+     </article>):<p className="text-sm text-slate-500">No posts with publication dates in this period. Older posts may still have been newly collected; see the collection indicator above.</p>}
+    </Panel>
+    <Panel title="Regional Intelligence Overview" subtitle={mapSource==='social'?'Social Evidence Inbox · date-filtered geographic signals':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
+     <div className="flex gap-2 text-xs" aria-label="Regional map data source">
+      <button type="button" onClick={()=>setMapSource('social')} aria-pressed={mapSource==='social'} className={mapSource==='social'?'intel-button text-xs':'intel-ghost text-xs'}>Assessed social evidence</button>
+      <button type="button" onClick={()=>setMapSource('recorded')} aria-pressed={mapSource==='recorded'} className={mapSource==='recorded'?'intel-button text-xs':'intel-ghost text-xs'}>Recorded intelligence</button>
+     </div>
+     {(()=>{const rows=mapSource==='social'?(data.regional_inbox_signals||[]):(data.regional_intelligence||[]);const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
+      <p className="text-xs text-slate-600">{total} province-associated {mapSource==='social'?'AI-assessed social post signal(s) in the selected period':'recorded intelligence association(s), all time'} across {rows.length} province(s). Separate sources are never added together or treated as confirmed violation locations.</p>
+      <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={mapSource==='social'?'AI assessment geographic signals · selected period':'Recorded intelligence geographic associations · all time'} footnote={mapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/>
+      {!rows.length&&<p className="text-xs text-slate-500">No {mapSource==='social'?'assessed posts with recognized provincial location signals in this period':'recorded intelligence with recognized provincial associations'}. This does not imply the area has no monitored activity.</p>}
      </div>})()}
     </Panel>
     <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">

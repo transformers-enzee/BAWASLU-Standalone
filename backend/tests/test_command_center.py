@@ -182,3 +182,39 @@ def test_unassessed_posts_do_not_create_fabricated_violation_alerts():
     assert out['briefing']['kind']=='LOCATION_EVIDENCE_BRIEFING'
     assert 'no undismissed preliminary issue alerts' in out['briefing']['text'].lower()
     db.close()
+
+
+def test_home_distinguishes_publication_from_new_collection_and_respects_region():
+    db=SessionLocal()
+    national=_actor(db,'national-ingestion@test.local','National Administrator','Nationwide')
+    west=_actor(db,'west-ingestion@test.local','Provincial Analyst','Province','Jawa Barat')
+    central=_actor(db,'central-ingestion@test.local','Provincial Analyst','Province','Jawa Tengah')
+    old='2024-01-01T09:15:00'
+    _evidence(db,'Jawa Barat','Old publication collected for current monitoring',False,'old-west')
+    _evidence(db,'Jawa Tengah','Old publication collected for other province',False,'old-central')
+    db.query(SocialListeningResult).update({SocialListeningResult.published_at:old})
+    db.commit()
+    all_data=build_command_center(db,national)
+    west_data=build_command_center(db,west)
+    central_data=build_command_center(db,central)
+    assert all_data['activity']['captured_mentions']==0
+    assert all_data['activity']['newly_collected_mentions']==2
+    assert west_data['activity']['captured_mentions']==0
+    assert west_data['activity']['newly_collected_mentions']==1
+    assert central_data['activity']['newly_collected_mentions']==1
+    assert all_data['activity']['published_date_basis']=='SOURCE_PUBLISHED_AT'
+    assert all_data['activity']['ingestion_date_basis']=='SOURCE_COLLECTED_AT'
+    db.close()
+
+def test_recently_assessed_geography_is_scoped_to_selected_publication_period():
+    db=SessionLocal()
+    actor=_actor(db,'geo-basis@test.local','National Administrator','Nationwide')
+    campaign,post,assessment=_evidence(db,'Jawa Barat','Provincial election oversight',False,'geo-post')
+    assessment.geographic_signals_json=json.dumps(['Jawa Barat'])
+    db.commit()
+    assert any(x['province']=='Jawa Barat' for x in build_command_center(db,actor)['regional_inbox_signals'])
+    post.published_at='2024-01-01T09:15:00'
+    db.commit()
+    assert build_command_center(db,actor)['regional_inbox_signals']==[]
+    assert any(x['province']=='Jawa Barat' for x in build_command_center(db,actor,{'period':'all'})['regional_inbox_signals'])
+    db.close()

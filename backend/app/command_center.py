@@ -238,22 +238,19 @@ def build_command_center(db,p,data=None):
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_captured.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
-    # Regional Intelligence Inbox records are reported separately from campaign
-    # monitoring scope. Only confirmed geographic assignments count here.
+    # Regional Intelligence Inbox heatmap is an all-time authorized inventory.
+    # It is independent of the campaign-post monitoring date window.
     regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set(),'confirmed':set()})
     unclassified_intel=0
     for record in db.query(IntelligenceItem).all():
         if not allowed(p,record):continue
-        dated=record.publication_datetime or record.publication_date or ''
-        when=_day(dated) or _day(record.created_at.isoformat() if record.created_at else '')
-        if not (start<=when<=end):continue
         # Match the recorded province fields used in the Intelligence Inbox.
         # Keep human-confirmed jurisdictions distinguishable from recorded but unconfirmed ones.
         areas=_as_list(record.geographic_assignments_json) if record.jurisdiction_type=='Multi-Region' else [{'province':record.province,'province_code':record.province_code}]
         codes=set()
         for area in areas:
             if not isinstance(area,dict):continue
-            code=province_code_for(area.get('province'),area.get('province_code'))
+            code=province_code_for(area.get('province') or area.get('province_name'),area.get('province_code'))
             if code and (not selected_code or code==selected_code):codes.add(code)
         if not codes:
             unclassified_intel+=1
@@ -383,6 +380,7 @@ def build_command_center(db,p,data=None):
                         'data_basis':'CAMPAIGN_LINKED_CAPTURED_POSTS'},
             'regions':by_region[:38],
             'regional_intelligence':regional_intelligence[:38],
+            'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'unclassified_intelligence':unclassified_intel,
             'unknown_region_mentions':len(region_unknown_captured),
             'region_method':'CAMPAIGN_MONITORING_SCOPE_NOT_POST_ORIGIN',

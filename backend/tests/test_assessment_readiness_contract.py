@@ -30,14 +30,14 @@ class AssessmentReadinessContract(unittest.TestCase):
             "val=by_id.get(gate.id,{})",
             "val.get('answer','UNCERTAIN')",
             "answer!=gate.required_answer",
-            "label='IRRELEVANT'",
-            "label=='RELEVANT' and any(answer=='UNCERTAIN'",
+            "return 'UNCERTAIN' if model_label=='RELEVANT' else model_label",
+            "resolve_relevance_gates(label,gate_results)",
         ):
             with self.subTest(expression=expression):
                 self.assertIn(expression, SCREEN)
 
     def test_keyword_match_is_not_enough(self):
-        self.assertIn("A keyword or hashtag by itself is NOT evidence", SCREEN)
+        self.assertIn("A generic or unrelated keyword by itself is NOT evidence", SCREEN)
         self.assertIn("FIRST assess topical relevance", SCREEN)
         self.assertIn("actual campaign objective", SCREEN)
 

@@ -163,24 +163,21 @@ export default function Home(){
      {(data.latest_intelligence||[]).length?data.latest_intelligence.slice(0,3).map(row=><MiniRecord key={row.record_type==='INTELLIGENCE_ITEM'?'intel-'+row.id:row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
     </Panel>
    </div>
-   <div className="grid xl:grid-cols-[1.2fr_1fr] gap-3 md:gap-4 items-start">
-    <Panel title="Recently Published Social Evidence" subtitle="Actual captured posts, including posts not yet assessed by AI" to="/social-listening" action="Open Social Listening">
-     {(activity.recent_captured||[]).length?(activity.recent_captured||[]).map(post=><article key={post.result_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
-      <div className="flex items-center justify-between gap-2"><strong className="text-xs text-[#173952]">{post.platform}</strong><span className="text-[11px] text-slate-500">{fmtTime(post.published_at)} · Published</span></div>
-      <p className="text-sm text-slate-700 line-clamp-2">{post.preview||'No source text available'}</p>
-      <div className="flex items-center flex-wrap gap-3 text-xs"><Link to="/social-listening" className="font-semibold text-[#126d91]">View Social Listening →</Link>{cleanSource(post.source_url)&&<a href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:underline">Original source ↗</a>}</div>
-     </article>):<p className="text-sm text-slate-500">No posts with publication dates in this period. Older posts may still have been newly collected; see the collection indicator above.</p>}
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-start">
+    <Panel title="Captured Social Activity" subtitle="Published-post activity · selected monitoring period" to="/social-listening" action="Open Social Listening">
+     <div className="flex flex-wrap gap-3 text-xs text-slate-600"><span><strong>{fmtNumber(activity.captured_mentions)}</strong> published in period</span><span><strong>{fmtNumber(activity.newly_collected_mentions)}</strong> newly collected</span></div>
+     <div className="flex h-28 items-end gap-1 rounded-lg bg-slate-50 px-3 py-2" aria-label="Captured social activity daily trend">
+      {trend.length?trend.map((point,i)=><div key={i} className="flex-1 min-w-0 rounded-t bg-[#4384a3]" style={{height:Math.max(3,Math.round(100*(Number(point.count)||0)/trendMax))+'%'}} title={String(point.date||'')+': '+(point.count||0)+' posts'}/>):<span className="text-xs text-slate-500">No daily activity recorded</span>}
+     </div>
+     <p className="text-xs font-semibold text-slate-600">Top platforms</p>
+     <div className="flex flex-wrap gap-2 text-xs">{(activity.top_platforms||[]).length?activity.top_platforms.slice(0,4).map(p=><span key={p.platform} className="rounded-full bg-slate-100 px-2 py-1">{p.platform} · {p.count}</span>):<span className="text-slate-500">No platform activity in this period</span>}</div>
+     <p className="text-xs font-semibold text-slate-600">Recent captured evidence</p>
+     {(activity.recent_captured||[]).slice(0,3).map(post=><article key={post.result_id} className="border-t border-slate-100 py-2 text-xs">
+      <div className="flex justify-between gap-2"><strong>{post.platform}</strong><span className="text-slate-500">{fmtTime(post.published_at)}</span></div>
+      <p className="mt-1 line-clamp-2">{post.preview||'No source text available'}</p>
+      {cleanSource(post.source_url)&&<a className="text-[#126d91]" href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer">Original post ↗</a>}
+     </article>)}
     </Panel>
-    <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
-     {(data.watchlist?.entries||[]).length?data.watchlist.entries.map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
-      <div className="flex justify-between gap-2"><p className="font-semibold text-sm">{x.name}</p><span className="text-[11px] text-slate-500">{x.platform}</span></div>
-      <p className="text-xs text-slate-600 line-clamp-2">{x.summary||'Post text unavailable'}</p>
-      <p className="text-[11px] text-slate-500">{x.province} · {fmtTime(x.last_post_at)}</p>
-      <Link className="text-xs text-[#126d91] font-semibold" to={'/watchlist/'+x.watchlist_id+'/posts'}>View captured account posts →</Link>
-     </article>):<div className="text-sm text-slate-500 py-2 space-y-2"><p>No matching posts from registered Watchlist accounts were captured in this period.</p><p>{fmtNumber(data.watchlist?.monitored_profiles)} profiles are visible in your authorized scope. Registered accounts do not imply successful collection.</p></div>}
-    </Panel>
-   </div>
-   <div className="space-y-3 md:space-y-4">
     <Panel title="Regional Intelligence Overview" subtitle={effectiveMapSource==='social'?'Social Evidence Inbox · all-time authorized AI geographic signals':effectiveMapSource==='coverage'?'Social Listening · campaign monitoring coverage':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
      <div className="flex gap-2 text-xs" aria-label="Regional map data source">
       <button type="button" onClick={()=>setMapSource('social')} aria-pressed={effectiveMapSource==='social'} className={effectiveMapSource==='social'?'intel-button text-xs':'intel-ghost text-xs'}>Assessed social evidence</button>
@@ -190,10 +187,30 @@ export default function Home(){
      {effectiveMapSource==='coverage'&&!(data.regional_monitoring_coverage||[]).length&&<p role="note" className="text-xs text-amber-800">No selected campaigns have a provincial monitoring assignment in this period. National and unassigned posts cannot be placed on a province map. Choose Recorded intelligence to view known jurisdictions.</p>}
      {(()=>{const rows=effectiveMapSource==='social'?(data.regional_inbox_signals||[]):effectiveMapSource==='coverage'?(data.regional_monitoring_coverage||[]):(data.regional_intelligence||[]);const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,province_code:x.province_code,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
       <p className="text-xs text-slate-600">{total} province-associated {effectiveMapSource==='social'?'AI-assessed social post signal(s) from all saved assessments':effectiveMapSource==='coverage'?'captured posts linked to region-scoped campaigns in the period':'recorded intelligence association(s), all time'} across {rows.length} province(s). Separate sources are never added together or treated as confirmed violation locations.</p>
-      <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={effectiveMapSource==='social'?'AI assessment geographic signals · all dates':effectiveMapSource==='coverage'?'Campaign monitoring jurisdiction · selected period':'Recorded intelligence geographic associations · all time'} footnote={effectiveMapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':effectiveMapSource==='coverage'?'Based on campaign monitoring province, not verified source location or incident location. Nationwide campaigns have no provincial assignment.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/>
+      <div className="max-w-[720px] mx-auto"><ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={effectiveMapSource==='social'?'AI assessment geographic signals · all dates':effectiveMapSource==='coverage'?'Campaign monitoring jurisdiction · selected period':'Recorded intelligence geographic associations · all time'} footnote={effectiveMapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':effectiveMapSource==='coverage'?'Based on campaign monitoring province, not verified source location or incident location. Nationwide campaigns have no provincial assignment.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/></div>
       {!rows.length&&<p className="text-xs text-slate-500">No {effectiveMapSource==='social'?'assessed posts with recognized provincial location signals in this period':effectiveMapSource==='coverage'?'captured posts linked to province-scoped campaigns':'recorded intelligence with recognized provincial associations'}. This does not imply the area has no monitored activity.</p>}
      </div>})()}
-    </Panel>   </div>
+    </Panel>   <
+   </div>
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-start">
+    <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
+     {(data.watchlist?.entries||[]).length?data.watchlist.entries.slice(0,3).map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
+      <div className="flex justify-between gap-2"><p className="font-semibold text-sm">{x.name}</p><span className="text-[11px] text-slate-500">{x.platform}</span></div>
+      <p className="text-xs text-slate-600 line-clamp-2">{x.summary||'Post text unavailable'}</p>
+      <p className="text-[11px] text-slate-500">{x.province} · {fmtTime(x.last_post_at)}</p>
+      <Link className="text-xs text-[#126d91] font-semibold" to={'/watchlist/'+x.watchlist_id+'/posts'}>View captured account posts →</Link>
+     </article>):<div className="text-sm text-slate-500 py-2 space-y-2"><p>No matching posts from registered Watchlist accounts were captured in this period.</p><p>{fmtNumber(data.watchlist?.monitored_profiles)} profiles are visible in your authorized scope. Registered accounts do not imply successful collection.</p></div>}
+    </Panel>
+   
+    <Panel title="Review Workload" subtitle="Human review and assessment coverage · authorized records" to="/inbox" action="Open Intelligence Inbox">
+     <div className="grid grid-cols-2 gap-2 text-sm">
+      <Link to="/inbox" className="rounded-lg border border-slate-200 p-3"><strong className="block text-xl tabular-nums">{fmtNumber(metrics.awaiting_review)}</strong><span className="text-xs text-slate-600">Awaiting human review</span></Link>
+      <Link to="/inbox" className="rounded-lg border border-slate-200 p-3"><strong className="block text-xl tabular-nums">{fmtNumber(metrics.potential_alerts)}</strong><span className="text-xs text-slate-600">Preliminary issue alerts</span></Link>
+      <Link to="/social-listening" className="rounded-lg border border-slate-200 p-3 col-span-2"><strong className="block text-xl tabular-nums">{fmtNumber(data.coverage?.unassessed_posts_in_period)}</strong><span className="text-xs text-slate-600">Captured posts awaiting AI assessment · publication period</span></Link>
+     </div>
+     <p className="text-xs text-slate-500">Numbers reflect stored module records, not confirmed electoral violations. Review decisions remain with authorized BAWASLU staff.</p>
+    </Panel>
+   </div>
    <Panel title="AI Assistant · Quick Investigation" subtitle="Ask questions grounded in authorized system records" to="/assistant" action="Open full assistant">
     <form onSubmit={e=>{e.preventDefault();if(question.trim())navigate('/assistant?q='+encodeURIComponent(question.trim()))}} className="flex flex-col sm:flex-row gap-2">
      <input className="intel-input flex-1 min-w-0" maxLength={400} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask about recent evidence or pending intelligence…" aria-label="Question for Intelligence Assistant"/>

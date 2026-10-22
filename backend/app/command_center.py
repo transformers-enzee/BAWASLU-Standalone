@@ -238,6 +238,44 @@ def build_command_center(db,p,data=None):
                 'flagged':len(region_flags.get(code,set())),
                 'province_code':code} for code,posts in region_captured.items()]
     by_region.sort(key=lambda r:(r['flagged'],r['count']),reverse=True)
+    # Regional Intelligence Inbox records are reported separately from campaign
+    # monitoring scope. Only confirmed geographic assignments count here.
+    regional_intel=defaultdict(lambda:{'records':set(),'pending':set(),'potential':set()})
+    unclassified_intel=0
+    for record in db.query(IntelligenceItem).all():
+        if not allowed(p,record):continue
+        dated=record.publication_datetime or record.publication_date or ''
+        when=_day(dated) or _day(record.created_at.isoformat() if record.created_at else '')
+        if not (start<=when<=end):continue
+        if record.jurisdiction_confirmed is not True:
+            unclassified_intel+=1
+            continue
+        areas=_as_list(record.geographic_assignments_json) if record.jurisdiction_type=='Multi-Region' else [{'province':record.province,'province_code':record.province_code}]
+        codes=set()
+        for area in areas:
+            if not isinstance(area,dict):continue
+            code=province_code_for(area.get('province'),area.get('province_code'))
+            if code and (not selected_code or code==selected_code):codes.add(code)
+        if not codes:
+            unclassified_intel+=1
+            continue
+        try: proposed=json.loads(record.ai_suggestions_json or '{}')
+        except (ValueError,TypeError):proposed={}
+        decisions=proposed.get('_decisions') or {}
+        try: screening=json.loads(record.supervision_screening_json or '{}')
+        except (ValueError,TypeError):screening={}
+        raw_signal=str(screening.get('supervision_signal') or '').upper()
+        ai_signal=str(proposed.get('supervision_signal') or '').upper()
+        flagged=(raw_signal=='POTENTIAL REGULATORY ISSUE' or
+                 (decisions.get('supervision_signal',{}).get('status')!='Human Rejected' and ai_signal in ('POTENTIAL REGULATORY ISSUE','REVIEW RECOMMENDED')))
+        for code in codes:
+            entry=regional_intel[code];entry['records'].add(record.id)
+            if record.review_status in ('Pending Review','Awaiting Validation'):entry['pending'].add(record.id)
+            if flagged:entry['potential'].add(record.id)
+    regional_intelligence=[{'province':_province_name(code),'province_code':code,
+        'records':len(v['records']),'pending':len(v['pending']),
+        'potential_signals':len(v['potential'])} for code,v in regional_intel.items()]
+    regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
     # Combine assessed social posts with traditional/manual Intelligence Inbox
     # records. These are presented as recent records, NOT counted again in
     # the distinct AI-assessed social indicators above.
@@ -344,6 +382,8 @@ def build_command_center(db,p,data=None):
                         'recent_captured':latest_captured,
                         'data_basis':'CAMPAIGN_LINKED_CAPTURED_POSTS'},
             'regions':by_region[:38],
+            'regional_intelligence':regional_intelligence[:38],
+            'unclassified_intelligence':unclassified_intel,
             'unknown_region_mentions':len(region_unknown_captured),
             'region_method':'CAMPAIGN_MONITORING_SCOPE_NOT_POST_ORIGIN',
             'watchlist':{'entries':watch_rows,'captured_posts_in_period':len(watch_count_ids),

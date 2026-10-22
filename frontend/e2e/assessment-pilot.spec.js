@@ -26,6 +26,7 @@ test('40-50 post assessment pilot previews stored evidence without provider call
  await pilot.getByRole('button',{name:'Preview sample (free)'}).click();
  await expect(pilot.getByText('0 of 50 records selected',{exact:false})).toBeVisible();
  await expect(pilot.getByRole('progressbar',{name:'Pilot assessment completion'})).toHaveAttribute('aria-valuenow','0');
- await expect(pilot).toContainText('No AI provider called, no credits charged');
+ await expect(pilot).toContainText('This preview never charges or starts jobs');
+ await expect(pilot.getByRole('button',{name:'Start batch AI assessment (0)'})).toBeDisabled();
  expect(paid).toEqual([]);
 });

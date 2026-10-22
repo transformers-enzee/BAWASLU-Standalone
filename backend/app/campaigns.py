@@ -348,6 +348,9 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action=='campaignAssessmentPilotPreview':
         from .assessment_pilot import assessment_pilot_preview
         return assessment_pilot_preview(db,p,data,id)
+    if action=='campaignAssessmentPilotStart':
+        from .assessment_pilot import start_assessment_pilot
+        return start_assessment_pilot(db,p,data,id)
     if action in ('campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart'):
         from .models import EvidenceAssessment, SocialListeningResult
         from .socialcrawl import _result_in_scope

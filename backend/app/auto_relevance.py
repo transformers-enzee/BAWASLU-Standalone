@@ -174,8 +174,15 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
         taxonomy=active_issue_taxonomy(categories,phrases)
         active_gates=db.query(RelevanceGateQuestion).filter(RelevanceGateQuestion.active==True).order_by(RelevanceGateQuestion.id).limit(20).all()
-        enqueue_campaign_evidence(campaign.id)
-        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        if target_result_id is None:
+            enqueue_campaign_evidence(campaign.id)
+            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        else:
+            # Paid pilot must use ONLY the explicitly approved evidence ID, even
+            # when it falls outside the latest 300 links; never auto-enqueue unrelated posts.
+            links=db.query(CampaignEvidence).filter(
+                CampaignEvidence.campaign_id==campaign.id,
+                CampaignEvidence.result_id==int(target_result_id)).limit(1).all()
         used=0
         for link in links:
             if target_result_id is not None and link.result_id!=int(target_result_id):continue
@@ -199,9 +206,9 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             db.commit()
             if claimed.rowcount!=1:continue
             db.refresh(job)
-            if requested_limit is None and not reserve_automatic_ai_request(db,campaign.id):
+            if (requested_limit is None or target_result_id is not None) and not reserve_automatic_ai_request(db,campaign.id):
                 # Never bill after a failed reservation; do not leave an ambiguous PROCESSING row.
-                job.state='COMPLETED' if reanalysis else ('FAILED' if job.attempts>=3 else 'PENDING')
+                job.state='COMPLETED' if reanalysis else ('FAILED' if target_result_id is not None or job.attempts>=3 else 'PENDING')
                 job.last_error='Automatic AI budget reservation unavailable'
                 job.updated_at=datetime.utcnow();db.commit()
                 break
@@ -274,7 +281,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 db.rollback()
                 if job:
                     job=db.get(AIAssessmentJob,job.id)
-                    job.state='FAILED' if job.attempts>=3 else 'PENDING'
+                    job.state='FAILED' if target_result_id is not None or job.attempts>=3 else 'PENDING'
                     job.last_error=type(exc).__name__
                     job.updated_at=datetime.utcnow()
                     db.commit()

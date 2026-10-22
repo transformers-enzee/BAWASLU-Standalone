@@ -72,7 +72,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'90.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'90.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -184,6 +184,9 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
         if body.action=='campaignAssessmentBacklogStart' and result.get('assessment_job_accepted'):
             from .auto_relevance import assess_pending_campaign
             background_tasks.add_task(assess_pending_campaign,int(result['campaign_id']),int(result['batch_limit']))
+        if body.action=='campaignAssessmentPilotStart' and result.get('started'):
+            from .assessment_pilot import execute_assessment_pilot
+            background_tasks.add_task(execute_assessment_pilot,int(result['campaign_id']),result['batch_result_ids'])
         return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))

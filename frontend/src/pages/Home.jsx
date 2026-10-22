@@ -55,7 +55,7 @@ export default function Home(){
  const [province,setProvince]=useState('');
  const [version,setVersion]=useState(0),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [question,setQuestion]=useState('');
- const [mapSource,setMapSource]=useState('coverage');
+ const [mapSource,setMapSource]=useState('recorded');
  const effectiveProvince=data?.scope?.can_select_national?province:'';
  const params=useMemo(()=>({period,province:effectiveProvince,...(period==='custom'?{date_from:dateFrom,date_to:dateTo}:{})}),[period,effectiveProvince,dateFrom,dateTo]);
  useEffect(()=>{
@@ -176,6 +176,7 @@ export default function Home(){
       <button type="button" onClick={()=>setMapSource('coverage')} aria-pressed={mapSource==='coverage'} className={mapSource==='coverage'?'intel-button text-xs':'intel-ghost text-xs'}>Campaign coverage</button>
       <button type="button" onClick={()=>setMapSource('recorded')} aria-pressed={mapSource==='recorded'} className={mapSource==='recorded'?'intel-button text-xs':'intel-ghost text-xs'}>Recorded intelligence</button>
      </div>
+     {mapSource==='coverage'&&!(data.regional_monitoring_coverage||[]).length&&<p role="note" className="text-xs text-amber-800">No selected campaigns have a provincial monitoring assignment in this period. National and unassigned posts cannot be placed on a province map. Choose Recorded intelligence to view known jurisdictions.</p>}
      {(()=>{const rows=mapSource==='social'?(data.regional_inbox_signals||[]):mapSource==='coverage'?(data.regional_monitoring_coverage||[]):(data.regional_intelligence||[]);const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
       <p className="text-xs text-slate-600">{total} province-associated {mapSource==='social'?'AI-assessed social post signal(s) in the selected period':mapSource==='coverage'?'captured posts linked to region-scoped campaigns in the period':'recorded intelligence association(s), all time'} across {rows.length} province(s). Separate sources are never added together or treated as confirmed violation locations.</p>
       <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Intelligence distribution" subtitle={mapSource==='social'?'AI assessment geographic signals · selected period':mapSource==='coverage'?'Campaign monitoring jurisdiction · selected period':'Recorded intelligence geographic associations · all time'} footnote={mapSource==='social'?'Based on AI assessment location signals. Counts are source associations, not verified incident locations.':mapSource==='coverage'?'Based on campaign monitoring province, not verified source location or incident location. Nationwide campaigns have no provincial assignment.':'Based on authorized recorded intelligence jurisdictions and explicit place references. Some jurisdictions are unconfirmed; counts are associations, not verified incident locations.'}/>

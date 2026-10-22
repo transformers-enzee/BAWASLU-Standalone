@@ -13,3 +13,21 @@ def test_relevance_and_violation_are_independent():
 def test_insufficient_context_guidance():
     assert 'hashtags-only' in RELEVANCE_SCREENING_INSTRUCTIONS
     assert 'use UNCERTAIN' in RELEVANCE_SCREENING_INSTRUCTIONS
+
+
+
+def test_election_colloquial_language_instructions():
+    instruction=RELEVANCE_SCREENING_INSTRUCTIONS.lower()
+    for phrase in ('pilkada','kpps','caleg','nyoblos','serangan fajar','amplop'):
+        assert phrase in instruction
+    assert 'do not automatically classify them as bribery or vote buying' in instruction.lower()
+
+
+def test_conflicting_gate_requires_uncertainty_not_forced_irrelevance():
+    from types import SimpleNamespace
+    from app.auto_relevance import resolve_relevance_gates
+    gate=SimpleNamespace(required_answer='YES')
+    assert resolve_relevance_gates('RELEVANT',[(gate,'NO','mismatch')])=='UNCERTAIN'
+    assert resolve_relevance_gates('RELEVANT',[(gate,'UNCERTAIN','insufficient')])=='UNCERTAIN'
+    assert resolve_relevance_gates('RELEVANT',[(gate,'YES','supported')])=='RELEVANT'
+    assert resolve_relevance_gates('IRRELEVANT',[(gate,'NO','mismatch')])=='IRRELEVANT'

@@ -99,37 +99,15 @@ export default function Home(){
   {error&&<div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Unable to load intelligence overview.</strong><p className="mt-1">{error}</p><button className="mt-2 underline" onClick={()=>setVersion(x=>x+1)}>Retry</button></div>}
   {loading&&<div role="status" className="intel-card p-8 text-sm text-slate-500">Loading authorized intelligence and monitoring coverage…</div>}
   {!loading&&data&&<>
-   <Panel title={'Executive Situation Briefing · '+data.scope.label} subtitle={'Location-specific monitoring · '+data.period.date_from+' to '+data.period.date_to}>
-    <div className="grid lg:grid-cols-[1.35fr_1fr] gap-4">
-     <div className="space-y-3">
-      <div className="flex gap-3">
-       <Sparkles size={18} className="shrink-0 text-[#126d91] mt-0.5"/>
-       <div className="min-w-0">
-        <p className="text-sm leading-6 text-[#283f52]">{data.briefing.text}</p>
-        <p className="text-[11px] text-slate-500 mt-2">{data.briefing.limitation}</p>
-       </div>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-       {(data.briefing.sources||[]).map((x,i)=><Link key={x.campaign_id+'-'+x.result_id} to={evidenceLink(x)} className="text-xs text-[#126d91] font-semibold">Supporting record {i+1} ↗</Link>)}
-       {data.briefing.kind==='DATA_COVERAGE_NOTICE'&&<Link to="/social-listening" className="text-xs text-[#126d91] font-semibold">Explore captured evidence ↗</Link>}
-      </div>
-     </div>
-     <section className="rounded-lg bg-[#f4f7fa] p-3 md:p-4 space-y-3" aria-label="BAWASLU representative review actions">
-      <div>
-       <h3 className="text-sm font-semibold text-[#173952]">For BAWASLU Representative</h3>
-       <p className="text-xs text-slate-500 mt-1">Preliminary indicators and evidence work requiring review</p>
-      </div>
-      {(data.attention_actions||[]).length?(data.attention_actions||[]).map((x,i)=><div key={x.kind+'-'+i} className="bg-white rounded-md border border-[#e0e8ee] p-3 space-y-1.5">
-       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-[#263e51]">{x.title}</p>
-        <span className="text-[10px] shrink-0 text-amber-800">{x.kind==='POTENTIAL_ISSUE'?'Preliminary alert':'Data coverage'}</span>
-       </div>
-       <p className="text-xs text-slate-600 line-clamp-2">{x.description}</p>
-       <p className="text-[11px] text-slate-500">{x.recommended_action}</p>
-       <Link to={x.kind==='POTENTIAL_ISSUE'?evidenceLink(x):'/social-listening'} className="inline-block text-xs font-semibold text-[#126d91]">Review supporting evidence →</Link>
-      </div>):<p className="text-xs text-slate-600">No outstanding preliminary issue alerts or unassessed captured campaign posts were identified for the selected period. This is not a determination that no violations occurred.</p>}
-      <Link to="/inbox" className="text-xs font-semibold text-[#126d91] inline-block">Open Intelligence Inbox →</Link>
-     </section>
+   <Panel title={'BAWASLU · Operational Focus · '+data.scope.label} subtitle={'Evidence-based direction · '+data.period.date_from+' to '+data.period.date_to}>
+    <div className="space-y-3">
+     <p className="text-sm text-[#283f52]">Start with the following actions, prioritized from stored assessments and authorized monitoring evidence.</p>
+     {(data.focus_actions||[]).map((item,i)=><div key={i} className="rounded-lg border border-[#e0e8ee] p-3 space-y-1.5">
+      <p className="text-sm font-semibold text-[#173952]">{item.title}</p>
+      <p className="text-xs text-slate-600">{item.detail}</p>
+      <Link to={item.kind==='REVIEW_EVIDENCE'?evidenceLink(item):item.kind==='COVERAGE_GAP'?'/social-listening':'/inbox'} className="text-xs text-[#126d91] font-semibold">Open supporting records →</Link>
+     </div>)}
+     <p className="text-[11px] text-slate-500">Generated from stored evidence and review status at refresh time. This is not live streaming analysis or a determination of electoral misconduct.</p>
     </div>
    </Panel>
    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3" aria-label="Intelligence indicators">

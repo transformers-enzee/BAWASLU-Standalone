@@ -528,6 +528,22 @@ def build_command_center(db,p,data=None):
             'review_status':'NOT_ASSESSED',
             'recommended_action':'Open Social Listening to review captured evidence and its assessment status.'})
 
+    # Action-oriented briefing: point to supported reviews, never fabricate an
+    # AI narrative or turn missing assessments into a finding of no risk.
+    focus=[]
+    for item in latest_alerts[:3]:
+        focus.append({'kind':'REVIEW_EVIDENCE','title':'Review preliminary '+item['category']+' signal',
+            'detail':(item.get('description') or item.get('summary') or '')[:180],
+            'campaign_id':item['campaign_id'],'result_id':item['result_id'],
+            'basis':'STORED_ASSESSMENT'})
+    if not focus and unassessed_coverage:
+        focus.append({'kind':'COVERAGE_GAP','title':'Prioritize AI screening of unassessed captured evidence',
+            'detail':'There are captured posts in this publication period without an AI assessment. Select a representative sample in Social Listening before drawing conclusions.',
+            'basis':'CAPTURED_UNASSESSED_POSTS'})
+    if not focus:
+        focus.append({'kind':'VERIFY_COVERAGE','title':'Review recent Intelligence Inbox evidence and collection coverage',
+            'detail':'No evidence-backed issue alert is available in the current authorized view. Check source coverage, assessments and review decisions before treating this as an absence of electoral issues.',
+            'basis':'COVERAGE_STATUS'})
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
             'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
             'scope':{'label':scope_label,'geographic_scope':p.get('geographic_scope'),
@@ -538,7 +554,7 @@ def build_command_center(db,p,data=None):
                 'potential_alerts':len(latest_alerts),
                 'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in latest_alerts),
                 'emerging_issues':None},
-            'briefing':briefing,'attention_actions':attention[:4],
+            'briefing':briefing,'focus_actions':focus,'attention_actions':attention[:4],
             'alerts':latest_alerts[:10], 'latest_intelligence':recent,
             'activity':{'captured_mentions':len(captured_ids),
                         'newly_collected_mentions':newly_collected,

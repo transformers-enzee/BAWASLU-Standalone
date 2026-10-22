@@ -109,18 +109,6 @@ export default function Home(){
         <p className="text-[11px] text-slate-500 mt-2">{data.briefing.limitation}</p>
        </div>
       </div>
-      <div className="flex flex-wrap gap-2 items-center">
-       <span className="text-[11px] font-semibold text-slate-600">Active platforms</span>
-       {(activity.top_platforms||[]).length?activity.top_platforms.slice(0,3).map(x=><span key={x.platform} className="rounded-full bg-[#edf4f8] px-2 py-1 text-[11px] text-[#355b71]">{x.platform}: {fmtNumber(x.count)}</span>):<span className="text-xs text-slate-500">No captured posts for this period</span>}
-      </div>
-      {trend.length>0&&<div className="rounded-lg border border-[#e2e9ef] p-3" aria-label="Captured social activity trend">
-       <div className="flex justify-between items-center gap-3"><strong className="text-xs text-[#29485d]">Captured social activity</strong><Link to="/social-listening" className="text-[11px] text-[#126d91] font-semibold">Explore posts →</Link></div>
-       <div className="flex h-16 items-end gap-1 mt-3" role="img" aria-label={'Captured posts by day: '+trend.map(x=>x.date+': '+x.count).join('; ')}>
-        {trend.map(x=><div key={x.date} className="flex-1 min-w-0 rounded-t-sm bg-[#167b9f]" style={{height:Math.max(2,(Number(x.count||0)/trendMax)*100)+'%'}} title={x.date+': '+x.count+' captured post(s)'}/>)}
-       </div>
-       <div className="flex justify-between text-[10px] text-slate-500 mt-1"><span>{trend[0]?.date}</span><span>{trend[trend.length-1]?.date}</span></div>
-       <p className="text-[10px] text-slate-500 mt-1">Daily count of distinct campaign-linked captured posts in the selected location scope.</p>
-      </div>}
       <div className="flex flex-wrap gap-x-3 gap-y-1">
        {(data.briefing.sources||[]).map((x,i)=><Link key={x.campaign_id+'-'+x.result_id} to={evidenceLink(x)} className="text-xs text-[#126d91] font-semibold">Supporting record {i+1} ↗</Link>)}
        {data.briefing.kind==='DATA_COVERAGE_NOTICE'&&<Link to="/social-listening" className="text-xs text-[#126d91] font-semibold">Explore captured evidence ↗</Link>}
@@ -163,8 +151,8 @@ export default function Home(){
      {(data.latest_intelligence||[]).length?data.latest_intelligence.slice(0,3).map(row=><MiniRecord key={row.record_type==='INTELLIGENCE_ITEM'?'intel-'+row.id:row.result_id} record={row}/>):<p className="text-sm text-slate-500 py-3">No assessed relevant intelligence is available for this period and geographic scope.</p>}
     </Panel>
    </div>
-   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-start">
-    <Panel title="Captured Social Activity" subtitle="Published-post activity · selected monitoring period" to="/social-listening" action="Open Social Listening">
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Captured Social Activity" subtitle="Published-post activity · selected monitoring period" to="/social-listening" action="Open Social Listening">
      <div className="flex flex-wrap gap-3 text-xs text-slate-600"><span><strong>{fmtNumber(activity.captured_mentions)}</strong> published in period</span><span><strong>{fmtNumber(activity.newly_collected_mentions)}</strong> newly collected</span></div>
      <div className="flex h-28 items-end gap-1 rounded-lg bg-slate-50 px-3 py-2" aria-label="Captured social activity daily trend">
       {trend.length?trend.map((point,i)=><div key={i} className="flex-1 min-w-0 rounded-t bg-[#4384a3]" style={{height:Math.max(3,Math.round(100*(Number(point.count)||0)/trendMax))+'%'}} title={String(point.date||'')+': '+(point.count||0)+' posts'}/>):<span className="text-xs text-slate-500">No daily activity recorded</span>}
@@ -178,7 +166,7 @@ export default function Home(){
       {cleanSource(post.source_url)&&<a className="text-[#126d91]" href={cleanSource(post.source_url)} target="_blank" rel="noopener noreferrer">Original post ↗</a>}
      </article>)}
     </Panel>
-    <Panel title="Regional Intelligence Overview" subtitle={effectiveMapSource==='social'?'Social Evidence Inbox · all-time authorized AI geographic signals':effectiveMapSource==='coverage'?'Social Listening · campaign monitoring coverage':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
+    <Panel fillHeight title="Regional Intelligence Overview" subtitle={effectiveMapSource==='social'?'Social Evidence Inbox · all-time authorized AI geographic signals':effectiveMapSource==='coverage'?'Social Listening · campaign monitoring coverage':'Recorded Intelligence Inbox · all-time authorized jurisdiction inventory'} to="/inbox" action="Open Intelligence Inbox">
      <div className="flex gap-2 text-xs" aria-label="Regional map data source">
       <button type="button" onClick={()=>setMapSource('social')} aria-pressed={effectiveMapSource==='social'} className={effectiveMapSource==='social'?'intel-button text-xs':'intel-ghost text-xs'}>Assessed social evidence</button>
       <button type="button" onClick={()=>setMapSource('coverage')} aria-pressed={effectiveMapSource==='coverage'} className={effectiveMapSource==='coverage'?'intel-button text-xs':'intel-ghost text-xs'}>Campaign coverage</button>
@@ -192,8 +180,8 @@ export default function Home(){
      </div>})()}
     </Panel>
    </div>
-   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-start">
-    <Panel title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
+   <div className="grid xl:grid-cols-2 gap-3 md:gap-4 items-stretch">
+    <Panel fillHeight title="Watchlist Highlights" subtitle="Registered entities and their captured account activity" to="/watchlist" action="View full Watchlist">
      {(data.watchlist?.entries||[]).length?data.watchlist.entries.slice(0,3).map(x=><article key={x.watchlist_id} className="border-b border-slate-100 last:border-0 py-2.5 first:pt-0 space-y-1">
       <div className="flex justify-between gap-2"><p className="font-semibold text-sm">{x.name}</p><span className="text-[11px] text-slate-500">{x.platform}</span></div>
       <p className="text-xs text-slate-600 line-clamp-2">{x.summary||'Post text unavailable'}</p>
@@ -202,14 +190,19 @@ export default function Home(){
      </article>):<div className="text-sm text-slate-500 py-2 space-y-2"><p>No matching posts from registered Watchlist accounts were captured in this period.</p><p>{fmtNumber(data.watchlist?.monitored_profiles)} profiles are visible in your authorized scope. Registered accounts do not imply successful collection.</p></div>}
     </Panel>
    
-    <Panel title="Review Workload" subtitle="Human review and assessment coverage · authorized records" to="/inbox" action="Open Intelligence Inbox">
-     <div className="grid grid-cols-2 gap-2 text-sm">
-      <Link to="/inbox" className="rounded-lg border border-slate-200 p-3"><strong className="block text-xl tabular-nums">{fmtNumber(metrics.awaiting_review)}</strong><span className="text-xs text-slate-600">Awaiting human review</span></Link>
-      <Link to="/inbox" className="rounded-lg border border-slate-200 p-3"><strong className="block text-xl tabular-nums">{fmtNumber(metrics.potential_alerts)}</strong><span className="text-xs text-slate-600">Preliminary issue alerts</span></Link>
-      <Link to="/social-listening" className="rounded-lg border border-slate-200 p-3 col-span-2"><strong className="block text-xl tabular-nums">{fmtNumber(data.coverage?.unassessed_posts_in_period)}</strong><span className="text-xs text-slate-600">Captured posts awaiting AI assessment · publication period</span></Link>
-     </div>
-     <p className="text-xs text-slate-500">Numbers reflect stored module records, not confirmed electoral violations. Review decisions remain with authorized BAWASLU staff.</p>
+    <Panel fillHeight title="Channel Distribution" subtitle="Captured posts by social platform · selected publication period" to="/social-listening" action="View Social Listening">
+     {(activity.top_platforms||[]).length?<div className="space-y-3">
+      {(activity.top_platforms||[]).slice(0,5).map(channel=><div key={channel.platform} className="space-y-1">
+       <div className="flex justify-between gap-3 text-xs"><span className="font-semibold text-[#173952]">{channel.platform}</span><span className="tabular-nums text-slate-600">{fmtNumber(channel.count)} · {activity.captured_mentions?Math.round(100*channel.count/activity.captured_mentions):0}%</span></div>
+       <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-[#4384a3] rounded-full" style={{width:(activity.captured_mentions?Math.min(100,100*channel.count/activity.captured_mentions):0)+'%'}}/></div>
+      </div>)}
+      <p className="text-xs text-slate-500">Platform shares use captured posts published in the selected period. They do not indicate confirmed violations.</p>
+     </div>:<p className="text-sm text-slate-500 py-3">No captured social platform data for this period.</p>}
     </Panel>
+   </div>
+   <div className="rounded-lg border border-[#e1e8ee] bg-[#f6f9fb] px-3 py-2 text-xs text-[#52697d] flex flex-wrap justify-between gap-2" aria-label="Review workload summary">
+    <span><strong>Review workload:</strong> {fmtNumber(metrics.awaiting_review)} awaiting human review · {fmtNumber(metrics.potential_alerts)} preliminary issue alerts · {fmtNumber(data.coverage?.unassessed_posts_in_period)} published posts awaiting assessment</span>
+    <Link to="/inbox" className="text-[#126d91] font-semibold">Open Intelligence Inbox →</Link>
    </div>
    <Panel title="AI Assistant · Quick Investigation" subtitle="Ask questions grounded in authorized system records" to="/assistant" action="Open full assistant">
     <form onSubmit={e=>{e.preventDefault();if(question.trim())navigate('/assistant?q='+encodeURIComponent(question.trim()))}} className="flex flex-col sm:flex-row gap-2">

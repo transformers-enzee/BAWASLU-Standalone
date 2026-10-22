@@ -10,7 +10,7 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend/app/main.py"
 SIDEBAR = ROOT / "frontend/src/components/intel/AccessNavigation.jsx"
-VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\\.[1-9])?\\Z")
+VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[1-9])?\Z")
 
 
 def following(value):
@@ -37,7 +37,7 @@ def verify():
     backend = BACKEND.read_text(encoding="utf-8")
     sidebar = SIDEBAR.read_text(encoding="utf-8")
     server = read_version(backend, r"'build_version':'([^']+)'", "backend")
-    client = read_version(sidebar, r"useState\\(\\{build_version:'([^']+)'", "sidebar")
+    client = read_version(sidebar, r"useState\(\{build_version:'([^']+)'", "sidebar")
     assert server == client, f"Build mismatch: backend {server}, sidebar {client}"
 
     previous = subprocess.run(
@@ -56,6 +56,7 @@ def verify():
             f"Each commit must advance exactly one build: {old} -> {expected}; got {server}"
         )
     assert following("89.9") == "90"
+    assert following("90") == "90.1"
     assert following("90.9") == "91"
     assert not VERSION.fullmatch("89.10")
     assert not VERSION.fullmatch("89.11")

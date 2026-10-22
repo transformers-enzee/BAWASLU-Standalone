@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, AlertTriangle, MapPin, Radio, ShieldAlert, Eye, Inbox, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, AlertTriangle, MapPin, ShieldAlert, Eye, Inbox, RefreshCw } from 'lucide-react';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import { base44 } from '@/api/base44Client';
 import { Notice } from '@/components/intel/Fields';
@@ -21,7 +21,7 @@ const signal=x=>{
   return null;
 };
 const high=x=>x.priority==='Critical'||x.priority==='High';
-const ago=x=>{const d=new Date(x);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})};
+const ago=x=>{if(!x)return '—';const d=new Date(x);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})};
 function Section({title,subtitle,to,children}){return <section className="intel-card p-4 sm:p-5 min-w-0"><div className="flex items-start justify-between gap-3 mb-4"><div className="min-w-0"><h2 className="text-base font-semibold text-[#173851]">{title}</h2>{subtitle&&<p className="text-xs text-[#70869a] mt-1">{subtitle}</p>}</div>{to&&<Link to={to} className="shrink-0 text-xs font-semibold text-[#176e8e] hover:underline flex items-center gap-1">Lihat semua <ArrowUpRight size={13}/></Link>}</div>{children}</section>}
 function Empty({children}){return <div className="rounded-lg border border-dashed border-[#dce6ec] px-4 py-7 text-center text-sm text-[#70869a]">{children}</div>}
 function Record({item,detail}){return <Link to={'/intelligence/'+item.id} className="flex items-start justify-between gap-3 py-3 border-b border-[#edf2f5] last:border-0 hover:bg-[#fafcfd]"><div className="min-w-0"><p className="text-sm font-semibold text-[#1f3c50] line-clamp-2">{item.title||'Intelijen tanpa judul'}</p><p className="text-xs text-[#77899a] mt-1">{place(item)} · {ago(item.publication_datetime||item.updated_date||item.created_date)}</p>{detail&&<p className="text-xs text-[#97642b] mt-1">{detail}</p>}</div><ArrowUpRight size={15} className="shrink-0 mt-1 text-[#176e8e]"/></Link>}
@@ -41,12 +41,12 @@ export default function Home(){
  const viol=useMemo(()=>scoped.filter(x=>signal(x)).sort((a,b)=>Number(high(b))-Number(high(a))||stamp(b)-stamp(a)),[scoped]);
  const tasks=useMemo(()=>scoped.filter(x=>pending(x)||x.jurisdiction_confirmed!==true||x.geographic_mismatch_review?.status==='pending').sort((a,b)=>Number(high(b))-Number(high(a))||stamp(b)-stamp(a)),[scoped]);
  const latest=useMemo(()=>[...scoped].sort((a,b)=>stamp(b)-stamp(a)).slice(0,4),[scoped]);
- const topics=useMemo(()=>{const m=new Map();for(const x of scoped){for(const v of (Array.isArray(x.related_topics)?x.related_topics:[])){const name=(typeof v==='string'?v:v?.name||v?.label||'').trim();if(name)m.set(name,(m.get(name)||0)+1)}}return [...m].sort((a,b)=>b[1]-a[1]).slice(0,5)},[scoped]);
+ const topics=useMemo(()=>{const m=new Map();for(const x of scoped){for(const v of (Array.isArray(x.related_topics)?x.related_topics:[])){const name=String(typeof v==='string'?v:v?.name||v?.label||'').trim();if(name)m.set(name,(m.get(name)||0)+1)}}return [...m].sort((a,b)=>b[1]-a[1]).slice(0,5)},[scoped]);
  const watch=watchState.items||[];
  const relevantWatch=watch.filter(x=>!province||(x.province===province&&(!regency||x.regency_city===regency)));
  const socialCounts=social?.counts||{};
  const socialItems=(social?.results||[]).filter(x=>['DISCOVERED','RELEVANT','MONITOR'].includes(x.review_state)).slice(0,3);
- const refreshAll=()=>{refresh();loadSocial()};
+ const refreshAll=()=>{refresh();watchState.refresh();loadSocial()};
  return <div className="mx-auto max-w-[1360px] space-y-5 pb-8">
   <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4"><div className="min-w-0"><p className="text-[11px] uppercase tracking-[.18em] font-bold text-[#9a7e49]">BAWASLU · INTELLIGENCE COMMAND CENTER</p><h1 className="intel-heading mt-2">Situasi Pengawasan Pemilu</h1><p className="text-sm text-[#70869a] mt-1 max-w-2xl">Lihat perkembangan wilayah, sinyal yang perlu ditinjau, dan langkah pengawasan berikutnya — dalam satu tampilan.</p></div><button type="button" onClick={refreshAll} className="inline-flex self-start items-center gap-2 rounded-lg border border-[#cfdee6] bg-white px-3 py-2 text-xs font-semibold text-[#176e8e] hover:bg-[#f5fafc]"><RefreshCw size={14}/> Perbarui data</button></header>
   <div className="intel-card p-3 sm:p-4 flex flex-wrap items-center gap-3"><MapPin size={17} className="text-[#176e8e]"/><span className="text-xs font-semibold text-[#52697d]">Cakupan wilayah</span><select aria-label="Pilih provinsi" value={province} onChange={e=>{setProvince(e.target.value);setRegency('')}} className="min-w-[190px] rounded-lg border border-[#d3e0e8] bg-white px-3 py-2 text-sm text-[#173851]"><option value="">Seluruh wilayah berizin</option>{provinces.map(x=><option key={x} value={x}>{x}</option>)}</select>{province&&<select aria-label="Pilih kabupaten atau kota" value={regency} onChange={e=>setRegency(e.target.value)} className="min-w-[190px] rounded-lg border border-[#d3e0e8] bg-white px-3 py-2 text-sm text-[#173851]"><option value="">Seluruh Kabupaten/Kota</option>{regencies.map(x=><option key={x} value={x}>{x}</option>)}</select>}<span className="text-xs text-[#8192a3] ml-auto">{lastUpdated?'Social Listening diperbarui '+ago(lastUpdated):'Ringkasan data tersimpan'}</span></div>

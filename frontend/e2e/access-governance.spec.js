@@ -84,7 +84,7 @@ test('national administrator sees governance modules and cannot edit own assignm
 test('provincial analyst only sees permitted navigation and protected routes are denied', async ({ page }) => {
   await uiLogin(page, ANALYST_EMAIL, ANALYST_PASSWORD);
 
-  await expect(page.getByRole('link', { name: /intelligence inbox/i })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Intelligence Inbox', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /intelligence assistant/i })).toBeVisible();
   await expect(page.getByRole('link', { name: /add intelligence/i })).toBeVisible();
 
@@ -113,7 +113,7 @@ test('language toggle switches app-owned navigation labels', async ({ page }) =>
   await uiLogin(page, ANALYST_EMAIL, ANALYST_PASSWORD);
 
   await page.getByRole('button', { name: 'ID' }).click();
-  await expect(page.getByRole('link', { name: /kotak masuk intelijen/i })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: /kotak masuk intelijen/i })).toBeVisible();
 
   await page.getByRole('button', { name: 'EN' }).click();
   await expect(page.getByRole('link', { name: /intelligence inbox/i })).toBeVisible();

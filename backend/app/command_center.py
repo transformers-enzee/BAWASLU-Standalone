@@ -409,6 +409,15 @@ def build_command_center(db,p,data=None):
     regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
     # Read-only signal volume inventory. Only authorized saved assessments are
     # counted; a source mention is not a legal finding or suspicion of a person.
+    # Resolve known candidate aliases before counting. Post-ID sets prevent
+    # multiple spellings in one source from inflating mention volume.
+    candidate_aliases={
+        'gibran':'Gibran Rakabuming Raka',
+        'gibran rakabuming':'Gibran Rakabuming Raka',
+        'gibran rakabuming raka':'Gibran Rakabuming Raka',
+        'prabowo':'Prabowo Subianto',
+        'prabowo subianto':'Prabowo Subianto',
+    }
     candidate_inventory={}
     category_post_ids=defaultdict(set)
     seen_signal_posts=set()
@@ -420,6 +429,8 @@ def build_command_center(db,p,data=None):
             name=(item.get('name') or item.get('value') or '') if isinstance(item,dict) else item
             name=str(name or '').strip()[:120]
             if len(name)<3:continue
+            normalized=re.sub(r'\\s+',' ',name).strip().casefold()
+            name=candidate_aliases.get(normalized,name)
             key=name.casefold()
             entry=candidate_inventory.setdefault(key,{'name':name,'posts':set()})
             entry['posts'].add(post.id)
@@ -429,7 +440,7 @@ def build_command_center(db,p,data=None):
             category_post_ids[str(signal['category_name'])].add(post.id)
     candidate_coverage=sorted(
         [{'name':v['name'],'mentions':len(v['posts'])} for v in candidate_inventory.values()],
-        key=lambda row:row['name'].casefold())[:10]
+        key=lambda row:(-row['mentions'],row['name'].casefold()))[:10]
     issue_volume=sorted(
         [{'category':name,'posts':len(ids)} for name,ids in category_post_ids.items()],
         key=lambda row:(-row['posts'],row['category']))[:10]

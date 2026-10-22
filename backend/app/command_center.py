@@ -317,21 +317,35 @@ def build_command_center(db,p,data=None):
     # Use the same period, campaign authorization and source-run scope as
     # the Social Evidence Inbox summary. Old code independently fetched all
     # assessments from all dates, giving a stale province map after filtering.
+    # Restore the Build 90.6 all-time geography inventory. A post published
+    # before the dashboard date filter must not disappear from the map merely
+    # because its AI assessment was saved recently.
     regional_assessed=defaultdict(set)
-    for assessment,post in assessed_rows:
-        if not _result_in_scope(db,p,post):
-            continue
-        codes=set()
-        for signal in _as_list(assessment.geographic_signals_json):
-            value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''
-            value=str(value or '').strip()
-            code=province_code_for(value)
-            if not code:
-                city=regency_code_for(value)
-                if city:code=str(REGENCY_BY_CODE[city].get('province_code') or '')
-            if not code and value.lower().replace(' ','') in ('sumbar','sumaterabarat'):code='13'
-            if code and (not selected_code or code==selected_code):codes.add(code)
-        for code in codes:regional_assessed[code].add(assessment.result_id)
+    if campaigns_ids:
+        latest_geo=(db.query(EvidenceAssessment.campaign_id.label('cid'),
+                             EvidenceAssessment.result_id.label('rid'),
+                             func.max(EvidenceAssessment.assessment_version).label('ver'))
+            .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
+            .group_by(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id).subquery())
+        geo_rows=(db.query(EvidenceAssessment,SocialListeningResult)
+            .join(latest_geo,and_(EvidenceAssessment.campaign_id==latest_geo.c.cid,
+                 EvidenceAssessment.result_id==latest_geo.c.rid,
+                 EvidenceAssessment.assessment_version==latest_geo.c.ver))
+            .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
+            .all())
+        for assessment,post in geo_rows:
+            if not _result_in_scope(db,p,post):continue
+            codes=set()
+            for signal in _as_list(assessment.geographic_signals_json):
+                value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''
+                value=str(value or '').strip()
+                code=province_code_for(value)
+                if not code:
+                    city=regency_code_for(value)
+                    if city:code=str(REGENCY_BY_CODE[city].get('province_code') or '')
+                if not code and value.lower().replace(' ','') in ('sumbar','sumaterabarat'):code='13'
+                if code and (not selected_code or code==selected_code):codes.add(code)
+            for code in codes:regional_assessed[code].add(assessment.result_id)
     regional_inbox_signals=[{'province':_province_name(code),'province_code':code,'records':len(ids)}
         for code,ids in regional_assessed.items()]
     regional_inbox_signals.sort(key=lambda item:item['records'],reverse=True)
@@ -507,6 +521,7 @@ def build_command_center(db,p,data=None):
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'regional_inbox_signals':regional_inbox_signals,
+            'regional_inbox_signals_period':'ALL_TIME_AUTHORIZED',
             'regional_monitoring_coverage':by_region[:38],
             'mapped_intelligence':len(mapped_intel_ids),
             'unclassified_intelligence':unclassified_intel,

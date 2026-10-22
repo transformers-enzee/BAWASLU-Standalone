@@ -203,6 +203,45 @@ def build_command_center(db,p,data=None):
         prior=alerts_by_post.get(post.id)
         if prior is None or alert['priority_order']>prior['priority_order']:
             alerts_by_post[post.id]=alert
+    # Homepage recency is based on saved assessment time, not publication time.
+    latest_assessed=[]
+    latest_alerts=[]
+    if campaigns_ids:
+        all_recent=(db.query(EvidenceAssessment,SocialListeningResult)
+          .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
+          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
+          .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc())
+          .limit(300).all())
+        seen_recent=set()
+        for assessment,post in all_recent:
+            if post.id in seen_recent or not _result_in_scope(db,p,post):continue
+            campaign=campaigns_by_id.get(assessment.campaign_id)
+            if not campaign:continue
+            seen_recent.add(post.id)
+            note={'result_id':str(post.id),'campaign_id':str(campaign.id),
+                  'campaign_name':campaign.name,'source_url':post.canonical_url,
+                  'platform':post.platform,'author':post.author_name or post.observed_handle or 'Unknown author',
+                  'published_at':post.published_at,
+                  'detected_at':assessment.created_at.isoformat() if assessment.created_at else None,
+                  'summary':(assessment.explanation or post.text_content or '').strip()[:260],
+                  'relevance_label':assessment.relevance_label,'record_type':'ASSESSED_SOCIAL'}
+            latest_assessed.append(note)
+            if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):continue
+            signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
+            if not signals:signals=phrase_screening_candidates(post.text_content,categories,phrases)
+            if not signals:continue
+            review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+               .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==post.id,
+                       EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+               .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+            decision=review.decision if review else 'AWAITING_REVIEW'
+            if decision=='FLAG_DISMISSED':continue
+            signal=signals[0]
+            latest_alerts.append({**note,'category':signal['category_name'],
+                 'description':signal.get('explanation') or note['summary'],
+                 'evidence_quote':signal.get('evidence_quote',''),
+                 'province':_province_name(_region_code(campaign)) if _region_code(campaign) else 'Unclassified',
+                 'review_status':decision,'signal_provenance':signal.get('signal_provenance','')})
     # Complete coverage denominator: all campaign-linked, authorized captured
     # posts in the period, including posts that have not received AI screening.
     # Use narrow columns to avoid loading large raw-payload JSON records.
@@ -376,8 +415,10 @@ def build_command_center(db,p,data=None):
             'review_status':record.review_status,
             'date_basis':'SOURCE_PUBLICATION' if _day(date_text) else 'RECORD_CREATED'
         })
-    recent=sorted(list(relevant.values())+manual_recent,
-                  key=lambda x:x['published_at'] or '',reverse=True)[:5]
+    for item in manual_recent:
+        item['inbox_at']=item.get('published_at') or ''
+    recent=sorted(latest_assessed+manual_recent,
+                  key=lambda x:x.get('detected_at') or x.get('inbox_at') or '',reverse=True)[:8]
     # Watchlist highlights use only evidence explicitly linked to registered
     # accounts, not noisy substring matches against people's names.
     watch_items=[w for w in db.query(WatchlistItem).all() if allowed(p,w)]
@@ -449,11 +490,11 @@ def build_command_center(db,p,data=None):
             'generated_at':datetime.utcnow().isoformat()+'Z',
             'latest_evidence_at':source_updated.isoformat()+'Z' if source_updated else None,
             'indicators':{'relevant_mentions':len(relevant),
-                'potential_alerts':len(alerts),
-                'awaiting_review':waiting,
+                'potential_alerts':len(latest_alerts),
+                'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in latest_alerts),
                 'emerging_issues':None},
             'briefing':briefing,'attention_actions':attention[:4],
-            'alerts':alerts[:5], 'latest_intelligence':recent,
+            'alerts':latest_alerts[:10], 'latest_intelligence':recent,
             'activity':{'captured_mentions':len(captured_ids),
                         'newly_collected_mentions':newly_collected,
                         'published_date_basis':'SOURCE_PUBLISHED_AT',
@@ -466,6 +507,7 @@ def build_command_center(db,p,data=None):
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'regional_inbox_signals':regional_inbox_signals,
+            'regional_monitoring_coverage':by_region[:38],
             'mapped_intelligence':len(mapped_intel_ids),
             'unclassified_intelligence':unclassified_intel,
             'national_intelligence':national_intel,

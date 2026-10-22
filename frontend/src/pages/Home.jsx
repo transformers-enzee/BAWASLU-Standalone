@@ -165,7 +165,7 @@ export default function Home(){
      {(()=>{const rows=data.regional_inbox_signals||[];const total=rows.reduce((n,x)=>n+Number(x.records||0),0);const mapped=rows.map(x=>({province:x.province,count:x.records,percentage:total?Number(x.records||0)*100/total:0}));return <div className="space-y-3">
       <p className="text-xs text-slate-600">{total} province-associated assessed post(s) across {rows.length} province(s). Separate manual intelligence jurisdiction counts are not included in this map.</p>
       <ProvinceHeatmap distribution={mapped} totalPosts={total} unit="intelligence records" title="Indonesia · Social Evidence Inbox distribution" subtitle="AI-assessed post location signals" footnote="Based on AI assessment location signals used by the Social Evidence Inbox. City signals are mapped to their province when recognized; counts indicate associated assessed posts, not verified incident locations."/>
-      {rows.length>0?<div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left text-slate-500"><th className="py-2">Province</th><th className="text-right">Records</th></tr></thead><tbody>{rows.slice(0,6).map(x=><tr key={x.province_code} className="border-b last:border-0 border-slate-100"><td className="py-2">{x.province}</td><td className="text-right tabular-nums">{x.records}</td></tr>)}</tbody></table></div>:<p className="text-xs text-slate-500">No assessed Inbox posts have recognized provincial location signals. Unrecognized signals are not mapped.</p>}
+      {!rows.length&&<p className="text-xs text-slate-500">No assessed Inbox posts have recognized provincial location signals. Unrecognized signals are not mapped.</p>}
 
      </div>})()}
     </Panel>

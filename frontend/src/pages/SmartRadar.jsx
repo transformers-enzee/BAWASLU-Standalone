@@ -15,12 +15,15 @@ const primary='rounded-lg px-3 py-2 text-sm bg-[#147968] text-white hover:bg-[#1
 export default function SmartRadar(){
  const {access}=useOutletContext();
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [processing,setProcessing]=useState(null),[running,setRunning]=useState(false);
  const [perspective,setPerspective]=useState('operations'),[topic,setTopic]=useState('All Topics'),[period,setPeriod]=useState('historical');
  const [panel,setPanel]=useState(null),[deskTab,setDeskTab]=useState('review'),[notice,setNotice]=useState(true),[expanded,setExpanded]=useState(false);
  const [selected,setSelected]=useState(null),[history,setHistory]=useState(null),[note,setNote]=useState(''),[followup,setFollowup]=useState('');
  const [confirm,setConfirm]=useState(null),[saving,setSaving]=useState(false),[toast,setToast]=useState('');
  const reload=()=>call('/dashboard').then(setData);
- useEffect(()=>{reload().catch(e=>setError(e.message)).finally(()=>setLoading(false))},[]);
+ const refreshProcessing=()=>call('/processing-status').then(setProcessing).catch(()=>setProcessing(null));
+ const runPilot=async()=>{setRunning(true);try{const result=await call('/process-batch',{limit:5});await Promise.all([reload(),refreshProcessing()]);setToast(result.failed?.length?'AI processing stopped: '+result.failed[0].reason:result.processed.length+' posts assessed and saved');}catch(e){setError(e.message)}finally{setRunning(false)}};
+ useEffect(()=>{reload().catch(e=>setError(e.message)).finally(()=>setLoading(false));if(access?.role==='National Administrator')refreshProcessing()},[access?.role]);
  const findings=data?.findings||[];
  const filtered=useMemo(()=>findings.filter(f=>{
   if(f.perspective!==perspective)return false;
@@ -28,7 +31,7 @@ export default function SmartRadar(){
   if(period!=='historical'&&dateValue(f.published_at)<Date.now()-Number(period)*86400000)return false;
   return true;
  }),[findings,perspective,topic,period]);
- const needs=filtered.filter(f=>f.status==='pending'&&f.player==='attention');
+ const needs=filtered.filter(f=>f.status==='pending').sort((a,b)=>(b.priority_score??-1)-(a.priority_score??-1));
  const inPlayer=k=>k==='validated'?filtered.filter(f=>f.human_reviewed):k==='attention'?needs:filtered.filter(f=>f.player===k);
  const due=f=>f.next_followup&&dateValue(f.next_followup)<=Date.now();
  const actionCount=findings.filter(f=>f.status==='pending'||(f.status==='investigating'&&due(f))).length;
@@ -63,6 +66,7 @@ export default function SmartRadar(){
    <div className="md:col-span-4"><label className="text-xs font-bold">Intelligence Topic</label><select className={inputClass+' mt-1'} value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map(t=><option key={t}>{t}</option>)}</select></div>
   </div>
   {notice&&<div className="rounded-lg border-l-4 border-[#16886e] border bg-[#f1faf6] p-3 flex items-start gap-3"><Bell className="shrink-0 text-[#147968]" size={18}/><div className="flex-1"><b className="text-sm">Welcome Back</b><p className="text-xs text-slate-500">Historical pilot data · No verified personal last-visit baseline</p><div className="flex flex-wrap gap-4 my-2 text-xs"><span><b>—</b> New Issues</span><span><b>—</b> Important Updates</span><span><b>{actionCount}</b> Follow-ups / Reviews Due</span><span><b>—</b> New Narratives</span></div><p className="text-xs">Since your last visit, new allegations and concerns were identified. Some require a decision; others are for awareness only.</p>{expanded&&<p className="text-xs mt-2 text-slate-600">Exact since-last-visit counts will become available after account-specific visit tracking and incremental ingestion are enabled.</p>}</div><button aria-label="Details" className="text-xs underline" onClick={()=>setExpanded(!expanded)}>{expanded?'Less':'Details'}</button><button aria-label="Dismiss notification" onClick={()=>setNotice(false)}><X size={17}/></button></div>}
+  {processing&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="flex flex-wrap justify-between gap-3 items-center"><div><b className="text-sm">Phase 3 AI processing · Administrator</b><p className="text-xs text-amber-800 mt-1">{processing.assessed} / {processing.sources} posts assessed and saved · {processing.input_tokens} input tokens · {processing.output_tokens} output tokens</p><p className="text-xs text-slate-500">Only runs when clicked. Requires SMART_RADAR_PILOT_AI_ENABLED=true, OPENAI_API_KEY and SMART_RADAR_PILOT_MODEL on the staging backend.</p></div><button className={primary} disabled={running||processing.assessed>=processing.sources} onClick={runPilot}>{running?"Processing...":"Assess next 5 posts"}</button></div></div>}
   <div className="border border-slate-200 rounded-xl p-5"><h2 className="font-semibold">✦ Executive Briefing</h2><p className="text-sm text-slate-600 mt-2">{filtered.length} preliminary discussion groups are visible in this filtered view, supported by {filtered.reduce((n,f)=>n+f.supporting_posts,0)} original source posts. These are exploratory groupings, not verified incidents or AI-reviewed allegations. Review linked evidence before taking action.</p><p className="text-xs text-amber-700 mt-2">{data?.disclaimer}</p></div>
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[[filtered.length,'Preliminary Groups'],[filtered.reduce((n,f)=>n+f.supporting_posts,0),'Supporting Posts'],[needs.length,'Needs Attention (Scored)'],[filtered.filter(f=>f.human_reviewed).length,'Reviewed Issues']].map(([n,l])=><div key={l} className="border rounded-xl p-4 bg-white"><b className="text-2xl">{n}</b><p className="text-xs text-slate-500 mt-1">{l}</p></div>)}</div>
   <div className="flex justify-between items-end"><h2 className="font-semibold text-lg">Four Intelligence Players</h2><span className="text-xs text-slate-500">Click any player for details</span></div>

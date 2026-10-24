@@ -27,10 +27,15 @@ def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
         rows=db.execute(text("""SELECT (SELECT count(*) FROM pilot_smart_radar.source_posts WHERE ingest_batch_id='RADAR-PHASE3-BATCH-001') AS sources,
  (SELECT count(*) FROM pilot_smart_radar.post_assessments) AS assessed,
  (SELECT coalesce(sum(input_tokens),0) FROM pilot_smart_radar.post_assessments) AS input_tokens,
- (SELECT coalesce(sum(output_tokens),0) FROM pilot_smart_radar.post_assessments) AS output_tokens""")).mappings().first()
+ (SELECT coalesce(sum(output_tokens),0) FROM pilot_smart_radar.post_assessments) AS output_tokens,
+ (SELECT count(*) FROM pilot_smart_radar.topic_summaries) AS topic_summaries""")).mappings().first()
     except Exception as exc:
         db.rollback();raise HTTPException(503,"Pilot assessment tables unavailable") from exc
-    return dict(rows)
+    from .smart_radar import fetch_sources
+    from .smart_radar_intelligence import assign_theme
+    result=dict(rows)
+    result["topic_count"]=len({assign_theme(p) for p in fetch_sources(db)})
+    return result
 @router.post("/process-batch")
 def process_batch(body:StartPilot,user:User=Depends(current_user),db:Session=Depends(get_db)):
     _permission(db,user)

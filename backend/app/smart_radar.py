@@ -45,10 +45,27 @@ def authorised(db, user, decision=False):
 _CACHE_LOCK=threading.RLock()
 _SOURCE_CACHE={"rows":None,"expires":0.0}
 _AI_CACHE={"rows":None,"expires":0.0}
+_TOPIC_CACHE={"rows":None,"expires":0.0}
 def invalidate_source_cache():
     with _CACHE_LOCK:_SOURCE_CACHE.update(rows=None,expires=0.0)
 def invalidate_assessment_cache():
     with _CACHE_LOCK:_AI_CACHE.update(rows=None,expires=0.0)
+def invalidate_topic_cache():
+    with _CACHE_LOCK:_TOPIC_CACHE.update(rows=None,expires=0.0)
+def fetch_topic_summaries(db):
+    ttl=max(5,min(120,int(os.getenv("SMART_RADAR_TOPIC_CACHE_SECONDS","30"))))
+    with _CACHE_LOCK:
+        if _TOPIC_CACHE["rows"] is not None and time.monotonic()<_TOPIC_CACHE["expires"]:
+            return _TOPIC_CACHE["rows"]
+        try:
+            rows={x["finding_id"]:dict(x) for x in db.execute(text(
+                "SELECT finding_id,source_signature,insight_json,model,prompt_version,sample_count,generated_at "
+                "FROM pilot_smart_radar.topic_summaries")).mappings()}
+        except Exception:
+            db.rollback()
+            return {}
+        _TOPIC_CACHE.update(rows=rows,expires=time.monotonic()+ttl)
+        return rows
 
 def fetch_sources(db):
     ttl=max(30,min(1800,int(os.getenv("SMART_RADAR_SOURCE_CACHE_SECONDS","600"))))
@@ -137,7 +154,30 @@ def build_findings(posts, states, assessments=None):
 
 def access_findings(db,user):
     authorised(db,user)
-    return build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
+    findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
+    cached=fetch_topic_summaries(db)
+    for f in findings:
+        row=cached.get(f["id"])
+        if not row or row.get("source_signature")!=f["source_signature"]:
+            continue
+        output=row.get("insight_json") or {}
+        if isinstance(output,str):
+            try:output=json.loads(output)
+            except ValueError:output={}
+        if not isinstance(output,dict):continue
+        matched=False
+        for lens in f["perspectives"]:
+            item=output.get(lens)
+            if isinstance(item,dict) and isinstance(item.get("summary"),str) and item["summary"].strip():
+                f["insights"][lens]=item["summary"].strip()[:900]
+                f.setdefault("insight_sources",{})[lens]=item.get("source_ids",[])
+                matched=True
+        if matched:
+            f["ai_summary"]=True
+            f["summary"]=f["insights"].get("operations") or f["insights"].get("reputation")
+            f["ai_model"]=row.get("model")
+            f["summary_evidence_sample"]=row.get("sample_count")
+    return findings
 
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):

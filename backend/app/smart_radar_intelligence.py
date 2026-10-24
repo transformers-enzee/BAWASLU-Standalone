@@ -6,6 +6,7 @@ as an identifiable reported case. Never imply independent corroboration from
 multiple reposts.
 """
 import re
+import hashlib
 from collections import Counter, defaultdict
 
 # Stable IDs avoid duplicate officer actions across dashboard perspectives.
@@ -216,6 +217,10 @@ def build_topic_findings(posts,states,assessments,actors,source_view):
         b["day_counts"]=dict(b["day_counts"])
         b["actor_mentions"]=dict(b["actor_mentions"])
         b["source_ids"]=[p["pilot_post_id"] for p in b["posts"]]
+        b["source_signature"]=hashlib.sha256((
+          "\n".join(sorted(p["pilot_post_id"]+":"+str(p.get("message_original") or "") for p in b["posts"]))
+        ).encode("utf-8")).hexdigest()
+        b["ai_summary"]=False
         b["review_basis"]="Preliminary source-based triage" if b["review_suggested"] else "For Awareness"
         b["last_update"]=b["updated_at"] or b["published_at"]
     return sorted(buckets.values(),

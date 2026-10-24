@@ -121,12 +121,14 @@ def build_findings(posts, states, assessments=None):
         if a:
             b["assessment_count"]+=1
             b.setdefault("_scores",[]).append(a.get("priority_score") or 0)
+            if result.get("potential_action") is True and (a.get("priority_score") or 0)>=75:
+                b["suggested_action"]=True
         b["actors"].update(actors(p["message_original"]))
         if perspective(p)=="reputation":b["perspective"]="reputation"
         b["published_at"]=max(b["published_at"],p["published_at_raw"] or "")
     for b in buckets.values():
         st=states.get(b["id"],{})
-        b["status"]=st.get("status") or "awareness"
+        b["status"]=st.get("status") or ("pending" if b.get("suggested_action") else "awareness")
         b["human_reviewed"]=bool(st.get("first_reviewed_at"))
         b["next_followup"]=str(st["next_followup"]) if st.get("next_followup") else ""
         b["updated_at"]=str(st.get("updated_at") or "")
@@ -137,6 +139,7 @@ def build_findings(posts, states, assessments=None):
             b["priority_label"]="High Priority" if max(scores)>=75 else "Medium Priority" if max(scores)>=50 else "Routine"
         b["summary"]=(f"{len(b['posts'])} original source post(s) discussing this topic. "
              "Grouping and labels are preliminary; original claims have not been verified.")
+        b["player"]="attention" if b["status"]=="pending" else b["player"]
         b["supporting_posts"]=len(b["posts"])
     return sorted(buckets.values(),key=lambda x:x["published_at"],reverse=True)
 

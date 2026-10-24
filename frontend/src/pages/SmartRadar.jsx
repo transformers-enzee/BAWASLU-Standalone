@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Radar, X, Bell, ArrowLeft, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 const token=()=>window.localStorage.getItem('bawaslu_access_token')||'';
 async function call(path,body){
- const r=await fetch('/api/smart-radar'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token(),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const r=await fetch('/api/smart-radar'+path,{cache:'no-store',method:body?'POST':'GET',headers:{Authorization:'Bearer '+token(),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
  const v=await r.json().catch(()=>({}));if(!r.ok)throw Error(v.detail||'Server error');return v;
 }
 const players=[['attention','Needs Attention'],['concerns','Public Concerns'],['narratives','Emerging Narratives'],['validated','Validated Intelligence']];
@@ -18,7 +18,7 @@ export default function SmartRadar(){
  const [processing,setProcessing]=useState(null),[running,setRunning]=useState(false);
  const [perspective,setPerspective]=useState('operations'),[topic,setTopic]=useState('All Topics'),[period,setPeriod]=useState('historical');
  const [panel,setPanel]=useState(null),[deskTab,setDeskTab]=useState('review'),[notice,setNotice]=useState(true),[expanded,setExpanded]=useState(false);
- const [selected,setSelected]=useState(null),[history,setHistory]=useState(null),[note,setNote]=useState(''),[followup,setFollowup]=useState('');
+ const [selected,setSelected]=useState(null),[detailLoading,setDetailLoading]=useState(false),[history,setHistory]=useState(null),[note,setNote]=useState(''),[followup,setFollowup]=useState('');
  const [confirm,setConfirm]=useState(null),[saving,setSaving]=useState(false),[toast,setToast]=useState('');
  const reload=()=>call('/dashboard').then(setData);
  const refreshProcessing=()=>call('/processing-status').then(setProcessing).catch(()=>setProcessing(null));
@@ -35,7 +35,13 @@ export default function SmartRadar(){
  const inPlayer=k=>k==='validated'?filtered.filter(f=>f.human_reviewed):k==='attention'?needs:filtered.filter(f=>f.player===k);
  const due=f=>f.next_followup&&dateValue(f.next_followup)<=Date.now();
  const actionCount=findings.filter(f=>f.status==='pending'||(f.status==='investigating'&&due(f))).length;
- const openFinding=f=>{setSelected(f);setHistory(null);setNote('');setFollowup(f.next_followup||'');setPanel('finding')};
+ const openFinding=async f=>{
+  setSelected(null);setDetailLoading(true);setHistory(null);setNote('');
+  setFollowup(f.next_followup||'');setPanel('finding');
+  try{setSelected(await call('/finding/'+encodeURIComponent(f.id)))}
+  catch(e){setError(e.message);setPanel(null)}
+  finally{setDetailLoading(false)}
+ };
  const doAction=async()=>{if(!confirm||!selected)return;setSaving(true);try{
    await call('/decision',{finding_id:selected.id,action:confirm,note,next_followup:followup||null});
    await reload();setPanel(null);setSelected(null);setConfirm(null);setToast('Officer decision saved');setTimeout(()=>setToast(''),4500);
@@ -87,6 +93,7 @@ export default function SmartRadar(){
     <div className="flex justify-between items-center gap-3 mb-5"><h2 className="font-bold text-xl">{panel==='desk'?'Action Desk':panel==='finding'?'Finding Details':players.find(p=>p[0]===panel)?.[1]}</h2><button onClick={()=>setPanel(null)} className={btn}><X size={17}/></button></div>
     {panel==='desk'&&<><p className="text-sm text-slate-500 mb-4">BAWASLU officer homework, separate from technical QC.</p><div className="flex gap-2 mb-4">{[['review','To Review'],['investigating','Investigating'],['monitoring','Monitoring']].map(([k,l])=><button key={k} className={deskTab===k?primary:btn} onClick={()=>setDeskTab(k)}>{l}</button>)}</div>{findings.filter(f=>deskTab==='review'?f.status==='pending':f.status===deskTab).map(f=><button key={f.id} onClick={()=>openFinding(f)} className="border w-full rounded-lg p-3 text-left mb-2 hover:border-[#167968]"><b>{f.title}</b><p className="text-xs text-slate-500 mt-1">{f.perspective} · {f.status} · {f.supporting_posts} posts</p></button>)}{!findings.some(f=>deskTab==='review'?f.status==='pending':f.status===deskTab)&&<p className="text-sm text-slate-500">No assigned findings in this section.</p>}</>}
     {players.some(p=>p[0]===panel)&&<><p className="text-xs text-amber-700 mb-3">Preliminary grouping. Priority labels await AI scoring. Opening evidence does not constitute officer review.</p>{inPlayer(panel).map(f=><button key={f.id} onClick={()=>openFinding(f)} className="border block w-full text-left rounded-lg p-4 mb-3 hover:border-[#167968]"><div className="flex justify-between gap-3"><b>{f.title}</b><span className="text-xs whitespace-nowrap text-[#147968]">{f.priority_label}</span></div><p className="text-sm text-slate-600 mt-2">{f.summary}</p><p className="text-xs text-slate-500 mt-2">{f.supporting_posts} Supporting Posts · {f.status}</p></button>)}{!inPlayer(panel).length&&<p className="text-sm text-slate-500">No findings in the current selection.</p>}</>}
+    {panel==='finding'&&detailLoading&&<p className="text-sm text-slate-500">Loading source evidence...</p>}
     {panel==='finding'&&selected&&<><button className={btn} onClick={()=>setPanel('desk')}><ArrowLeft size={14} className="inline"/> Back to Action Desk</button><h3 className="text-lg font-bold mt-4">{selected.title}</h3><div className="flex flex-wrap gap-2 my-3"><span className="bg-slate-100 px-2 py-1 text-xs rounded-full">{selected.status}</span><span className="bg-amber-50 text-amber-800 px-2 py-1 text-xs rounded-full">{selected.priority_label}</span>{selected.topics.map(t=><span key={t} className="bg-slate-100 px-2 py-1 text-xs rounded-full">{t}</span>)}</div><p className="text-sm text-slate-600">{selected.summary}</p><h4 className="font-semibold mt-5">Original Supporting Posts ({selected.posts.length})</h4>{selected.posts.map(p=><div key={p.pilot_post_id} className="border rounded-lg p-3 my-3"><p className="text-xs text-slate-500">{p.pilot_post_id} · {p.platform} · {p.published_at_raw} · {p.account_raw}</p><p className="text-sm whitespace-pre-wrap my-2">{p.message_original}</p><a href={p.source_url} target="_blank" rel="noopener noreferrer" className="text-[#147968] text-xs underline">View original source <ExternalLink className="inline" size={12}/></a></div>)}
     <button className={btn+' mt-3 w-full'} onClick={async()=>{if(history){setHistory(null);return}try{setHistory((await call('/history/'+encodeURIComponent(selected.id))).events)}catch(e){setError(e.message)}}}>Previous Reviews & Updates {history?'▲':'▼'}</button>{history&&<div className="mt-3">{history.length?history.map((h,i)=><div key={i} className="border-b py-2 text-xs"><b>{h.action}</b><span className="text-slate-400 ml-2">{h.created_at}</span><p>{h.note}</p></div>):<p className="text-xs text-slate-500">No recorded officer reviews yet.</p>}</div>}
     {canReview&&<div className="mt-6 border-t pt-4"><label className="text-sm font-semibold">Officer note {['escalated','closed'].includes(selected.status)?'(required when reopening)':''}</label><textarea className={inputClass+' mt-1 min-h-24'} value={note} onChange={e=>setNote(e.target.value)} placeholder="Short evidence-grounded note or reference"/>{selected.status==='investigating'&&<div className="mt-3"><label className="text-sm font-semibold">Optional next follow-up date</label><input className={inputClass} type="date" value={followup} onChange={e=>setFollowup(e.target.value)}/></div>}<div className="flex flex-wrap gap-2 mt-4">{options.map(([k,label])=><button key={k} className={primary} onClick={()=>{if(['reopen','escalate'].includes(k)&&!note.trim()){setError('A short note is required for this action');return}setConfirm(k)}}>{label}</button>)}</div><p className="text-xs text-slate-500 mt-2">Officer action only. Technical QC is not performed here.</p></div>}

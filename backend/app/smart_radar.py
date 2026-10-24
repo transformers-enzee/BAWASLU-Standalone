@@ -4,9 +4,12 @@ No Supabase credentials are sent to the browser. Routes use app authentication a
 """
 from collections import Counter, defaultdict
 import json
+import os
+import time
+import threading
 from datetime import datetime, timezone
 import re
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -33,12 +36,28 @@ def authorised(db, user, decision=False):
         raise HTTPException(403, "Pilot records require verified jurisdiction before regional access")
     return p
 
+# Per-instance bounded cache of static pilot data only, never officer decisions.
+# Authorization and jurisdiction checks happen on every incoming API request.
+_CACHE_LOCK=threading.RLock()
+_SOURCE_CACHE={"rows":None,"expires":0.0}
+_AI_CACHE={"rows":None,"expires":0.0}
+def invalidate_source_cache():
+    with _CACHE_LOCK:_SOURCE_CACHE.update(rows=None,expires=0.0)
+def invalidate_assessment_cache():
+    with _CACHE_LOCK:_AI_CACHE.update(rows=None,expires=0.0)
+
 def fetch_sources(db):
-    try:
-        return [dict(x) for x in db.execute(text(SOURCE_SQL), {"batch": BATCH}).mappings()]
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(503, "Pilot source table unavailable: check staging DATABASE_URL and import") from exc
+    ttl=max(30,min(1800,int(os.getenv("SMART_RADAR_SOURCE_CACHE_SECONDS","600"))))
+    with _CACHE_LOCK:
+        if _SOURCE_CACHE["rows"] is not None and time.monotonic()<_SOURCE_CACHE["expires"]:
+            return _SOURCE_CACHE["rows"]
+        try:
+            rows=[dict(x) for x in db.execute(text(SOURCE_SQL), {"batch": BATCH}).mappings()]
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(503, "Pilot source table unavailable: check staging DATABASE_URL and import") from exc
+        _SOURCE_CACHE.update(rows=rows,expires=time.monotonic()+ttl)
+        return rows
 
 def detect_topic(post):
     content = (post["message_original"] or "").lower()
@@ -82,10 +101,17 @@ def grouping(post):
     return ("POST-"+pid,title or pid,"concerns" if detect_topic(post)=="Citizen Reports / Public Concerns" else "narratives")
 
 def fetch_assessments(db):
-    try:
-        return {x["pilot_post_id"]: dict(x) for x in db.execute(text("SELECT pilot_post_id,result_json,relevance_score,priority_score,processed_at FROM pilot_smart_radar.post_assessments")).mappings()}
-    except Exception:
-        db.rollback();return {}
+    ttl=max(5,min(60,int(os.getenv("SMART_RADAR_ASSESSMENT_CACHE_SECONDS","15"))))
+    with _CACHE_LOCK:
+        if _AI_CACHE["rows"] is not None and time.monotonic()<_AI_CACHE["expires"]:
+            return _AI_CACHE["rows"]
+        try:
+            rows={x["pilot_post_id"]: dict(x) for x in db.execute(text("SELECT pilot_post_id,result_json,relevance_score,priority_score,processed_at FROM pilot_smart_radar.post_assessments")).mappings()}
+        except Exception:
+            db.rollback()
+            return {}
+        _AI_CACHE.update(rows=rows,expires=time.monotonic()+ttl)
+        return rows
 
 def fetch_states(db):
     try:
@@ -150,19 +176,28 @@ def access_findings(db,user):
     return build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
 
 @router.get("/dashboard")
-def dashboard(user:User=Depends(current_user),db:Session=Depends(get_db)):
+def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    response.headers["Cache-Control"]="private, no-store"
     findings=access_findings(db,user)
     posts=fetch_sources(db)
     platform_counts=Counter((p.get("platform") or "Unknown").title() for p in posts)
     mention_counts=Counter()
     for p in posts: mention_counts.update(set(actors(p["message_original"])))
     return {"batch_id":BATCH,"source_total":len(posts),"source_unique_urls":len(set(p["source_url"] for p in posts)),
-        "findings":findings,"platform_counts":dict(platform_counts),
+        "findings":[{k:v for k,v in f.items() if k!="posts"} for f in findings],
+        "platform_counts":dict(platform_counts),
         "candidate_mentions":mention_counts.most_common(10),
         "reviewed_total":sum(x["human_reviewed"] for x in findings),
         "mode":"PARTIAL_ASSESSMENT" if fetch_assessments(db) else "PRELIMINARY_SOURCE_GROUPING", "scoring_ready":bool(fetch_assessments(db)),
         "disclaimer":"Source grouping is provisional; only saved assessments have priority scores. Allegations remain unverified.",
         "jurisdictions":["Indonesia - National"],"timezone":"Asia/Jakarta"}
+
+@router.get("/finding/{finding_id}")
+def finding_detail(finding_id:str,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    response.headers["Cache-Control"]="private, no-store"
+    result=next((f for f in access_findings(db,user) if f["id"]==finding_id),None)
+    if result is None:raise HTTPException(404,"Finding unavailable")
+    return result
 
 @router.get("/history/{finding_id}")
 def history(finding_id:str,user:User=Depends(current_user),db:Session=Depends(get_db)):

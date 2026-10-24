@@ -88,7 +88,10 @@ Do not manufacture allegations. Account handles are not verified actor identitie
                 "version":VERSION,"result":json.dumps(result,ensure_ascii=False),"rel":result["relevance_score"],
                 "priority":result["priority_score"],"in_tok":int(usage.get("prompt_tokens") or 0),
                 "out_tok":int(usage.get("completion_tokens") or 0)})
-            db.commit();processed.append(post["pilot_post_id"])
+            db.commit()
+            from .smart_radar import invalidate_assessment_cache
+            invalidate_assessment_cache()
+            processed.append(post["pilot_post_id"])
         except (httpx.HTTPError,ValueError,KeyError,IndexError,TypeError,json.JSONDecodeError) as exc:
             db.rollback();failed.append({"post_id":post["pilot_post_id"],"reason":type(exc).__name__})
             break # prevent repeated provider requests on failure

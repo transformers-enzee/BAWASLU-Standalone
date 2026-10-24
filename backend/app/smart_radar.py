@@ -121,7 +121,8 @@ def build_findings(posts, states, assessments=None):
         if a:
             b["assessment_count"]+=1
             b.setdefault("_scores",[]).append(a.get("priority_score") or 0)
-            if result.get("potential_action") is True and (a.get("priority_score") or 0)>=75:
+            if result.get("summary"): b.setdefault("_summaries",[]).append(str(result["summary"])[:350])
+            if ident.startswith("POST-") and result.get("potential_action") is True and (a.get("priority_score") or 0)>=75:
                 b["suggested_action"]=True
         b["actors"].update(actors(p["message_original"]))
         if perspective(p)=="reputation":b["perspective"]="reputation"
@@ -137,7 +138,8 @@ def build_findings(posts, states, assessments=None):
         if scores:
             b["priority_score"]=max(scores)
             b["priority_label"]="High Priority" if max(scores)>=75 else "Medium Priority" if max(scores)>=50 else "Routine"
-        b["summary"]=(f"{len(b['posts'])} original source post(s) discussing this topic. "
+        summaries=b.pop("_summaries",[])
+        b["summary"]=(" ".join(summaries[:2])[:600]+" (AI preliminary; unverified source claims.)") if summaries else (f"{len(b['posts'])} original source post(s) discussing this topic. "
              "Grouping and labels are preliminary; original claims have not been verified.")
         b["player"]="attention" if b["status"]=="pending" else b["player"]
         b["supporting_posts"]=len(b["posts"])

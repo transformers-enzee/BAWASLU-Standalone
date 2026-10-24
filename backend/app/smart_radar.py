@@ -18,6 +18,7 @@ from .auth import current_user
 from .models import User
 from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
+from .smart_radar_geography import attach_geo_to_findings
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -182,11 +183,7 @@ def access_findings(db,user):
     authorised(db,user)
     findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
     cached=fetch_topic_summaries(db)
-    by_post=fetch_verified_incident_geography(db)
     for f in findings:
-        verified_posts=[p for p in f["source_ids"] if p in by_post]
-        f["verified_geo_posts"]=len(verified_posts)
-        f["province_codes"]=sorted({code for post_id in verified_posts for code in by_post[post_id]})
         row=cached.get(f["id"])
         if not row or row.get("source_signature")!=f["source_signature"]:
             continue
@@ -207,7 +204,7 @@ def access_findings(db,user):
             f["summary"]=f["insights"].get("operations") or f["insights"].get("reputation")
             f["ai_model"]=row.get("model")
             f["summary_evidence_sample"]=row.get("sample_count")
-    return findings
+    return attach_geo_to_findings(findings,db)
 
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):

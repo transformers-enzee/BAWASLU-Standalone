@@ -114,7 +114,7 @@ export default function SmartRadar(){
    </div>
   </div>
   <div className="border rounded-xl bg-white p-5 min-w-0">
-    <IndonesiaProvinceHeatmap findings={filtered}/>
+    <IndonesiaProvinceHeatmap findings={filtered} onOpenFinding={openFinding}/>
   </div>
     <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Strategic Insights</h3><p className="text-sm text-slate-600 mt-2">Recommended next step: validate source and grouping quality, then run the agreed AI relevance and priority pipeline before producing officer-ready recommendations or SWOT.</p></div>
   {toast&&<div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-[#145343] text-white text-sm rounded-lg px-5 py-3 z-[90]">{toast}</div>}

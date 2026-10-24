@@ -1,97 +1,79 @@
 import { useEffect, useMemo, useState } from 'react';
 
-const PALETTE=[
-  {min:1,label:'1 topic',color:'#b5e3d6'},
-  {min:2,label:'2–3 topics',color:'#70c6ad'},
-  {min:4,label:'4–7 topics',color:'#2b9b82'},
-  {min:8,label:'8+ topics',color:'#116455'}
+const COLORS=[{min:1,label:'1 post',color:'#a9decf'},{min:2,label:'2–3 posts',color:'#68bca6'},{min:4,label:'4–7 posts',color:'#278d78'},{min:8,label:'8+ posts',color:'#0e6356'}];
+const GRAY='#e1e8ed';
+const LAYERS=[
+  {key:'regional',name:'Regional activities & institutions',note:'Unverified location references in source posts; not confirmed incidents'},
+  {key:'potential_incident',name:'Potential incident locations',note:'Possible incident locations only; pending source verification'},
+  {key:'verified_incident',name:'Verified incident locations',note:'Locations independently verified and linked to evidence'}
 ];
-const UNKNOWN='#e1e8ed';
-const project=([longitude,latitude])=>[
-  26 + ((longitude-94)/48.5)*950,
-  17 + ((7.4-latitude)/19.5)*390
-];
-const point=coordinates=>{const [x,y]=project(coordinates);return x.toFixed(1)+','+y.toFixed(1)};
-function ringPath(ring){
-  if(!ring || ring.length<3)return '';
-  return 'M'+ring.map(point).join('L')+'Z';
-}
-function provincePath(feature){
-  const g=feature?.geometry;
-  if(!g?.coordinates)return '';
-  const polygons=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
-  return polygons.map(poly=>poly.map(ringPath).join('')).join('');
-}
-function fillColor(n){
-  if(!n)return UNKNOWN;
-  for(let i=PALETTE.length-1;i>=0;i--)if(n>=PALETTE[i].min)return PALETTE[i].color;
-  return PALETTE[0].color;
-}
-export default function IndonesiaProvinceHeatmap({findings=[]}){
-  const [features,setFeatures]=useState([]);
-  const [loadError,setLoadError]=useState('');
-  const [selected,setSelected]=useState(null);
-  useEffect(()=>{
-    const controller=new AbortController();
+const project=([lon,lat])=>[26+((lon-94)/48.5)*950,17+((7.4-lat)/19.5)*390];
+const polyPath=(ring)=>ring?.length>=3?'M'+ring.map(pair=>project(pair).map(v=>v.toFixed(1)).join(',')).join('L')+'Z':'';
+const provincePath=(f)=>{const geo=f.geometry;const polys=geo.type==='Polygon'?[geo.coordinates]:geo.type==='MultiPolygon'?geo.coordinates:[];return polys.map(p=>p.map(polyPath).join('')).join('')};
+const color=(n)=>{if(!n)return GRAY;for(let i=COLORS.length-1;i>=0;i--)if(n>=COLORS[i].min)return COLORS[i].color;return COLORS[0].color};
+export default function IndonesiaProvinceHeatmap({findings=[],onOpenFinding}) {
+  const [features,setFeatures]=useState([]),[failure,setFailure]=useState('');
+  const [layer,setLayer]=useState('regional'),[province,setProvince]=useState('');
+  useEffect(()=>{const controller=new AbortController();
     fetch('/maps/indonesia-provinces.geojson',{signal:controller.signal,cache:'force-cache'})
-      .then(response=>{if(!response.ok)throw Error('Province boundary file unavailable');return response.json()})
-      .then(data=>{
-        if(!Array.isArray(data.features) || data.features.length!==38)throw Error('Province boundaries incomplete');
-        setFeatures(data.features);
-      })
-      .catch(err=>{if(err.name!=='AbortError')setLoadError(err.message)});
+      .then(r=>{if(!r.ok)throw Error('Province map data unavailable');return r.json()})
+      .then(j=>{if(!Array.isArray(j.features)||j.features.length!==38)throw Error('Province boundaries are incomplete');setFeatures(j.features)})
+      .catch(e=>{if(e.name!=='AbortError')setFailure(e.message)});
     return ()=>controller.abort();
   },[]);
-  // Counts are DISTINCT TOPICS with at least one human-verified incident
-  // province; a finding can be present in more than one province, but never
-  // counted twice within a province. Other locations do not color the map.
-  const metrics=useMemo(()=>{
-    const counts={};
-    for(const finding of findings){
-      for(const code of new Set(finding.province_codes||[]))
-        counts[code]=(counts[code]||0)+1;
+  const areas=useMemo(()=>{
+    const result={};
+    for(const finding of findings) for(const [code,ids] of Object.entries(finding.geo_layers?.[layer]||{})){
+      if(!result[code])result[code]={sourceIds:new Set(),topics:new Map()};
+      ids.forEach(id=>result[code].sourceIds.add(id));
+      result[code].topics.set(finding.id,finding);
     }
-    return {counts,assigned:findings.filter(f=>(f.province_codes||[]).length>0).length,unassigned:findings.filter(f=>!(f.province_codes||[]).length).length};
-  },[findings]);
-  const polygons=useMemo(()=>features.map(f=>({code:String(f.properties.KODE_PROV||f.id||''),name:f.properties.PROVINSI||'Unknown province',d:provincePath(f)})),[features]);
-  const selectedProvince=polygons.find(p=>p.code===selected);
-  const activeProvinces=Object.values(metrics.counts).filter(n=>n>0).length;
+    return result;
+  },[findings,layer]);
+  const places=useMemo(()=>features.map(f=>({code:String(f.properties.KODE_PROV||f.id||''),name:f.properties.PROVINSI||'Unspecified',d:provincePath(f)})),[features]);
+  const active=Object.values(areas).filter(v=>v.sourceIds.size>0).length;
+  const selected=places.find(p=>p.code===province);
+  const selectedData=selected?areas[selected.code]:null;
+  const distinct=new Set(Object.values(areas).flatMap(v=>[...v.sourceIds])).size;
+  const activeLayer=LAYERS.find(t=>t.key===layer);
   return <div className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-wrap gap-2 items-start justify-between">
       <div><h3 className="font-semibold text-base">Geographic Intelligence</h3>
-        <p className="text-xs text-slate-500 mt-1">Indonesia · 38 provinces · Verified incident locations only</p>
+       <p className="text-xs text-slate-500 mt-1">Indonesia · 38 provinces · geographic evidence from original posts</p>
       </div>
-      <span className="text-[11px] rounded-full px-3 py-1 bg-slate-100 text-slate-600">{activeProvinces} / 38 provinces mapped</span>
+      <span className="rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs">{active}/38 provinces mapped</span>
     </div>
-    <div className="rounded-lg bg-[#f4f8fa] border border-slate-100 relative">
-      {loadError?<p role="alert" className="text-xs text-red-700 p-5">Unable to load province map: {loadError}</p>:
-      !features.length?<div className="h-56 grid place-items-center text-xs text-slate-500">Loading Indonesia's province boundaries…</div>:
-      <svg viewBox="0 0 1000 430" className="w-full h-auto" role="group" aria-label="Indonesia province choropleth heatmap showing verified intelligence topics" preserveAspectRatio="xMidYMid meet">
-        {polygons.map(p=><path key={p.code} d={p.d}
-          fill={fillColor(metrics.counts[p.code]||0)}
-          stroke={selected===p.code?'#0d594f':'#ffffff'}
-          strokeWidth={selected===p.code?2.3:0.95}
-          strokeLinejoin="round"
-          fillRule="evenodd"
-          className="cursor-pointer transition-colors hover:brightness-95 focus:outline-none"
-          role="button" tabIndex={0}
-          aria-label={p.name+': '+(metrics.counts[p.code]?metrics.counts[p.code]+' location-attributed topics':'no verified province-attributed topics')}
-          onClick={()=>setSelected(p.code)}
-          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelected(p.code)}}}>
-          <title>{p.name}: {metrics.counts[p.code]?metrics.counts[p.code]+' topics':'No verified incident attribution'}</title>
-        </path>)}
+    <div role="group" aria-label="Geographic intelligence layers" className="flex gap-2 flex-wrap">
+      {LAYERS.map(t=><button key={t.key} type="button" aria-pressed={layer===t.key} onClick={()=>{setLayer(t.key);setProvince('')}}
+        className={'border rounded-lg px-3 py-2 text-xs '+(layer===t.key?'bg-[#147968] text-white border-[#147968]':'bg-white border-slate-200 text-slate-600')}>{t.name}</button>)}
+    </div>
+    <p className="text-xs text-slate-500">{activeLayer.note}</p>
+    <div className="rounded-lg bg-[#f4f8fa] border border-slate-100">
+      {failure?<p role="alert" className="text-red-700 p-5 text-xs">{failure}</p>:!features.length?<p className="text-xs text-center text-slate-500 py-20">Loading Indonesia provinces…</p>:
+      <svg viewBox="0 0 1000 430" className="w-full h-auto" aria-label="Indonesian province heatmap showing evidence-linked post locations" role="group">
+      {places.map(p=>{const n=areas[p.code]?.sourceIds.size||0;return <path key={p.code} d={p.d} fill={color(n)} fillRule="evenodd"
+        stroke={province===p.code?'#0e6356':'#ffffff'} strokeWidth={province===p.code?2.3:0.95}
+        className="cursor-pointer hover:brightness-95" role="button" tabIndex={0}
+        aria-label={p.name+': '+n+' linked posts'}
+        onClick={()=>setProvince(p.code)}
+        onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setProvince(p.code)}}}>
+        <title>{p.name}: {n} original supporting posts ({activeLayer.name})</title>
+      </path>})}
       </svg>}
     </div>
-    <div className="flex gap-x-3 gap-y-2 flex-wrap items-center text-[11px] text-slate-600">
-      <span className="flex items-center gap-1"><i className="w-3 h-3 rounded-sm border border-slate-300 inline-block" style={{background:UNKNOWN}}/>Unassigned / no verified data</span>
-      {PALETTE.map(t=><span key={t.label} className="flex items-center gap-1"><i className="w-3 h-3 rounded-sm inline-block" style={{background:t.color}}/>{t.label}</span>)}
+    <div className="flex flex-wrap gap-x-3 gap-y-2 text-[11px] text-slate-600">
+      <span className="inline-flex gap-1 items-center"><i className="w-3 h-3 rounded-sm border border-slate-300" style={{background:GRAY}}/>No mapped reference</span>
+      {COLORS.map(t=><span key={t.label} className="inline-flex gap-1 items-center"><i className="w-3 h-3 rounded-sm" style={{background:t.color}}/>{t.label}</span>)}
     </div>
-    <div aria-live="polite" className="border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
-      {selectedProvince? <><b className="text-slate-800">{selectedProvince.name}</b> — {metrics.counts[selectedProvince.code]?
-        metrics.counts[selectedProvince.code]+' topic(s) linked to a verified incident location':'No verified incident location available for this province.'}</>:
-       <><b className="text-slate-800">{metrics.assigned} of {findings.length}</b> displayed intelligence topics have a verified incident province. <b>{metrics.unassigned}</b> have no verified incident province yet.</>}
+    <div className="rounded-lg p-3 border border-slate-200 text-xs text-slate-600" aria-live="polite">
+     {selected?<><b className="text-slate-900">{selected.name}</b> — {selectedData?.sourceIds.size||0} original source posts across {selectedData?.topics.size||0} intelligence topics.
+       {selectedData?.topics.size?<div className="mt-3 space-y-2">{[...selectedData.topics.values()].map(f=><button type="button" onClick={()=>onOpenFinding?.(f)} key={f.id} className="w-full p-2 border rounded-lg text-left hover:border-[#147968]">
+         <b className="text-slate-800">{f.title}</b><span className="ml-2 text-slate-500">({f.geo_layers?.[layer]?.[selected.code]?.length||0} posts)</span>
+       </button>)}</div>:<p className="mt-1">No source-linked references in this view; absence does not mean no election activity.</p>}
+     </>:<><b>{distinct}</b> unique supporting posts have geographic references in this view. Select a province to inspect evidence-linked topics.</>}
     </div>
-    {activeProvinces===0&&<p className="text-xs text-amber-800">The pilot's 109 posts have not been assigned verified incident provinces. Gray means <b>location unknown</b>, not zero election issues.</p>}
-    <p className="text-[10px] text-slate-400">Province boundaries: <a href="https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces" target="_blank" rel="noopener noreferrer" className="underline">Indonesia GeoJSON (38 provinces)</a>, licensed <a className="underline" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Province highlighting requires human-verified incident locations.</p>
+    {layer!=='verified_incident'&&<p className="text-xs text-amber-800">Provisional location extraction: activity and institution references are <b>not</b> alleged violations or verified incident sites.</p>}
+    {active===0&&<p className="text-xs text-slate-500">No locations mapped in this layer. Gray means unassigned, not zero incidents.</p>}
+    <p className="text-[10px] text-slate-400">Province boundaries: <a className="underline" href="https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces" target="_blank" rel="noopener noreferrer">Indonesia GeoJSON (38 provinces)</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. 38 distinct province codes including new Papua provinces.</p>
   </div>;
 }

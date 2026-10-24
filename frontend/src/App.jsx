@@ -15,6 +15,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import Shell from '@/components/intel/Shell';
 import AccessGate from '@/components/intel/AccessGate';
 import Home from '@/pages/Home';
+import SmartRadar from '@/pages/SmartRadar';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<Home />} />
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/command-center" element={<Home />} />
+            <Route path="/smart-radar" element={<SmartRadar />} />
           </Route>
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/watchlist/:id" element={<WatchlistProfile />} />

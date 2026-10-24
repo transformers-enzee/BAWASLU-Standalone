@@ -3,6 +3,7 @@ This is a PILOT heuristic view; AI-scored findings should replace heuristic grou
 No Supabase credentials are sent to the browser. Routes use app authentication and role grants.
 """
 from collections import Counter, defaultdict
+import json
 from datetime import datetime, timezone
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -80,6 +81,12 @@ def grouping(post):
     title=re.sub(r"\s+"," ",post["message_original"] or "").strip()[:105]
     return ("POST-"+pid,title or pid,"concerns" if detect_topic(post)=="Citizen Reports / Public Concerns" else "narratives")
 
+def fetch_assessments(db):
+    try:
+        return {x["pilot_post_id"]: dict(x) for x in db.execute(text("SELECT pilot_post_id,result_json,relevance_score,priority_score,processed_at FROM pilot_smart_radar.post_assessments")).mappings()}
+    except Exception:
+        db.rollback();return {}
+
 def fetch_states(db):
     try:
         return {x["finding_id"]: dict(x) for x in db.execute(text(
@@ -93,7 +100,8 @@ def source_view(p):
     return {k:p.get(k) for k in ("pilot_post_id","platform","published_at_raw","account_raw",
             "message_original","source_url","source_verification_status","original_category_hint")}
 
-def build_findings(posts, states):
+def build_findings(posts, states, assessments=None):
+    assessments=assessments or {}
     buckets={}
     for p in posts:
         ident,title,player=grouping(p)
@@ -103,7 +111,16 @@ def build_findings(posts, states):
                 "priority_score":None,"priority_label":"Unscored","geography":"Unresolved"}
         b=buckets[ident]
         b["posts"].append(source_view(p))
-        b["topics"].add(detect_topic(p))
+        a=assessments.get(p["pilot_post_id"])
+        result=a["result_json"] if a else {}
+        if isinstance(result,str):
+            try:result=json.loads(result)
+            except ValueError:result={}
+        b["topics"].update(result.get("topics") or [detect_topic(p)])
+        b.setdefault("assessment_count",0)
+        if a:
+            b["assessment_count"]+=1
+            b.setdefault("_scores",[]).append(a.get("priority_score") or 0)
         b["actors"].update(actors(p["message_original"]))
         if perspective(p)=="reputation":b["perspective"]="reputation"
         b["published_at"]=max(b["published_at"],p["published_at_raw"] or "")
@@ -114,6 +131,10 @@ def build_findings(posts, states):
         b["next_followup"]=str(st["next_followup"]) if st.get("next_followup") else ""
         b["updated_at"]=str(st.get("updated_at") or "")
         b["topics"]=sorted(b["topics"]);b["actors"]=sorted(b["actors"])
+        scores=b.pop("_scores",[])
+        if scores:
+            b["priority_score"]=max(scores)
+            b["priority_label"]="High Priority" if max(scores)>=75 else "Medium Priority" if max(scores)>=50 else "Routine"
         b["summary"]=(f"{len(b['posts'])} original source post(s) discussing this topic. "
              "Grouping and labels are preliminary; original claims have not been verified.")
         b["supporting_posts"]=len(b["posts"])
@@ -121,7 +142,7 @@ def build_findings(posts, states):
 
 def access_findings(db,user):
     authorised(db,user)
-    return build_findings(fetch_sources(db),fetch_states(db))
+    return build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
 
 @router.get("/dashboard")
 def dashboard(user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -134,8 +155,8 @@ def dashboard(user:User=Depends(current_user),db:Session=Depends(get_db)):
         "findings":findings,"platform_counts":dict(platform_counts),
         "candidate_mentions":mention_counts.most_common(10),
         "reviewed_total":sum(x["human_reviewed"] for x in findings),
-        "mode":"PRELIMINARY_SOURCE_GROUPING","scoring_ready":False,
-        "disclaimer":"Preliminary source-based grouping. No AI relevance or risk scores have been generated. Claims are unverified.",
+        "mode":"PARTIAL_ASSESSMENT" if fetch_assessments(db) else "PRELIMINARY_SOURCE_GROUPING", "scoring_ready":bool(fetch_assessments(db)),
+        "disclaimer":"Source grouping is provisional; only saved assessments have priority scores. Allegations remain unverified.",
         "jurisdictions":["Indonesia - National"],"timezone":"Asia/Jakarta"}
 
 @router.get("/history/{finding_id}")
@@ -162,7 +183,7 @@ class Decision(BaseModel):
 @router.post("/decision")
 def decision(body:Decision,user:User=Depends(current_user),db:Session=Depends(get_db)):
     authorised(db,user,decision=True)
-    findings=build_findings(fetch_sources(db),fetch_states(db))
+    findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
     f=next((x for x in findings if x["id"]==body.finding_id),None)
     if not f:raise HTTPException(404,"Finding does not exist")
     old=f["status"]

@@ -16,6 +16,7 @@ import Shell from '@/components/intel/Shell';
 import AccessGate from '@/components/intel/AccessGate';
 import Home from '@/pages/Home';
 import SmartRadar from '@/pages/SmartRadar';
+import SmartRadar from '@/pages/SmartRadar';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
@@ -60,11 +61,13 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to={`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`} replace />} />}>
         <Route element={<Shell />}>
-          <Route path="/" element={<Home />} />
+          <Route element={<AccessGate permission="view_intelligence" />}><Route path="/" element={<SmartRadar />} /></Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/command-center" element={<Home />} />
             <Route path="/smart-radar" element={<SmartRadar />} />
           </Route>
+          <Route path="/legacy-home" element={<Home />} />
+          <Route path="/smart-radar" element={<SmartRadar />} />
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/watchlist/:id" element={<WatchlistProfile />} />
           <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />

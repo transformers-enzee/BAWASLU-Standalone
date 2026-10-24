@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const COLORS=[{min:1,label:'1 post',color:'#a9decf'},{min:2,label:'2–3 posts',color:'#68bca6'},{min:4,label:'4–7 posts',color:'#278d78'},{min:8,label:'8+ posts',color:'#0e6356'}];
 const GRAY='#e1e8ed';
@@ -14,6 +14,23 @@ const color=(n)=>{if(!n)return GRAY;for(let i=COLORS.length-1;i>=0;i--)if(n>=COL
 export default function IndonesiaProvinceHeatmap({findings=[],onOpenFinding}) {
   const [features,setFeatures]=useState([]),[failure,setFailure]=useState('');
   const [layer,setLayer]=useState('regional'),[province,setProvince]=useState('');
+  const [hovered,setHovered]=useState(null);
+  const mapRef=useRef(null);
+  const showTooltip=(element,code,clientX,clientY)=>{
+    const bounds=mapRef.current?.getBoundingClientRect();
+    if(!bounds)return;
+    const x=Math.max(Math.min(142,bounds.width/2),Math.min(bounds.width-Math.min(142,bounds.width/2),clientX-bounds.left));
+    const y=Math.max(8,Math.min(bounds.height-8,clientY-bounds.top));
+    setHovered({code,x,y,below:y<125});
+  };
+  const hoverProvince=(event,code)=>{
+    if(event.pointerType==='touch')return;
+    showTooltip(event.currentTarget,code,event.clientX,event.clientY);
+  };
+  const focusProvince=(event,code)=>{
+    const b=event.currentTarget.getBoundingClientRect();
+    showTooltip(event.currentTarget,code,b.left+b.width/2,b.top+b.height/2);
+  };
   useEffect(()=>{const controller=new AbortController();
     fetch('/maps/indonesia-provinces.geojson',{signal:controller.signal,cache:'force-cache'})
       .then(r=>{if(!r.ok)throw Error('Province map data unavailable');return r.json()})
@@ -44,22 +61,46 @@ export default function IndonesiaProvinceHeatmap({findings=[],onOpenFinding}) {
       <span className="rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs">{active}/38 provinces mapped</span>
     </div>
     <div role="group" aria-label="Geographic intelligence layers" className="flex gap-2 flex-wrap">
-      {LAYERS.map(t=><button key={t.key} type="button" aria-pressed={layer===t.key} onClick={()=>{setLayer(t.key);setProvince('')}}
+      {LAYERS.map(t=><button key={t.key} type="button" aria-pressed={layer===t.key} onClick={()=>{setLayer(t.key);setProvince('');setHovered(null)}}
         className={'border rounded-lg px-3 py-2 text-xs '+(layer===t.key?'bg-[#147968] text-white border-[#147968]':'bg-white border-slate-200 text-slate-600')}>{t.name}</button>)}
     </div>
     <p className="text-xs text-slate-500">{activeLayer.note}</p>
-    <div className="rounded-lg bg-[#f4f8fa] border border-slate-100">
+    <div ref={mapRef} className="relative rounded-lg bg-[#f4f8fa] border border-slate-100">
       {failure?<p role="alert" className="text-red-700 p-5 text-xs">{failure}</p>:!features.length?<p className="text-xs text-center text-slate-500 py-20">Loading Indonesia provinces…</p>:
       <svg viewBox="0 0 1000 430" className="w-full h-auto" aria-label="Indonesian province heatmap showing evidence-linked post locations" role="group">
-      {places.map(p=>{const n=areas[p.code]?.sourceIds.size||0;return <path key={p.code} d={p.d} fill={color(n)} fillRule="evenodd"
+      {places.map(p=>{const n=areas[p.code]?.sourceIds.size||0;const topics=areas[p.code]?.topics.size||0;return <path key={p.code} d={p.d} fill={color(n)} fillRule="evenodd"
         stroke={province===p.code?'#0e6356':'#ffffff'} strokeWidth={province===p.code?2.3:0.95}
-        className="cursor-pointer hover:brightness-95" role="button" tabIndex={0}
-        aria-label={p.name+': '+n+' linked posts'}
+        className="cursor-pointer hover:brightness-95 focus:outline-none focus:stroke-[#0e6356]" role="button" tabIndex={0}
+        aria-label={p.name+': '+n+' supporting posts across '+topics+' intelligence topics. Select for details.'}
+        onPointerEnter={e=>hoverProvince(e,p.code)}
+        onPointerMove={e=>hoverProvince(e,p.code)}
+        onPointerLeave={()=>setHovered(null)}
+        onFocus={e=>focusProvince(e,p.code)}
+        onBlur={()=>setHovered(null)}
         onClick={()=>setProvince(p.code)}
-        onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setProvince(p.code)}}}>
-        <title>{p.name}: {n} original supporting posts ({activeLayer.name})</title>
-      </path>})}
+        onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setProvince(p.code)}}}/>
+      })}
       </svg>}
+      {hovered&&places.some(p=>p.code===hovered.code)&&(()=>{
+        const p=places.find(p=>p.code===hovered.code);
+        const posts=areas[hovered.code]?.sourceIds.size||0;
+        const topics=areas[hovered.code]?.topics.size||0;
+        return <div role="tooltip" className="absolute z-20 w-[260px] max-w-[95%] pointer-events-none rounded-xl border border-slate-200 bg-white/95 shadow-xl p-3 text-left"
+          style={{left:hovered.x,top:hovered.below?hovered.y+14:hovered.y-14,transform:hovered.below?'translate(-50%, 0)':'translate(-50%, -100%)'}}>
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{backgroundColor:color(posts)}}/>
+            <span className="font-semibold text-sm text-slate-800">{p.name}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div><div className="font-bold text-2xl text-[#147968] tabular-nums">{posts}</div><div className="text-[11px] text-slate-600">Supporting {posts===1?'post':'posts'}</div></div>
+            <div><div className="font-bold text-2xl text-slate-800 tabular-nums">{topics}</div><div className="text-[11px] text-slate-600">Intelligence {topics===1?'topic':'topics'}</div></div>
+          </div>
+          <div className="border-t border-slate-100 mt-3 pt-2 text-[11px] text-slate-500">
+            {layer==='regional'?'Regional reference · not a verified incident':layer==='potential_incident'?'Potential incident · not verified':'Verified incident location'}
+            <span className="block text-[#147968] mt-1">Click province to view supporting topics</span>
+          </div>
+        </div>;
+      })()}
     </div>
     <div className="flex flex-wrap gap-x-3 gap-y-2 text-[11px] text-slate-600">
       <span className="inline-flex gap-1 items-center"><i className="w-3 h-3 rounded-sm border border-slate-300" style={{background:GRAY}}/>No mapped reference</span>

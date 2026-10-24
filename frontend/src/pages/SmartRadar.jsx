@@ -66,7 +66,6 @@ export default function SmartRadar(){
  const maxMention=Math.max(1,...mentions.map(x=>x[1]));
  const categories=topicOptions.slice(1).map(t=>[t,filtered.filter(f=>f.topics.includes(t)).length]).filter(x=>x[1]);
  const priorityItems=needs.slice(0,3);
- const focusItems=filtered.filter(f=>(f.players||[]).includes('concerns')||f.status==='pending').slice(0,3);
  const canReview=access?.permissions?.human_validation===true;
  if(loading)return <p className="p-6 text-sm text-slate-500">Loading Smart Radar source data...</p>;
  if(error&&!data)return <p role="alert" className="p-5 text-red-700">{error}</p>;
@@ -94,14 +93,6 @@ export default function SmartRadar(){
     </div>
     <p className="text-[11px] text-amber-800 mt-2">Staging AI requires admin-enabled configuration and consumes provider tokens only when a processing button is pressed. Synthesis analyzes a bounded source sample and is labeled accordingly.</p>
   </div>}
-  <div className="border border-slate-200 rounded-xl p-5">
-   <h2 className="font-semibold">✦ Executive Briefing — {perspective==='operations'?'Electoral Operations':'BAWASLU Reputation'}</h2>
-   <p className="text-xs text-slate-500 mt-2">{filtered.length} intelligence topics · {filtered.reduce((n,f)=>n+f.supporting_posts,0)} original supporting posts · {needs.length} awaiting initial officer review.</p>
-   {focusItems.length?<div className="mt-3 space-y-3">{focusItems.map(f=><div key={f.id} className="border-l-2 border-[#147968] pl-3">
-     <p className="text-xs font-bold">{f.title} · {f.supporting_posts} supporting posts</p>
-     <p className="text-sm text-slate-700 mt-1">{insight(f)}</p><span className="text-[11px] text-slate-500">{f.ai_summary?'Saved AI insight':'Preliminary source-based insight'}</span></div>)}</div>:<p className="text-sm mt-2 text-slate-600">No intelligence topics match the selected filters.</p>}
-   <p className="text-xs text-amber-700 mt-3">{data?.disclaimer}</p>
-  </div>
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[[filtered.length,'Intelligence Topics'],[filtered.reduce((n,f)=>n+f.supporting_posts,0),'Supporting Posts'],[needs.length,'To Review'],[filtered.filter(f=>f.human_reviewed).length,'Reviewed Issues']].map(([n,l])=><div key={l} className="border rounded-xl p-4 bg-white"><b className="text-2xl">{n}</b><p className="text-xs text-slate-500 mt-1">{l}</p></div>)}</div>
   <div className="flex justify-between items-end"><h2 className="font-semibold text-lg">Four Intelligence Players</h2><span className="text-xs text-slate-500">Click any player for details</span></div>
   <div className="grid lg:grid-cols-2 gap-4">{players.map(([key,name])=>{const group=inPlayer(key);return <button key={key} onClick={()=>setPanel(key)} className="text-left border border-slate-200 hover:border-[#14816e] hover:shadow-md rounded-xl p-5 bg-white min-h-[230px] flex flex-col">

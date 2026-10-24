@@ -1,0 +1,18 @@
+BAWASLU Smart Radar – Province boundary data
+
+GeoJSON source:
+  denyherianto/indonesia-geojson-topojson-maps-with-38-provinces
+  https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces
+  Original dataset: GeoJSON/indonesia-38-provinces.geojson
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://creativecommons.org/licenses/by/4.0/
+
+Modification for this application:
+  Papua region province KODE_PROV and id attributes were normalized to
+  distinct codes 91 (Papua), 92 (Papua Barat), 93 (Papua Selatan),
+  94 (Papua Tengah), 95 (Papua Pegunungan), 96 (Papua Barat Daya).
+  Original province geometries are not modified.
+
+The visual choropleth counts only VERIFIED INCIDENT LOCATION mappings linked
+to evidence, not inferred candidate constituencies, office addresses, or
+the geographic location of the social media uploader.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Radar, X, Bell, ArrowLeft, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import { SourceActivityChart, SourcePlatformsDonut } from '@/components/intel/SmartRadarCharts';
+import IndonesiaProvinceHeatmap from '@/components/intel/IndonesiaProvinceHeatmap';
 const token=()=>window.localStorage.getItem('bawaslu_access_token')||'';
 async function call(path,body){
  const r=await fetch('/api/smart-radar'+path,{cache:'no-store',method:body?'POST':'GET',headers:{Authorization:'Bearer '+token(),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
@@ -61,7 +63,6 @@ export default function SmartRadar(){
    Object.entries(f.platform_counts||{}).forEach(([p,n])=>byPlatform[p]=(byPlatform[p]||0)+n);
    Object.entries(f.actor_mentions||{}).forEach(([p,n])=>byActor[p]=(byActor[p]||0)+n);
  });
- const max=Math.max(1,...Object.values(byDay));
  const mentions=Object.entries(byActor).sort((a,b)=>b[1]-a[1]).slice(0,10);
  const maxMention=Math.max(1,...mentions.map(x=>x[1]));
  const categories=topicOptions.slice(1).map(t=>[t,filtered.filter(f=>f.topics.includes(t)).length]).filter(x=>x[1]);
@@ -101,10 +102,21 @@ export default function SmartRadar(){
   <div className="grid lg:grid-cols-2 gap-4">
    <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Candidate Mention Ranking</h3><p className="text-xs text-slate-500">Raw source-post mentions only — not wrongdoing or a validated watchlist</p>{mentions.map(([name,n])=><div key={name} className="text-xs mt-3"><div className="flex justify-between"><span>{name}</span><b>{n}</b></div><div className="bg-slate-100 rounded-full h-2 mt-1"><div className="bg-[#1d8d79] h-2 rounded-full" style={{width:100*n/maxMention+'%'}}/></div></div>)}</div>
    <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Priority Candidate Watchlist</h3><p className="text-xs text-slate-500 mt-2">Not populated: priority associations require evidence-linked AI assessment and QC. Popularity does not imply misconduct.</p><div className="mt-7 border-t pt-4"><h3 className="font-semibold">Topic Distribution</h3>{categories.map(([cat,n])=><div key={cat} className="flex justify-between text-xs py-2 border-b border-slate-100"><span>{cat}</span><b>{n}</b></div>)}</div></div>
-   <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Source Activity</h3><p className="text-xs text-slate-500">Published dates from pilot posts (not new-ingestion timestamps)</p><div className="flex items-end gap-1 h-28 mt-4 overflow-x-auto">{Object.entries(byDay).sort(([a],[b])=>a.localeCompare(b)).slice(-35).map(([day,n])=><div key={day} title={day+': '+n+' posts'} style={{height:Math.max(3,n/max*95)+'%'}} className="bg-[#238977] rounded-t min-w-[7px] flex-1"/>)}</div></div>
-   <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Geographic Intelligence</h3><p className="text-sm text-slate-600 mt-4">Incident geography is unresolved in this source-only pilot. We must not infer an incident's location from a politician's constituency or account location.</p><h3 className="font-semibold mt-7">Source Platforms</h3>{Object.entries(byPlatform).sort((a,b)=>b[1]-a[1]).map(([p,n])=><div key={p} className="flex justify-between text-xs py-1"><span>{p}</span><b>{n}</b></div>)}</div>
+   <div className="border rounded-xl bg-white p-5 min-w-0">
+     <h3 className="font-semibold">Source Activity</h3>
+     <p className="text-xs text-slate-500 mt-1">Daily publication trends across supporting posts</p>
+     <SourceActivityChart byDay={byDay}/>
+   </div>
+   <div className="border rounded-xl bg-white p-5 min-w-0">
+     <h3 className="font-semibold">Source Platforms</h3>
+     <p className="text-xs text-slate-500 mt-1">Share of original supporting posts by platform</p>
+     <SourcePlatformsDonut byPlatform={byPlatform}/>
+   </div>
   </div>
-  <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Strategic Insights</h3><p className="text-sm text-slate-600 mt-2">Recommended next step: validate source and grouping quality, then run the agreed AI relevance and priority pipeline before producing officer-ready recommendations or SWOT.</p></div>
+  <div className="border rounded-xl bg-white p-5 min-w-0">
+    <IndonesiaProvinceHeatmap findings={filtered}/>
+  </div>
+    <div className="border rounded-xl bg-white p-5"><h3 className="font-semibold">Strategic Insights</h3><p className="text-sm text-slate-600 mt-2">Recommended next step: validate source and grouping quality, then run the agreed AI relevance and priority pipeline before producing officer-ready recommendations or SWOT.</p></div>
   {toast&&<div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-[#145343] text-white text-sm rounded-lg px-5 py-3 z-[90]">{toast}</div>}
   {error&&data&&<div role="alert" className="fixed bottom-5 right-5 bg-red-100 text-red-900 border border-red-300 rounded-lg p-3 z-[90] max-w-sm"><button className="float-right ml-3" onClick={()=>setError('')}>×</button>{error}</div>}
   {panel&&<div className="fixed inset-0 z-[70] bg-slate-900/60 flex justify-end" onMouseDown={e=>{if(e.target===e.currentTarget)setPanel(null)}}>

@@ -46,6 +46,7 @@ _CACHE_LOCK=threading.RLock()
 _SOURCE_CACHE={"rows":None,"expires":0.0}
 _AI_CACHE={"rows":None,"expires":0.0}
 _TOPIC_CACHE={"rows":None,"expires":0.0}
+_GEO_CACHE={"rows":None,"expires":0.0}
 def invalidate_source_cache():
     with _CACHE_LOCK:_SOURCE_CACHE.update(rows=None,expires=0.0)
 def invalidate_assessment_cache():
@@ -66,6 +67,31 @@ def fetch_topic_summaries(db):
             return {}
         _TOPIC_CACHE.update(rows=rows,expires=time.monotonic()+ttl)
         return rows
+
+def fetch_verified_incident_geography(db):
+    """Only explicitly human-verified incident provinces are eligible for the heatmap.
+
+    An account's address, a BAWASLU office, or a candidate's constituency must
+    never be mistaken for the geographical location of an incident.
+    """
+    ttl=max(10,min(300,int(os.getenv("SMART_RADAR_GEO_CACHE_SECONDS","60"))))
+    with _CACHE_LOCK:
+        if _GEO_CACHE["rows"] is not None and time.monotonic()<_GEO_CACHE["expires"]:
+            return _GEO_CACHE["rows"]
+        try:
+            pairs=list(db.execute(text("""
+                SELECT pilot_post_id,province_code
+                FROM pilot_smart_radar.post_geography
+                WHERE location_role='incident' AND verification_status='verified'
+            """)).mappings())
+        except Exception:
+            db.rollback()
+            return {}
+        result=defaultdict(set)
+        for item in pairs:
+            result[item["pilot_post_id"]].add(item["province_code"])
+        _GEO_CACHE.update(rows=dict(result),expires=time.monotonic()+ttl)
+        return _GEO_CACHE["rows"]
 
 def fetch_sources(db):
     ttl=max(30,min(1800,int(os.getenv("SMART_RADAR_SOURCE_CACHE_SECONDS","600"))))
@@ -156,7 +182,11 @@ def access_findings(db,user):
     authorised(db,user)
     findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
     cached=fetch_topic_summaries(db)
+    by_post=fetch_verified_incident_geography(db)
     for f in findings:
+        verified_posts=[p for p in f["source_ids"] if p in by_post]
+        f["verified_geo_posts"]=len(verified_posts)
+        f["province_codes"]=sorted({code for post_id in verified_posts for code in by_post[post_id]})
         row=cached.get(f["id"])
         if not row or row.get("source_signature")!=f["source_signature"]:
             continue

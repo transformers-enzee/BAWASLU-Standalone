@@ -14,9 +14,11 @@ from .domain import intelligence_action
 from .registry import registry_action
 from .socialcrawl import social_listening_action, recover_existing_news_languages, sync_promoted_news_languages
 from .source_retrieval import _language_detection
+from .smart_radar import router as smart_radar_router
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
+app.include_router(smart_radar_router)
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS','http://localhost:5173').split(',')],allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 UPLOAD_DIR=Path(os.getenv('UPLOAD_DIR','./uploads')); UPLOAD_DIR.mkdir(parents=True,exist_ok=True)
 app.mount('/uploads',StaticFiles(directory=str(UPLOAD_DIR)),name='uploads')

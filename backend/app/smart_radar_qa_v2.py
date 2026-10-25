@@ -113,12 +113,13 @@ def label_review_flags(row):
         "media sosial","informasi palsu","percakapan daring","online",
         "viral","narasi","platform","internet","teknologi informasi"]):
         flags.append("No clear digital-information subject despite Digital Risks label")
-    if category=="Citizen Reports / Public Concerns" and _contains(content,[
-        "sosialisasi","pengawasan partisipatif","pemilu inklusif",
-        "kegiatan edukasi","mengikuti kegiatan","pembekalan"])
+    if (category=="Citizen Reports / Public Concerns"
+        and _contains(content,[
+          "sosialisasi","pengawasan partisipatif","pemilu inklusif",
+          "kegiatan edukasi","mengikuti kegiatan","pembekalan"])
         and not _contains(content,[
-        "mengeluh","keluhan","kecewa","aduan","laporan warga",
-        "tidak percaya","mempersoalkan","kritik","protes","pengaduan"]):
+          "mengeluh","keluhan","kecewa","aduan","laporan warga",
+          "tidak percaya","mempersoalkan","kritik","protes","pengaduan"])):
         flags.append("May describe outreach rather than an actual citizen concern")
     if category=="Election Operations" and _contains(content,[
         "sudah curang","telah curang","kecurangan kpu","bawaslu curang"])

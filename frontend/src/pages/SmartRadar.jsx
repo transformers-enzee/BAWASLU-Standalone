@@ -23,16 +23,12 @@ export default function SmartRadar(){
  const title=(f)=>radarTitle(language,f);
  const topicLabel=(key)=>radarTopic(language,key);
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- const [processing,setProcessing]=useState(null),[running,setRunning]=useState(false),[synthesizing,setSynthesizing]=useState(false);
  const [perspective,setPerspective]=useState('operations'),[topic,setTopic]=useState('All Topics'),[period,setPeriod]=useState('historical');
  const [panel,setPanel]=useState(null),[originPanel,setOriginPanel]=useState('desk'),[deskTab,setDeskTab]=useState('review'),[notice,setNotice]=useState(true),[expanded,setExpanded]=useState(false);
  const [selected,setSelected]=useState(null),[detailLoading,setDetailLoading]=useState(false),[history,setHistory]=useState(null),[note,setNote]=useState(''),[followup,setFollowup]=useState('');
  const [confirm,setConfirm]=useState(null),[saving,setSaving]=useState(false),[toast,setToast]=useState('');
  const reload=()=>call('/dashboard').then(setData);
- const refreshProcessing=()=>call('/processing-status').then(setProcessing).catch(()=>setProcessing(null));
- const runPilot=async()=>{setRunning(true);try{const result=await call('/process-batch',{limit:5});await Promise.all([reload(),refreshProcessing()]);setToast(result.failed?.length?tr('AI processing stopped: ')+result.failed[0].reason:result.processed.length+' '+tr('posts assessed and saved'));}catch(e){setError(e.message)}finally{setRunning(false)}};
- const synthesize=async()=>{setSynthesizing(true);try{const result=await call('/summarize-topic',{});await Promise.all([reload(),refreshProcessing()]);setToast(result.generated?tr('AI intelligence summary saved for ')+result.finding_id:result.reason);}catch(e){setError(e.message)}finally{setSynthesizing(false)}};
- useEffect(()=>{reload().catch(e=>setError(e.message)).finally(()=>setLoading(false));if(access?.role==='National Administrator')refreshProcessing()},[access?.role]);
+ useEffect(()=>{reload().catch(e=>setError(e.message)).finally(()=>setLoading(false))},[]);
  const findings=data?.findings||[];
  const filtered=useMemo(()=>findings.filter(f=>{
   if(!(f.perspectives||[f.perspective]).includes(perspective))return false;
@@ -94,18 +90,6 @@ export default function SmartRadar(){
    <div className="md:col-span-4"><label className="text-xs font-bold">{tr('Intelligence Topic')}</label><select className={inputClass+' mt-1'} value={topic} onChange={e=>setTopic(e.target.value)}>{topicOptions.map(t=><option key={t} value={t}>{topicLabel(t)}</option>)}</select></div>
   </div>
   {notice&&<div className="rounded-lg border-l-4 border-[#16886e] border bg-[#f1faf6] p-3 flex items-start gap-3"><Bell className="shrink-0 text-[#147968]" size={18}/><div className="flex-1"><b className="text-sm">{tr('Welcome Back')}</b><p className="text-xs text-slate-500">{tr('Historical pilot data · No verified personal last-visit baseline')}</p><div className="flex flex-wrap gap-4 my-2 text-xs"><span><b>—</b> {tr('New Issues')}</span><span><b>—</b> {tr('Important Updates')}</span><span><b>{actionCount}</b> {tr('Follow-ups / Reviews Due')}</span><span><b>—</b> {tr('New Narratives')}</span></div><p className="text-xs">{tr('Since your last visit, new allegations and concerns were identified. Some require a decision; others are for awareness only.')}</p>{expanded&&<p className="text-xs mt-2 text-slate-600">{tr('Exact since-last-visit counts will become available after account-specific visit tracking and incremental ingestion are enabled.')}</p>}</div><button aria-label={tr('Details')} className="text-xs underline" onClick={()=>setExpanded(!expanded)}>{tr(expanded?'Less':'Details')}</button><button aria-label={tr('Dismiss notification')} onClick={()=>setNotice(false)}><X size={17}/></button></div>}
-  {processing&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-    <div className="flex flex-wrap gap-4 items-center justify-between">
-      <div><b className="text-sm">{tr('Phase 3 intelligence processing · Administrator')}</b>
-        <p className="text-xs text-amber-800 mt-1">{processing.assessed} / {processing.sources} {tr('posts assessed')} · {processing.topic_summaries} / {processing.topic_count} {tr('topic-level AI summaries saved')}</p>
-        <p className="text-xs text-slate-500 mt-1">{tr('Only runs when clicked. Cached results are reused on every dashboard visit; no AI calls on page open.')}</p>
-      </div><div className="flex flex-wrap gap-2">
-        <button className={primary} disabled={running||synthesizing||processing.assessed>=processing.sources} onClick={runPilot}>{tr(running?'Assessing...':'Assess next 5 posts')}</button>
-        <button className={primary} disabled={running||synthesizing||processing.topic_summaries>=processing.topic_count} onClick={synthesize}>{tr(synthesizing?'Summarizing...':'Generate next topic AI insight')}</button>
-      </div>
-    </div>
-    <p className="text-[11px] text-amber-800 mt-2">{tr('Staging AI requires admin-enabled configuration and consumes provider tokens only when a processing button is pressed. Synthesis analyzes a bounded source sample and is labeled accordingly.')}</p>
-  </div>}
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[[filtered.length,'Intelligence Topics'],[filtered.reduce((n,f)=>n+f.supporting_posts,0),'Supporting Posts'],[needs.length,'To Review'],[filtered.filter(f=>f.human_reviewed).length,'Reviewed Issues']].map(([n,l])=><div key={l} className="border rounded-xl p-4 bg-white"><b className="text-2xl">{n}</b><p className="text-xs text-slate-500 mt-1">{tr(l)}</p></div>)}</div>
   <div className="flex justify-between items-end"><h2 className="font-semibold text-lg">{tr('Four Intelligence Players')}</h2><span className="text-xs text-slate-500">{tr('Click any player for details')}</span></div>
   <div className="grid lg:grid-cols-2 gap-4">{players.map(([key,name])=>{const group=inPlayer(key);return <button key={key} onClick={()=>setPanel(key)} className="text-left border border-slate-200 hover:border-[#14816e] hover:shadow-md rounded-xl p-5 bg-white min-h-[230px] flex flex-col">

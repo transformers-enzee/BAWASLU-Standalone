@@ -22,6 +22,7 @@ from .db import get_db
 from .auth import current_user
 from .models import User
 from .access import profile,has
+from .smart_radar_qa_limits import qa_config, qa_readiness, ensure_qa_batch
 
 router=APIRouter(prefix="/api/smart-radar/qa",tags=["smart-radar-qa"])
 CATS=["Allegations / Violations","Voter Register / PDPB",
@@ -46,9 +47,8 @@ def qa_admin(db,user):
     return p
 
 def model_config():
-    return (os.getenv("SMART_RADAR_QA_MODEL","").strip() or
-            os.getenv("SMART_RADAR_PILOT_MODEL","").strip(),
-            os.getenv("OPENAI_API_KEY","").strip())
+    cfg=qa_config()
+    return cfg["model"],cfg["key"]
 
 def source_hash(url,msg):
     return sha256((url+"\n"+msg).encode("utf-8")).hexdigest()
@@ -77,6 +77,7 @@ def balanced_sample(records,pilot_urls):
 def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     model,key=model_config()
+    readiness=qa_readiness(db)
     def scalar(sql):return int(db.execute(text(sql)).scalar() or 0)
     return {
       "total":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_source_posts"),
@@ -89,10 +90,16 @@ def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
       "reference_labeled":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_human_labels"),
       "ai_scored":scalar("SELECT COUNT(DISTINCT qa_id) FROM pilot_smart_radar.qa_ai_assessments"),
       "model":model or None,
-      "ai_enabled":os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true",
-      "ai_ready":bool(model and key and os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true"),
+      "ai_enabled":bool(readiness["max_run"]>0),
+      "ai_ready":readiness["ready"],
       "model_configured":bool(model),
+      "model_source":readiness["model_source"],
       "api_key_configured":bool(key),
+      "max_per_run":readiness["max_run"],
+      "daily_limit":readiness["daily"],
+      "daily_remaining":readiness["daily_remaining"],
+      "lifetime_limit":readiness["lifetime"],
+      "lifetime_remaining":readiness["lifetime_remaining"],
       "prompt_version":VERSION,
       "gold_status":"Human gold is absent until a named analyst saves reviewed judgments."
     }
@@ -365,16 +372,11 @@ class AssessRequest(BaseModel):
 @router.post("/assess-next")
 def assess_next(body:AssessRequest,user:User=Depends(current_user),db:Session=Depends(get_db)):
     qa_admin(db,user)
-    model,key=model_config()
-    if os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()!="true" or not model or not key:
-        raise HTTPException(409,"QA AI disabled; configure SMART_RADAR_QA_AI_ENABLED=true, model and OPENAI_API_KEY on staging")
     if not LOCK.acquire(blocking=False):
         raise HTTPException(409,"QA batch is already running")
     try:
-        ceiling=max(1,min(100,int(os.getenv("SMART_RADAR_QA_DAILY_CAP","30"))))
-        used=int(db.execute(text("""SELECT COUNT(*) FROM pilot_smart_radar.qa_ai_assessments
-                    WHERE processed_at >= CURRENT_DATE""")).scalar() or 0)
-        if used+body.limit>ceiling:raise HTTPException(429,"Daily QA AI cap reached")
+        cfg=ensure_qa_batch(db,body.limit)
+        model,key=cfg["model"],cfg["key"]
         items=db.execute(text("""SELECT p.qa_id,p.message_original,p.source_url,p.source_hash
           FROM pilot_smart_radar.qa_source_posts p
           LEFT JOIN pilot_smart_radar.qa_human_labels h ON h.qa_id=p.qa_id
@@ -420,7 +422,7 @@ def assess_next(body:AssessRequest,user:User=Depends(current_user),db:Session=De
     If uncertain, select Uncertain and explain. Return only valid JSON."""
         for x in items:
             try:
-                rr=httpx.post("https://api.openai.com/v1/chat/completions",
+                rr=httpx.post(cfg["base_url"]+"/chat/completions",
                   headers={"Authorization":"Bearer "+key},
                   json={"model":model,"messages":[
                     {"role":"system","content":instructions},

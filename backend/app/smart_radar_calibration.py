@@ -21,6 +21,7 @@ from .db import get_db
 from .auth import current_user
 from .models import User
 from .smart_radar_qa import qa_admin, reviewer, model_config, CAT_SET
+from .smart_radar_qa_limits import ensure_qa_batch
 
 router=APIRouter(prefix="/api/smart-radar/qa", tags=["smart-radar-calibration"])
 _LOCK=threading.Lock()
@@ -143,22 +144,15 @@ class Trial(BaseModel):
 def assess_calibration(body:Trial,user:User=Depends(current_user),db:Session=Depends(get_db)):
     qa_admin(db,user)
     if body.mode not in VERSIONS:raise HTTPException(400,"Unknown calibration mode")
-    model,key=model_config()
-    if (os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()!="true"
-       or not model or not key):
-        raise HTTPException(409,"Staging QA model not configured or enabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another calibration batch is running")
     try:
+        cfg=ensure_qa_batch(db,body.limit)
+        model,key=cfg["model"],cfg["key"]
         train,holdout,excluded=load_reference(db)
         if len(train)<15 or len(holdout)<5:
             raise HTTPException(409,"Not enough labelled training and unseen test posts")
         version=VERSIONS[body.mode]
-        today=db.execute(text("""SELECT count(*) FROM pilot_smart_radar.qa_ai_assessments
-                   WHERE processed_at >= CURRENT_DATE""")).scalar()
-        limit=max(1,min(100,int(os.getenv("SMART_RADAR_QA_DAILY_CAP","30"))))
-        if today+body.limit>limit:
-            raise HTTPException(429,"Daily QA processing cap reached")
         # The same held-out posts are tested in each mode. No human labels
         # from held-out posts are put into the model's input.
         completed={r["qa_id"] for r in db.execute(text("""
@@ -187,7 +181,7 @@ def assess_calibration(body:Trial,user:User=Depends(current_user),db:Session=Dep
         processed=[];errors=[]
         for item in selected:
             try:
-                response=httpx.post("https://api.openai.com/v1/chat/completions",
+                response=httpx.post(cfg["base_url"]+"/chat/completions",
                     headers={"Authorization":"Bearer "+key},
                     json={"model":model,"messages":[
                       {"role":"system","content":system},

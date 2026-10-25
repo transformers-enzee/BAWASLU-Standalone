@@ -82,7 +82,7 @@ export default function SmartRadarQA(){
  }
  async function assess(){
    setBusy('assess');setError('');setMessage('');
-   try{const result=await api('/assess-next',{limit:3});
+   try{const result=await api('/assess-next',{limit:Math.min(stats?.max_per_run||3,3)});
      setMessage(result.errors?.length?'AI stopped: '+result.errors[0].reason:(result.processed?.length||0)+' assessments saved');
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
@@ -90,7 +90,7 @@ export default function SmartRadarQA(){
  async function trial(mode){
    setBusy('trial-'+mode);setError('');setMessage('');
    try{
-     const result=await api('/assess-calibration',{mode,limit:3});
+     const result=await api('/assess-calibration',{mode,limit:Math.min(stats?.max_per_run||3,3)});
      setMessage(result.errors?.length?'QA assessment stopped: '+result.errors[0].reason:
        (result.processed?.length||0)+' '+(language==='id'?'prediksi uji buta tersimpan':'blind-test predictions saved'));
      await refresh();
@@ -157,7 +157,7 @@ export default function SmartRadarQA(){
        {[[calibration?.training_examples??0,language==='id'?'Contoh pelatihan':'Training examples'],[calibration?.holdout_examples??0,language==='id'?'Uji tertahan':'Unseen holdouts'],[calibration?.results?.baseline?.accuracy,language==='id'?'Akurasi awal':'Baseline accuracy'],[calibration?.results?.calibrated?.accuracy,language==='id'?'Akurasi kalibrasi':'Calibrated accuracy']].map(([n,label],i)=><div className='rounded-lg bg-slate-50 p-3' key={label}><b className='text-xl text-slate-800'>{i>=2?(n==null?'—':(n*100).toFixed(1)+'%'):n}</b><p className='text-xs text-slate-500 mt-1'>{label}</p></div>)}
      </div>
      <div className="flex flex-wrap gap-2 mt-3">
-       {canImport&&[['baseline',language==='id'?'Uji awal (3 unggahan)':'Test baseline (3 posts)'],['calibrated',language==='id'?'Uji contoh manusia (3 unggahan)':'Test human-guided (3 posts)']].map(([mode,label])=><button key={mode} type='button' disabled={!stats?.ai_ready||!!busy||(calibration?.holdout_examples??0)<5} className='px-3 py-2 text-sm rounded-lg bg-[#147968] text-white disabled:opacity-50' onClick={()=>trial(mode)}>{busy==='trial-'+mode?'Assessing...':label}</button>)}
+       {canImport&&[['baseline',language==='id'?'Uji awal (3 unggahan)':'Test baseline (3 posts)'],['calibrated',language==='id'?'Uji contoh manusia (3 unggahan)':'Test human-guided (3 posts)']].map(([mode,label])=><button key={mode} type='button' disabled={!stats?.ai_ready||!!busy||(calibration?.holdout_examples??0)<5} className='px-3 py-2 text-sm rounded-lg bg-[#147968] text-white disabled:opacity-50' onClick={()=>trial(mode)}>{busy==='trial-'+mode?'Assessing...':label.replace('3',String(stats?.max_per_run||3))}</button>)}
      </div>
      <p className="text-xs text-amber-700 mt-3">{language==='id'?'Semua penilaian menggunakan data uji yang sama dan tidak pernah mengirim jawaban dari set uji ke AI. Pemrosesan hanya dilakukan setelah tombol ditekan.':'Both modes use the same held-out posts. The answer key is never shown to the AI. Model requests are made only after an administrator clicks a test button.'}</p>
    </div>
@@ -176,14 +176,16 @@ export default function SmartRadarQA(){
      <p className="text-sm text-slate-600 my-2">{stats?.ai_ready?
       (language==='id'?'Siap untuk uji 3 unggahan terkendali':'Ready for a controlled three-post test'):
       (language==='id'?'Penilaian AI belum tersedia. Periksa konfigurasi staging di bawah.':'AI assessment unavailable. Check the staging configuration below.')}</p>
-     {!stats?.ai_ready&&<div className="text-xs border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-1 text-amber-900">
-       <p>{stats?.model_configured?'✓':'○'} {language==='id'?'Model QA':'QA model'}: {stats?.model_configured?'Configured':'SMART_RADAR_QA_MODEL'}</p>
+     <div className="text-xs border border-slate-200 bg-slate-50 rounded-lg p-3 space-y-1 text-slate-700">
+       <p>✓ {language==='id'?'Model dari konfigurasi yang sudah ada':'Model from existing settings'}: <b>{stats?.model||'—'}</b> <span className="text-slate-500">({stats?.model_source||'OPENAI_MODEL'})</span></p>
        <p>{stats?.api_key_configured?'✓':'○'} OPENAI_API_KEY: {stats?.api_key_configured?'Configured':'Missing'}</p>
-       <p>{stats?.ai_enabled?'✓':'○'} SMART_RADAR_QA_AI_ENABLED=true</p>
-       <p className="pt-1 text-slate-600">{language==='id'?'Atur pada backend Render; kunci API tidak ditampilkan dalam aplikasi.':'Configure on the Render backend. API keys are never displayed in the app.'}</p>
-     </div>}
+       <p>{stats?.max_per_run>0?'✓':'○'} BAWASLU_AI_ASSESSMENTS_PER_RUN: {stats?.max_per_run??'—'} {language==='id'?'maks per uji':'maximum per test'}</p>
+       <p>BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN: {stats?.daily_remaining??'—'} / {stats?.daily_limit??'—'} {language==='id'?'kuota QA hari ini':'QA slots today'}</p>
+       <p>BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN: {stats?.lifetime_remaining??'—'} / {stats?.lifetime_limit??'—'} {language==='id'?'kuota QA sepanjang uji':'QA lifetime slots'}</p>
+       <p className="pt-1 text-slate-500">{language==='id'?'Pengujian QA berjalan hanya jika administrator menekan tombol. Tombol pekerja otomatis tidak memengaruhinya; tanpa variabel baru.':'QA runs only on an administrator click. Worker/auto-screening toggles do not control this test; no new variables required.'}</p>
+     </div>
      <div className="flex justify-between gap-3 items-center"><p className="text-xs text-slate-500">Model: {stats?.model||'Not configured'} · Rubric {stats?.prompt_version||'v1'}</p>
-       {canImport&&<button disabled={!stats?.ai_ready||!!busy||!stats?.cohort_total} onClick={assess} className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50">{busy==='assess'?'Assessing…':t('run')}</button>}</div>
+       {canImport&&<button disabled={!stats?.ai_ready||!!busy||!stats?.cohort_total} onClick={assess} className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50">{busy==='assess'?'Assessing…':language==='id'?'Nilai '+(stats?.max_per_run||3)+' unggahan berikutnya':'Assess next '+(stats?.max_per_run||3)+' (AI)'}</button>}</div>
     </div>
    </div>
    <div className="grid lg:grid-cols-[1.05fr_1fr] gap-4 items-start">

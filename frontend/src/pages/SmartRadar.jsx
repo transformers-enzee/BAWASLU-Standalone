@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 import { Radar, X, Bell, ArrowLeft, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 import { SourceActivityChart, SourcePlatformsDonut } from '@/components/intel/SmartRadarCharts';
 import IndonesiaProvinceHeatmap from '@/components/intel/IndonesiaProvinceHeatmap';
@@ -79,7 +79,13 @@ export default function SmartRadar(){
  return <div className="space-y-5 max-w-[1370px] mx-auto">
   <div className="rounded-2xl p-6 bg-gradient-to-r from-[#18344c] to-[#167561] text-white flex items-center justify-between gap-5">
    <div><p className="text-[11px] uppercase tracking-[.2em] opacity-75">{tr('BAWASLU · Intelligence Command Center')}</p><h1 className="text-3xl font-bold mt-1 flex items-center gap-2"><Radar/> Smart Radar</h1><p className="text-sm opacity-85 mt-1">{tr('Evidence-linked, preliminary intelligence from the staging pilot')}</p></div>
-   <button className="bg-white/15 border border-white/30 rounded-xl px-4 py-3 whitespace-nowrap" onClick={()=>setPanel('desk')}>{tr('Action Desk')} {actionCount>0&&<b className="rounded-full bg-red-600 px-2 py-1 ml-1 text-xs">{actionCount}</b>}</button>
+   <div className="flex flex-wrap items-center gap-2">
+    {(access?.permissions?.review_ai_suggestions||access?.permissions?.administration)&&
+      <Link to="/smart-radar/qa" className="bg-white text-[#124d47] border border-white/70 rounded-xl px-4 py-3 text-sm font-semibold whitespace-nowrap hover:bg-emerald-50">
+        {language==='id'?'Laboratorium QA AI':'AI QA Lab'} <span className="text-[10px] opacity-70">Stage 1</span>
+      </Link>}
+    <button className="bg-white/15 border border-white/30 rounded-xl px-4 py-3 whitespace-nowrap" onClick={()=>setPanel('desk')}>{tr('Action Desk')} {actionCount>0&&<b className="rounded-full bg-red-600 px-2 py-1 ml-1 text-xs">{actionCount}</b>}</button>
+   </div>
   </div>
   <div className="grid md:grid-cols-4 gap-3">
    <div className="md:col-span-2"><label className="text-xs font-bold">{tr('Intelligence Perspective')}</label><div className="flex gap-1 p-1 bg-slate-100 rounded-lg mt-1">{[['operations','Electoral Operations'],['reputation','BAWASLU Reputation']].map(([k,l])=><button key={k} className={'flex-1 rounded-md px-2 py-2 text-xs font-semibold '+(perspective===k?'bg-[#167968] text-white':'text-slate-600')} onClick={()=>{setPerspective(k);setTopic('All Topics')}}>{tr(l)}</button>)}</div></div>

@@ -110,6 +110,14 @@ export default function SmartRadarQA(){
      {[[stats?.cohort_total??0,t('sample')],[metrics?.human_labeled??0,t('human')],[metrics?.ai_assessed??0,t('model')],[metrics?.compared??0,t('covered')],[metrics?.primary_category_accuracy==null?'—':(metrics.primary_category_accuracy*100).toFixed(1)+'%',t('accuracy')]].map(([n,l])=>
        <div className={bx} key={l}><b className="text-2xl text-slate-800 tabular-nums">{n}</b><p className="text-xs text-slate-500 mt-1">{l}</p></div>)}
    </div>
+   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+    {[
+      [metrics?.relevance_accuracy,language==='id'?'Kecocokan relevansi':'Relevance agreement'],
+      [metrics?.perspective_accuracy,language==='id'?'Kecocokan perspektif':'Perspective agreement'],
+      [metrics?.actionability_accuracy,language==='id'?'Kecocokan keputusan tindak lanjut':'Actionability agreement'],
+      [metrics?.action_false_positives,language==='id'?'Alarm tindak lanjut keliru':'False-positive review signals']
+     ].map(([v,label],i)=><div key={label} className="border border-slate-200 bg-white rounded-lg p-3"><b className="text-lg">{v==null?'—':i===3?v:(v*100).toFixed(1)+'%'}</b><p className="text-[11px] text-slate-500 mt-1">{label}</p></div>)}
+   </div>
    <p className="text-xs text-amber-800 rounded-lg p-3 bg-amber-50 border border-amber-200">{t('onlyHuman')} {t('admin')}</p>
    <div className="grid lg:grid-cols-2 gap-4">
     <div className={bx}>

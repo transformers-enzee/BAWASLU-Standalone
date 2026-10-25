@@ -270,6 +270,9 @@ def metrics(user:User=Depends(current_user),db:Session=Depends(get_db)):
        ) a ON TRUE
        WHERE p.balanced_qa_100"""),{"model":model,"version":VERSION}).mappings()
     total=0;human=0;predicted=0;compared=0;matched=0
+    relevance_compared=relevance_matches=0
+    perspective_compared=perspective_matches=0
+    action_compared=action_matches=action_false_positives=human_nonactionable=0
     confusion={};per_category={c:{"true":0,"predicted":0,"tp":0} for c in CATS}
     for x in xs:
         total+=1
@@ -286,6 +289,22 @@ def metrics(user:User=Depends(current_user),db:Session=Depends(get_db)):
             if gold in per_category:per_category[gold]["true"]+=1
             if guess in per_category:per_category[guess]["predicted"]+=1
             if gold==guess and gold in per_category:per_category[gold]["tp"]+=1
+            if x["relevance"] in ("Relevant","Irrelevant","Uncertain") and ai.get("relevance") in ("Relevant","Irrelevant","Uncertain"):
+                relevance_compared+=1
+                relevance_matches+=int(x["relevance"]==ai["relevance"])
+            if x["perspective"] in ("operations","reputation","both","uncertain"):
+                perspectives=ai.get("perspectives") or []
+                if isinstance(perspectives,list):
+                    normalized=("both" if set(perspectives)=={"operations","reputation"}
+                       else perspectives[0] if len(perspectives)==1 else "uncertain")
+                    perspective_compared+=1
+                    perspective_matches+=int(x["perspective"]==normalized)
+            if x["actionable"] in ("Yes","No","Uncertain") and ai.get("actionable") in ("Yes","No","Uncertain"):
+                action_compared+=1
+                action_matches+=int(x["actionable"]==ai["actionable"])
+                if x["actionable"]=="No":
+                    human_nonactionable+=1
+                    action_false_positives+=int(ai["actionable"]=="Yes")
     f1s=[]
     for v in per_category.values():
         p=v["tp"]/v["predicted"] if v["predicted"] else 0
@@ -295,6 +314,11 @@ def metrics(user:User=Depends(current_user),db:Session=Depends(get_db)):
       "compared":compared,"matches":matched,
       "primary_category_accuracy":round(matched/compared,4) if compared else None,
       "macro_f1":round(sum(f1s)/len(f1s),4) if compared else None,
+      "relevance_accuracy":round(relevance_matches/relevance_compared,4) if relevance_compared else None,
+      "perspective_accuracy":round(perspective_matches/perspective_compared,4) if perspective_compared else None,
+      "actionability_accuracy":round(action_matches/action_compared,4) if action_compared else None,
+      "action_false_positives":action_false_positives,
+      "human_nonactionable":human_nonactionable,
       "confusion":confusion,
       "warning":"Heuristic spreadsheet categories are not human gold. No accuracy metric exists without both AI and reviewed human labels."}
 

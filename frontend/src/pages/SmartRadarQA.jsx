@@ -116,9 +116,19 @@ export default function SmartRadarQA(){
    {error&&<div role="alert" className="border border-red-300 bg-red-50 text-red-800 rounded-lg p-3">{error}</div>}
    {message&&<div role="status" className="border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-lg p-3">{message}</div>}
    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-     {[[stats?.cohort_total??0,t('sample')],[metrics?.human_labeled??0,t('human')],[metrics?.ai_assessed??0,t('model')],[metrics?.compared??0,t('covered')],[metrics?.primary_category_accuracy==null?'—':(metrics.primary_category_accuracy*100).toFixed(1)+'%',t('accuracy')]].map(([n,l])=>
+     {[[stats?.cohort_total??0,t('sample')],[stats?.source_matched_human_categories??0,language==='id'?'Unggahan acuan tersedia':'Human-reference posts ready'],[metrics?.ai_assessed??0,t('model')],[metrics?.compared??0,t('covered')],[metrics?.primary_category_accuracy==null?'—':(metrics.primary_category_accuracy*100).toFixed(1)+'%',t('accuracy')]].map(([n,l])=>
        <div className={bx} key={l}><b className="text-2xl text-slate-800 tabular-nums">{n}</b><p className="text-xs text-slate-500 mt-1">{l}</p></div>)}
    </div>
+   {stats?.cohort_total===0&&stats?.total>0&&
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex flex-wrap gap-3 justify-between items-center text-sm" role="status">
+      <div><b className="text-amber-900">{language==='id'?'Sampel 100 seimbang belum diimpor':'Balanced 100 not imported yet'}</b>
+       <p className="text-amber-800 text-xs mt-1">{language==='id'?
+          (stats.total+' unggahan sumber tersedia saat ini. Unggah berkas kurasi 407 unggahan untuk melengkapi data dan membuat sampel seimbang; label manusia tetap tersimpan.'):
+          (stats.total+' source posts are available now. Upload the 407-post curated workbook to create the balanced cohort. Existing human reference labels are preserved.')}</p></div>
+      <button type="button" onClick={()=>{setCohort('human');setPage(1)}} className="rounded-lg bg-white border border-amber-300 px-3 py-2 text-xs text-amber-900">
+       {language==='id'?'Lihat unggahan acuan manusia':'View available human-reference posts'}
+      </button>
+    </div>}
    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
     {[
       [metrics?.relevance_accuracy,language==='id'?'Kecocokan relevansi':'Relevance agreement'],
@@ -155,15 +165,23 @@ export default function SmartRadarQA(){
     <div className={bx}>
      <h2 className="font-semibold">{t('imports')}</h2><p className="text-xs text-slate-500 my-2">{t('importNote')}</p>
      {canImport?<form onSubmit={onUpload} className="flex flex-wrap gap-2 items-center">
-       <label className="text-xs border rounded-lg px-3 py-2 cursor-pointer flex-1 min-w-0 text-slate-700"><Upload size={14} className="inline mr-1"/>{file?.name||'BAWASLU_Curated_Social_Listening_QA.xlsx'}
+       <label className="text-xs border rounded-lg px-3 py-2 cursor-pointer flex-1 min-w-0 text-slate-700"><Upload size={14} className="inline mr-1"/>{file?.name||(language==='id'?'Pilih berkas Excel 407 unggahan (.xlsx)':'Choose 407-post Excel workbook (.xlsx)')}
         <input type="file" className="sr-only" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
-       <button className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50" disabled={!file||!!busy}>{busy==='import'?'Importing…':t('upload')}</button>
+       <button className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50" disabled={!file||!!busy}>{busy==='import'?'Importing…':(language==='id'?'Impor 407 unggahan':'Import 407 posts')}</button>
      </form>:<p className="text-sm text-slate-500">Import is restricted to national administrators.</p>}
-     <p className="text-xs mt-2 text-slate-500">{stats?.total||0} / 407 {language==='id'?'teks unggahan tersedia dalam QA Lab. Unggah berkas sumber 407 untuk melengkapi data yang belum termuat.':'source texts loaded in QA Lab. Upload the 407-source workbook to complete any missing matched posts.'}</p>
+     <p className="text-xs mt-2 text-slate-500">{stats?.total||0} / 407 {language==='id'?'teks sumber telah tersimpan dalam QA Lab. Impor hanya mengisi area QA; tidak mengubah Action Desk.':'source texts loaded in QA Lab. Import affects QA data only, never Action Desk.'}</p>
     </div>
     <div className={bx}>
      <h2 className="font-semibold">{t('aiMode')}</h2>
-     <p className="text-sm text-slate-600 my-2">{stats?.ai_ready?'Ready for a controlled 3-post batch':t('disabled')}</p>
+     <p className="text-sm text-slate-600 my-2">{stats?.ai_ready?
+      (language==='id'?'Siap untuk uji 3 unggahan terkendali':'Ready for a controlled three-post test'):
+      (language==='id'?'Penilaian AI belum tersedia. Periksa konfigurasi staging di bawah.':'AI assessment unavailable. Check the staging configuration below.')}</p>
+     {!stats?.ai_ready&&<div className="text-xs border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-1 text-amber-900">
+       <p>{stats?.model_configured?'✓':'○'} {language==='id'?'Model QA':'QA model'}: {stats?.model_configured?'Configured':'SMART_RADAR_QA_MODEL'}</p>
+       <p>{stats?.api_key_configured?'✓':'○'} OPENAI_API_KEY: {stats?.api_key_configured?'Configured':'Missing'}</p>
+       <p>{stats?.ai_enabled?'✓':'○'} SMART_RADAR_QA_AI_ENABLED=true</p>
+       <p className="pt-1 text-slate-600">{language==='id'?'Atur pada backend Render; kunci API tidak ditampilkan dalam aplikasi.':'Configure on the Render backend. API keys are never displayed in the app.'}</p>
+     </div>}
      <div className="flex justify-between gap-3 items-center"><p className="text-xs text-slate-500">Model: {stats?.model||'Not configured'} · Rubric {stats?.prompt_version||'v1'}</p>
        {canImport&&<button disabled={!stats?.ai_ready||!!busy||!stats?.cohort_total} onClick={assess} className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50">{busy==='assess'?'Assessing…':t('run')}</button>}</div>
     </div>
@@ -172,9 +190,17 @@ export default function SmartRadarQA(){
      <div className={bx}>
        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
          <h2 className="font-semibold">{t('browse')} ({total})</h2>
-         <div className="flex gap-2 text-xs">{[['balanced',t('sample')],['human',t('reviewed')],['all',t('all')]].map(([v,l])=><button key={v} onClick={()=>{setCohort(v);setPage(1);setCurrent(null)}} className={'px-3 py-2 rounded-lg border '+(cohort===v?'bg-[#147968] text-white':'bg-white text-slate-600')}>{l}</button>)}</div>
+         <div className="flex gap-2 text-xs">{[['balanced',t('sample')],['human',t('reviewed')],['all',t('all')]].map(([v,l])=><button key={v} disabled={v==='balanced'&&!stats?.cohort_total} onClick={()=>{setCohort(v);setPage(1);setCurrent(null)}} className={'px-3 py-2 rounded-lg border disabled:opacity-45 disabled:cursor-not-allowed '+(cohort===v?'bg-[#147968] text-white':'bg-white text-slate-600')}>{l}{v==='balanced'&&stats?.cohort_total===0?' (0)':''}</button>)}</div>
        </div>
-       {!records.length?<p className="py-10 text-sm text-slate-500">{t('missing')}</p>:records.map(row=>
+       {!records.length?<div className="py-10 text-sm text-slate-500">
+        <p>{cohort==='balanced'&&(stats?.total??0)>0?
+          (language==='id'?'100 sampel seimbang belum dibuat. Unggah berkas 407 unggahan di atas.':'The balanced 100 cohort has not been created. Import the 407-post workbook above.'):
+          cohort==='human'?(language==='id'?'Belum ada teks sumber yang terhubung dengan berkas acuan manusia.':'No source texts have been matched with the human reference yet.'):t('missing')}</p>
+        {cohort==='balanced'&&stats?.source_matched_human_categories>0&&
+         <button type="button" className="mt-3 text-xs text-[#147968] underline" onClick={()=>{setCohort('human');setPage(1)}}>
+           {language==='id'?'Lihat '+stats.source_matched_human_categories+' unggahan acuan yang tersedia':'View '+stats.source_matched_human_categories+' available human-reference posts'}
+         </button>}
+       </div>:records.map(row=>
          <button onClick={()=>select(row)} key={row.qa_id} className={'block w-full text-left border rounded-lg p-3 mb-2 hover:border-emerald-500 '+(current?.qa_id===row.qa_id?'border-emerald-600 bg-emerald-50':'border-slate-200')}>
            <div className="flex justify-between gap-2"><span className="font-semibold text-sm text-slate-800">{row.qa_id} <span className="font-normal text-slate-500">· {row.platform}</span></span><span className="text-[11px] text-slate-500">{row.h_category&&row.ai_result?(row.agreement?t('match'):t('mismatch')):t('notready')}</span></div>
            <p className="text-xs text-slate-700 mt-1 line-clamp-2">{row.message_original}</p>

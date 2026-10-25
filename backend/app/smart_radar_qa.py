@@ -91,6 +91,8 @@ def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
       "model":model or None,
       "ai_enabled":os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true",
       "ai_ready":bool(model and key and os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true"),
+      "model_configured":bool(model),
+      "api_key_configured":bool(key),
       "prompt_version":VERSION,
       "gold_status":"Human gold is absent until a named analyst saves reviewed judgments."
     }

@@ -55,13 +55,13 @@ const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-whit
 export default function SmartRadarQA(){
  const {access}=useOutletContext();
  const {language}=useLanguage();const t=key=>(wording[language]||wording.en)[key]||key;
- const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]),[calibration,setCalibration]=useState(null);
+ const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]),[calibration,setCalibration]=useState(null),[calibrationV2,setCalibrationV2]=useState(null);
  const [page,setPage]=useState(1),[cohort,setCohort]=useState('human'),[total,setTotal]=useState(0);
  const [current,setCurrent]=useState(null),[form,setForm]=useState({relevance:'Uncertain',primary_category:'Uncertain',perspective:'uncertain',actionable:'Uncertain',incident_key:'',note:''});
  const [file,setFile]=useState(null),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState('');
  const refresh=useCallback(async()=>{
-   const [s,m,x,c]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15'),api('/calibration-status')]);
-   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);setCalibration(c);
+   const [s,m,x,c,v]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15'),api('/calibration-status'),api('/calibration-v2-status')]);
+   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);setCalibration(c);setCalibrationV2(v);
  },[cohort,page]);
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[refresh]);
  const select=row=>{
@@ -93,6 +93,14 @@ export default function SmartRadarQA(){
      const result=await api('/assess-calibration',{mode,limit:Math.min(stats?.max_per_run||3,3)});
      setMessage(result.errors?.length?'QA assessment stopped: '+result.errors[0].reason:
        (result.processed?.length||0)+' '+(language==='id'?'prediksi uji buta tersimpan':'blind-test predictions saved'));
+     await refresh();
+   }catch(e){setError(e.message)}finally{setBusy('')}
+ }
+ async function testV2(mode){
+   setBusy('v2-'+mode);setError('');setMessage('');
+   try{
+     const result=await api('/assess-calibration-v2',{mode,limit:Math.min(stats?.max_per_run||3,3)});
+     setMessage(result.errors?.length?'QA v2 stopped: '+result.errors[0].reason:(result.saved?.length||0)+' v2 predictions saved (QA only)');
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
@@ -146,9 +154,47 @@ export default function SmartRadarQA(){
    </div>
    <p className="text-xs text-amber-800 rounded-lg p-3 bg-amber-50 border border-amber-200">{language==='id'?'Kategori dari berkas manusia adalah acuan awal, belum disetujui oleh peninjau dalam aplikasi. Hanya label yang disimpan oleh peninjau dihitung sebagai acuan final.':'Uploaded human categories are provisional reference candidates until confirmed by a named reviewer. Only reviewer-saved decisions count as final gold labels.'} {t('admin')}</p>
    <div className={bx}>
+     <div className="flex flex-wrap gap-2 justify-between items-start">
+       <div><h2 className="font-semibold">{language==='id'?'Kalibrasi AI Tahap 1 — v2':'Stage 1 AI Calibration — v2'}</h2>
+         <p className="text-xs text-slate-500 mt-1">{language==='id'?'Aturan primer lebih jelas dan contoh pelatihan manusia; hasil belum disetujui untuk produksi.':'Clearer primary-category rules and selected human examples. Not approved for production.'}</p></div>
+       <span className="text-xs rounded-full bg-amber-50 border border-amber-200 px-3 py-1">QA v2</span>
+     </div>
+     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+       {[
+         [calibrationV2?.training_examples??0,language==='id'?'Sampel pelatihan':'Training posts'],
+         [calibrationV2?.clean_holdout_total??0,language==='id'?'Uji belum terlihat':'Clean holdouts'],
+         [calibrationV2?.results?.baseline,language==='id'?'Akurasi awal v2':'V2 baseline'],
+         [calibrationV2?.results?.guided,language==='id'?'Akurasi contoh manusia v2':'V2 guided']
+       ].map(([v,label],i)=><div key={label} className="bg-slate-50 rounded-lg p-3">
+         <b className="text-xl">{i<2?v:v?.accuracy==null?'—':(v.accuracy*100).toFixed(1)+'%'}</b>
+         <p className="text-xs text-slate-500 mt-1">{label}</p>
+         {i>=2&&<p className="text-[11px] text-slate-500">{v?.correct||0}/{v?.tested||0} {language==='id'?'benar':'correct'} · {v?.tested||0}/{calibrationV2?.clean_holdout_total??'—'} {language==='id'?'diuji':'tested'}</p>}
+       </div>)}
+     </div>
+     <div className="flex gap-2 flex-wrap mt-3">
+       {canImport&&[['baseline',language==='id'?'Uji AI Awal':'Test v2 baseline'],['guided',language==='id'?'Uji AI Terarah':'Test v2 human-guided']].map(([mode,label])=>
+         <button key={mode} type="button" disabled={!stats?.ai_ready||!!busy||!calibrationV2?.testing_ready}
+           className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50" onClick={()=>testV2(mode)}>
+           {busy==='v2-'+mode?'Assessing…':label+' ('+(stats?.max_per_run||3)+')'}
+         </button>)}
+     </div>
+     <p className="text-xs text-amber-800 mt-3">{language==='id'?'Empat unggahan yang telah dibahas dikeluarkan dari tes v2. Model belum dilatih ulang dan belum semua label manusia disetujui.':'Four previously discussed cases are excluded from v2. The base model is unchanged and the human reference labels have not been formally signed off.'}</p>
+     {!!calibrationV2?.extra_seen_tests&&<p className="text-red-700 text-xs mt-2">{language==='id'?'Sampel v2 tidak lagi sepenuhnya baru; perlu uji baru.':'V2 holdout was already tested in another version; a fresh split is required.'}</p>}
+     <div className="border-t mt-3 pt-3">
+       <h3 className="font-semibold text-sm">{language==='id'?'Label acuan yang perlu diperiksa':'Human labels requiring review'} ({calibrationV2?.flags_count??0})</h3>
+       <p className="text-xs text-slate-500 mt-1">{language==='id'?'Tanda ini tidak mengubah label secara otomatis; Shahrin harus memeriksanya sebelum mengesahkan hasil.':'Flags do not change Shahrin’s labels; an analyst needs to confirm or correct them before approving results.'}</p>
+       <div className="grid md:grid-cols-2 gap-2 mt-2">
+         {(calibrationV2?.training_reference_flags||[]).slice(0,8).map(row=><div key={row.qa_id} className="text-xs p-2 rounded-lg bg-amber-50 border border-amber-200">
+           <b>{row.qa_id}</b> · {row.category}<p className="mt-1 text-slate-600">{row.flags.join('; ')}</p>
+         </div>)}
+       </div>
+       <p className="text-xs text-slate-500 mt-2">{language==='id'?'Kategori tanpa sampel uji':'Categories with no clean holdout'}: {(calibrationV2?.underrepresented_categories||[]).join(', ')||'—'}</p>
+     </div>
+   </div>
+   <div className={bx}>
      <div className="flex flex-wrap gap-3 justify-between items-start">
        <div>
-         <h2 className="font-semibold">{language==='id'?'Kalibrasi dari Contoh Manusia':'Human-example Calibration'}</h2>
+         <h2 className="font-semibold">{language==='id'?'Kalibrasi v1 (riwayat)':'Previous calibration v1 (history)'}</h2>
          <p className="text-xs text-slate-500 mt-1">{language==='id'?'Model dasar tidak dilatih ulang. Contoh kategori manusia digunakan untuk mengkalibrasi instruksi, kemudian diuji pada unggahan yang disembunyikan.':'The base model is not retrained. Human-labelled training examples guide the classifier, then a hidden test set measures whether it improves.'}</p>
        </div>
        <span className="text-xs rounded-full bg-amber-50 border border-amber-200 px-3 py-1">{language==='id'?'Eksperimen QA saja':'QA-only experiment'}</span>
@@ -157,7 +203,7 @@ export default function SmartRadarQA(){
        {[[calibration?.training_examples??0,language==='id'?'Contoh pelatihan':'Training examples'],[calibration?.holdout_examples??0,language==='id'?'Uji tertahan':'Unseen holdouts'],[calibration?.results?.baseline?.accuracy,language==='id'?'Akurasi awal':'Baseline accuracy'],[calibration?.results?.calibrated?.accuracy,language==='id'?'Akurasi kalibrasi':'Calibrated accuracy']].map(([n,label],i)=><div className='rounded-lg bg-slate-50 p-3' key={label}><b className='text-xl text-slate-800'>{i>=2?(n==null?'—':(n*100).toFixed(1)+'%'):n}</b><p className='text-xs text-slate-500 mt-1'>{label}</p></div>)}
      </div>
      <div className="flex flex-wrap gap-2 mt-3">
-       {canImport&&[['baseline',language==='id'?'Uji awal (3 unggahan)':'Test baseline (3 posts)'],['calibrated',language==='id'?'Uji contoh manusia (3 unggahan)':'Test human-guided (3 posts)']].map(([mode,label])=><button key={mode} type='button' disabled={!stats?.ai_ready||!!busy||(calibration?.holdout_examples??0)<5} className='px-3 py-2 text-sm rounded-lg bg-[#147968] text-white disabled:opacity-50' onClick={()=>trial(mode)}>{busy==='trial-'+mode?'Assessing...':label.replace('3',String(stats?.max_per_run||3))}</button>)}
+       <p className='text-xs text-slate-500'>{language==='id'?'Pengujian v1 dihentikan. Hasilnya tetap tersimpan sebagai riwayat.':'V1 testing is paused. Existing results remain for comparison.'}</p>
      </div>
      <p className="text-xs text-amber-700 mt-3">{language==='id'?'Semua penilaian menggunakan data uji yang sama dan tidak pernah mengirim jawaban dari set uji ke AI. Pemrosesan hanya dilakukan setelah tombol ditekan.':'Both modes use the same held-out posts. The answer key is never shown to the AI. Model requests are made only after an administrator clicks a test button.'}</p>
    </div>

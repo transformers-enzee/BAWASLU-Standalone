@@ -19,6 +19,7 @@ from .smart_radar_processing import router as smart_radar_processing_router
 from .smart_radar_synthesis import router as smart_radar_synthesis_router
 from .smart_radar_qa import router as smart_radar_qa_router
 from .smart_radar_calibration import router as smart_radar_calibration_router
+from .smart_radar_qa_v2 import router as smart_radar_qa_v2_router
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
@@ -27,6 +28,7 @@ app.include_router(smart_radar_processing_router)
 app.include_router(smart_radar_synthesis_router)
 app.include_router(smart_radar_qa_router)
 app.include_router(smart_radar_calibration_router)
+app.include_router(smart_radar_qa_v2_router)
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS','http://localhost:5173').split(',')],allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 UPLOAD_DIR=Path(os.getenv('UPLOAD_DIR','./uploads')); UPLOAD_DIR.mkdir(parents=True,exist_ok=True)
 app.mount('/uploads',StaticFiles(directory=str(UPLOAD_DIR)),name='uploads')

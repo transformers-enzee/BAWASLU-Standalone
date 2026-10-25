@@ -19,7 +19,7 @@ const wording={
    title:'AI Quality Assurance Lab',note:'Compare blind AI classifications with actual analyst-reviewed labels. Separate from officer Action Desk.',
    imports:'Import curated source workbook',upload:'Upload 407-record workbook',importNote:'Uploads source posts only. Curated categories are candidate tags—not human reference decisions.',
    human:'Human reference labels',model:'AI predictions',covered:'Compared',accuracy:'Primary-category match',f1:'Macro F1',pending:'Not measurable yet',
-   sample:'Balanced 100',all:'All 407',reviewed:'Human-labelled',run:'Assess next 3 (AI)',disabled:'AI assessment disabled until the staging administrator enables it.',
+   sample:'Balanced 100',all:'All 407',reviewed:'Human reference (uploaded)',run:'Assess next 3 (AI)',disabled:'AI assessment disabled until the staging administrator enables it.',
    missing:'No QA records yet. Import the curated 407-record workbook to create the balanced 100-record test.',
    source:'Original source',curated:'Provisional category (NOT GOLD)',humanTitle:'Shahrin / analyst reference review',
    relevance:'Electoral relevance',category:'Human primary category',perspective:'Perspective',actionable:'Review-worthy signal',
@@ -36,7 +36,7 @@ const wording={
    title:'Laboratorium Kendali Mutu AI',note:'Bandingkan klasifikasi AI secara mandiri dengan label yang benar-benar telah ditinjau analis. Terpisah dari Meja Tindak Lanjut.',
    imports:'Impor berkas sumber kurasi',upload:'Unggah berkas 407 unggahan',importNote:'Hanya mengimpor sumber. Kategori kurasi adalah label sementara—bukan keputusan analis.',
    human:'Label acuan analis',model:'Prediksi AI',covered:'Sudah dibandingkan',accuracy:'Kecocokan kategori utama',f1:'F1 Makro',pending:'Belum dapat diukur',
-   sample:'100 Sampel Seimbang',all:'Semua 407',reviewed:'Diberi Label Analis',run:'Nilai 3 unggahan berikutnya (AI)',disabled:'Penilaian AI belum diaktifkan oleh administrator staging.',
+   sample:'100 Sampel Seimbang',all:'Semua 407',reviewed:'Acuan Analis (Diunggah)',run:'Nilai 3 unggahan berikutnya (AI)',disabled:'Penilaian AI belum diaktifkan oleh administrator staging.',
    missing:'Belum ada data QA. Impor berkas kurasi 407 unggahan untuk membuat 100 sampel seimbang.',
    source:'Sumber asli',curated:'Kategori sementara (BUKAN ACUAN)',humanTitle:'Penilaian acuan Shahrin / analis',
    relevance:'Relevansi pemilu',category:'Kategori utama hasil review',perspective:'Perspektif',actionable:'Memerlukan peninjauan',
@@ -55,18 +55,18 @@ const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-whit
 export default function SmartRadarQA(){
  const {access}=useOutletContext();
  const {language}=useLanguage();const t=key=>(wording[language]||wording.en)[key]||key;
- const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]);
- const [page,setPage]=useState(1),[cohort,setCohort]=useState('balanced'),[total,setTotal]=useState(0);
+ const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]),[calibration,setCalibration]=useState(null);
+ const [page,setPage]=useState(1),[cohort,setCohort]=useState('human'),[total,setTotal]=useState(0);
  const [current,setCurrent]=useState(null),[form,setForm]=useState({relevance:'Uncertain',primary_category:'Uncertain',perspective:'uncertain',actionable:'Uncertain',incident_key:'',note:''});
  const [file,setFile]=useState(null),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState('');
  const refresh=useCallback(async()=>{
-   const [s,m,x]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15')]);
-   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);
+   const [s,m,x,c]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15'),api('/calibration-status')]);
+   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);setCalibration(c);
  },[cohort,page]);
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[refresh]);
  const select=row=>{
    setCurrent(row);
-   setForm({qa_id:row.qa_id,relevance:row.h_relevance||'Uncertain',primary_category:row.h_category||'Uncertain',
+   setForm({qa_id:row.qa_id,relevance:row.h_relevance||'Uncertain',primary_category:row.h_category||row.imported_human_category||'Uncertain',
      perspective:row.h_perspective||'uncertain',actionable:row.h_actionable||'Uncertain',
      incident_key:row.h_incident_key||'',note:row.h_note||''});
  };
@@ -84,6 +84,15 @@ export default function SmartRadarQA(){
    setBusy('assess');setError('');setMessage('');
    try{const result=await api('/assess-next',{limit:3});
      setMessage(result.errors?.length?'AI stopped: '+result.errors[0].reason:(result.processed?.length||0)+' assessments saved');
+     await refresh();
+   }catch(e){setError(e.message)}finally{setBusy('')}
+ }
+ async function trial(mode){
+   setBusy('trial-'+mode);setError('');setMessage('');
+   try{
+     const result=await api('/assess-calibration',{mode,limit:3});
+     setMessage(result.errors?.length?'QA assessment stopped: '+result.errors[0].reason:
+       (result.processed?.length||0)+' '+(language==='id'?'prediksi uji buta tersimpan':'blind-test predictions saved'));
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
@@ -118,7 +127,30 @@ export default function SmartRadarQA(){
       [metrics?.action_false_positives,language==='id'?'Alarm tindak lanjut keliru':'False-positive review signals']
      ].map(([v,label],i)=><div key={label} className="border border-slate-200 bg-white rounded-lg p-3"><b className="text-lg">{v==null?'—':i===3?v:(v*100).toFixed(1)+'%'}</b><p className="text-[11px] text-slate-500 mt-1">{label}</p></div>)}
    </div>
-   <p className="text-xs text-amber-800 rounded-lg p-3 bg-amber-50 border border-amber-200">{t('onlyHuman')} {t('admin')}</p>
+   <div className="border border-slate-200 bg-white rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
+     <b>{language==='id'?'Berkas kategori analis diunggah':'Imported analyst-category workbook'}:</b>
+     <span><b>{stats?.uploaded_human_categories??0}</b> {language==='id'?'label kategori':'category labels'}</span>
+     <span><b>{stats?.source_matched_human_categories??0}</b> {language==='id'?'sumber tersedia':'source texts available'}</span>
+     <span><b>{stats?.signed_off_human_categories??0}</b> {language==='id'?'dikonfirmasi analis':'analyst-confirmed'}</span>
+     <span><b>{stats?.missing_content_urls??0}</b> {language==='id'?'URL tanpa teks':'URL-only references'}</span>
+   </div>
+   <p className="text-xs text-amber-800 rounded-lg p-3 bg-amber-50 border border-amber-200">{language==='id'?'Kategori dari berkas manusia adalah acuan awal, belum disetujui oleh peninjau dalam aplikasi. Hanya label yang disimpan oleh peninjau dihitung sebagai acuan final.':'Uploaded human categories are provisional reference candidates until confirmed by a named reviewer. Only reviewer-saved decisions count as final gold labels.'} {t('admin')}</p>
+   <div className={bx}>
+     <div className="flex flex-wrap gap-3 justify-between items-start">
+       <div>
+         <h2 className="font-semibold">{language==='id'?'Kalibrasi dari Contoh Manusia':'Human-example Calibration'}</h2>
+         <p className="text-xs text-slate-500 mt-1">{language==='id'?'Model dasar tidak dilatih ulang. Contoh kategori manusia digunakan untuk mengkalibrasi instruksi, kemudian diuji pada unggahan yang disembunyikan.':'The base model is not retrained. Human-labelled training examples guide the classifier, then a hidden test set measures whether it improves.'}</p>
+       </div>
+       <span className="text-xs rounded-full bg-amber-50 border border-amber-200 px-3 py-1">{language==='id'?'Eksperimen QA saja':'QA-only experiment'}</span>
+     </div>
+     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+       {[[calibration?.training_examples??0,language==='id'?'Contoh pelatihan':'Training examples'],[calibration?.holdout_examples??0,language==='id'?'Uji tertahan':'Unseen holdouts'],[calibration?.results?.baseline?.accuracy,language==='id'?'Akurasi awal':'Baseline accuracy'],[calibration?.results?.calibrated?.accuracy,language==='id'?'Akurasi kalibrasi':'Calibrated accuracy']].map(([n,label],i)=><div className='rounded-lg bg-slate-50 p-3' key={label}><b className='text-xl text-slate-800'>{i>=2?(n==null?'—':(n*100).toFixed(1)+'%'):n}</b><p className='text-xs text-slate-500 mt-1'>{label}</p></div>)}
+     </div>
+     <div className="flex flex-wrap gap-2 mt-3">
+       {canImport&&[['baseline',language==='id'?'Uji awal (3 unggahan)':'Test baseline (3 posts)'],['calibrated',language==='id'?'Uji contoh manusia (3 unggahan)':'Test human-guided (3 posts)']].map(([mode,label])=><button key={mode} type='button' disabled={!stats?.ai_ready||!!busy||(calibration?.holdout_examples??0)<5} className='px-3 py-2 text-sm rounded-lg bg-[#147968] text-white disabled:opacity-50' onClick={()=>trial(mode)}>{busy==='trial-'+mode?'Assessing...':label}</button>)}
+     </div>
+     <p className="text-xs text-amber-700 mt-3">{language==='id'?'Semua penilaian menggunakan data uji yang sama dan tidak pernah mengirim jawaban dari set uji ke AI. Pemrosesan hanya dilakukan setelah tombol ditekan.':'Both modes use the same held-out posts. The answer key is never shown to the AI. Model requests are made only after an administrator clicks a test button.'}</p>
+   </div>
    <div className="grid lg:grid-cols-2 gap-4">
     <div className={bx}>
      <h2 className="font-semibold">{t('imports')}</h2><p className="text-xs text-slate-500 my-2">{t('importNote')}</p>
@@ -127,7 +159,7 @@ export default function SmartRadarQA(){
         <input type="file" className="sr-only" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
        <button className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50" disabled={!file||!!busy}>{busy==='import'?'Importing…':t('upload')}</button>
      </form>:<p className="text-sm text-slate-500">Import is restricted to national administrators.</p>}
-     <p className="text-xs mt-2 text-slate-500">{stats?.total||0} / 407 imported. Balanced QA excludes source URLs already used in the 109-post pilot.</p>
+     <p className="text-xs mt-2 text-slate-500">{stats?.total||0} / 407 {language==='id'?'teks unggahan tersedia dalam QA Lab. Unggah berkas sumber 407 untuk melengkapi data yang belum termuat.':'source texts loaded in QA Lab. Upload the 407-source workbook to complete any missing matched posts.'}</p>
     </div>
     <div className={bx}>
      <h2 className="font-semibold">{t('aiMode')}</h2>
@@ -147,6 +179,7 @@ export default function SmartRadarQA(){
            <div className="flex justify-between gap-2"><span className="font-semibold text-sm text-slate-800">{row.qa_id} <span className="font-normal text-slate-500">· {row.platform}</span></span><span className="text-[11px] text-slate-500">{row.h_category&&row.ai_result?(row.agreement?t('match'):t('mismatch')):t('notready')}</span></div>
            <p className="text-xs text-slate-700 mt-1 line-clamp-2">{row.message_original}</p>
            <p className="text-[11px] text-slate-500 mt-2">{t('curated')}: {row.curated_category}</p>
+           {row.imported_human_category&&<p className="text-[11px] mt-1 text-[#147968]">{language==='id'?'Kategori dari berkas analis':'Uploaded analyst category'}: <b>{row.imported_human_category}</b> · {row.imported_review_status==='confirmed'?(language==='id'?'Dikonfirmasi':'Confirmed'):(language==='id'?'Menunggu persetujuan':'Awaiting sign-off')}</p>}
          </button>)}
        <div className="flex justify-between items-center text-xs text-slate-600 pt-2">
          <button disabled={page<=1} onClick={()=>setPage(p=>p-1)}>{t('prev')}</button>
@@ -157,7 +190,13 @@ export default function SmartRadarQA(){
      <div className={bx}>
        {!current?<p className="text-sm text-slate-500 p-8 text-center">{t('review')}</p>:<>
          <h2 className="font-semibold mb-3">{current.qa_id}</h2>
-         <p className="text-xs text-slate-500 mb-2">{t('curated')}: {current.curated_category} — {t('notready')}</p>
+         <p className="text-xs text-slate-500 mb-2">{t('curated')}: {current.curated_category}</p>
+         {current.imported_human_category&&<div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs mb-3">
+           <b>{language==='id'?'Kategori yang disediakan analis':'Uploaded analyst category'}:</b> {current.imported_human_category}
+           <p className="text-slate-600 mt-1">{current.imported_review_status==='confirmed'?
+             (language==='id'?'Sudah dikonfirmasi oleh peninjau.':'Confirmed by reviewer.'):
+             (language==='id'?'Belum diverifikasi dalam aplikasi. Konfirmasikan atau koreksi label sebelum skor QA dianggap final.':'Not yet signed off in the app. Confirm or correct before using as gold-standard QA.')}</p>
+         </div>}
          <div className="bg-slate-50 rounded-lg border p-3 max-h-[240px] overflow-y-auto text-sm whitespace-pre-wrap">{current.message_original}</div>
          <a href={current.source_url} className="text-xs text-[#147968] underline inline-block mt-2" target="_blank" rel="noopener noreferrer">{t('open')}</a>
          <div className="mt-4 border-t pt-4"><h3 className="font-semibold">{t('aiTitle')}</h3>

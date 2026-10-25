@@ -81,6 +81,11 @@ def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
     return {
       "total":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_source_posts"),
       "cohort_total":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_source_posts WHERE balanced_qa_100"),
+      "uploaded_human_categories":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_imported_human_categories"),
+      "source_matched_human_categories":scalar("""SELECT count(*) FROM pilot_smart_radar.qa_imported_human_categories h
+         JOIN pilot_smart_radar.qa_source_posts p ON p.original_excel_row=h.original_excel_row AND p.source_url=h.source_url"""),
+      "signed_off_human_categories":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_imported_human_categories WHERE review_status='confirmed'"),
+      "missing_content_urls":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_unresolved_human_urls"),
       "reference_labeled":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_human_labels"),
       "ai_scored":scalar("SELECT COUNT(DISTINCT qa_id) FROM pilot_smart_radar.qa_ai_assessments"),
       "model":model or None,
@@ -145,10 +150,10 @@ async def import_curated(file:UploadFile=File(...),user:User=Depends(current_use
         r["balanced_qa_100"]=r["qa_id"] in chosen
     # Batch upsert without overwriting human labels, AI predictions, or changed
     # source bodies. Refuse any mismatch to avoid silent historical data changes.
-    old={x["qa_id"]:x["source_hash"] for x in db.execute(text(
-       "SELECT qa_id,source_hash FROM pilot_smart_radar.qa_source_posts")).mappings()}
-    if any(old.get(r["qa_id"],r["source_hash"])!=r["source_hash"] for r in records):
-        raise HTTPException(409,"Existing QA source text differs; source was not overwritten")
+    old={x["qa_id"]:x["source_url"] for x in db.execute(text(
+       "SELECT qa_id,source_url FROM pilot_smart_radar.qa_source_posts")).mappings()}
+    if any(old.get(r["qa_id"],r["source_url"])!=r["source_url"] for r in records):
+        raise HTTPException(409,"QA source ID already exists with a different URL; import stopped")
     for offset in range(0,len(records),40):
         payload=json.dumps(records[offset:offset+40],ensure_ascii=False)
         db.execute(text("""INSERT INTO pilot_smart_radar.qa_source_posts
@@ -163,7 +168,19 @@ async def import_curated(file:UploadFile=File(...),user:User=Depends(current_use
             heuristic_score int,platform text,published_at_raw text,account_raw text,
             message_original text,source_url text,source_hash text,
             overlaps_pilot_109 boolean,balanced_qa_100 boolean)
-          ON CONFLICT (qa_id) DO NOTHING"""),{"payload":payload})
+          ON CONFLICT (qa_id) DO UPDATE SET qa_tier=EXCLUDED.qa_tier,
+            curated_category=EXCLUDED.curated_category,
+            heuristic_score=EXCLUDED.heuristic_score,platform=EXCLUDED.platform,
+            published_at_raw=EXCLUDED.published_at_raw,
+            account_raw=EXCLUDED.account_raw,
+            message_original=EXCLUDED.message_original,
+            source_hash=EXCLUDED.source_hash,
+            overlaps_pilot_109=EXCLUDED.overlaps_pilot_109,
+            balanced_qa_100=EXCLUDED.balanced_qa_100
+          WHERE pilot_smart_radar.qa_source_posts.source_url=EXCLUDED.source_url"""),{"payload":payload})
+    db.execute(text("""UPDATE pilot_smart_radar.qa_imported_human_categories h
+       SET matched_at=now() FROM pilot_smart_radar.qa_source_posts p
+       WHERE h.original_excel_row=p.original_excel_row AND h.source_url=p.source_url"""))
     db.commit()
     return {"imported_or_existing":len(records),"balanced_cohort":100,
        "overlap_with_pilot":sum(r["overlaps_pilot_109"] for r in records),
@@ -176,21 +193,26 @@ def records(page:int=Query(1,ge=1),size:int=Query(20,ge=1,le=50),
     reviewer(db,user)
     if cohort not in ("balanced","all","human"):raise HTTPException(400,"Unknown cohort")
     clause=("WHERE p.balanced_qa_100" if cohort=="balanced"
-       else "WHERE EXISTS (SELECT 1 FROM pilot_smart_radar.qa_human_labels hl WHERE hl.qa_id=p.qa_id)" if cohort=="human"
+       else """WHERE EXISTS (SELECT 1 FROM pilot_smart_radar.qa_human_labels hl WHERE hl.qa_id=p.qa_id)
+                   OR EXISTS (SELECT 1 FROM pilot_smart_radar.qa_imported_human_categories ih
+                     WHERE ih.original_excel_row=p.original_excel_row AND ih.source_url=p.source_url)""" if cohort=="human"
        else "")
     model,_=model_config()
     rows=db.execute(text(f"""SELECT p.*,h.relevance AS h_relevance,h.primary_category AS h_category,
           h.perspective AS h_perspective,h.actionable AS h_actionable,
           h.incident_key AS h_incident_key,h.note AS h_note,h.reviewer_name,h.reviewed_at,
+          ih.category AS imported_human_category,ih.review_status AS imported_review_status,
           a.result_json AS ai_result,a.model AS ai_model,a.prompt_version AS ai_version,
           a.processed_at AS ai_processed_at
           FROM pilot_smart_radar.qa_source_posts p
           LEFT JOIN pilot_smart_radar.qa_human_labels h ON h.qa_id=p.qa_id
+          LEFT JOIN pilot_smart_radar.qa_imported_human_categories ih
+             ON ih.original_excel_row=p.original_excel_row AND ih.source_url=p.source_url
           LEFT JOIN LATERAL (
            SELECT result_json,model,prompt_version,processed_at
            FROM pilot_smart_radar.qa_ai_assessments ai WHERE ai.qa_id=p.qa_id
-           ORDER BY (ai.model=:model AND ai.prompt_version=:version
-             AND ai.source_hash=p.source_hash) DESC,processed_at DESC LIMIT 1
+              AND ai.source_hash=p.source_hash
+           ORDER BY (ai.model=:model AND ai.prompt_version=:version) DESC,processed_at DESC LIMIT 1
           ) a ON TRUE
           {clause}
           ORDER BY CASE p.curated_category
@@ -258,6 +280,11 @@ def human_review(body:HumanReview,user:User=Depends(current_user),db:Session=Dep
         "category":body.primary_category,"perspective":body.perspective,
         "actionable":body.actionable,"incident":body.incident_key.strip()[:100],
         "note":body.note.strip(),"actor":str(user.id),"name":p["name"]})
+    db.execute(text("""UPDATE pilot_smart_radar.qa_imported_human_categories ih
+      SET review_status=CASE WHEN ih.category=:category THEN 'confirmed' ELSE 'rejected' END
+      FROM pilot_smart_radar.qa_source_posts p
+      WHERE p.qa_id=:id AND p.original_excel_row=ih.original_excel_row AND p.source_url=ih.source_url"""),
+      {"id":body.qa_id,"category":body.primary_category})
     db.commit()
     return {"ok":True,"qa_id":body.qa_id,"message":"Human QA label saved with history; not an officer decision"}
 
@@ -349,11 +376,13 @@ def assess_next(body:AssessRequest,user:User=Depends(current_user),db:Session=De
         items=db.execute(text("""SELECT p.qa_id,p.message_original,p.source_url,p.source_hash
           FROM pilot_smart_radar.qa_source_posts p
           LEFT JOIN pilot_smart_radar.qa_human_labels h ON h.qa_id=p.qa_id
+          LEFT JOIN pilot_smart_radar.qa_imported_human_categories ih
+            ON ih.original_excel_row=p.original_excel_row AND ih.source_url=p.source_url
           LEFT JOIN pilot_smart_radar.qa_ai_assessments a
            ON a.qa_id=p.qa_id AND a.source_hash=p.source_hash
            AND a.model=:model AND a.prompt_version=:version
-          WHERE (p.balanced_qa_100 OR h.qa_id IS NOT NULL) AND a.qa_id IS NULL
-          ORDER BY CASE WHEN h.qa_id IS NOT NULL THEN 0 ELSE 1 END,p.qa_id LIMIT :limit"""),
+          WHERE (p.balanced_qa_100 OR h.qa_id IS NOT NULL OR ih.original_excel_row IS NOT NULL) AND a.qa_id IS NULL
+          ORDER BY CASE WHEN ih.original_excel_row IS NOT NULL OR h.qa_id IS NOT NULL THEN 0 ELSE 1 END,p.qa_id LIMIT :limit"""),
           {"model":model,"version":VERSION,"limit":body.limit}).mappings().all()
         processed=[];errors=[]
         instructions="""You are a neutral, evidence-grounded BAWASLU post classifier in a blind QA test.

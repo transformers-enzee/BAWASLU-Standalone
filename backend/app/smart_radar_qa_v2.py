@@ -23,6 +23,7 @@ from .models import User
 from .smart_radar_qa import reviewer, qa_admin, CAT_SET
 from .smart_radar_qa_limits import qa_config, qa_readiness, ensure_qa_batch
 from .smart_radar_qa_errors import qa_provider_error
+from .smart_radar_qa_validation import validate_qa_v2_output, QAOutputError
 from .smart_radar_calibration import load_reference, canonical_key, SYSTEM_RUBRIC
 
 router = APIRouter(prefix="/api/smart-radar/qa", tags=["smart-radar-calibration-v2"])
@@ -255,21 +256,11 @@ def assess_calibration_v2(body:V2Trial,user:User=Depends(current_user),
                             {"post_text":x["message_original"][:9000]},
                             ensure_ascii=False)}
                     ],"response_format":{"type":"json_object"},
-                    "max_completion_tokens":900},timeout=50)
+                    "max_completion_tokens":1300},timeout=50)
                 response.raise_for_status()
                 response_json=response.json()
-                answer=json.loads(response_json["choices"][0]["message"]["content"])
-                primary=answer.get("primary_category")
-                quote=answer.get("evidence_quote")
-                if primary not in CAT_SET:
-                    raise ValueError("Invalid primary classification")
-                if not isinstance(quote,str) or not quote.strip() or quote not in x["message_original"]:
-                    raise ValueError("Quote is missing or not verbatim")
-                if body.mode=="guided":
-                    second=answer.get("secondary_categories")
-                    if not isinstance(second,list) or len(second)>2 or any(
-                        c not in CAT_SET or c==primary for c in second):
-                        raise ValueError("Invalid secondary categories")
+                answer=validate_qa_v2_output(
+                    response_json,x["message_original"],CAT_SET,body.mode)
                 usage=response_json.get("usage") or {}
                 db.execute(text("""
                     INSERT INTO pilot_smart_radar.qa_ai_assessments
@@ -282,6 +273,11 @@ def assess_calibration_v2(body:V2Trial,user:User=Depends(current_user),
                     "out_tokens":int(usage.get("completion_tokens") or 0)})
                 db.commit()
                 saved.append(x["qa_id"])
+            except QAOutputError as exc:
+                db.rollback()
+                errors.append({"qa_id":x["qa_id"],"reason":str(exc),
+                               "validation_code":exc.code})
+                break
             except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError,json.JSONDecodeError) as exc:
                 db.rollback()
                 errors.append({"qa_id":x["qa_id"],**qa_provider_error(exc)})

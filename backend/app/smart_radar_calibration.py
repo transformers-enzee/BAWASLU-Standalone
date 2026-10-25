@@ -22,6 +22,7 @@ from .auth import current_user
 from .models import User
 from .smart_radar_qa import qa_admin, reviewer, model_config, CAT_SET
 from .smart_radar_qa_limits import ensure_qa_batch
+from .smart_radar_qa_errors import qa_provider_error
 
 router=APIRouter(prefix="/api/smart-radar/qa", tags=["smart-radar-calibration"])
 _LOCK=threading.Lock()
@@ -188,7 +189,7 @@ def assess_calibration(body:Trial,user:User=Depends(current_user),db:Session=Dep
                       {"role":"user","content":json.dumps({
                          "post_text":item["message_original"][:9500]},
                          ensure_ascii=False)}
-                    ],"response_format":{"type":"json_object"},"max_tokens":350},
+                    ],"response_format":{"type":"json_object"},"max_completion_tokens":850},
                     timeout=50)
                 response.raise_for_status()
                 payload=response.json()
@@ -210,7 +211,7 @@ def assess_calibration(body:Trial,user:User=Depends(current_user),db:Session=Dep
                 db.commit();processed.append(item["qa_id"])
             except (httpx.HTTPError,KeyError,ValueError,TypeError,IndexError,json.JSONDecodeError) as exc:
                 db.rollback()
-                errors.append({"qa_id":item["qa_id"],"reason":type(exc).__name__})
+                errors.append({"qa_id":item["qa_id"],**qa_provider_error(exc)})
                 break
         return {"mode":body.mode,"version":version,"processed":processed,
             "errors":errors,"training_examples_available":len(train),

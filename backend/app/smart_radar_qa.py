@@ -23,6 +23,7 @@ from .auth import current_user
 from .models import User
 from .access import profile,has
 from .smart_radar_qa_limits import qa_config, qa_readiness, ensure_qa_batch
+from .smart_radar_qa_errors import qa_provider_error
 
 router=APIRouter(prefix="/api/smart-radar/qa",tags=["smart-radar-qa"])
 CATS=["Allegations / Violations","Voter Register / PDPB",
@@ -451,7 +452,7 @@ def assess_next(body:AssessRequest,user:User=Depends(current_user),db:Session=De
                 processed.append(x["qa_id"])
             except (httpx.HTTPError,ValueError,KeyError,IndexError,TypeError,json.JSONDecodeError) as exc:
                 db.rollback()
-                errors.append({"qa_id":x["qa_id"],"reason":type(exc).__name__})
+                errors.append({"qa_id":x["qa_id"],**qa_provider_error(exc)})
                 break
         return {"processed":processed,"errors":errors,"model":model,
                 "prompt_version":VERSION,"reminder":"Predictions are QA-only, not homepage or officer-reviewed intelligence"}

@@ -121,9 +121,11 @@ def label_review_flags(row):
           "mengeluh","keluhan","kecewa","aduan","laporan warga",
           "tidak percaya","mempersoalkan","kritik","protes","pengaduan"])):
         flags.append("May describe outreach rather than an actual citizen concern")
-    if category=="Election Operations" and _contains(content,[
-        "sudah curang","telah curang","kecurangan kpu","bawaslu curang"])
-        and not _contains(content,["sosialisasi","seminar","pelatihan","forum debat"]):
+    if (category=="Election Operations"
+        and _contains(content,[
+            "sudah curang","telah curang","kecurangan kpu","bawaslu curang"])
+        and not _contains(content,[
+            "sosialisasi","seminar","pelatihan","forum debat"])):
         flags.append("May primarily allege misconduct rather than routine operations")
     return flags
 

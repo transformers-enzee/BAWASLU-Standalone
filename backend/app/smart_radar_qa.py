@@ -250,8 +250,17 @@ def human_review(body:HumanReview,user:User=Depends(current_user),db:Session=Dep
         "category":body.primary_category,"perspective":body.perspective,
         "actionable":body.actionable,"incident":body.incident_key.strip()[:100],
         "note":body.note.strip(),"actor":str(user.id),"name":p["name"]})
+    db.execute(text("""INSERT INTO pilot_smart_radar.qa_label_history
+       (qa_id,relevance,primary_category,perspective,actionable,incident_key,
+        note,reviewer_id,reviewer_name)
+       VALUES(:qa_id,:relevance,:category,:perspective,:actionable,:incident,
+        :note,:actor,:name)"""),{
+        "qa_id":body.qa_id,"relevance":body.relevance,
+        "category":body.primary_category,"perspective":body.perspective,
+        "actionable":body.actionable,"incident":body.incident_key.strip()[:100],
+        "note":body.note.strip(),"actor":str(user.id),"name":p["name"]})
     db.commit()
-    return {"ok":True,"qa_id":body.qa_id,"message":"Human QA label saved; not an officer decision"}
+    return {"ok":True,"qa_id":body.qa_id,"message":"Human QA label saved with history; not an officer decision"}
 
 @router.get("/metrics")
 def metrics(user:User=Depends(current_user),db:Session=Depends(get_db)):

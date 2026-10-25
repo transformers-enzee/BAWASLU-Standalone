@@ -81,11 +81,8 @@ def status(user:User=Depends(current_user),db:Session=Depends(get_db)):
     return {
       "total":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_source_posts"),
       "cohort_total":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_source_posts WHERE balanced_qa_100"),
-      "reference_labeled":scalar("""SELECT COUNT(*) FROM pilot_smart_radar.qa_human_labels h
-        JOIN pilot_smart_radar.qa_source_posts p ON p.qa_id=h.qa_id WHERE p.balanced_qa_100"""),
-      "ai_scored":scalar("""SELECT COUNT(DISTINCT a.qa_id) FROM pilot_smart_radar.qa_ai_assessments a
-        JOIN pilot_smart_radar.qa_source_posts p ON p.qa_id=a.qa_id
-        WHERE p.balanced_qa_100"""),
+      "reference_labeled":scalar("SELECT COUNT(*) FROM pilot_smart_radar.qa_human_labels"),
+      "ai_scored":scalar("SELECT COUNT(DISTINCT qa_id) FROM pilot_smart_radar.qa_ai_assessments"),
       "model":model or None,
       "ai_enabled":os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true",
       "ai_ready":bool(model and key and os.getenv("SMART_RADAR_QA_AI_ENABLED","false").lower()=="true"),
@@ -177,8 +174,10 @@ def records(page:int=Query(1,ge=1),size:int=Query(20,ge=1,le=50),
             cohort:str=Query("balanced"),user:User=Depends(current_user),
             db:Session=Depends(get_db)):
     reviewer(db,user)
-    if cohort not in ("balanced","all"):raise HTTPException(400,"Unknown cohort")
-    clause="WHERE p.balanced_qa_100" if cohort=="balanced" else ""
+    if cohort not in ("balanced","all","human"):raise HTTPException(400,"Unknown cohort")
+    clause=("WHERE p.balanced_qa_100" if cohort=="balanced"
+       else "WHERE EXISTS (SELECT 1 FROM pilot_smart_radar.qa_human_labels hl WHERE hl.qa_id=p.qa_id)" if cohort=="human"
+       else "")
     model,_=model_config()
     rows=db.execute(text(f"""SELECT p.*,h.relevance AS h_relevance,h.primary_category AS h_category,
           h.perspective AS h_perspective,h.actionable AS h_actionable,
@@ -277,7 +276,7 @@ def metrics(user:User=Depends(current_user),db:Session=Depends(get_db)):
              AND a.model=:model AND a.prompt_version=:version
            ORDER BY a.processed_at DESC LIMIT 1
        ) a ON TRUE
-       WHERE p.balanced_qa_100"""),{"model":model,"version":VERSION}).mappings()
+       """),{"model":model,"version":VERSION}).mappings()
     total=0;human=0;predicted=0;compared=0;matched=0
     relevance_compared=relevance_matches=0
     perspective_compared=perspective_matches=0
@@ -349,11 +348,12 @@ def assess_next(body:AssessRequest,user:User=Depends(current_user),db:Session=De
         if used+body.limit>ceiling:raise HTTPException(429,"Daily QA AI cap reached")
         items=db.execute(text("""SELECT p.qa_id,p.message_original,p.source_url,p.source_hash
           FROM pilot_smart_radar.qa_source_posts p
+          LEFT JOIN pilot_smart_radar.qa_human_labels h ON h.qa_id=p.qa_id
           LEFT JOIN pilot_smart_radar.qa_ai_assessments a
            ON a.qa_id=p.qa_id AND a.source_hash=p.source_hash
            AND a.model=:model AND a.prompt_version=:version
-          WHERE p.balanced_qa_100 AND a.qa_id IS NULL
-          ORDER BY p.qa_id LIMIT :limit"""),
+          WHERE (p.balanced_qa_100 OR h.qa_id IS NOT NULL) AND a.qa_id IS NULL
+          ORDER BY CASE WHEN h.qa_id IS NOT NULL THEN 0 ELSE 1 END,p.qa_id LIMIT :limit"""),
           {"model":model,"version":VERSION,"limit":body.limit}).mappings().all()
         processed=[];errors=[]
         instructions="""You are a neutral, evidence-grounded BAWASLU post classifier in a blind QA test.

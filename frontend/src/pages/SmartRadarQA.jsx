@@ -19,7 +19,7 @@ const wording={
    title:'AI Quality Assurance Lab',note:'Compare blind AI classifications with actual analyst-reviewed labels. Separate from officer Action Desk.',
    imports:'Import curated source workbook',upload:'Upload 407-record workbook',importNote:'Uploads source posts only. Curated categories are candidate tags—not human reference decisions.',
    human:'Human reference labels',model:'AI predictions',covered:'Compared',accuracy:'Primary-category match',f1:'Macro F1',pending:'Not measurable yet',
-   sample:'Balanced 100',all:'All 407',run:'Assess next 3 (AI)',disabled:'AI assessment disabled until the staging administrator enables it.',
+   sample:'Balanced 100',all:'All 407',reviewed:'Human-labelled',run:'Assess next 3 (AI)',disabled:'AI assessment disabled until the staging administrator enables it.',
    missing:'No QA records yet. Import the curated 407-record workbook to create the balanced 100-record test.',
    source:'Original source',curated:'Provisional category (NOT GOLD)',humanTitle:'Shahrin / analyst reference review',
    relevance:'Electoral relevance',category:'Human primary category',perspective:'Perspective',actionable:'Review-worthy signal',
@@ -36,7 +36,7 @@ const wording={
    title:'Laboratorium Kendali Mutu AI',note:'Bandingkan klasifikasi AI secara mandiri dengan label yang benar-benar telah ditinjau analis. Terpisah dari Meja Tindak Lanjut.',
    imports:'Impor berkas sumber kurasi',upload:'Unggah berkas 407 unggahan',importNote:'Hanya mengimpor sumber. Kategori kurasi adalah label sementara—bukan keputusan analis.',
    human:'Label acuan analis',model:'Prediksi AI',covered:'Sudah dibandingkan',accuracy:'Kecocokan kategori utama',f1:'F1 Makro',pending:'Belum dapat diukur',
-   sample:'100 Sampel Seimbang',all:'Semua 407',run:'Nilai 3 unggahan berikutnya (AI)',disabled:'Penilaian AI belum diaktifkan oleh administrator staging.',
+   sample:'100 Sampel Seimbang',all:'Semua 407',reviewed:'Diberi Label Analis',run:'Nilai 3 unggahan berikutnya (AI)',disabled:'Penilaian AI belum diaktifkan oleh administrator staging.',
    missing:'Belum ada data QA. Impor berkas kurasi 407 unggahan untuk membuat 100 sampel seimbang.',
    source:'Sumber asli',curated:'Kategori sementara (BUKAN ACUAN)',humanTitle:'Penilaian acuan Shahrin / analis',
    relevance:'Relevansi pemilu',category:'Kategori utama hasil review',perspective:'Perspektif',actionable:'Memerlukan peninjauan',
@@ -140,7 +140,7 @@ export default function SmartRadarQA(){
      <div className={bx}>
        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
          <h2 className="font-semibold">{t('browse')} ({total})</h2>
-         <div className="flex gap-2 text-xs">{[['balanced',t('sample')],['all',t('all')]].map(([v,l])=><button key={v} onClick={()=>{setCohort(v);setPage(1);setCurrent(null)}} className={'px-3 py-2 rounded-lg border '+(cohort===v?'bg-[#147968] text-white':'bg-white text-slate-600')}>{l}</button>)}</div>
+         <div className="flex gap-2 text-xs">{[['balanced',t('sample')],['human',t('reviewed')],['all',t('all')]].map(([v,l])=><button key={v} onClick={()=>{setCohort(v);setPage(1);setCurrent(null)}} className={'px-3 py-2 rounded-lg border '+(cohort===v?'bg-[#147968] text-white':'bg-white text-slate-600')}>{l}</button>)}</div>
        </div>
        {!records.length?<p className="py-10 text-sm text-slate-500">{t('missing')}</p>:records.map(row=>
          <button onClick={()=>select(row)} key={row.qa_id} className={'block w-full text-left border rounded-lg p-3 mb-2 hover:border-emerald-500 '+(current?.qa_id===row.qa_id?'border-emerald-600 bg-emerald-50':'border-slate-200')}>

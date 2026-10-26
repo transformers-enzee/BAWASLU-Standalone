@@ -250,6 +250,11 @@ class SavePrompt(BaseModel):
     use_quality_gated_references:bool=False
     use_contrast_references:bool=False
 
+class RunAudit(BaseModel):
+    version_id:int=Field(ge=1)
+    limit:int=Field(default=15,ge=1,le=15)
+    retry_failed:bool=False
+
 class RunPrompt(BaseModel):
     version_id:int=Field(ge=1)
     limit:int=Field(default=3,ge=1,le=3)
@@ -377,7 +382,7 @@ def exemplar_audit_status(user:User=Depends(current_user),db:Session=Depends(get
        "warning":"Exploratory IN-SAMPLE exemplar agreement; not independent V14 accuracy. The sealed holdout is never touched."}
 
 @router.post("/tuning/exemplar-audit/run")
-def run_exemplar_audit(body:RunPrompt,user:User=Depends(current_user),
+def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
     if body.version_id!=14 or body.retry_failed:
@@ -419,10 +424,15 @@ def run_exemplar_audit(body:RunPrompt,user:User=Depends(current_user),
         pending=[r for r in targets if r["qa_id"] not in completed and r["qa_id"] not in failed]
         if not pending:
             return {"saved":[],"errors":[],"remaining":0,"message":"No eligible new audit targets"}
-        selected=pending[:min(body.limit,3,_available_slots(db,body.limit))]
+        readiness=qa_readiness(db)
+        if not readiness["key"]:
+            raise HTTPException(409,"AI provider key not configured")
+        if readiness["max_run"]<=0 or readiness["lifetime"]<=0:
+            raise HTTPException(409,"QA paid requests are disabled")
+        selected=pending[:min(body.limit,15,readiness["lifetime_remaining"])]
         if not selected:
-            raise HTTPException(429,"QA request budget exhausted")
-        cfg=ensure_qa_batch(db,len(selected))
+            raise HTTPException(429,"QA lifetime request budget exhausted")
+        cfg=readiness
         saved=[];errors=[]
         for record in selected:
             # Never show a target to itself. Also exclude duplicate source hashes

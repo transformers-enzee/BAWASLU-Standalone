@@ -1,5 +1,6 @@
 import {useEffect,useState,useCallback} from 'react';
 import {FlaskConical,Save,RefreshCw} from 'lucide-react';
+import QAAlignmentReview from '@/components/QAAlignmentReview';
 const fld='w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white';
 const auth=()=>window.localStorage.getItem('bawaslu_access_token')||'';
 async function call(path,body){
@@ -59,6 +60,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
    </div>
    {error&&<p role="alert" className="text-sm text-red-800 bg-red-50 rounded-lg p-3">{error}</p>}
    {notice&&<p role="status" className="text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">{notice}</p>}
+   <QAAlignmentReview language={language} onSaved={()=>refresh().catch(e=>setError(e.message))}/>
    <div className="grid grid-cols-3 gap-2">
      {[[data?.development_posts??'—',id?'Sampel pengembangan':'Development posts'],
        [data?.exemplar_posts??'—',id?'Contoh dari manusia':'Human examples'],
@@ -67,7 +69,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
    </div>
    <p className="text-xs p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-950">{id?
      'Kecocokan pada sampel pengembangan berguna untuk memperbaiki prompt, bukan bukti akurasi akhir. Label Shahrin masih perlu disetujui analis. Sampel uji final tidak dibuka saat tuning.':
-     'Development agreement is useful for iterating, not final unbiased accuracy. Human labels still require sign-off; final holdouts stay sealed.'}</p>
+     'Development agreement is useful for iterating, not final unbiased accuracy. Human reference conflicts must be reviewed; unresolved flagged cases are excluded from new tests. Final holdouts stay sealed.'}</p>
    <div className="grid lg:grid-cols-[1.2fr_1fr] gap-4 items-start">
      <div className="space-y-2">
        <h3 className="font-semibold text-sm">{id?'Ubah Instruksi AI':'Edit AI Instructions'}</h3>

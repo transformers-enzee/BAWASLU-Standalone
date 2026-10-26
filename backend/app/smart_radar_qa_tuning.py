@@ -26,6 +26,7 @@ from .smart_radar_calibration import load_reference
 from .smart_radar_qa_limits import qa_config, ensure_qa_batch
 from .smart_radar_qa_errors import qa_provider_error
 from .smart_radar_qa_validation import validate_qa_v2_output, QAOutputError
+from .smart_radar_qa_alignment import blocked_references
 
 router=APIRouter(prefix="/api/smart-radar/qa",tags=["smart-radar-prompt-tuning"])
 _LOCK=threading.Lock()
@@ -100,11 +101,20 @@ Prefer evidence and context over speculation. Use no unseen facts.
 def version_key(vid):
     return PREFIX+str(vid)
 
-def _cohort_rows(db):
+def _cohort_rows(db,as_of=None):
+    """Read label history AS OF a prompt's creation to preserve old scores.
+
+    New analyst corrections take effect only on a NEW saved prompt version.
+    The Excel upload is never modified and prior prompt versions remain
+    comparable using the reference labels that existed at their creation.
+    """
     return db.execute(text("""SELECT c.qa_id,c.cohort,p.source_hash,
          p.message_original,p.source_url,p.platform,
-         COALESCE(hl.primary_category,h.category) AS gold_category,
-         h.review_status
+         COALESCE(CASE WHEN ar.decision IN ('confirmed','corrected')
+           THEN ar.approved_category END,
+           hl.primary_category,h.category) AS gold_category,
+         h.category AS uploaded_category,
+         h.review_status,ar.decision AS alignment_decision
       FROM pilot_smart_radar.qa_prompt_cohort c
       JOIN pilot_smart_radar.qa_source_posts p
         ON p.qa_id=c.qa_id AND p.source_hash=c.source_hash
@@ -112,8 +122,14 @@ def _cohort_rows(db):
         ON h.original_excel_row=p.original_excel_row
        AND h.source_url=p.source_url
       LEFT JOIN pilot_smart_radar.qa_human_labels hl ON hl.qa_id=p.qa_id
+      LEFT JOIN LATERAL (
+        SELECT ah.decision,ah.approved_category
+        FROM pilot_smart_radar.qa_alignment_history ah
+        WHERE ah.qa_id=p.qa_id AND (CAST(:as_of AS timestamptz) IS NULL OR ah.reviewed_at<=CAST(:as_of AS timestamptz))
+        ORDER BY ah.reviewed_at DESC,ah.id DESC LIMIT 1
+      ) ar ON TRUE
       ORDER BY c.qa_id
-    """)).mappings().all()
+    """),{"as_of":as_of}).mappings().all()
 
 def _setup_cohort(db):
     n=db.execute(text("SELECT COUNT(*) FROM pilot_smart_radar.qa_prompt_cohort")).scalar()
@@ -158,7 +174,9 @@ def _version_rows(db):
 
 def _results_for(db,vid):
     cfg=qa_config()
-    rows=_cohort_rows(db)
+    as_of=db.execute(text("SELECT created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=:id"),
+                     {"id":vid}).scalar()
+    rows=_cohort_rows(db,as_of=as_of)
     dev={r["qa_id"]:r for r in rows if r["cohort"]=="development"}
     data=db.execute(text("""SELECT a.qa_id,a.result_json FROM pilot_smart_radar.qa_ai_assessments a
         JOIN pilot_smart_radar.qa_prompt_cohort c
@@ -222,6 +240,7 @@ def tuning_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
         "provisional_labels":db.execute(text("""SELECT COUNT(*) FROM
            pilot_smart_radar.qa_imported_human_categories
            WHERE review_status<>'confirmed'""")).scalar() or 0,
+        "reference_cases_blocked":len(blocked_references(db)),
         "note":"Development agreement is for iterative tuning only; do not present as unbiased final accuracy."}
 
 @router.post("/tuning/versions")
@@ -261,13 +280,21 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another tuning batch is running")
     try:
-        version=db.execute(text("""SELECT instructions FROM
+        version=db.execute(text("""SELECT instructions,created_at FROM
             pilot_smart_radar.qa_prompt_versions WHERE id=:id"""),
-            {"id":body.version_id}).scalar_one_or_none()
+            {"id":body.version_id}).mappings().first()
         if version is None:raise HTTPException(404,"Save this prompt version first")
-        records=_cohort_rows(db)
-        dev=[r for r in records if r["cohort"]=="development"]
-        exemplars=[r for r in records if r["cohort"]=="exemplar"]
+        records=_cohort_rows(db,as_of=version["created_at"])
+        blocked=blocked_references(db)
+        # A reference approved after this prompt version was created must
+        # be used with a NEW version to preserve auditability.
+        later=db.execute(text("""SELECT DISTINCT qa_id FROM
+            pilot_smart_radar.qa_alignment_history WHERE reviewed_at>:created"""),
+            {"created":version["created_at"]}).mappings().all()
+        blocked.update({row["qa_id"]:"Reference updated after prompt version saved"
+                        for row in later})
+        dev=[r for r in records if r["cohort"]=="development" and r["qa_id"] not in blocked]
+        exemplars=[r for r in records if r["cohort"]=="exemplar" and r["qa_id"] not in blocked]
         if not dev or not exemplars:
             raise HTTPException(409,"No frozen development cohort; save a version first")
         cfg=qa_config()
@@ -288,7 +315,7 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
             for ex in sorted(grouped[category],key=lambda r:r["qa_id"])[:2]:
                 few_shot.append({"source_text":ex["message_original"][:1100],
                     "human_primary_category":category})
-        system=SYSTEM_GUARD+"\nADMIN-APPROVED CLASSIFICATION INSTRUCTIONS:\n"+version
+        system=SYSTEM_GUARD+"\nADMIN-APPROVED CLASSIFICATION INSTRUCTIONS:\n"+version["instructions"]
         system+="\nANALYST-LABELLED TRAINING EXAMPLES (not scoring cases):\n"
         system+=json.dumps(few_shot,ensure_ascii=False)
         saved=[];errors=[]
@@ -325,7 +352,8 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
                 db.rollback()
                 errors.append({"qa_id":record["qa_id"],**qa_provider_error(exc)});break
         return {"version_id":body.version_id,"saved":saved,"errors":errors,
-          "message":"Development sample only; final sealed holdout has not been assessed",
+          "excluded_unresolved":len(blocked),
+          "message":"Development sample only; ambiguous analyst references excluded until adjudicated; final sealed holdout untouched",
           "complete":False}
     finally:
         _LOCK.release()

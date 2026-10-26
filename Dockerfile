@@ -11,7 +11,7 @@ COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend ./backend
 # Verify backend syntax and Stage 1 QA validators before the live deployment.
-RUN python -m compileall -q ./backend && cd backend && python -m pytest -q tests/test_smart_radar_qa_validation.py tests/test_smart_radar_qa_v2.py tests/test_smart_radar_qa_tuning.py
+RUN python -m compileall -q ./backend && cd backend && python -m pytest -q tests/test_smart_radar_qa_validation.py tests/test_smart_radar_qa_v2.py tests/test_smart_radar_qa_tuning.py tests/test_smart_radar_qa_alignment.py
 COPY --from=frontend-build /src/frontend/dist ./frontend_dist
 ENV FRONTEND_DIST=/app/frontend_dist
 WORKDIR /app/backend

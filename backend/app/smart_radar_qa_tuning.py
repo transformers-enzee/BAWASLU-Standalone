@@ -354,6 +354,137 @@ def version_detail(version_id:int,user:User=Depends(current_user),
     return {"id":row["id"],"title":row["title"],"instructions":row["instructions"],
         "change_note":row["change_note"],"results":_results_for(db,version_id)}
 
+# Additional agreement audit: eligible exemplar cohort ONLY; never holdout.
+# Its results use a distinct prompt_version and cannot alter V14 development scores.
+EXEMPLAR_AUDIT_LIMIT=55
+EXEMPLAR_AUDIT_KEY="qa-exemplar-audit-v14"
+
+@router.get("/tuning/exemplar-audit")
+def exemplar_audit_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    reviewer(db,user)
+    rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
+       e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status
+       FROM pilot_smart_radar.qa_ai_assessments a
+       JOIN pilot_smart_radar.qa_shahrin_exemplars e ON e.qa_id=a.qa_id
+       WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
+       {"version":EXEMPLAR_AUDIT_KEY}).mappings().all()
+    n=len(rows)
+    matched=sum(x["predicted"]==x["gold"] for x in rows)
+    return {"completed":n,"target":EXEMPLAR_AUDIT_LIMIT,"matched":matched,
+       "agreement":round(matched/n,4) if n else None,
+       "remaining":max(0,EXEMPLAR_AUDIT_LIMIT-n),
+       "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
+       "warning":"Exploratory IN-SAMPLE exemplar agreement; not independent V14 accuracy. The sealed holdout is never touched."}
+
+@router.post("/tuning/exemplar-audit/run")
+def run_exemplar_audit(body:RunPrompt,user:User=Depends(current_user),
+                       db:Session=Depends(get_db)):
+    qa_admin(db,user)
+    if body.version_id!=14 or body.retry_failed:
+        raise HTTPException(422,"Only the frozen V14 exemplar audit is supported; retries disabled")
+    if not _LOCK.acquire(blocking=False):
+        raise HTTPException(409,"Another QA batch is running")
+    try:
+        version=db.execute(text("""SELECT instructions,instructions_sha256,change_note,
+            created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=14""")).mappings().first()
+        if not version or not version["change_note"].startswith("[shahrin-ref-v3]"):
+            raise HTTPException(409,"Frozen V14 contrast reference configuration not found")
+        from .smart_radar_qa_references import validate_rubric_hash
+        validate_rubric_hash(dict(version,reference_revision=REFERENCE_REVISION_V3))
+        if os.getenv("BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()!="true":
+            raise HTTPException(409,"Paid assessment gate is disabled")
+        # The audit deliberately uses eligible exemplars, never development or holdout.
+        records=_cohort_rows(db,as_of=version["created_at"])
+        excluded=blocked_references(db)
+        pool=[r for r in records if r["cohort"]=="exemplar"
+             and r["qa_id"] not in excluded]
+        approved={r["qa_id"]:r for r in db.execute(text("""
+            SELECT qa_id FROM pilot_smart_radar.qa_shahrin_exemplars
+            WHERE eligible=true""")).mappings().all()}
+        pool=[r for r in pool if r["qa_id"] in approved]
+        # Stable hash order limits selection bias from numeric QA IDs.
+        pool=sorted(pool,key=lambda r:hashlib.sha256(r["qa_id"].encode()).hexdigest())
+        targets=pool[:EXEMPLAR_AUDIT_LIMIT]
+        if len(targets)<EXEMPLAR_AUDIT_LIMIT:
+            raise HTTPException(409,"Fewer than 55 eligible independent exemplar targets")
+        cfg=qa_config()
+        completed={r["qa_id"] for r in db.execute(text("""
+            SELECT qa_id FROM pilot_smart_radar.qa_ai_assessments
+            WHERE prompt_version=:version AND model=:model"""),
+            {"version":EXEMPLAR_AUDIT_KEY,"model":cfg["model"]}).mappings()}
+        failed={r["qa_id"] for r in db.execute(text("""
+            SELECT qa_id FROM pilot_smart_radar.qa_prompt_attempts
+            WHERE version_id=14 AND model=:model AND attempt_status IN ('failed','started')"""),
+            {"model":cfg["model"]}).mappings()}
+        pending=[r for r in targets if r["qa_id"] not in completed and r["qa_id"] not in failed]
+        if not pending:
+            return {"saved":[],"errors":[],"remaining":0,"message":"No eligible new audit targets"}
+        selected=pending[:min(body.limit,3,_available_slots(db,body.limit))]
+        if not selected:
+            raise HTTPException(429,"QA request budget exhausted")
+        cfg=ensure_qa_batch(db,len(selected))
+        saved=[];errors=[]
+        for record in selected:
+            # Never show a target to itself. Also exclude duplicate source hashes
+            # and URLs and the private quarantine list from reference candidates.
+            refs=[r for r in pool if r["qa_id"]!=record["qa_id"]
+                  and r["source_hash"]!=record["source_hash"]
+                  and r["source_url"]!=record["source_url"]]
+            try:
+                faux=dict(record,cohort="development")
+                references=reference_examples_for_record(db,faux,refs,max_examples=2)
+                messages,fingerprint=build_reference_messages(
+                    SYSTEM_GUARD,dict(version,reference_revision=REFERENCE_REVISION_V3),
+                    record,references)
+            except Exception as exc:
+                raise HTTPException(409,"Reference assembly failed before paid request") from exc
+            attempt_id=db.execute(text("""INSERT INTO pilot_smart_radar.qa_prompt_attempts
+                (version_id,qa_id,model,attempt_status) VALUES(14,:qid,:model,'started')
+                RETURNING id"""),{"qid":record["qa_id"],"model":cfg["model"]}).scalar_one()
+            db.commit()
+            try:
+                response=httpx.post(cfg["base_url"]+"/chat/completions",
+                    headers={"Authorization":"Bearer "+cfg["key"]},
+                    json={"model":cfg["model"],"messages":messages,
+                          "response_format":{"type":"json_object"},
+                          "max_completion_tokens":1300},timeout=60)
+                response.raise_for_status()
+                raw=response.json()
+                output=validate_qa_v2_output(raw,record["message_original"],CAT_SET,"guided")
+                output.update(reference_audit_metadata(references,fingerprint))
+                output["qa_reference_revision"]=REFERENCE_REVISION_V3
+                output["qa_audit_cohort"]="exemplar_in_sample"
+                usage=raw.get("usage") or {}
+                db.execute(text("""INSERT INTO pilot_smart_radar.qa_ai_assessments
+                    (qa_id,model,prompt_version,source_hash,result_json,input_tokens,output_tokens)
+                    VALUES(:qid,:model,:version,:hash,CAST(:payload AS jsonb),:input,:output)
+                    ON CONFLICT DO NOTHING"""),
+                    {"qid":record["qa_id"],"model":cfg["model"],
+                     "version":EXEMPLAR_AUDIT_KEY,"hash":record["source_hash"],
+                     "payload":json.dumps(output,ensure_ascii=False),
+                     "input":int(usage.get("prompt_tokens") or 0),
+                     "output":int(usage.get("completion_tokens") or 0)})
+                db.execute(text("""UPDATE pilot_smart_radar.qa_prompt_attempts
+                    SET attempt_status='saved',updated_at=now() WHERE id=:id"""),
+                    {"id":attempt_id})
+                db.commit()
+                saved.append(record["qa_id"])
+            except (QAOutputError,httpx.HTTPError,ValueError,KeyError,TypeError) as exc:
+                db.rollback()
+                db.execute(text("""UPDATE pilot_smart_radar.qa_prompt_attempts
+                    SET attempt_status='failed',failure_code='exemplar_audit_error',
+                        failure_reason=:reason,updated_at=now() WHERE id=:id"""),
+                    {"id":attempt_id,"reason":str(exc)[:500]})
+                db.commit()
+                errors.append({"qa_id":record["qa_id"],"reason":"Assessment failed"})
+                # Stop on provider errors; avoid billable repeat storms.
+                break
+        return {"saved":saved,"errors":errors,"remaining":len(pending)-len(saved),
+           "audit_version":EXEMPLAR_AUDIT_KEY,
+           "warning":"In-sample exemplar agreement only; not holdout accuracy"}
+    finally:
+        _LOCK.release()
+
 @router.post("/tuning/run")
 def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends(get_db)):
     qa_admin(db,user)

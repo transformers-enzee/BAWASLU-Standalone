@@ -3,6 +3,7 @@ import {Link} from 'react-router-dom';
 import {useOutletContext} from 'react-router-dom';
 import {useLanguage} from '@/lib/LanguageContext';
 import {ArrowLeft,RefreshCw,Upload,CheckCircle2,AlertCircle,FlaskConical} from 'lucide-react';
+import QAPromptWorkbench from '@/components/QAPromptWorkbench';
 
 const CATS=['Allegations / Violations','Voter Register / PDPB','Citizen Reports / Public Concerns','Disputes / Legal','Participatory Oversight','Election Operations','Digital Risks / Information','Uncertain'];
 const token=()=>window.localStorage.getItem('bawaslu_access_token')||'';
@@ -153,6 +154,7 @@ export default function SmartRadarQA(){
      <span><b>{stats?.missing_content_urls??0}</b> {language==='id'?'URL tanpa teks':'URL-only references'}</span>
    </div>
    <p className="text-xs text-amber-800 rounded-lg p-3 bg-amber-50 border border-amber-200">{language==='id'?'Kategori dari berkas manusia adalah acuan awal, belum disetujui oleh peninjau dalam aplikasi. Hanya label yang disimpan oleh peninjau dihitung sebagai acuan final.':'Uploaded human categories are provisional reference candidates until confirmed by a named reviewer. Only reviewer-saved decisions count as final gold labels.'} {t('admin')}</p>
+   <QAPromptWorkbench canEdit={canImport} language={language} maxRun={stats?.max_per_run||3} ready={!!stats?.ai_ready}/>
    <div className={bx}>
      <div className="flex flex-wrap gap-2 justify-between items-start">
        <div><h2 className="font-semibold">{language==='id'?'Kalibrasi AI Tahap 1 — v2':'Stage 1 AI Calibration — v2'}</h2>

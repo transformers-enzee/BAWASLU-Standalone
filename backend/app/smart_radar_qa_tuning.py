@@ -279,6 +279,48 @@ def tuning_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
         "slots_available":_available_slots(db),
         "note":"Development agreement is for iterative tuning only; do not present as unbiased final accuracy."}
 
+@router.get("/tuning/preflight")
+def qa_calibration_preflight(user:User=Depends(current_user),
+                             db:Session=Depends(get_db)):
+    """Development-only, zero-provider-call readiness summary.
+
+    Never reads the sealed holdout posts or exposes their labels.
+    This is an offline gate, not claimed AI classification accuracy.
+    """
+    reviewer(db,user)
+    from .smart_radar_qa_reference_audit import audit_development_references
+    results=audit_development_references(db)
+    eligible=db.execute(text("""
+        SELECT shahrin_category,COUNT(*) AS n
+        FROM pilot_smart_radar.qa_shahrin_exemplars
+        WHERE eligible=true GROUP BY shahrin_category
+        ORDER BY shahrin_category
+    """)).mappings().all()
+    by_category={r["shahrin_category"]:int(r["n"]) for r in eligible}
+    missing=sorted(set(CAT_SET)-set(by_category))
+    v11=db.execute(text("""
+        SELECT id,change_note FROM pilot_smart_radar.qa_prompt_versions
+        WHERE id=11
+    """)).mappings().first()
+    paid_v2_enabled=os.getenv(
+        "BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()=="true"
+    return {
+        "cohort":"development",
+        "development_evaluated":results["evaluated_development_posts"],
+        "nearest_reference_agreement":results["nearest_reference_agreement"],
+        "nearest_reference_rate":results["nearest_reference_rate"],
+        "weak_or_conflicting":results["weak_or_conflicting"],
+        "eligible_references_by_category":by_category,
+        "categories_without_eligible_references":missing,
+        "v11_reference_revision":"shahrin-ref-v2" if v11 and
+            v11["change_note"].startswith("[shahrin-ref-v2]") else None,
+        "paid_v2_enabled":paid_v2_enabled,
+        "recommendation":"DO_NOT_RUN_PAID_V2" if not paid_v2_enabled
+            else "REVIEW_BEFORE_RUN",
+        "warning":"Nearest-reference agreement is NOT AI classification accuracy; "
+                  "development tuning does not validate holdout generalization.",
+    }
+
 @router.post("/tuning/versions")
 def save_tuning_version(body:SavePrompt,user:User=Depends(current_user),
                         db:Session=Depends(get_db)):

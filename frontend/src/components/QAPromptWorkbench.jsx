@@ -16,6 +16,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  const [preflight,setPreflight]=useState(null),[preflightError,setPreflightError]=useState('');
  const [useReferences,setUseReferences]=useState(false);
  const [qualityReferences,setQualityReferences]=useState(false);
+ const [contrastReferences,setContrastReferences]=useState(false);
  const [data,setData]=useState(null),[prompt,setPrompt]=useState(''),[title,setTitle]=useState('Calibration revision 1'),
  [note,setNote]=useState(''),[selected,setSelected]=useState(null),[details,setDetails]=useState(null),
  [busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
@@ -32,10 +33,10 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  async function save(){
    setBusy('save');setError('');setNotice('');
    try{
-     const r=await call('/versions',{title,instructions:prompt,change_note:note,use_shahrin_references:useReferences,use_quality_gated_references:qualityReferences});
+     const r=await call('/versions',{title,instructions:prompt,change_note:note,use_shahrin_references:useReferences,use_quality_gated_references:qualityReferences,use_contrast_references:contrastReferences});
      setSelected(r.version_id);
      setNotice(id?'Versi baru disimpan; belum menggunakan API AI.':'New prompt version saved; no AI call was made.');
-     setTitle(id?'Revisi berikutnya':'Next revision');setNote('');setUseReferences(false);setQualityReferences(false);
+     setTitle(id?'Revisi berikutnya':'Next revision');setNote('');setUseReferences(false);setQualityReferences(false);setContrastReferences(false);
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
@@ -105,8 +106,9 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
        <label className="text-xs block">{id?'Nama versi baru':'New version name'}<input className={fld+' mt-1'} value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit} maxLength={100}/></label>
        <label className="text-xs block">{id?'Perubahan dari versi sebelumnya':'What changed and why?'}<input className={fld+' mt-1'} value={note} onChange={e=>setNote(e.target.value)} disabled={!canEdit} maxLength={500} placeholder="E.g. Do not infer misconduct from political timing"/></label>
        <label className="text-xs block">{id?'Instruksi klasifikasi lengkap':'Classification instructions'}<textarea className={fld+' mt-1 font-mono leading-5'} rows={18} value={prompt} spellCheck={false} onChange={e=>setPrompt(e.target.value)} disabled={!canEdit}/></label>
-       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={useReferences} onChange={e=>{setUseReferences(e.target.checked);if(e.target.checked)setQualityReferences(false)}}/><span>{id?'Gunakan contoh acuan Shahrin yang relevan untuk versi BARU (tidak mengubah versi lama)':'Use relevant Shahrin reference examples for this NEW version (existing versions unchanged)'}</span></label>}
-       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={qualityReferences} onChange={e=>{setQualityReferences(e.target.checked);if(e.target.checked)setUseReferences(false)}}/><span>{id?'Gunakan referensi Shahrin dengan pemeriksaan kualitas untuk versi BARU':'Use quality-gated Shahrin references for this NEW version (experimental; weak/conflicting examples excluded)'}</span></label>}
+       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={useReferences} onChange={e=>{setUseReferences(e.target.checked);if(e.target.checked){setQualityReferences(false);setContrastReferences(false)}}}/><span>{id?'Gunakan contoh acuan Shahrin yang relevan untuk versi BARU (tidak mengubah versi lama)':'Use relevant Shahrin reference examples for this NEW version (existing versions unchanged)'}</span></label>}
+       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={qualityReferences} onChange={e=>{setQualityReferences(e.target.checked);if(e.target.checked){setUseReferences(false);setContrastReferences(false)}}}/><span>{id?'Gunakan referensi Shahrin dengan pemeriksaan kualitas untuk versi BARU':'Use quality-gated Shahrin references for this NEW version (experimental; weak/conflicting examples excluded)'}</span></label>}
+       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={contrastReferences} onChange={e=>{setContrastReferences(e.target.checked);if(e.target.checked){setUseReferences(false);setQualityReferences(false)}}}/><span>{id?'Gunakan contoh acuan kontras Shahrin untuk versi BARU (eksperimental)':'Use contrastive Shahrin references for a NEW version (experimental; retains distinct opposite-category examples)'}</span></label>}
        <div className="flex flex-wrap gap-2">
          {canEdit&&<button onClick={save} disabled={!!busy||prompt.length<300||title.trim().length<3} type="button" className="bg-[#147968] text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50 flex items-center gap-1"><Save size={14}/>{busy==='save'?'Saving…':id?'Simpan versi baru':'Save new version'}</button>}
          <button onClick={()=>refresh().catch(e=>setError(e.message))} disabled={!!busy} type="button" className="border rounded-lg px-3 py-2 text-sm flex items-center gap-1"><RefreshCw size={14}/>{id?'Muat ulang':'Refresh'}</button>
@@ -124,7 +126,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
          <b className="text-sm">{id?'Uji versi':'Test version'} {selected?('v'+selected):'—'}</b>
          <p className="text-xs text-slate-500 mt-2">{id?'Hasil salah kategori disimpan sebagai mismatch, bukan error. Permintaan gagal dilewati; percobaan ulang hanya saat Anda memilih Retry.':'Incorrect categories are saved as mismatches, NOT errors. Failed requests are skipped and retried only when you choose Retry.'}</p>
          <p className="text-xs text-slate-600 mt-2">{id?'Kuota permintaan QA tersisa':'QA request allowance remaining'}: <b>{data?.slots_available??'—'}</b> {id?'untuk batch berikutnya':'for the next batch'}</p>
-         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||slots<=0||(chosen?.change_note?.startsWith('[shahrin-ref-v2]')&&!preflight?.paid_v2_enabled)||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={()=>test(false)} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
+         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||slots<=0||((chosen?.change_note?.startsWith('[shahrin-ref-v2]')||chosen?.change_note?.startsWith('[shahrin-ref-v3]'))&&!preflight?.paid_v2_enabled)||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={()=>test(false)} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
            {busy==='test'?'Assessing…':(id?'Uji ': 'Test next ')+slots+(id?' pos pengembangan berikutnya':' development posts')}
          </button>}
          {hasFailures&&

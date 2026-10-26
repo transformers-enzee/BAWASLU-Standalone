@@ -29,6 +29,7 @@ from .smart_radar_qa_errors import qa_provider_error
 from .smart_radar_qa_validation import validate_qa_v2_output, QAOutputError
 from .smart_radar_qa_alignment import blocked_references
 from .smart_radar_qa_reference_quality import REFERENCE_REVISION_V2, select_reference_v2
+from .smart_radar_qa_reference_contrast import REFERENCE_REVISION_V3, select_reference_v3
 from .smart_radar_qa_references import (REFERENCE_REVISION, reference_examples_for_record,
     build_reference_messages, reference_audit_metadata)
 
@@ -247,6 +248,7 @@ class SavePrompt(BaseModel):
     change_note:str=Field(default="",max_length=500)
     use_shahrin_references:bool=False
     use_quality_gated_references:bool=False
+    use_contrast_references:bool=False
 
 class RunPrompt(BaseModel):
     version_id:int=Field(ge=1)
@@ -336,7 +338,7 @@ def save_tuning_version(body:SavePrompt,user:User=Depends(current_user),
          VALUES (:title,:instructions,:note,:digest,:actor)
          RETURNING id"""),
          {"title":body.title.strip(),"instructions":instructions,
-          "note":(("[shahrin-ref-v2] " if body.use_quality_gated_references else "[shahrin-ref-v1] " if body.use_shahrin_references else "") + body.change_note.strip())[:500],"digest":digest,
+          "note":(("[shahrin-ref-v3] " if body.use_contrast_references else "[shahrin-ref-v2] " if body.use_quality_gated_references else "[shahrin-ref-v1] " if body.use_shahrin_references else "") + body.change_note.strip())[:500],"digest":digest,
           "actor":str(user.id)}).scalar_one()
     db.commit()
     return {"version_id":int(row),"version_key":version_key(row),
@@ -363,15 +365,16 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
             {"id":body.version_id}).mappings().first()
         if version is None:
             raise HTTPException(404,"Save this prompt version first")
+        contrast_mode=version["change_note"].startswith("[shahrin-ref-v3]")
         quality_mode=version["change_note"].startswith("[shahrin-ref-v2]")
-        ref_mode=quality_mode or version["change_note"].startswith("[shahrin-ref-v1]")
+        ref_mode=contrast_mode or quality_mode or version["change_note"].startswith("[shahrin-ref-v1]")
         # The offline 13-post Shahrin audit found lexical nearest-example
         # agreement of 4/13. Do not spend credits on v2 by default until
         # an explicit reviewed calibration gate is enabled.
-        if quality_mode and os.getenv("BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()!="true":
+        if (quality_mode or contrast_mode) and os.getenv("BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()!="true":
             raise HTTPException(409,"V11 quality-gated references are paused: offline nearest-example agreement was 4/13. No paid AI calls made. Review the calibration before enabling a paid test.")
         if ref_mode:
-            version=dict(version,reference_revision=REFERENCE_REVISION_V2 if quality_mode else REFERENCE_REVISION)
+            version=dict(version,reference_revision=REFERENCE_REVISION_V3 if contrast_mode else REFERENCE_REVISION_V2 if quality_mode else REFERENCE_REVISION)
         records=_cohort_rows(db,as_of=version["created_at"])
         blocked=blocked_references(db)
         # Development scoring is exploratory: a disagreement is saved and
@@ -427,13 +430,13 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
             if ref_mode:
                 # Assemble before creating a billable attempt; fail closed if
                 # the private reference layer is unavailable.
-                references,quality_reason=(select_reference_v2(db,record,exemplars) if quality_mode
+                references,quality_reason=(select_reference_v3(db,record,exemplars) if contrast_mode else select_reference_v2(db,record,exemplars) if quality_mode
                     else (reference_examples_for_record(db,record,exemplars),"legacy_v1"))
                 prepared_messages,reference_fingerprint=build_reference_messages(
                     SYSTEM_GUARD,version,record,references)
                 reference_metadata=reference_audit_metadata(references,reference_fingerprint)
-                if quality_mode:
-                    reference_metadata["qa_reference_revision"]=REFERENCE_REVISION_V2
+                if quality_mode or contrast_mode:
+                    reference_metadata["qa_reference_revision"]=REFERENCE_REVISION_V3 if contrast_mode else REFERENCE_REVISION_V2
                     reference_metadata["qa_reference_quality_reason"]=quality_reason
             else:
                 prepared_messages=[

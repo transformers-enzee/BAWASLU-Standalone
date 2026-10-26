@@ -42,10 +42,19 @@ def qa_config():
                             "built-in gpt-4o-mini default")}
 
 def qa_budget(db):
+    # Successful predictions are counted from the assessment table. Failed or
+    # in-flight prompt-tuning calls have no saved prediction yet, but may still
+    # consume provider tokens. Include them to prevent unbounded retries.
     row=db.execute(text("""SELECT
-        count(*)::int AS used_lifetime,
-        count(*) FILTER (WHERE processed_at >= CURRENT_DATE)::int AS used_today
-        FROM pilot_smart_radar.qa_ai_assessments""")).mappings().first()
+        (SELECT count(*) FROM pilot_smart_radar.qa_ai_assessments)
+          + (SELECT count(*) FROM pilot_smart_radar.qa_prompt_attempts
+             WHERE attempt_status IN ('failed','started')) AS used_lifetime,
+        (SELECT count(*) FROM pilot_smart_radar.qa_ai_assessments
+             WHERE processed_at >= CURRENT_DATE)
+          + (SELECT count(*) FROM pilot_smart_radar.qa_prompt_attempts
+             WHERE attempted_at >= CURRENT_DATE
+               AND attempt_status IN ('failed','started')) AS used_today
+        """)).mappings().first()
     return {"used_today":int(row["used_today"] or 0),
             "used_lifetime":int(row["used_lifetime"] or 0)}
 

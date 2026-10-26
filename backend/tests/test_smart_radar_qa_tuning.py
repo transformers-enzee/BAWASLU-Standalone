@@ -34,3 +34,29 @@ def test_tuning_endpoint_only_targets_development_records():
     assert 'r["cohort"]=="development"' in source
     assert 'r["cohort"]=="exemplar"' in source
     assert "sealed_holdout" not in source
+
+def test_mismatch_is_completed_not_a_blocker():
+    from app.smart_radar_qa_tuning import choose_development_candidates
+    dev=[{"qa_id":f"QA-{i}"} for i in range(1,7)]
+    # QA-1 is a persisted classification mismatch; QA-2 is a real
+    # failed AI request. Neither should trap the next three candidates.
+    selected=choose_development_candidates(
+        dev,completed={"QA-1"},failures={"QA-2"},retry_failed=False)
+    assert [r["qa_id"] for r in selected]==["QA-3","QA-4","QA-5","QA-6"]
+    retries=choose_development_candidates(
+        dev,completed={"QA-1"},failures={"QA-2"},retry_failed=True)
+    assert [r["qa_id"] for r in retries]==["QA-2"]
+
+def test_qa_batch_shrinks_to_actual_allowance(monkeypatch):
+    import app.smart_radar_qa_tuning as mod
+    monkeypatch.setattr(mod,"qa_readiness",lambda db:{
+        "max_run":3,"daily_remaining":2,"lifetime_remaining":17})
+    assert mod._available_slots(None,3)==2
+    monkeypatch.setattr(mod,"qa_readiness",lambda db:{
+        "max_run":3,"daily_remaining":0,"lifetime_remaining":17})
+    assert mod._available_slots(None,3)==0
+
+def test_retry_requires_explicit_selection():
+    x=RunPrompt(version_id=6,limit=1,retry_failed=True)
+    assert x.retry_failed is True
+    assert RunPrompt(version_id=6,limit=3).retry_failed is False

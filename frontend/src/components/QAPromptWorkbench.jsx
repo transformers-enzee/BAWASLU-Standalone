@@ -35,13 +35,27 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
- async function test(){
-   setBusy('test');setError('');setNotice('');
+ async function test(retryFailed=false){
+   setBusy(retryFailed?'retry':'test');setError('');setNotice('');
    try{
-     const r=await call('/run',{version_id:selected,limit:Math.max(1,Math.min(3,maxRun||3))});
-     setNotice(r.errors?.length?r.errors[0].reason:
-       r.saved?.length?String(r.saved.length)+(id?' hasil pengembangan disimpan':' development predictions saved'):
-       (id?'Semua pos pengembangan telah diuji untuk versi ini':'This version already assessed all development posts'));
+     const allowance=Math.min(3,maxRun||3,data?.slots_available??3);
+     if(allowance<=0){
+       setError(id?'Batas QA hari ini telah habis. Tidak ada permintaan AI yang dikirim.':
+         'No QA requests remain under the configured budget. No AI call was made.');
+       return;
+     }
+     const r=await call('/run',{
+       version_id:selected,
+       limit:retryFailed?1:Math.max(1,allowance),
+       retry_failed:retryFailed
+     });
+     const messages=[];
+     if(r.saved?.length)messages.push(r.saved.length+(id?' hasil tersimpan':' predictions saved'));
+     if(r.errors?.length)messages.push(
+       r.errors.length+(id?' rekaman gagal dan dilewati; dapat dicoba ulang secara terpisah':' failed and skipped; use Retry failed separately'));
+     if(r.slots_remaining===0)messages.push(id?'Batas QA hari ini tercapai':'QA budget reached');
+     if(!messages.length)messages.push(r.message|| (id?'Tidak ada sampel yang perlu diuji':'No new records available'));
+     setNotice(messages.join(' · '));
      await refresh();setDetails(await call('/versions/'+selected));
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
@@ -54,6 +68,8 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  }
  const versions=data?.versions||[];
  const chosen=versions.find(v=>v.id===selected);
+ const slots=Math.max(0,Math.min(3,maxRun||3,data?.slots_available??3));
+ const hasFailures=(details?.results?.failed?.length||0)>0;
  return <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
    <div><h2 className="text-lg font-semibold flex items-center gap-2"><FlaskConical size={19}/>{id?'Perbaikan Prompt AI Berkelanjutan':'Continuous AI Prompt Improvement'}</h2>
      <p className="text-xs text-slate-600 mt-1">{id?'Ubah instruksi, simpan versi baru, uji pada sampel pengembangan yang sama, periksa kesalahan, lalu ulangi.':'Edit instructions, save a new version, test on the same development cases, inspect mistakes, and repeat. No deployment needed per revision.'}</p>
@@ -91,10 +107,21 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
        </button>)}
        <div className="border border-slate-200 rounded-lg p-3">
          <b className="text-sm">{id?'Uji versi':'Test version'} {selected?('v'+selected):'—'}</b>
-         <p className="text-xs text-slate-500 mt-2">{id?'Hanya memproses ketika diklik. Hasil tersimpan, tidak memproses ulang saat halaman dibuka.':'Only processes when clicked. Per-version results are cached and opening the page never calls the model.'}</p>
-         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={test} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
-           {busy==='test'?'Assessing…':id?'Uji 3 pos berikutnya':'Test next 3 development posts'}
+         <p className="text-xs text-slate-500 mt-2">{id?'Hasil salah kategori disimpan sebagai mismatch, bukan error. Permintaan gagal dilewati; percobaan ulang hanya saat Anda memilih Retry.':'Incorrect categories are saved as mismatches, NOT errors. Failed requests are skipped and retried only when you choose Retry.'}</p>
+         <p className="text-xs text-slate-600 mt-2">{id?'Kuota permintaan QA tersisa':'QA request allowance remaining'}: <b>{data?.slots_available??'—'}</b> {id?'untuk batch berikutnya':'for the next batch'}</p>
+         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||slots<=0||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={()=>test(false)} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
+           {busy==='test'?'Assessing…':(id?'Uji ': 'Test next ')+slots+(id?' pos pengembangan berikutnya':' development posts')}
          </button>}
+         {hasFailures&&
+           <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+             <b className="text-xs text-amber-900">{id?'Ada permintaan yang gagal':'Previous provider/validation failures'} ({details.results.failed.length})</b>
+             <div className="space-y-1 my-2">
+               {details.results.failed.map(f=><p className="text-xs text-slate-700" key={f.qa_id}><b>{f.qa_id}</b> · {f.reason}</p>)}
+             </div>
+             {canEdit&&<button type="button" disabled={!ready||!!busy||slots<=0} onClick={()=>test(true)} className="border border-amber-400 bg-white rounded-lg px-3 py-2 text-xs disabled:opacity-50">
+               {busy==='retry'?'Retrying…':id?'Coba lagi satu rekaman gagal':'Retry one failed request (1)'}
+             </button>}
+           </div>}
        </div>
      </div>
    </div>

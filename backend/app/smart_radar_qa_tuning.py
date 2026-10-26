@@ -23,7 +23,7 @@ from .db import get_db
 from .models import User
 from .smart_radar_qa import qa_admin, reviewer, CAT_SET
 from .smart_radar_calibration import load_reference
-from .smart_radar_qa_limits import qa_config, ensure_qa_batch
+from .smart_radar_qa_limits import qa_config, qa_readiness, ensure_qa_batch
 from .smart_radar_qa_errors import qa_provider_error
 from .smart_radar_qa_validation import validate_qa_v2_output, QAOutputError
 from .smart_radar_qa_alignment import blocked_references
@@ -172,6 +172,32 @@ def _version_rows(db):
          created_by,created_at FROM pilot_smart_radar.qa_prompt_versions
          ORDER BY id DESC LIMIT 50""")).mappings().all()
 
+def _failures_for(db,vid,model):
+    rows=db.execute(text("""SELECT DISTINCT ON (t.qa_id)
+          t.qa_id,t.failure_code,t.failure_reason,t.attempt_status,t.attempted_at
+        FROM pilot_smart_radar.qa_prompt_attempts t
+        WHERE t.version_id=:version_id AND t.model=:model
+        ORDER BY t.qa_id,t.attempted_at DESC,t.id DESC"""),
+        {"version_id":vid,"model":model}).mappings().all()
+    return [{"qa_id":x["qa_id"],"code":x["failure_code"] or "unknown",
+             "reason":x["failure_reason"] or "Incomplete attempt"}
+            for x in rows if x["attempt_status"] in ("failed","started")]
+
+def choose_development_candidates(dev,completed,failures,retry_failed=False):
+    """Do not trap a batch on one failed post.
+
+    Incorrect classification is a saved result in completed, not in failures.
+    Failed provider/JSON requests are skipped until an explicit retry.
+    """
+    pending=[r for r in dev if r["qa_id"] not in completed]
+    return [r for r in pending
+            if (r["qa_id"] in failures)==bool(retry_failed)]
+
+def _available_slots(db,requested=3):
+    cfg=qa_readiness(db)
+    return max(0,min(requested,cfg["max_run"],
+                     cfg["daily_remaining"],cfg["lifetime_remaining"]))
+
 def _results_for(db,vid):
     cfg=qa_config()
     as_of=db.execute(text("SELECT created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=:id"),
@@ -205,9 +231,11 @@ def _results_for(db,vid):
             "boundary":answer.get("decision_boundary") or "",
             "evidence_validation":answer.get("evidence_validation"),
             "warnings":answer.get("qa_validation_warnings") or []})
+    failures=_failures_for(db,vid,cfg["model"])
     return {"tested":len(entries),"correct":correct,
         "development_total":len(dev),
         "agreement":round(correct/len(entries),4) if entries else None,
+        "failed_count":len(failures),"failed":failures,
         "entries":entries}
 
 class SavePrompt(BaseModel):
@@ -218,6 +246,7 @@ class SavePrompt(BaseModel):
 class RunPrompt(BaseModel):
     version_id:int=Field(ge=1)
     limit:int=Field(default=3,ge=1,le=3)
+    retry_failed:bool=False
 
 @router.get("/tuning")
 def tuning_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -233,6 +262,7 @@ def tuning_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
             "change_note":x["change_note"],"created_by":x["created_by"],
             "created_at":x["created_at"].isoformat(),"tested":score["tested"],
             "correct":score["correct"],"agreement":score["agreement"],
+            "failed_count":score["failed_count"],
             "development_total":score["development_total"]})
     return {"versions":versions,"default_instructions":DEFAULT_INSTRUCTIONS,
         "development_posts":counts["development"],"exemplar_posts":counts["exemplar"],
@@ -241,6 +271,7 @@ def tuning_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
            pilot_smart_radar.qa_imported_human_categories
            WHERE review_status<>'confirmed'""")).scalar() or 0,
         "reference_cases_blocked":len(blocked_references(db)),
+        "slots_available":_available_slots(db),
         "note":"Development agreement is for iterative tuning only; do not present as unbiased final accuracy."}
 
 @router.post("/tuning/versions")
@@ -283,20 +314,22 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
         version=db.execute(text("""SELECT instructions,created_at FROM
             pilot_smart_radar.qa_prompt_versions WHERE id=:id"""),
             {"id":body.version_id}).mappings().first()
-        if version is None:raise HTTPException(404,"Save this prompt version first")
+        if version is None:
+            raise HTTPException(404,"Save this prompt version first")
         records=_cohort_rows(db,as_of=version["created_at"])
         blocked=blocked_references(db)
-        # A reference approved after this prompt version was created must
-        # be used with a NEW version to preserve auditability.
-        later=db.execute(text("""SELECT DISTINCT qa_id FROM
-            pilot_smart_radar.qa_alignment_history WHERE reviewed_at>:created"""),
-            {"created":version["created_at"]}).mappings().all()
-        blocked.update({row["qa_id"]:"Reference updated after prompt version saved"
-                        for row in later})
-        dev=[r for r in records if r["cohort"]=="development" and r["qa_id"] not in blocked]
-        exemplars=[r for r in records if r["cohort"]=="exemplar" and r["qa_id"] not in blocked]
+        # Development scoring is exploratory: a disagreement is saved and
+        # reviewable, never a reason to halt or permanently exclude the next
+        # development post. Unresolved source conflicts and suspect labels
+        # are excluded from FEW-SHOT exemplars instead.
+        dev=[r for r in records if r["cohort"]=="development"]
+        # Exemplar sources must be independent from development URLs.
+        development_urls={r["source_url"] for r in dev}
+        exemplars=[r for r in records if r["cohort"]=="exemplar"
+                   and r["qa_id"] not in blocked
+                   and r["source_url"] not in development_urls]
         if not dev or not exemplars:
-            raise HTTPException(409,"No frozen development cohort; save a version first")
+            raise HTTPException(409,"No frozen development cohort or eligible examples")
         cfg=qa_config()
         completed={r["qa_id"] for r in db.execute(text("""
           SELECT a.qa_id FROM pilot_smart_radar.qa_ai_assessments a
@@ -304,12 +337,25 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
              AND c.source_hash=a.source_hash AND c.cohort='development'
           WHERE a.model=:model AND a.prompt_version=:version"""),
           {"model":cfg["model"],"version":version_key(body.version_id)}).mappings()}
-        selected=[r for r in dev if r["qa_id"] not in completed][:body.limit]
-        if not selected:
-            return {"saved":[],"errors":[],"complete":True,"message":"All development examples already assessed for this version"}
+        failures={f["qa_id"] for f in _failures_for(db,body.version_id,cfg["model"])}
+        pending=[r for r in dev if r["qa_id"] not in completed]
+        candidates=choose_development_candidates(
+            dev,completed,failures,body.retry_failed)
+        if not candidates:
+            return {"saved":[],"errors":[],"complete":len(pending)==0,
+                    "failed_remaining":len(failures),
+                    "message":("This version has previous failed calls; retry individually if desired."
+                        if failures and pending else "All development records assessed for this version")}
+        slots=_available_slots(db,1 if body.retry_failed else body.limit)
+        if slots<=0:
+            raise HTTPException(429,
+                "QA request allowance exhausted for today or lifetime; no additional AI calls were made.")
+        selected=candidates[:slots]
+        # Strict cap as a second backend enforcement.
         cfg=ensure_qa_batch(db,len(selected))
         grouped=defaultdict(list)
-        for r in exemplars:grouped[r["gold_category"]].append(r)
+        for r in exemplars:
+            grouped[r["gold_category"]].append(r)
         few_shot=[]
         for category in sorted(grouped):
             for ex in sorted(grouped[category],key=lambda r:r["qa_id"])[:2]:
@@ -320,6 +366,17 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
         system+=json.dumps(few_shot,ensure_ascii=False)
         saved=[];errors=[]
         for record in selected:
+            # Store attempt before the paid request. Failed/unfinished requests
+            # count against QA budget and are skipped in subsequent batches.
+            attempt_id=db.execute(text("""
+              INSERT INTO pilot_smart_radar.qa_prompt_attempts
+              (version_id,qa_id,model,attempt_status)
+              VALUES(:vid,:qid,:model,'started') RETURNING id"""),
+              {"vid":body.version_id,"qid":record["qa_id"],
+               "model":cfg["model"]}).scalar_one()
+            db.commit()
+            failure=None
+            stop_batch=False
             try:
                 response=httpx.post(cfg["base_url"]+"/chat/completions",
                     headers={"Authorization":"Bearer "+cfg["key"]},
@@ -331,29 +388,58 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
                       "max_completion_tokens":1300},timeout=60)
                 response.raise_for_status()
                 raw=response.json()
-                output=validate_qa_v2_output(raw,record["message_original"],CAT_SET,"guided")
-                tokens=raw.get("usage") or {}
+                output=validate_qa_v2_output(
+                    raw,record["message_original"],CAT_SET,"guided")
+                usage=raw.get("usage") or {}
                 db.execute(text("""INSERT INTO pilot_smart_radar.qa_ai_assessments
                   (qa_id,model,prompt_version,source_hash,result_json,input_tokens,output_tokens)
                   VALUES(:qid,:model,:version,:hash,CAST(:payload AS jsonb),:input,:output)
                   ON CONFLICT DO NOTHING"""),
                   {"qid":record["qa_id"],"model":cfg["model"],
-                   "version":version_key(body.version_id),"hash":record["source_hash"],
+                   "version":version_key(body.version_id),
+                   "hash":record["source_hash"],
                    "payload":json.dumps(output,ensure_ascii=False),
-                   "input":int(tokens.get("prompt_tokens") or 0),
-                   "output":int(tokens.get("completion_tokens") or 0)})
+                   "input":int(usage.get("prompt_tokens") or 0),
+                   "output":int(usage.get("completion_tokens") or 0)})
+                db.execute(text("""UPDATE pilot_smart_radar.qa_prompt_attempts
+                  SET attempt_status='saved',updated_at=now()
+                  WHERE id=:id"""),{"id":attempt_id})
                 db.commit()
                 saved.append(record["qa_id"])
             except QAOutputError as exc:
-                db.rollback()
-                errors.append({"qa_id":record["qa_id"],"reason":str(exc),
-                               "validation_code":exc.code});break
+                failure={"qa_id":record["qa_id"],"reason":str(exc),
+                         "validation_code":exc.code}
+            except httpx.HTTPStatusError as exc:
+                failure={"qa_id":record["qa_id"],**qa_provider_error(exc)}
+                # Provider HTTP failures often affect the entire batch
+                # (model, auth, quota, unsupported parameter). Stop the batch
+                # rather than repeat a costly, unproductive request.
+                stop_batch=True
             except (httpx.HTTPError,ValueError,KeyError,TypeError,IndexError) as exc:
+                failure={"qa_id":record["qa_id"],**qa_provider_error(exc)}
+            if failure is not None:
                 db.rollback()
-                errors.append({"qa_id":record["qa_id"],**qa_provider_error(exc)});break
+                safe_code=str(failure.get("validation_code") or
+                              failure.get("provider_code") or "request_failed")[:80]
+                db.execute(text("""UPDATE pilot_smart_radar.qa_prompt_attempts
+                  SET attempt_status='failed',failure_code=:code,
+                      failure_reason=:reason,updated_at=now()
+                  WHERE id=:id"""),
+                  {"id":attempt_id,"code":safe_code,
+                   "reason":str(failure["reason"])[:500]})
+                db.commit()
+                errors.append(failure)
+                if stop_batch:
+                    break
+            # A wrong category is a SAVED prediction. It never creates an
+            # exception or blocks the next candidate.
+        pending_count=max(0,len(pending)-len(saved))
         return {"version_id":body.version_id,"saved":saved,"errors":errors,
-          "excluded_unresolved":len(blocked),
-          "message":"Development sample only; ambiguous analyst references excluded until adjudicated; final sealed holdout untouched",
-          "complete":False}
+          "attempted":len(saved)+len(errors),
+          "remaining_unassessed":pending_count,
+          "failed_remaining":len(failures)+len(errors),
+          "slots_remaining":_available_slots(db),
+          "message":"Development QA only; category disagreements never block later posts. No automatic retries of failed provider requests.",
+          "complete":pending_count==0}
     finally:
         _LOCK.release()

@@ -40,7 +40,7 @@ def validate_rubric_hash(version):
     if hashlib.sha256(instructions.encode("utf-8")).hexdigest() != expected_hash:
         raise HTTPException(409, "Saved rubric hash mismatch")
     revision = version.get("reference_revision") or ""
-    if revision not in ("", REFERENCE_REVISION):
+    if revision not in ("", REFERENCE_REVISION, "shahrin-ref-v2"):
         raise HTTPException(409, "Unsupported QA reference revision")
     return revision
 
@@ -97,7 +97,7 @@ def build_reference_messages(system_guard, version, record, examples):
 
     Source IDs and scores are audit metadata, not information shown to the AI.
     """
-    if validate_rubric_hash(version) != REFERENCE_REVISION:
+    if validate_rubric_hash(version) not in (REFERENCE_REVISION, "shahrin-ref-v2"):
         raise HTTPException(409, "This saved prompt is not reference-enabled")
     clean = [
         {"source_text": x["source_text"],

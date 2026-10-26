@@ -13,6 +13,7 @@ async function call(path,body){
 }
 export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,ready=false}){
  const id=language==='id';
+ const [useReferences,setUseReferences]=useState(false);
  const [data,setData]=useState(null),[prompt,setPrompt]=useState(''),[title,setTitle]=useState('Calibration revision 1'),
  [note,setNote]=useState(''),[selected,setSelected]=useState(null),[details,setDetails]=useState(null),
  [busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');

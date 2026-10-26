@@ -9,6 +9,7 @@ Never edits deployed officer pipelines or changes model weights.
 """
 import hashlib
 import json
+import os
 import threading
 from collections import defaultdict
 
@@ -322,6 +323,11 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
             raise HTTPException(404,"Save this prompt version first")
         quality_mode=version["change_note"].startswith("[shahrin-ref-v2]")
         ref_mode=quality_mode or version["change_note"].startswith("[shahrin-ref-v1]")
+        # The offline 13-post Shahrin audit found lexical nearest-example
+        # agreement of 4/13. Do not spend credits on v2 by default until
+        # an explicit reviewed calibration gate is enabled.
+        if quality_mode and os.getenv("BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()!="true":
+            raise HTTPException(409,"V11 quality-gated references are paused: offline nearest-example agreement was 4/13. No paid AI calls made. Review the calibration before enabling a paid test.")
         if ref_mode:
             version=dict(version,reference_revision=REFERENCE_REVISION_V2 if quality_mode else REFERENCE_REVISION)
         records=_cohort_rows(db,as_of=version["created_at"])

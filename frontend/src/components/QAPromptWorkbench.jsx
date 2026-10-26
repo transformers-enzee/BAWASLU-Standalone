@@ -13,17 +13,19 @@ async function call(path,body){
 }
 export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,ready=false}){
  const id=language==='id';
+ const [preflight,setPreflight]=useState(null),[preflightError,setPreflightError]=useState('');
  const [useReferences,setUseReferences]=useState(false);
  const [qualityReferences,setQualityReferences]=useState(false);
  const [data,setData]=useState(null),[prompt,setPrompt]=useState(''),[title,setTitle]=useState('Calibration revision 1'),
  [note,setNote]=useState(''),[selected,setSelected]=useState(null),[details,setDetails]=useState(null),
  [busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const reloadPreflight=useCallback(()=>call('/preflight').then(v=>{setPreflight(v);setPreflightError('')}).catch(e=>setPreflightError(e.message)),[]);
  const refresh=useCallback(async()=>{
    const d=await call('');
    setData(d);setPrompt(s=>s||d.default_instructions||'');
    setSelected(s=>s||d.versions?.[0]?.id||null);
  },[]);
- useEffect(()=>{refresh().catch(e=>setError(e.message))},[refresh]);
+ useEffect(()=>{refresh().catch(e=>setError(e.message));reloadPreflight()},[refresh,reloadPreflight]);
  useEffect(()=>{
    if(selected)call('/versions/'+selected).then(setDetails).catch(e=>setError(e.message));
  },[selected,data?.versions?.length]);
@@ -78,6 +80,15 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
    </div>
    {error&&<p role="alert" className="text-sm text-red-800 bg-red-50 rounded-lg p-3">{error}</p>}
    {notice&&<p role="status" className="text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">{notice}</p>}
+   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+     <div className="flex justify-between items-center gap-2"><b className="text-sm">{id?'Pemeriksaan Kalibrasi Gratis':'No-credit Calibration Preflight'}</b>
+       <button type="button" onClick={reloadPreflight} className="text-xs border rounded px-2 py-1 bg-white">{id?'Periksa ulang':'Recheck'}</button></div>
+     {preflightError&&<p role="alert" className="text-xs text-red-700">{preflightError}</p>}
+     {preflight&&<><p className="text-xs text-slate-700">{id?'Kesamaan acuan terdekat':'Nearest reference agreement'}: <b>{preflight.nearest_reference_agreement}/{preflight.development_evaluated}</b> · {id?'Contoh lemah/bertentangan':'Weak/conflicting cases'}: <b>{preflight.weak_or_conflicting}</b></p>
+       <p className="text-xs text-slate-700">{id?'Kategori tanpa contoh yang memenuhi syarat':'Categories with no eligible examples'}: <b>{preflight.categories_without_eligible_references?.join(', ')||'None'}</b></p>
+       <p className={'text-xs font-semibold '+(preflight.paid_v2_enabled?'text-amber-800':'text-red-700')}>{preflight.paid_v2_enabled?(id?'Uji berbayar v2 diizinkan; perlu tinjauan':'Paid v2 enabled; review first'):(id?'Pengujian berbayar v2 dijeda':'Paid v2 testing paused')}</p>
+       <p className="text-xs text-slate-500">{id?'Kecocokan contoh bukan akurasi AI':'Reference agreement is not AI accuracy.'}</p></>}
+   </div>
    <QAAlignmentReview language={language} onSaved={()=>refresh().catch(e=>setError(e.message))}/>
    <div className="grid grid-cols-3 gap-2">
      {[[data?.development_posts??'—',id?'Sampel pengembangan':'Development posts'],
@@ -113,7 +124,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
          <b className="text-sm">{id?'Uji versi':'Test version'} {selected?('v'+selected):'—'}</b>
          <p className="text-xs text-slate-500 mt-2">{id?'Hasil salah kategori disimpan sebagai mismatch, bukan error. Permintaan gagal dilewati; percobaan ulang hanya saat Anda memilih Retry.':'Incorrect categories are saved as mismatches, NOT errors. Failed requests are skipped and retried only when you choose Retry.'}</p>
          <p className="text-xs text-slate-600 mt-2">{id?'Kuota permintaan QA tersisa':'QA request allowance remaining'}: <b>{data?.slots_available??'—'}</b> {id?'untuk batch berikutnya':'for the next batch'}</p>
-         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||slots<=0||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={()=>test(false)} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
+         {canEdit&&<button type="button" disabled={!ready||!!busy||!selected||slots<=0||(chosen?.change_note?.startsWith('[shahrin-ref-v2]')&&!preflight?.paid_v2_enabled)||(chosen?.development_total>0&&chosen.tested>=chosen.development_total)} onClick={()=>test(false)} className="mt-3 w-full bg-[#147968] rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50">
            {busy==='test'?'Assessing…':(id?'Uji ': 'Test next ')+slots+(id?' pos pengembangan berikutnya':' development posts')}
          </button>}
          {hasFailures&&

@@ -28,10 +28,10 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  async function save(){
    setBusy('save');setError('');setNotice('');
    try{
-     const r=await call('/versions',{title,instructions:prompt,change_note:note});
+     const r=await call('/versions',{title,instructions:prompt,change_note:note,use_shahrin_references:useReferences});
      setSelected(r.version_id);
      setNotice(id?'Versi baru disimpan; belum menggunakan API AI.':'New prompt version saved; no AI call was made.');
-     setTitle(id?'Revisi berikutnya':'Next revision');setNote('');
+     setTitle(id?'Revisi berikutnya':'Next revision');setNote('');setUseReferences(false);
      await refresh();
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
@@ -63,7 +63,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
    setSelected(v);setBusy('load');setError('');
    try{
      const d=await call('/versions/'+v);
-     setPrompt(d.instructions);setTitle((id?'Revisi dari v':'Revision from v')+v);setNote('');setDetails(d);
+     setUseReferences(false);setPrompt(d.instructions);setTitle((id?'Revisi dari v':'Revision from v')+v);setNote('');setDetails(d);
    }catch(e){setError(e.message)}finally{setBusy('')}
  }
  const versions=data?.versions||[];
@@ -92,6 +92,7 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
        <label className="text-xs block">{id?'Nama versi baru':'New version name'}<input className={fld+' mt-1'} value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit} maxLength={100}/></label>
        <label className="text-xs block">{id?'Perubahan dari versi sebelumnya':'What changed and why?'}<input className={fld+' mt-1'} value={note} onChange={e=>setNote(e.target.value)} disabled={!canEdit} maxLength={500} placeholder="E.g. Do not infer misconduct from political timing"/></label>
        <label className="text-xs block">{id?'Instruksi klasifikasi lengkap':'Classification instructions'}<textarea className={fld+' mt-1 font-mono leading-5'} rows={18} value={prompt} spellCheck={false} onChange={e=>setPrompt(e.target.value)} disabled={!canEdit}/></label>
+       {canEdit&&<label className="flex gap-2 items-start text-xs text-slate-700"><input type="checkbox" checked={useReferences} onChange={e=>setUseReferences(e.target.checked)}/><span>{id?'Gunakan contoh acuan Shahrin yang relevan untuk versi BARU (tidak mengubah versi lama)':'Use relevant Shahrin reference examples for this NEW version (existing versions unchanged)'}</span></label>}
        <div className="flex flex-wrap gap-2">
          {canEdit&&<button onClick={save} disabled={!!busy||prompt.length<300||title.trim().length<3} type="button" className="bg-[#147968] text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50 flex items-center gap-1"><Save size={14}/>{busy==='save'?'Saving…':id?'Simpan versi baru':'Save new version'}</button>}
          <button onClick={()=>refresh().catch(e=>setError(e.message))} disabled={!!busy} type="button" className="border rounded-lg px-3 py-2 text-sm flex items-center gap-1"><RefreshCw size={14}/>{id?'Muat ulang':'Refresh'}</button>

@@ -27,6 +27,8 @@ from .smart_radar_qa_limits import qa_config, qa_readiness, ensure_qa_batch
 from .smart_radar_qa_errors import qa_provider_error
 from .smart_radar_qa_validation import validate_qa_v2_output, QAOutputError
 from .smart_radar_qa_alignment import blocked_references
+from .smart_radar_qa_references import (REFERENCE_REVISION, reference_examples_for_record,
+    build_reference_messages, reference_audit_metadata)
 
 router=APIRouter(prefix="/api/smart-radar/qa",tags=["smart-radar-prompt-tuning"])
 _LOCK=threading.Lock()
@@ -241,6 +243,7 @@ class SavePrompt(BaseModel):
     title:str=Field(min_length=3,max_length=100)
     instructions:str=Field(min_length=300,max_length=16000)
     change_note:str=Field(default="",max_length=500)
+    use_shahrin_references:bool=False
 
 class RunPrompt(BaseModel):
     version_id:int=Field(ge=1)
@@ -288,7 +291,7 @@ def save_tuning_version(body:SavePrompt,user:User=Depends(current_user),
          VALUES (:title,:instructions,:note,:digest,:actor)
          RETURNING id"""),
          {"title":body.title.strip(),"instructions":instructions,
-          "note":body.change_note.strip(),"digest":digest,
+          "note":(("[shahrin-ref-v1] " if body.use_shahrin_references else "") + body.change_note.strip())[:500],"digest":digest,
           "actor":str(user.id)}).scalar_one()
     db.commit()
     return {"version_id":int(row),"version_key":version_key(row),
@@ -310,11 +313,14 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another tuning batch is running")
     try:
-        version=db.execute(text("""SELECT instructions,created_at FROM
+        version=db.execute(text("""SELECT instructions,instructions_sha256,change_note,created_at FROM
             pilot_smart_radar.qa_prompt_versions WHERE id=:id"""),
             {"id":body.version_id}).mappings().first()
         if version is None:
             raise HTTPException(404,"Save this prompt version first")
+        ref_mode=version["change_note"].startswith("[shahrin-ref-v1]")
+        if ref_mode:
+            version=dict(version,reference_revision=REFERENCE_REVISION)
         records=_cohort_rows(db,as_of=version["created_at"])
         blocked=blocked_references(db)
         # Development scoring is exploratory: a disagreement is saved and
@@ -361,10 +367,25 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
                 few_shot.append({"source_text":ex["message_original"][:1100],
                     "human_primary_category":category})
         system=SYSTEM_GUARD+"\nADMIN-APPROVED CLASSIFICATION INSTRUCTIONS:\n"+version["instructions"]
-        system+="\nANALYST-LABELLED TRAINING EXAMPLES (not scoring cases):\n"
-        system+=json.dumps(few_shot,ensure_ascii=False)
+        if not ref_mode:
+            system+="\nANALYST-LABELLED TRAINING EXAMPLES (not scoring cases):\n"
+            system+=json.dumps(few_shot,ensure_ascii=False)
         saved=[];errors=[]
         for record in selected:
+            reference_metadata={}
+            if ref_mode:
+                # Assemble before creating a billable attempt; fail closed if
+                # the private reference layer is unavailable.
+                references=reference_examples_for_record(db,record,exemplars)
+                prepared_messages,reference_fingerprint=build_reference_messages(
+                    SYSTEM_GUARD,version,record,references)
+                reference_metadata=reference_audit_metadata(references,reference_fingerprint)
+            else:
+                prepared_messages=[
+                    {"role":"system","content":system},
+                    {"role":"user","content":json.dumps(
+                        {"post_text":record["message_original"][:8500]},ensure_ascii=False)}
+                ]
             # Store attempt before the paid request. Failed/unfinished requests
             # count against QA budget and are skipped in subsequent batches.
             attempt_id=db.execute(text("""
@@ -379,16 +400,14 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
             try:
                 response=httpx.post(cfg["base_url"]+"/chat/completions",
                     headers={"Authorization":"Bearer "+cfg["key"]},
-                    json={"model":cfg["model"],"messages":[
-                        {"role":"system","content":system},
-                        {"role":"user","content":json.dumps(
-                            {"post_text":record["message_original"][:8500]},ensure_ascii=False)}
-                    ],"response_format":{"type":"json_object"},
+                    json={"model":cfg["model"],"messages":prepared_messages,"response_format":{"type":"json_object"},
                       "max_completion_tokens":1300},timeout=60)
                 response.raise_for_status()
                 raw=response.json()
                 output=validate_qa_v2_output(
                     raw,record["message_original"],CAT_SET,"guided")
+                if ref_mode:
+                    output.update(reference_metadata)
                 usage=raw.get("usage") or {}
                 db.execute(text("""INSERT INTO pilot_smart_radar.qa_ai_assessments
                   (qa_id,model,prompt_version,source_hash,result_json,input_tokens,output_tokens)

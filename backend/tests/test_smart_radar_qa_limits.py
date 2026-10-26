@@ -1,4 +1,4 @@
-"""QA reuses existing BAWASLU request limits without new Render env keys."""
+"""QA uses existing per-click/lifetime limits, ignoring campaign daily restriction."""
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
@@ -26,7 +26,9 @@ def test_existing_env_model_and_budget(monkeypatch):
     cfg=ensure_qa_batch(_DB(today=2,lifetime=7),3)
     assert cfg["model"]=="gpt-4o-mini"
     assert cfg["model_source"]=="OPENAI_MODEL"
-    assert cfg["daily_remaining"]==6
+    assert cfg["daily_remaining"] is None
+    assert cfg["daily"] is None
+    assert cfg["used_today"]==2
     assert cfg["lifetime_remaining"]==5
     assert cfg["max_run"]==3
 
@@ -50,16 +52,16 @@ def test_existing_limits_fail_closed(monkeypatch):
     with pytest.raises(HTTPException):
         ensure_qa_batch(_DB(),1)
 
-def test_daily_and_lifetime_qa_counters_restrict_requests(monkeypatch):
+def test_daily_qa_limit_removed_but_lifetime_still_enforced(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY","test-placeholder")
     monkeypatch.setenv("BAWASLU_AI_ASSESSMENTS_PER_RUN","3")
     monkeypatch.setenv("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN","4")
     monkeypatch.setenv("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN","8")
-    with pytest.raises(HTTPException) as daily:
-        ensure_qa_batch(_DB(today=3,lifetime=3),2)
-    assert daily.value.status_code==429
+    # Legacy campaign daily env must NOT restrict manual QA experimentation.
+    assert ensure_qa_batch(_DB(today=400,lifetime=3),2)["used_today"]==400
+    assert qa_readiness(_DB(today=400,lifetime=3))["ready"] is True
     with pytest.raises(HTTPException) as lifetime:
-        ensure_qa_batch(_DB(today=0,lifetime=7),2)
+        ensure_qa_batch(_DB(today=400,lifetime=7),2)
     assert lifetime.value.status_code==429
 
 def test_hard_maximums_are_conservative(monkeypatch):
@@ -69,5 +71,5 @@ def test_hard_maximums_are_conservative(monkeypatch):
     monkeypatch.setenv("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN","999")
     cfg=qa_config()
     assert cfg["max_run"]==3
-    assert cfg["daily"]==30
+    assert cfg["daily"] is None
     assert cfg["lifetime"]==200

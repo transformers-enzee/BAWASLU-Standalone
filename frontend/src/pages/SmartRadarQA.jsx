@@ -267,7 +267,7 @@ export default function SmartRadarQA(){
        <p>✓ {language==='id'?'Model dari konfigurasi yang sudah ada':'Model from existing settings'}: <b>{stats?.model||'—'}</b> <span className="text-slate-500">({stats?.model_source||'OPENAI_MODEL'})</span></p>
        <p>{stats?.api_key_configured?'✓':'○'} OPENAI_API_KEY: {stats?.api_key_configured?'Configured':'Missing'}</p>
        <p>{stats?.max_per_run>0?'✓':'○'} BAWASLU_AI_ASSESSMENTS_PER_RUN: {stats?.max_per_run??'—'} {language==='id'?'maks per uji':'maximum per test'}</p>
-       <p>BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN: {stats?.daily_remaining??'—'} / {stats?.daily_limit??'—'} {language==='id'?'kuota QA hari ini':'QA slots today'}</p>
+       <p>{language==='id'?'Batas harian QA':'QA daily limit'}: <b>{language==='id'?'Tidak ada':'None'}</b> · {language==='id'?'Pengujian tersimpan hari ini':'Assessments saved today'}: {stats?.qa_requests_today??'—'}</p>
        <p>BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN: {stats?.lifetime_remaining??'—'} / {stats?.lifetime_limit??'—'} {language==='id'?'kuota QA sepanjang uji':'QA lifetime slots'}</p>
        <p className="pt-1 text-slate-500">{language==='id'?'Pengujian QA berjalan hanya jika administrator menekan tombol. Tombol pekerja otomatis tidak memengaruhinya; tanpa variabel baru.':'QA runs only on an administrator click. Worker/auto-screening toggles do not control this test; no new variables required.'}</p>
      </div>

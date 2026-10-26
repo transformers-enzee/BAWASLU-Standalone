@@ -47,13 +47,16 @@ def test_mismatch_is_completed_not_a_blocker():
         dev,completed={"QA-1"},failures={"QA-2"},retry_failed=True)
     assert [r["qa_id"] for r in retries]==["QA-2"]
 
-def test_qa_batch_shrinks_to_actual_allowance(monkeypatch):
+def test_qa_batch_ignores_daily_and_respects_lifetime(monkeypatch):
     import app.smart_radar_qa_tuning as mod
     monkeypatch.setattr(mod,"qa_readiness",lambda db:{
-        "max_run":3,"daily_remaining":2,"lifetime_remaining":17})
+        "max_run":3,"daily_remaining":None,"lifetime_remaining":17})
+    assert mod._available_slots(None,3)==3
+    monkeypatch.setattr(mod,"qa_readiness",lambda db:{
+        "max_run":3,"daily_remaining":None,"lifetime_remaining":2})
     assert mod._available_slots(None,3)==2
     monkeypatch.setattr(mod,"qa_readiness",lambda db:{
-        "max_run":3,"daily_remaining":0,"lifetime_remaining":17})
+        "max_run":3,"daily_remaining":None,"lifetime_remaining":0})
     assert mod._available_slots(None,3)==0
 
 def test_retry_requires_explicit_selection():

@@ -195,8 +195,7 @@ def choose_development_candidates(dev,completed,failures,retry_failed=False):
 
 def _available_slots(db,requested=3):
     cfg=qa_readiness(db)
-    return max(0,min(requested,cfg["max_run"],
-                     cfg["daily_remaining"],cfg["lifetime_remaining"]))
+    return max(0,min(requested,cfg["max_run"],cfg["lifetime_remaining"]))
 
 def _results_for(db,vid):
     cfg=qa_config()
@@ -349,7 +348,7 @@ def run_tuning(body:RunPrompt,user:User=Depends(current_user),db:Session=Depends
         slots=_available_slots(db,1 if body.retry_failed else body.limit)
         if slots<=0:
             raise HTTPException(429,
-                "QA request allowance exhausted for today or lifetime; no additional AI calls were made.")
+                "QA lifetime request allowance exhausted; no additional AI calls were made.")
         selected=candidates[:slots]
         # Strict cap as a second backend enforcement.
         cfg=ensure_qa_batch(db,len(selected))

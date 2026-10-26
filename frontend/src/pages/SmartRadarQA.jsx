@@ -55,13 +55,13 @@ const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-whit
 export default function SmartRadarQA(){
  const {access}=useOutletContext();
  const {language}=useLanguage();const t=key=>(wording[language]||wording.en)[key]||key;
- const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]),[calibration,setCalibration]=useState(null),[calibrationV2,setCalibrationV2]=useState(null);
+ const [stats,setStats]=useState(null),[metrics,setMetrics]=useState(null),[records,setRecords]=useState([]),[calibration,setCalibration]=useState(null),[calibrationV2,setCalibrationV2]=useState(null),[v2Disagreements,setV2Disagreements]=useState(null);
  const [page,setPage]=useState(1),[cohort,setCohort]=useState('human'),[total,setTotal]=useState(0);
  const [current,setCurrent]=useState(null),[form,setForm]=useState({relevance:'Uncertain',primary_category:'Uncertain',perspective:'uncertain',actionable:'Uncertain',incident_key:'',note:''});
  const [file,setFile]=useState(null),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState('');
  const refresh=useCallback(async()=>{
-   const [s,m,x,c,v]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15'),api('/calibration-status'),api('/calibration-v2-status')]);
-   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);setCalibration(c);setCalibrationV2(v);
+   const [s,m,x,c,v,d]=await Promise.all([api('/status'),api('/metrics'),api('/records?cohort='+cohort+'&page='+page+'&size=15'),api('/calibration-status'),api('/calibration-v2-status'),api('/calibration-v2-disagreements')]);
+   setStats(s);setMetrics(m);setRecords(x.rows);setTotal(x.total);setCalibration(c);setCalibrationV2(v);setV2Disagreements(d);
  },[cohort,page]);
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[refresh]);
  const select=row=>{
@@ -173,12 +173,51 @@ export default function SmartRadarQA(){
      </div>
      <div className="flex gap-2 flex-wrap mt-3">
        {canImport&&[['baseline',language==='id'?'Uji AI Awal':'Test v2 baseline'],['guided',language==='id'?'Uji AI Terarah':'Test v2 human-guided']].map(([mode,label])=>
-         <button key={mode} type="button" disabled={!stats?.ai_ready||!!busy||!calibrationV2?.testing_ready}
+         <button key={mode} type="button" disabled={!stats?.ai_ready||!!busy||!calibrationV2?.testing_ready||calibrationV2?.testing_paused}
            className="rounded-lg px-3 py-2 bg-[#147968] text-white text-sm disabled:opacity-50" onClick={()=>testV2(mode)}>
            {busy==='v2-'+mode?'Assessing…':label+' ('+(stats?.max_per_run||3)+')'}
          </button>)}
      </div>
      <p className="text-xs text-amber-800 mt-3">{language==='id'?'Empat unggahan yang telah dibahas dikeluarkan dari tes v2. Model belum dilatih ulang dan belum semua label manusia disetujui.':'Four previously discussed cases are excluded from v2. The base model is unchanged and the human reference labels have not been formally signed off.'}</p>
+     {calibrationV2?.testing_paused&&
+       <div role="status" className="rounded-lg bg-amber-50 border border-amber-200 p-3 mt-3 text-xs text-amber-950">
+         <b>{language==='id'?'Pengujian v2 dihentikan sementara':'V2 testing paused for analyst review'}</b>
+         <p className="mt-1">{language==='id'?'Tiga prediksi terbaru tidak cocok dengan label manusia yang diunggah. Tinjau perbedaannya dan mintalah analis menyetujui label sebelum pengujian model baru. Tombol v2 dinonaktifkan agar tidak menghabiskan token.':'The three recorded guided predictions disagree with the uploaded human categories. Review the differences and have an analyst confirm the reference decisions before testing a new version. V2 buttons are disabled to avoid unnecessary token use.'}</p>
+       </div>}
+     <div className="border-t border-slate-200 mt-4 pt-3">
+       <h3 className="font-semibold text-sm">{language==='id'?'Perbedaan AI dan Analis':'AI–Analyst Disagreement Review'} ({v2Disagreements?.mismatches??0}/{v2Disagreements?.tested??0})</h3>
+       <p className="text-xs text-slate-500 mt-1">{language==='id'?'Label dari Excel masih sementara. Keputusan manusia harus ditinjau dan tidak boleh diganti otomatis oleh AI. Kasus ini tidak lagi menjadi sampel yang tidak terlihat.':'Excel analyst labels are provisional. Review them against the source; do not automatically replace human decisions with AI guesses. These disclosed cases are no longer unseen test examples.'}</p>
+       <div className="space-y-3 mt-3">
+         {(v2Disagreements?.entries||[]).map(entry=>
+           <div key={entry.qa_id} className="border border-amber-200 rounded-lg p-3 space-y-2">
+             <div className="flex flex-wrap items-center justify-between gap-2">
+               <b className="text-sm">{entry.qa_id} · {entry.platform}</b>
+               <span className="text-[11px] text-amber-800">{entry.review_status==='confirmed'?(language==='id'?'Label dikonfirmasi':'Label confirmed'):(language==='id'?'Menunggu persetujuan':'Awaiting sign-off')}</span>
+             </div>
+             <div className="grid md:grid-cols-2 gap-2 text-xs">
+               <div className="bg-emerald-50 rounded-md p-2"><span className="text-slate-500">{language==='id'?'Label unggahan analis':'Uploaded analyst label'}</span><p className="font-semibold mt-1">{entry.human_category}</p></div>
+               <div className="bg-amber-50 rounded-md p-2"><span className="text-slate-500">{language==='id'?'Prediksi AI':'AI predicted'}</span><p className="font-semibold mt-1">{entry.ai_category}</p></div>
+             </div>
+             <p className="text-xs text-slate-700"><b>{language==='id'?'Penjelasan AI':'AI reasoning'}:</b> {entry.ai_rationale}</p>
+             {entry.ai_boundary&&<p className="text-xs text-slate-600"><b>{language==='id'?'Batas kategori':'Category boundary'}:</b> {entry.ai_boundary}</p>}
+             <details className="text-xs text-slate-700">
+               <summary className="cursor-pointer text-[#147968] font-medium">{language==='id'?'Baca unggahan sumber asli':'Read original source post'}</summary>
+               <p className="mt-2 p-2 bg-slate-50 whitespace-pre-wrap max-h-64 overflow-y-auto">{entry.message_original}</p>
+             </details>
+             <div className="flex flex-wrap items-center gap-3 text-xs">
+               <a href={entry.source_url} target="_blank" rel="noopener noreferrer" className="text-[#147968] underline">{language==='id'?'Buka tautan sumber':'Open source URL'}</a>
+               <button type="button" onClick={()=>{
+                   select({...entry,h_category:null,imported_human_category:entry.human_category,
+                     imported_review_status:entry.review_status});
+                   document.getElementById('qa-human-review-panel')?.scrollIntoView({behavior:'smooth',block:'start'});
+                 }} className="text-[#147968] font-semibold underline">
+                 {language==='id'?'Periksa / setujui label':'Inspect / confirm human label'}
+               </button>
+             </div>
+           </div>)}
+         {!v2Disagreements?.tested&&<p className="text-xs text-slate-500">{language==='id'?'Belum ada prediksi v2 yang tersimpan.':'No saved v2 guided predictions yet.'}</p>}
+       </div>
+     </div>
      {!!calibrationV2?.extra_seen_tests&&<p className="text-red-700 text-xs mt-2">{language==='id'?'Sampel v2 tidak lagi sepenuhnya baru; perlu uji baru.':'V2 holdout was already tested in another version; a fresh split is required.'}</p>}
      <div className="border-t mt-3 pt-3">
        <h3 className="font-semibold text-sm">{language==='id'?'Label acuan yang perlu diperiksa':'Human labels requiring review'} ({calibrationV2?.flags_count??0})</h3>
@@ -261,7 +300,7 @@ export default function SmartRadarQA(){
          <button disabled={page>=Math.ceil(total/15)} onClick={()=>setPage(p=>p+1)}>{t('next')}</button>
        </div>
      </div>
-     <div className={bx}>
+     <div id="qa-human-review-panel" className={bx}>
        {!current?<p className="text-sm text-slate-500 p-8 text-center">{t('review')}</p>:<>
          <h2 className="font-semibold mb-3">{current.qa_id}</h2>
          <p className="text-xs text-slate-500 mb-2">{t('curated')}: {current.curated_category}</p>

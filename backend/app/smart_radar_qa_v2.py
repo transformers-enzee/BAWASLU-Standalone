@@ -33,6 +33,7 @@ EXPOSED_DIAGNOSTIC_IDS = frozenset({
     "QA-14141","QA-14352","QA-14806","QA-14835"
 })
 MAX_EXEMPLARS_PER_CATEGORY=2
+V2_TESTING_PAUSED=True  # v2 first three human-guided predictions all disagree with provisional human labels.
 
 # Decision guidelines were derived from source content in the TRAINING portion,
 # especially original-vs-human category changes. These are proposals for analyst
@@ -214,8 +215,57 @@ def calibration_v2_status(user:User=Depends(current_user),db:Session=Depends(get
         "SELECT count(*) FROM pilot_smart_radar.qa_imported_human_categories WHERE review_status='confirmed'")).scalar() or 0,
       "results":results,
       "approved_for_production":False,
+      "testing_paused":V2_TESTING_PAUSED,
+      "testing_pause_reason":"AI v2 requires analyst review of the three observed disagreements before a revised classifier is tested on a new unseen cohort.",
       "notes":"Research only. Labels are not yet signed off; no model weights changed. Exposed four historical diagnostics excluded."
     }
+
+@router.get("/calibration-v2-disagreements")
+def calibration_v2_disagreements(user:User=Depends(current_user),
+                                 db:Session=Depends(get_db)):
+    reviewer(db,user)
+    cfg=qa_config()
+    rows=db.execute(text("""
+      SELECT p.qa_id,p.source_url,p.platform,p.message_original,
+             p.curated_category AS original_category,
+             h.category AS human_category,h.review_status,
+             a.prompt_version,a.result_json,a.processed_at
+      FROM pilot_smart_radar.qa_ai_assessments a
+      JOIN pilot_smart_radar.qa_source_posts p
+        ON p.qa_id=a.qa_id AND p.source_hash=a.source_hash
+      JOIN pilot_smart_radar.qa_imported_human_categories h
+        ON h.original_excel_row=p.original_excel_row AND h.source_url=p.source_url
+      WHERE a.model=:model AND a.prompt_version=:version
+      ORDER BY a.qa_id LIMIT 100
+    """),{"model":cfg["model"],"version":VERSIONS["guided"]}).mappings()
+    items=[]
+    assessed=0
+    for row in rows:
+        assessed+=1
+        output=row["result_json"]
+        if isinstance(output,str):
+            output=json.loads(output)
+        if not isinstance(output,dict):
+            continue
+        if output.get("primary_category")==row["human_category"]:
+            continue
+        items.append({
+          "qa_id":row["qa_id"],"source_url":row["source_url"],
+          "platform":row["platform"],"message_original":row["message_original"],
+          "original_category":row["original_category"],
+          "human_category":row["human_category"],
+          "review_status":row["review_status"],
+          "ai_category":output.get("primary_category"),
+          "ai_rationale":str(output.get("rationale") or "")[:1200],
+          "ai_boundary":str(output.get("decision_boundary") or "")[:1200],
+          "ai_uncertainty":str(output.get("uncertainty_note") or "")[:600],
+          "ai_secondary":output.get("secondary_categories") or [],
+          "evidence_validation":output.get("evidence_validation"),
+          "prompt_version":row["prompt_version"]
+        })
+    return {"tested":assessed,"mismatches":len(items),
+      "entries":items,"human_labels_provisional":True,
+      "training_note":"These posts are now disclosed diagnostic cases. Do not reuse their labels to score the same classifier as blind or to tune and re-score on these same posts."}
 
 class V2Trial(BaseModel):
     mode:str
@@ -227,6 +277,8 @@ def assess_calibration_v2(body:V2Trial,user:User=Depends(current_user),
     qa_admin(db,user)
     if body.mode not in VERSIONS:
         raise HTTPException(400,"Unknown QA v2 test mode")
+    if V2_TESTING_PAUSED:
+        raise HTTPException(409,"QA v2 paused for human review: examine recorded disagreements. No further paid v2 assessments will run.")
     if not LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA v2 batch is already running")
     try:

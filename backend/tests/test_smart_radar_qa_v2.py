@@ -48,3 +48,43 @@ def test_accuracy_denominator_counts_only_saved_predictions():
     assert x["tested"]==2
     assert x["correct"]==1
     assert x["accuracy"]==0.5
+
+
+def test_v2_is_paused_until_human_references_reviewed():
+    from app.smart_radar_qa_v2 import V2_TESTING_PAUSED
+    assert V2_TESTING_PAUSED is True
+
+def test_disagreements_expose_only_reviewed_records(monkeypatch):
+    import app.smart_radar_qa_v2 as mod
+    monkeypatch.setattr(mod,"reviewer",lambda db,user: {"role":"National Administrator"})
+    monkeypatch.setattr(mod,"qa_config",lambda: {"model":"unit-test"})
+    class FakeRows:
+        def mappings(self):return self
+        def __iter__(self):
+            yield {"qa_id":"QA-1","source_url":"https://example.org/1",
+                   "platform":"x","message_original":"Teks asli",
+                   "original_category":"Election Operations",
+                   "human_category":"Election Operations",
+                   "review_status":"awaiting_analyst_signoff",
+                   "prompt_version":"qa-clean-human-guided-v2",
+                   "processed_at":None,
+                   "result_json":{"primary_category":"Allegations / Violations",
+                                  "rationale":"Alasan AI","decision_boundary":"Alasan batas",
+                                  "evidence_validation":"verified_verbatim"}}
+            yield {"qa_id":"QA-2","source_url":"https://example.org/2",
+                   "platform":"x","message_original":"Teks lainnya",
+                   "original_category":"Election Operations",
+                   "human_category":"Election Operations",
+                   "review_status":"confirmed",
+                   "prompt_version":"qa-clean-human-guided-v2",
+                   "processed_at":None,
+                   "result_json":{"primary_category":"Election Operations"}}
+    class FakeDB:
+        def execute(self,*args,**kwargs):return FakeRows()
+    out=mod.calibration_v2_disagreements(user=object(),db=FakeDB())
+    assert out["tested"]==2
+    assert out["mismatches"]==1
+    assert out["entries"][0]["qa_id"]=="QA-1"
+    assert out["entries"][0]["human_category"]=="Election Operations"
+    assert out["entries"][0]["review_status"]=="awaiting_analyst_signoff"
+    assert out["human_labels_provisional"] is True

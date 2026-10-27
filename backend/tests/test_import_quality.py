@@ -30,3 +30,22 @@ def test_radar_source_completeness_and_namespace():
     assert radar_quality(row).missing_fields==()
     row["message_original"]=""
     assert radar_quality(row).missing_fields==("content",)
+
+def test_social_result_api_marks_missing_publication_without_inference():
+    from types import SimpleNamespace
+    from datetime import datetime
+    from app.socialcrawl import serialize_result
+    row=SimpleNamespace(id=101,run_id=1,provider="stored",provider_result_id="",
+      platform="threads",content_type="post",canonical_url="https://example.org/p",
+      author_name="Public account",observed_handle="",published_at="",
+      text_content="Original",language="id",relevance_score=0,
+      engagement_json="{}",geography_json="{}",source_identity_json="{}",
+      watchlist_matches_json="[]",review_state="MONITOR",review_notes="",
+      promoted_intelligence_id=None,collected_at=datetime(2026,10,28))
+    record=serialize_result(row)
+    assert record["canonical_source_id"]=="social:101"
+    assert record["provenance_quality"]["missing_fields"]==["published_at"]
+    assert record["provenance_quality"]["publication_time_verified"] is False
+    assert record["provenance_quality"]["provider_id_available"] is False
+    assert record["published_at"]==""
+    assert record["collected_at"].startswith("2026-10-28")

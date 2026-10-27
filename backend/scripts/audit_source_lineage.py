@@ -32,6 +32,15 @@ QUERIES = {
                              AND (author IS NULL OR TRIM(author)='') THEN 1 ELSE 0 END),0) AS missing_account,
       COALESCE(SUM(CASE WHEN source_id IS NULL OR TRIM(source_id)='' THEN 1 ELSE 0 END),0) AS missing_source_id
     FROM intelligence_items""",
+ "promotion_lineage": """
+    SELECT COUNT(*) AS promoted,
+      COALESCE(SUM(CASE WHEN i.id IS NULL THEN 1 ELSE 0 END),0) AS broken_intelligence_fk,
+      COALESCE(SUM(CASE WHEN i.source_id IS NULL OR TRIM(i.source_id)='' THEN 1 ELSE 0 END),0) AS missing_canonical_id,
+      COALESCE(SUM(CASE WHEN i.source_id IS NOT NULL AND TRIM(i.source_id)<>''
+                       AND i.source_id <> ('social:' || CAST(s.id AS TEXT)) THEN 1 ELSE 0 END),0) AS conflicting_canonical_id
+    FROM social_listening_results s
+    LEFT JOIN intelligence_items i ON i.id=s.promoted_intelligence_id
+    WHERE s.promoted_intelligence_id IS NOT NULL""",
  "candidate_tracking": """
     SELECT COUNT(*) AS candidates,
       COALESCE(SUM(CASE WHEN status='Active' THEN 1 ELSE 0 END),0) AS active_candidates
@@ -61,7 +70,7 @@ def audit(session):
             # as an empty batch. Roll back failed reads to keep session usable.
             session.rollback()
             report[key]={"state":"unavailable"}
-    report["canonical_id_status"]="NOT_VERIFIED: social listening result IDs, intelligence source IDs, and Smart Radar pilot IDs require explicit migration mapping"
+    report["canonical_id_status"]="NAMESPACED_SOURCE_IDS_DEFINED: social:<saved social result id>, radar:<saved pilot post id>, candidate:<saved watchlist registry id>. Cross-module backfill and staging verification required."
     return report
 
 def main():

@@ -53,3 +53,8 @@ The authenticated nationwide National Administrator API now supports:
 - The administrator-only `GET /api/integration/readiness` now includes fail-closed `release_gates` for complete Social Listening source provenance, zero broken/missing/conflicting promoted canonical IDs, and required manual review. The separate Supabase pilot is explicitly excluded from these app-database gates.
 - Existing 3 historical promoted records are still awaiting an authorized, confirmed backfill. This change does not run any write or provider request.
 - Browser role UAT and a real-record end-to-end pass are still required before full checklist closure; the readiness endpoint never claims they were completed.
+
+## Shared canonical source resolution — 28 October follow-up
+- Added authenticated `GET /api/source-lineage/social:<stored social result ID>` to resolve original Social Listening provenance and explicitly linked Intelligence references. It uses the same existing search-run geographic scope check as Social Listening and returns 404 when evidence is unavailable/out of scope.
+- No original source post text is returned, no cross-database joins are guessed, and missing publication timestamps are clearly marked unverified. `radar:<pilot post ID>` references are intentionally rejected with 409, directing consumers to the existing Smart Radar pilot API.
+- Added `backend/tests/test_source_lineage.py` for authorization, scope restrictions, canonical ID validation, separate Radar namespace, and no false verification claims. Integrated test into branch CI. No provider calls or staging data modifications were performed.

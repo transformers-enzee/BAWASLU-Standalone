@@ -122,7 +122,9 @@ def provenance_review_queue(limit:int=100,offset:int=0,user:User=Depends(current
          OR COALESCE(NULLIF(TRIM(observed_handle),''),NULLIF(TRIM(author_name),'')) IS NULL
          OR NULLIF(TRIM(provider_result_id),'') IS NULL
       ORDER BY id LIMIT :limit OFFSET :offset
-    """),{"limit":limit,"offset":offset}).mappings().all()
+    """),{"limit":limit+1,"offset":offset}).mappings().all()
+    has_more=len(rows)>limit
+    rows=rows[:limit]
     from .source_ids import canonical_source_id
     output=[]
     for row in rows:
@@ -138,6 +140,6 @@ def provenance_review_queue(limit:int=100,offset:int=0,user:User=Depends(current
                        "missing_fields":missing,
                        "source_url_available":bool(str(row["canonical_url"] or "").strip())})
     return {"results":output,"limit":limit,"offset":offset,
-            "has_more":len(rows)==limit,
+            "has_more":has_more,
             "policy":"Source content and original URLs are withheld; verify against original evidence before edits.",
             "paid_requests":0}

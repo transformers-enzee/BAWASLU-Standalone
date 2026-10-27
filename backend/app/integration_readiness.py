@@ -111,6 +111,15 @@ def provenance_review_queue(limit:int=100,offset:int=0,user:User=Depends(current
     require_admin(db,user)
     if limit<1 or limit>200 or offset<0 or offset>100000:
         raise HTTPException(422,"Invalid review queue page")
+    count_row=db.execute(text("""
+      SELECT COUNT(*) AS total FROM social_listening_results
+      WHERE NULLIF(TRIM(canonical_url),'') IS NULL
+         OR NULLIF(TRIM(platform),'') IS NULL
+         OR NULLIF(TRIM(published_at),'') IS NULL
+         OR NULLIF(TRIM(text_content),'') IS NULL
+         OR COALESCE(NULLIF(TRIM(observed_handle),''),NULLIF(TRIM(author_name),'')) IS NULL
+         OR NULLIF(TRIM(provider_result_id),'') IS NULL
+    """)).mappings().one()
     rows=db.execute(text("""
       SELECT id,platform,canonical_url,published_at,provider_result_id,
              text_content,observed_handle,author_name
@@ -140,6 +149,8 @@ def provenance_review_queue(limit:int=100,offset:int=0,user:User=Depends(current
                        "missing_fields":missing,
                        "source_url_available":bool(str(row["canonical_url"] or "").strip())})
     return {"results":output,"limit":limit,"offset":offset,
+            "total":int(count_row["total"] or 0),
+            "remaining_after_page":max(0,int(count_row["total"] or 0)-offset-len(output)),
             "has_more":has_more,
             "policy":"Source content and original URLs are withheld; verify against original evidence before edits.",
             "paid_requests":0}

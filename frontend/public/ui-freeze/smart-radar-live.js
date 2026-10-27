@@ -130,7 +130,7 @@
   async function refresh() {
     dashboard = await request('/api/smart-radar/dashboard');
     ui.setData((dashboard.findings || []).map(mapFinding));
-    $('.body').style.visibility = 'visible';
+    document.body.classList.add('bawaslu-ready');
   }
   async function boot() {
     try {
@@ -140,10 +140,13 @@
       } catch {ui.canReview=false;}
       await refresh();
     } catch (error) {
-      $('.body').style.visibility = 'visible';
-      $('#executive').textContent = 'Unable to load authorised staging data: ' + error.message;
+      document.body.classList.add('bawaslu-ready');
+      const message='Unable to load authorised Smart Radar data: ' + error.message;
       ui.setData([]);
-      $('#executive').textContent = 'Unable to load authorised staging data: ' + error.message;
+      $('#executive').textContent = message;
+      const status=$('#startup-status');
+      if(status){status.textContent=message;status.classList.add('error');status.setAttribute('role','alert');}
+      document.body.classList.add('bawaslu-ready');
     }
   }
   async function fetchFinding(id) {

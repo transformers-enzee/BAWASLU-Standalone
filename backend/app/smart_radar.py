@@ -171,8 +171,11 @@ def fetch_states(db):
         return {}
 
 def source_view(p):
-    return {k:p.get(k) for k in ("pilot_post_id","platform","published_at_raw","account_raw",
+    from .source_ids import canonical_source_id
+    view={k:p.get(k) for k in ("pilot_post_id","platform","published_at_raw","account_raw",
             "message_original","source_url","source_verification_status","original_category_hint")}
+    view["canonical_source_id"]=canonical_source_id("radar",p["pilot_post_id"])
+    return view
 
 def build_findings(posts, states, assessments=None):
     # Topic-centric findings with stable IDs and independently tracked officer

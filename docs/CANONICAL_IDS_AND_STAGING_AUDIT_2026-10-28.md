@@ -48,3 +48,8 @@ The authenticated nationwide National Administrator API now supports:
 - `POST /api/integration/source-id-backfill/apply`: request JSON `{"confirm":true,"expected_missing":<preview eligible_missing_ids>}`. Rejects no confirmation, role mismatch, conflicts or changed counts. Only writes empty `intelligence_items.source_id` values based on existing promoted foreign keys; original source evidence is not touched.
 - No automatic backfill is run on deployment. Inspect and verify preview first. Prefer a non-production session for any smoke test of write endpoints.
 - Manual sign-off is still needed for final controlled historical backfill and role/browser UAT.
+
+## Release readiness gate — 28 October follow-up
+- The administrator-only `GET /api/integration/readiness` now includes fail-closed `release_gates` for complete Social Listening source provenance, zero broken/missing/conflicting promoted canonical IDs, and required manual review. The separate Supabase pilot is explicitly excluded from these app-database gates.
+- Existing 3 historical promoted records are still awaiting an authorized, confirmed backfill. This change does not run any write or provider request.
+- Browser role UAT and a real-record end-to-end pass are still required before full checklist closure; the readiness endpoint never claims they were completed.

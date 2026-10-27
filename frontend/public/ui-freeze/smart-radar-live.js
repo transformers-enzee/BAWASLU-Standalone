@@ -46,7 +46,7 @@
       priority_score: f.priority_score, priority_label: f.priority_label || 'Not AI-scored',
       platform_counts: f.platform_counts || {}, day_counts: f.day_counts || {},
       actor_mentions: f.actor_mentions || {}, next_followup: f.next_followup || '',
-      source_ids: f.source_ids || []
+      source_ids: f.source_ids || [],followup: f.next_followup || ''
     };
   }
   function miniBars(rows, maxValue, color = '#279681') {
@@ -178,6 +178,26 @@
         originals[i].appendChild(a);
       });
     } catch(error){ui.notify('Cannot load source evidence: '+error.message);}
+    finally{busy=false;}
+  };
+  ui.openInsight = async id => {
+    if (id === 'watchlist') {window.top.location.assign('/watchlist');return;}
+    if (busy) return;
+    busy=true;
+    try {
+      const rows=ui.view();
+      await Promise.all(rows.map(f=>fetchFinding(f.id)));
+      ui.openPanel('insight',id);
+      const sources=$('#drawerBody').querySelectorAll('.source');
+      const posts=rows.flatMap(f=>f.posts||[]);
+      posts.forEach((post,i)=>{
+        const href=safeUrl(post[3]);
+        if(!href||!sources[i])return;
+        const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener noreferrer';
+        a.textContent='View original source →';a.className='source-link';
+        sources[i].appendChild(a);
+      });
+    } catch(error) {ui.notify('Unable to open source evidence: '+error.message);}
     finally{busy=false;}
   };
   ui.onAction = async action => {

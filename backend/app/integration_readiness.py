@@ -1,5 +1,6 @@
 """Administrator-only integration readiness. Counts only; no evidence text or paid calls."""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .db import get_db
@@ -51,3 +52,32 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     result["external_pilot_verification"]="Not queried by this endpoint"
     result["paid_requests"]=0
     return result
+
+class BackfillRequest(BaseModel):
+    confirm: bool = False
+    expected_missing: int = Field(default=0, ge=0, le=1000)
+
+@router.get("/source-id-backfill/preview")
+def preview_backfill(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Read-only plan; never changes stored source evidence."""
+    require_admin(db,user)
+    from scripts.backfill_source_ids import run
+    return run(db,apply=False)
+
+@router.post("/source-id-backfill/apply")
+def apply_backfill(body:BackfillRequest,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Apply explicitly confirmed and preflight-matched source-ID repair only."""
+    require_admin(db,user)
+    if not body.confirm:
+        raise HTTPException(409,"Explicit confirmation required")
+    from scripts.backfill_source_ids import run
+    preview=run(db,apply=False)
+    if preview["conflicting_nonblank_ids"] or preview["eligible_missing_ids"]!=body.expected_missing:
+        raise HTTPException(409,"Backfill changed since preview; no updates applied")
+    if preview["eligible_missing_ids"]==0:
+        return {**preview,"mode":"already_complete"}
+    try:
+        return run(db,apply=True)
+    except RuntimeError as exc:
+        db.rollback()
+        raise HTTPException(409,str(exc)) from exc

@@ -151,6 +151,15 @@
       const regionalPilotBlocked = error.message.includes('Pilot records require verified jurisdiction before regional access');
       const region = access?.province || 'your assigned region';
       const role = access?.role || 'Viewer';
+      if (regionalPilotBlocked) {
+        const jurisdiction=$('#geo');
+        if (jurisdiction) {
+          jurisdiction.options[0].textContent=region+' — regional access only';
+          jurisdiction.disabled=true;
+        }
+        const scope=$('#scopeLabel');
+        if (scope) scope.textContent=region+' · Restricted pilot';
+      }
       const message = regionalPilotBlocked
         ? 'Smart Radar pilot data is not available for ' + region + ' (' + role + '). These national pilot posts have no verified event-level jurisdiction and cannot be displayed as regional intelligence. No authorised regional findings are available in this pilot view.'
         : 'Unable to load authorised Smart Radar data: ' + error.message;

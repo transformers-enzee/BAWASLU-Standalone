@@ -31,7 +31,10 @@ export default function IntegrationReadiness() {
         api('provenance-review-queue?limit=25&offset='+nextOffset)
       ]);
       setMetrics(m); setPreview(p); setQueue(q); setOffset(nextOffset); setConfirm(false);
-    } catch(e) { setError(e.message); }
+    } catch(e) {
+      setMetrics(null); setPreview(null); setQueue(null); setConfirm(false);
+      setError(e.message);
+    }
     finally {setBusy(false);}
   },[offset]);
   useEffect(()=>{refresh(0);},[]);

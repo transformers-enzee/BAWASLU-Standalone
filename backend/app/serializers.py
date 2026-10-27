@@ -15,7 +15,7 @@ def intelligence(x):
       'ai_suggestions':loads(x.ai_suggestions_json,{}),'ai_geography':loads(x.ai_geography_json,{}),'proposed_geography':loads(x.proposed_geography_json,{}),
       'geographic_mismatch_review':loads(x.geographic_mismatch_review_json,{}),'source_type':x.source_type,'ingestion_method':x.ingestion_method,
       'observed_publisher_handle':x.observed_publisher_handle,'provider_source_metadata':loads(x.provider_source_metadata_json,{}),'source_identity':loads(x.source_identity_json,{}),
-      'entity_relationships':loads(x.entity_relationships_json,[]),'source_id':x.source_id,'source_url':x.source_url,'source_name':x.source_name,
+      'entity_relationships':loads(x.entity_relationships_json,[]),'source_id':x.source_id,'canonical_source_id':x.source_id if str(x.source_id or '').startswith(('social:','radar:')) else None,'source_url':x.source_url,'source_name':x.source_name,
       'platform':x.platform,'author':x.author,'publication_datetime':x.publication_datetime,'publication_date':x.publication_date,
       'publication_time_precision':x.publication_time_precision,'collection_datetime':x.collection_datetime,'owned_channel':loads(x.owned_channel_json,{}),
       'related_entities':loads(x.related_entities_json,[]),'related_topics':loads(x.related_topics_json,[]),'jurisdiction_type':x.jurisdiction_type,

@@ -38,3 +38,25 @@ def test_apply_preserves_populated_ids(session):
     assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()=="social:5"
     assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=12")).scalar()=="social:6"
     assert run(session,apply=True)["updated"]==0
+
+def test_atomic_expected_count_rejects_changed_preview(session):
+    session.execute(text("UPDATE intelligence_items SET source_id='social:6' WHERE id=12"))
+    session.commit()
+    with pytest.raises(RuntimeError,match="changed since preview"):
+        run(session,apply=True,expected_missing=2)
+    assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()==""
+
+def test_atomic_expected_count_allows_exact_repair(session):
+    session.execute(text("UPDATE intelligence_items SET source_id='social:6' WHERE id=12"))
+    session.commit()
+    result=run(session,apply=True,expected_missing=1)
+    assert result["updated"]==1
+    assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()=="social:5"
+
+def test_two_sources_cannot_claim_same_intelligence_item(session):
+    session.execute(text("DELETE FROM social_listening_results WHERE id=6"))
+    session.execute(text("INSERT INTO social_listening_results VALUES (6,11)"))
+    session.commit()
+    with pytest.raises(RuntimeError,match="Multiple sources"):
+        run(session,apply=True,expected_missing=2)
+    assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()==""

@@ -1,4 +1,4 @@
-"""QA uses existing per-click/lifetime limits, ignoring campaign daily restriction."""
+"""QA retains explicit per-click limits; lifetime and daily counters are informational."""
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
@@ -29,7 +29,7 @@ def test_existing_env_model_and_budget(monkeypatch):
     assert cfg["daily_remaining"] is None
     assert cfg["daily"] is None
     assert cfg["used_today"]==2
-    assert cfg["lifetime_remaining"]==5
+    assert cfg["lifetime_remaining"]>200
     assert cfg["max_run"]==3
 
 def test_worker_flags_do_not_implicitly_trigger_or_block_admin_qa(monkeypatch):
@@ -52,7 +52,7 @@ def test_existing_limits_fail_closed(monkeypatch):
     with pytest.raises(HTTPException):
         ensure_qa_batch(_DB(),1)
 
-def test_daily_qa_limit_removed_but_lifetime_still_enforced(monkeypatch):
+def test_daily_and_lifetime_limits_do_not_block_admin_qa(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY","test-placeholder")
     monkeypatch.setenv("BAWASLU_AI_ASSESSMENTS_PER_RUN","3")
     monkeypatch.setenv("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN","4")
@@ -60,9 +60,7 @@ def test_daily_qa_limit_removed_but_lifetime_still_enforced(monkeypatch):
     # Legacy campaign daily env must NOT restrict manual QA experimentation.
     assert ensure_qa_batch(_DB(today=400,lifetime=3),2)["used_today"]==400
     assert qa_readiness(_DB(today=400,lifetime=3))["ready"] is True
-    with pytest.raises(HTTPException) as lifetime:
-        ensure_qa_batch(_DB(today=400,lifetime=7),2)
-    assert lifetime.value.status_code==429
+    assert ensure_qa_batch(_DB(today=400,lifetime=700),2)["used_lifetime"]==700
 
 def test_hard_maximums_are_conservative(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY","test-placeholder")
@@ -72,4 +70,4 @@ def test_hard_maximums_are_conservative(monkeypatch):
     cfg=qa_config()
     assert cfg["max_run"]==3
     assert cfg["daily"] is None
-    assert cfg["lifetime"]==200
+    assert cfg["lifetime"] is None

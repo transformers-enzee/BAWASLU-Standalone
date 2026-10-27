@@ -363,6 +363,7 @@ def version_detail(version_id:int,user:User=Depends(current_user),
 # Additional agreement audit: eligible exemplar cohort ONLY; never holdout.
 # Its results use a distinct prompt_version and cannot alter V14 development scores.
 EXEMPLAR_AUDIT_LIMIT=55
+EXEMPLAR_V17_PILOT_LIMIT=18  # only first 18 deterministic exemplar targets
 # Existing v14/v15 audit scores were no-reference ablations because
 # the legacy per-post lookup only accepted development/holdout targets.
 # Freeze those historical runs and use only v16 for corrected lookups.
@@ -370,7 +371,7 @@ def exemplar_audit_key(vid):
     return "qa-exemplar-audit-v"+str(vid)
 
 @router.get("/tuning/exemplar-audit")
-def exemplar_audit_status(version_id:int=Query(16,ge=14,le=16),user:User=Depends(current_user),db:Session=Depends(get_db)):
+def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
        e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status,
@@ -380,20 +381,21 @@ def exemplar_audit_status(version_id:int=Query(16,ge=14,le=16),user:User=Depends
        WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
        {"version":exemplar_audit_key(version_id)}).mappings().all()
     n=len(rows)
+    target=EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT
     matched=sum(x["predicted"]==x["gold"] for x in rows)
-    return {"version_id":version_id,"completed":n,"target":EXEMPLAR_AUDIT_LIMIT,"matched":matched,
+    return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
        "agreement":round(matched/n,4) if n else None,
-       "remaining":max(0,EXEMPLAR_AUDIT_LIMIT-n),
+       "remaining":max(0,target-n),
        "with_references":sum(x["reference_count"]>0 for x in rows),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
-       "warning":"In-sample exemplar agreement only. Historical V14/V15 audits had no references; V16 uses corrected text-based references. Holdout remains excluded."}
+       "warning":"In-sample exemplar agreement only. Historical V14/V15 were no-reference audits, while V16/V17 use text-based reference lookup. V17 fixed 18-post paired pilot. Holdout excluded."}
 
 @router.post("/tuning/exemplar-audit/run")
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
-    if body.version_id != 16 or body.retry_failed:
-        raise HTTPException(422,"Only V16 corrected-reference audit accepts new paid batches; retries disabled")
+    if body.version_id != 17 or body.retry_failed:
+        raise HTTPException(422,"Only V17 paired 18-post pilot accepts new paid batches; retries disabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA batch is running")
     try:
@@ -416,9 +418,9 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
         pool=[r for r in pool if r["qa_id"] in approved]
         # Stable hash order limits selection bias from numeric QA IDs.
         pool=sorted(pool,key=lambda r:hashlib.sha256(r["qa_id"].encode()).hexdigest())
-        targets=pool[:EXEMPLAR_AUDIT_LIMIT]
-        if len(targets)<EXEMPLAR_AUDIT_LIMIT:
-            raise HTTPException(409,"Fewer than 55 eligible independent exemplar targets")
+        targets=pool[:EXEMPLAR_V17_PILOT_LIMIT]
+        if len(targets)<EXEMPLAR_V17_PILOT_LIMIT:
+            raise HTTPException(409,"Fewer than 18 eligible independent exemplar targets")
         cfg=qa_config()
         completed={r["qa_id"] for r in db.execute(text("""
             SELECT qa_id FROM pilot_smart_radar.qa_ai_assessments
@@ -470,7 +472,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                 output.update(reference_audit_metadata(references,fingerprint))
                 output["qa_reference_revision"]=REFERENCE_REVISION_V3
                 output["qa_audit_cohort"]="exemplar_in_sample"
-                output["qa_audit_protocol"]="exemplar_text_lookup_v16"
+                output["qa_audit_protocol"]="exemplar_text_lookup_v17_paired_pilot"
                 usage=raw.get("usage") or {}
                 db.execute(text("""INSERT INTO pilot_smart_radar.qa_ai_assessments
                     (qa_id,model,prompt_version,source_hash,result_json,input_tokens,output_tokens)

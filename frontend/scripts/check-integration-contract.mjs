@@ -28,6 +28,8 @@ assert.match(watchRoute,/watchlist-v2_2\.html/);
 assert.match(smartBridge,/\/api\/smart-radar\/dashboard/);
 assert.match(smartBridge,/\/api\/smart-radar\/finding/);
 assert.match(smartBridge,/\/api\/smart-radar\/decision/);
+assert.match(smartBridge,/regional access only/);
+assert.match(smartBridge,/No authorised regional findings are available/);
 assert.match(watchBridge,/watchlistCapturedFeed/);
 assert.match(watchBridge,/updateWatchlist/);
 assert.match(social,/inboxEvidenceLink/);

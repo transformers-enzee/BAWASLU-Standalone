@@ -1,0 +1,45 @@
+"""Integration readiness endpoint permission and read-only evidence checks."""
+from types import SimpleNamespace
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import create_engine,text
+from sqlalchemy.orm import Session
+from app import integration_readiness as integration
+
+def user():
+    return SimpleNamespace(id=1)
+
+def test_readiness_denies_non_admin(monkeypatch):
+    monkeypatch.setattr(integration,"profile",lambda db,user:{"role":"Viewer","geographic_scope":"Nationwide","status":"Active","permissions":{"administration":False}})
+    monkeypatch.setattr(integration,"has",lambda p,k:p["permissions"].get(k,False))
+    with pytest.raises(HTTPException) as err:
+        integration.require_admin(None,user())
+    assert err.value.status_code==403
+
+def test_readiness_denies_regional_admin(monkeypatch):
+    monkeypatch.setattr(integration,"profile",lambda db,user:{"role":"Provincial Administrator","geographic_scope":"Province","status":"Active","permissions":{"administration":True}})
+    monkeypatch.setattr(integration,"has",lambda p,k:p["permissions"].get(k,False))
+    with pytest.raises(HTTPException) as err:
+        integration.require_admin(None,user())
+    assert err.value.status_code==403
+
+def test_readiness_returns_only_aggregate_counts(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    engine=create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,canonical_url TEXT,platform TEXT,published_at TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT,provider_result_id TEXT,promoted_intelligence_id INTEGER)"))
+        conn.execute(text("CREATE TABLE intelligence_items(id INTEGER PRIMARY KEY,source_id TEXT)"))
+        conn.execute(text("CREATE TABLE watchlist_items(id INTEGER PRIMARY KEY,type TEXT,status TEXT)"))
+        conn.execute(text("INSERT INTO social_listening_results VALUES (8,'https://example.org/post','x','','sample','@test','','',42)"))
+        conn.execute(text("INSERT INTO intelligence_items VALUES (42,'')"))
+        conn.execute(text("INSERT INTO watchlist_items VALUES (7,'Candidate','Active')"))
+    with Session(engine) as db:
+        result=integration.readiness(user(),db)
+    assert result["social_posts"]["total"]==1
+    assert result["social_posts"]["missing_publication"]==1
+    assert result["promotion_lineage"]["eligible_backfill"]==1
+    assert result["promotion_lineage"]["conflicts"]==0
+    assert result["candidates"]["active"]==1
+    assert "https://example.org/post" not in str(result)
+    assert result["paid_requests"]==0
+    engine.dispose()

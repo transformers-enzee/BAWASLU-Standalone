@@ -98,13 +98,9 @@ def apply_backfill(body:BackfillRequest,user:User=Depends(current_user),db:Sessi
     if not body.confirm:
         raise HTTPException(409,"Explicit confirmation required")
     from scripts.backfill_source_ids import run
-    preview=run(db,apply=False)
-    if preview["conflicting_nonblank_ids"] or preview["eligible_missing_ids"]!=body.expected_missing:
-        raise HTTPException(409,"Backfill changed since preview; no updates applied")
-    if preview["eligible_missing_ids"]==0:
-        return {**preview,"mode":"already_complete"}
     try:
-        return run(db,apply=True)
+        result=run(db,apply=True,expected_missing=body.expected_missing)
+        return {**result,"mode":"already_complete" if result["updated"]==0 else "apply"}
     except RuntimeError as exc:
         db.rollback()
         raise HTTPException(409,str(exc)) from exc

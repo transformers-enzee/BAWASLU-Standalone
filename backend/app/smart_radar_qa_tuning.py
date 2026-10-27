@@ -363,8 +363,8 @@ def version_detail(version_id:int,user:User=Depends(current_user),
 # Additional agreement audit: eligible exemplar cohort ONLY; never holdout.
 # Its results use a distinct prompt_version and cannot alter V14 development scores.
 EXEMPLAR_AUDIT_LIMIT=55
-EXEMPLAR_V17_PILOT_LIMIT=18  # only first 18 deterministic exemplar targets
-V17_ABSOLUTE_LIFETIME_CEILING=218  # 200 ordinary requests + 18 V17-only
+EXEMPLAR_V17_PILOT_LIMIT=105  # upper ceiling; current eligible cohort may be smaller
+
 # Existing v14/v15 audit scores were no-reference ablations because
 # the legacy per-post lookup only accepted development/holdout targets.
 # Freeze those historical runs and use only v16 for corrected lookups.
@@ -402,7 +402,7 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends
        "pilot_slots_remaining":pilot_slots,
        "with_references":sum(x["reference_count"]>0 for x in rows),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
-       "warning":"In-sample exemplar agreement only. Historical V14/V15 were no-reference audits, while V16/V17 use text-based reference lookup. V17 fixed 18-post paired pilot. Holdout excluded."}
+       "warning":"In-sample exemplar agreement only. Historical V14/V15 were no-reference audits, while V16/V17 use text-based reference lookup. V17 capped at 105, but restricted to eligible exemplar targets; designated holdout excluded. Holdout excluded."}
 
 @router.post("/tuning/exemplar-audit/run")
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
@@ -433,8 +433,8 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
         # Stable hash order limits selection bias from numeric QA IDs.
         pool=sorted(pool,key=lambda r:hashlib.sha256(r["qa_id"].encode()).hexdigest())
         targets=pool[:EXEMPLAR_V17_PILOT_LIMIT]
-        if len(targets)<EXEMPLAR_V17_PILOT_LIMIT:
-            raise HTTPException(409,"Fewer than 18 eligible independent exemplar targets")
+        if not targets:
+            raise HTTPException(409,"No eligible exemplar targets available")
         cfg=qa_config()
         completed={r["qa_id"] for r in db.execute(text("""
             SELECT qa_id FROM pilot_smart_radar.qa_ai_assessments

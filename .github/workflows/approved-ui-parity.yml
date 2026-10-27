@@ -5,6 +5,7 @@ on:
       - architecture-v2-foundation-20261015
     paths:
       - 'frontend/**'
+      - 'backend/**'
       - '.github/workflows/approved-ui-parity.yml'
   workflow_dispatch:
 jobs:
@@ -32,6 +33,18 @@ jobs:
           node --check /tmp/watchlist-v2_2.js
           node --check frontend/public/ui-freeze/smart-radar-live.js
           node --check frontend/public/ui-freeze/watchlist-live.js
+      - name: Check five-module integration and source evidence contracts
+        working-directory: frontend
+        run: node scripts/check-integration-contract.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test authenticated Assistant history and backend syntax
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements.txt
+          python -m compileall -q app
+          python -m pytest -q tests/test_assistant_history.py
       - name: Build existing React app with the approved HTML assets
         working-directory: frontend
         run: |

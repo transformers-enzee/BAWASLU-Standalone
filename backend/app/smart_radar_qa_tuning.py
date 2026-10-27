@@ -364,6 +364,7 @@ def version_detail(version_id:int,user:User=Depends(current_user),
 # Its results use a distinct prompt_version and cannot alter V14 development scores.
 EXEMPLAR_AUDIT_LIMIT=55
 EXEMPLAR_V17_PILOT_LIMIT=18  # only first 18 deterministic exemplar targets
+V17_ABSOLUTE_LIFETIME_CEILING=218  # 200 ordinary requests + 18 V17-only
 # Existing v14/v15 audit scores were no-reference ablations because
 # the legacy per-post lookup only accepted development/holdout targets.
 # Freeze those historical runs and use only v16 for corrected lookups.
@@ -391,12 +392,14 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends
     n=len(rows)
     target=EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT
     matched=sum(x["predicted"]==x["gold"] for x in rows)
+    pilot_slots=max(0,V17_ABSOLUTE_LIFETIME_CEILING-qa_readiness(db)["used_lifetime"]) if version_id==17 else 0
     return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
        "baseline_paired_n":len(paired),
        "baseline_paired_matched":baseline_matches,
        "baseline_paired_agreement":round(baseline_matches/len(paired),4) if paired else None,
        "agreement":round(matched/n,4) if n else None,
        "remaining":max(0,target-n),
+       "pilot_slots_remaining":pilot_slots,
        "with_references":sum(x["reference_count"]>0 for x in rows),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
        "warning":"In-sample exemplar agreement only. Historical V14/V15 were no-reference audits, while V16/V17 use text-based reference lookup. V17 fixed 18-post paired pilot. Holdout excluded."}
@@ -449,9 +452,9 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
             raise HTTPException(409,"AI provider key not configured")
         if readiness["max_run"]<=0 or readiness["lifetime"]<=0:
             raise HTTPException(409,"QA paid requests are disabled")
-        selected=pending[:min(body.limit,15,readiness["lifetime_remaining"])]
+        selected=pending[:min(body.limit,15,max(0,V17_ABSOLUTE_LIFETIME_CEILING-readiness["used_lifetime"]))]
         if not selected:
-            raise HTTPException(429,"QA lifetime request budget exhausted")
+            raise HTTPException(429,"Dedicated V17 18-request extension exhausted")
         cfg=readiness
         saved=[];errors=[]
         for record in selected:

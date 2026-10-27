@@ -104,3 +104,40 @@ def apply_backfill(body:BackfillRequest,user:User=Depends(current_user),db:Sessi
     except RuntimeError as exc:
         db.rollback()
         raise HTTPException(409,str(exc)) from exc
+
+@router.get("/provenance-review-queue")
+def provenance_review_queue(limit:int=100,offset:int=0,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Bounded, administrator-only provenance review queue (metadata only)."""
+    require_admin(db,user)
+    if limit<1 or limit>200 or offset<0 or offset>100000:
+        raise HTTPException(422,"Invalid review queue page")
+    rows=db.execute(text("""
+      SELECT id,platform,canonical_url,published_at,provider_result_id,
+             text_content,observed_handle,author_name
+      FROM social_listening_results
+      WHERE NULLIF(TRIM(canonical_url),'') IS NULL
+         OR NULLIF(TRIM(platform),'') IS NULL
+         OR NULLIF(TRIM(published_at),'') IS NULL
+         OR NULLIF(TRIM(text_content),'') IS NULL
+         OR COALESCE(NULLIF(TRIM(observed_handle),''),NULLIF(TRIM(author_name),'')) IS NULL
+         OR NULLIF(TRIM(provider_result_id),'') IS NULL
+      ORDER BY id LIMIT :limit OFFSET :offset
+    """),{"limit":limit,"offset":offset}).mappings().all()
+    from .source_ids import canonical_source_id
+    output=[]
+    for row in rows:
+        missing=[]
+        for field,column in (("source_url","canonical_url"),("platform","platform"),
+                             ("publication_time","published_at"),("content","text_content"),
+                             ("provider_record_id","provider_result_id")):
+            if not str(row[column] or "").strip(): missing.append(field)
+        if not str(row["observed_handle"] or row["author_name"] or "").strip():
+            missing.append("account")
+        output.append({"source_id":canonical_source_id("social",row["id"]),
+                       "platform":str(row["platform"] or "Unknown")[:64],
+                       "missing_fields":missing,
+                       "source_url_available":bool(str(row["canonical_url"] or "").strip())})
+    return {"results":output,"limit":limit,"offset":offset,
+            "has_more":len(rows)==limit,
+            "policy":"Source content and original URLs are withheld; verify against original evidence before edits.",
+            "paid_requests":0}

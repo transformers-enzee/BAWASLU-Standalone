@@ -94,7 +94,11 @@ def test_provenance_review_queue_pagination_exact_boundary(monkeypatch):
         first=integration.provenance_review_queue(1,0,user(),db)
         second=integration.provenance_review_queue(1,1,user(),db)
         empty=integration.provenance_review_queue(1,2,user(),db)
+    assert first["total"]==2
+    assert first["remaining_after_page"]==1
     assert first["has_more"] is True
+    assert second["total"]==2
+    assert second["remaining_after_page"]==0
     assert second["has_more"] is False
     assert empty["has_more"] is False
     assert [x["source_id"] for x in first["results"]]==["social:1"]

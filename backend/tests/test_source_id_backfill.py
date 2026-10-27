@@ -21,6 +21,7 @@ def test_dry_run_never_updates(session):
     report=run(session,apply=False)
     assert report["linked"]==2
     assert report["eligible_missing_ids"]==1
+    assert report["proposed_links"]==[{"source_id":"social:5","intelligence_row_id":"11"}]
     assert report["conflicting_nonblank_ids"]==1
     assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()==""
 

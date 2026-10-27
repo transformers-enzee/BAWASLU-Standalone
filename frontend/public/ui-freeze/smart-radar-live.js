@@ -102,13 +102,18 @@
     $('#issues').innerHTML = miniBars(topics.slice(0,8),topicMax);
     $('#cloud').innerHTML = topics.slice(0,12).map(([name],i) =>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
-    $('#trend').innerHTML = trendSvg(asRows(addCounts(filtered,'day_counts')));
+    $('#trend').innerHTML = trendSvg(asRows(addCounts(filtered,'day_counts')));$('#trend').setAttribute('data-insight','trend');
     $('#regions').innerHTML = '<p class="small muted">Incident-level geography has not been verified for this pilot batch. No province totals are inferred from account locations.</p>';
     $('#regions').removeAttribute('data-insight');
     $('#sentimentExplain').textContent = 'No post-level sentiment labels are supplied by the current Smart Radar pilot API.';
     $('#sentiments').innerHTML = '<p class="small muted">No verified sentiment distribution available.</p>';
     const platforms = asRows(addCounts(filtered,'platform_counts'));
-    $('#platforms').innerHTML = miniBars(platforms,Math.max(1,...platforms.map(row=>row[1])),'#5588a8');
+    $('#platforms').innerHTML = platforms.map(([name,count]) =>
+      '<button class="insightclick" data-insight="platform:'+label(name)+'"><div class="row small"><span>'+label(name)+
+      '</span><b>'+count+'</b></div><div class="track"><div class="fill" style="width:'+
+      (count/Math.max(1,...platforms.map(row=>row[1]))*100)+
+      '%;background:#5588a8"></div></div></button>').join('') ||
+      '<p class="small muted">No saved platforms for this view.</p>';
     $('#trendsAiSummary').textContent = nPosts + ' linked posts are distributed across ' + filtered.length +
       ' preliminary groups. The activity and platform charts use saved source data. No independent geographic or sentiment conclusions have been generated.';
     $('#strategy').textContent = 'Review supporting posts and saved assessments before prioritising officer action. Unverified mentions and discussion levels are not proof of electoral violations.';
@@ -151,7 +156,8 @@
       post.published_at_raw || 'Unknown time',
       post.message_original || '',
       post.source_url || '',
-      post.pilot_post_id || ''
+      post.pilot_post_id || '',
+      post.platform || ''
     ]);
     try {
       const history = await request('/api/smart-radar/history/'+encodeURIComponent(id));
@@ -180,16 +186,19 @@
     } catch(error){ui.notify('Cannot load source evidence: '+error.message);}
     finally{busy=false;}
   };
+  ui.insightView = id => id.startsWith('platform:') ?
+    ui.view().filter(f=>Object.entries(f.platform_counts||{}).some(([k,v])=>k.toLowerCase()===id.slice(9).toLowerCase()&&v>0)) :
+    ui.view();
   ui.openInsight = async id => {
     if (id === 'watchlist') {window.top.location.assign('/watchlist');return;}
     if (busy) return;
     busy=true;
     try {
-      const rows=ui.view();
+      const rows=ui.insightView(id);
       await Promise.all(rows.map(f=>fetchFinding(f.id)));
       ui.openPanel('insight',id);
       const sources=$('#drawerBody').querySelectorAll('.source');
-      const posts=rows.flatMap(f=>f.posts||[]);
+      const posts=rows.flatMap(f=>(f.posts||[]).filter(p=>!id.startsWith('platform:')||String(p[5]||'').toLowerCase()===id.slice(9).toLowerCase()));
       posts.forEach((post,i)=>{
         const href=safeUrl(post[3]);
         if(!href||!sources[i])return;

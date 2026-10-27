@@ -15,13 +15,14 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  const id=language==='id';
  const [preflight,setPreflight]=useState(null),[preflightError,setPreflightError]=useState('');
  const [audit,setAudit]=useState(null),[auditError,setAuditError]=useState('');
+ const [auditVersion,setAuditVersion]=useState(15);
  const [useReferences,setUseReferences]=useState(false);
  const [qualityReferences,setQualityReferences]=useState(false);
  const [contrastReferences,setContrastReferences]=useState(false);
  const [data,setData]=useState(null),[prompt,setPrompt]=useState(''),[title,setTitle]=useState('Calibration revision 1'),
  [note,setNote]=useState(''),[selected,setSelected]=useState(null),[details,setDetails]=useState(null),
  [busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const reloadAudit=useCallback(()=>fetch('/api/smart-radar/qa/tuning/exemplar-audit',{headers:{Authorization:'Bearer '+auth()},cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('Audit status unavailable');return r.json()}).then(v=>{setAudit(v);setAuditError('')}).catch(e=>setAuditError(e.message)),[]);
+ const reloadAudit=useCallback(()=>fetch('/api/smart-radar/qa/tuning/exemplar-audit?version_id='+auditVersion,{headers:{Authorization:'Bearer '+auth()},cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('Audit status unavailable');return r.json()}).then(v=>{setAudit(v);setAuditError('')}).catch(e=>setAuditError(e.message)),[auditVersion]);
  const reloadPreflight=useCallback(()=>call('/preflight').then(v=>{setPreflight(v);setPreflightError('')}).catch(e=>setPreflightError(e.message)),[]);
  const refresh=useCallback(async()=>{
    const d=await call('');
@@ -93,11 +94,12 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
        <p className="text-xs text-slate-500">{id?'Kecocokan contoh bukan akurasi AI':'Reference agreement is not AI accuracy.'}</p></>}
    </div>
    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
-     <div className="flex justify-between gap-2 items-center"><b className="text-sm">{id?'Audit tambahan V14: 55 contoh':'V14 additional 55-exemplar audit'}</b><button type="button" className="border bg-white rounded px-2 py-1 text-xs" onClick={reloadAudit}>{id?'Muat ulang':'Refresh audit'}</button></div>
+     <div className="flex justify-between gap-2 items-center"><b className="text-sm">{id?'Audit tambahan V14/V15: 55 contoh':'V14/V15 additional 55-exemplar audit'}</b><button type="button" className="border bg-white rounded px-2 py-1 text-xs" onClick={reloadAudit}>{id?'Muat ulang':'Refresh audit'}</button></div>
      <p className="text-xs text-slate-700">{id?'Audit berbayar terpisah, hanya untuk 55 contoh Shahrin yang layak. Bukan uji independen; hasil V14 sebelumnya tetap utuh.':'Separate paid audit of 55 eligible Shahrin exemplars. In-sample agreement, NOT independent accuracy; original V14 results stay unchanged.'}</p>
+     <label className="text-xs flex items-center gap-2">{id?'Versi audit':'Audit version'}<select className="border bg-white rounded p-1" value={auditVersion} onChange={e=>{setAuditVersion(Number(e.target.value));setAudit(null)}}><option value={15}>V15 (new rules)</option><option value={14}>V14 (baseline)</option></select></label>
      {auditError&&<p role="alert" className="text-xs text-red-700">{auditError}</p>}
      {audit&&<p className="text-sm font-semibold">{audit.completed}/{audit.target} {id?'selesai':'assessed'} · {audit.agreement==null?'—':(audit.agreement*100).toFixed(1)+'%'} {id?'cocok':'agreement'} · {audit.quote_warnings} {id?'peringatan kutipan':'quote warnings'}</p>}
-     {canEdit&&<button type="button" disabled={!!busy||!ready||!audit||audit.remaining<=0||!preflight?.paid_v2_enabled||slots<=0} className="bg-[#147968] text-white rounded px-3 py-2 text-sm disabled:opacity-50" onClick={async()=>{setBusy('audit');setAuditError('');try{const resp=await fetch('/api/smart-radar/qa/tuning/exemplar-audit/run',{method:'POST',headers:{Authorization:'Bearer '+auth(),'Content-Type':'application/json'},body:JSON.stringify({version_id:14,limit:15})});const out=await resp.json();if(!resp.ok)throw Error(typeof out.detail==='string'?out.detail:'Audit request failed');setNotice((out.saved?.length||0)+' exemplar predictions saved');await reloadAudit();await refresh()}catch(e){setAuditError(e.message)}finally{setBusy('')}}}>{busy==='audit'?'Assessing…':id?'Uji 15 contoh berikutnya (berbayar)':'Assess next 15 exemplars (paid)'}</button>}
+     {canEdit&&<button type="button" disabled={!!busy||!ready||!audit||audit.remaining<=0||!preflight?.paid_v2_enabled||slots<=0} className="bg-[#147968] text-white rounded px-3 py-2 text-sm disabled:opacity-50" onClick={async()=>{setBusy('audit');setAuditError('');try{const resp=await fetch('/api/smart-radar/qa/tuning/exemplar-audit/run',{method:'POST',headers:{Authorization:'Bearer '+auth(),'Content-Type':'application/json'},body:JSON.stringify({version_id:auditVersion,limit:15})});const out=await resp.json();if(!resp.ok)throw Error(typeof out.detail==='string'?out.detail:'Audit request failed');setNotice((out.saved?.length||0)+' exemplar predictions saved');await reloadAudit();await refresh()}catch(e){setAuditError(e.message)}finally{setBusy('')}}}>{busy==='audit'?'Assessing…':id?'Uji 15 contoh berikutnya (berbayar)':'Assess next 15 exemplars (paid)'}</button>}
    </div>
    <QAAlignmentReview language={language} onSaved={()=>refresh().catch(e=>setError(e.message))}/>
    <div className="grid grid-cols-3 gap-2">

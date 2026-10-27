@@ -139,6 +139,11 @@
         const a = await request('/api/functions/registry',{method:'POST',body:JSON.stringify({action:'myAccess',data:{}})});
         access = a.access || null;
         ui.canReview = access?.permissions?.human_validation === true;
+        if (access?.geographic_scope !== 'Nationwide' && $('#geo')) {
+          const region = access.province || 'Assigned region';
+          $('#geo').options[0].textContent = region + ' — regional access only';
+          $('#geo').disabled = true;
+        }
       } catch {ui.canReview=false;}
       await refresh();
     } catch (error) {

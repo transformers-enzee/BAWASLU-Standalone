@@ -31,6 +31,11 @@ METRICS={
   FROM social_listening_results s
   LEFT JOIN intelligence_items i ON i.id=s.promoted_intelligence_id
   WHERE s.promoted_intelligence_id IS NOT NULL""",
+ "duplicate_promotions": """SELECT COUNT(*) AS total FROM (
+    SELECT promoted_intelligence_id FROM social_listening_results
+    WHERE promoted_intelligence_id IS NOT NULL
+    GROUP BY promoted_intelligence_id HAVING COUNT(*)>1
+  ) duplicates""",
  "intelligence_provenance": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE NULLIF(TRIM(source_url),'') IS NULL) AS missing_url,
   COUNT(*) FILTER(WHERE NULLIF(TRIM(platform),'') IS NULL) AS missing_platform,
@@ -67,9 +72,9 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     lineage=result["promotion_lineage"]
     result["release_gates"]={
       "social_source_provenance_complete":all(
-        source[field]==0 for field in ("missing_url","missing_platform","missing_publication","missing_content","missing_account")
+        source[field]==0 for field in ("missing_url","missing_platform","missing_publication","missing_content","missing_account","missing_provider_id")
       ),
-      "promoted_source_id_integrity":lineage["broken_fk"]==0 and lineage["eligible_backfill"]==0 and lineage["conflicts"]==0,
+      "promoted_source_id_integrity":lineage["broken_fk"]==0 and lineage["eligible_backfill"]==0 and lineage["conflicts"]==0 and result["duplicate_promotions"]["total"]==0,
       "source_id_backfill_needed":lineage["eligible_backfill"]>0,
       "manual_validation_required":True,
       "external_pilot_status":"Requires separate Supabase audit"

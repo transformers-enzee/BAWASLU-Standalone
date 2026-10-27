@@ -41,3 +41,10 @@ Added `backend/tests/test_source_ids.py` and included it in the architecture bra
 - Non-news Social Listening records account for the bulk of missing provider IDs and publication times. Missing publication times must not be replaced by collection times. Source capture remediation should be handled in the existing provider ingestion pipeline after field-level verification.
 - Added `backend/tests/test_integration_readiness.py` for Viewer and regional-role denial and aggregate-only output. Included it in the architecture-branch CI workflow.
 - The latest Render deployment is automatically triggered by branch pushes; check the newest deploy status before claiming the endpoint is live.
+
+## Historical source ID repair control (new)
+The authenticated nationwide National Administrator API now supports:
+- `GET /api/integration/source-id-backfill/preview`: read-only counts for explicit promoted result IDs, missing IDs and conflicts.
+- `POST /api/integration/source-id-backfill/apply`: request JSON `{"confirm":true,"expected_missing":<preview eligible_missing_ids>}`. Rejects no confirmation, role mismatch, conflicts or changed counts. Only writes empty `intelligence_items.source_id` values based on existing promoted foreign keys; original source evidence is not touched.
+- No automatic backfill is run on deployment. Inspect and verify preview first. Prefer a non-production session for any smoke test of write endpoints.
+- Manual sign-off is still needed for final controlled historical backfill and role/browser UAT.

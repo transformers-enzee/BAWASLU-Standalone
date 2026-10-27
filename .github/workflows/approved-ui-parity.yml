@@ -23,7 +23,7 @@ jobs:
           assets=Path('frontend/public/ui-freeze')
           for name in ('smart-radar-v6_2','watchlist-v2_2'):
               text=(assets/(name+'.html')).read_text(encoding='utf-8')
-              scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',text,re.DOTALL)
+              scripts=[body for body in re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',text,re.DOTALL) if body.strip()]
               if len(scripts)!=1 or not scripts[0].strip():
                   raise SystemExit(f'Expected one inline prototype script in {name}')
               Path('/tmp/'+name+'.js').write_text(scripts[0],encoding='utf-8')

@@ -61,3 +61,12 @@ def test_two_sources_cannot_claim_same_intelligence_item(session):
     with pytest.raises(RuntimeError,match="Multiple sources"):
         run(session,apply=True,expected_missing=2)
     assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()==""
+
+def test_duplicate_link_with_already_populated_record_aborts(session):
+    session.execute(text("UPDATE intelligence_items SET source_id='social:5' WHERE id=11"))
+    session.execute(text("DELETE FROM social_listening_results WHERE id=6"))
+    session.execute(text("INSERT INTO social_listening_results VALUES (6,11)"))
+    session.commit()
+    with pytest.raises(RuntimeError,match="Multiple sources"):
+        run(session,apply=True,expected_missing=0)
+    assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()=="social:5"

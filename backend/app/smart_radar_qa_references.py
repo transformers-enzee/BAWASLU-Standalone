@@ -128,3 +128,59 @@ def reference_audit_metadata(examples, fingerprint):
         "qa_reference_fingerprint": fingerprint,
         "qa_reference_ids": [x["qa_id"] for x in examples],
     }
+
+
+# Separate exemplar-as-target lookup. The per-post SQL function intentionally
+# permits only development/holdout records, so it MUST NOT be used by an
+# exemplar audit. This text-based variant does not require target human labels.
+_AUDIT_REFERENCE_SQL = text("""
+SELECT example_qa_id, shahrin_category, example_excerpt, source_url, similarity
+FROM pilot_smart_radar.qa_shahrin_examples_for_text(:source_text,:source_hash,:limit)
+ORDER BY similarity DESC, example_qa_id
+""")
+
+
+def reference_examples_for_audit_target(db, record, exemplars, *, max_examples=2):
+    """Independently eligible, cross-source examples for one exemplar target.
+
+    Preserve the audit target's original cohort. Never read its gold category,
+    include itself, or retrieve sealed-holdout labels.
+    """
+    if record.get("cohort") != "exemplar":
+        raise HTTPException(409, "Only exemplar targets are allowed in this audit")
+    if not 1 <= max_examples <= 2:
+        raise ValueError("Invalid exemplar-audit reference limit")
+    allowed = {x["qa_id"]: x for x in exemplars
+               if x.get("cohort") == "exemplar"}
+    rows = db.execute(_AUDIT_REFERENCE_SQL, {
+        "source_text": record["message_original"],
+        "source_hash": record["source_hash"],
+        "limit": max_examples,
+    }).mappings().all()
+    output = []
+    categories = set()
+    for x in rows:
+        candidate = allowed.get(x["example_qa_id"])
+        cat = x["shahrin_category"]
+        sim = x["similarity"]
+        excerpt = x["example_excerpt"]
+        if (candidate is None or candidate["qa_id"] == record["qa_id"]
+                or candidate["source_hash"] == record["source_hash"]
+                or candidate["source_url"] == record["source_url"]
+                or candidate["source_url"] != x["source_url"]
+                or candidate["gold_category"] != cat
+                or cat in categories or not isinstance(excerpt, str)
+                or not excerpt.strip() or len(excerpt) > 900
+                or isinstance(sim, bool) or not isinstance(sim, (int, float))
+                or not MIN_SIMILARITY <= sim < MAX_SIMILARITY):
+            continue
+        categories.add(cat)
+        output.append({
+            "qa_id": x["example_qa_id"],
+            "human_primary_category": cat,
+            "source_text": excerpt,
+            "similarity": round(sim, 4),
+        })
+        if len(output) >= max_examples:
+            break
+    return output

@@ -36,6 +36,9 @@ jobs:
       - name: Check five-module integration and source evidence contracts
         working-directory: frontend
         run: node scripts/check-integration-contract.mjs
+      - name: Smoke test Smart Radar and Watchlist startup without network calls
+        working-directory: frontend
+        run: node scripts/smoke-ui-freeze.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

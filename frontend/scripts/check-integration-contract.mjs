@@ -30,6 +30,8 @@ assert.match(smartBridge,/\/api\/smart-radar\/finding/);
 assert.match(smartBridge,/\/api\/smart-radar\/decision/);
 assert.match(smartBridge,/regional access only/);
 assert.match(smartBridge,/No authorised regional findings are available/);
+assert.match(smartBridge,/regionalPilotBlocked/);
+assert.match(smartBridge,/scope\.textContent=region/);
 assert.match(watchBridge,/watchlistCapturedFeed/);
 assert.match(watchBridge,/updateWatchlist/);
 assert.match(social,/inboxEvidenceLink/);

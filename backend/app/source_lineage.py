@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .db import get_db
 from .models import User, SocialListeningResult, IntelligenceItem
 from .auth import current_user
-from .access import profile, has
+from .access import profile, has, allowed
 from .source_ids import parse_canonical_source_id
 from .socialcrawl import _result_in_scope
 
@@ -32,7 +32,7 @@ def resolve_source(reference:str,user:User=Depends(current_user),db:Session=Depe
     intel=None
     if row.promoted_intelligence_id is not None:
         candidate=db.get(IntelligenceItem,row.promoted_intelligence_id)
-        if candidate and candidate.source_id in ("",None,reference):
+        if candidate and allowed(p,candidate) and candidate.source_id in ("",None,reference):
             intel={"id":str(candidate.id),"intelligence_code":candidate.intelligence_id}
     return {
         "canonical_source_id":reference,

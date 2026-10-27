@@ -16,6 +16,7 @@ from .socialcrawl import social_listening_action, recover_existing_news_language
 from .source_retrieval import _language_detection
 from .smart_radar import router as smart_radar_router
 from .assistant_history import router as assistant_history_router
+from .integration_readiness import router as integration_readiness_router
 from .smart_radar_processing import router as smart_radar_processing_router
 from .smart_radar_synthesis import router as smart_radar_synthesis_router
 from .smart_radar_qa import router as smart_radar_qa_router
@@ -28,6 +29,7 @@ from .seed import seed
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
 app.include_router(smart_radar_router)
 app.include_router(assistant_history_router)
+app.include_router(integration_readiness_router)
 app.include_router(smart_radar_processing_router)
 app.include_router(smart_radar_synthesis_router)
 app.include_router(smart_radar_qa_router)

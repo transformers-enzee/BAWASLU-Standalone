@@ -43,3 +43,15 @@ def test_readiness_returns_only_aggregate_counts(monkeypatch):
     assert "https://example.org/post" not in str(result)
     assert result["paid_requests"]==0
     engine.dispose()
+
+def test_backfill_requires_explicit_confirmation(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    with pytest.raises(HTTPException) as err:
+        integration.apply_backfill(integration.BackfillRequest(confirm=False,expected_missing=1),user(),None)
+    assert err.value.status_code==409
+
+def test_backfill_is_denied_before_database_access(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:(_ for _ in ()).throw(HTTPException(403,"Denied")))
+    with pytest.raises(HTTPException) as err:
+        integration.preview_backfill(user(),None)
+    assert err.value.status_code==403

@@ -31,6 +31,7 @@ import { useParams } from 'react-router-dom';
 const CampaignDashboardPage=()=>{const {id}=useParams();return <CampaignPanel campaignId={id}/>};
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
+import IntegrationReadiness from '@/pages/IntegrationReadiness';
 import { LanguageProvider } from '@/lib/LanguageContext';
 
 const AuthenticatedApp = () => {
@@ -89,6 +90,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="administration" />}>
             <Route path="/administration" element={<Administration />} />
+            <Route path="/administration/integration" element={<IntegrationReadiness />} />
           </Route>
         </Route>
       </Route>

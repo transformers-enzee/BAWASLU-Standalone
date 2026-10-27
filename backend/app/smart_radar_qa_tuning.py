@@ -373,7 +373,8 @@ def exemplar_audit_key(vid):
 def exemplar_audit_status(version_id:int=Query(16,ge=14,le=16),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
-       e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status
+       e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status,
+       jsonb_array_length(COALESCE(a.result_json->'qa_reference_ids','[]'::jsonb)) AS reference_count
        FROM pilot_smart_radar.qa_ai_assessments a
        JOIN pilot_smart_radar.qa_shahrin_exemplars e ON e.qa_id=a.qa_id
        WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
@@ -383,6 +384,7 @@ def exemplar_audit_status(version_id:int=Query(16,ge=14,le=16),user:User=Depends
     return {"version_id":version_id,"completed":n,"target":EXEMPLAR_AUDIT_LIMIT,"matched":matched,
        "agreement":round(matched/n,4) if n else None,
        "remaining":max(0,EXEMPLAR_AUDIT_LIMIT-n),
+       "with_references":sum(x["reference_count"]>0 for x in rows),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
        "warning":"In-sample exemplar agreement only. Historical V14/V15 audits had no references; V16 uses corrected text-based references. Holdout remains excluded."}
 

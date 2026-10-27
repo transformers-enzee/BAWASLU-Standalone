@@ -380,10 +380,21 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends
        JOIN pilot_smart_radar.qa_shahrin_exemplars e ON e.qa_id=a.qa_id
        WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
        {"version":exemplar_audit_key(version_id)}).mappings().all()
+    baseline = {}
+    if version_id == 17 and rows:
+        baseline_rows = db.execute(text("""SELECT qa_id,result_json->>'primary_category' AS predicted
+            FROM pilot_smart_radar.qa_ai_assessments
+            WHERE prompt_version='qa-exemplar-audit-v16'""")).mappings().all()
+        baseline = {x["qa_id"]: x["predicted"] for x in baseline_rows}
+    paired = [x for x in rows if x["qa_id"] in baseline]
+    baseline_matches = sum(baseline[x["qa_id"]] == x["gold"] for x in paired)
     n=len(rows)
     target=EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT
     matched=sum(x["predicted"]==x["gold"] for x in rows)
     return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
+       "baseline_paired_n":len(paired),
+       "baseline_paired_matched":baseline_matches,
+       "baseline_paired_agreement":round(baseline_matches/len(paired),4) if paired else None,
        "agreement":round(matched/n,4) if n else None,
        "remaining":max(0,target-n),
        "with_references":sum(x["reference_count"]>0 for x in rows),

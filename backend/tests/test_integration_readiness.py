@@ -28,10 +28,10 @@ def test_readiness_returns_only_aggregate_counts(monkeypatch):
     engine=create_engine("sqlite+pysqlite:///:memory:")
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,canonical_url TEXT,platform TEXT,published_at TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT,provider_result_id TEXT,promoted_intelligence_id INTEGER)"))
-        conn.execute(text("CREATE TABLE intelligence_items(id INTEGER PRIMARY KEY,source_id TEXT)"))
+        conn.execute(text("CREATE TABLE intelligence_items(id INTEGER PRIMARY KEY,source_id TEXT,source_url TEXT,platform TEXT,original_content TEXT)"))
         conn.execute(text("CREATE TABLE watchlist_items(id INTEGER PRIMARY KEY,type TEXT,status TEXT)"))
         conn.execute(text("INSERT INTO social_listening_results VALUES (8,'https://example.org/post','x','','sample','@test','','',42)"))
-        conn.execute(text("INSERT INTO intelligence_items VALUES (42,'')"))
+        conn.execute(text("INSERT INTO intelligence_items VALUES (42,'','','x','sample')"))
         conn.execute(text("INSERT INTO watchlist_items VALUES (7,'Candidate','Active')"))
     with Session(engine) as db:
         result=integration.readiness(user(),db)
@@ -40,6 +40,9 @@ def test_readiness_returns_only_aggregate_counts(monkeypatch):
     assert result["promotion_lineage"]["eligible_backfill"]==1
     assert result["promotion_lineage"]["conflicts"]==0
     assert result["candidates"]["active"]==1
+    assert result["intelligence_provenance"]["missing_url"]==1
+    assert result["platform_quality"][0]["missing_publication"]==1
+    assert result["platform_quality"][0]["missing_provider_id"]==1
     assert "https://example.org/post" not in str(result)
     assert result["paid_requests"]==0
     engine.dispose()

@@ -392,7 +392,7 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends
     n=len(rows)
     target=EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT
     matched=sum(x["predicted"]==x["gold"] for x in rows)
-    pilot_slots=max(0,V17_ABSOLUTE_LIFETIME_CEILING-qa_readiness(db)["used_lifetime"]) if version_id==17 else 0
+    pilot_slots=max(0,EXEMPLAR_V17_PILOT_LIMIT-n) if version_id==17 else 0
     return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
        "baseline_paired_n":len(paired),
        "baseline_paired_matched":baseline_matches,
@@ -450,9 +450,9 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
         readiness=qa_readiness(db)
         if not readiness["key"]:
             raise HTTPException(409,"AI provider key not configured")
-        if readiness["max_run"]<=0 or readiness["lifetime"]<=0:
+        if readiness["max_run"]<=0:
             raise HTTPException(409,"QA paid requests are disabled")
-        selected=pending[:min(body.limit,15,max(0,V17_ABSOLUTE_LIFETIME_CEILING-readiness["used_lifetime"]))]
+        selected=pending[:min(body.limit,15)]
         if not selected:
             raise HTTPException(429,"Dedicated V17 18-request extension exhausted")
         cfg=readiness

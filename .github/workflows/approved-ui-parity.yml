@@ -6,6 +6,8 @@ on:
     paths:
       - 'frontend/**'
       - 'backend/**'
+      - 'docs/UI_FREEZE_2026-10-28.md'
+      - 'docs/FIVE_MODULE_INTEGRATION_QA_2026-10-28.md'
       - '.github/workflows/approved-ui-parity.yml'
   workflow_dispatch:
 jobs:

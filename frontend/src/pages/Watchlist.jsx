@@ -10,7 +10,7 @@ const STATUSES=['Active','Under Review','Inactive'];
 const ACCOUNT_PLATFORMS=['TikTok','YouTube','Instagram','Facebook','X','Threads','Reddit','LinkedIn','Web'];
 const ACCOUNT_URL_EXAMPLES={TikTok:'https://www.tiktok.com/@username',YouTube:'https://www.youtube.com/@channel',Instagram:'https://www.instagram.com/username',Facebook:'https://www.facebook.com/username',X:'https://x.com/username',Threads:'https://www.threads.net/@username',Reddit:'https://www.reddit.com/user/username',LinkedIn:'https://www.linkedin.com/in/username',Web:'https://example.com/profile'};
 const RELATIONSHIP_TYPES=['Associated with','Member of','Campaign relationship','Publicly linked to','Other observed relationship'];
-const blankItem=()=>({priority:'Medium',status:'Active',related_topics:''});
+const blankItem=()=>({type:'Candidate',priority:'Medium',status:'Active',related_topics:''});
 const topicText=v=>Array.isArray(v)?v.join(', '):(v||'');
 
 export default function Watchlist(){
@@ -20,6 +20,7 @@ export default function Watchlist(){
   const {items,accounts,relationships,loading,error,refresh}=useRegistry();
   const [form,setForm]=useState(null),[account,setAccount]=useState(null),[relation,setRelation]=useState(null);
   const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
+  const [directoryMode,setDirectoryMode]=useState('candidates');
   const [q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState(''),[typeFilter,setTypeFilter]=useState(''),[priorityFilter,setPriorityFilter]=useState(''),[geoFilter,setGeoFilter]=useState('');
   const formRef=useRef(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
@@ -75,19 +76,28 @@ export default function Watchlist(){
   const list=useMemo(()=>items.filter(x=>{
     const geo=[x.regency_city,x.province].filter(Boolean).join(', ')||t('nationwide');
     const text=(x.name+' '+x.type+' '+x.province+' '+x.regency_city+' '+(x.related_topics||[]).join(' ')).toLowerCase();
-    return text.includes(q.toLowerCase())&&(!statusFilter||x.status===statusFilter)&&(!typeFilter||x.type===typeFilter)&&(!priorityFilter||x.priority===priorityFilter)&&(!geoFilter||geo===geoFilter);
-  }),[items,q,statusFilter,typeFilter,priorityFilter,geoFilter,t]);
+    return (directoryMode==='all'||x.type==='Candidate')&&text.includes(q.toLowerCase())&&(!statusFilter||x.status===statusFilter)&&(!typeFilter||x.type===typeFilter)&&(!priorityFilter||x.priority===priorityFilter)&&(!geoFilter||geo===geoFilter);
+  }),[items,q,statusFilter,typeFilter,priorityFilter,geoFilter,t,directoryMode]);
 
   const relationsFor=x=>relationships.filter(r=>r.from_id===x.id||r.to_id===x.id);
 
-  return <div className="space-y-6">
-    <div className="flex justify-between gap-3 items-end">
-      <div><p className="text-xs uppercase tracking-[.18em] text-[#9a7e49] font-bold mb-2">{t('monitoring_registry')}</p><h1 className="intel-heading">{t('watchlist')}</h1><p className="text-sm text-[#77899b] mt-2">{t('watchlist_intro')}</p></div>
-      {canManage&&<button onClick={startCreate} className="intel-button"><Plus size={16}/>{t('add_watchlist_item')}</button>}
+  const candidates=items.filter(x=>x.type==='Candidate');
+  const activeCandidates=candidates.filter(x=>x.status==='Active');
+  return <div className="space-y-6 max-w-[1350px] mx-auto rounded-2xl bg-white pb-8 shadow-sm overflow-hidden">
+    <div className="rounded-b-2xl bg-gradient-to-r from-[#132d45] to-[#116b58] text-white p-6 md:p-8 flex flex-wrap justify-between items-center gap-6">
+      <div><p className="text-[11px] uppercase tracking-[.18em] font-extrabold text-[#aadbd1]">BAWASLU · Intelligence</p><h1 className="text-2xl md:text-3xl font-bold mt-2">◉ Candidate Watchlist V2.2</h1><p className="text-sm text-[#d0e8e2] mt-2">Follow selected candidate activity, own posts and public mentions.</p></div>
+      {canManage&&<button type="button" onClick={startCreate} className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#126451] hover:bg-emerald-50 flex gap-2 items-center"><Plus size={16}/> Add Candidate</button>}
     </div>
+    <div className="px-4 md:px-8 space-y-6">
+      <div className="rounded-xl border border-[#c7e8dc] bg-[#eef9f6] p-4 text-xs text-[#295e52]">
+        <strong>Candidate activity monitoring.</strong> Own posts require verified account affiliation. Mentions by other accounts are not evidence of wrongdoing. Counts reflect only stored, authorized data; platform-wide coverage is not guaranteed.
+      </div>
     <Notice error={message||error}/>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {[[activeCandidates.length,'Active Candidate Tracking'],[candidates.length,'Candidate Profiles'],[accounts.filter(a=>activeCandidates.some(c=>String(c.id)===String(a.watchlist_id))).length,'Linked Public Accounts'],[items.filter(x=>x.status==='Under Review').length,'Registry Items Under Review']].map(([value,title])=><div key={title} className="rounded-xl border border-[#dce6e8] bg-white p-4"><strong className="block text-2xl font-bold text-[#164e48]">{value}</strong><span className="mt-1 block text-xs text-[#627783]">{title}</span></div>)}
+    </div>
 
-    {form&&<form ref={formRef} onSubmit={submit} className={'intel-card p-6 space-y-5 scroll-mt-6 '+(form.mode==='edit'?'ring-2 ring-[#b9d8e5]':'')}>
+    {form&&<div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#142839ab] p-3 md:p-6" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setForm(null)}}><form ref={formRef} onSubmit={submit} role="dialog" aria-modal="true" aria-label={form.mode==='edit'?'Edit watchlist item':'Add Candidate'} className={'w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl p-5 md:p-7 space-y-5 shadow-2xl '+(form.mode==='edit'?'ring-2 ring-[#b9d8e5]':'')}>
       <div><p className="text-[11px] uppercase tracking-[.14em] font-bold text-[#9a7e49]">{form.mode==='edit'?t('editing_watchlist_item'):t('create_watchlist_item')}</p><h2 className="font-semibold text-lg mt-1">{form.mode==='edit'?t('edit_prefix')+': '+(form.name||t('watchlist_item')):t('new_watchlist_item')}</h2>{form.mode==='edit'&&<p className="text-xs text-[#718398] mt-1">{t('edit_watchlist_help')}</p>}</div>
       <div className="grid md:grid-cols-3 gap-4">
         <Field label={t('name')} value={form.name} onChange={v=>set('name',v)} required/>
@@ -103,9 +113,10 @@ export default function Watchlist(){
       <Field label={t('description')} as="textarea" value={form.description} onChange={v=>set('description',v)}/>
       <Field label={t('notes')} as="textarea" value={form.notes} onChange={v=>set('notes',v)}/>
       <div className="flex gap-2"><button disabled={busy} className="intel-button">{busy?t('saving'):form.mode==='edit'?t('save_changes'):t('create_item')}</button><button type="button" onClick={()=>setForm(null)} className="intel-ghost">{t('cancel')}</button></div>
-    </form>}
+    </form></div>}
 
-    <div className="intel-card p-4 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-[#1b2b39]">Tracked Candidates</h2><p className="text-xs text-slate-500 mt-1">Select a candidate to view their activity and original evidence.</p></div><div className="inline-flex rounded-lg bg-[#f0f7f6] p-1 gap-1"><button type="button" onClick={()=>setDirectoryMode('candidates')} className={'px-3 py-2 rounded-md text-xs font-semibold '+(directoryMode==='candidates'?'bg-[#147b67] text-white':'text-slate-600')}>Candidates</button><button type="button" onClick={()=>setDirectoryMode('all')} className={'px-3 py-2 rounded-md text-xs font-semibold '+(directoryMode==='all'?'bg-[#147b67] text-white':'text-slate-600')}>All monitored entities</button></div></div>
+    <div className="rounded-xl border border-[#dce6e8] bg-[#f9fbfb] p-4 grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
       <input className="intel-input" placeholder={t('search_watchlist')} aria-label={t('search_watchlist')} value={q} onChange={e=>setQ(e.target.value)}/>
       <select className="intel-input" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">{t('all_statuses')}</option>{STATUSES.map(x=><option key={x} value={x}>{label(x)}</option>)}</select>
       <select className="intel-input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="">{t('all_types')}</option>{types.map(x=><option key={x} value={x}>{label(x)}</option>)}</select>
@@ -168,5 +179,6 @@ export default function Watchlist(){
       </div>)}
       {!list.length&&<div className="intel-card p-10 text-sm text-[#73869a]">{t('no_watchlist_filter_match')}</div>}
     </div>}
+    </div>
   </div>;
 }

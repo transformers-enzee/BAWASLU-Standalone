@@ -29,7 +29,7 @@ UPDATE = text("""
    AND (source_id IS NULL OR TRIM(source_id)='')
 """)
 
-def run(session, apply=False):
+def run(session, apply=False, expected_missing=None):
     # Serialize apply runs: the existing relationship and source ID must not change
     # between selecting a proposal and committing it.
     if apply and session.bind.dialect.name=="postgresql":
@@ -50,6 +50,12 @@ def run(session, apply=False):
     if apply and conflicts:
         session.rollback()
         raise RuntimeError("Conflicting populated source IDs detected; refusing all updates")
+    if apply and expected_missing is not None and len(proposals)!=expected_missing:
+        session.rollback()
+        raise RuntimeError("Backfill changed since preview; no updates applied")
+    if apply and len({item[0] for item in proposals})!=len(proposals):
+        session.rollback()
+        raise RuntimeError("Multiple sources point at one Intelligence record; no updates applied")
     updated=0
     if apply:
         for intelligence_id,reference in proposals:

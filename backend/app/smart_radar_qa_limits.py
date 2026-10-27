@@ -4,7 +4,8 @@ No new Render variables are required. The QA lab is NEVER started by the
 automatic campaign worker. Requests are explicitly triggered by an authorized
 national administrator and persisted in the QA-only assessment table.
 QA is not subject to the election campaign's per-day request quota.
-The per-click and lifetime guardrails remain in force to limit accidental spend.
+The per-click, admin approval and explicit run gates prevent accidental spend.
+Lifetime QA usage is tracked but no longer blocks additional authorized runs.
 Campaign workers continue to use their existing settings independently.
 """
 import os
@@ -14,7 +15,7 @@ from sqlalchemy import text
 _DEFAULT_MODEL="gpt-4o-mini"
 _DEFAULT_URL="https://api.openai.com/v1"
 _MAX_QA_RUN=3
-_MAX_QA_LIFETIME=200
+_UNLIMITED_QA_REMAINING=2147483647
 
 def _safe_limit(name, default, maximum):
     raw=os.getenv(name)
@@ -33,7 +34,7 @@ def qa_config():
     key=os.getenv("OPENAI_API_KEY","").strip()
     base=(os.getenv("OPENAI_BASE_URL","").strip() or _DEFAULT_URL).rstrip("/")
     max_run=_safe_limit("BAWASLU_AI_ASSESSMENTS_PER_RUN",_MAX_QA_RUN,_MAX_QA_RUN)
-    lifetime=_safe_limit("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN",_MAX_QA_LIFETIME,_MAX_QA_LIFETIME)
+    lifetime=None  # Legacy campaign lifetime cap is intentionally disabled for QA
     return {"model":model,"key":key,"base_url":base,"max_run":max_run,
             "daily":None,"lifetime":lifetime,
             "model_source":("OPENAI_MODEL" if os.getenv("OPENAI_MODEL","").strip() else
@@ -62,18 +63,15 @@ def qa_readiness(db):
     used=qa_budget(db)
     return {**cfg,**used,
         "daily_remaining":None,
-        "lifetime_remaining":max(0,cfg["lifetime"]-used["used_lifetime"]),
-        "ready":bool(cfg["model"] and cfg["key"] and cfg["max_run"]>0
-                     and used["used_lifetime"]<cfg["lifetime"])}
+        "lifetime_remaining":_UNLIMITED_QA_REMAINING,
+        "ready":bool(cfg["model"] and cfg["key"] and cfg["max_run"]>0)}
 
 def ensure_qa_batch(db,requested):
     cfg=qa_readiness(db)
     if not cfg["key"]:
         raise HTTPException(409,"OPENAI_API_KEY is not configured on the staging backend")
-    if cfg["max_run"]<=0 or cfg["lifetime"]<=0:
+    if cfg["max_run"]<=0:
         raise HTTPException(409,"Existing BAWASLU AI request limits are zero or invalid")
     if requested>cfg["max_run"]:
         raise HTTPException(409,"QA batch exceeds BAWASLU_AI_ASSESSMENTS_PER_RUN")
-    if cfg["used_lifetime"]+requested>cfg["lifetime"]:
-        raise HTTPException(429,"Lifetime QA request cap reached")
     return cfg

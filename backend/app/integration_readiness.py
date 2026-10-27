@@ -63,6 +63,17 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
       GROUP BY platform ORDER BY COUNT(*) DESC LIMIT 25""")).mappings().all()
     result["platform_quality"]=[{key:(int(value or 0) if key!="platform" else str(value or "Unknown")[:64])
                                 for key,value in row.items()} for row in platform_rows]
+    source=result["social_posts"]
+    lineage=result["promotion_lineage"]
+    result["release_gates"]={
+      "social_source_provenance_complete":all(
+        source[field]==0 for field in ("missing_url","missing_platform","missing_publication","missing_content","missing_account")
+      ),
+      "promoted_source_id_integrity":lineage["broken_fk"]==0 and lineage["eligible_backfill"]==0 and lineage["conflicts"]==0,
+      "source_id_backfill_needed":lineage["eligible_backfill"]>0,
+      "manual_validation_required":True,
+      "external_pilot_status":"Requires separate Supabase audit"
+    }
     result["canonical_contract"]="social:<row id> | radar:<pilot post id> | candidate:<registry id>"
     result["scope"]="Current app database only; Smart Radar pilot lives in separate Supabase project"
     result["external_pilot_verification"]="Not queried by this endpoint"

@@ -164,6 +164,9 @@
         ? 'Smart Radar pilot data is not available for ' + region + ' (' + role + '). These national pilot posts have no verified event-level jurisdiction and cannot be displayed as regional intelligence. No authorised regional findings are available in this pilot view.'
         : 'Unable to load authorised Smart Radar data: ' + error.message;
       ui.setData([]);
+      // setData renders the frozen prototype and rewrites scopeLabel to National.
+      // Apply the verified access scope after that render, never to the source data.
+      if (regionalPilotBlocked && $('#scopeLabel')) $('#scopeLabel').textContent=region+' · Restricted pilot';
       $('#executive').textContent = message;
       const status=$('#startup-status');
       if(status){status.textContent=message;status.classList.add('error');status.setAttribute('role','alert');}

@@ -8,6 +8,19 @@ export default function ActorIntelligence({actorId,accounts}){
   const {t}=useLanguage();
   const [records,setRecords]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
   useEffect(()=>{let active=true;setLoading(true);intel('actorPicture',{actor_id:actorId}).then(r=>{if(active)setRecords(r.records||[])}).catch(e=>{if(active)setError(e.response?.data?.error||e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[actorId]);
+  // Only explicit recorded sentiment labels count. Do not infer sentiment from unrelated triage values.
+  const sentimentOf=r=>{
+    const raw=r.sentiment_label??r.sentiment??r.intelligence_extraction?.sentiment;
+    const v=typeof raw==='string'?raw.trim().toLowerCase():'';
+    return v==='positive'?'Positive':v==='negative'?'Negative':v==='neutral'?'Neutral':null;
+  };
+  const positive=records.filter(r=>sentimentOf(r)==='Positive').length;
+  const negative=records.filter(r=>sentimentOf(r)==='Negative').length;
+  const neutral=records.filter(r=>sentimentOf(r)==='Neutral').length;
+  const sentimentTotal=positive+negative;
+  const own=records.filter(r=>r.source_identity?.status==='REGISTERED_ACCOUNT_CONFIRMED'||!!r.owned_channel?.account_id).length;
+  const earned=records.length-own;
+  const positivePct=sentimentTotal?100*positive/sentimentTotal:0;
   const channels=[...new Set(records.filter(r=>r.source_identity?.status!=='REGISTERED_ACCOUNT_CONFIRMED'&&!r.owned_channel?.account_id).map(r=>r.observed_publisher_handle||r.author).filter(Boolean))];
   const summaries=[
     [t('activities'),[...new Set(records.map(r=>activityLabel(r.intelligence_extraction)).filter(Boolean))]],
@@ -20,6 +33,20 @@ export default function ActorIntelligence({actorId,accounts}){
   return <section className="intel-card p-6 space-y-4">
     <div><h2 className="font-semibold text-lg">{t('actor_picture')}</h2><p className="text-xs text-[#617789]">{t('actor_picture_note')}</p></div>
     {loading?<p className="text-sm">{t('loading_timeline')}</p>:error?<p role="alert" className="text-sm text-red-700">{error}</p>:<>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border bg-white p-4"><strong className="text-2xl text-emerald-800">{own}</strong><p className="mt-1 text-xs text-slate-500">Verified own-channel records</p></div>
+        <div className="rounded-xl border bg-white p-4"><strong className="text-2xl text-emerald-800">{earned}</strong><p className="mt-1 text-xs text-slate-500">Mentions / other sources</p></div>
+        <div className="rounded-xl border bg-white p-4"><strong className="text-2xl text-emerald-800">{records.length}</strong><p className="mt-1 text-xs text-slate-500">Linked intelligence records</p></div>
+      </div>
+      <div className="rounded-xl border bg-white p-5">
+        <h3 className="font-semibold">Sentiment Distribution</h3>
+        <p className="mt-1 text-xs text-slate-500">Recorded positive and negative labels only; neutral and unlabelled records are excluded.</p>
+        {sentimentTotal?<div className="mt-4 flex flex-wrap items-center gap-6">
+          <div role="img" aria-label={positive+' positive and '+negative+' negative labelled records'} className="h-28 w-28 shrink-0 rounded-full border-4 border-white shadow" style={{background:`conic-gradient(#1a9478 0 ${positivePct}%, #d05a5d ${positivePct}% 100%)`}}/>
+          <div className="space-y-2 text-sm"><p><span className="mr-2 inline-block h-3 w-3 rounded-full bg-[#1a9478]"/>Positive: {positive} ({Math.round(positivePct)}%)</p><p><span className="mr-2 inline-block h-3 w-3 rounded-full bg-[#d05a5d]"/>Negative: {negative} ({100-Math.round(positivePct)}%)</p></div>
+        </div>:<p className="mt-4 text-sm text-slate-500">No positive or negative source labels are available yet.</p>}
+        <p className="mt-3 text-xs text-slate-500">{neutral} neutral labels excluded · {records.length-sentimentTotal-neutral} records without a recognized sentiment label. Sentiment does not imply wrongdoing.</p>
+      </div>
       <div><span className="intel-label">{t('registered_owned_channels')}</span>{accounts.filter(a=>a.watchlist_id===actorId).map(a=><p key={a.id} className="text-sm">{a.handle||a.url} · {t('registered_account')}</p>)}{!accounts.some(a=>a.watchlist_id===actorId)&&<p className="text-sm">{t('none_recorded')}</p>}</div>
       <div><span className="intel-label">{t('related_observed_publishers')}</span>{channels.map(h=><p key={h} className="text-sm">{h} · {t('related_observed_account')}</p>)}{!channels.length&&<p className="text-sm">{t('none_recorded')}</p>}</div>
       <div className="grid sm:grid-cols-2 gap-3 text-sm">{summaries.map(([heading,values])=><div key={heading}><span className="intel-label">{heading}</span><p>{values.join(' · ')||t('not_yet_recorded')}</p></div>)}</div>

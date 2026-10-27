@@ -16,6 +16,10 @@ def canonical_source_id(namespace, record_id):
         raise ValueError("Invalid source record ID")
     if namespace == "social" and not value.isdecimal():
         raise ValueError("Social source ID must be the stored numeric row ID")
+    if namespace == "social":
+        if int(value) <= 0:
+            raise ValueError("Social source ID must be positive")
+        value = str(int(value))
     return namespace + ":" + value
 
 def canonical_candidate_id(record_id):

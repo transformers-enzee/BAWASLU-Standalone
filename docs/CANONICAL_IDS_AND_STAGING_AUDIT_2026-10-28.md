@@ -58,3 +58,7 @@ The authenticated nationwide National Administrator API now supports:
 - Added authenticated `GET /api/source-lineage/social:<stored social result ID>` to resolve original Social Listening provenance and explicitly linked Intelligence references. It uses the same existing search-run geographic scope check as Social Listening and returns 404 when evidence is unavailable/out of scope.
 - No original source post text is returned, no cross-database joins are guessed, and missing publication timestamps are clearly marked unverified. `radar:<pilot post ID>` references are intentionally rejected with 409, directing consumers to the existing Smart Radar pilot API.
 - Added `backend/tests/test_source_lineage.py` for authorization, scope restrictions, canonical ID validation, separate Radar namespace, and no false verification claims. Integrated test into branch CI. No provider calls or staging data modifications were performed.
+
+## Atomic historical backfill guard — latest batch
+- The confirmed backfill now checks `expected_missing` **inside the same transaction and PostgreSQL lock** as the historical update. A changed count, populated conflicting source ID or multiple Social Listening rows linked to the same intelligence record aborts the entire update.
+- Extended SQLite regression tests for stale previews, exact-count repair, duplicate-source conflicts, and idempotence. Live PostgreSQL backfill has not been executed.

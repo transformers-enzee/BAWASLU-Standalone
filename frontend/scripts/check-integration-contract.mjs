@@ -31,7 +31,7 @@ assert.match(smartBridge,/\/api\/smart-radar\/decision/);
 assert.match(watchBridge,/watchlistCapturedFeed/);
 assert.match(watchBridge,/updateWatchlist/);
 assert.match(social,/inboxEvidenceLink/);
-assert.match(social,/Open in Inbox/);
+assert.match(social,/Open campaign Inbox/);
 assert.match(inbox,/Original source provenance/);
 assert.match(inbox,/safeOriginalUrl/);
 assert.ok(!inbox.includes('synthetic-demo'),'Synthetic Inbox fixture must not ship');

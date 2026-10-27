@@ -49,7 +49,7 @@ jobs:
         run: |
           python -m pip install -r requirements.txt
           python -m compileall -q app
-          python -m pytest -q tests/test_assistant_history.py tests/test_source_ids.py
+          python -m pytest -q tests/test_assistant_history.py tests/test_source_ids.py tests/test_source_id_backfill.py
       - name: Build existing React app with the approved HTML assets
         working-directory: frontend
         run: |

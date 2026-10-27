@@ -44,6 +44,10 @@ def test_readiness_returns_only_aggregate_counts(monkeypatch):
     assert result["platform_quality"][0]["missing_publication"]==1
     assert result["platform_quality"][0]["missing_provider_id"]==1
     assert "https://example.org/post" not in str(result)
+    assert result["release_gates"]["source_id_backfill_needed"] is True
+    assert result["release_gates"]["promoted_source_id_integrity"] is False
+    assert result["release_gates"]["social_source_provenance_complete"] is False
+    assert result["release_gates"]["manual_validation_required"] is True
     assert result["paid_requests"]==0
     engine.dispose()
 

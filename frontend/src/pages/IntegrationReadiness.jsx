@@ -65,6 +65,7 @@ export default function IntegrationReadiness() {
     {preview && <section className="bg-white border rounded-xl p-4 space-y-3">
       <h2 className="text-lg font-semibold">Historical source-ID repair</h2>
       <p className="text-sm text-slate-700">Linked: {preview.linked}. Eligible missing IDs: {preview.eligible_missing_ids}. Conflicts: {preview.conflicting_nonblank_ids}. Only saved Social Listening promotion links may be repaired.</p>
+      {!!preview.proposed_links?.length && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className={cell}>Existing social source</th><th className={cell}>Intelligence row</th></tr></thead><tbody>{preview.proposed_links.map(link=><tr key={link.source_id}><td className={cell}>{link.source_id}</td><td className={cell}>{link.intelligence_row_id}</td></tr>)}</tbody></table></div>}
       <label className="flex gap-2 items-start text-sm">
         <input type="checkbox" checked={confirm} disabled={busy || preview.eligible_missing_ids<1 || preview.conflicting_nonblank_ids>0} onChange={e=>setConfirm(e.target.checked)} className="mt-1"/>
         I reviewed the current preview and authorize updating exactly {preview.eligible_missing_ids} blank canonical source IDs. Existing populated IDs and evidence will not be overwritten.

@@ -62,3 +62,8 @@ The authenticated nationwide National Administrator API now supports:
 ## Atomic historical backfill guard — latest batch
 - The confirmed backfill now checks `expected_missing` **inside the same transaction and PostgreSQL lock** as the historical update. A changed count, populated conflicting source ID or multiple Social Listening rows linked to the same intelligence record aborts the entire update.
 - Extended SQLite regression tests for stale previews, exact-count repair, duplicate-source conflicts, and idempotence. Live PostgreSQL backfill has not been executed.
+
+## Officer provenance remediation queue
+- Active nationwide National Administrators can use `GET /api/integration/provenance-review-queue?limit=100&offset=0` for a paginated list of source IDs and missing URL, platform, publication date, content, provider ID, and account fields.
+- The response excludes original post text and original URLs, does not mutate evidence, and makes no paid provider calls. The review must return to an authenticated source workflow to inspect underlying evidence before any legitimate repair.
+- The live staging read-only audit still reports source IDs 101, 105 and 154 linked respectively to Intelligence records 4, 5 and 6 with blank canonical IDs. The protected backfill has not been applied.

@@ -31,7 +31,8 @@ from .smart_radar_qa_alignment import blocked_references
 from .smart_radar_qa_reference_quality import REFERENCE_REVISION_V2, select_reference_v2
 from .smart_radar_qa_reference_contrast import REFERENCE_REVISION_V3, select_reference_v3
 from .smart_radar_qa_references import (REFERENCE_REVISION, reference_examples_for_record,
-    build_reference_messages, reference_audit_metadata)
+    build_reference_messages, reference_audit_metadata,
+    reference_examples_for_audit_target)
 
 router=APIRouter(prefix="/api/smart-radar/qa",tags=["smart-radar-prompt-tuning"])
 _LOCK=threading.Lock()
@@ -362,11 +363,14 @@ def version_detail(version_id:int,user:User=Depends(current_user),
 # Additional agreement audit: eligible exemplar cohort ONLY; never holdout.
 # Its results use a distinct prompt_version and cannot alter V14 development scores.
 EXEMPLAR_AUDIT_LIMIT=55
+# Existing v14/v15 audit scores were no-reference ablations because
+# the legacy per-post lookup only accepted development/holdout targets.
+# Freeze those historical runs and use only v16 for corrected lookups.
 def exemplar_audit_key(vid):
     return "qa-exemplar-audit-v"+str(vid)
 
 @router.get("/tuning/exemplar-audit")
-def exemplar_audit_status(version_id:int=Query(14,ge=14,le=15),user:User=Depends(current_user),db:Session=Depends(get_db)):
+def exemplar_audit_status(version_id:int=Query(16,ge=14,le=16),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
        e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status
@@ -380,14 +384,14 @@ def exemplar_audit_status(version_id:int=Query(14,ge=14,le=15),user:User=Depends
        "agreement":round(matched/n,4) if n else None,
        "remaining":max(0,EXEMPLAR_AUDIT_LIMIT-n),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
-       "warning":"Exploratory IN-SAMPLE exemplar agreement; not independent V14 accuracy. The sealed holdout is never touched."}
+       "warning":"In-sample exemplar agreement only. Historical V14/V15 audits had no references; V16 uses corrected text-based references. Holdout remains excluded."}
 
 @router.post("/tuning/exemplar-audit/run")
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
-    if body.version_id not in (14,15) or body.retry_failed:
-        raise HTTPException(422,"Only frozen V14/V15 exemplar audits are supported; retries disabled")
+    if body.version_id != 16 or body.retry_failed:
+        raise HTTPException(422,"Only V16 corrected-reference audit accepts new paid batches; retries disabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA batch is running")
     try:
@@ -442,8 +446,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                   and r["source_hash"]!=record["source_hash"]
                   and r["source_url"]!=record["source_url"]]
             try:
-                faux=dict(record,cohort="development")
-                references=reference_examples_for_record(db,faux,refs,max_examples=2)
+                references=reference_examples_for_audit_target(db,record,refs,max_examples=2)
                 messages,fingerprint=build_reference_messages(
                     SYSTEM_GUARD,dict(version,reference_revision=REFERENCE_REVISION_V3),
                     record,references)
@@ -465,6 +468,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                 output.update(reference_audit_metadata(references,fingerprint))
                 output["qa_reference_revision"]=REFERENCE_REVISION_V3
                 output["qa_audit_cohort"]="exemplar_in_sample"
+                output["qa_audit_protocol"]="exemplar_text_lookup_v16"
                 usage=raw.get("usage") or {}
                 db.execute(text("""INSERT INTO pilot_smart_radar.qa_ai_assessments
                     (qa_id,model,prompt_version,source_hash,result_json,input_tokens,output_tokens)

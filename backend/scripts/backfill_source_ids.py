@@ -65,7 +65,8 @@ def run(session, apply=False, expected_missing=None):
                 raise RuntimeError("Concurrent change detected; backfill rolled back")
             updated+=1
         session.commit()
-    return {"linked":len(rows),"already_correct":len(already),
+    return {"proposed_links":[{"source_id":reference,"intelligence_row_id":str(iid)} for iid,reference in proposals] if not apply else [],
+            "linked":len(rows),"already_correct":len(already),
             "conflicting_nonblank_ids":len(conflicts),
             "eligible_missing_ids":len(proposals),
             "updated":updated,"mode":"apply" if apply else "dry_run"}

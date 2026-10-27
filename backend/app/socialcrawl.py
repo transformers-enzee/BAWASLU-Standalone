@@ -685,7 +685,23 @@ def _visible_rules(db:Session,p):
     return q.filter(SocialListeningRule.created_by==str(p.get('id') or '')).all()
 
 def serialize_run(x): return {'id':str(x.id),'rule_id':str(x.rule_id) if x.rule_id else None,'provider':x.provider,'query':json.loads(x.query_json or '{}'),'provider_request_id':x.provider_request_id,'credits_used':x.credits_used,'credits_remaining':x.credits_remaining,'cached':x.cached,'result_count':x.result_count,'status':x.status,'error_text':x.error_text,'executed_by':x.executed_by,'executed_at':x.executed_at.isoformat()}
-def serialize_result(x): return {'id':str(x.id),'canonical_source_id':'social:'+str(x.id),'run_id':str(x.run_id),'provider':x.provider,'provider_result_id':x.provider_result_id,'platform':x.platform,'content_type':x.content_type,'canonical_url':x.canonical_url,'author_name':x.author_name,'observed_handle':x.observed_handle,'published_at':x.published_at,'text_content':x.text_content,'language':x.language,'relevance_score':x.relevance_score,'engagement':json.loads(x.engagement_json or '{}'),'geography':json.loads(x.geography_json or '{}'),'source_identity':json.loads(x.source_identity_json or '{}'),'watchlist_matches':json.loads(x.watchlist_matches_json or '[]'),'review_state':x.review_state,'review_notes':x.review_notes,'promoted_intelligence_id':str(x.promoted_intelligence_id) if x.promoted_intelligence_id else None,'collected_at':x.collected_at.isoformat()}
+def serialize_result(x):
+    from .import_quality import social_quality
+    from .source_ids import canonical_source_id
+    quality=social_quality({
+        'id':x.id,'canonical_url':x.canonical_url,'platform':x.platform,
+        'published_at':x.published_at,'text_content':x.text_content,
+        'observed_handle':x.observed_handle,'author_name':x.author_name
+    })
+    record={'id':str(x.id),'canonical_source_id':'social:'+str(x.id),'run_id':str(x.run_id),'provider':x.provider,'provider_result_id':x.provider_result_id,'platform':x.platform,'content_type':x.content_type,'canonical_url':x.canonical_url,'author_name':x.author_name,'observed_handle':x.observed_handle,'published_at':x.published_at,'text_content':x.text_content,'language':x.language,'relevance_score':x.relevance_score,'engagement':json.loads(x.engagement_json or '{}'),'geography':json.loads(x.geography_json or '{}'),'source_identity':json.loads(x.source_identity_json or '{}'),'watchlist_matches':json.loads(x.watchlist_matches_json or '[]'),'review_state':x.review_state,'review_notes':x.review_notes,'promoted_intelligence_id':str(x.promoted_intelligence_id) if x.promoted_intelligence_id else None,'collected_at':x.collected_at.isoformat()}
+    record['canonical_source_id']=canonical_source_id('social',x.id)
+    record['provenance_quality']={
+        'missing_fields':list(quality.missing_fields),
+        'requires_manual_review':quality.requires_manual_review,
+        'provider_id_available':bool(str(x.provider_result_id or '').strip()),
+        'publication_time_verified':bool(str(x.published_at or '').strip())
+    }
+    return record
 
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action in {'listCampaigns','createCampaign','updateCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignThumbnailRecovery','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart'}:

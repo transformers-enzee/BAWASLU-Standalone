@@ -30,6 +30,10 @@ UPDATE = text("""
 """)
 
 def run(session, apply=False):
+    # Serialize apply runs: the existing relationship and source ID must not change
+    # between selecting a proposal and committing it.
+    if apply and session.bind.dialect.name=="postgresql":
+        session.execute(text("LOCK TABLE social_listening_results, intelligence_items IN SHARE ROW EXCLUSIVE MODE"))
     rows=list(session.execute(FIND).mappings())
     proposals=[]
     conflicts=[]
@@ -44,6 +48,7 @@ def run(session, apply=False):
         else:
             proposals.append((row["intelligence_id"],reference))
     if apply and conflicts:
+        session.rollback()
         raise RuntimeError("Conflicting populated source IDs detected; refusing all updates")
     updated=0
     if apply:

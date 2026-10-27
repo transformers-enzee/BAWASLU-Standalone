@@ -30,6 +30,7 @@ assert.match(smartBridge,/\/api\/smart-radar\/finding/);
 assert.match(smartBridge,/\/api\/smart-radar\/decision/);
 assert.match(smartBridge,/regional access only/);
 assert.match(smartBridge,/No authorised regional findings are available/);
+assert.match(smartBridge,/No verified regional pilot baseline is available/);
 assert.match(smartBridge,/regionalPilotBlocked/);
 assert.match(smartBridge,/scope\.textContent=region/);
 assert.ok(smartBridge.indexOf("ui.setData([]);") < smartBridge.lastIndexOf("$('#scopeLabel').textContent=region"), 'Scope must be set after prototype render');

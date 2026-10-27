@@ -39,6 +39,7 @@ def test_readiness_returns_only_aggregate_counts(monkeypatch):
     assert result["social_posts"]["missing_publication"]==1
     assert result["promotion_lineage"]["eligible_backfill"]==1
     assert result["promotion_lineage"]["conflicts"]==0
+    assert result["duplicate_promotions"]["total"]==0
     assert result["candidates"]["active"]==1
     assert result["intelligence_provenance"]["missing_url"]==1
     assert result["platform_quality"][0]["missing_publication"]==1
@@ -103,4 +104,21 @@ def test_provenance_review_queue_pagination_exact_boundary(monkeypatch):
     assert empty["has_more"] is False
     assert [x["source_id"] for x in first["results"]]==["social:1"]
     assert [x["source_id"] for x in second["results"]]==["social:2"]
+    engine.dispose()
+
+def test_release_integrity_detects_duplicate_promotions_and_missing_provider_id(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    engine=create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,canonical_url TEXT,platform TEXT,published_at TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT,provider_result_id TEXT,promoted_intelligence_id INTEGER)"))
+        conn.execute(text("CREATE TABLE intelligence_items(id INTEGER PRIMARY KEY,source_id TEXT,source_url TEXT,platform TEXT,original_content TEXT)"))
+        conn.execute(text("CREATE TABLE watchlist_items(id INTEGER PRIMARY KEY,type TEXT,status TEXT)"))
+        conn.execute(text("INSERT INTO intelligence_items VALUES (8,'social:1','https://example.org/post','threads','text')"))
+        conn.execute(text("INSERT INTO social_listening_results VALUES (1,'https://example.org/post','threads','2026-10-27','text','@source','','',8)"))
+        conn.execute(text("INSERT INTO social_listening_results VALUES (2,'https://example.org/second','threads','2026-10-27','text','@source','','id-2',8)"))
+    with Session(engine) as db:
+        result=integration.readiness(user(),db)
+    assert result["duplicate_promotions"]["total"]==1
+    assert result["release_gates"]["promoted_source_id_integrity"] is False
+    assert result["release_gates"]["social_source_provenance_complete"] is False
     engine.dispose()

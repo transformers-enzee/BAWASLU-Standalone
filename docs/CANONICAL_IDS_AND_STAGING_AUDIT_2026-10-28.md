@@ -34,3 +34,10 @@ Added `backend/tests/test_source_ids.py` and included it in the architecture bra
 - Read-only Supabase verification of `RADAR-PHASE3-BATCH-001`: **109 source posts**, **109 distinct pilot post IDs**, and **zero missing** source URLs, platforms, publication timestamps, original content, or account fields.
 - The prior missing-table error was a connection-to-the-wrong-database observation, not evidence that the pilot dataset was lost. Deployment must keep the Smart Radar pilot connection configured correctly. Avoid copying Supabase credentials into front-end code or documentation.
 - Social Listening/Intelligence staging data still has the separately measured gaps above. The two stores remain separate namespaces and must not be joined on guessed text, people, or numeric IDs.
+
+## Integration readiness — next live development batch
+- Added authenticated `GET /api/integration/readiness` for **active nationwide National Administrator** only. It reports aggregate Social Listening provenance gaps, promoted FK/canonical-ID coverage and candidate totals from the app database. No source content or credentials leave this API.
+- Cross-module audit found 3 existing promotions with explicit foreign keys, zero conflicts, and 3 eligible missing canonical IDs. `scripts.backfill_source_ids` remains dry-run by default; historical data was not changed by this sprint.
+- Non-news Social Listening records account for the bulk of missing provider IDs and publication times. Missing publication times must not be replaced by collection times. Source capture remediation should be handled in the existing provider ingestion pipeline after field-level verification.
+- Added `backend/tests/test_integration_readiness.py` for Viewer and regional-role denial and aggregate-only output. Included it in the architecture-branch CI workflow.
+- The latest Render deployment is automatically triggered by branch pushes; check the newest deploy status before claiming the endpoint is live.

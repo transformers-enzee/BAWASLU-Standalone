@@ -133,15 +133,22 @@
     document.body.classList.add('bawaslu-ready');
   }
   async function boot() {
+    let access = null;
     try {
       try {
         const a = await request('/api/functions/registry',{method:'POST',body:JSON.stringify({action:'myAccess',data:{}})});
-        ui.canReview = a.access?.permissions?.human_validation === true;
+        access = a.access || null;
+        ui.canReview = access?.permissions?.human_validation === true;
       } catch {ui.canReview=false;}
       await refresh();
     } catch (error) {
       document.body.classList.add('bawaslu-ready');
-      const message='Unable to load authorised Smart Radar data: ' + error.message;
+      const regionalPilotBlocked = error.message.includes('Pilot records require verified jurisdiction before regional access');
+      const region = access?.province || 'your assigned region';
+      const role = access?.role || 'Viewer';
+      const message = regionalPilotBlocked
+        ? 'Smart Radar pilot data is not available for ' + region + ' (' + role + '). These national pilot posts have no verified event-level jurisdiction and cannot be displayed as regional intelligence. No authorised regional findings are available in this pilot view.'
+        : 'Unable to load authorised Smart Radar data: ' + error.message;
       ui.setData([]);
       $('#executive').textContent = message;
       const status=$('#startup-status');

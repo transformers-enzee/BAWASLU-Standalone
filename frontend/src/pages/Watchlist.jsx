@@ -124,17 +124,18 @@ export default function Watchlist(){
       <select className="intel-input" value={geoFilter} onChange={e=>setGeoFilter(e.target.value)}><option value="">{t('all_geographies')}</option>{geos.map(x=><option key={x}>{x}</option>)}</select>
     </div>
 
-    {loading?<p>{t('loading_watchlist')}</p>:<div className="grid xl:grid-cols-2 gap-4">
-      {list.map(x=><div id={'watchlist-card-'+x.id} className="intel-card p-6 scroll-mt-6" key={x.id}>
+    {loading?<p>{t('loading_watchlist')}</p>:<div className="grid lg:grid-cols-2 gap-4">
+      {list.map(x=><div id={'watchlist-card-'+x.id} className="rounded-2xl border border-[#dae5e7] bg-white p-5 md:p-6 scroll-mt-6 hover:border-[#14826e] hover:shadow-md transition-shadow" key={x.id}>
         <div className="flex justify-between gap-3">
-          <div><p className="text-[11px] uppercase text-[#6b8ca0] font-bold tracking-wider">{label(x.type)}</p><h2 className="font-semibold text-lg mt-1">{x.name}</h2></div>
+          <div className="flex items-center gap-3 min-w-0"><div className="h-12 w-12 rounded-full bg-[#e2f2ee] text-[#156a5b] grid place-items-center shrink-0 text-xl font-extrabold">{(x.name||'C').slice(0,1).toUpperCase()}</div><div className="min-w-0"><p className="text-[11px] uppercase text-[#6b8ca0] font-bold tracking-wider">{label(x.type)}</p><h2 className="font-semibold text-lg mt-1 break-words">{x.name}</h2></div></div>
           <div className="flex items-start gap-2"><Status value={x.priority}/><Status value={x.status}/></div>
         </div>
         <p className="text-sm text-[#718398] mt-3">{x.description||t('no_description')}</p>
         {!!x.related_topics?.length&&<div className="flex flex-wrap gap-1.5 mt-3">{x.related_topics.map(topic=><span key={topic} className="rounded-full bg-[#f2f6f8] px-2 py-1 text-[11px] text-[#536d80]">{topic}</span>)}</div>}
         <div className="text-xs text-[#7f91a1] mt-3">{[x.regency_city,x.province].filter(Boolean).join(', ')||t('nationwide')} · {x.related_election||t('election_not_specified')}</div>
         <div className="text-xs text-[#7f91a1] mt-2">{t('created')} {new Date(x.created_date).toLocaleDateString('en-GB')} · {t('updated')} {new Date(x.updated_date).toLocaleDateString('en-GB')}</div>
-        <div className="flex flex-wrap gap-3 mt-4">
+        <div className="flex flex-wrap items-center gap-3 mt-4">
+          <Link to={'/watchlist/'+x.id} className="rounded-lg bg-[#147b67] text-white px-4 py-2 text-xs font-semibold hover:bg-[#116955]">View Candidate Profile →</Link>
           <Link to={'/watchlist/'+x.id+'/posts'} className="text-xs font-semibold text-[#126b8b]">View captured posts →</Link>
           <Link to={'/inbox?entity='+encodeURIComponent(x.name)} className="text-xs font-semibold text-[#126b8b]">{t('view_related_intelligence')} →</Link>
           {canManage&&<button className="text-xs font-semibold text-[#126b8b]" onClick={()=>startEdit(x)}><Pencil size={13} className="inline mr-1"/>{t('edit')}</button>}
@@ -143,6 +144,7 @@ export default function Watchlist(){
           {canManage&&x.status!=='Inactive'&&<button className="text-xs font-semibold text-[#7a5960]" disabled={busy} onClick={()=>setStatus(x,'Inactive')}>{t('deactivate')}</button>}
         </div>
 
+        <details className="mt-5 border-t border-[#edf1f5] pt-4"><summary className="cursor-pointer text-xs font-semibold text-[#147b67]">Manage accounts and registry relationships</summary>
         <div className="border-t border-[#edf1f5] mt-5 pt-4">
           <div className="text-xs font-bold text-[#536d80] mb-2">{t('public_accounts_urls')}</div>
           {accounts.filter(a=>a.watchlist_id===x.id).map(a=><div key={a.id} className="flex items-center justify-between gap-3 py-1.5">
@@ -176,8 +178,9 @@ export default function Watchlist(){
             <button type="button" className="intel-ghost" onClick={()=>setRelation(null)}>{t('cancel')}</button>
           </form>:canManage&&<button className="text-xs font-semibold text-[#126b8b] mt-2" onClick={()=>setRelation({from_id:x.id})}>{t('link_watchlist_item')}</button>}
         </div>
+        </details>
       </div>)}
-      {!list.length&&<div className="intel-card p-10 text-sm text-[#73869a]">{t('no_watchlist_filter_match')}</div>}
+      {!list.length&&<div className="intel-card p-10 text-sm text-[#73869a]">{directoryMode==='candidates'&&candidates.length===0?'No candidates tracked yet. Use Add Candidate to create an approved profile.':t('no_watchlist_filter_match')}</div>}
     </div>}
     </div>
   </div>;

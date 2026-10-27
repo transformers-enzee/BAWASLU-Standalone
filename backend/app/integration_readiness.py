@@ -31,6 +31,12 @@ METRICS={
   FROM social_listening_results s
   LEFT JOIN intelligence_items i ON i.id=s.promoted_intelligence_id
   WHERE s.promoted_intelligence_id IS NOT NULL""",
+ "intelligence_provenance": """SELECT COUNT(*) AS total,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(source_url),'') IS NULL) AS missing_url,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(platform),'') IS NULL) AS missing_platform,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(original_content),'') IS NULL) AS missing_content,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(source_id),'') IS NULL) AS missing_canonical_source_id
+  FROM intelligence_items""",
  "candidates": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE status='Active') AS active
   FROM watchlist_items WHERE LOWER(type)='candidate'"""
@@ -47,6 +53,16 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
         except Exception:
             db.rollback()
             raise HTTPException(503,"Integration readiness query unavailable")
+    # Untrusted source fields are never returned. The provider distribution
+    # is a fixed aggregate over platform names with a strict result cap.
+    platform_rows=db.execute(text("""SELECT platform,COUNT(*) AS total,
+        COUNT(*) FILTER(WHERE NULLIF(TRIM(published_at),'') IS NULL) AS missing_publication,
+        COUNT(*) FILTER(WHERE NULLIF(TRIM(provider_result_id),'') IS NULL) AS missing_provider_id,
+        COUNT(*) FILTER(WHERE NULLIF(TRIM(text_content),'') IS NULL) AS missing_content
+      FROM social_listening_results
+      GROUP BY platform ORDER BY COUNT(*) DESC LIMIT 25""")).mappings().all()
+    result["platform_quality"]=[{key:(int(value or 0) if key!="platform" else str(value or "Unknown")[:64])
+                                for key,value in row.items()} for row in platform_rows]
     result["canonical_contract"]="social:<row id> | radar:<pilot post id> | candidate:<registry id>"
     result["scope"]="Current app database only; Smart Radar pilot lives in separate Supabase project"
     result["external_pilot_verification"]="Not queried by this endpoint"

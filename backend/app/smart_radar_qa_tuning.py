@@ -362,20 +362,21 @@ def version_detail(version_id:int,user:User=Depends(current_user),
 # Additional agreement audit: eligible exemplar cohort ONLY; never holdout.
 # Its results use a distinct prompt_version and cannot alter V14 development scores.
 EXEMPLAR_AUDIT_LIMIT=55
-EXEMPLAR_AUDIT_KEY="qa-exemplar-audit-v14"
+def exemplar_audit_key(vid):
+    return "qa-exemplar-audit-v"+str(vid)
 
 @router.get("/tuning/exemplar-audit")
-def exemplar_audit_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
+def exemplar_audit_status(version_id:int=Query(14,ge=14,le=15),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
        e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status
        FROM pilot_smart_radar.qa_ai_assessments a
        JOIN pilot_smart_radar.qa_shahrin_exemplars e ON e.qa_id=a.qa_id
        WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
-       {"version":EXEMPLAR_AUDIT_KEY}).mappings().all()
+       {"version":exemplar_audit_key(version_id)}).mappings().all()
     n=len(rows)
     matched=sum(x["predicted"]==x["gold"] for x in rows)
-    return {"completed":n,"target":EXEMPLAR_AUDIT_LIMIT,"matched":matched,
+    return {"version_id":version_id,"completed":n,"target":EXEMPLAR_AUDIT_LIMIT,"matched":matched,
        "agreement":round(matched/n,4) if n else None,
        "remaining":max(0,EXEMPLAR_AUDIT_LIMIT-n),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
@@ -385,15 +386,15 @@ def exemplar_audit_status(user:User=Depends(current_user),db:Session=Depends(get
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
-    if body.version_id!=14 or body.retry_failed:
-        raise HTTPException(422,"Only the frozen V14 exemplar audit is supported; retries disabled")
+    if body.version_id not in (14,15) or body.retry_failed:
+        raise HTTPException(422,"Only frozen V14/V15 exemplar audits are supported; retries disabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA batch is running")
     try:
         version=db.execute(text("""SELECT instructions,instructions_sha256,change_note,
-            created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=14""")).mappings().first()
+            created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=:vid"""),{"vid":body.version_id}).mappings().first()
         if not version or not version["change_note"].startswith("[shahrin-ref-v3]"):
-            raise HTTPException(409,"Frozen V14 contrast reference configuration not found")
+            raise HTTPException(409,"Frozen contrast reference configuration not found")
         from .smart_radar_qa_references import validate_rubric_hash
         validate_rubric_hash(dict(version,reference_revision=REFERENCE_REVISION_V3))
         if os.getenv("BAWASLU_QA_V2_PAID_TEST_APPROVED","false").lower()!="true":
@@ -416,11 +417,11 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
         completed={r["qa_id"] for r in db.execute(text("""
             SELECT qa_id FROM pilot_smart_radar.qa_ai_assessments
             WHERE prompt_version=:version AND model=:model"""),
-            {"version":EXEMPLAR_AUDIT_KEY,"model":cfg["model"]}).mappings()}
+            {"version":exemplar_audit_key(body.version_id),"model":cfg["model"]}).mappings()}
         failed={r["qa_id"] for r in db.execute(text("""
             SELECT qa_id FROM pilot_smart_radar.qa_prompt_attempts
-            WHERE version_id=14 AND model=:model AND attempt_status IN ('failed','started')"""),
-            {"model":cfg["model"]}).mappings()}
+            WHERE version_id=:vid AND model=:model AND attempt_status IN ('failed','started')"""),
+            {"model":cfg["model"],"vid":body.version_id}).mappings()}
         pending=[r for r in targets if r["qa_id"] not in completed and r["qa_id"] not in failed]
         if not pending:
             return {"saved":[],"errors":[],"remaining":0,"message":"No eligible new audit targets"}
@@ -449,8 +450,8 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
             except Exception as exc:
                 raise HTTPException(409,"Reference assembly failed before paid request") from exc
             attempt_id=db.execute(text("""INSERT INTO pilot_smart_radar.qa_prompt_attempts
-                (version_id,qa_id,model,attempt_status) VALUES(14,:qid,:model,'started')
-                RETURNING id"""),{"qid":record["qa_id"],"model":cfg["model"]}).scalar_one()
+                (version_id,qa_id,model,attempt_status) VALUES(:vid,:qid,:model,'started')
+                RETURNING id"""),{"vid":body.version_id,"qid":record["qa_id"],"model":cfg["model"]}).scalar_one()
             db.commit()
             try:
                 response=httpx.post(cfg["base_url"]+"/chat/completions",
@@ -470,7 +471,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                     VALUES(:qid,:model,:version,:hash,CAST(:payload AS jsonb),:input,:output)
                     ON CONFLICT DO NOTHING"""),
                     {"qid":record["qa_id"],"model":cfg["model"],
-                     "version":EXEMPLAR_AUDIT_KEY,"hash":record["source_hash"],
+                     "version":exemplar_audit_key(body.version_id),"hash":record["source_hash"],
                      "payload":json.dumps(output,ensure_ascii=False),
                      "input":int(usage.get("prompt_tokens") or 0),
                      "output":int(usage.get("completion_tokens") or 0)})
@@ -490,7 +491,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                 # Stop on provider errors; avoid billable repeat storms.
                 break
         return {"saved":saved,"errors":errors,"remaining":len(pending)-len(saved),
-           "audit_version":EXEMPLAR_AUDIT_KEY,
+           "audit_version":exemplar_audit_key(body.version_id),
            "warning":"In-sample exemplar agreement only; not holdout accuracy"}
     finally:
         _LOCK.release()

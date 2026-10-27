@@ -278,6 +278,9 @@ def assistant_record_view(item):
       'verification_status':item.verification_status,
       'approved_count':approved.get('approved_count') or 0,
       'source_name':item.observed_publisher_handle or item.source_name or item.author or '',
+      'source_url':item.source_url or '',
+      'platform':item.platform or '',
+      'source_post_id':item.source_id or '',
       'validation_governance_state':governance['state'],
       'validation_governance_blockers':governance['blockers'],
       'validation_governance_note':governance['note']

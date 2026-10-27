@@ -49,6 +49,7 @@ def test_resolver_scopes_source_before_returning(monkeypatch):
 def test_resolver_does_not_claim_source_verification(monkeypatch):
     monkeypatch.setattr(module,"profile",lambda db,user:grant())
     monkeypatch.setattr(module,"_result_in_scope",lambda db,p,row:True)
+    monkeypatch.setattr(module,"allowed",lambda p,record:True)
     row=SimpleNamespace(id=101,provider_result_id="",canonical_url="https://example.org/p",
       platform="threads",published_at="",collected_at=None,text_content="Original",
       observed_handle="@public",author_name="",review_state="PROMOTED",promoted_intelligence_id=4)
@@ -59,3 +60,15 @@ def test_resolver_does_not_claim_source_verification(monkeypatch):
     assert result["publication_time_verified"] is False
     assert result["source_evidence_verified"] is False
     assert "Original" not in str(result)
+
+def test_source_lineage_does_not_leak_out_of_scope_intelligence(monkeypatch):
+    monkeypatch.setattr(module,"profile",lambda db,user:grant())
+    monkeypatch.setattr(module,"_result_in_scope",lambda db,p,row:True)
+    monkeypatch.setattr(module,"allowed",lambda p,record:False)
+    row=SimpleNamespace(id=101,provider_result_id=None,canonical_url=None,
+      platform="threads",published_at=None,collected_at=None,text_content="Original",
+      observed_handle="@public",author_name="",review_state="PROMOTED",promoted_intelligence_id=4)
+    intel=SimpleNamespace(id=4,intelligence_id="PRIVATE-4",source_id="")
+    result=module.resolve_source("social:101",user(),FakeDb(row,intel))
+    assert result["intelligence"] is None
+    assert "PRIVATE-4" not in str(result)

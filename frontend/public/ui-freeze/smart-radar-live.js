@@ -167,6 +167,14 @@
       // setData renders the frozen prototype and rewrites scopeLabel to National.
       // Apply the verified access scope after that render, never to the source data.
       if (regionalPilotBlocked && $('#scopeLabel')) $('#scopeLabel').textContent=region+' · Restricted pilot';
+      if (regionalPilotBlocked) {
+        const welcome=$('.noticebar');
+        if (welcome) {
+          welcome.setAttribute('aria-label','Pilot data unavailable for regional Viewer');
+          const intro=welcome.querySelector('p');
+          if (intro) intro.textContent='No verified regional pilot baseline is available for this account. The national pilot cannot be used to claim new East Java issues.';
+        }
+      }
       $('#executive').textContent = message;
       const status=$('#startup-status');
       if(status){status.textContent=message;status.classList.add('error');status.setAttribute('role','alert');}

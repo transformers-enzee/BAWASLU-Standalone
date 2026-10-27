@@ -62,3 +62,24 @@ def test_backfill_is_denied_before_database_access(monkeypatch):
     with pytest.raises(HTTPException) as err:
         integration.preview_backfill(user(),None)
     assert err.value.status_code==403
+
+def test_provenance_review_queue_admin_only(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:(_ for _ in ()).throw(HTTPException(403,"Denied")))
+    with pytest.raises(HTTPException) as err:
+        integration.provenance_review_queue(100,0,user(),None)
+    assert err.value.status_code==403
+
+def test_provenance_review_queue_redacts_content_and_urls(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    engine=create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,platform TEXT,canonical_url TEXT,published_at TEXT,provider_result_id TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT)"))
+        conn.execute(text("INSERT INTO social_listening_results VALUES (101,'threads','https://example.org/private','','','sensitive original post','@public','')"))
+    with Session(engine) as db:
+        result=integration.provenance_review_queue(100,0,user(),db)
+    assert len(result["results"])==1
+    assert result["results"][0]["source_id"]=="social:101"
+    assert result["results"][0]["missing_fields"]==["publication_time","provider_record_id"]
+    assert "sensitive original post" not in str(result)
+    assert "https://example.org/private" not in str(result)
+    engine.dispose()

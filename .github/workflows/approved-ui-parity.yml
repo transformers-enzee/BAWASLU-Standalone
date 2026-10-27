@@ -1,0 +1,39 @@
+name: Approved UI visual-parity build checks
+on:
+  push:
+    branches:
+      - architecture-v2-foundation-20261015
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/approved-ui-parity.yml'
+  workflow_dispatch:
+jobs:
+  validate-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate embedded prototype scripts and live adapters
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          assets=Path('frontend/public/ui-freeze')
+          for name in ('smart-radar-v6_2','watchlist-v2_2'):
+              text=(assets/(name+'.html')).read_text(encoding='utf-8')
+              scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',text,re.DOTALL)
+              if len(scripts)!=1 or not scripts[0].strip():
+                  raise SystemExit(f'Expected one inline prototype script in {name}')
+              Path('/tmp/'+name+'.js').write_text(scripts[0],encoding='utf-8')
+          PY
+          node --check /tmp/smart-radar-v6_2.js
+          node --check /tmp/watchlist-v2_2.js
+          node --check frontend/public/ui-freeze/smart-radar-live.js
+          node --check frontend/public/ui-freeze/watchlist-live.js
+      - name: Build existing React app with the approved HTML assets
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build

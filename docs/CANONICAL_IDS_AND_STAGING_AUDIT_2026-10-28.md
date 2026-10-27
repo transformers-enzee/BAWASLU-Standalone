@@ -28,3 +28,9 @@ Read-only queries on Render Postgres `bawaslu-postgres`, 28 October 2026:
 
 ## QA status
 Added `backend/tests/test_source_ids.py` and included it in the architecture branch's automated workflow. Source-level implementation pushed. The full build and deployment verification must be recorded separately.
+
+## Verified pilot database location — follow-up, 28 October 2026
+- The BAWASLU Supabase project (`bsekqkhgyjedcmptjnag`) contains `pilot_smart_radar.source_posts` and the other pilot review/QA tables. The Render-managed `bawaslu-postgres` connection is a separate database and must **not** be treated as the Smart Radar pilot store.
+- Read-only Supabase verification of `RADAR-PHASE3-BATCH-001`: **109 source posts**, **109 distinct pilot post IDs**, and **zero missing** source URLs, platforms, publication timestamps, original content, or account fields.
+- The prior missing-table error was a connection-to-the-wrong-database observation, not evidence that the pilot dataset was lost. Deployment must keep the Smart Radar pilot connection configured correctly. Avoid copying Supabase credentials into front-end code or documentation.
+- Social Listening/Intelligence staging data still has the separately measured gaps above. The two stores remain separate namespaces and must not be joined on guessed text, people, or numeric IDs.

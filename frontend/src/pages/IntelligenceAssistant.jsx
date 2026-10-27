@@ -8,13 +8,14 @@ import { useLanguage } from '@/lib/LanguageContext';
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
 async function historyRequest(path='',method='GET',body=null){
  const token=window.localStorage.getItem('bawaslu_access_token')||'';
- const response=await fetch('/api/assistant-history'+path,{
+ if(!token)throw Error('Your login session has expired. Sign in to access conversation history.');
+ const response=await fetch((import.meta.env.VITE_API_BASE_URL||'')+'/api/assistant-history'+path,{
   method,cache:'no-store',
   headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},
   ...(body?{body:JSON.stringify(body)}:{})
  });
  const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(data.detail||data.error||'Conversation history unavailable');
+ if(!response.ok)throw Error(response.status===401?'Your login session has expired. Sign in again.':data.detail||data.error||'Conversation history unavailable');
  return data;
 }
 export default function IntelligenceAssistant(){

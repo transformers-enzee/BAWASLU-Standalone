@@ -34,3 +34,20 @@ def test_authentication_state_and_assistant_history_use_same_session():
     assert "bawaslu_access_token" in assistant
     assert "VITE_API_BASE_URL" in assistant
     assert "response.status===401" in assistant
+
+def test_integration_console_invalidates_cached_protected_data():
+    console=(FRONTEND/"pages"/"IntegrationReadiness.jsx").read_text(encoding="utf-8")
+    assert "setMetrics(null); setPreview(null); setQueue(null); setConfirm(false)" in console
+    assert "National Administrator access is required." in console
+    assert "expected_missing:preview.eligible_missing_ids" in console
+
+def test_lineage_checks_both_source_and_intelligence_scope():
+    source=Path(source_lineage.__file__).read_text(encoding="utf-8")
+    assert "_result_in_scope(db,p,row)" in source
+    assert "allowed(p,candidate)" in source
+
+def test_historical_backfill_refuses_duplicate_promotions():
+    from scripts import backfill_source_ids
+    source=Path(backfill_source_ids.__file__).read_text(encoding="utf-8")
+    assert 'len({row["intelligence_id"] for row in rows})!=len(rows)' in source
+    assert "expected_missing" in source

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
@@ -41,6 +42,7 @@ export default function Administration(){
    </tr>)}</tbody></table>{!visible.length&&<p className="p-5 text-sm text-muted-foreground">{t('no_users_found')}</p>}
   </section>}
   {mayManage&&edit&&<AccessAssignmentForm key={edit.id} edit={edit} setEdit={setEdit} adminRole={adminRole} adminProvince={adminProvince} users={users} roles={roles} labels={labels} busy={busy} onSave={save} onCancel={()=>setEdit(null)}/>}
+  {access.role==='National Administrator'&&access.permissions?.administration===true&&<div className="rounded-xl border bg-white p-4"><h2 className="text-lg font-semibold">Data Integration &amp; Readiness</h2><p className="text-sm text-slate-600 mt-1">Review evidence gaps and authorize an explicitly previewed source-ID repair.</p><Link className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm" to="/administration/integration">Open integration console</Link></div>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<RelevanceGateManager/>}
   <CategoryManager categories={categories} refresh={refresh} authorized={access.role==='National Administrator'&&access.permissions?.administration===true}/>
  </div>;

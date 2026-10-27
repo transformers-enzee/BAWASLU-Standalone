@@ -10,7 +10,8 @@ async function call(path,body){
  const r=await fetch('/api/smart-radar'+path,{cache:'no-store',method:body?'POST':'GET',headers:{Authorization:'Bearer '+token(),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
  const v=await r.json().catch(()=>({}));if(!r.ok)throw Error(v.detail||'Server error');return v;
 }
-const players=[['attention','Needs Attention'],['concerns','Public Concerns'],['narratives','Emerging Narratives'],['validated','Validated Intelligence']];
+const players=[['violations','Potential Violations'],['concerns','Public Concerns'],['narratives','Emerging Narratives'],['attention','Needs Attention'],['validated','Validated Intelligence']];
+const playerLevels=[{title:'LEVEL 1 · What we are seeing',keys:['violations','concerns','narratives']},{title:'LEVEL 2 · What needs your attention',keys:['attention']},{title:'LEVEL 3 · What officers have reviewed',keys:['validated']}];
 const topics=['All Topics','Allegations / Violations','Citizen Reports / Public Concerns','Digital Risks / Information','Disputes / Legal','Election Operations','Participatory Oversight','Voter Register / PDPB'];
 function dateValue(s){const t=Date.parse(s||'');return Number.isFinite(t)?t:0}
 const inputClass='border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full';
@@ -39,7 +40,7 @@ export default function SmartRadar(){
  const insight=f=>radarInsight(language,f,perspective);
  const topicOptions=useMemo(()=>['All Topics',...new Set(findings.filter(f=>(f.perspectives||[]).includes(perspective)).flatMap(f=>f.topics||[]))].sort((a,b)=>a==='All Topics'?-1:b==='All Topics'?1:a.localeCompare(b)),[findings,perspective]);
  const needs=filtered.filter(f=>f.status==='pending').sort((a,b)=>(b.priority_score??-1)-(a.priority_score??-1)||b.supporting_posts-a.supporting_posts);
- const inPlayer=k=>k==='validated'?filtered.filter(f=>f.human_reviewed):k==='attention'?needs:filtered.filter(f=>(f.players||[f.player]).includes(k));
+ const inPlayer=k=>k==='validated'?filtered.filter(f=>f.human_reviewed):k==='attention'?needs:k==='violations'?filtered.filter(f=>(f.players||[f.player]).includes('violations')||(f.topics||[]).some(t=>/allegation|violation/i.test(t))):filtered.filter(f=>(f.players||[f.player]).includes(k));
  const due=f=>f.next_followup&&dateValue(f.next_followup)<=Date.now();
  const actionCount=findings.filter(f=>f.status==='pending'||(f.status==='investigating'&&due(f))).length;
  const openFinding=async f=>{
@@ -91,7 +92,24 @@ export default function SmartRadar(){
   </div>
   {notice&&<div className="rounded-lg border-l-4 border-[#16886e] border bg-[#f1faf6] p-3 flex items-start gap-3"><Bell className="shrink-0 text-[#147968]" size={18}/><div className="flex-1"><b className="text-sm">{tr('Welcome Back')}</b><p className="text-xs text-slate-500">{tr('Historical pilot data · No verified personal last-visit baseline')}</p><div className="flex flex-wrap gap-4 my-2 text-xs"><span><b>—</b> {tr('New Issues')}</span><span><b>—</b> {tr('Important Updates')}</span><span><b>{actionCount}</b> {tr('Follow-ups / Reviews Due')}</span><span><b>—</b> {tr('New Narratives')}</span></div><p className="text-xs">{tr('Since your last visit, new allegations and concerns were identified. Some require a decision; others are for awareness only.')}</p>{expanded&&<p className="text-xs mt-2 text-slate-600">{tr('Exact since-last-visit counts will become available after account-specific visit tracking and incremental ingestion are enabled.')}</p>}</div><button aria-label={tr('Details')} className="text-xs underline" onClick={()=>setExpanded(!expanded)}>{tr(expanded?'Less':'Details')}</button><button aria-label={tr('Dismiss notification')} onClick={()=>setNotice(false)}><X size={17}/></button></div>}
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[[filtered.length,'Intelligence Topics'],[filtered.reduce((n,f)=>n+f.supporting_posts,0),'Supporting Posts'],[needs.length,'To Review'],[filtered.filter(f=>f.human_reviewed).length,'Reviewed Issues']].map(([n,l])=><div key={l} className="border rounded-xl p-4 bg-white"><b className="text-2xl">{n}</b><p className="text-xs text-slate-500 mt-1">{tr(l)}</p></div>)}</div>
-  <div className="flex justify-between items-end"><h2 className="font-semibold text-lg">{tr('Four Intelligence Players')}</h2><span className="text-xs text-slate-500">{tr('Click any player for details')}</span></div>
+  <div className="flex justify-between items-end"><h2 className="font-semibold text-lg">{tr(perspective==='operations'?'Five Intelligence Players':'Four Intelligence Players')}</h2><span className="text-xs text-slate-500">{tr('Click any player for details')}</span></div>
+  {playerLevels.map(level=>{
+    const visible=level.keys.filter(k=>perspective==='operations'||k!=='violations');
+    return <section key={level.title} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+      <h3 className="mb-3 text-xs font-extrabold uppercase tracking-wide text-slate-600">{level.title}</h3>
+      <div className={visible.length===3?'grid gap-3 lg:grid-cols-3':visible.length===2?'grid gap-3 md:grid-cols-2':'grid grid-cols-1 gap-3'}>
+       {visible.map(key=>{const name=players.find(p=>p[0]===key)?.[1]||key;const group=inPlayer(key);
+        return <button key={key} onClick={()=>setPanel(key)} className={'text-left border rounded-xl p-5 bg-white flex flex-col hover:shadow-md min-h-[185px] '+(key==='attention'?'border-amber-400 hover:border-amber-500':'border-slate-200 hover:border-[#14816e]')}>
+         <span className="text-[#16816e] text-xl">{key==='attention'?'⚑':key==='validated'?'✓':key==='violations'?'⚖':key==='concerns'?'◉':'↗'}</span>
+         <b className="text-lg mt-2">{tr(name)}</b>
+         <span className="text-xs text-[#147968] mt-2">{group.length} {tr(key==='validated'?'Reviewed Issues':key==='narratives'?'Narratives Identified':'Issues Identified')} · {group.reduce((n,f)=>n+f.supporting_posts,0)} {tr('Supporting Posts')}</span>
+         <p className="text-sm text-slate-600 mt-3 flex-1">{group.length?group.slice(0,2).map(f=>insight(f)).join(' '):key==='attention'?tr('No findings awaiting an initial officer decision.'):tr('No matching issues for this perspective and period.')}</p>
+         <span className="text-xs font-semibold text-[#147968] mt-3 pt-3 border-t">{tr('View intelligence and original sources →')}</span>
+        </button>
+       })}
+      </div>
+    </section>
+  })}
   <div className="grid lg:grid-cols-2 gap-4">{players.map(([key,name])=>{const group=inPlayer(key);return <button key={key} onClick={()=>setPanel(key)} className="text-left border border-slate-200 hover:border-[#14816e] hover:shadow-md rounded-xl p-5 bg-white min-h-[230px] flex flex-col">
     <span className="text-[#16816e] text-xl">{key==='attention'?'⚑':key==='validated'?'✓':key==='concerns'?'◉':'↗'}</span><b className="text-lg mt-2">{tr(name)}</b><span className="text-xs text-[#147968] mt-2">{group.length} {tr(key==='validated'?'Reviewed Issues':key==='narratives'?'Narratives Identified':'Issues Identified')} · {group.reduce((n,f)=>n+f.supporting_posts,0)} {tr('Supporting Posts')}</span><p className="text-sm text-slate-600 mt-3 flex-1">{group.length?group.slice(0,2).map(f=>insight(f)).join(' '):key==='attention'?tr('No findings awaiting an initial officer decision.'):tr('No matching issues for this perspective and period.')}</p><span className="text-xs font-semibold text-[#147968] mt-3 pt-3 border-t">{tr('View intelligence and original sources →')}</span>
    </button>})}</div>

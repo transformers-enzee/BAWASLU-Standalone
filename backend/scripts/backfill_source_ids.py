@@ -53,7 +53,7 @@ def run(session, apply=False, expected_missing=None):
     if apply and expected_missing is not None and len(proposals)!=expected_missing:
         session.rollback()
         raise RuntimeError("Backfill changed since preview; no updates applied")
-    if apply and len({item[0] for item in proposals})!=len(proposals):
+    if apply and len({row["intelligence_id"] for row in rows})!=len(rows):
         session.rollback()
         raise RuntimeError("Multiple sources point at one Intelligence record; no updates applied")
     updated=0

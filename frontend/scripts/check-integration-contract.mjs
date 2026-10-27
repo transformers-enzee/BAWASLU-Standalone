@@ -40,4 +40,7 @@ assert.match(assistant,/Saved conversations/);
 assert.match(refs,/View original source/);
 assert.ok(!smart.includes("const seed=[{"),'Fictional Smart Radar seed must not ship');
 assert.ok(!watch.includes('const C=[{"id"'),'Fictional Watchlist candidate seed must not ship');
-console.log('PASS: 24 source-level UI and data-lineage contract checks');
+assert.match(social,/provenance_quality\?\.requires_manual_review/);
+assert.match(social,/Source metadata incomplete/);
+assert.match(social,/Provider record ID not supplied/);
+console.log('PASS: frozen UI, integration, and row-level provenance warning contracts');

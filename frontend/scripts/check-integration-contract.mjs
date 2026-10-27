@@ -43,4 +43,16 @@ assert.ok(!watch.includes('const C=[{"id"'),'Fictional Watchlist candidate seed 
 assert.match(social,/provenance_quality\?\.requires_manual_review/);
 assert.match(social,/Source metadata incomplete/);
 assert.match(social,/Provider record ID not supplied/);
+const integrationConsole=read('src/pages/IntegrationReadiness.jsx');
+const app=read('src/App.jsx');
+const admin=read('src/pages/Administration.jsx');
+assert.match(app,/administration\/integration/);
+assert.match(app,/<AccessGate permission="administration"/);
+assert.match(admin,/Open integration console/);
+assert.match(integrationConsole,/source-id-backfill\/preview/);
+assert.match(integrationConsole,/source-id-backfill\/apply/);
+assert.match(integrationConsole,/expected_missing:preview\.eligible_missing_ids/);
+assert.match(integrationConsole,/provenance-review-queue/);
+assert.match(integrationConsole,/bawaslu_access_token/);
+assert.match(integrationConsole,/!confirm\|\|busy/);
 console.log('PASS: frozen UI, integration, and row-level provenance warning contracts');

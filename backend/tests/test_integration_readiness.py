@@ -83,3 +83,20 @@ def test_provenance_review_queue_redacts_content_and_urls(monkeypatch):
     assert "sensitive original post" not in str(result)
     assert "https://example.org/private" not in str(result)
     engine.dispose()
+
+def test_provenance_review_queue_pagination_exact_boundary(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    engine=create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,platform TEXT,canonical_url TEXT,published_at TEXT,provider_result_id TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT)"))
+        conn.execute(text("INSERT INTO social_listening_results VALUES (1,'threads','https://example.org/a','','','first','@a',''),(2,'threads','https://example.org/b','','','second','@b','')"))
+    with Session(engine) as db:
+        first=integration.provenance_review_queue(1,0,user(),db)
+        second=integration.provenance_review_queue(1,1,user(),db)
+        empty=integration.provenance_review_queue(1,2,user(),db)
+    assert first["has_more"] is True
+    assert second["has_more"] is False
+    assert empty["has_more"] is False
+    assert [x["source_id"] for x in first["results"]]==["social:1"]
+    assert [x["source_id"] for x in second["results"]]==["social:2"]
+    engine.dispose()

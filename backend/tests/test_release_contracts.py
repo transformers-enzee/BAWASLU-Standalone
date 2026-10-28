@@ -63,7 +63,8 @@ def test_social_review_changes_require_human_validation():
 
 def test_frontend_route_permissions_cover_inbox_watchlist_and_creation():
     source=(FRONTEND/"App.jsx").read_text(encoding="utf-8")
-    readonly=source.split('<Route element={<AccessGate permission="view_intelligence" />}>',3)[2]
+    readonly=source.split('<Route path="/legacy-home"',1)[0]
+    assert readonly.rstrip().endswith('<Route element={<AccessGate permission="view_intelligence" />}>')
     for path in ("/legacy-home", "/watchlist", "/watchlist/:id", "/watchlist/:id/posts", "/inbox", "/intelligence/:id"):
-        assert f'path="{path}"' in readonly
+        assert f'path="{path}"' in source
     assert '<Route element={<AccessGate permission="add_intelligence" />}><Route path="/add"' in source

@@ -32,7 +32,7 @@ def test_authentication_state_and_assistant_history_use_same_session():
     assert "setUser(null)" in auth
     assert "base44.auth.logout('/login')" in auth
     assert "bawaslu_access_token" in assistant
-    assert "VITE_API_BASE_URL" in assistant
+    assert "fetch('/api/assistant-history'+path" in assistant
     assert "response.status===401" in assistant
 
 def test_integration_console_invalidates_cached_protected_data():

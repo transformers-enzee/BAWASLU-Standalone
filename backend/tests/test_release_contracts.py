@@ -133,3 +133,18 @@ def test_assistant_provider_timeout_is_bounded_before_gateway_failure():
     assert "AssistantProviderError('provider_timeout'" in source
     main=(Path(intelligence_assistant.__file__).with_name("main.py")).read_text(encoding="utf-8")
     assert "deterministic_assistant_answer(q,evidence,exc.code)" in main
+
+
+def test_assistant_excludes_only_known_legacy_tech_promotions():
+    from types import SimpleNamespace
+    from app.intelligence_assistant import _legacy_non_election_tech_record
+    assert _legacy_non_election_tech_record(SimpleNamespace(source_id="social:105",title="iPhone 18 Pro Cameras"))
+    assert _legacy_non_election_tech_record(SimpleNamespace(source_id="social:154",title="iPhone 13 Pro comparison"))
+    assert not _legacy_non_election_tech_record(SimpleNamespace(source_id="social:101",title="BAWASLU election oversight"))
+    assert not _legacy_non_election_tech_record(SimpleNamespace(source_id="radar:PILOT-011",title="iPhone source discussion"))
+
+def test_assistant_fallback_separates_relevance_from_evidence_verification():
+    from app import intelligence_assistant
+    source=Path(intelligence_assistant.__file__).read_text(encoding="utf-8")
+    assert "penilaian relevansi manusia, bukan verifikasi kebenaran sumber" in source
+    assert "klaim sumber belum terverifikasi" in source

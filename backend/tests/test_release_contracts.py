@@ -174,3 +174,13 @@ def test_socialcrawl_multi_platform_maps_x_brand_to_twitter_provider_id():
     result=_multi_provider_params({'query':'BAWASLU','platforms':['twitter-ai-search','tiktok']})
     assert result['platforms']=='twitter,tiktok'
     assert 'x' not in result['platforms'].split(',')
+
+
+def test_campaign_dashboard_cache_invalidates_on_new_evidence():
+    from app import campaigns
+    code=Path(campaigns.__file__).read_text(encoding="utf-8")
+    dashboard=code.split("if action=='campaignDashboard':",1)[1].split("if action=='campaignRunReadiness':",1)[0]
+    assert "evidence_revision=" in dashboard
+    assert "func.count(CampaignEvidence.id)" in dashboard
+    assert "func.max(CampaignEvidence.id)" in dashboard
+    assert "int(evidence_revision[0] or 0)" in dashboard

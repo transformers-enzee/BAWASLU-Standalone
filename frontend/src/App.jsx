@@ -68,16 +68,18 @@ const AuthenticatedApp = () => {
             <Route path="/smart-radar" element={<SmartRadar />} />
             <Route path="/smart-radar/qa" element={<SmartRadarQA />} />
           </Route>
-          <Route path="/legacy-home" element={<Home />} />
-          <Route path="/watchlist" element={<Watchlist />} />
-          <Route path="/watchlist/:id" element={<WatchlistProfile />} />
-          <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />
-          <Route path="/inbox" element={<Inbox />} />
+          <Route element={<AccessGate permission="view_intelligence" />}>
+            <Route path="/legacy-home" element={<Home />} />
+            <Route path="/watchlist" element={<Watchlist />} />
+            <Route path="/watchlist/:id" element={<WatchlistProfile />} />
+            <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />
+            <Route path="/inbox" element={<Inbox />} />
+            <Route path="/intelligence/:id" element={<IntelligenceDetail />} />
+          </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />
           </Route>
-          <Route path="/add" element={<AddIntelligence />} />
-          <Route path="/intelligence/:id" element={<IntelligenceDetail />} />
+          <Route element={<AccessGate permission="add_intelligence" />}><Route path="/add" element={<AddIntelligence />} /></Route>
           <Route element={<AccessGate permission="administration" />}>
             <Route path="/sources" element={<DataSources />} />
           </Route>

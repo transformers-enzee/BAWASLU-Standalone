@@ -9,7 +9,7 @@ const starterKeys=['starter_latest_validated','starter_main_issues','starter_las
 async function historyRequest(path='',method='GET',body=null){
  const token=window.localStorage.getItem('bawaslu_access_token')||'';
  if(!token)throw Error('Your login session has expired. Sign in to access conversation history.');
- const response=await fetch((import.meta.env.VITE_API_BASE_URL||'')+'/api/assistant-history'+path,{
+ const response=await fetch('/api/assistant-history'+path,{
   method,cache:'no-store',
   headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},
   ...(body?{body:JSON.stringify(body)}:{})

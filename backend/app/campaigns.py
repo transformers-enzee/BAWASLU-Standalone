@@ -871,7 +871,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         principal=str(p.get('id') or p.get('user_id') or '')
         if not principal:
             principal=json.dumps(p,sort_keys=True,default=str)
-        cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword)
+        # Invalidate cached analytics immediately when campaign evidence changes.
+        evidence_revision=db.query(
+            __import__('sqlalchemy').func.count(CampaignEvidence.id),
+            __import__('sqlalchemy').func.max(CampaignEvidence.id)
+        ).filter(CampaignEvidence.campaign_id==c.id).one()
+        cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword,
+                   int(evidence_revision[0] or 0), int(evidence_revision[1] or 0))
         cached=_dashboard_cache_get(cache_key)
         if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)

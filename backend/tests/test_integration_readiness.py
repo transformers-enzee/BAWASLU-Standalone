@@ -122,3 +122,18 @@ def test_release_integrity_detects_duplicate_promotions_and_missing_provider_id(
     assert result["release_gates"]["promoted_source_id_integrity"] is False
     assert result["release_gates"]["social_source_provenance_complete"] is False
     engine.dispose()
+
+def test_empty_app_database_never_claims_release_readiness(monkeypatch):
+    monkeypatch.setattr(integration,"require_admin",lambda db,user:None)
+    engine=create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE social_listening_results(id INTEGER PRIMARY KEY,canonical_url TEXT,platform TEXT,published_at TEXT,text_content TEXT,observed_handle TEXT,author_name TEXT,provider_result_id TEXT,promoted_intelligence_id INTEGER)"))
+        conn.execute(text("CREATE TABLE intelligence_items(id INTEGER PRIMARY KEY,source_id TEXT,source_url TEXT,platform TEXT,original_content TEXT)"))
+        conn.execute(text("CREATE TABLE watchlist_items(id INTEGER PRIMARY KEY,type TEXT,status TEXT)"))
+    with Session(engine) as db:
+        result=integration.readiness(user(),db)
+    assert result["data_source_status"]=="empty_or_uninitialized"
+    assert result["release_gates"]["database_population_verified"] is False
+    assert result["release_gates"]["social_source_provenance_complete"] is False
+    assert result["release_gates"]["promoted_source_id_integrity"] is False
+    engine.dispose()

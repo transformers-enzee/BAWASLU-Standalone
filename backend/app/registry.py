@@ -98,6 +98,8 @@ def _account_duplicate(db,watchlist_id,url,platform,handle,exclude_id=None):
 def registry_action(db:Session,p,action,data,id=None):
     if p.get('status')!='Active': raise PermissionError('BAWASLU account access is inactive')
     if action=='myAccess': return {'access':p}
+    # Protect every Watchlist, source and account listing action at the API boundary.
+    if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     if action=='list':
         items=[x for x in db.query(WatchlistItem).order_by(WatchlistItem.created_at.desc()).all() if allowed(p,x)]
         ids={x.id for x in items}

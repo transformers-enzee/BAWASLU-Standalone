@@ -182,6 +182,18 @@ def _basis_date(item,basis):
         return _collection_date(item)
     return _publication_date(item)
 
+def _legacy_non_election_tech_record(item):
+    """Exclude clearly unrelated legacy technology-search promotions from election summaries.
+
+    This is a narrowly scoped historical-data guard, not a change to saved
+    human review decisions or source records. Explicit technology inquiries can
+    still be handled separately outside the BAWASLU election summary workflow.
+    """
+    title=str(getattr(item,'title','') or '').lower()
+    source=str(getattr(item,'source_id','') or '')
+    return source in {'social:105','social:154'} and ('iphone' in title or 'pixel' in title)
+
+
 def select_assistant_records(question, rows, limit=12):
     q=str(question or '').lower()
     semantics=assistant_query_semantics(q)
@@ -192,6 +204,8 @@ def select_assistant_records(question, rows, limit=12):
 
     scored=[]
     for item in rows:
+        if _legacy_non_election_tech_record(item):
+            continue
         if semantics['requires_validated'] and item.review_status!='Validated as Relevant Intelligence':
             continue
         if semantics['requires_unverified'] and item.verification_status!='UNVERIFIED':
@@ -376,7 +390,7 @@ def deterministic_assistant_answer(question, records, reason=''):
     result={
       'answer_summary':f'Ditemukan {len(records)} catatan intelijen yang dapat diakses dan relevan dengan pertanyaan. {validated} telah divalidasi sebagai intelijen relevan; {unverified} masih didukung oleh sumber berstatus UNVERIFIED.',
       'key_observations':[f"[{r['record_id']}] {r['title']}" for r in records[:5]],
-      'evidence_status':[f'{validated} catatan berstatus Validated as Relevant Intelligence.',f'{unverified} catatan memiliki sumber berstatus UNVERIFIED.'],
+      'evidence_status':[f'{validated} catatan berstatus Validated as Relevant Intelligence (penilaian relevansi manusia, bukan verifikasi kebenaran sumber).',f'{unverified} catatan memiliki sumber berstatus UNVERIFIED; klaim sumber belum terverifikasi.'],
       'date_basis':semantics['date_basis_note'],
       'limitations':['Sintesis generatif tidak tersedia; jawaban ini adalah ringkasan deterministik dari catatan yang terpilih.'+(f' Status provider: {reason}.' if reason else '')],
       'cited_record_ids':ids

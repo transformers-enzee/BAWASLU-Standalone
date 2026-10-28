@@ -39,7 +39,7 @@ export default function IntegrationReadiness() {
   },[offset]);
   useEffect(()=>{refresh(0);},[]);
   async function applyBackfill() {
-    if (!confirm || !preview || busy || preview.conflicting_nonblank_ids !== 0 || preview.eligible_missing_ids < 1) return;
+    if (!confirm || !preview || !metrics?.release_gates?.database_population_verified || busy || preview.conflicting_nonblank_ids !== 0 || preview.eligible_missing_ids < 1) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const result=await api('source-id-backfill/apply',{
@@ -55,6 +55,7 @@ export default function IntegrationReadiness() {
     {error && <p role="alert" className="p-3 bg-red-50 text-red-800 rounded">{error}</p>}
     {notice && <p role="status" className="p-3 bg-emerald-50 text-emerald-800 rounded">{notice}</p>}
     <button className="px-4 py-2 bg-slate-900 text-white rounded disabled:opacity-50" onClick={()=>refresh(0)} disabled={busy}>{busy?'Working…':'Refresh readiness'}</button>
+    {metrics?.data_source_status==='empty_or_uninitialized' && <p role="alert" className="p-4 rounded border border-red-300 bg-red-50 text-red-900 font-medium">Staging database mismatch or empty app database: this environment has zero Social Listening and Intelligence records. Do not treat zero missing fields as complete, and do not run historical repair here. Verify the deployed service DATABASE_URL points to the intended Render PostgreSQL instance.</p>}
     {metrics && <section className="bg-white border rounded-xl p-4">
       <h2 className="font-semibold text-lg mb-3">Staging quality</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -63,7 +64,7 @@ export default function IntegrationReadiness() {
         <div><p className="text-slate-500">Missing original content</p><p className="text-2xl font-semibold">{metrics.social_posts?.missing_content ?? '—'}</p></div>
         <div><p className="text-slate-500">Missing canonical IDs</p><p className="text-2xl font-semibold">{metrics.promotion_lineage?.eligible_backfill ?? '—'}</p></div>
       </div>
-      <p className="text-sm mt-3 text-slate-600">Release status: {metrics.release_gates?.promoted_source_id_integrity?'ID integrity passed':'ID backfill required'} · {metrics.release_gates?.social_source_provenance_complete?'Provenance complete':'Provenance review required'}. Final role/browser UAT remains mandatory.</p>
+      <p className="text-sm mt-3 text-slate-600">Release status: {metrics.release_gates?.database_population_verified === false ? 'Data source unverified' : metrics.release_gates?.promoted_source_id_integrity?'ID integrity passed':'ID backfill required'} · {metrics.release_gates?.database_population_verified === false ? 'Provenance cannot be assessed' : metrics.release_gates?.social_source_provenance_complete?'Provenance complete':'Provenance review required'}. Final role/browser UAT remains mandatory.</p>
     </section>}
     {preview && <section className="bg-white border rounded-xl p-4 space-y-3">
       <h2 className="text-lg font-semibold">Historical source-ID repair</h2>

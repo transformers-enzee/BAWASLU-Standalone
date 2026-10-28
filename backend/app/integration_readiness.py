@@ -42,6 +42,11 @@ METRICS={
   COUNT(*) FILTER(WHERE NULLIF(TRIM(original_content),'') IS NULL) AS missing_content,
   COUNT(*) FILTER(WHERE NULLIF(TRIM(source_id),'') IS NULL) AS missing_canonical_source_id
   FROM intelligence_items""",
+ "campaign_pipeline": """SELECT
+  (SELECT COUNT(*) FROM monitoring_campaigns) AS campaigns,
+  (SELECT COUNT(*) FROM campaign_runs) AS collection_runs,
+  (SELECT COUNT(*) FROM campaign_evidence) AS linked_evidence,
+  (SELECT COUNT(*) FROM evidence_assessments) AS assessments""",
  "candidates": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE status='Active') AS active
   FROM watchlist_items WHERE LOWER(type)='candidate'"""

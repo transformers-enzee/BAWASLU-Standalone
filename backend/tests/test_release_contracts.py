@@ -95,3 +95,10 @@ def test_supabase_pilot_schema_is_audited_without_paid_calls():
     assert "SELECT COUNT(*) FROM pilot_smart_radar.source_posts" in source
     assert '"smart_radar_pilot_posts"' in source
     assert "separate Supabase project" not in source
+
+
+def test_smart_radar_source_counts_distinguish_references_from_loaded_posts():
+    html=(FRONTEND.parent/"public"/"ui-freeze"/"smart-radar-v6_2.html").read_text(encoding="utf-8")
+    assert "f.source_count??f.posts.length" in html
+    assert "Original Posts (${f.posts.length} loaded of ${f.source_count??f.posts.length} referenced)" in html
+    assert "Do not treat the aggregate count as opened or verified evidence." in html

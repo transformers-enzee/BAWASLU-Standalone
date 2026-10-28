@@ -68,3 +68,22 @@ def test_frontend_route_permissions_cover_inbox_watchlist_and_creation():
     for path in ("/legacy-home", "/watchlist", "/watchlist/:id", "/watchlist/:id/posts", "/inbox", "/intelligence/:id"):
         assert f'path="{path}"' in source
     assert '<Route element={<AccessGate permission="add_intelligence" />}><Route path="/add"' in source
+
+
+def test_backend_module_boundaries_deny_missing_view_permission():
+    from app import socialcrawl, registry
+    social=Path(socialcrawl.__file__).read_text(encoding="utf-8")
+    watch=Path(registry.__file__).read_text(encoding="utf-8")
+    entry=social.split("def social_listening_action(",1)[1].split("    if action in ",1)[0]
+    assert "if not has(p,'view_intelligence'): raise PermissionError" in entry
+    guard=watch.split("def registry_action(",1)[1].split("    if action=='list':",1)[0]
+    assert "if action=='myAccess': return {'access':p}" in guard
+    assert "if not has(p,'view_intelligence'): raise PermissionError" in guard
+
+def test_social_promotion_preserves_review_and_canonical_source_ids():
+    from app import socialcrawl
+    source=Path(socialcrawl.__file__).read_text(encoding="utf-8")
+    promote=source.split("    if action=='promote':",1)[1]
+    assert "has(p,'add_intelligence')" in promote
+    assert "row.review_state not in ('RELEVANT','MONITOR')" in promote
+    assert "canonical_source_id('social',row.id)" in promote

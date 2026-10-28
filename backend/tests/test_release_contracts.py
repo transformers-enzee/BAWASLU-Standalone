@@ -51,3 +51,19 @@ def test_historical_backfill_refuses_duplicate_promotions():
     source=Path(backfill_source_ids.__file__).read_text(encoding="utf-8")
     assert 'len({row["intelligence_id"] for row in rows})!=len(rows)' in source
     assert "expected_missing" in source
+
+
+def test_social_review_changes_require_human_validation():
+    from app import socialcrawl
+    source=Path(socialcrawl.__file__).read_text(encoding="utf-8")
+    block=source.split("    if action=='review':", 1)[1].split("    if action=='promote':", 1)[0]
+    assert "has(p,'human_validation')" in block
+    assert "_result_in_scope(db,p,row)" in source
+    assert "row.review_state=decision" in block
+
+def test_frontend_route_permissions_cover_inbox_watchlist_and_creation():
+    source=(FRONTEND/"App.jsx").read_text(encoding="utf-8")
+    readonly=source.split('<Route element={<AccessGate permission="view_intelligence" />}>',3)[2]
+    for path in ("/legacy-home", "/watchlist", "/watchlist/:id", "/watchlist/:id/posts", "/inbox", "/intelligence/:id"):
+        assert f'path="{path}"' in readonly
+    assert '<Route element={<AccessGate permission="add_intelligence" />}><Route path="/add"' in source

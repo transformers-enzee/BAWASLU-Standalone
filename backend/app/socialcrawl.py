@@ -760,6 +760,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if not row: raise ValueError('Social listening result not found')
     if not _result_in_scope(db,p,row): raise PermissionError('Social listening result is outside your authorized geographic scope')
     if action=='review':
+        if not has(p,'human_validation'): raise PermissionError('Reviewer permission required')
         if row.promoted_intelligence_id or row.review_state=='PROMOTED':
             raise ValueError('Promoted Social Listening results are locked from further review changes')
         decision=str(data.get('decision') or '')

@@ -81,6 +81,14 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
         result["database_name"]="not-postgresql"
         result["database_schema"]="not-postgresql"
     result["data_source_status"]="empty_or_uninitialized" if empty_dataset else "populated"
+    # The deployed Supabase main DB also hosts the pilot_smart_radar schema.
+    # Do not claim that the pilot lives in an unrelated database.
+    pilot_count=None
+    if database_kind=="postgresql":
+        pilot_table=db.execute(text("SELECT to_regclass('pilot_smart_radar.source_posts')")).scalar()
+        if pilot_table is not None:
+            pilot_count=int(db.execute(text("SELECT COUNT(*) FROM pilot_smart_radar.source_posts")).scalar_one())
+    result["smart_radar_pilot_posts"]=pilot_count
     result["release_gates"]={
       "database_population_verified":not empty_dataset,
       "social_source_provenance_complete":source["total"]>0 and all(
@@ -89,11 +97,11 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
       "promoted_source_id_integrity":not empty_dataset and lineage["broken_fk"]==0 and lineage["eligible_backfill"]==0 and lineage["conflicts"]==0 and result["duplicate_promotions"]["total"]==0,
       "source_id_backfill_needed":lineage["eligible_backfill"]>0,
       "manual_validation_required":True,
-      "external_pilot_status":"Requires separate Supabase audit"
+      "external_pilot_status":"Verified in main Supabase schema" if pilot_count is not None else "Pilot schema not accessible"
     }
     result["canonical_contract"]="social:<row id> | radar:<pilot post id> | candidate:<registry id>"
-    result["scope"]="Current app database only; Smart Radar pilot lives in separate Supabase project"
-    result["external_pilot_verification"]="Not queried by this endpoint"
+    result["scope"]="Main application database; pilot_smart_radar is a separate schema when present"
+    result["external_pilot_verification"]="Read-only pilot source_posts count" if pilot_count is not None else "Pilot schema unavailable"
     result["paid_requests"]=0
     return result
 

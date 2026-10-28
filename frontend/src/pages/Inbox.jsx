@@ -181,7 +181,7 @@ function SocialEvidenceInbox(){
       <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
       <p className="text-xs text-[#146a8b]">View source and assessment →</p>
      </button>)}
-     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No AI-assessed relevant findings in this view. Unassessed posts remain in Social Listening.</p>}
+     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection, assessment and relevance checks. The separate historical Intelligence and Smart Radar pilot records are not counted as campaign findings.</p>}
     </div>
    </section>
    <div className="grid grid-rows-2 gap-3 xl:sticky xl:top-4 min-w-0">

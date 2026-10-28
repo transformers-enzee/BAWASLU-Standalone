@@ -167,3 +167,10 @@ def test_integration_readiness_reports_campaign_pipeline_separately():
     for table in ("monitoring_campaigns","campaign_runs","campaign_evidence","evidence_assessments"):
         assert table in statement
     assert "COUNT(" in statement
+
+
+def test_socialcrawl_multi_platform_maps_x_brand_to_twitter_provider_id():
+    from app.socialcrawl import _multi_provider_params
+    result=_multi_provider_params({'query':'BAWASLU','platforms':['twitter-ai-search','tiktok']})
+    assert result['platforms']=='twitter,tiktok'
+    assert 'x' not in result['platforms'].split(',')

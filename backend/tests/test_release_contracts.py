@@ -110,3 +110,17 @@ def test_smart_radar_detail_fetches_original_posts_and_rejects_count_mismatch():
     assert "Finding evidence count mismatch:" in adapter
     assert "model.posts = (finding.posts||[]).map" in adapter
     assert "View original source" in adapter
+
+
+def test_assistant_history_uses_authenticated_same_origin_backend():
+    assistant=(FRONTEND/"pages"/"IntelligenceAssistant.jsx").read_text(encoding="utf-8")
+    assert "fetch('/api/assistant-history'+path" in assistant
+    assert "fetch((import.meta.env.VITE_API_BASE_URL||'')+'/api/assistant-history'" not in assistant
+    assert "Authorization:'Bearer '+token" in assistant
+
+def test_smart_radar_counts_use_stable_backend_references():
+    adapter=(FRONTEND.parent/"public"/"ui-freeze"/"smart-radar-live.js").read_text(encoding="utf-8")
+    html=(FRONTEND.parent/"public"/"ui-freeze"/"smart-radar-v6_2.html").read_text(encoding="utf-8")
+    assert "source_count: Number(f.supporting_posts ?? 0)" in adapter
+    assert "f.source_count??f.posts.length" in html
+    assert "Finding evidence count mismatch:" in adapter

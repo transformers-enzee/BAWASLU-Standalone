@@ -87,3 +87,11 @@ def test_social_promotion_preserves_review_and_canonical_source_ids():
     assert "has(p,'add_intelligence')" in promote
     assert "row.review_state not in ('RELEVANT','MONITOR')" in promote
     assert "canonical_source_id('social',row.id)" in promote
+
+
+def test_supabase_pilot_schema_is_audited_without_paid_calls():
+    source=Path(integration_readiness.__file__).read_text(encoding="utf-8")
+    assert "to_regclass('pilot_smart_radar.source_posts')" in source
+    assert "SELECT COUNT(*) FROM pilot_smart_radar.source_posts" in source
+    assert '"smart_radar_pilot_posts"' in source
+    assert "separate Supabase project" not in source

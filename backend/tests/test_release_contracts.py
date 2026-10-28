@@ -124,3 +124,12 @@ def test_smart_radar_counts_use_stable_backend_references():
     assert "source_count: Number(f.supporting_posts ?? 0)" in adapter
     assert "f.source_count??f.posts.length" in html
     assert "Finding evidence count mismatch:" in adapter
+
+
+def test_assistant_provider_timeout_is_bounded_before_gateway_failure():
+    from app import intelligence_assistant
+    source=Path(intelligence_assistant.__file__).read_text(encoding="utf-8")
+    assert "httpx.Timeout(18.0, connect=5.0)" in source
+    assert "AssistantProviderError('provider_timeout'" in source
+    main=(Path(intelligence_assistant.__file__).with_name("main.py")).read_text(encoding="utf-8")
+    assert "deterministic_assistant_answer(q,evidence,exc.code)" in main

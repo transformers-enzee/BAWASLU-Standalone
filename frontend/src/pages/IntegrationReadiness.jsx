@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const API = import.meta.env.VITE_API_BASE_URL || '';
+// Integration controls must always operate on the authenticated Standalone host.
+// A build-time external API override could silently target another database.
+const API = '';
 async function api(path, options = {}) {
   const token = window.localStorage.getItem('bawaslu_access_token');
   if (!token) throw new Error('Please sign in with an authorized National Administrator account.');
@@ -55,6 +57,7 @@ export default function IntegrationReadiness() {
     {error && <p role="alert" className="p-3 bg-red-50 text-red-800 rounded">{error}</p>}
     {notice && <p role="status" className="p-3 bg-emerald-50 text-emerald-800 rounded">{notice}</p>}
     <button className="px-4 py-2 bg-slate-900 text-white rounded disabled:opacity-50" onClick={()=>refresh(0)} disabled={busy}>{busy?'Working…':'Refresh readiness'}</button>
+    {metrics && <p className="text-xs text-slate-600">API host: this Standalone service · Database engine: {metrics.database_engine || "unknown"} · Database: {metrics.database_name || "unknown"} · Schema: {metrics.database_schema || "unknown"}</p>}
     {metrics?.data_source_status==='empty_or_uninitialized' && <p role="alert" className="p-4 rounded border border-red-300 bg-red-50 text-red-900 font-medium">Staging database mismatch or empty app database: this environment has zero Social Listening and Intelligence records. Do not treat zero missing fields as complete, and do not run historical repair here. Verify the deployed service DATABASE_URL points to the intended Render PostgreSQL instance.</p>}
     {metrics && <section className="bg-white border rounded-xl p-4">
       <h2 className="font-semibold text-lg mb-3">Staging quality</h2>

@@ -148,3 +148,22 @@ def test_assistant_fallback_separates_relevance_from_evidence_verification():
     source=Path(intelligence_assistant.__file__).read_text(encoding="utf-8")
     assert "penilaian relevansi manusia, bukan verifikasi kebenaran sumber" in source
     assert "klaim sumber belum terverifikasi" in source
+
+
+def test_campaign_backlog_uses_linked_source_rows_not_orm_unpacking():
+    from app import campaigns
+    code=Path(campaigns.__file__).read_text(encoding="utf-8")
+    block=code.split("if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):",1)[1].split("if action=='campaignManualFlag':",1)[0]
+    assert "for link in links:" in block
+    assert "db.get(SocialListeningResult,link.result_id)" in block
+    assert "_result_in_scope(db,p,item)" in block
+    assert "matched_fields,run_id,published_at" not in block
+    assert "estimated_ai_requests" in block
+    assert "confirm_ai_cost" in block
+
+def test_integration_readiness_reports_campaign_pipeline_separately():
+    from app import integration_readiness
+    statement=integration_readiness.METRICS["campaign_pipeline"]
+    for table in ("monitoring_campaigns","campaign_runs","campaign_evidence","evidence_assessments"):
+        assert table in statement
+    assert "COUNT(" in statement

@@ -71,6 +71,8 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     source=result["social_posts"]
     lineage=result["promotion_lineage"]
     empty_dataset=source["total"]==0 and result["intelligence_provenance"]["total"]==0
+    database_kind=db.get_bind().dialect.name
+    result["database_engine"]=database_kind
     result["data_source_status"]="empty_or_uninitialized" if empty_dataset else "populated"
     result["release_gates"]={
       "database_population_verified":not empty_dataset,

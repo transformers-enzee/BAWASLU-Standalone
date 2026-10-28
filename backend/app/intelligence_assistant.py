@@ -321,7 +321,9 @@ def generate_openai_assistant_answer(question, previous_question, records):
       'max_output_tokens':2200
     }
     try:
-        with httpx.Client(timeout=60.0) as client:
+        # Keep provider latency within the web gateway budget; the caller returns a
+        # source-grounded deterministic answer on provider timeout.
+        with httpx.Client(timeout=httpx.Timeout(18.0, connect=5.0)) as client:
             response=client.post(base_url+'/responses',headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json'},json=request)
     except httpx.TimeoutException as exc:
         raise AssistantProviderError('provider_timeout','OpenAI request timed out') from exc

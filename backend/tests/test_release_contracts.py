@@ -102,3 +102,11 @@ def test_smart_radar_source_counts_distinguish_references_from_loaded_posts():
     assert "f.source_count??f.posts.length" in html
     assert "Original Posts (${f.posts.length} loaded of ${f.source_count??f.posts.length} referenced)" in html
     assert "Do not treat the aggregate count as opened or verified evidence." in html
+
+
+def test_smart_radar_detail_fetches_original_posts_and_rejects_count_mismatch():
+    adapter=(FRONTEND.parent/"public"/"ui-freeze"/"smart-radar-live.js").read_text(encoding="utf-8")
+    assert "request('/api/smart-radar/finding/'+encodeURIComponent(id))" in adapter
+    assert "Finding evidence count mismatch:" in adapter
+    assert "model.posts = (finding.posts||[]).map" in adapter
+    assert "View original source" in adapter

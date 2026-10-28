@@ -73,6 +73,13 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     empty_dataset=source["total"]==0 and result["intelligence_provenance"]["total"]==0
     database_kind=db.get_bind().dialect.name
     result["database_engine"]=database_kind
+    if database_kind=="postgresql":
+        identity=db.execute(text("SELECT current_database() AS db_name, current_schema() AS db_schema")).mappings().one()
+        result["database_name"]=identity["db_name"]
+        result["database_schema"]=identity["db_schema"]
+    else:
+        result["database_name"]="not-postgresql"
+        result["database_schema"]="not-postgresql"
     result["data_source_status"]="empty_or_uninitialized" if empty_dataset else "populated"
     result["release_gates"]={
       "database_population_verified":not empty_dataset,

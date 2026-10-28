@@ -242,7 +242,7 @@ def _multi_provider_params(filters):
     f=_normalize_filters(filters)
     selected=[x for x in f['platforms'] if x!='online_news']
     if not selected: raise ValueError('Select at least one social platform')
-    params={'query':_query_text(f),'platforms':','.join('x' if x=='twitter-ai-search' else x for x in selected)}
+    params={'query':_query_text(f),'platforms':','.join('twitter' if x in ('twitter-ai-search','x') else x for x in selected)}
     if f.get('date_from'): params['since']=f['date_from']
     if f.get('minimum_relevance') not in (None,''):
         params['relevance']='filter'

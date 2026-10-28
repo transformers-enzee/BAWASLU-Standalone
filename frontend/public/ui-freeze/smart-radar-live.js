@@ -41,7 +41,7 @@
       day: 0, status: f.status || 'awareness',
       summary: f.summary || '', insights: f.insights || {},
       violation: (f.players || []).includes('violations'),
-      posts: [], source_count: f.supporting_posts || 0,
+      posts: [], source_count: Number(f.supporting_posts ?? 0),
       human_reviewed: Boolean(f.human_reviewed), history: [],
       priority_score: f.priority_score, priority_label: f.priority_label || 'Not AI-scored',
       platform_counts: f.platform_counts || {}, day_counts: f.day_counts || {},

@@ -186,6 +186,10 @@
     const model = ui.db().find(f => f.id===id);
     if(!model) return null;
     model.summary = finding.summary || model.summary;
+    const referenced = Number(finding.supporting_posts || 0);
+    const loaded = (finding.posts || []).length;
+    if (referenced !== loaded) throw Error('Finding evidence count mismatch: ' + referenced + ' referenced, ' + loaded + ' loaded');
+    model.source_count = referenced;
     model.posts = (finding.posts||[]).map(post=>[
       post.account_raw || 'Unknown public account',
       post.published_at_raw || 'Unknown time',

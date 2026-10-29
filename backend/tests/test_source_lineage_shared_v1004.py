@@ -7,7 +7,7 @@ from app import source_lineage as lineage
 def test_shared_social_lookup_returns_same_persisted_contract_without_ai(monkeypatch):
     post=SimpleNamespace(id=225,text_content='Election oversight concern')
     db=SimpleNamespace(get=lambda cls,key:post if cls is lineage.SocialListeningResult and key==225 else None)
-    monkeypatch.setattr(lineage,'profile',lambda db,user:{'permissions':{'view_intelligence':True}})
+    monkeypatch.setattr(lineage,'profile',lambda db,user:{'status':'Active','geographic_scope':'Nationwide','permissions':{'view_intelligence':True}})
     monkeypatch.setattr(lineage,'_result_in_scope',lambda db,p,row:True)
     from app import saved_assessment_views
     expected=[{'campaign_id':'1','assessment_version':4,'topic_labels':['BAWASLU Reputation'],
@@ -23,13 +23,13 @@ def test_shared_social_lookup_returns_same_persisted_contract_without_ai(monkeyp
     assert response['paid_provider_called'] is False
 
 def test_no_implicit_radar_crosswalk(monkeypatch):
-    monkeypatch.setattr(lineage,'profile',lambda db,user:{'permissions':{'view_intelligence':True}})
+    monkeypatch.setattr(lineage,'profile',lambda db,user:{'status':'Active','geographic_scope':'Nationwide','permissions':{'view_intelligence':True}})
     with pytest.raises(HTTPException) as exc:
         lineage.resolve_saved_assessments('radar:POST-001',SimpleNamespace(id=1),None)
     assert exc.value.status_code==409
 
 def test_shared_lookup_denies_unauthorized_source(monkeypatch):
-    monkeypatch.setattr(lineage,'profile',lambda db,user:{'permissions':{'view_intelligence':True}})
+    monkeypatch.setattr(lineage,'profile',lambda db,user:{'status':'Active','geographic_scope':'Nationwide','permissions':{'view_intelligence':True}})
     monkeypatch.setattr(lineage,'_result_in_scope',lambda db,p,row:False)
     db=SimpleNamespace(get=lambda cls,key:SimpleNamespace(id=225))
     with pytest.raises(HTTPException) as exc:

@@ -44,6 +44,26 @@ def resolve_saved_assessments(reference:str,user:User=Depends(current_user),db:S
         'paid_provider_called':False}
 
 
+@router.get("/crosswalk-status")
+def crosswalk_status(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Read-only, permission-scoped factual overlap check; never equate fuzzy posts."""
+    p=profile(db,user)
+    if not has(p,"view_intelligence") or p.get("geographic_scope")!="Nationwide":
+        raise HTTPException(403,"Nationwide intelligence access required")
+    from .smart_radar import fetch_sources
+    from sqlalchemy import func
+    # Exact URL is necessary for automatic identity; even then human verification
+    # is required before reusing any prior assessment as historical pilot evidence.
+    pilot_urls={str(x.get("source_url") or "").strip() for x in fetch_sources(db)}
+    pilot_urls.discard("")
+    social_urls={str(row[0]).strip() for row in db.query(SocialListeningResult.canonical_url).filter(SocialListeningResult.canonical_url.isnot(None)).all()}
+    overlap=pilot_urls.intersection(social_urls)
+    return {"pilot_source_url_count":len(pilot_urls),"social_source_url_count":len(social_urls),
+            "exact_url_overlap_count":len(overlap),"auto_linked_count":0,
+            "status":"PENDING_HUMAN_IDENTITY_VERIFICATION" if overlap else "NO_EXACT_URL_MATCHES",
+            "assessment_reuse_permitted":False,"paid_provider_called":False}
+
+
 @router.get("/inbox-campaigns")
 def inbox_campaigns(user:User=Depends(current_user),db:Session=Depends(get_db)):
     """Select only campaigns currently visible to this officer; no AI charges."""

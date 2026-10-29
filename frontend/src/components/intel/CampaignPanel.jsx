@@ -45,6 +45,7 @@ function SourceThumbnail({url,platform}){
 export default function CampaignPanel({campaignId=null}){
  const navigate=useNavigate();
  const [campaigns,setCampaigns]=useState([]);
+ const [trackedCount,setTrackedCount]=useState(null);
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
  const [creating,setCreating]=useState(false),[editing,setEditing]=useState(null);
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
@@ -114,7 +115,7 @@ export default function CampaignPanel({campaignId=null}){
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsKeyword,setAnalyticsKeyword]=useState(''),[appliedKeyword,setAppliedKeyword]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  const visibleCapturedPosts=evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);const dateOk=!(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo));const label=String(item.sentiment||'UNCLASSIFIED').toUpperCase();return dateOk&&(capturedSentimentFilter==='ALL'||(capturedSentimentFilter==='UNCLASSIFIED'?!['POSITIVE','NEUTRAL','NEGATIVE'].includes(label):label===capturedSentimentFilter))}).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
-  setCampaignSection('overview');
+  setCampaignSection(new URLSearchParams(window.location.search).get('tab')==='watchlist'?'watchlist':'overview');
   setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
@@ -276,6 +277,7 @@ export default function CampaignPanel({campaignId=null}){
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setLoading(false)}
  }
+ useEffect(()=>{if(campaignId)return;let active=true;base44.functions.invoke('registry',{action:'list',data:{}}).then(r=>{if(active)setTrackedCount((r.data.items||[]).filter(x=>String(x.type||'').toLowerCase()==='candidate'&&x.status==='Active').length)}).catch(()=>{if(active)setTrackedCount(null)});return ()=>{active=false}},[campaignId]);
  useEffect(()=>{if(!campaignId){refresh();return}let active=true;setLoading(true);base44.functions.invoke('socialListening',{action:'getCampaign',id:campaignId,data:{}}).then(r=>{if(active)viewEvidence(r.data.campaign)}).catch(e=>{if(active)setError(e.response?.data?.detail||e.response?.data?.error||e.message)}).finally(()=>{if(active)setLoading(false)});return ()=>{active=false}},[campaignId]);
  function newCampaign(){resetKeywordPreview();clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
@@ -327,25 +329,25 @@ export default function CampaignPanel({campaignId=null}){
    .v10-campaign .intel-card {border-radius:13px}
   `}</style>}
 
-  {!campaignId&&<div className="intel-card p-5 space-y-3">
-   <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><h2 className="text-lg font-semibold">Monitoring Campaigns</h2>
-      <p className="text-sm text-[#77899b]">Organize ongoing listening by topic, candidate and keyword.</p></div>
-    <button type="button" className="intel-button" onClick={newCampaign}>+ New Campaign</button>
-   </div>
-   <p className="text-xs text-[#8b6e39]">Campaigns are drafts for now. Automatic crawling will activate after credit limits and scheduling QA are completed.</p>
-   <div className="flex flex-wrap gap-4 text-sm">
-    <span><strong>{total}</strong> campaigns</span><span><strong>{campaigns.filter(x=>x.status==='PAUSED').length}</strong> paused</span>
-   </div>
-   <div className="flex flex-wrap gap-2"><input className="intel-input flex-1" value={query} aria-label="Search campaigns" placeholder="Search campaigns" onChange={e=>setQuery(e.target.value)}/><select className="intel-input" aria-label="Campaign status filter" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option><option value="DRAFT">Draft</option><option value="PAUSED">Paused</option></select></div>
-  </div>}
+  <header className="flex flex-wrap items-start justify-between gap-4">
+    <div><p className="text-[11px] font-extrabold uppercase tracking-[.13em] text-[#6d8994]">Monitoring &amp; Collection</p>
+    <h1 className="mt-1 text-[27px] font-bold tracking-tight text-[#152c47]">Social Listening</h1>
+    <p className="mt-1 text-sm text-[#60768c]">Discover broad conversations. Track selected candidates.</p></div>
+    {!campaignId&&<button type="button" className="rounded-xl border border-[#11816d] bg-[#11816d] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={newCampaign}>＋ Create campaign</button>}
+  </header>
+  <div className="rounded-xl border border-[#d7e8e2] bg-[#f4fbf8] px-4 py-3 text-xs leading-6 text-[#295e57]"><b>Live BAWASLU monitoring.</b> Campaigns, captured posts, classifications and candidate tracking show saved authorized records. No sample or demonstration posts have been added.</div>
+  <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1" aria-label="Monitoring workflow steps">
+   {['Set up monitoring','Monitoring Home','Campaign Dashboard'].map((label,i)=><span key={label} className={'inline-flex items-center gap-2 text-xs '+((creating?i===0:campaignId?i===2:i===1)?'font-bold text-[#117c6c]':'text-[#708394]')}>
+    <span className={'grid h-6 w-6 place-items-center rounded-full '+((creating?i===0:campaignId?i===2:i===1)?'bg-[#117c6c] text-white':'bg-[#e3eaee] text-[#708394]')}>{i+1}</span>{label}{i<2&&<span className="ml-2 text-[#a0b1bb]">→</span>}
+   </span>)}
+  </nav>
   {!creating&&error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
-  {creating&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setCreating(false)}}>
-   <div role="dialog" aria-modal="true" aria-labelledby="campaign-modal-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+  {creating&&<section className="rounded-xl border border-[#dce5ed] bg-white p-4 sm:p-6">
+   <div className="w-full">
     <form className="p-5 sm:p-7 space-y-4" onSubmit={save} aria-label="Campaign editor">
    <div className="flex items-center justify-between gap-4">
-    <h3 id="campaign-modal-title" className="text-lg font-semibold">{editing?'Edit Campaign':'Create Campaign'}</h3>
+    <div><h2 id="campaign-modal-title" className="text-xl font-semibold text-[#152c47]">{editing?'Edit monitoring campaign':'Create a monitoring campaign'}</h2><p className="text-sm text-[#60768c]">Choose keywords and collection coverage, then save your campaign to open its dashboard.</p></div>
     <button type="button" aria-label="Close campaign popup" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>✕</button>
    </div>
    <div className="grid gap-3 md:grid-cols-2">
@@ -385,33 +387,40 @@ export default function CampaignPanel({campaignId=null}){
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>
    </div>
-  </div>}
-  {!campaignId&&(loading?<p className="rounded-xl bg-white p-5">Loading campaigns…</p>:
-  <section className="rounded-xl border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
-   <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see its overview, captured posts, and candidate tracking.</p></div><span className="rounded-full bg-[#e8f4ef] px-3 py-1.5 text-xs font-semibold text-[#207558]">{visible.length} campaign(s)</span></div>
-   <div className="mt-4 space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white p-4 hover:border-[#90c7bd]">
-    <div className="min-w-0"><h3 className="font-semibold text-[#19324a]">{c.name} <span className="ml-2 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] text-[#207558]">{displayStatus(c.status)}</span></h3><p className="mt-1 text-xs text-[#60768c]">Main keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {c.evidence_count||0} saved source posts</p><p className="text-xs text-[#60768c]">{c.date_from||'Any date'} — {c.date_to||'Any date'}</p></div>
-    <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg bg-[#11816d] px-3 py-2 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
-   </article>)}{!visible.length&&<p className="rounded-lg border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No monitoring campaigns match your search.</p>}</div>
-  </section>)}
-  {campaignId&&selected&&!creating&&<div className="rounded-xl border border-[#dce5ed] bg-white p-5 space-y-3">
+  </section>}
+  {!campaignId&&!creating&&<section className="space-y-4">
+   <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see the dashboard, captured posts and candidate tracking.</p></div>
+   {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#11816d] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
+   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    {[[total,'Monitoring campaigns'],[campaigns.reduce((n,c)=>n+Number(c.evidence_count||0),0),'Campaign-linked source posts'],[new Set(campaigns.flatMap(c=>c.platforms||[])).size,'Configured source platforms'],[trackedCount===null?'—':trackedCount,'Actively tracked candidates']].map(([value,label])=><div key={label} className="rounded-xl border border-[#dce5ed] bg-white px-4 py-5"><strong className="block text-[26px] font-bold tabular-nums text-[#152c47]">{typeof value==='number'?value.toLocaleString():value}</strong><span className="text-[11px] text-[#60768c]">{label}</span></div>)}
+   </div>
+   <section className="rounded-[13px] border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
+    {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
+      <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+     </article>)}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
+   </section>
+   <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords and platforms, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
+  </section>}
+  {campaignId&&selected&&!creating&&<div className="v10-detail space-y-4">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
    <h3 className="text-2xl font-bold text-[#152c47]">{selected.name} — Campaign Overview</h3>
+   <div className="flex flex-wrap gap-2" aria-label="Campaign keyword summaries">
+    {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
+   </div>
+   <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
    {campaignSection==='posts'&&!dashboard&&<section className="space-y-3 rounded-xl border border-[#dce5ed] bg-white p-4"><h4 className="font-semibold">Captured posts &amp; sources</h4><p className="text-sm text-[#60768c]">Showing saved source evidence from this campaign. Dashboard analytics are temporarily unavailable.</p>{evidenceLoading?<p className="text-sm">Loading captured posts…</p>:evidence.length?evidence.map(item=><article key={item.id} className="space-y-2 border-b border-[#dce5ed] py-3"><p className="text-xs text-[#60768c]">{platformLabel(item.platform)} · {item.published_at||'Undated'}</p><p className="whitespace-pre-wrap break-words text-sm">{item.text_content||'No source text'}</p><div className="flex flex-wrap gap-2">{/^https:\/\//i.test(item.canonical_url||'')&&<a className="intel-ghost" target="_blank" rel="noopener noreferrer" href={item.canonical_url}>Open original source</a>}<button type="button" className="intel-ghost" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button></div></article>):<p className="text-sm text-[#60768c]">No saved captured posts for this campaign.</p>}</section>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='watchlist'?'hidden':'contents'} data-campaign-body={campaignSection}>
 
-   <div className="flex flex-wrap gap-2" aria-label="Campaign keyword summaries">
-    {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
-   </div>
-   <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
    {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
    {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Campaign data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
-   {campaignSection==='overview'&&<AssessmentPilotPreview campaign={selected}/>}
-   {dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-xl border border-[#dce5ed] bg-white p-4 space-y-3">
-    <h4 className="font-semibold">Monitoring dashboard</h4>
+
+   {dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
+    <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>
     <p className="text-xs text-slate-500">Keyword dropdown filters by campaign keywords in post text (case-insensitive). Date filters use publication dates. Dashboard analytics cover up to the latest 5,000 matching evidence records. No crawl credits used.</p>{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -590,6 +599,7 @@ export default function CampaignPanel({campaignId=null}){
     </div>}
     {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
    </section>
+   {campaignSection==='overview'&&<details className="rounded-xl border border-[#dce5ed] bg-white p-4"><summary className="cursor-pointer text-sm font-semibold text-[#19324a]">AI assessment tools and source review</summary><div className="mt-3"><AssessmentPilotPreview campaign={selected}/></div></details>}
    {evidenceError&&<p role="alert" className="text-red-700 text-sm">{evidenceError}</p>}
   </div>
   </div>}

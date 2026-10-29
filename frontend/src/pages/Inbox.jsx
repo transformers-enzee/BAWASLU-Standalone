@@ -411,6 +411,13 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <button type="button" className="intel-ghost text-xs" disabled={acceptanceBusy} onClick={loadAcceptance}>Load production acceptance evidence (free)</button>
       {acceptance&&<div className="space-y-2">
        <p className="text-xs">{acceptance.relevant_posts} relevant saved / {acceptance.authorized_posts} authorized posts · {acceptance.unassessed_posts} unassessed · {acceptance.saved_groups_count} saved groups. No item below represents formal officer sign-off.</p>
+       <div className="rounded border p-2 space-y-1 text-xs">
+        <strong>Unfinished production acceptance — concrete next actions</strong>
+        {(acceptance.next_actions||[]).map((item,i)=><p key={i}>
+         <b>#{item.item} · {item.status.replaceAll('_',' ')}:</b> {item.instruction}
+        </p>)}
+        <p className="text-slate-500">Not marked DONE until all required evidence and approvals exist.</p>
+       </div>
        <div className="max-h-72 overflow-y-auto space-y-1">{(acceptance.items||[]).map(x=><div key={x.number} className="rounded border p-2 text-xs">
         <strong>#{x.number} · {x.name}</strong> — {x.production_state.replaceAll('_',' ')} · {x.supporting_records} supporting record(s)
         <p className="text-slate-600">{x.note}</p></div>)}</div>

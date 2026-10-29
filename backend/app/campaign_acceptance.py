@@ -93,7 +93,43 @@ def campaign_acceptance_snapshot(db,p,raw_id):
        item(15,'Processing diagnostics','COVERAGE_AVAILABLE',
             coverage['authorized_posts'],'No paid requests or assumed zero cost'),
     ]
+    # Next actions are honest evidence gates, not inferred DONE statuses.
+    next_actions=[]
+    if candidate_counts['EXACT_DUPLICATE'] and not stored['EXACT_DUPLICATE']:
+        next_actions.append({'item':8,'kind':'OFFICER_WORKFLOW',
+            'status':'READY_FOR_OFFICER_TO_SAVE',
+            'instruction':'Inspect the exact duplicate source texts; save the provisional group and record an independent officer decision.',
+            'source_groups':candidate_counts['EXACT_DUPLICATE'],
+            'permission_required':'review_ai_suggestions'})
+    elif stored['EXACT_DUPLICATE'] and not reviewed['EXACT_DUPLICATE']:
+        next_actions.append({'item':8,'kind':'OFFICER_WORKFLOW',
+            'status':'PENDING_OFFICER_REVIEW',
+            'instruction':'Inspect the saved duplicate source records before accepting or rejecting.',
+            'source_groups':stored['EXACT_DUPLICATE'],
+            'permission_required':'human_validation'})
+    if candidate_counts['NARRATIVE_CANDIDATE'] and not reviewed['NARRATIVE_CANDIDATE']:
+        next_actions.append({'item':9,'kind':'OFFICER_WORKFLOW',
+            'status':'READY_FOR_REVIEW' if stored['NARRATIVE_CANDIDATE'] else 'READY_FOR_OFFICER_TO_SAVE',
+            'instruction':'Inspect recurring independent sources and determine if they truly form a narrative.',
+            'source_groups':candidate_counts['NARRATIVE_CANDIDATE'],
+            'permission_required':'human_validation'})
+    elif not candidate_counts['NARRATIVE_CANDIDATE']:
+        next_actions.append({'item':9,'kind':'DATA_DEPENDENCY',
+            'status':'NO_QUALIFYING_NARRATIVE_SOURCES',
+            'instruction':'Do not fabricate a narrative: the current saved relevant posts do not meet the recurring-source threshold.',
+            'source_groups':0})
+    if not draft_count:
+        next_actions.append({'item':12,'kind':'PAID_AI_DEPENDENCY',
+            'status':'NO_SAVED_AI_SUMMARIES',
+            'instruction':'A small explicitly authorized AI assessment sample is needed; verbatim source extracts are not AI summaries.',
+            'source_groups':0})
+    next_actions.append({'item':14,'kind':'QA_AND_HUMAN_DEPENDENCY',
+        'status':'REFERENCE_SIGNOFF_AND_MEASURED_EVALUATION_REQUIRED',
+        'instruction':'An analyst must reconcile reference labels; the unvalidated V18 draft requires a separate authorized measured test.',
+        'source_groups':0})
     return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,
+        'next_actions':next_actions,
+        'fully_completed_items_not_inferred':True,
         'items':ledger,'linked_posts':coverage['linked_posts'],
         'authorized_posts':coverage['authorized_posts'],
         'relevant_posts':coverage['relevant_posts'],

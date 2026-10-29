@@ -47,6 +47,29 @@ METRICS={
   (SELECT COUNT(*) FROM campaign_runs) AS collection_runs,
   (SELECT COUNT(*) FROM campaign_evidence) AS linked_evidence,
   (SELECT COUNT(*) FROM evidence_assessments) AS assessments""",
+ "assessment_quality": """SELECT COUNT(*) AS total,
+  COUNT(*) FILTER(WHERE relevance_label IN ('RELEVANT','HIGHLY_RELEVANT')) AS relevant,
+  COUNT(*) FILTER(WHERE relevance_label IN ('IRRELEVANT','NOT_RELEVANT')) AS irrelevant,
+  COUNT(*) FILTER(WHERE relevance_label NOT IN ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','NOT_RELEVANT')) AS other_relevance,
+  COUNT(*) FILTER(WHERE sentiment IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS sentiment_classified,
+  COUNT(*) FILTER(WHERE sentiment NOT IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS sentiment_unclassified,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(geographic_signals_json),'') IS NULL OR geographic_signals_json='[]') AS no_geographic_signals,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(candidate_signals_json),'') IS NULL OR candidate_signals_json='[]') AS no_candidate_signals,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(potential_issue_signals_json),'') IS NULL OR potential_issue_signals_json='[]') AS no_potential_issue_signals
+  FROM evidence_assessments""",
+ "campaign_source_quality": """SELECT COUNT(*) AS linked,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.canonical_url),'') IS NULL) AS missing_url,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.published_at),'') IS NULL) AS missing_publication,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.text_content),'') IS NULL) AS missing_text,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.platform),'') IS NULL) AS missing_platform,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.author_name),'') IS NULL) AS missing_author
+  FROM campaign_evidence ce JOIN social_listening_results s ON s.id=ce.result_id""",
+ "campaign_duplicate_text": """SELECT COUNT(*) AS duplicate_groups FROM (
+  SELECT LOWER(TRIM(s.text_content)) AS body FROM campaign_evidence ce
+  JOIN social_listening_results s ON s.id=ce.result_id
+  WHERE NULLIF(TRIM(s.text_content),'') IS NOT NULL
+  GROUP BY LOWER(TRIM(s.text_content)) HAVING COUNT(*)>1
+  ) duplicates""",
  "candidates": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE status='Active') AS active
   FROM watchlist_items WHERE LOWER(type)='candidate'"""

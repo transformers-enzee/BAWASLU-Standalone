@@ -184,3 +184,15 @@ def test_campaign_dashboard_cache_invalidates_on_new_evidence():
     assert "func.count(CampaignEvidence.id)" in dashboard
     assert "func.max(CampaignEvidence.id)" in dashboard
     assert "int(evidence_revision[0] or 0)" in dashboard
+
+
+def test_v92_4_readiness_tracks_classification_and_source_quality_without_paid_calls():
+    from app import integration_readiness
+    metrics=integration_readiness.METRICS
+    for name in ('assessment_quality','campaign_source_quality','campaign_duplicate_text'):
+        assert name in metrics
+    assert 'sentiment_classified' in metrics['assessment_quality']
+    assert 'no_potential_issue_signals' in metrics['assessment_quality']
+    assert 'HAVING COUNT(*)>1' in metrics['campaign_duplicate_text']
+    shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert 'v92.4' in shell

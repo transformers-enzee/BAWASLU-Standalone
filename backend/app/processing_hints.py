@@ -450,7 +450,7 @@ def summarize_scoped_findings(records):
             and len(saved_quote)>=20
             and saved_quote.casefold() in source_text.casefold()
             and bool(issue or valid_concerns))
-        if (issue or flag or saved_attention_valid) and not dismissed:
+        if (issue or flag) and not dismissed:
             posture=attention_evidence_readiness(row)
             if saved_attention_valid:
                 posture['seriousness']=proposed.get('seriousness','NOT_ASSESSED')

@@ -23,12 +23,10 @@ def test_multiple_players_topics_summaries_and_attention_from_one_saved_post():
     assert {x['topic'] for x in summary['topic_groups']}=={
         'Electoral Operations','BAWASLU Reputation'}
     assert summary['intelligence_players']['Public Concerns']['count']==1
-    assert summary['intelligence_players']['Needs Attention']['count']==1
+    assert summary['intelligence_players']['Needs Attention']['count']==0
     assert summary['intelligence_players']['Potential Violations']['count']==0
     assert summary['intelligence_players']['Public Concerns']['entries'][0]['ai_summary_draft']['source_quote']==QUOTE
-    entry=summary['needs_attention_candidates'][0]
-    assert entry['urgency']=='MEDIUM' and entry['seriousness']=='HIGH'
-    assert entry['legal_violation_confirmed'] is False
+    assert summary['needs_attention_candidates']==[]
     assert summary['paid_provider_called'] is False
 
 def test_source_change_removes_stale_ai_attention_and_draft():
@@ -47,11 +45,16 @@ def test_multiple_players_can_use_same_source():
     row={'id':'1','campaign_id':'91','text_content':TEXT,'relevance_label':'RELEVANT',
         'potential_issues':[{'evidence_quote':QUOTE}],
         'public_concern_signals':[{'evidence_quote':QUOTE,'concern':'Voter register'}],
-        'is_flagged':True}
+        'is_flagged':True,
+        'attention_assessment':{'status':'AI_ASSESSMENT_UNVERIFIED',
+           'seriousness':'HIGH','urgency':'MEDIUM','evidence_quote':QUOTE}}
     summary=summarize_scoped_findings([row])
     assert summary['intelligence_players']['Potential Violations']['count']==1
     assert summary['intelligence_players']['Public Concerns']['count']==1
     assert summary['intelligence_players']['Needs Attention']['count']==1
+    attention=summary['needs_attention_candidates'][0]
+    assert attention['urgency']=='MEDIUM' and attention['seriousness']=='HIGH'
+    assert attention['legal_violation_confirmed'] is False
     assert summary['intelligence_players']['Potential Violations']['entries'][0]['evidence_verified'] is False
 
 def test_historical_accuracy_cannot_pass_by_tiny_sample_or_unsigned_labels():

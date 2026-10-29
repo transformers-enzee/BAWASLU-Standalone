@@ -701,13 +701,16 @@ def campaign_action(db:Session,p,action,data,id=None):
                     components=[recorded_metric('likes','like_count'),recorded_metric('comments','comment_count'),recorded_metric('shares','share_count')]
                     captured_engagement=sum(v for v in components if v is not None) if any(v is not None for v in components) else None
                 captured_views=recorded_metric('views','view_count','plays','play_count')
+                from .processing_hints import source_hints
+                processing=source_hints(item.text_content)
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
                     'author_name':item.author_name,'published_at':item.published_at,
                     'engagement_total':captured_engagement,'views':captured_views,'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
-                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
+                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
+                    'processing_hints':processing,'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,
                     'flag_review_status':latest_review.decision if latest_review else None,
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,

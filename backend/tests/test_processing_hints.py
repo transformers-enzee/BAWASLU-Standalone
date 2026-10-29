@@ -18,3 +18,15 @@ def test_no_automatic_violation_or_sentiment_claim():
     hints=source_hints('Ada dugaan pelanggaran pemilu di Riau.')
     assert 'sentiment' not in hints
     assert 'violation_confirmed' not in hints
+
+def test_greeting_is_reviewable_routine_not_electoral_incident():
+    text='Selamat Hari Sumpah Pemuda ke-98 Tahun, bersatulah seluruh Pemuda Indonesia! #Bawaslu #BawasluSBB'
+    result=source_hints(text)
+    assert result['communication_context']['category']=='ROUTINE_COMMUNICATION'
+    assert result['communication_context']['actionability']=='NOT_ESTABLISHED'
+    assert not result['topic_suggestions']
+
+def test_incident_greeting_mixed_content_not_suppressed():
+    result=source_hints('Selamat hari ini. Ada laporan dugaan pelanggaran pemilu di Riau')
+    assert result['communication_context']['category']=='UNRESOLVED'
+    assert result['incident_jurisdiction_status']=='UNVERIFIED'

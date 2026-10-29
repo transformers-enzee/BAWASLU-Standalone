@@ -17,6 +17,17 @@ TOPIC_TERMS={
     'Electoral Operations':('kpu','pemilu','pemilihan','pengawasan','dkpp','pencalonan','pelanggaran pemilu'),
     'BAWASLU Reputation':('reputasi bawaslu','kepercayaan publik terhadap bawaslu','kritik terhadap bawaslu','citra bawaslu'),
 }
+ROUTINE_MARKERS=('selamat hari','sumpah pemuda','dirgahayu','selamat ulang tahun','ucapan selamat','memperingati hari')
+SUBSTANTIVE_MARKERS=('pelanggaran','dugaan','laporan','investigasi','pengawasan pemilu','pemungutan suara','sengketa','kecurangan','putusan dkpp','temuan')
+def communication_context(text):
+    """Conservative triage hint; never silently overrides an AI or human label."""
+    body=str(text or '').casefold()
+    greeting=any(term in body for term in ROUTINE_MARKERS)
+    substantive=any(term in body for term in SUBSTANTIVE_MARKERS)
+    if greeting and not substantive:
+        return {'category':'ROUTINE_COMMUNICATION','actionability':'NOT_ESTABLISHED','requires_human_review':True}
+    return {'category':'UNRESOLVED','actionability':'NOT_ESTABLISHED','requires_human_review':True}
+
 def source_hints(text):
     body=str(text or '')
     folded=body.casefold()
@@ -26,6 +37,7 @@ def source_hints(text):
     normalized=re.sub(r'\s+',' ',folded).strip()
     return {
         'topic_suggestions':topics,
+        'communication_context':communication_context(body),
         'province_mentions':provinces,
         'incident_jurisdiction_status':'UNVERIFIED',
         'province_mentions_are_incident_location':False,

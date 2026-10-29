@@ -14,7 +14,7 @@ function SocialEvidenceInbox(){
  const requestedCampaign=deepLink.get('campaign_id')||'';
  const requestedPost=deepLink.get('result_id')||'';
  const [processingSummary,setProcessingSummary]=useState(null);
- const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState('');
+ const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState(''),[groupExpanded,setGroupExpanded]=useState(false);
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
@@ -135,14 +135,14 @@ function SocialEvidenceInbox(){
  }
  async function previewFindingGroups(){
   if(!campaign){setGroupError('Select a campaign to preview groups.');return;}
-  setGroupBusy(true);setGroupError('');setGroupNotice('');
+  setGroupBusy(true);setGroupError('');setGroupNotice('');setGroupExpanded(true);
   try{const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsPreview',id:campaign,data:{}});setGroupPreview(r.data)}
   catch(e){setGroupError(e.response?.data?.detail||e.message)}
   finally{setGroupBusy(false)}
  }
  async function loadFindingGroups(){
   if(!campaign){setGroupError('Select a campaign first.');return;}
-  setGroupBusy(true);setGroupError('');
+  setGroupBusy(true);setGroupError('');setGroupExpanded(true);
   try{const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsList',id:campaign,data:{}});setGroupRows(r.data.groups||[])}
   catch(e){setGroupError(e.response?.data?.detail||e.message)}
   finally{setGroupBusy(false)}
@@ -272,7 +272,8 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">
    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Source-linked grouping review</h3><p className="text-xs text-slate-500">Exact duplicates, incident clusters and Emerging Narratives · saved separately from legal findings.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={previewFindingGroups}>Preview groups (free)</button><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={loadFindingGroups}>Saved groups</button></div></div>
    {groupPreview&&<div className="text-xs space-y-1"><p>{groupPreview.proposal_count} grouping candidate(s) from {groupPreview.eligible_posts} assessed relevant posts. {groupPreview.source_window_truncated?'Only the first 300 linked posts were scanned.':''}</p><p>All proposed incidents and narratives require human source review. No shared incident is automatically verified.</p>{groupPreview.proposal_count>0&&<button type="button" className="intel-button text-xs" disabled={groupBusy} onClick={saveFindingGroups}>Save provisional groups for review</button>}</div>}
-   {!!groupRows.length&&<div className="space-y-2 max-h-64 overflow-y-auto">{groupRows.map(row=><div className="rounded-lg border border-slate-200 p-2 text-xs flex flex-wrap justify-between gap-2" key={row.id}><div><strong>{row.group_type.replaceAll('_',' ')} · {row.label}</strong><p className="text-slate-600">Source posts: {row.source_ids.join(', ')} · {row.review_status}</p><p className="text-slate-500">Human grouping decisions do not establish a legal violation.</p></div>{row.review_status==='PROPOSED'&&<div className="flex gap-2"><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'ACCEPTED')}>Accept group</button><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'REJECTED')}>Reject group</button></div>}</div>)}</div>}
+   {groupExpanded&&groupRows.length===0&&!groupBusy&&<p className="text-xs text-slate-500">No saved review groups yet. Preview existing assessed posts, then save proposed groups before officer review.</p>}
+   {!!groupRows.length&&<div className="space-y-2 max-h-64 overflow-y-auto">{groupRows.map(row=><div className="rounded-lg border border-slate-200 p-2 text-xs flex flex-wrap justify-between gap-2" key={row.id}><div><strong>{row.group_type.replaceAll('_',' ')} · {row.label}</strong><p className="text-slate-600">Source posts: {row.source_ids.length} · {row.review_status}</p><p className="text-slate-500">Human grouping decisions do not establish a legal violation.</p><div className="flex flex-wrap gap-1 mt-1">{row.source_ids.map(id=><button key={id} type="button" className="intel-ghost text-xs" onClick={()=>{const source=findings.find(x=>String(x.id)===String(id)&&String(x.campaign_id)===String(row.campaign_id));if(source){setSelected(source);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}else{setGroupError('This source is outside the currently loaded Inbox findings. Open the matching campaign evidence view to inspect it.')}}}>Inspect source {id}</button>)}</div></div>{row.review_status==='PROPOSED'&&<div className="flex gap-2"><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'ACCEPTED')}>Accept group</button><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'REJECTED')}>Reject group</button></div>}</div>)}</div>}
    {groupNotice&&<p className="text-xs text-emerald-700" role="status">{groupNotice}</p>}{groupError&&<p className="text-xs text-red-700" role="alert">{groupError}</p>}
   </section>}
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}

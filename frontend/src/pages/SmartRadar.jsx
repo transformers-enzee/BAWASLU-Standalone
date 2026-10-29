@@ -6,10 +6,21 @@ import {useEffect,useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 
 export default function SmartRadar(){
- const [params]=useSearchParams();
+ const [params,setParams]=useSearchParams();
+ const [campaigns,setCampaigns]=useState([]);
  const campaignId=params.get('campaign_id');
  const validCampaign=Boolean(campaignId && /^[1-9][0-9]*$/.test(campaignId));
  const [state,setState]=useState({loading:false,data:null,error:''});
+ useEffect(()=>{
+  let ignore=false;
+  const token=localStorage.getItem('bawaslu_access_token')||'';
+  fetch('/api/source-lineage/inbox-campaigns',{cache:'no-store',headers:{Authorization:'Bearer '+token}})
+   .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.detail||'Campaign list unavailable');return data;})
+   .then(data=>{if(!ignore)setCampaigns(data.campaigns||[]);})
+   .catch(()=>{if(!ignore)setCampaigns([]);});
+  return ()=>{ignore=true;};
+ },[]);
+
  const [perspective,setPerspective]=useState('inbox');
  const [selectedTopic,setSelectedTopic]=useState('');
  const [showSummaries,setShowSummaries]=useState(false);
@@ -30,6 +41,7 @@ export default function SmartRadar(){
  const topicNames=row=>(row.topic_labels||[]).map(topic=>typeof topic==='string'?topic:topic?.topic||topic?.label).filter(Boolean);
  const topicCounts=Object.entries(entries.reduce((acc,row)=>{for(const topic of row.topic_labels||[]){const key=typeof topic==='string'?topic:topic?.topic||topic?.label;if(key)acc[key]=(acc[key]||0)+1;}return acc;},{})).sort((a,b)=>b[1]-a[1]);
  return <section aria-label="Smart Radar V6.2" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#f1f5f7]">
+  <div className="bg-white border-b border-[#dce5ea] px-5 py-2"><label className="text-xs text-[#122f46]" htmlFor="radar-campaign">Intelligence Inbox campaign: </label><select id="radar-campaign" aria-label="Intelligence Inbox campaign" className="border rounded px-2 py-1 text-xs" value={validCampaign?campaignId:''} onChange={event=>{const p=new URLSearchParams(params);if(event.target.value)p.set('campaign_id',event.target.value);else p.delete('campaign_id');setParams(p);}}><option value="">Historical Radar pilot (no campaign selected)</option>{campaigns.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></div>
   {validCampaign&&<div className="border-b border-[#dce5ea] bg-white px-5 py-3 text-sm">
    <div className="font-semibold text-[#122f46]">Intelligence Inbox evidence feed · Campaign {campaignId}</div>
    <div className="text-xs text-[#526575]">Verified social-source assessments; legacy Radar pilot records remain separate.</div>

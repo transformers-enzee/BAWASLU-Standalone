@@ -44,6 +44,19 @@ def resolve_saved_assessments(reference:str,user:User=Depends(current_user),db:S
         'paid_provider_called':False}
 
 
+@router.get("/inbox-campaigns")
+def inbox_campaigns(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Select only campaigns currently visible to this officer; no AI charges."""
+    p=profile(db,user)
+    if not has(p,'view_intelligence'):
+        raise HTTPException(403,'Intelligence access required')
+    from .models import MonitoringCampaign
+    campaigns=(db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc())
+               .limit(500).all())
+    return {'campaigns':[{'id':str(c.id),'name':c.name}
+            for c in campaigns if allowed(p,c)],
+            'paid_provider_called':False}
+
 @router.get("/inbox-radar-feed/{campaign_id}")
 def inbox_radar_feed(campaign_id:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     """Future Smart Radar feed: reuse *actual* scoped Intelligence Inbox assessments.

@@ -253,16 +253,21 @@ def incident_cluster_candidates(records):
         anchors=narrative_anchors(row.get('text_content'))
         if not (campaign and rid and author and url and fp and len(provinces)==1):
             continue
+        # Posts dated in different calendar months must not be presumed to
+        # describe the same incident. Undated posts remain separate candidates.
+        published=str(row.get('published_at') or '')
+        period=published[:7] if re.fullmatch(r'\d{4}-\d{2}',published[:7]) else 'UNDATED'
         for anchor in anchors:
-            grouped[(campaign,provinces[0],anchor)].append((rid,author,url,fp))
+            grouped[(campaign,provinces[0],anchor,period)].append((rid,author,url,fp))
     result=[]
-    for (campaign,province,anchor),rows in sorted(grouped.items()):
+    for (campaign,province,anchor,period),rows in sorted(grouped.items()):
         unique={item[3]:item for item in rows}
         evidence=list(unique.values())
         if len(evidence)<2 or len({x[1] for x in evidence})<2 or len({x[2] for x in evidence})<2:
             continue
         result.append({'campaign_id':campaign,'incident_province_unverified':province,
-            'discussion_anchor':anchor,'source_ids':sorted(x[0] for x in evidence),
+            'discussion_anchor':anchor,'publication_month':period,
+            'source_ids':sorted(x[0] for x in evidence),
             'status':'INCIDENT_CLUSTER_REVIEW_CANDIDATE',
             'same_incident_verified':False,'evidence_independence':'UNVERIFIED'})
     return result
@@ -350,6 +355,11 @@ def processing_acceptance_snapshot(records):
       'unresolved_candidate_names_count':len(unknown_candidate_names),
       'multi_location_ambiguity_count':ambiguous_locations,
       'missing_source_text_count':missing_context,
+      'posts_with_saved_candidate_signals':sum(
+          bool(row.get('candidate_signals')) for row in relevant),
+      'posts_with_explicit_incident_month':sum(
+          bool(re.fullmatch(r'\d{4}-\d{2}',str(row.get('published_at') or '')[:7]))
+          for row in relevant),
       'confirmed_candidate_identities':0,
       'verified_incidents':0,
       'verified_narratives':0,

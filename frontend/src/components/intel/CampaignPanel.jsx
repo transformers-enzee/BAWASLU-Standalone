@@ -17,7 +17,8 @@ function SentimentBar({values}){
  const categories=[{name:'Negative',color:'#dc4545'},{name:'Neutral',color:'#eab308'},{name:'Positive',color:'#16a34a'}];
  const counts=categories.map(x=>({...x,count:Number(values?.[x.name]??values?.[x.name.toUpperCase()]??values?.[x.name.toLowerCase()]??0)}));
  const total=counts.reduce((sum,x)=>sum+x.count,0);
- return <div className="pt-2 space-y-2" aria-label="Sentiment overview"><div className="flex items-center justify-between gap-2"><h6 className="text-xs font-semibold">Sentiment overview</h6><span className="text-[11px] text-slate-500">{total?total.toLocaleString()+' classified':'No classified sentiment yet'}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={total?counts.map(x=>x.name+': '+x.count).join(', '):'No sentiment data available'}>{counts.filter(x=>x.count>0).map(x=><div key={x.name} style={{width:(x.count/total*100)+'%',backgroundColor:x.color}} title={x.name+': '+x.count}/>)}</div><div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">{counts.map(x=><span key={x.name} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{backgroundColor:x.color}}/>{x.name} {x.count.toLocaleString()}{total?' ('+(x.count/total*100).toFixed(1)+'%)':''}</span>)}</div></div>;
+ const unclassified=Number(values?.Unclassified??values?.UNCLASSIFIED??0);
+ return <div className="pt-2 space-y-2" aria-label="Sentiment overview"><div className="flex items-center justify-between gap-2"><h6 className="text-xs font-semibold">Sentiment overview</h6><span className="text-[11px] text-slate-500">{total.toLocaleString()} classified · {unclassified.toLocaleString()} unclassified</span></div><div className="flex h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={total?counts.map(x=>x.name+': '+x.count).join(', '):'No sentiment data available'}>{counts.filter(x=>x.count>0).map(x=><div key={x.name} style={{width:(x.count/total*100)+'%',backgroundColor:x.color}} title={x.name+': '+x.count}/>)}</div><div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">{counts.map(x=><span key={x.name} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{backgroundColor:x.color}}/>{x.name} {x.count.toLocaleString()}{total?' ('+(x.count/total*100).toFixed(1)+'%)':''}</span>)}</div></div>;
 }
 function ChannelDonut({values}){
  const entries=Object.entries(values||{}).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
@@ -104,6 +105,7 @@ export default function CampaignPanel({campaignId=null}){
   finally{setExternalBusy(false)}
  }
  const [aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[batchPreview,setBatchPreview]=useState(null),[batchNotice,setBatchNotice]=useState('');
+ const [sentimentBatchSize,setSentimentBatchSize]=useState(10);
  const [everywhereQuery,setEverywhereQuery]=useState('');
  const [metricRepairBusy,setMetricRepairBusy]=useState(false),[metricRepairNotice,setMetricRepairNotice]=useState(''),[metricRepairError,setMetricRepairError]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
@@ -193,9 +195,19 @@ export default function CampaignPanel({campaignId=null}){
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setManualBusy(false)}
  }
+ async function refreshSentimentViews(){
+  if(!selected)return;
+  const [d,e]=await Promise.all([
+    base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,
+      data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}}),
+    base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,
+      data:{keyword:appliedKeyword}})
+  ]);
+  setDashboard(d.data);setEvidence(e.data.evidence||[]);
+ }
  async function checkBatch(){
   if(!selected)return;
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentBatchPreview',id:selected.id,data:{}});setBatchPreview(r.data);setAiError('')}
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentBatchPreview',id:selected.id,data:{sample_limit:sentimentBatchSize}});setBatchPreview(r.data);setAiError('')}
   catch(e){setAiError(e.response?.data?.detail||e.message)}
  }
  async function runBatch(){
@@ -207,17 +219,23 @@ export default function CampaignPanel({campaignId=null}){
       setEvidence(old=>old.map(x=>x.id===result_id?{...x,sentiment:r.data.sentiment,sentiment_details:{confidence:r.data.confidence,explanation:r.data.explanation,model:r.data.model}}:x))}
    catch(e){setAiError('Batch stopped: '+(e.response?.data?.detail||e.message));break}
   }
-  setBatchNotice(completed+' post(s) classified.');setBatchPreview(null);setAiBusy(false);
+  setBatchNotice(completed+' post(s) processed. The campaign chart reflects saved labels.');
+  setBatchPreview(null);
+  if(completed){try{await refreshSentimentViews()}catch(e){setAiError('Analysis was saved but refresh failed: '+(e.response?.data?.detail||e.message))}}
+  setAiBusy(false);
  }
  async function classifyNextPost(){
   if(!selected||aiBusy)return;
-  const item=evidence.find(x=>!x.sentiment||x.sentiment==='Unclassified');
+  const item=evidence.find(x=>(!x.sentiment||x.sentiment==='Unclassified')&&!x.sentiment_details?.status);
   if(!item){setAiError('No unclassified post available in the loaded evidence.');return}
   if(!window.confirm('Analyze one post with AI? OpenAI API usage may incur a charge.'))return;
   setAiBusy(true);setAiError('');
   try{
    const res=await base44.functions.invoke('socialListening',{action:'campaignSentimentClassify',id:selected.id,data:{result_id:item.id,confirm_ai_cost:true}});
-   setEvidence(old=>old.map(x=>x.id===item.id?{...x,sentiment:res.data.sentiment}:x));
+   setEvidence(old=>old.map(x=>x.id===item.id?{...x,sentiment:res.data.sentiment,
+     sentiment_details:{confidence:res.data.confidence,explanation:res.data.explanation,
+       model:res.data.model,status:res.data.sentiment==='Unclassified'?'ASSESSED_UNCLASSIFIED':'CLASSIFIED'}}:x));
+   await refreshSentimentViews();
   }catch(e){setAiError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setAiBusy(false)}
  }
@@ -372,7 +390,7 @@ export default function CampaignPanel({campaignId=null}){
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>
     <p className="text-xs text-slate-500">Keyword dropdown filters by campaign keywords in post text (case-insensitive). Date filters use publication dates. Dashboard analytics cover up to the latest 5,000 matching evidence records. No crawl credits used.</p>{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/><p className="text-xs text-slate-500">Based on stored evidence. Views and engagements may be incomplete when platforms do not supply them.</p></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/><div className="flex flex-wrap justify-between gap-2"><p className="text-xs text-slate-500">Saved campaign AI assessments only. Neutral differs from Unclassified.</p><button type="button" className="intel-ghost text-xs" disabled={analyticsBusy||aiBusy} onClick={async()=>{setAnalyticsBusy(true);try{await refreshSentimentViews()}catch(e){setDashboardError(e.response?.data?.detail||e.message)}finally{setAnalyticsBusy(false)}}}>Refresh saved sentiment (free)</button></div><p className="text-xs text-slate-500">Views and engagements may be incomplete when platforms do not supply them.</p></section>
 
       <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
       <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Campaign trend by platform">
@@ -412,7 +430,7 @@ export default function CampaignPanel({campaignId=null}){
 </div>}
 
       <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
- <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified")} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={mediaPreviewBusy} onClick={previewMediaCapability}>{mediaPreviewBusy?'Checking media options…':'Check Instagram media options (free)'}</button>
+ <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified"&&!x.sentiment_details?.status)} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={mediaPreviewBusy} onClick={previewMediaCapability}>{mediaPreviewBusy?'Checking media options…':'Check Instagram media options (free)'}</button>
  {mediaPreviewError&&<p className="text-xs text-red-600" role="alert">{mediaPreviewError}</p>}
  {mediaPreview&&<div className="rounded-md border bg-slate-50 p-3 text-xs space-y-1" aria-label="Instagram media capability preview">
   <p className="font-semibold">Instagram media enrichment · preview only</p>
@@ -422,8 +440,8 @@ export default function CampaignPanel({campaignId=null}){
  </div>}
  <button type="button" className="intel-ghost text-xs" disabled={thumbnailRecoveryBusy} onClick={recoverThumbnails}>{thumbnailRecoveryBusy?'Checking images…':'Recover stored thumbnails (free)'}</button>
  {thumbnailRecoveryMessage&&<p className="text-xs text-slate-600" role="status">{thumbnailRecoveryMessage}</p>}
- <button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview batch AI</button>
- {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} possible billable AI calls (max 3). Token costs vary and are not quoted in advance.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm AI batch</button></div>}
+ <div className="flex flex-wrap items-end gap-2"><label className="text-xs">Sentiment batch size<select aria-label="Sentiment batch size" className="intel-input mt-1" value={sentimentBatchSize} disabled={aiBusy} onChange={e=>{setSentimentBatchSize(Number(e.target.value));setBatchPreview(null)}}>{[1,5,10,20].map(n=><option key={n} value={n}>{n} posts</option>)}</select></label><button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview sentiment AI (free)</button></div>
+ {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} potentially billable OpenAI requests for existing posts (up to {batchPreview.sample_limit}; no new crawl). Token costs are unknown. No processing starts until you confirm.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm sentiment analysis</button></div>
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button> <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{await base44.externalImport.downloadCampaign(selected.id)}catch(e){setEvidenceError(e.message)}}}>Export all campaign records (CSV)</button>

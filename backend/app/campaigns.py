@@ -269,32 +269,47 @@ def _existing_thumbnail(item, include_expired=False):
             return candidate
     return ''
 
-def _latest_sentiment(db,campaign_id,result_id):
+def _current_assessment(db,campaign_id,result_id):
     from .models import EvidenceAssessment
-    record=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
-            .order_by(EvidenceAssessment.assessment_version.desc()).first())
+    return (db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
+            .order_by(EvidenceAssessment.assessment_version.desc(),
+                      EvidenceAssessment.id.desc()).first())
+
+def _latest_sentiment(db,campaign_id,result_id):
+    record=_current_assessment(db,campaign_id,result_id)
     label=str(record.sentiment or '').upper() if record else ''
     return label.title() if label in ('POSITIVE','NEGATIVE','NEUTRAL') else 'Unclassified'
 
 def _sentiment_details(db,campaign_id,result_id):
-    from .models import EvidenceAssessment
-    record=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
-        .order_by(EvidenceAssessment.assessment_version.desc()).first())
-    if not record or record.sentiment not in ('POSITIVE','NEUTRAL','NEGATIVE'): return None
-    return {'confidence':record.relevance_confidence or '','explanation':record.explanation or '',
-            'model':record.model_version or ''}
+    from .sentiment_processing import sentiment_is_assessed
+    record=_current_assessment(db,campaign_id,result_id)
+    if not sentiment_is_assessed(record):return None
+    return {'confidence':record.sentiment_confidence or '',
+            'explanation':record.sentiment_explanation or '',
+            'model':record.sentiment_model or record.model_version or '',
+            'status':'ASSESSED_UNCLASSIFIED' if str(record.sentiment or '').upper()=='UNCLASSIFIED'
+                    else 'CLASSIFIED'}
 
-def _batch_preview(db,p,c):
+def _batch_preview(db,p,c,data=None):
     from .models import SocialListeningResult
     from .socialcrawl import _result_in_scope
-    links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(200).all()
+    from .sentiment_processing import sentiment_is_assessed
+    try:limit=int((data or {}).get('sample_limit',10))
+    except (TypeError,ValueError):raise ValueError('Batch size must be an integer') from None
+    if not 1<=limit<=20:raise ValueError('Choose between 1 and 20 posts per batch')
+    links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(
+        CampaignEvidence.id.desc()).limit(300).all()
     eligible=[]
     for link in links:
         item=db.get(SocialListeningResult,link.result_id)
-        if item and _result_in_scope(db,p,item) and _latest_sentiment(db,c.id,item.id)=='Unclassified':
+        if item and _result_in_scope(db,p,item) and not sentiment_is_assessed(
+                _current_assessment(db,c.id,item.id)):
             eligible.append(str(item.id))
-    return {'unclassified':len(eligible),'selected_ids':eligible[:3],'estimated_ai_calls':min(len(eligible),3),
-            'notice':'OpenAI API token charges vary; no monetary estimate is available. No SocialCrawl credits.'}
+    return {'unclassified':len(eligible),'selected_ids':eligible[:limit],
+            'sample_limit':limit,'estimated_ai_calls':min(len(eligible),limit),
+            'socialcrawl_credits':0,
+            'paid_provider_called':False,
+            'notice':'Existing campaign posts only. Each requested post can incur a separate OpenAI API token charge. No SocialCrawl credits.'}
 
 def _classify_campaign_sentiment(db,p,c,data):
     """Explicit, single-record AI classification; never invoked during retrieval."""
@@ -311,8 +326,14 @@ def _classify_campaign_sentiment(db,p,c,data):
     row=db.get(SocialListeningResult,int(rid))
     if not link or not row or not _result_in_scope(db,p,row):
         raise ValueError('Evidence record is not accessible')
-    current=_latest_sentiment(db,c.id,row.id)
-    if current!='Unclassified': return {'sentiment':current,'cached':True,'paid_provider_called':False}
+    from .sentiment_processing import sentiment_is_assessed, normalize_sentiment_output
+    prior=_current_assessment(db,c.id,row.id)
+    if sentiment_is_assessed(prior):
+        return {'sentiment':_latest_sentiment(db,c.id,row.id),
+                'confidence':prior.sentiment_confidence or '',
+                'explanation':prior.sentiment_explanation or '',
+                'model':prior.sentiment_model or prior.model_version or '',
+                'cached':True,'paid_provider_called':False}
     if not openai_triage_configured(): raise ValueError('OPENAI_API_KEY is not configured')
     model=openai_triage_model()
     schema={'type':'object','properties':{
@@ -337,13 +358,20 @@ def _classify_campaign_sentiment(db,p,c,data):
     label=outcome.get('sentiment')
     if label not in ('POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED'):
         raise ValueError('AI returned an unsupported sentiment')
-    prior=(db.query(EvidenceAssessment).filter_by(campaign_id=c.id,result_id=row.id)
-           .order_by(EvidenceAssessment.assessment_version.desc()).first())
+    # Normalize confidence without ever repurposing relevance confidence.
+    normalized=normalize_sentiment_output({
+        'sentiment':label,'sentiment_confidence':outcome.get('confidence'),
+        'sentiment_explanation':outcome.get('explanation')})
+    prior=_current_assessment(db,c.id,row.id)
     version=prior.assessment_version+1 if prior else 1
     # Sentiment is an additional annotation, never a replacement for previously
     # assessed relevance, candidate, geographic or potential-issue signals.
     record=EvidenceAssessment(campaign_id=c.id,result_id=row.id,assessment_version=version,
-        model_version=str(payload.get('model') or model),sentiment=label,
+        model_version=prior.model_version if prior else str(payload.get('model') or model),
+        sentiment=normalized['sentiment'],
+        sentiment_model=str(payload.get('model') or model),
+        sentiment_confidence=normalized['sentiment_confidence'],
+        sentiment_explanation=normalized['sentiment_explanation'],
         relevance_label=prior.relevance_label if prior else 'UNASSESSED',
         relevance_confidence=prior.relevance_confidence if prior else '',
         candidate_signals_json=prior.candidate_signals_json if prior else '[]',
@@ -354,7 +382,9 @@ def _classify_campaign_sentiment(db,p,c,data):
     audit(db,p,'EvidenceAssessment',record.id,'AI_POST_SENTIMENT_CLASSIFIED',
           {'sentiment':{'new':label},'model':{'new':record.model_version}})
     return {'sentiment':label.title() if label!='UNCLASSIFIED' else 'Unclassified',
-            'confidence':record.relevance_confidence,'explanation':record.explanation,'model':record.model_version,'cached':False,'paid_provider_called':True}
+            'confidence':record.sentiment_confidence,
+            'explanation':record.sentiment_explanation,
+            'model':record.sentiment_model,'cached':False,'paid_provider_called':True}
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
@@ -910,7 +940,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can preview')
-        return _batch_preview(db,p,c)
+        return _batch_preview(db,p,c,data)
     if action=='campaignSentimentClassify':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
@@ -930,12 +960,17 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not principal:
             principal=json.dumps(p,sort_keys=True,default=str)
         # Invalidate cached analytics immediately when campaign evidence changes.
-        evidence_revision=db.query(
-            __import__('sqlalchemy').func.count(CampaignEvidence.id),
-            __import__('sqlalchemy').func.max(CampaignEvidence.id)
-        ).filter(CampaignEvidence.campaign_id==c.id).one()
+        from .models import EvidenceAssessment
+        from .sentiment_processing import latest_saved_sentiments
+        from sqlalchemy import func
+        evidence_revision=db.query(func.count(CampaignEvidence.id),
+            func.max(CampaignEvidence.id)).filter(CampaignEvidence.campaign_id==c.id).one()
+        assessment_revision=db.query(func.count(EvidenceAssessment.id),
+            func.max(EvidenceAssessment.id)).filter(
+                EvidenceAssessment.campaign_id==c.id).one()
         cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword,
-                   int(evidence_revision[0] or 0), int(evidence_revision[1] or 0))
+                   int(evidence_revision[0] or 0), int(evidence_revision[1] or 0),
+                   int(assessment_revision[0] or 0), int(assessment_revision[1] or 0))
         cached=_dashboard_cache_get(cache_key)
         if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
@@ -947,13 +982,14 @@ def campaign_action(db:Session,p,action,data,id=None):
         # Stream only dashboard columns, not full ORM entities and their large payloads.
         # The original full-entity query was expensive on 40k+ evidence rows.
         from types import SimpleNamespace
+        saved_sentiments=latest_saved_sentiments(db,c.id)
         columns=(CampaignEvidence.matched_fields_json,
             SocialListeningResult.run_id,SocialListeningResult.published_at,
             SocialListeningResult.language,SocialListeningResult.geography_json,
             SocialListeningResult.text_content,SocialListeningResult.platform,
             SocialListeningResult.author_name,SocialListeningResult.engagement_json,
             SocialListeningResult.raw_payload_json,SocialListeningResult.content_type,
-            SocialListeningResult.review_state)
+            SocialListeningResult.review_state, SocialListeningResult.id)
         links=query.with_entities(*columns).order_by(CampaignEvidence.id.desc()).yield_per(1000)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
@@ -972,7 +1008,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         province_counts=Counter(); province_mentions=Counter(); province_connected=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         from types import SimpleNamespace
         for record in links:
-            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state)=record
+            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state,result_id)=record
             item=SimpleNamespace(run_id=run_id,published_at=published_at,language=language,geography_json=geography_json,text_content=text_content,platform=platform,author_name=author_name,engagement_json=engagement_json,raw_payload_json=raw_payload_json,content_type=content_type,review_state=review_state)
             if not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
@@ -1042,7 +1078,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
-            sentiment['Unclassified']+=1
+            sentiment[saved_sentiments.get(result_id,'Unclassified')]+=1
             try: geo=json.loads(item.geography_json or '{}')
             except (ValueError,TypeError): geo={}
             if isinstance(geo,dict):
@@ -1067,7 +1103,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'metrics_available':dict(metrics_available)},
                 'daily_platform_trend':[{'date':day,**{platform+'__'+metric:daily_platform[day].get(platform+'__'+metric,0) for platform in platforms for metric in ('posts','engagement','views')}} for day in sorted(daily_platform)],
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
-                'sentiment':dict(sentiment),'sentiment_method':'UNCLASSIFIED',
+                'sentiment':{key:int(sentiment.get(key,0)) for key in ('Positive','Neutral','Negative','Unclassified')},
+                'sentiment_classified_count':sum(sentiment.get(key,0) for key in ('Positive','Neutral','Negative')),
+                'sentiment_unclassified_count':int(sentiment.get('Unclassified',0)),
+                'sentiment_method':'SAVED_CAMPAIGN_AI_ASSESSMENTS',
                 'geographies':dict(geographies),
                 'province_distribution': [{'province':name,'count':count,'percentage':round(count*100/sum(province_counts.values()),1)} for name,count in province_counts.most_common()],
                 'province_coverage':sum(province_counts.values()),

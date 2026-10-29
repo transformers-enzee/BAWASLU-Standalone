@@ -54,6 +54,11 @@ const wording={
 const bx='rounded-lg border border-slate-200 p-4 bg-white';
 const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white';
 
+function SharedAssessmentReuseQA(){
+ const [id,setId]=useState('209'),[result,setResult]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function check(){setBusy(true);setError('');setResult(null);try{if(!/^\\d+$/.test(id.trim()))throw new Error('Enter a numeric Social Listening source ID');const ref='social:'+id.trim();const res=await fetch('/api/source-lineage/saved-assessments/'+encodeURIComponent(ref),{cache:'no-store',headers:{Authorization:'Bearer '+token()}});const d=await res.json().catch(()=>({}));if(!res.ok)throw new Error(d.detail||'Assessment lookup failed');setResult(d);}catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"><h2 className="font-semibold">#13 — Shared saved-assessment reuse QA (free)</h2><p className="text-sm text-slate-600">Read an existing Social Listening source through the shared module contract. No model calls, officer decisions or historical ID assumptions.</p><div className="flex flex-wrap gap-2 items-center"><label className="text-sm">Social source ID <input className="border rounded px-2 py-2 w-28 ml-2" inputMode="numeric" value={id} onChange={e=>setId(e.target.value)} /></label><button type="button" className="intel-ghost" disabled={busy} onClick={check}>{busy?'Checking…':'Verify saved assessment (free)'}</button></div>{error&&<p role="alert" className="text-sm text-red-700">{error}</p>}{result&&<div className="text-sm space-y-1"><p>Canonical ID: <b>{result.canonical_source_id}</b> · Saved assessments: <b>{result.assessment_count}</b></p><p>Reuse provenance: <b>{result.shared_review_provenance}</b> · AI provider called: <b>{String(result.paid_provider_called)}</b></p><p>Reusable by: {(result.reusable_by||[]).join(', ')}</p><p>Historical pilot crosswalk verified: {String(result.radar_pilot_identity_crosswalk_verified)}</p></div>}</section>;
+}
 function LineageClosureAudit(){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  async function inspect(){setBusy(true);setError('');try{const res=await fetch('/api/source-lineage/crosswalk-status',{cache:'no-store',headers:{Authorization:'Bearer '+token()}});const d=await res.json().catch(()=>({}));if(!res.ok)throw new Error(d.detail||'Source audit unavailable');setData(d);}catch(e){setError(e.message)}finally{setBusy(false)}}
@@ -131,6 +136,7 @@ export default function SmartRadarQA(){
  if(!canReview)return <p className="p-6 text-red-700">{t('access')}</p>;
  return <div className="max-w-[1400px] mx-auto space-y-5">\n   {canImport&&<PaidPilotControls/>}
    {canImport&&<LineageClosureAudit/>}
+   {canImport&&<SharedAssessmentReuseQA/>}
    <div className="rounded-xl bg-gradient-to-r from-[#16364a] to-[#147968] text-white px-6 py-5 flex flex-wrap gap-4 justify-between items-center">
     <div><Link to="/" className="text-xs text-white/80 inline-flex gap-1 items-center"><ArrowLeft size={14}/>{t('back')}</Link>
      <h1 className="font-semibold text-2xl mt-2 flex items-center gap-2"><FlaskConical/> {t('title')}</h1>

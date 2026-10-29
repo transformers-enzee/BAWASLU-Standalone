@@ -10,6 +10,7 @@ export default function SmartRadar(){
  const campaignId=params.get('campaign_id');
  const validCampaign=Boolean(campaignId && /^[1-9][0-9]*$/.test(campaignId));
  const [state,setState]=useState({loading:false,data:null,error:''});
+ const [perspective,setPerspective]=useState('inbox');
  useEffect(()=>{
   if(!validCampaign){setState({loading:false,data:null,error:''});return;}
   let cancelled=false;
@@ -30,13 +31,21 @@ export default function SmartRadar(){
    {state.loading&&<div role="status">Loading saved assessment evidence…</div>}
    {state.error&&<div role="alert">Unable to load campaign evidence: {state.error}</div>}
    {state.data&&<div role="status">{entries.length} saved relevant assessments available to Smart Radar.</div>}
-   {entries.length>0&&<div className="mt-2 flex flex-wrap gap-2">{entries.slice(0,12).map(x=>
+   {state.data&&<div className="mt-2 flex gap-2"><button type="button" onClick={()=>setPerspective('inbox')} aria-pressed={perspective==='inbox'} className="rounded border px-3 py-1">Inbox evidence</button><button type="button" onClick={()=>setPerspective('pilot')} aria-pressed={perspective==='pilot'} className="rounded border px-3 py-1">Historic Radar pilot</button></div>}
+   {entries.length>0&&perspective==='inbox'&&<div className="mt-2 flex flex-wrap gap-2">{entries.slice(0,12).map(x=>
     <a key={x.canonical_source_id} href={'/inbox?campaign_id='+encodeURIComponent(campaignId)+'&result_id='+encodeURIComponent(x.canonical_source_id.slice(7))}
      className="rounded border border-[#dce5ea] px-2 py-1 text-xs text-[#174663]">
      {x.canonical_source_id} · v{x.assessment_version||'?'} · {(x.topic_labels||[]).join(', ')||'No topic'}
     </a>)}</div>}
   </div>}
-  <iframe title="BAWASLU Smart Radar V6.2" src="/ui-freeze/smart-radar-v6_2.html"
-   className="block w-full border-0 bg-[#f1f5f7]" style={{height:'calc(100vh - 76px)',minHeight:640}}/>
+  {validCampaign&&state.data&&perspective==='inbox'&&<div className="bg-white px-5 py-3 text-sm" aria-label="Saved Inbox intelligence perspectives">
+   <div className="font-semibold mb-2">Saved assessment perspectives (provisional)</div>
+   <div className="flex flex-wrap gap-3">{['Electoral Operations','BAWASLU Reputation'].map(topic=><div key={topic} className="rounded border p-3"><strong>{topic}</strong><div>{entries.filter(x=>(x.topic_labels||[]).includes(topic)).length} saved source posts</div></div>)}
+   <div className="rounded border p-3"><strong>Public Concerns</strong><div>{entries.filter(x=>(x.public_concern_signals||[]).length).length} posts with saved signals</div></div>
+   <div className="rounded border p-3"><strong>Potential Issues</strong><div>{entries.filter(x=>(x.potential_issues||[]).length).length} posts with preliminary signals</div></div></div>
+   <p className="mt-2 text-xs text-[#526575]">Counts describe saved relevant Inbox assessments, not corroborated incidents or representative public opinion.</p>
+  </div>}
+  {(!validCampaign||perspective==='pilot'||!state.data)&&<iframe title="BAWASLU Smart Radar V6.2" src="/ui-freeze/smart-radar-v6_2.html"
+   className="block w-full border-0 bg-[#f1f5f7]" style={{height:'calc(100vh - 76px)',minHeight:640}}/>}
  </section>;
 }

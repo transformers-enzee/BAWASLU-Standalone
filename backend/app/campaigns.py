@@ -1247,6 +1247,45 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'blocked_reasons':schedule['blocked_reasons'],
                 'can_execute':False,'paid_provider_called':False,
                 'notice':'Preview only. Campaign execution is disabled until a separate authorized release.'}
+    if action=='campaignCapturedPosts':
+        # All saved campaign posts, not the dashboard's hottest-200 preview.
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        from .thumbnail_cache import stored_thumbnail_uri
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c): raise ValueError('Campaign not available')
+        opts=data if isinstance(data,dict) else {}
+        try:
+            page=int(opts.get('page') or 1)
+            page_size=int(opts.get('page_size') or 200)
+        except (TypeError,ValueError): raise ValueError('Invalid captured post pagination')
+        if not 1<=page<=100000 or not 1<=page_size<=200:
+            raise ValueError('Captured post page must be positive and page size 1-200')
+        q=(db.query(CampaignEvidence,SocialListeningResult)
+           .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
+           .filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()))
+        start=(page-1)*page_size
+        if p.get('geographic_scope')=='Nationwide':
+            total=q.order_by(None).count()
+            links=q.offset(start).limit(page_size).all()
+        else:
+            total=0;links=[]
+            for link,item in q.yield_per(200):
+                if not _result_in_scope(db,p,item): continue
+                if start<=total<start+page_size: links.append((link,item))
+                total+=1
+        rows=[]
+        for link,item in links:
+            if not _result_in_scope(db,p,item): continue
+            rows.append({'id':str(item.id),'platform':item.platform,
+                         'content_type':item.content_type,'published_at':item.published_at,
+                         'author_name':item.author_name,'text_content':item.text_content,
+                         'canonical_url':item.canonical_url,
+                         'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
+                         'sentiment':_latest_sentiment(db,c.id,item.id),
+                         'sentiment_details':_sentiment_details(db,c.id,item.id)})
+        return {'evidence':rows,'total':total,'page':page,'page_size':page_size,
+                'has_more':page*page_size<total,'paid_provider_called':False}
     if action=='campaignEvidenceById':
         from .models import SocialListeningResult, EvidenceAssessment
         from .socialcrawl import _result_in_scope

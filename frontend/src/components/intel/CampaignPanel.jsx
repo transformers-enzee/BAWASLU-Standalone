@@ -6,6 +6,7 @@ import { base44 } from '@/api/base44Client';
 import KeywordTags from '@/components/intel/KeywordTags';
 import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
+import CapturedPostList from '@/components/intel/CapturedPostList';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
@@ -331,14 +332,7 @@ export default function CampaignPanel({campaignId=null}){
  }
  const visible=campaigns.filter(x=>(statusFilter==='all'||x.status===statusFilter)&&(x.name+' '+x.description+' '+x.primary_keywords.join(' ')).toLowerCase().includes(query.toLowerCase()));
  return <section className="v10-campaign space-y-5" aria-label="Monitoring campaigns">
-  {campaignId&&<style>{`
-   [data-active-campaign-tab="overview"] [aria-label="Captured posts"] {display:none!important}
-   [data-active-campaign-tab="posts"] > :not([aria-label="Captured posts"]):not(:has([aria-label="Captured posts"])) {display:none!important}
-   [data-active-campaign-tab="posts"] [aria-label="Captured posts"] {display:block!important}
-   [data-active-campaign-tab="posts"] {border:0;padding:0}
-   [data-campaign-body="posts"] > details,[data-campaign-body="posts"] > section[aria-label="Manual campaign crawl"] {display:none!important}
-   .v10-campaign .intel-card {border-radius:13px}
-  `}</style>}
+  {campaignId&&<style>{`.v10-campaign .intel-card {border-radius:13px}`}</style>}
 
   <header className="flex flex-wrap items-start justify-between gap-4">
     <div><p className="text-[11px] font-extrabold uppercase tracking-[.13em] text-[#6d8994]">Monitoring &amp; Collection</p>
@@ -422,15 +416,15 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
-   {campaignSection==='posts'&&!dashboard&&<section className="space-y-3 rounded-xl border border-[#dce5ed] bg-white p-4"><h4 className="font-semibold">Captured posts &amp; sources</h4><p className="text-sm text-[#60768c]">Showing saved source evidence from this campaign. Dashboard analytics are temporarily unavailable.</p>{evidenceLoading?<p className="text-sm">Loading captured posts…</p>:evidence.length?evidence.map(item=><article key={item.id} className="space-y-2 border-b border-[#dce5ed] py-3"><p className="text-xs text-[#60768c]">{platformLabel(item.platform)} · {item.published_at||'Undated'}</p><p className="whitespace-pre-wrap break-words text-sm">{item.text_content||'No source text'}</p><div className="flex flex-wrap gap-2">{/^https:\/\//i.test(item.canonical_url||'')&&<a className="intel-ghost" target="_blank" rel="noopener noreferrer" href={item.canonical_url}>Open original source</a>}<button type="button" className="intel-ghost" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button></div></article>):<p className="text-sm text-[#60768c]">No saved captured posts for this campaign.</p>}</section>}
+    {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
-   <div className={campaignSection==='watchlist'?'hidden':'contents'} data-campaign-body={campaignSection}>
+   <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
    {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
    {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Campaign data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
 
-   {dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
+   {campaignSection==='overview'&&dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
     <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>
     <p className="text-xs text-slate-500">Keyword dropdown filters by campaign keywords in post text (case-insensitive). Date filters use publication dates. Dashboard analytics cover up to the latest 5,000 matching evidence records. No crawl credits used.</p>{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}

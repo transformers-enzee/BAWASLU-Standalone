@@ -114,6 +114,7 @@ class WatchlistItem(Base):
     related_election: Mapped[str] = mapped_column(String(255), default='')
     related_entity: Mapped[str] = mapped_column(String(255), default='')
     related_topics_json: Mapped[str] = mapped_column(Text, default='[]')
+    candidate_aliases_json: Mapped[str] = mapped_column(Text, default='[]')
     priority: Mapped[str] = mapped_column(String(64), default='Medium')
     status: Mapped[str] = mapped_column(String(64), default='Active')
     notes: Mapped[str] = mapped_column(Text, default='')
@@ -397,6 +398,22 @@ class EvidenceAssessment(Base):
     explanation: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__=(UniqueConstraint('campaign_id','result_id','assessment_version',name='uq_evidence_assessment_version'),)
+
+class CampaignFindingGroup(Base):
+    """Persisted source-linked review candidate; status is never a legal finding."""
+    __tablename__='campaign_finding_groups'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    group_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    group_type: Mapped[str] = mapped_column(String(40), index=True)
+    label: Mapped[str] = mapped_column(String(255), default='')
+    source_ids_json: Mapped[str] = mapped_column(Text, default='[]')
+    review_status: Mapped[str] = mapped_column(String(32), default='PROPOSED', index=True)
+    review_rationale: Mapped[str] = mapped_column(Text, default='')
+    created_by: Mapped[str] = mapped_column(String(128), default='')
+    reviewed_by: Mapped[str] = mapped_column(String(128), default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reviewed_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
 class AssessmentSignalDiagnostic(Base):
     """Non-sensitive AI candidate and validation counts, never raw model output."""

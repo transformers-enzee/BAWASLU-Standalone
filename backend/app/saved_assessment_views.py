@@ -64,6 +64,8 @@ def saved_classifications_for_posts(db, user_profile, posts):
         key=(campaign_id,result_id)
         if key in relevant and key not in decisions:
             decisions[key]=review.decision
+    from .candidate_registry import candidate_index, resolve_signals
+    scoped_candidate_index=candidate_index(db,user_profile)
     posts_by_id={post.id:post for post in posts}
     for (campaign_id,result_id),assessment in sorted(relevant.items()):
         post=posts_by_id[result_id]
@@ -91,6 +93,9 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'sentiment_confidence':assessment.sentiment_confidence or '',
             'sentiment_explanation':assessment.sentiment_explanation or '',
             'sentiment_model':assessment.sentiment_model or '',
+            'candidate_identity_matches':resolve_signals(
+                _safe_candidate_signals(assessment.candidate_signals_json),
+                scoped_candidate_index),
             'potential_issues':signals,
             'signal_source':source,
             'review_status':decision,
@@ -101,3 +106,10 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'assessment_persisted':True,
         })
     return result
+
+def _safe_candidate_signals(raw):
+    try:
+        value=json.loads(raw or '[]')
+    except (TypeError,ValueError):
+        return []
+    return value if isinstance(value,list) else []

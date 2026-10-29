@@ -390,6 +390,10 @@ def _classify_campaign_sentiment(db,p,c,data):
 
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
+    if action in ('campaignFindingGroupsPreview','campaignFindingGroupsSave',
+                  'campaignFindingGroupsList','campaignFindingGroupsReview'):
+        from .finding_groups import finding_group_action
+        return finding_group_action(db,p,action,data or {},id)
     if action=='campaignAssessmentPilotPreview':
         from .assessment_pilot import assessment_pilot_preview
         return assessment_pilot_preview(db,p,data,id)
@@ -841,7 +845,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'can_review_flag':has(p,'human_validation'),'active_issue_categories':active_categories})
         if requested_result and campaign_id:
             records.sort(key=lambda row:int(str(row['id'])==requested_result and str(row['campaign_id'])==campaign_id),reverse=True)
-        return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
+        from .candidate_registry import attach_candidate_ids
+        candidate_registry_diagnostics=attach_candidate_ids(db,p,records)
+        return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
+                'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
                 'classification_processing':__import__('app.processing_hints',fromlist=['summarize_scoped_findings']).summarize_scoped_findings(records[:300]),
                 'paid_provider_called':False}

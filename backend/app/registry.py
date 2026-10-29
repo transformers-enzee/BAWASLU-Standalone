@@ -242,10 +242,15 @@ def registry_action(db:Session,p,action,data,id=None):
         name=clean(data.get('name'),255); type_=clean(data.get('type'),100)
         if not name or not type_: raise ValueError('Name and type are required')
         if _duplicate_watchlist(db,data): raise ValueError('A watchlist item with the same name, type and geography already exists')
+        from .candidate_registry import validate_aliases, ensure_aliases_available
+        if 'candidate_aliases' in data and type_!='Candidate':
+            raise ValueError('Only Candidate watchlist records can have identity aliases')
+        aliases=validate_aliases(data.get('candidate_aliases',[]),name) if type_=='Candidate' else []
+        if type_=='Candidate':ensure_aliases_available(db,None,name,aliases)
         status=clean(data.get('status') or 'Active',64); priority=clean(data.get('priority') or 'Medium',64)
         if status not in WATCHLIST_STATUSES: raise ValueError('Invalid monitoring status')
         if priority not in WATCHLIST_PRIORITIES: raise ValueError('Invalid monitoring priority')
-        w=WatchlistItem(name=name,type=type_,description=clean(data.get('description'),5000),province=clean(data.get('province'),128),regency_city=clean(data.get('regency_city'),128),related_election=clean(data.get('related_election'),255),related_entity=clean(data.get('related_entity'),255),related_topics_json=json.dumps(data.get('related_topics') or []),priority=priority,status=status,notes=clean(data.get('notes'),5000))
+        w=WatchlistItem(name=name,type=type_,description=clean(data.get('description'),5000),province=clean(data.get('province'),128),regency_city=clean(data.get('regency_city'),128),related_election=clean(data.get('related_election'),255),related_entity=clean(data.get('related_entity'),255),related_topics_json=json.dumps(data.get('related_topics') or []),candidate_aliases_json=json.dumps(aliases),priority=priority,status=status,notes=clean(data.get('notes'),5000))
         db.add(w); db.commit(); db.refresh(w)
         audit(db,p,'WatchlistItem',w.id,'CREATED',{'name':{'new':w.name},'status':{'new':w.status}})
         return {'item':watchlist(w)}
@@ -268,6 +273,17 @@ def registry_action(db:Session,p,action,data,id=None):
         if 'related_election' in data: w.related_election=clean(data.get('related_election'),255)
         if 'related_entity' in data: w.related_entity=clean(data.get('related_entity'),255)
         if 'related_topics' in data: w.related_topics_json=json.dumps(data.get('related_topics') or [])
+        if 'candidate_aliases' in data or 'name' in data or 'type' in data:
+            from .candidate_registry import validate_aliases, ensure_aliases_available, aliases_for
+            if w.type=='Candidate':
+                aliases=validate_aliases(
+                    data.get('candidate_aliases',aliases_for(w)),w.name)
+                ensure_aliases_available(db,w.id,w.name,aliases)
+                w.candidate_aliases_json=json.dumps(aliases,ensure_ascii=False)
+            elif data.get('candidate_aliases'):
+                raise ValueError('Candidate aliases require a Candidate watchlist item')
+            else:
+                w.candidate_aliases_json='[]'
         if 'priority' in data:
             priority=clean(data.get('priority'),64)
             if priority not in WATCHLIST_PRIORITIES: raise ValueError('Invalid monitoring priority')

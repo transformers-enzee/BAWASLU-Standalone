@@ -1,0 +1,3 @@
+# v103 independent QA gates for #12, #13, #14
+
+Run no-credit regression checks in one CI pass: (12) genuine SHA256 fingerprint, verbatim source quote and production provenance constraints; (13) shared social-source ID while refusing pilot crosswalk; (14) historical accuracy computed from saved label joins without inferring or rewriting results. These are **engineering tests only**, not a real provider-produced summary, operational officer signoff or an improved evaluated classification score. Remaining operational acceptance: #12 at least one real and officer-reviewed production summary; #13 verified historical crosswalk or explicitly approved future-data-only scope; #14 newly measured reference-label accuracy meeting agreed threshold. No credits spent.

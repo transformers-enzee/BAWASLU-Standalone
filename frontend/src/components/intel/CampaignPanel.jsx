@@ -54,6 +54,7 @@ export default function CampaignPanel({campaignId=null}){
  const keywordPreviewRequest=useRef(0);
  function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
+ const [campaignSection,setCampaignSection]=useState('overview');
  const [statusFilter,setStatusFilter]=useState('all');
  const [trendMetric,setTrendMetric]=useState('posts');
  const [chartDay,setChartDay]=useState(null);
@@ -379,6 +380,10 @@ export default function CampaignPanel({campaignId=null}){
   {campaignId&&selected&&!creating&&<div className="intel-card p-5 space-y-2">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
    <h3 className="font-semibold text-xl">{selected.name} — Campaign Overview</h3>
+   <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src="/ui-freeze/watchlist-v2_2.html" className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
+   <div className={campaignSection==='watchlist'?'hidden':'contents'}>
+
    <div className="flex flex-wrap gap-2" aria-label="Campaign keyword summaries">
     {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
    </div>
@@ -568,6 +573,7 @@ export default function CampaignPanel({campaignId=null}){
     {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
    </section>
    {evidenceError&&<p role="alert" className="text-red-700 text-sm">{evidenceError}</p>}
+  </div>
   </div>}
  </section>
 }

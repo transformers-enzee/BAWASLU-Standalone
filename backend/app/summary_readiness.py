@@ -62,6 +62,8 @@ def campaign_summary_readiness(db,p,campaign_id):
         'posts_needing_ai_drafts':len(no_draft),
         'posts_needing_pipeline_ai_drafts':len(no_pipeline),
         'source_fingerprints_checked':True,
+        'production_pilot_acceptance_ready':bool(rows) and all(x['pipeline_ai_drafts']>0 for x in rows[:1]),
+        'production_pilot_acceptance_status':'SOURCE_VERIFIED_DRAFT_ONLY' if any(x['pipeline_ai_drafts'] for x in rows) else 'NO_REAL_PIPELINE_DRAFT',
         'human_approved_summary_count':0,
         'manual_sample_is_not_pipeline_acceptance':True,
         'suggested_small_pilot_ids':[x['result_id'] for x in no_pipeline[:5]

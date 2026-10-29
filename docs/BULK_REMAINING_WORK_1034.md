@@ -1,0 +1,3 @@
+# v103.4 parallel readiness hardening
+
+#12: expose genuine pipeline draft presence separately from human-accepted completion; preserve quote/fingerprint provenance checks. #13: explicit backend future Inbox-origin reuse and historical crosswalk FALSE; preserve exact approved Smart Radar V6.2 screen. #14: regression preserves saved human-label comparison; the existing measured 20/33 benchmark does NOT improve without a real evaluation. Caching stays on in the approved pilot live adapter. No paid inference/crawling run and no fabricated acceptance. This release does not claim checklist completion.

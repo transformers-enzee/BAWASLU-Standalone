@@ -32,6 +32,13 @@ assert.doesNotMatch(social,/Discover sources|Review queue|Saved searches/);
 assert.match(campaign,/watchlist-v2_2\.html\?campaign_id/);
 assert.match(campaign,/Captured Posts/);
 assert.match(campaign,/Candidate Watchlist/);
+const trendPosition=campaign.indexOf('aria-label="Campaign trend by platform"');
+const topicsPosition=campaign.indexOf('aria-label="Topics and Themes"');
+const capturedPosition=campaign.indexOf('aria-label="Captured posts"',trendPosition);
+assert.ok(trendPosition>=0 && trendPosition<topicsPosition && topicsPosition<capturedPosition,
+  'Topics & Themes must appear immediately below the platform chart, before captured evidence');
+assert.match(campaign,/lg:col-span-2 rounded-\[13px\][^\n]+aria-label="Topics and Themes"/,
+  'Topics & Themes must span the dashboard grid on desktop');
 assert.match(registry,/CampaignEvidence\.campaign_id==scoped_campaign\.id/);
 assert.match(watchBridge,/campaign_id/);
 assert.match(watchBridge,/campaignId\?\(Array\.isArray\(actor\.value\)/,'Campaign-earned mentions must consume the scoped evidence array, not the global actor response');

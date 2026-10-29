@@ -21,7 +21,7 @@ function SocialEvidenceInbox(){
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const watchBaseline=useRef(null);
- const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState('');
+ const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState(''),[manualCue,setManualCue]=useState(null);
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost}})
@@ -59,6 +59,35 @@ function SocialEvidenceInbox(){
   const interval=window.setInterval(refresh,5000);
   return()=>{cancelled=true;window.clearInterval(interval)};
  },[watchProgress,campaign]);
+ async function refreshReviewedPost(post){
+  try{
+   const response=await base44.functions.invoke('socialListening',{
+    action:'campaignIntelligenceInbox',
+    data:{campaign_id:String(post.campaign_id),result_id:String(post.id)}});
+   const refreshed=(response.data.findings||[]).find(item=>
+    String(item.id)===String(post.id)&&String(item.campaign_id)===String(post.campaign_id));
+   if(refreshed){
+    setSelected(refreshed);
+    setFindings(previous=>previous.map(item=>
+     String(item.id)===String(post.id)&&String(item.campaign_id)===String(post.campaign_id)
+       ?refreshed:item));
+   }
+  }catch(_ignored){
+   // Saved officer decisions remain saved even if the follow-up read fails.
+  }
+ }
+ function selectKeywordCueForReview(lead){
+  if(!selected?.can_review_flag||selected.is_flagged||(selected.potential_issues||[]).length)return;
+  if(!issueCategories.some(item=>String(item.id)===String(lead.category_id))){
+   setReviewError('This issue category is no longer active. Refresh the Inbox.');
+   return;
+  }
+  setManualCategory(String(lead.category_id));
+  setManualCue({post_id:String(selected.id),campaign_id:String(selected.campaign_id),
+   category_id:String(lead.category_id),source_quote:lead.evidence_quote||''});
+  setManualRationale('');
+  setReviewError('');
+ }
  async function submitFlagReview(){
   if(!selected||!reviewDecision||reviewRationale.trim().length<10||reviewBusy)return;
   if(!window.confirm('Save this human review decision to the evidence audit trail?'))return;
@@ -69,6 +98,7 @@ function SocialEvidenceInbox(){
    const updated={...selected,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'};
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
    setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
+   await refreshReviewedPost(selected);
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
   finally{setReviewBusy(false)}
  }
@@ -77,13 +107,18 @@ function SocialEvidenceInbox(){
   if(!window.confirm('Create a human-origin preliminary flag requiring further investigation?'))return;
   setReviewBusy(true);setReviewError('');setReviewNotice('');
   try{
+   const verifiedCue=manualCue&&manualCue.post_id===String(selected.id)&&
+     manualCue.campaign_id===String(selected.campaign_id)&&
+     manualCue.category_id===String(manualCategory)?manualCue.source_quote:'';
    await base44.functions.invoke('socialListening',{action:'campaignManualFlag',id:selected.campaign_id,
-     data:{result_id:selected.id,assessment_version:selected.assessment_version,category_id:manualCategory,rationale:manualRationale.trim()}});
+     data:{result_id:selected.id,assessment_version:selected.assessment_version,category_id:manualCategory,
+       rationale:manualRationale.trim(),...(verifiedCue?{source_quote:verifiedCue}:{})}});
    const updated={...selected,flag_review_status:'FURTHER_INVESTIGATION',is_flagged:true};
    setSelected(updated);
    setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
-   setManualCategory('');setManualRationale('');
+   setManualCategory('');setManualRationale('');setManualCue(null);
    setReviewNotice('Human-origin preliminary flag saved for further investigation; AI evidence unchanged.');
+   await refreshReviewedPost(selected);
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save manual flag')}
   finally{setReviewBusy(false)}
  }
@@ -380,13 +415,23 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      {(selected.public_concern_signals||[]).length>0&&<section className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><strong>Public Concerns · unverified source quotations</strong>{selected.public_concern_signals.map((item,i)=><p key={i} className="text-xs">“{item.evidence_quote}” · {item.concern}</p>)}</section>}
      {selected.attention_assessment?.status==='AI_ASSESSMENT_UNVERIFIED'&&<p><strong>AI Needs Attention suggestion:</strong> Seriousness {selected.attention_assessment.seriousness} · Urgency {selected.attention_assessment.urgency} · Human triage required, not an automatic order.</p>}
      {(selected.player_summaries||[]).length>0&&<section className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1" aria-label="AI player summary drafts"><strong>Source-referenced AI summary drafts</strong>{selected.player_summaries.map((item,i)=><p key={i} className="text-xs"><strong>{item.player}:</strong> {item.summary} <span className="text-slate-500">Evidence: “{item.source_quote}” · Human verification required</span></p>)}</section>}
-     <p><strong>Canonical Watchlist candidate IDs:</strong> {(selected.canonical_candidate_ids||[]).join(', ')||'Not resolved'} · Alias matches require human verification.</p><p><strong>Potential issue categories:</strong> {[...new Set((selected.potential_issues||[]).map(x=>x.category_name).filter(Boolean))].join(', ')||'None flagged'}</p>{(selected.issue_review_leads||[]).length>0&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" role="note" aria-label="Text-only review cues"><p className="font-semibold">Keyword review cues (not violation flags)</p><p>{[...new Set(selected.issue_review_leads.map(x=>x.category_name).filter(Boolean))].join(', ')}</p><p>Text patterns require independent confirmation and do not enter the Potential Violations or Needs Attention queues automatically.</p></div>}{(selected.potential_issues||[]).length>0&&<div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2" aria-label="Potential issue evidence"><h4 className="text-sm font-semibold">Why this was flagged · preliminary evidence</h4>{issueGroups(selected.potential_issues).map(([category,signals])=><div key={category} className="text-xs space-y-2"><p className="font-semibold">{category} · {signals.length} {signals.length===1?'signal':'signals'} · Unverified</p>{signals.map((signal,index)=><div key={index} className="pl-2 border-l-2 border-amber-400 space-y-1"><p className="font-medium">{signal.signal_type==='REPORTED_INCIDENT'?'Reported incident · '+(signal.time_context||'UNKNOWN').toLowerCase():'Potential violation'}</p>{signal.evidence_quote&&<blockquote className="whitespace-pre-wrap">Source excerpt: “{signal.evidence_quote}”</blockquote>}<p>{signal.explanation||'Requires human review against the original source.'}</p></div>)}</div>)}<p className="text-xs text-amber-800">Source-supported text is not proof of a legal violation. Verify independently before acting.</p></div>}{(selected.potential_issues||[]).some(x=>x.signal_provenance==='LEGACY_MISSING_TYPE')&&<p className="text-xs text-amber-700" role="note">Legacy AI signal (original type missing) · Source quotation validated · Human verification required</p>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div>
+     <p><strong>Canonical Watchlist candidate IDs:</strong> {(selected.canonical_candidate_ids||[]).join(', ')||'Not resolved'} · Alias matches require human verification.</p><p><strong>Potential issue categories:</strong> {[...new Set((selected.potential_issues||[]).map(x=>x.category_name).filter(Boolean))].join(', ')||'None flagged'}</p>{(selected.issue_review_leads||[]).length>0&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" role="note" aria-label="Text-only review cues"><p className="font-semibold">Keyword review cues (not violation flags)</p><p>{[...new Set(selected.issue_review_leads.map(x=>x.category_name).filter(Boolean))].join(', ')}</p><p>Text patterns require independent confirmation and do not enter the Potential Violations or Needs Attention queues automatically.</p>
+      {selected.can_review_flag&&!selected.is_flagged&&!(selected.potential_issues||[]).length&&
+       <div className="space-y-2 mt-2">{selected.issue_review_leads.map((lead,i)=>
+        <div key={i} className="border-t border-slate-200 pt-2"><p className="italic">“{lead.evidence_quote}”</p>
+         <button type="button" className="intel-ghost text-xs" disabled={reviewBusy}
+          onClick={()=>selectKeywordCueForReview(lead)}>Escalate source cue for officer review</button>
+        </div>)}</div>}
+     </div>}{(selected.potential_issues||[]).length>0&&<div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2" aria-label="Potential issue evidence"><h4 className="text-sm font-semibold">Why this was flagged · preliminary evidence</h4>{issueGroups(selected.potential_issues).map(([category,signals])=><div key={category} className="text-xs space-y-2"><p className="font-semibold">{category} · {signals.length} {signals.length===1?'signal':'signals'} · Unverified</p>{signals.map((signal,index)=><div key={index} className="pl-2 border-l-2 border-amber-400 space-y-1"><p className="font-medium">{signal.signal_type==='REPORTED_INCIDENT'?'Reported incident · '+(signal.time_context||'UNKNOWN').toLowerCase():'Potential violation'}</p>{signal.evidence_quote&&<blockquote className="whitespace-pre-wrap">Source excerpt: “{signal.evidence_quote}”</blockquote>}<p>{signal.explanation||'Requires human review against the original source.'}</p></div>)}</div>)}<p className="text-xs text-amber-800">Source-supported text is not proof of a legal violation. Verify independently before acting.</p></div>}{(selected.potential_issues||[]).some(x=>x.signal_provenance==='LEGACY_MISSING_TYPE')&&<p className="text-xs text-amber-700" role="note">Legacy AI signal (original type missing) · Source quotation validated · Human verification required</p>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div>
     {<div className="border-t pt-3 space-y-3">
      <h4 className="font-semibold">Human flag review</h4>
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
      <p className="text-xs">Current status: <strong>{selected.flag_review_status||((selected.is_flagged||(selected.potential_issues||[]).length>0)?'Awaiting review':'Not flagged for violation')}</strong></p>
      {(selected.flag_review_history||[]).length>0&&<details className="text-xs"><summary className="cursor-pointer font-semibold">Review history ({selected.flag_review_history.length} most recent)</summary><ol className="mt-2 space-y-2">{selected.flag_review_history.map((entry,index)=><li key={index} className="border-l-2 border-slate-200 pl-2"><strong>{entry.decision.replaceAll('_',' ')}</strong> · Assessment v{entry.assessment_version} · {entry.reviewed_at?new Date(entry.reviewed_at).toLocaleString():'Date unavailable'}<p className="text-slate-500">{entry.rationale}</p></li>)}</ol></details>}
-     {selected.can_review_flag&&!(selected.potential_issues||[]).length&&!selected.is_flagged&&<div className="border border-amber-200 rounded-lg p-3 space-y-2"><p className="text-xs font-semibold">Flag this relevant post manually</p><p className="text-xs text-slate-500">Preliminary human concern only — not a legal finding.</p><label htmlFor="manual-issue-category" className="text-xs">Issue category</label><select id="manual-issue-category" className="intel-input w-full" value={manualCategory} onChange={e=>setManualCategory(e.target.value)}><option value="">Select active category</option>{issueCategories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select><label htmlFor="manual-flag-rationale" className="text-xs">Reason (at least 10 characters)</label><textarea id="manual-flag-rationale" className="intel-input w-full" value={manualRationale} onChange={e=>setManualRationale(e.target.value)} maxLength={1500}/><button type="button" className="intel-button" disabled={reviewBusy||!manualCategory||manualRationale.trim().length<10} onClick={submitManualFlag}>Flag for investigation</button></div>}
+     {selected.can_review_flag&&!(selected.potential_issues||[]).length&&!selected.is_flagged&&<div className="border border-amber-200 rounded-lg p-3 space-y-2"><p className="text-xs font-semibold">Flag this relevant post manually</p><p className="text-xs text-slate-500">Preliminary human concern only — not a legal finding.</p><label htmlFor="manual-issue-category" className="text-xs">Issue category</label><select id="manual-issue-category" className="intel-input w-full" value={manualCategory} onChange={e=>setManualCategory(e.target.value)}><option value="">Select active category</option>{issueCategories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select><label htmlFor="manual-flag-rationale" className="text-xs">Reason (at least 10 characters)</label>{manualCue?.post_id===String(selected.id)&&manualCue?.campaign_id===String(selected.campaign_id)&&
+      manualCue?.category_id===String(manualCategory)&&
+      <p className="text-xs text-amber-800">Selected unverified source cue: “{manualCue.source_quote}” · This does not verify a legal violation.</p>}
+     <textarea id="manual-flag-rationale" className="intel-input w-full" value={manualRationale} onChange={e=>setManualRationale(e.target.value)} maxLength={1500} placeholder="Your independent evidence assessment and reason for further investigation (required)"/><button type="button" className="intel-button" disabled={reviewBusy||!manualCategory||manualRationale.trim().length<10} onClick={submitManualFlag}>Flag for investigation</button></div>}
      {selected.can_review_flag&&((selected.potential_issues||[]).length>0||selected.is_flagged)&&<><label className="block text-xs font-semibold" htmlFor="flag-review-decision">Decision</label>
       <select id="flag-review-decision" className="intel-input w-full" value={reviewDecision} onChange={e=>setReviewDecision(e.target.value)}><option value="">Select a decision</option><option value="FLAG_CONFIRMED">Confirm preliminary flag</option><option value="FLAG_DISMISSED">Dismiss preliminary flag</option><option value="FURTHER_INVESTIGATION">Request further investigation</option></select>
       <label className="block text-xs font-semibold" htmlFor="flag-review-rationale">Reason for decision (minimum 10 characters)</label>

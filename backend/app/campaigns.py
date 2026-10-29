@@ -527,6 +527,12 @@ def campaign_action(db:Session,p,action,data,id=None):
         rationale=str(payload.get('rationale') or '').strip()
         if not 10<=len(rationale)<=1500:
             raise ValueError('Rationale must contain 10 to 1500 characters')
+        # A suggested keyword cue is never a finding. An officer may attach
+        # its exact source excerpt to the independent human flag decision.
+        source_quote=str(payload.get('source_quote') or '').strip()
+        if source_quote and (not 15<=len(source_quote)<=350 or
+                source_quote.casefold() not in str(item.text_content or '').casefold()):
+            raise ValueError('Source quote must be an exact 15-350 character passage from this post')
         # A sentiment-only version must not hide an earlier human decision.
         latest=(db.query(EvidenceReview)
                 .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
@@ -539,7 +545,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Existing active flag must be reviewed before flagging again')
         review=EvidenceReview(assessment_id=assessment.id,reviewer_id=str(p['id']),
                               decision='FURTHER_INVESTIGATION',
-                              rationale='[Manual flag: '+category.name+'] '+rationale)
+                              rationale='[Manual flag: '+category.name+'] '+rationale+
+                                (' [Source cue: '+source_quote+']' if source_quote else ''))
         db.add(review);db.flush()
         review_id=review.id
         db.commit()
@@ -547,8 +554,10 @@ def campaign_action(db:Session,p,action,data,id=None):
               {'campaign_id':campaign.id,'result_id':item.id,'assessment_id':assessment.id,
                'assessment_version':assessment.assessment_version,'category_id':category.id,
                'category_name':category.name,'decision':'FURTHER_INVESTIGATION',
-               'source':'HUMAN','legal_finding':False})
+               'source':'HUMAN','source_quote_verified':bool(source_quote),
+               'source_quote':source_quote[:350],'legal_finding':False})
         return {'saved':True,'review_id':str(review_id),'decision':'FURTHER_INVESTIGATION',
+                'source_quote_verified':bool(source_quote),
                 'paid_provider_called':False}
     if action=='campaignFlagReview':
         from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult

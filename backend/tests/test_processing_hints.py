@@ -37,3 +37,21 @@ def test_routine_relevant_requires_human_relevance_review():
     assert triage_disposition(text,'RELEVANT')=='REVIEW_RELEVANCE'
     assert triage_disposition(text,'IRRELEVANT')=='NOT_AI_RELEVANT'
     assert triage_disposition('Dugaan pelanggaran pemilu di Riau','RELEVANT')=='RELEVANT_REVIEWED_BY_AI'
+
+def test_candidate_alias_normalization_preserves_unknown_names():
+    from app.processing_hints import normalize_candidate_signals
+    result=normalize_candidate_signals([{'name':'Gibran Rakabuming'},'gibran rakabuming raka','Unrecognized Person'])
+    assert result==['Gibran Rakabuming Raka','Unrecognized Person']
+
+def test_legal_screening_phrase_does_not_claim_violation_or_sentiment():
+    from app.processing_hints import classification_evidence
+    result=classification_evidence('Laporan dugaan pelanggaran pemilu di Riau')
+    assert 'dugaan pelanggaran' in result['potential_issue_phrase_matches']
+    assert result['potential_violation_confirmed'] is False
+    assert result['sentiment']=='UNCLASSIFIED'
+
+def test_incident_geography_remains_unverified_after_issue_screening():
+    result=source_hints('Dugaan pelanggaran di Riau')
+    assert result['province_mentions']==['Riau']
+    assert result['incident_jurisdiction_status']=='UNVERIFIED'
+    assert result['issue_screening']['potential_violation_confirmed'] is False

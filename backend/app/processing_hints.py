@@ -38,6 +38,38 @@ def triage_disposition(text, relevance_label):
         return 'RELEVANT_REVIEWED_BY_AI'
     return 'NOT_AI_RELEVANT'
 
+CANDIDATE_ALIASES={
+    'Prabowo Subianto':('prabowo subianto',),
+    'Gibran Rakabuming Raka':('gibran rakabuming raka','gibran rakabuming'),
+}
+def normalize_candidate_signals(signals):
+    """Resolve only an explicitly known full-name alias; retain unknowns unaltered."""
+    resolved=[]
+    for signal in signals or []:
+        if isinstance(signal,str):
+            name=signal
+        elif isinstance(signal,dict):
+            name=signal.get('name') or signal.get('value') or ''
+        else:
+            continue
+        clean=re.sub(r'\\s+',' ',str(name)).strip()
+        if not clean:continue
+        canonical=next((person for person,aliases in CANDIDATE_ALIASES.items()
+            if clean.casefold() in aliases),clean)
+        if canonical not in resolved:resolved.append(canonical)
+    return resolved
+
+def classification_evidence(text):
+    """Issue terminology is a review cue, never a finding or legal verdict."""
+    value=str(text or '')
+    terms=('dugaan pelanggaran','laporan pelanggaran','sengketa pemilu','politik uang','kecurangan pemilu')
+    matches=[term for term in terms if re.search(r'(?<!\\w)'+re.escape(term)+r'(?!\\w)',value.casefold())]
+    return {'potential_issue_phrase_matches':matches,
+            'potential_violation_confirmed':False,
+            'needs_human_validation':bool(matches),
+            'sentiment':'UNCLASSIFIED',
+            'sentiment_basis':'NOT_AI_ASSESSED'}
+
 def source_hints(text):
     body=str(text or '')
     folded=body.casefold()
@@ -47,6 +79,7 @@ def source_hints(text):
     normalized=re.sub(r'\s+',' ',folded).strip()
     return {
         'topic_suggestions':topics,
+        'issue_screening':classification_evidence(body),
         'communication_context':communication_context(body),
         'province_mentions':provinces,
         'incident_jurisdiction_status':'UNVERIFIED',

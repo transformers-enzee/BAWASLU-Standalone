@@ -58,6 +58,8 @@ export default function CampaignPanel({campaignId=null}){
  const [trendMetric,setTrendMetric]=useState('posts');
  const [chartDay,setChartDay]=useState(null);
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
+ const [capturedSentimentFilter,setCapturedSentimentFilter]=useState('ALL'),[capturedSentimentSort,setCapturedSentimentSort]=useState('HOTTEST');
+ const visibleCapturedPosts=evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);const dateOk=!(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo));const label=String(item.sentiment||'UNCLASSIFIED').toUpperCase();return dateOk&&(capturedSentimentFilter==='ALL'||(capturedSentimentFilter==='UNCLASSIFIED'?!['POSITIVE','NEUTRAL','NEGATIVE'].includes(label):label===capturedSentimentFilter))}).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
@@ -111,7 +113,7 @@ export default function CampaignPanel({campaignId=null}){
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsKeyword,setAnalyticsKeyword]=useState(''),[appliedKeyword,setAppliedKeyword]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  async function viewEvidence(c){
-  resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
@@ -502,19 +504,20 @@ export default function CampaignPanel({campaignId=null}){
     </section>}
   </div>}
  </details>
- <p className="text-xs text-slate-500">Hottest posts first · automatically combines engagements and views.</p>
+ <div className="flex flex-wrap gap-2 items-end"><label className="text-xs font-semibold">Sentiment filter<select aria-label="Filter captured posts by sentiment" className="intel-input mt-1 block" value={capturedSentimentFilter} onChange={e=>setCapturedSentimentFilter(e.target.value)}>{[['ALL','All sentiments'],['POSITIVE','Positive'],['NEUTRAL','Neutral'],['NEGATIVE','Negative'],['UNCLASSIFIED','Unclassified']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label className="text-xs font-semibold">Sort posts<select aria-label="Sort captured posts" className="intel-input mt-1 block" value={capturedSentimentSort} onChange={e=>setCapturedSentimentSort(e.target.value)}><option value="HOTTEST">Hottest first</option><option value="CLASSIFIED_FIRST">Classified first</option></select></label><span className="text-xs text-slate-500">{visibleCapturedPosts.length} matching / {evidence.length} loaded</span></div>
+ <p className="text-xs text-slate-500">Filters use saved sentiment from loaded posts without an AI call.</p>
  {evidenceError&&<p role="alert" className="text-xs text-red-700">{evidenceError}</p>}
  {evidenceLoading?<p className="text-xs">Loading evidence…</p>:evidence.length?<div className="max-h-96 overflow-y-auto space-y-2">
- {evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);return !(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo))}).slice(0,40).map(item=>{
+ {visibleCapturedPosts.slice(0,40).map(item=>{
  const valid=/^https:\/\//i.test(item.canonical_url||'');
  return <div key={item.id} className="space-y-1"><a href={valid?item.canonical_url:undefined} target={valid?'_blank':undefined} rel="noopener noreferrer" aria-label={valid?'Open original '+item.platform+' post':'Source URL unavailable'} className={'flex items-center gap-2 rounded-xl border border-slate-200 p-2.5 text-xs transition-colors '+(valid?'hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500':'cursor-default')}>
   <SourceThumbnail url={item.thumbnail_url} platform={item.platform}/>
   <div className="min-w-0 flex-1 space-y-1"><div className="flex items-center gap-2"><strong className="capitalize">{platformLabel(item.platform)} · {item.content_type||'Post'}</strong><span className="text-slate-500">{item.published_at?String(item.published_at).slice(0,10):'Undated'}</span></div><p className="line-clamp-3 text-slate-700 whitespace-pre-wrap break-words">{item.text_content||'No source text'}</p></div>
   <SentimentMarker value={item.sentiment} details={item.sentiment_details}/>
- </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,true)}>Reanalyze with AI · Post #{item.id}</button></div>})}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
+ </a><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,false)}>Analyze with AI · Post #{item.id}</button><button type="button" className="intel-ghost text-xs" disabled={singleBusy} onClick={()=>previewSingle(item,true)}>Reanalyze with AI · Post #{item.id}</button></div>)}{!visibleCapturedPosts.length&&<p className="text-xs p-3 text-slate-500">No loaded posts match this filter. Try All sentiments.</p>}</div>:<p className="text-xs text-slate-500">No captured evidence yet</p>}
  {singlePreview&&<div className="rounded-lg border border-amber-300 p-3 space-y-2 text-xs" role="status"><strong>Post #{singlePreview.result_id} · {singlePreview.reanalysis?'Versioned AI reanalysis':'AI analysis'} cost preview</strong><p>Exactly {singlePreview.estimated_ai_requests} AI request · SocialCrawl credits: {singlePreview.socialcrawl_credits} · {singlePreview.estimated_ai_cost}.</p><button type="button" className="intel-button" disabled={singleBusy||!singlePreview.ai_key_configured} onClick={startSingle}>Confirm paid AI analysis for this post</button><button type="button" className="intel-ghost ml-2" onClick={()=>setSinglePreview(null)}>Cancel</button>{!singlePreview.ai_key_configured&&<p>AI provider key not configured.</p>}</div>}
  {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
- <p className="text-xs text-slate-500">Top 40 displayed from the 200 hottest stored posts (up to 5,000 scanned). Engagement and views are combined automatically; missing metrics are not estimated.</p>
+ <p className="text-xs text-slate-500">Up to 40 matching posts displayed from the loaded 200 hottest stored posts (up to 5,000 scanned). Filters do not search outside the loaded set.</p>
  </section>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">
  <h5 className="font-semibold">Demographics & data coverage</h5>

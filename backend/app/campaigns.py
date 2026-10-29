@@ -722,6 +722,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             records.sort(key=lambda row:int(str(row['id'])==requested_result and str(row['campaign_id'])==campaign_id),reverse=True)
         return {'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
+                'classification_processing':__import__('app.processing_hints',fromlist=['summarize_scoped_findings']).summarize_scoped_findings(records[:300]),
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

@@ -55,3 +55,20 @@ def test_incident_geography_remains_unverified_after_issue_screening():
     assert result['province_mentions']==['Riau']
     assert result['incident_jurisdiction_status']=='UNVERIFIED'
     assert result['issue_screening']['potential_violation_confirmed'] is False
+
+def test_scoped_classification_aggregation_is_read_only_and_conservative():
+    from app.processing_hints import summarize_scoped_findings,source_hints
+    a={'id':'10','campaign_id':'1','canonical_url':'https://example.org/a',
+       'text_content':'KPU pengawasan pemilu di Riau','potential_issues':[],
+       'processing_hints':source_hints('KPU pengawasan pemilu di Riau')}
+    b={**a,'id':'11'}
+    c={'id':'12','campaign_id':'2','canonical_url':'https://example.org/a',
+       'text_content':'dugaan pelanggaran','potential_issues':[{'category_name':'Preliminary'}]}
+    result=summarize_scoped_findings([a,b,c])
+    assert result['visible_relevant_count']==3
+    assert result['exact_duplicate_groups']==[{'campaign_id':'1','source_ids':['10','11'],'basis':'EXACT_URL_OR_TEXT'}]
+    assert result['topic_groups'][0]['status']=='KEYWORD_GROUP_ONLY'
+    assert result['needs_attention_candidates'][0]['result_id']=='12'
+    assert result['incident_clusters_verified']==0
+    assert result['narratives_verified']==0
+    assert result['paid_provider_called'] is False

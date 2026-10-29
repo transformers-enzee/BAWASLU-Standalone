@@ -87,3 +87,41 @@ def source_hints(text):
         'exact_text_fingerprint':hashlib.sha256(normalized.encode('utf-8')).hexdigest() if normalized else None,
         'classification_method':'RULE_HINTS_V1',
     }
+
+def summarize_scoped_findings(records):
+    """Deterministic, read-only aggregation of ALREADY authorized relevant findings.
+
+    Grouping is preliminary: exact duplicate fingerprints and source URLs are
+    not incident identity. Topic grouping is not emerging-narrative detection.
+    """
+    from collections import defaultdict
+    buckets=defaultdict(list)
+    topic_groups=defaultdict(list)
+    attention=[]
+    for row in records:
+        rid=str(row.get('id') or '')
+        campaign=str(row.get('campaign_id') or '')
+        metadata=row.get('processing_hints') or source_hints(row.get('text_content'))
+        fingerprint=metadata.get('exact_text_fingerprint')
+        url=str(row.get('canonical_url') or '').strip().casefold()
+        # Campaign-specific grouping never crosses visibility boundaries.
+        if url:
+            buckets[(campaign,'url',url)].append(rid)
+        elif fingerprint:
+            buckets[(campaign,'text',fingerprint)].append(rid)
+        for topic in metadata.get('topic_suggestions') or []:
+            topic_groups[topic].append(rid)
+        if row.get('potential_issues') or row.get('is_flagged'):
+            attention.append({'result_id':rid,'campaign_id':campaign,
+                'reason':'EXISTING_ISSUE_OR_HUMAN_FLAG','status':'PRELIMINARY_REVIEW'})
+    duplicates=[{'campaign_id':key[0],'source_ids':ids,'basis':'EXACT_URL_OR_TEXT'}
+        for key,ids in buckets.items() if len(ids)>1]
+    return {'visible_relevant_count':len(records),
+        'exact_duplicate_groups':duplicates,
+        'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),'status':'KEYWORD_GROUP_ONLY'}
+            for name,ids in sorted(topic_groups.items())],
+        'needs_attention_candidates':attention,
+        'incident_clusters_verified':0,
+        'narratives_verified':0,
+        'status':'DERIVED_FROM_AUTHORIZED_SAVED_ASSESSMENTS',
+        'paid_provider_called':False}

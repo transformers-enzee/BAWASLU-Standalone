@@ -212,6 +212,62 @@ def classification_contract(row):
             'assessment_version':row.get('assessment_version')}
 
 
+def canonical_candidate_candidates(records):
+    """Stable provisional identities ONLY for known full-name alias entries.
+
+    Persisted candidate registry IDs remain the authority; unknown names
+    are not automatically merged or assigned an authoritative identity.
+    """
+    results=[]
+    for row in records:
+        names=normalize_candidate_signals(row.get('candidate_signals') or [])
+        for name in names:
+            if name not in CANDIDATE_ALIASES:
+                continue
+            results.append({'campaign_id':str(row.get('campaign_id') or ''),
+                'result_id':str(row.get('id') or ''),'canonical_name':name,
+                'provisional_candidate_key':'alias:'+hashlib.sha256(
+                    name.casefold().encode()).hexdigest()[:16],
+                'registry_identity_verified':False})
+    return results
+
+
+def incident_cluster_candidates(records):
+    """Unverified event-review clusters, distinct from text duplicates.
+
+    Requires matching specific discussion anchor and one explicit incident
+    province, plus two different authors, URLs and nonidentical source texts.
+    Broad topic similarity or account profile geography never suffices.
+    """
+    from collections import defaultdict
+    grouped=defaultdict(list)
+    for row in records:
+        if str(row.get('relevance_label') or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+            continue
+        campaign=str(row.get('campaign_id') or '')
+        rid=str(row.get('id') or '')
+        author=str(row.get('author_name') or '').strip().casefold()
+        url=str(row.get('canonical_url') or '').strip().casefold()
+        fp=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        provinces=incident_location_cues(row.get('text_content'))
+        anchors=narrative_anchors(row.get('text_content'))
+        if not (campaign and rid and author and url and fp and len(provinces)==1):
+            continue
+        for anchor in anchors:
+            grouped[(campaign,provinces[0],anchor)].append((rid,author,url,fp))
+    result=[]
+    for (campaign,province,anchor),rows in sorted(grouped.items()):
+        unique={item[3]:item for item in rows}
+        evidence=list(unique.values())
+        if len(evidence)<2 or len({x[1] for x in evidence})<2 or len({x[2] for x in evidence})<2:
+            continue
+        result.append({'campaign_id':campaign,'incident_province_unverified':province,
+            'discussion_anchor':anchor,'source_ids':sorted(x[0] for x in evidence),
+            'status':'INCIDENT_CLUSTER_REVIEW_CANDIDATE',
+            'same_incident_verified':False,'evidence_independence':'UNVERIFIED'})
+    return result
+
+
 def exact_source_groups(records):
     """Exact normalized-text duplicates, isolated per campaign.
 
@@ -309,6 +365,8 @@ def summarize_scoped_findings(records):
     duplicates=[{'campaign_id':group['campaign_id'],'source_ids':group['post_ids'],
                  'basis':'EXACT_NORMALIZED_TEXT'} for group in exact_source_groups(records)]
     narratives=emerging_narrative_candidates(records)
+    incident_candidates=incident_cluster_candidates(records)
+    candidate_identities=canonical_candidate_candidates(records)
     for narrative in narratives:
         players['Emerging Narratives'].append({
             'campaign_id':narrative['campaign_id'],
@@ -327,6 +385,8 @@ def summarize_scoped_findings(records):
         'exact_source_groups':exact_source_groups(records),
         'exact_duplicate_groups':duplicates,
         'emerging_narrative_candidates':narratives,
+        'incident_cluster_candidates':incident_candidates,
+        'canonical_candidate_candidates':candidate_identities,
         'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),
                          'status':'KEYWORD_GROUP_ONLY'}
                         for name,ids in sorted(topic_groups.items())],
@@ -342,5 +402,7 @@ def summarize_scoped_findings(records):
             'failed_classifications_reported':False,
             'ai_usage_cost_reported':False,'scope':'VISIBLE_ROWS_ONLY'},
         'incident_clusters_verified':0,'narratives_verified':0,
+        'incident_cluster_review_candidates_count':len(incident_candidates),
+        'canonical_candidate_review_candidates_count':len(candidate_identities),
         'status':'DERIVED_FROM_AUTHORIZED_SAVED_ASSESSMENTS',
         'paid_provider_called':False}

@@ -302,7 +302,7 @@ def _batch_preview(db,p,c,data=None):
     eligible=[]
     for link in links:
         item=db.get(SocialListeningResult,link.result_id)
-        if item and _result_in_scope(db,p,item) and not sentiment_is_assessed(
+        if item and str(item.text_content or '').strip() and _result_in_scope(db,p,item) and not sentiment_is_assessed(
                 _current_assessment(db,c.id,item.id)):
             eligible.append(str(item.id))
     return {'unclassified':len(eligible),'selected_ids':eligible[:limit],
@@ -334,6 +334,8 @@ def _classify_campaign_sentiment(db,p,c,data):
                 'explanation':prior.sentiment_explanation or '',
                 'model':prior.sentiment_model or prior.model_version or '',
                 'cached':True,'paid_provider_called':False}
+    if not str(row.text_content or '').strip():
+        raise ValueError('Source text is missing; no AI request was sent')
     if not openai_triage_configured(): raise ValueError('OPENAI_API_KEY is not configured')
     model=openai_triage_model()
     schema={'type':'object','properties':{
@@ -380,7 +382,7 @@ def _classify_campaign_sentiment(db,p,c,data):
         explanation=prior.explanation if prior else '')
     db.add(record);db.commit()
     audit(db,p,'EvidenceAssessment',record.id,'AI_POST_SENTIMENT_CLASSIFIED',
-          {'sentiment':{'new':label},'model':{'new':record.model_version}})
+          {'sentiment':{'new':label},'model':{'new':record.sentiment_model}})
     return {'sentiment':label.title() if label!='UNCLASSIFIED' else 'Unclassified',
             'confidence':record.sentiment_confidence,
             'explanation':record.sentiment_explanation,
@@ -408,10 +410,11 @@ def campaign_action(db:Session,p,action,data,id=None):
         link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(rid)).first()
         item=db.get(SocialListeningResult,int(rid))
         if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Post unavailable')
-        assessed=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=item.id).first()
+        from .sentiment_processing import relevance_is_assessed
+        assessed=relevance_is_assessed(_current_assessment(db,campaign.id,item.id))
         reanalysis=action in ('campaignSingleReanalysisPreview','campaignSingleReanalysisStart')
         if assessed and not reanalysis:raise ValueError('Already assessed; choose Reanalyze with AI')
-        if not assessed and reanalysis:raise ValueError('No previous assessment; choose Analyze with AI')
+        if not assessed and reanalysis:raise ValueError('No previous relevance assessment; choose Analyze with AI')
         preview={'campaign_id':str(campaign.id),'result_id':str(item.id),
                  'estimated_ai_requests':1,'socialcrawl_credits':0,
                  'estimated_ai_cost':'Variable; one model request, token-based provider pricing',
@@ -419,7 +422,18 @@ def campaign_action(db:Session,p,action,data,id=None):
         if action in ('campaignSingleAssessmentPreview','campaignSingleReanalysisPreview'):return preview
         if payload.get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
         if not preview['ai_key_configured']:raise ValueError('AI provider not configured')
-        return {**preview,'single_assessment_accepted':True,'reanalysis':reanalysis}
+        from .models import AIAssessmentJob
+        job=db.query(AIAssessmentJob).filter_by(
+            campaign_id=campaign.id,result_id=item.id).first()
+        expected='COMPLETED' if reanalysis else 'PENDING'
+        if job and job.state!=expected:
+            raise ValueError('Existing AI job state requires manual review before another request')
+        if job is None:
+            db.add(AIAssessmentJob(campaign_id=campaign.id,result_id=item.id,
+                                   state=expected,attempts=0))
+            db.commit()
+        return {**preview,'single_assessment_accepted':True,'reanalysis':reanalysis,
+                'job_queued':True}
     if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
         from .models import EvidenceAssessment
         from .socialcrawl import _result_in_scope
@@ -430,20 +444,26 @@ def campaign_action(db:Session,p,action,data,id=None):
         c=db.get(MonitoringCampaign,int(campaign_id))
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
+        from .sentiment_processing import relevance_is_assessed
         links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
         pending=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
             if not item or not _result_in_scope(db,p,item):
                 continue
-            if not db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first():
+            if not relevance_is_assessed(_current_assessment(db,c.id,item.id)):
                 pending+=1
         try:
+            requested_limit=int((data or {}).get('sample_limit',10))
+        except (ValueError,TypeError):raise ValueError('Choose an integer batch size')
+        if not 1<=requested_limit<=20:raise ValueError('Choose between 1 and 20 posts')
+        try:
             import os
-            configured_limit=max(0,min(25,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
+            configured_limit=max(0,min(20,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
         except ValueError:configured_limit=12
-        maximum=min(5,configured_limit,pending)
+        maximum=min(requested_limit,configured_limit,pending)
         preview={'campaign_id':str(c.id),'unassessed':pending,'batch_limit':maximum,
+                 'requested_sample_limit':requested_limit,
                  'ai_key_configured':openai_triage_configured(),
                  'socialcrawl_credits':0,'estimated_ai_requests':maximum,
                  'ai_token_cost_estimate':'Variable; provider token pricing applies',
@@ -573,7 +593,11 @@ def campaign_action(db:Session,p,action,data,id=None):
             if len(rationale)<10:raise ValueError('Correction rationale must contain at least 10 characters')
             new=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=old.assessment_version+1,
                 model_version='HUMAN_OVERRIDE',relevance_label=decision,relevance_confidence=old.relevance_confidence,
-                sentiment=old.sentiment,candidate_signals_json=old.candidate_signals_json,
+                sentiment=old.sentiment,
+                sentiment_confidence=old.sentiment_confidence,
+                sentiment_explanation=old.sentiment_explanation,
+                sentiment_model=old.sentiment_model,
+                candidate_signals_json=old.candidate_signals_json,
                 geographic_signals_json=old.geographic_signals_json,
                 potential_issue_signals_json=old.potential_issue_signals_json,
                 explanation='Human correction: '+rationale[:1100])

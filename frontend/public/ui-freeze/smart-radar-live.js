@@ -7,16 +7,48 @@
   let dashboard = null;
   let busy = false;
   const accessToken = () => localStorage.getItem('bawaslu_access_token') || '';
+  // Short-lived in-memory cache: no browser persistence, no shared officer data.
+  // Keep browser fetch no-store; this prevents *repeated network/Supabase reads*.
+  const readCache = new Map();
+  let cacheToken = null;
+  function clearReadCache(){ readCache.clear(); }
   async function request(path, options = {}) {
-    const response = await fetch(path, {
-      ...options, cache: 'no-store', headers: {
-        'Authorization': 'Bearer ' + accessToken(),
-        ...(options.body ? {'Content-Type': 'application/json'} : {})
-      }
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || data.error || 'Request failed (' + response.status + ')');
-    return data;
+    const token = accessToken();
+    if (cacheToken !== token) { clearReadCache(); cacheToken = token; }
+    const method = (options.method || 'GET').toUpperCase();
+    const eligible = method === 'GET' && /^\\/api\\/smart-radar\\/(dashboard|finding\\/|history\\/)/.test(path);
+    const ttl = path.includes('/history/') ? 10000 : path.includes('/finding/') ? 60000 : 30000;
+    const now = Date.now();
+    const key = path;
+    if (eligible) {
+      const cached = readCache.get(key);
+      if (cached && cached.expires > now) return cached.promise;
+      if (cached) readCache.delete(key);
+    } else if (method !== 'GET') {
+      clearReadCache();
+    }
+    const pending = (async () => {
+      const response = await fetch(path, {
+        ...options, cache: 'no-store', headers: {
+          'Authorization': 'Bearer ' + token,
+          ...(options.body ? {'Content-Type': 'application/json'} : {})
+        }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.error || 'Request failed (' + response.status + ')');
+      return data;
+    })();
+    if (eligible) {
+      // Evict rejected requests immediately; never cache authorization failures.
+      const tracked = pending.catch(error => {
+        if (readCache.get(key)?.promise === tracked) readCache.delete(key);
+        throw error;
+      });
+      readCache.set(key, {expires:now+ttl,promise:tracked});
+      if (readCache.size > 80) readCache.delete(readCache.keys().next().value);
+      return tracked;
+    }
+    return pending;
   }
   const countPosts = rows => rows.reduce((sum, row) => sum + Number(row.supporting_posts || 0), 0);
   const addCounts = (rows, key) => {

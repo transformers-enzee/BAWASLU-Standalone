@@ -214,6 +214,11 @@ def classification_contract(row):
             'incident_location_cues_unverified':hints.get('incident_location_cues_unverified') or [],
             'location_mentions_unverified':hints.get('province_mentions') or [],
             'potential_issues':row.get('potential_issues') or [],
+            'public_concern_signals':row.get('public_concern_signals') or [],
+            'attention_assessment':row.get('attention_assessment') or {},
+            'player_summary_drafts':row.get('player_summaries') or [],
+            'candidate_identity_matches':row.get('candidate_identity_matches') or [],
+            'source_evidence_verified':False,
             'review_status':row.get('flag_review_status'),
             'assessment_version':row.get('assessment_version')}
 

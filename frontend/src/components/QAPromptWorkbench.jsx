@@ -34,6 +34,21 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
  useEffect(()=>{
    if(selected)call('/versions/'+selected).then(setDetails).catch(e=>setError(e.message));
  },[selected,data?.versions?.length]);
+ async function loadCalibrationDraft(){
+   if(!canEdit)return;
+   setBusy('draft');setError('');setNotice('');
+   try{
+     const proposal=await call('/calibration-draft');
+     setPrompt(proposal.instructions);
+     setTitle(proposal.title);
+     setNote(proposal.change_note);
+     setUseReferences(false);setQualityReferences(false);
+     setContrastReferences(true);
+     setNotice(id?'Draf kalibrasi baru dimuat. Belum disimpan atau diuji dengan AI.':
+       'V18 candidate draft loaded. Not saved, not assessed, no accuracy improvement claimed.');
+   }catch(e){setError(e.message)}
+   finally{setBusy('')}
+ }
  async function save(){
    setBusy('save');setError('');setNotice('');
    try{
@@ -100,7 +115,8 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
      <label className="text-xs flex items-center gap-2">{id?'Versi audit':'Audit version'}<select className="border bg-white rounded p-1" value={auditVersion} onChange={e=>{setAuditVersion(Number(e.target.value));setAudit(null)}}><option value={17}>V17 (new Shahrin category boundaries)</option><option value={16}>V16 (18-post baseline, read-only)</option><option value={15}>V15 (historical no-reference audit)</option><option value={14}>V14 (historical no-reference audit)</option></select></label>
      <label className="text-xs flex items-center gap-2">{id?'Ukuran batch berbayar':'Paid batch size'}<select className="border bg-white rounded p-1" value={auditBatch} onChange={e=>setAuditBatch(Number(e.target.value))}><option value={3}>3</option><option value={5}>5</option><option value={15}>15</option></select></label>
      {auditError&&<p role="alert" className="text-xs text-red-700">{auditError}</p>}
-     {audit&&<p className="text-sm font-semibold">{audit.completed}/{audit.target} {id?'selesai':'assessed'} · {audit.agreement==null?'—':(audit.agreement*100).toFixed(1)+'%'} {id?'cocok':'agreement'} · {audit.quote_warnings} {id?'peringatan kutipan':'quote warnings'} · {audit.with_references??0} {id?'dengan referensi':'with Shahrin references'}</p>}
+     {audit&&<p className="text-sm font-semibold">{audit.completed_in_current_eligible_pool??audit.completed}/{audit.target} {id?'selesai':'eligible assessed'} · {audit.agreement==null?'—':(audit.agreement*100).toFixed(1)+'%'} {id?'cocok':'agreement'} · {audit.quote_warnings} {id?'peringatan kutipan':'quote warnings'} · {audit.with_references??0} {id?'dengan referensi':'with Shahrin references'}</p>}
+     {auditVersion===17&&audit&&<p className="text-xs text-slate-700">Upper ceiling: {audit.requested_exemplar_ceiling??105} · Eligible exemplars: {audit.eligible_reference_examples??'Unreported'} · Only available, unblocked exemplar posts are eligible; a ceiling is not a guaranteed target.</p>}
      {auditVersion===17&&audit?.baseline_paired_n>0&&<p className="text-xs text-slate-700">{id?"V16, post yang sama":"V16 on the exact same posts"}: <b>{audit.baseline_paired_matched}/{audit.baseline_paired_n} ({(audit.baseline_paired_agreement*100).toFixed(1)}%)</b> · {id?"V17":"V17"}: <b>{audit.matched}/{audit.completed}</b></p>}
      {canEdit&&<button type="button" disabled={!!busy||!ready||!audit||audit.remaining<=0||!preflight?.paid_v2_enabled||slots<=0||auditVersion!==17} className="bg-[#147968] text-white rounded px-3 py-2 text-sm disabled:opacity-50" onClick={async()=>{setBusy('audit');setAuditError('');try{const resp=await fetch('/api/smart-radar/qa/tuning/exemplar-audit/run',{method:'POST',headers:{Authorization:'Bearer '+auth(),'Content-Type':'application/json'},body:JSON.stringify({version_id:auditVersion,limit:auditBatch})});const out=await resp.json();if(!resp.ok)throw Error(typeof out.detail==='string'?out.detail:'Audit request failed');setNotice((out.saved?.length||0)+' exemplar predictions saved');await reloadAudit();await refresh()}catch(e){setAuditError(e.message)}finally{setBusy('')}}}>{busy==='audit'?'Assessing…':(id?'Uji '+auditBatch+' contoh berikutnya (berbayar)':'Assess next '+auditBatch+' exemplars (paid)')}</button>}
    </div>
@@ -117,6 +133,11 @@ export default function QAPromptWorkbench({canEdit=false,language='en',maxRun=3,
    <div className="grid lg:grid-cols-[1.2fr_1fr] gap-4 items-start">
      <div className="space-y-2">
        <h3 className="font-semibold text-sm">{id?'Ubah Instruksi AI':'Edit AI Instructions'}</h3>
+       {canEdit&&<button type="button" className="text-xs border rounded px-3 py-2 bg-white"
+          disabled={!!busy} onClick={loadCalibrationDraft}>
+          {id?'Muat draf V18 (gratis; tanpa penilaian AI)':'Load V18 calibration draft (free, no model run)'}
+       </button>}
+       <p className="text-xs text-slate-600">A draft changes only the editable text. Saving a new immutable version is a separate action; testing it requires explicit paid approval. V17 results remain unchanged.</p>
        <label className="text-xs block">{id?'Nama versi baru':'New version name'}<input className={fld+' mt-1'} value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit} maxLength={100}/></label>
        <label className="text-xs block">{id?'Perubahan dari versi sebelumnya':'What changed and why?'}<input className={fld+' mt-1'} value={note} onChange={e=>setNote(e.target.value)} disabled={!canEdit} maxLength={500} placeholder="E.g. Do not infer misconduct from political timing"/></label>
        <label className="text-xs block">{id?'Instruksi klasifikasi lengkap':'Classification instructions'}<textarea className={fld+' mt-1 font-mono leading-5'} rows={18} value={prompt} spellCheck={false} onChange={e=>setPrompt(e.target.value)} disabled={!canEdit}/></label>

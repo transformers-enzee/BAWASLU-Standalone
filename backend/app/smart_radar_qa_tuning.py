@@ -104,6 +104,74 @@ alternative. If the original post is ambiguous, mention that uncertainty.
 Prefer evidence and context over speculation. Use no unseen facts.
 """
 
+
+CALIBRATION_DRAFT_REVISION='v18-contrastive-boundaries-no-inference'
+CALIBRATION_DRAFT_ADDITION="""
+
+V18 CONTRASTIVE BOUNDARY AUDIT (UNVALIDATED DRAFT)
+This draft responds to recurring mistakes in saved non-holdout QA aggregate
+predictions. It is a candidate rubric, NOT a claim of improved accuracy. Each
+decision must follow the entire source rather than a memorized reference label.
+Use the closest alternative for an explicit two-category comparison.
+
+Disputes / Legal versus Allegations / Violations:
+- If the main update is an MK/DKPP hearing, petition, jurisdiction, remedy,
+  appeal, procedural objection or court ruling, prefer Disputes / Legal even
+  when allegations are recited as litigation background.
+- If the central news independently alleges a specific dishonest electoral
+  act, obstruction, intimidation, falsification or abuse of power, prefer
+  Allegations / Violations; merely mentioning court or DKPP is not enough
+  to turn the primary focus into Disputes / Legal.
+- Never infer criminal guilt from an allegation. A complaint filed with a
+  regulator is not proof of the accused conduct.
+
+Election Operations versus Participatory Oversight:
+- Internal staffing, legal compliance, logistical planning, election service
+  delivery and institutional coordination mainly describe Election Operations.
+- A concrete public-monitoring workshop, volunteer observer training, civic
+  election watch or community empowerment mainly describes Participatory
+  Oversight, even when conducted by an electoral commission.
+- General public communication or BAWASLU attendance alone does not establish
+  a participatory monitoring program.
+
+Citizen Reports / Public Concerns versus Election Operations:
+- Focus on voter inclusion, disability access, barriers, grievances, rights
+  and lived impacts is Citizen Reports / Public Concerns, even without anger.
+- Neutral changes to voter-facing administration without an expressed
+  citizen-rights or citizen-impact focus are Election Operations.
+
+Voter Register / PDPB versus Digital Risks / Information:
+- PDPB, DPT, DPS, coklit, voter-roll eligibility, verification and register
+  maintenance as the main subject belong to Voter Register / PDPB.
+- Hoaxes, social-media manipulation and online-information integrity as the
+  main subject belong to Digital Risks / Information.
+- A generic data application or publication on social media does not decide.
+
+OUTPUT VERIFICATION:
+Do not invent incidents, candidates, geography, motives or legal findings.
+Use verbatim evidence quotes and genuine uncertainty. Produce only the seven
+authorized categories: Allegations / Violations, Disputes / Legal,
+Election Operations, Participatory Oversight,
+Citizen Reports / Public Concerns, Voter Register / PDPB,
+Digital Risks / Information.
+Never use any target's Shahrin human label or reserved holdout content.
+"""
+
+def calibration_draft_payload():
+    return {'title':'V18 - Contrastive category boundary candidate',
+        'instructions':DEFAULT_INSTRUCTIONS+CALIBRATION_DRAFT_ADDITION,
+        'change_note':'Non-holdout saved-error patterns: legal vs allegations; participatory vs operations; citizen impact; voter registers. Unvalidated; no paid inference.',
+        'recommended_reference_mode':'shahrin-ref-v3',
+        'revision':CALIBRATION_DRAFT_REVISION,
+        'historical_versions_immutable':True,
+        'holdout_excluded_from_draft':True,
+        'no_new_accuracy_claim':True,'paid_provider_called':False}
+
+@router.get("/tuning/calibration-draft")
+def calibration_draft(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    reviewer(db,user)
+    return calibration_draft_payload()
+
 def version_key(vid):
     return PREFIX+str(vid)
 

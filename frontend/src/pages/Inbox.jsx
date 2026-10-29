@@ -371,6 +371,8 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
          <p className="font-medium">{entry.anchor||entry.status||entry.review_status||'Provisional evidence'} · {entry.seriousness&&entry.seriousness!=='NOT_ASSESSED'?'Seriousness: '+entry.seriousness+' · ':''}{entry.urgency&&entry.urgency!=='NOT_ASSESSED'?'Urgency: '+entry.urgency:''}</p>
          {entry.source_cues?.length>0&&<p className="mt-1 text-slate-700">Source evidence: {entry.source_cues.slice(0,2).join(' · ')}</p>}
          {entry.ai_summary_draft&&<p className="mt-1"><strong>Saved AI draft (unverified):</strong> {entry.ai_summary_draft.summary} · <em>Quote: {entry.ai_summary_draft.source_quote}</em></p>}
+         {!entry.ai_summary_draft&&entry.source_excerpt&&<p className="mt-1 text-slate-700"><strong>Source extract (not AI summary):</strong> {entry.source_excerpt}</p>}
+         {(entry.source_extracts||[]).map((ex,i)=><p key={i} className="text-slate-700"><strong>Source {ex.result_id} (not AI summary):</strong> {ex.source_excerpt}</p>)}
          {(entry.ai_summary_drafts||[]).map((draft,k)=><p key={k}><strong>Saved post draft (unverified):</strong> {draft.summary} · <em>{draft.source_quote}</em></p>)}
          <div className="flex flex-wrap gap-2 mt-2">{(entry.source_ids||[entry.result_id]).filter(Boolean).map(id=><button type="button" key={id} className="intel-ghost text-xs" onClick={()=>focusPlayerEvidence(id)}>Inspect source {id}</button>)}</div>
          <p className="text-slate-500 mt-1">Officer review required for intelligence validation.</p>

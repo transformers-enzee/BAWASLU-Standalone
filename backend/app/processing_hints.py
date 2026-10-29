@@ -408,7 +408,9 @@ def summarize_scoped_findings(records):
             and len(str(x.get('source_quote') or '').strip())>=15
             and str(x.get('source_quote') or '').strip().casefold()
                 in source_text.casefold()}
-        key={'result_id':rid,'campaign_id':campaign}
+        key={'result_id':rid,'campaign_id':campaign,
+            'source_excerpt':str(row.get('text_content') or '').strip()[:240],
+            'source_excerpt_provenance':'ORIGINAL_POST_NOT_AI_SUMMARY'}
         issue=bool(row.get('potential_issues'))
         flag=bool(row.get('is_flagged'))
         status=str(row.get('flag_review_status') or '').upper()
@@ -496,6 +498,11 @@ def summarize_scoped_findings(records):
             'source_ids':narrative['source_ids'],
             'anchor':narrative['anchor'],
             'ai_summary_drafts':eligible_drafts[:3],
+            'source_extracts':[{
+                'result_id':str(sid),
+                'source_excerpt':str((source_by_id.get(str(sid)) or {}).get('text_content') or '').strip()[:240],
+                'source_excerpt_provenance':'ORIGINAL_POST_NOT_AI_SUMMARY'}
+                for sid in narrative['source_ids'][:3]],
             'evidence_verified':False,
             'status':'REQUIRES_HUMAN_REVIEW'})
     missing_fields={'text_content':0,'canonical_url':0,'campaign_id':0,

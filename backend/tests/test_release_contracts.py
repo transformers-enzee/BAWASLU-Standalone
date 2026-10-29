@@ -232,3 +232,12 @@ def test_v92_8_bulk_quality_and_officer_checks():
     assert 'metrics.assessment_coverage?.relevant_without_sentiment' in screen
     assert 'metrics.campaign_duplicate_urls?.duplicate_url_groups' in screen
     assert 'v92.8' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+
+
+def test_v92_9_sentiment_does_not_erase_prior_relevance_or_issue_signals():
+    from app import campaigns
+    source=Path(campaigns.__file__).read_text(encoding='utf-8')
+    sentiment=source.split('def _classify_campaign_sentiment(',1)[1].split('def ',1)[0]
+    for name in ('relevance_label','candidate_signals_json','geographic_signals_json','potential_issue_signals_json'):
+        assert name+'=prior.'+name in sentiment
+    assert 'confirm_ai_cost' in sentiment

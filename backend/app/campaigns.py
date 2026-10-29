@@ -340,10 +340,16 @@ def _classify_campaign_sentiment(db,p,c,data):
     prior=(db.query(EvidenceAssessment).filter_by(campaign_id=c.id,result_id=row.id)
            .order_by(EvidenceAssessment.assessment_version.desc()).first())
     version=prior.assessment_version+1 if prior else 1
+    # Sentiment is an additional annotation, never a replacement for previously
+    # assessed relevance, candidate, geographic or potential-issue signals.
     record=EvidenceAssessment(campaign_id=c.id,result_id=row.id,assessment_version=version,
         model_version=str(payload.get('model') or model),sentiment=label,
-        relevance_confidence=str(outcome.get('confidence') or 'LOW'),
-        explanation=str(outcome.get('explanation') or '')[:1500])
+        relevance_label=prior.relevance_label if prior else 'UNASSESSED',
+        relevance_confidence=prior.relevance_confidence if prior else '',
+        candidate_signals_json=prior.candidate_signals_json if prior else '[]',
+        geographic_signals_json=prior.geographic_signals_json if prior else '[]',
+        potential_issue_signals_json=prior.potential_issue_signals_json if prior else '[]',
+        explanation=prior.explanation if prior else '')
     db.add(record);db.commit()
     audit(db,p,'EvidenceAssessment',record.id,'AI_POST_SENTIMENT_CLASSIFIED',
           {'sentiment':{'new':label},'model':{'new':record.model_version}})

@@ -13,7 +13,7 @@ def test_14_v18_has_real_audit_execution_path_with_opt_in_gates():
     source=inspect.getsource(run_exemplar_audit)
     assert 'not in (17,18)' in source
     assert 'BAWASLU_QA_V2_PAID_TEST_APPROVED' in source
-    assert 'qa-exemplar-audit' in inspect.getsource(exemplar_audit_status)
+    assert 'exemplar_audit_key' in inspect.getsource(exemplar_audit_status)
     payload=calibration_draft_payload()
     assert 'Disputes / Legal' in payload['instructions']
     assert payload['no_new_accuracy_claim'] is True

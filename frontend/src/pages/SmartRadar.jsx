@@ -24,6 +24,7 @@ export default function SmartRadar(){
   return ()=>{cancelled=true;};
  },[campaignId,validCampaign]);
  const entries=state.data?.entries||[];
+ const topicCounts=Object.entries(entries.reduce((acc,row)=>{for(const topic of row.topic_labels||[]){const key=typeof topic==='string'?topic:topic?.topic||topic?.label;if(key)acc[key]=(acc[key]||0)+1;}return acc;},{})).sort((a,b)=>b[1]-a[1]);
  return <section aria-label="Smart Radar V6.2" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#f1f5f7]">
   {validCampaign&&<div className="border-b border-[#dce5ea] bg-white px-5 py-3 text-sm">
    <div className="font-semibold text-[#122f46]">Intelligence Inbox evidence feed · Campaign {campaignId}</div>
@@ -40,9 +41,10 @@ export default function SmartRadar(){
   </div>}
   {validCampaign&&state.data&&perspective==='inbox'&&<div className="bg-white px-5 py-3 text-sm" aria-label="Saved Inbox intelligence perspectives">
    <div className="font-semibold mb-2">Saved assessment perspectives (provisional)</div>
-   <div className="flex flex-wrap gap-3">{['Electoral Operations','BAWASLU Reputation'].map(topic=><div key={topic} className="rounded border p-3"><strong>{topic}</strong><div>{entries.filter(x=>(x.topic_labels||[]).includes(topic)).length} saved source posts</div></div>)}
+   <div className="flex flex-wrap gap-3">{topicCounts.map(([topic,count])=><div key={topic} className="rounded border p-3"><strong>{topic}</strong><div>{count} saved source posts</div></div>)}
    <div className="rounded border p-3"><strong>Public Concerns</strong><div>{entries.filter(x=>(x.public_concern_signals||[]).length).length} posts with saved signals</div></div>
    <div className="rounded border p-3"><strong>Potential Issues</strong><div>{entries.filter(x=>(x.potential_issues||[]).length).length} posts with preliminary signals</div></div></div>
+   {topicCounts.length===0&&<p className="mt-2 text-xs text-[#526575]">No saved topic classifications in these assessed posts.</p>}
    <p className="mt-2 text-xs text-[#526575]">Counts describe saved relevant Inbox assessments, not corroborated incidents or representative public opinion.</p>
   </div>}
   {(!validCampaign||perspective==='pilot'||!state.data)&&<iframe title="BAWASLU Smart Radar V6.2" src="/ui-freeze/smart-radar-v6_2.html"

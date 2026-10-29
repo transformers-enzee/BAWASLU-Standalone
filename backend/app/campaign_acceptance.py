@@ -95,9 +95,9 @@ def campaign_acceptance_snapshot(db,p,raw_id):
             'UNTAGGED_LEGACY_DRAFTS_NOT_PIPELINE_VERIFIED' if unattributed_count else
             'NEEDS_SAVED_AI_SUMMARIES',draft_count,
             'Only source-fingerprinted pipeline drafts count as pipeline evidence; no automatic officer acceptance'),
-       item(13,'Cross-module reuse','SAVED_ASSESSMENTS_AVAILABLE'
+       item(13,'Cross-module reuse','SOCIAL_SOURCE_CONTRACT_READY_PILOT_CROSSWALK_UNVERIFIED'
             if rows else 'NO_RELEVANT_SAVED_ASSESSMENTS',len(rows),
-            'Reuses saved assessment versions'),
+            'Inbox/Watchlist canonical social source reuse verified; independent Radar pilot IDs have no verified crosswalk'),
        item(14,'Shahrin classification accuracy','TARGET_NOT_MET',0,
             'Historical accuracy below target; human labels await signoff'),
        item(15,'Processing diagnostics','COVERAGE_AVAILABLE',
@@ -142,6 +142,20 @@ def campaign_acceptance_snapshot(db,p,raw_id):
             'status':'PIPELINE_SUMMARIES_PENDING_HUMAN_QA',
             'instruction':'Independently verify source quotes and summary accuracy; pipeline output alone is not signoff.',
             'source_groups':pipeline_count,'permission_required':'human_validation'})
+    if not verified_locations:
+        next_actions.append({'item':6,'kind':'OFFICER_WORKFLOW',
+            'status':'JURISDICTION_REVIEW_REQUIRED',
+            'instruction':'Only confirm incident geography after checking explicit source context; never derive it from profile location.',
+            'source_groups':0,'permission_required':'human_validation'})
+    if not players.get('Needs Attention',{}).get('count'):
+        next_actions.append({'item':11,'kind':'EVIDENCE_DEPENDENCY',
+            'status':'NO_QUALIFYING_ATTENTION_EVIDENCE',
+            'instruction':'Keep urgency unassigned until supported saved signals or officer follow-up warrant triage.',
+            'source_groups':0})
+    next_actions.append({'item':13,'kind':'SOURCE_IDENTITY_DEPENDENCY',
+        'status':'PILOT_CROSSWALK_UNVERIFIED',
+        'instruction':'Confirm persisted source identity before reusing Social Listening assessments in separate Radar pilot records; canonical social IDs are already supported.',
+        'source_groups':0})
     next_actions.append({'item':14,'kind':'QA_AND_HUMAN_DEPENDENCY',
         'status':'REFERENCE_SIGNOFF_AND_MEASURED_EVALUATION_REQUIRED',
         'instruction':'An analyst must reconcile reference labels; the unvalidated V18 draft requires a separate authorized measured test.',

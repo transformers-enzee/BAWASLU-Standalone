@@ -37,7 +37,9 @@ jobs:
           node --check frontend/public/ui-freeze/watchlist-live.js
       - name: Check five-module integration and source evidence contracts
         working-directory: frontend
-        run: node scripts/check-integration-contract.mjs
+        run: |
+          node scripts/check-integration-contract.mjs
+          node scripts/check-radar-pilot-ui.mjs
       - name: Smoke test Smart Radar and Watchlist startup without network calls
         working-directory: frontend
         run: node scripts/smoke-ui-freeze.mjs

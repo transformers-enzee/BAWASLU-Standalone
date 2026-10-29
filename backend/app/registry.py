@@ -129,6 +129,15 @@ def registry_action(db:Session,p,action,data,id=None):
         except (ValueError,TypeError): raise ValueError('Invalid pagination')
         platform_filter=str(payload.get('platform') or '').strip().casefold()
         account_filter=str(payload.get('account_id') or '').strip()
+        campaign_id=str(payload.get('campaign_id') or '').strip()
+        scoped_campaign=None
+        if campaign_id:
+            from .models import MonitoringCampaign, CampaignEvidence
+            if not campaign_id.isdigit():raise ValueError('Invalid campaign ID')
+            scoped_campaign=db.get(MonitoringCampaign,int(campaign_id))
+            if not scoped_campaign or not allowed(p,scoped_campaign):
+                raise PermissionError('Campaign unavailable or inaccessible')
+
         search=str(payload.get('search') or '').strip()[:120]
         def valid_day(key):
             value=str(payload.get(key) or '').strip()
@@ -198,6 +207,11 @@ def registry_action(db:Session,p,action,data,id=None):
         if not match_conditions:
             return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
         query=db.query(SocialListeningResult).filter(or_(*match_conditions))
+        if scoped_campaign is not None:
+            query=query.filter(SocialListeningResult.id.in_(
+                db.query(CampaignEvidence.result_id).filter(
+                    CampaignEvidence.campaign_id==scoped_campaign.id)))
+
         if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
         if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
         if search:

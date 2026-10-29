@@ -114,6 +114,7 @@ export default function CampaignPanel({campaignId=null}){
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsKeyword,setAnalyticsKeyword]=useState(''),[appliedKeyword,setAppliedKeyword]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
  const visibleCapturedPosts=evidence.filter(item=>{const day=String(item.published_at||'').slice(0,10);const dateOk=!(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo));const label=String(item.sentiment||'UNCLASSIFIED').toUpperCase();return dateOk&&(capturedSentimentFilter==='ALL'||(capturedSentimentFilter==='UNCLASSIFIED'?!['POSITIVE','NEUTRAL','NEGATIVE'].includes(label):label===capturedSentimentFilter))}).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
+  setCampaignSection('overview');
   setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
@@ -316,7 +317,16 @@ export default function CampaignPanel({campaignId=null}){
   finally{setSaving(false)}
  }
  const visible=campaigns.filter(x=>(statusFilter==='all'||x.status===statusFilter)&&(x.name+' '+x.description+' '+x.primary_keywords.join(' ')).toLowerCase().includes(query.toLowerCase()));
- return <section className="space-y-5" aria-label="Monitoring campaigns">
+ return <section className="v10-campaign space-y-5" aria-label="Monitoring campaigns">
+  {campaignId&&<style>{`
+   [data-active-campaign-tab="overview"] [aria-label="Captured posts"] {display:none!important}
+   [data-active-campaign-tab="posts"] > :not([aria-label="Captured posts"]):not(:has([aria-label="Captured posts"])) {display:none!important}
+   [data-active-campaign-tab="posts"] [aria-label="Captured posts"] {display:block!important}
+   [data-active-campaign-tab="posts"] {border:0;padding:0}
+   [data-campaign-body="posts"] > details,[data-campaign-body="posts"] > section[aria-label="Manual campaign crawl"] {display:none!important}
+   .v10-campaign .intel-card {border-radius:13px}
+  `}</style>}
+
   {!campaignId&&<div className="intel-card p-5 space-y-3">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="text-lg font-semibold">Monitoring Campaigns</h2>
@@ -376,13 +386,20 @@ export default function CampaignPanel({campaignId=null}){
     </form>
    </div>
   </div>}
-  {!campaignId&&(loading?<p className="intel-card p-4">Loading campaigns…</p>:<div className="intel-card overflow-x-auto"><table className="w-full text-left text-sm" aria-label="Campaign list"><thead className="bg-slate-50 text-xs uppercase text-slate-600"><tr><th className="p-3">Campaign</th><th className="p-3">Dates</th><th className="p-3">Status</th><th className="p-3">Evidence</th><th className="p-3">Actions</th></tr></thead><tbody>{visible.map(c=><tr key={c.id} className="border-t border-slate-100"><td className="p-3"><strong>{c.name}</strong><div className="text-xs text-slate-500">{(c.primary_keywords||[]).join(' · ')}</div></td><td className="p-3 text-xs">{c.date_from||'Any'} — {c.date_to||'Any'}</td><td className="p-3">{displayStatus(c.status)}</td><td className="p-3">{c.evidence_count}</td><td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost" onClick={()=>navigate(`/social-listening/campaigns/${c.id}`)}>Open Dashboard</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div></td></tr>)}</tbody></table>{!visible.length&&<p className="p-4 text-sm">No campaigns match your filters.</p>}</div>)}
-  {campaignId&&selected&&!creating&&<div className="intel-card p-5 space-y-2">
+  {!campaignId&&(loading?<p className="rounded-xl bg-white p-5">Loading campaigns…</p>:
+  <section className="rounded-xl border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
+   <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see its overview, captured posts, and candidate tracking.</p></div><span className="rounded-full bg-[#e8f4ef] px-3 py-1.5 text-xs font-semibold text-[#207558]">{visible.length} campaign(s)</span></div>
+   <div className="mt-4 space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white p-4 hover:border-[#90c7bd]">
+    <div className="min-w-0"><h3 className="font-semibold text-[#19324a]">{c.name} <span className="ml-2 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] text-[#207558]">{displayStatus(c.status)}</span></h3><p className="mt-1 text-xs text-[#60768c]">Main keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {c.evidence_count||0} saved source posts</p><p className="text-xs text-[#60768c]">{c.date_from||'Any date'} — {c.date_to||'Any date'}</p></div>
+    <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg bg-[#11816d] px-3 py-2 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+   </article>)}{!visible.length&&<p className="rounded-lg border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No monitoring campaigns match your search.</p>}</div>
+  </section>)}
+  {campaignId&&selected&&!creating&&<div className="rounded-xl border border-[#dce5ed] bg-white p-5 space-y-3">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
-   <h3 className="font-semibold text-xl">{selected.name} — Campaign Overview</h3>
+   <h3 className="text-2xl font-bold text-[#152c47]">{selected.name} — Campaign Overview</h3>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
-   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src="/ui-freeze/watchlist-v2_2.html" className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
-   <div className={campaignSection==='watchlist'?'hidden':'contents'}>
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
+   <div className={campaignSection==='watchlist'?'hidden':'contents'} data-campaign-body={campaignSection}>
 
    <div className="flex flex-wrap gap-2" aria-label="Campaign keyword summaries">
     {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
@@ -391,8 +408,8 @@ export default function CampaignPanel({campaignId=null}){
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}
    {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
    {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Campaign data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
-   <AssessmentPilotPreview campaign={selected}/>
-   {dashboard&&<section aria-label="Campaign monitoring dashboard" className="rounded-lg border border-slate-200 p-4 space-y-3">
+   {campaignSection==='overview'&&<AssessmentPilotPreview campaign={selected}/>}
+   {dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-xl border border-[#dce5ed] bg-white p-4 space-y-3">
     <h4 className="font-semibold">Monitoring dashboard</h4>
     <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>
     <p className="text-xs text-slate-500">Keyword dropdown filters by campaign keywords in post text (case-insensitive). Date filters use publication dates. Dashboard analytics cover up to the latest 5,000 matching evidence records. No crawl credits used.</p>{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}

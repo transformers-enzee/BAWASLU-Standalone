@@ -3,6 +3,7 @@
   const ui=window.__watchlist;
   const $=selector=>document.querySelector(selector);
   const token=()=>localStorage.getItem('bawaslu_access_token')||'';
+  const campaignId=new URLSearchParams(window.location.search).get('campaign_id');
   let permitted=false,loading=new Set(),loaded=new Set();
   const safeUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:''}catch{return ''}};
   async function registry(action,data={},id=null){
@@ -83,7 +84,7 @@
   async function collectedPosts(id){
     const posts=[];
     for(let page=1;page<=10;page++){
-      const result=await registry('watchlistCapturedFeed',{page,page_size:50},id);
+      const result=await registry('watchlistCapturedFeed',{page,page_size:50,...(campaignId?{campaign_id:campaignId}:{})},id);
       posts.push(...(result.posts||[]));
       if(posts.length>=Number(result.total||0)||!result.posts?.length)break;
     }
@@ -128,7 +129,8 @@
       ]);
       const own=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
       const records=actor.status==='fulfilled'?(actor.value.records||[]):[];
-      const related=records.map(mapEarned);
+      // Campaign views must never mix unscoped intelligence from other campaigns.
+      const related=campaignId?[]:records.map(mapEarned);
       const known=new Set(own.map(post=>post.url).filter(Boolean));
       candidate.posts=[...own,...related.filter(post=>!post.url||!known.has(post.url))]
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));

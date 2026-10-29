@@ -325,6 +325,39 @@ def emerging_narrative_candidates(records):
     return candidates
 
 
+def processing_acceptance_snapshot(records):
+    """Auditable per-batch gaps. No claims of confirmed incident identity."""
+    relevant=[row for row in records if
+              str(row.get('relevance_label') or '').upper() in ('RELEVANT','HIGHLY_RELEVANT')]
+    unknown_candidate_names=set()
+    ambiguous_locations=0
+    missing_context=0
+    for row in relevant:
+        normalized=normalize_candidate_signals(row.get('candidate_signals') or [])
+        unknown_candidate_names.update(x for x in normalized if x not in CANDIDATE_ALIASES)
+        locations=incident_location_cues(row.get('text_content'))
+        ambiguous_locations+=len(locations)>1
+        missing_context+=not bool(str(row.get('text_content') or '').strip())
+    duplicate_groups=exact_source_groups(relevant)
+    clusters=incident_cluster_candidates(relevant)
+    narratives=emerging_narrative_candidates(relevant)
+    return {
+      'source':'AUTHORIZED_RELEVANT_SAVED_EVIDENCE',
+      'eligible_posts':len(relevant),
+      'exact_duplicate_groups':len(duplicate_groups),
+      'incident_review_candidates':len(clusters),
+      'narrative_review_candidates':len(narratives),
+      'unresolved_candidate_names_count':len(unknown_candidate_names),
+      'multi_location_ambiguity_count':ambiguous_locations,
+      'missing_source_text_count':missing_context,
+      'confirmed_candidate_identities':0,
+      'verified_incidents':0,
+      'verified_narratives':0,
+      'paid_ai_calls':0,
+      'manual_verification_required':bool(clusters or narratives or unknown_candidate_names),
+    }
+
+
 def summarize_scoped_findings(records):
     """Read-only, authorized saved-assessment aggregation; no model requests."""
     from collections import defaultdict
@@ -385,6 +418,7 @@ def summarize_scoped_findings(records):
         'exact_source_groups':exact_source_groups(records),
         'exact_duplicate_groups':duplicates,
         'emerging_narrative_candidates':narratives,
+        'processing_acceptance_snapshot':processing_acceptance_snapshot(records),
         'incident_cluster_candidates':incident_candidates,
         'canonical_candidate_candidates':candidate_identities,
         'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),

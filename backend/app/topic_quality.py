@@ -5,8 +5,8 @@ from .classification_enrichment import json_list
 def topic_quality_flags(source, topic_labels):
     labels=json_list(topic_labels)
     body=str(source or '')
-    content=re.sub(r'https?://\\S+|#[\\w_]+|@[\\w_.]+',' ',body.lower(),flags=re.I)
-    content=re.sub(r'\\s+',' ',content).strip()
+    content=re.sub(r'https?://\S+|#[\w_]+|@[\w_.]+',' ',body.lower(),flags=re.I)
+    content=re.sub(r'\s+',' ',content).strip()
     flags=[]
     if labels and len(content)<24:
         flags.append('INSUFFICIENT_NON_HASHTAG_CONTEXT')

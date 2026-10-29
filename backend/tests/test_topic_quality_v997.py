@@ -17,3 +17,8 @@ def test_hashtag_only_cannot_establish_electoral_operations():
 def test_source_grounded_operational_post_is_not_flagged():
     assert topic_quality_flags('Bawaslu mengawasi rekapitulasi suara pemilu di TPS',
                                ['Electoral Operations'])==[]
+
+
+def test_hashtag_stripping_preserves_real_election_prose():
+    assert topic_quality_flags('Pengawasan pemilu di TPS #pemilu #bawaslu', ['Electoral Operations']) == []
+    assert 'ELECTORAL_LABEL_REQUIRES_SOURCE_REVIEW' in topic_quality_flags('Komedi lucu #pemilu #pilkada', ['Electoral Operations'])

@@ -107,6 +107,7 @@ def inbox_radar_feed(campaign_id:str,user:User=Depends(current_user),db:Session=
        'historical_radar_pilot_id_mapping':'NOT_ATTEMPTED',
        'entry_count':len(entries),'entries':entries,
        'truncated_to_inbox_window':len(inbox.get('findings') or [])>=300,
+       'source_scope':'AUTHENTICATED_SAVED_INBOX_ONLY',
        'paid_provider_called':False,'socialcrawl_credits':0
     }
 

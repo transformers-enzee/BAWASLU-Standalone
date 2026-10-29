@@ -14,6 +14,7 @@ function SocialEvidenceInbox(){
  const requestedCampaign=deepLink.get('campaign_id')||'';
  const requestedPost=deepLink.get('result_id')||'';
  const [processingSummary,setProcessingSummary]=useState(null);
+ const [summaryReadiness,setSummaryReadiness]=useState(null),[summaryBusy,setSummaryBusy]=useState(false),[summaryError,setSummaryError]=useState('');
  const [qaHistory,setQAHistory]=useState(null),[qaBusy,setQABusy]=useState(false),[qaError,setQAError]=useState('');
  const [acceptance,setAcceptance]=useState(null),[acceptanceBusy,setAcceptanceBusy]=useState(false),[acceptanceError,setAcceptanceError]=useState('');
  const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState(''),[groupExpanded,setGroupExpanded]=useState(false),[groupEvidence,setGroupEvidence]=useState(null);
@@ -197,6 +198,16 @@ function SocialEvidenceInbox(){
    setJurisdictionMessage('Officer jurisdiction decision saved; source permissions unchanged.');
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
+ }
+ async function loadSummaryReadiness(){
+  if(!campaign)return;
+  setSummaryBusy(true);setSummaryError('');
+  try{
+   const result=await base44.functions.invoke('socialListening',{
+    action:'campaignSummaryReadiness',id:campaign,data:{}});
+   setSummaryReadiness(result.data);
+  }catch(e){setSummaryError(e.response?.data?.detail||e.message)}
+  finally{setSummaryBusy(false)}
  }
  async function loadAcceptance(){
   if(!campaign)return;
@@ -408,6 +419,14 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      {qaError&&<p role="alert" className="text-red-700">{qaError}</p>}
    </div>
    {campaign&&<div className="space-y-2 border-t pt-2">
+      <button type="button" className="intel-ghost text-xs" disabled={summaryBusy} onClick={loadSummaryReadiness}>Inspect #12 AI summary readiness (free)</button>
+      {summaryReadiness&&<div className="text-xs rounded border p-2 space-y-1">
+       <strong>#12 remains IN PROGRESS until real saved AI drafts are verified.</strong>
+       <p>{summaryReadiness.posts_with_valid_saved_ai_drafts} / {summaryReadiness.visible_relevant_posts} relevant saved posts contain valid AI draft summaries. {summaryReadiness.posts_needing_ai_drafts} still lack them.</p>
+       <p>Suggested representative pilot source IDs: {(summaryReadiness.suggested_small_pilot_ids||[]).join(', ')||'None'}.</p>
+       <p>Viewing this evidence never calls an AI provider. Source excerpts are NOT AI summaries.</p>
+      </div>}
+      {summaryError&&<p role="alert" className="text-red-700 text-xs">{summaryError}</p>}
       <button type="button" className="intel-ghost text-xs" disabled={acceptanceBusy} onClick={loadAcceptance}>Load production acceptance evidence (free)</button>
       {acceptance&&<div className="space-y-2">
        <p className="text-xs">{acceptance.relevant_posts} relevant saved / {acceptance.authorized_posts} authorized posts · {acceptance.unassessed_posts} unassessed · {acceptance.saved_groups_count} saved groups. No item below represents formal officer sign-off.</p>

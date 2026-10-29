@@ -447,7 +447,7 @@ def eligible_exemplar_audit_targets(records,blocked,approved,limit=EXEMPLAR_V17_
     return pool[:limit]
 
 @router.get("/tuning/exemplar-audit")
-def exemplar_audit_status(version_id:int=Query(17,ge=14,le=18),user:User=Depends(current_user),db:Session=Depends(get_db)):
+def exemplar_audit_status(version_id:int=Query(17,ge=14,le=19),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
     rows=db.execute(text("""SELECT a.qa_id,a.result_json->>'primary_category' AS predicted,
        e.shahrin_category AS gold, a.result_json->>'evidence_validation' AS quote_status,
@@ -457,10 +457,10 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=18),user:User=Depends
        WHERE a.prompt_version=:version AND e.eligible=true ORDER BY a.qa_id"""),
        {"version":exemplar_audit_key(version_id)}).mappings().all()
     baseline = {}
-    if version_id in (17,18) and rows:
+    if version_id in (17,18,19) and rows:
         baseline_rows = db.execute(text("""SELECT qa_id,result_json->>'primary_category' AS predicted
             FROM pilot_smart_radar.qa_ai_assessments
-            WHERE prompt_version=:baseline"""),{"baseline":exemplar_audit_key(17 if version_id==18 else 16)}).mappings().all()
+            WHERE prompt_version=:baseline"""),{"baseline":exemplar_audit_key(18 if version_id==19 else 17 if version_id==18 else 16)}).mappings().all()
         baseline = {x["qa_id"]: x["predicted"] for x in baseline_rows}
     paired = [x for x in rows if x["qa_id"] in baseline]
     baseline_matches = sum(baseline[x["qa_id"]] == x["gold"] for x in paired)
@@ -469,7 +469,7 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=18),user:User=Depends
     eligible_exemplars=0
     blocked_or_ineligible=0
     completed_in_active_pool=n
-    if version_id in (17,18):
+    if version_id in (17,18,19):
         version=db.execute(text("""
             SELECT created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=:vid
         """),{"vid":version_id}).mappings().first()
@@ -486,10 +486,10 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=18),user:User=Depends
         blocked_or_ineligible=max(0,len(records)-len(pool))
         target=len(pool)
     matched=sum(x["predicted"]==x["gold"] for x in rows)
-    pilot_slots=max(0,target-completed_in_active_pool) if version_id in (17,18) else 0
+    pilot_slots=max(0,target-completed_in_active_pool) if version_id in (17,18,19) else 0
     return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
-       "requested_exemplar_ceiling":EXEMPLAR_V17_PILOT_LIMIT if version_id in (17,18) else EXEMPLAR_AUDIT_LIMIT,
-       "eligible_reference_examples":eligible_exemplars if version_id in (17,18) else None,
+       "requested_exemplar_ceiling":EXEMPLAR_V17_PILOT_LIMIT if version_id in (17,18,19) else EXEMPLAR_AUDIT_LIMIT,
+       "eligible_reference_examples":eligible_exemplars if version_id in (17,18,19) else None,
        "completed_in_current_eligible_pool":completed_in_active_pool,
        "excluded_or_blocked_records":blocked_or_ineligible if version_id==17 else None,
        "baseline_paired_n":len(paired),
@@ -506,8 +506,8 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=18),user:User=Depends
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
-    if body.version_id not in (17,18) or body.retry_failed:
-        raise HTTPException(422,"Only V17/V18 eligible-exemplar audits accept manually approved batches; retries disabled")
+    if body.version_id not in (17,18,19) or body.retry_failed:
+        raise HTTPException(422,"Only V17/V18/V19 eligible-exemplar audits accept manually approved batches; retries disabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA batch is running")
     try:

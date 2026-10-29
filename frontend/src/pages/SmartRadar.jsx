@@ -16,7 +16,7 @@ export default function SmartRadar(){
   const token=localStorage.getItem('bawaslu_access_token')||'';
   fetch('/api/source-lineage/inbox-campaigns',{cache:'no-store',headers:{Authorization:'Bearer '+token}})
    .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.detail||'Campaign list unavailable');return data;})
-   .then(data=>{if(!ignore)setCampaigns(data.campaigns||[]);})
+   .then(data=>{if(!ignore){const available=data.campaigns||[];setCampaigns(available);if(!params.get('campaign_id')&&available.length===1){setParams(current=>{const next=new URLSearchParams(current);if(!next.has('campaign_id'))next.set('campaign_id',available[0].id);return next;},{replace:true});}}})
    .catch(()=>{if(!ignore)setCampaigns([]);});
   return ()=>{ignore=true;};
  },[]);
@@ -46,7 +46,7 @@ export default function SmartRadar(){
    <div className="font-semibold text-[#122f46]">Intelligence Inbox evidence feed · Campaign {campaignId}</div>
    <div className="text-xs text-[#526575]">Verified social-source assessments; legacy Radar pilot records remain separate.</div>
    {state.loading&&<div role="status">Loading saved assessment evidence…</div>}
-   {state.error&&<div role="alert">Unable to load campaign evidence: {state.error}</div>}
+   {state.error&&<div role="alert">Unable to load campaign evidence: {state.error}. No alternate or pilot data is substituted for this campaign.</div>}
    {state.data&&<div role="status">{entries.length} saved relevant assessments available to Smart Radar.</div>}
    {state.data&&<div className="mt-2 flex gap-2"><button type="button" onClick={()=>setPerspective('inbox')} aria-pressed={perspective==='inbox'} className="rounded border px-3 py-1">Inbox evidence</button><button type="button" onClick={()=>setPerspective('pilot')} aria-pressed={perspective==='pilot'} className="rounded border px-3 py-1">Historic Radar pilot</button></div>}
    {entries.length>0&&perspective==='inbox'&&<div className="mt-2 flex flex-wrap gap-2">{entries.slice(0,12).map(x=>
@@ -66,7 +66,7 @@ export default function SmartRadar(){
    {topicCounts.length===0&&<p className="mt-2 text-xs text-[#526575]">No saved topic classifications in these assessed posts.</p>}
    <p className="mt-2 text-xs text-[#526575]">Counts describe saved relevant Inbox assessments, not corroborated incidents or representative public opinion.</p>
   </div>}
-  {(!validCampaign||perspective==='pilot'||!state.data)&&<iframe title="BAWASLU Smart Radar V6.2" src="/ui-freeze/smart-radar-v6_2.html"
+  {(!validCampaign||perspective==='pilot')&&<iframe title="BAWASLU Smart Radar V6.2" src="/ui-freeze/smart-radar-v6_2.html"
    className="block w-full border-0 bg-[#f1f5f7]" style={{height:'calc(100vh - 76px)',minHeight:640}}/>}
  </section>;
 }

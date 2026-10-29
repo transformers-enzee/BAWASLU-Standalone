@@ -821,7 +821,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     try: parsed=json.loads(value or '[]')
                     except (ValueError,TypeError): return []
                     return parsed if isinstance(parsed,list) else []
-                from .issue_signals import validated_issue_signals, rejected_issue_signal_reasons, rejected_issue_type_summary, phrase_screening_candidates
+                from .issue_signals import validated_issue_signals, rejected_issue_signal_reasons, rejected_issue_type_summary, phrase_screening_candidates, shared_violation_decision
                 raw_signals=parse_list(assessment.potential_issue_signals_json)
                 issue_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
                 # Keyword matches are provisional leads, not independently
@@ -850,6 +850,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                             EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
                     .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).limit(10).all())
                 latest_review=review_rows[0][0] if review_rows else None
+                shared_flag=shared_violation_decision(issue_signals,latest_review.decision if latest_review else None)
                 review_history=[{'decision':review.decision,'reviewed_at':review.created_at.isoformat() if review.created_at else None,
                                  'assessment_version':assessment_version,'reviewer_id':review.reviewer_id,'rationale':review.rationale}
                                 for review,assessment_version in review_rows]
@@ -885,7 +886,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'player_summaries':parse_list(assessment.player_summaries_json),
                     'potential_issues':issue_signals,'issue_review_leads':issue_review_leads,
                     'processing_hints':{**processing,'triage_disposition':__import__('app.processing_hints',fromlist=['triage_disposition']).triage_disposition(item.text_content,assessment.relevance_label)},
-                    'normalized_candidate_names':__import__('app.processing_hints',fromlist=['normalize_candidate_signals']).normalize_candidate_signals(parse_list(assessment.candidate_signals_json)),'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
+                    'normalized_candidate_names':__import__('app.processing_hints',fromlist=['normalize_candidate_signals']).normalize_candidate_signals(parse_list(assessment.candidate_signals_json)),'is_flagged':shared_flag['is_flagged'],'violation_uncertainty':shared_flag['uncertainty_label'],
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,
                     'flag_review_status':latest_review.decision if latest_review else None,
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,
@@ -1367,6 +1368,13 @@ def campaign_action(db:Session,p,action,data,id=None):
             rows.append({**row,'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
                          'sentiment':_latest_sentiment(db,c.id,item.id),
                          'sentiment_details':_sentiment_details(db,c.id,item.id)})
+        # Share versioned, scoped source-assessment annotations with Watchlist.
+        from .saved_assessment_views import saved_classifications_for_posts
+        posts=[db.get(SocialListeningResult,int(row['id'])) for row in rows]
+        saved=saved_classifications_for_posts(db,p,posts)
+        for row in rows:
+            row['saved_assessments']=[v for v in saved.get(int(row['id']),[])
+                if v['campaign_id']==str(c.id)]
         return {'evidence':rows,'total':len(candidates),'limited_to':max_return,
                 'scan_limit':5000,'truncated':len(links)==5000,
                 'ranking':'combined_log_engagement_75_views_25',

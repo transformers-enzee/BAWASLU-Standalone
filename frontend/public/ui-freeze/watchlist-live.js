@@ -102,7 +102,8 @@
       id:'SRC-'+post.id,kind:'own',platform:post.platform||'Unknown platform',
       source:post.account||post.author_name||'Registered account · attribution not independently verified',
       date:String(post.published_at||''),text:post.text||'',
-      sentiment,flag:validatedFlag, url:safeUrl(post.url),
+      sentiment,flag:validatedFlag,
+      assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null, url:safeUrl(post.url),
       description:'Stored captured account post; candidate affiliation requires human verification.'
     };
   }
@@ -129,7 +130,9 @@
     return (payload.evidence||[]).filter(post=>candidateNames.some(name=>normalize(post.text_content).includes(name))).map(post=>({
       id:'CAM-'+post.id,kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
       date:String(post.published_at||''),text:post.text_content||'',sentiment:(()=>{const s=String(post.sentiment||'').toLowerCase();return ['positive','negative','neutral'].includes(s)?s[0].toUpperCase()+s.slice(1):'Unknown'})(),
-      flag:false,url:safeUrl(post.canonical_url),description:'Candidate name or alias mentioned in this campaign. Attribution and context require officer review.'
+      flag:(post.saved_assessments||[]).some(a=>a.is_flagged===true),
+      assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null,
+      url:safeUrl(post.canonical_url),description:'Candidate name or alias mentioned in this campaign. Attribution and context require officer review.'
     }));
   }
   ui.onProfile=async id=>{
@@ -151,8 +154,10 @@
       // Reuse only flags returned by the saved assessment view; never infer a legal violation.
       candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
         id:'FLAG-'+post.id,title:'Potential violation indicator · unverified',
-        summary:'A saved assessment flagged this source record. Inspect the original evidence before any officer decision.',
-        status:'Unverified',postIds:[post.id]
+        summary:'Saved assessment v'+(post.assessment?.assessment_version??'unknown')+
+          ' · '+(post.assessment?.violation_uncertainty||'UNVERIFIED_AI_INDICATOR')+
+          '. Inspect original evidence before any officer decision.',
+        status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
       }));
       loaded.add(id);
       ui.renderProfile(id);

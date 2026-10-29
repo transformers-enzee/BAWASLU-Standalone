@@ -30,6 +30,22 @@ def validated_issue_signals(raw_signals, active_categories, source_text):
                        'requires_human_verification':True,'signal_type':signal.get('signal_type') or 'POTENTIAL_VIOLATION','time_context':signal.get('time_context','UNKNOWN'),**({'alleged_actor':str(signal.get('alleged_actor'))[:160], 'alleged_activity':str(signal.get('alleged_activity'))[:160], 'attribution_status':'SOURCE_ALLEGATION_UNVERIFIED'} if signal.get('alleged_actor') and signal.get('alleged_activity') else {})})
     return result
 
+def shared_violation_decision(validated_signals, review_decision=None):
+    """One source-validated, read-only potential-violation decision for all modules.
+
+    Text-only review leads must never be promoted to automatic violation flags.
+    """
+    decision=review_decision if review_decision in ('FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION') else None
+    saved=any(isinstance(signal,dict) and signal.get('signal_provenance')!='KEYWORD_SCREENING'
+              for signal in (validated_signals if isinstance(validated_signals,list) else []))
+    flagged=decision!='FLAG_DISMISSED' and (saved or decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION'))
+    uncertainty=('DISMISSED_BY_OFFICER' if decision=='FLAG_DISMISSED'
+        else 'HUMAN_REVIEWED_PRELIMINARY' if decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')
+        else 'UNVERIFIED_AI_INDICATOR' if saved else 'NO_VALID_SAVED_SIGNAL')
+    return {'is_flagged':bool(flagged),'uncertainty_label':uncertainty,
+            'review_status':decision,'human_validation_required':True}
+
+
 def rejected_issue_signal_reasons(raw_signals, active_categories, source_text):
     """Return aggregated rejection reasons without changing the original AI records."""
     reasons={'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0}

@@ -5,6 +5,23 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
+  let savedCampaignFlags=null;
+  function renderSharedFlags(){
+    const host=$('#kpis');if(!host)return;
+    let panel=$('#sharedCampaignViolationAssessments');
+    if(!panel){panel=document.createElement('section');panel.id='sharedCampaignViolationAssessments';
+      panel.setAttribute('aria-label','Shared saved potential-violation assessments');
+      panel.style.cssText='margin:14px 0;padding:18px;border:1px solid #bdded6;border-radius:12px;background:#f3fbf8';
+      host.insertAdjacentElement('afterend',panel);}
+    if(!savedCampaignFlags){panel.innerHTML='<b>Shared Campaign Potential Violations</b><p class="small muted">Campaign assessment feed unavailable. Pilot findings remain separate.</p>';return;}
+    const rows=savedCampaignFlags.alerts||[], total=Number(savedCampaignFlags.indicators?.potential_alerts||0);
+    panel.innerHTML='<b>Shared Campaign Potential Violations · '+total+' saved flags</b>'+
+      '<p class="small muted">Same saved assessment versions and officer decisions as Intelligence Inbox and Watchlist. Preliminary, not legal findings. Campaign evidence is separate from historical pilot groups.</p>'+
+      (rows.length?rows.slice(0,10).map(a=>'<p class="small" style="padding:10px;background:white;border:1px solid #dce5ed;border-radius:8px"><b>'+
+      escapeHtml(a.category||'Potential issue')+'</b> · '+escapeHtml(a.violation_uncertainty||'UNVERIFIED_AI_INDICATOR')+
+      ' · Assessment v'+escapeHtml(a.assessment_version||'—')+
+      '<a href="/inbox?campaign_id='+encodeURIComponent(a.campaign_id)+'&result_id='+encodeURIComponent(a.result_id)+'" target="_top"> · Open same source in Inbox →</a></p>').join(''):'<p class="small muted">No saved flags in authorized campaign evidence; no coverage guarantee.</p>');
+  }
   let busy = false;
   const accessToken = () => localStorage.getItem('bawaslu_access_token') || '';
   // Short-lived in-memory cache: no browser persistence, no shared officer data.
@@ -162,6 +179,10 @@
   async function refresh() {
     dashboard = await request('/api/smart-radar/dashboard');
     ui.setData((dashboard.findings || []).map(mapFinding));
+    try{savedCampaignFlags=await request('/api/functions/commandCenter',
+      {method:'POST',body:JSON.stringify({period:'all'})});}
+    catch(error){savedCampaignFlags=null;}
+    renderSharedFlags();
     document.body.classList.add('bawaslu-ready');
   }
   async function boot() {

@@ -7,7 +7,7 @@ import json
 from .access import allowed, has
 from .models import (CampaignEvidence, MonitoringCampaign, EvidenceAssessment,
                      EvidenceReview, IssueCategory, IssueCategoryPhrase)
-from .issue_signals import validated_issue_signals, phrase_screening_candidates
+from .issue_signals import validated_issue_signals, phrase_screening_candidates, shared_violation_decision
 from .source_ids import canonical_source_id
 
 RELEVANT={'RELEVANT','HIGHLY_RELEVANT'}
@@ -83,7 +83,7 @@ def saved_classifications_for_posts(db, user_profile, posts):
         decision=decisions.get((campaign_id,result_id))
         from .jurisdiction_review import jurisdiction_status
         location_review=jurisdiction_status(db,campaign_id,result_id,post)
-        dismissed=decision=='FLAG_DISMISSED'
+        shared=shared_violation_decision(signals if source=='SAVED_ASSESSMENT' else [],decision)
         result[result_id].append({
             'canonical_source_id':canonical_source_id('social',result_id),
             'campaign_id':str(campaign_id),
@@ -111,10 +111,9 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'potential_issues':signals,
             'signal_source':source,
             'review_status':decision,
-            'is_flagged':not dismissed and (
-                (source=='SAVED_ASSESSMENT' and bool(signals)) or
-                decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')),
-            'human_validation_required':True,
+            'is_flagged':shared['is_flagged'],
+            'violation_uncertainty':shared['uncertainty_label'],
+            'human_validation_required':shared['human_validation_required'],
             'assessment_persisted':True,
         })
     return result

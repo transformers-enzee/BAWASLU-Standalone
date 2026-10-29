@@ -14,7 +14,7 @@ from .geography import province_code_for, province_name_for, regency_code_for, R
 def _province_name(code):
     names=INDONESIAN_PROVINCE_ALIASES.get(str(code),[])
     return names[0] if names else province_name_for(code)
-from .issue_signals import validated_issue_signals, phrase_screening_candidates
+from .issue_signals import validated_issue_signals, phrase_screening_candidates, shared_violation_decision
 from .models import (MonitoringCampaign, CampaignEvidence, EvidenceAssessment,
     EvidenceReview, SocialListeningResult, IssueCategory, IssueCategoryPhrase,
     WatchlistItem, SourceAccount, WatchlistAccountEvidence, WatchlistAccountSync, IntelligenceItem)
@@ -174,9 +174,7 @@ def build_command_center(db,p,data=None):
         else:unknown_posts.add(post.id)
         explicit=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),
                                          category_names,post.text_content)
-        if not explicit:
-            explicit=phrase_screening_candidates(post.text_content,categories,phrases)
-        if not explicit:continue
+        # Keyword-only leads are not saved source-validated potential violations.
         # Same review states and validated issue candidates used by Intelligence Inbox.
         review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
                 .filter(EvidenceAssessment.campaign_id==campaign.id,
@@ -184,15 +182,19 @@ def build_command_center(db,p,data=None):
                         EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
                 .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
         decision=review.decision if review else 'AWAITING_REVIEW'
-        if decision=='FLAG_DISMISSED':continue
-        signal=explicit[0]
+        decision_view=shared_violation_decision(explicit,decision)
+        if not decision_view['is_flagged']:continue
+        signal=explicit[0] if explicit else {'category_name':'Officer-reviewed issue',
+            'evidence_quote':'','explanation':'Check saved source evidence',
+            'signal_provenance':'HUMAN_REVIEW'}
         if code:region_flags[code].add(post.id)
         candidate=_as_list(assessment.candidate_signals_json)
         candidate_name=''
         if candidate:
             first=candidate[0]
             candidate_name=str(first.get('name') or first.get('value') or '') if isinstance(first,dict) else str(first)
-        alert={**note,'category':signal['category_name'],'evidence_quote':signal.get('evidence_quote','')[:280],
+        alert={**note,'assessment_version':assessment.assessment_version,
+               'violation_uncertainty':decision_view['uncertainty_label'],'category':signal['category_name'],'evidence_quote':signal.get('evidence_quote','')[:280],
                'description':signal.get('explanation') or note['summary'],
                'candidate':candidate_name[:120], 'province':_province_name(code) if code else 'Unknown / Unclassified',
                'province_basis':'CAMPAIGN_MONITORING_SCOPE' if code else 'UNCLASSIFIED',
@@ -228,16 +230,19 @@ def build_command_center(db,p,data=None):
             latest_assessed.append(note)
             if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):continue
             signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
-            if not signals:signals=phrase_screening_candidates(post.text_content,categories,phrases)
-            if not signals:continue
+            # Only saved, quoted issue evidence and officer decisions are actionable.
             review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
                .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==post.id,
                        EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
                .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
             decision=review.decision if review else 'AWAITING_REVIEW'
-            if decision=='FLAG_DISMISSED':continue
-            signal=signals[0]
-            latest_alerts.append({**note,'category':signal['category_name'],
+            decision_view=shared_violation_decision(signals,decision)
+            if not decision_view['is_flagged']:continue
+            signal=signals[0] if signals else {'category_name':'Officer-reviewed issue',
+                'evidence_quote':'','explanation':'Check saved source evidence',
+                'signal_provenance':'HUMAN_REVIEW'}
+            latest_alerts.append({**note,'assessment_version':assessment.assessment_version,
+                'violation_uncertainty':decision_view['uncertainty_label'],'category':signal['category_name'],
                  'description':signal.get('explanation') or note['summary'],
                  'evidence_quote':signal.get('evidence_quote',''),
                  'province':_province_name(_region_code(campaign)) if _region_code(campaign) else 'Unclassified',
@@ -435,7 +440,7 @@ def build_command_center(db,p,data=None):
             entry=candidate_inventory.setdefault(key,{'name':name,'posts':set()})
             entry['posts'].add(post.id)
         signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
-        if not signals:signals=phrase_screening_candidates(post.text_content,categories,phrases)
+        # Issue volume uses saved quote-validated assessment signals only.
         for signal in signals:
             category_post_ids[str(signal['category_name'])].add(post.id)
     candidate_coverage=sorted(

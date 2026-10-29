@@ -42,7 +42,64 @@ PUBLIC_CONCERN_CUES=(
     'masyarakat mempertanyakan','masyarakat resah','warga meminta kejelasan',
     'warga mengadukan','keluhan masyarakat',
 )
-NEGATED_CUE_PREFIX=re.compile(r'(?:tidak ada|tanpa|bukan|tidak ditemukan|tidak benar bahwa)\s*('selamat hari','sumpah pemuda','dirgahayu','selamat ulang tahun','ucapan selamat','memperingati hari')
+NEGATED_CUE_PREFIX=re.compile(r'(?:tidak ada|tanpa|bukan|tidak ditemukan|tidak benar bahwa)\s*$',re.IGNORECASE)
+
+def public_concern_cues(text):
+    """Explicit public complaints, not verified concerns."""
+    body=str(text or '')
+    folded=body.casefold()
+    if communication_context(body)['category']=='ROUTINE_COMMUNICATION':
+        return []
+    matches=[]
+    for phrase in PUBLIC_CONCERN_CUES:
+        for match in re.finditer(r'(?<!\w)'+re.escape(phrase)+r'(?!\w)',folded):
+            if NEGATED_CUE_PREFIX.search(folded[max(0,match.start()-35):match.start()]):
+                continue
+            matches.append(body[match.start():match.end()])
+            break
+    return matches
+
+INCIDENT_CONTEXT_PREFIXES=(
+    'kejadian di','insiden di','terjadi di','dugaan pelanggaran di',
+    'laporan pelanggaran di','lokasi kejadian di','kecurangan di',
+)
+def incident_location_cues(text):
+    folded=str(text or '').casefold()
+    found=set()
+    for prefix in INCIDENT_CONTEXT_PREFIXES:
+        for alias,province in PROVINCE_ALIASES.items():
+            if re.search(r'(?<!\w)'+re.escape(prefix)+r'\s+'+
+                         re.escape(alias)+r'(?!\w)',folded):
+                found.add(province)
+    return sorted(found)
+
+def attention_evidence_readiness(row):
+    content=str(row.get('text_content') or '').casefold()
+    signals=row.get('potential_issues') or []
+    supported_quotes=0
+    if isinstance(signals,list):
+        for signal in signals:
+            if not isinstance(signal,dict):
+                continue
+            quote=str(signal.get('evidence_quote') or '').strip().casefold()
+            if len(quote)>=12 and quote in content:
+                supported_quotes+=1
+    reviewed=str(row.get('flag_review_status') or '').upper()
+    return {
+        'seriousness':'NOT_ASSESSED',
+        'urgency':'OFFICER_REQUESTED_FOLLOW_UP' if reviewed=='FURTHER_INVESTIGATION'
+                  else 'NOT_ASSESSED',
+        'evidence_quality':'SOURCE_QUOTED_UNCORROBORATED' if supported_quotes
+                           else 'NOT_ASSESSED',
+        'supported_quote_count':supported_quotes,
+        'actionability':'HUMAN_REVIEW_REQUESTED' if reviewed in
+                        ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')
+                        else 'HUMAN_TRIAGE_ONLY',
+        'assessment_provenance':'SAVED_ASSESSMENT_AND_HUMAN_REVIEW',
+        'legal_violation_confirmed':False,
+    }
+
+ROUTINE_MARKERS=('selamat hari','sumpah pemuda','dirgahayu','selamat ulang tahun','ucapan selamat','memperingati hari')
 SUBSTANTIVE_MARKERS=('pelanggaran','dugaan','laporan','investigasi','pengawasan pemilu','pemungutan suara','sengketa','kecurangan','putusan dkpp','temuan')
 def communication_context(text):
     """Conservative triage hint; never silently overrides an AI or human label."""

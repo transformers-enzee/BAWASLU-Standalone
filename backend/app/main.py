@@ -96,7 +96,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'107.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'107.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -215,6 +215,45 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))
 
+
+
+@app.post('/api/social-listening/human-verified/preview')
+async def preview_human_verified_import(campaign_id:int,file:UploadFile=File(...),
+                                       user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .access import allowed,has
+    from .models import MonitoringCampaign
+    from .human_verified_import import preview,MAX_BYTES
+    p=profile(db,user);campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'National administrator permission required')
+    if Path(file.filename or '').suffix.lower()!='.xlsx':
+        raise HTTPException(400,'Upload a human-reviewed .xlsx workbook')
+    content=await file.read(MAX_BYTES+1)
+    try:return {'campaign_id':campaign_id,'preview_only':True,**preview(content)}
+    except ValueError as e:raise HTTPException(400,str(e))
+
+@app.post('/api/social-listening/human-verified/start')
+async def import_human_verified_workbook(campaign_id:int,file:UploadFile=File(...),
+                                         user:User=Depends(current_user),db:Session=Depends(get_db)):
+    from .access import allowed,has
+    from .models import MonitoringCampaign
+    from .human_verified_import import import_rows,MAX_BYTES
+    p=profile(db,user);campaign=db.get(MonitoringCampaign,campaign_id)
+    if not campaign or not allowed(p,campaign):raise HTTPException(404,'Campaign unavailable')
+    if p.get('role')!='National Administrator' or not has(p,'administration'):
+        raise HTTPException(403,'National administrator permission required')
+    if Path(file.filename or '').suffix.lower()!='.xlsx':
+        raise HTTPException(400,'Upload a human-reviewed .xlsx workbook')
+    content=await file.read(MAX_BYTES+1)
+    try:
+        return {'campaign_id':campaign_id,**import_rows(db,campaign,content,user.id)}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(400,str(e))
+    except Exception:
+        db.rollback()
+        raise
 
 @app.post('/api/social-listening/external-import/preview')
 def preview_external_campaign_import(campaign_id:int,file:UploadFile=File(...),user:User=Depends(current_user),db:Session=Depends(get_db)):

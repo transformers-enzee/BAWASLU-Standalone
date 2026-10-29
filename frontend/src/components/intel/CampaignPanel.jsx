@@ -79,6 +79,29 @@ export default function CampaignPanel({campaignId=null}){
   finally{setLookupBusy(false)}
  }
 
+ 
+ const [humanVerifiedFile,setHumanVerifiedFile]=useState(null);
+ const [humanVerifiedPreview,setHumanVerifiedPreview]=useState(null);
+ const [humanVerifiedResult,setHumanVerifiedResult]=useState(null);
+ const [humanVerifiedBusy,setHumanVerifiedBusy]=useState(false);
+ const [humanVerifiedError,setHumanVerifiedError]=useState('');
+ async function humanVerifiedRequest(stage){
+  if(!selected?.id||!humanVerifiedFile||humanVerifiedBusy)return;
+  if(stage==='start'&&!window.confirm('Import all reviewed records into Social Listening for '+selected.name+'? Only the Relevant records will enter Intelligence Inbox. Existing evidence is preserved; no AI credits are used.'))return;
+  setHumanVerifiedBusy(true);setHumanVerifiedError('');
+  try{
+   const form=new FormData();form.append('file',humanVerifiedFile);
+   const token=localStorage.getItem('bawaslu_access_token')||'';
+   const response=await fetch('/api/social-listening/human-verified/'+stage+'?campaign_id='+encodeURIComponent(selected.id),{
+     method:'POST',headers:{Authorization:'Bearer '+token},body:form,cache:'no-store'});
+   const payload=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(payload.detail||payload.error||'Workbook '+stage+' failed');
+   if(stage==='preview'){setHumanVerifiedPreview(payload);setHumanVerifiedResult(null);}
+   else {setHumanVerifiedResult(payload);await viewEvidence(selected);}
+  }catch(err){setHumanVerifiedError(err.message||'Unable to import human-reviewed workbook');}
+  finally{setHumanVerifiedBusy(false)}
+ }
+
  const [externalRun,setExternalRun]=useState(null),[externalImportBusy,setExternalImportBusy]=useState(false),[externalImportError,setExternalImportError]=useState('');
  async function startExternalImport(){
   if(!selected||!externalFile||externalImportBusy||!externalPreview?.validation)return;
@@ -129,7 +152,7 @@ export default function CampaignPanel({campaignId=null}){
  }).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
   setCampaignSection(['watchlist','posts'].includes(new URLSearchParams(window.location.search).get('tab'))?new URLSearchParams(window.location.search).get('tab'):'overview');
-  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
@@ -416,6 +439,19 @@ export default function CampaignPanel({campaignId=null}){
     {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
    </div>
    <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
+
+   <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">
+    <summary className="cursor-pointer font-semibold text-teal-900">Admin · Import human-reviewed source posts (Social Listening → Inbox)</summary>
+    <p className="mt-2 text-slate-600">All spreadsheet records enter the selected campaign's Captured Posts. Only rows marked Relevant appear in Intelligence Inbox. Human labels are preserved, no AI or crawl credits are spent, and repeat imports do not duplicate sample IDs.</p>
+    <input type="file" accept=".xlsx" aria-label="Human-verified Excel workbook" className="mt-3 block" onChange={e=>{setHumanVerifiedFile(e.target.files?.[0]||null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('')}}/>
+    <div className="mt-3 flex gap-2 flex-wrap">
+      <button type="button" className="intel-ghost text-xs" disabled={!humanVerifiedFile||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('preview')}>{humanVerifiedBusy?'Checking…':'Preview human labels'}</button>
+      <button type="button" className="intel-button text-xs" disabled={!humanVerifiedFile||!humanVerifiedPreview||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('start')}>Confirm and import to campaign</button>
+    </div>
+    {humanVerifiedPreview&&<p className="mt-2 text-teal-900">Preview: <strong>{humanVerifiedPreview.total} total</strong> · {humanVerifiedPreview.relevant} Relevant → Inbox · {humanVerifiedPreview.irrelevant} Irrelevant → Social Listening only. Source URL count: {humanVerifiedPreview.unique_direct_urls}. No records written yet.</p>}
+    {humanVerifiedResult&&<p className="mt-2 font-semibold text-teal-900" role="status">Imported: {humanVerifiedResult.inserted} new sources, {humanVerifiedResult.already_present} already present; {humanVerifiedResult.saved_human_assessments} human assessments saved. {humanVerifiedResult.relevant} Relevant / {humanVerifiedResult.irrelevant} Irrelevant.</p>}
+    {humanVerifiedError&&<p role="alert" className="mt-2 text-red-700">{humanVerifiedError}</p>}
+   </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}

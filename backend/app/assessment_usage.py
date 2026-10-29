@@ -1,5 +1,6 @@
 """Read-only AI processing coverage, failures, token usage and cost availability."""
 import json
+from decimal import Decimal, InvalidOperation
 from .models import (MonitoringCampaign,CampaignEvidence,SocialListeningResult,
     EvidenceAssessment,AIAssessmentJob,AIBudgetReservation,AssessmentAIUsage)
 from .access import allowed,has
@@ -49,6 +50,23 @@ def campaign_usage_diagnostics(db,p,raw_campaign_id):
     usage=[u for u in usage_rows if u.assessment_id in allowed_assessment_ids]
     reservations=db.query(AIBudgetReservation).filter_by(
         campaign_id=campaign.id).limit(400).all()
+    known_costs=[]
+    unknown_costs=0
+    for entry in usage:
+        if entry.cost_status!='REPORTED':
+            unknown_costs+=1
+            continue
+        try:
+            amount=Decimal(str(entry.cost_usd or ''))
+            if not amount.is_finite() or amount<0:
+                raise InvalidOperation
+            known_costs.append(amount)
+        except (InvalidOperation,ValueError):
+            unknown_costs+=1
+    reported_cost=sum(known_costs,Decimal('0'))
+    cost_status=('COMPLETE_REPORTED' if usage and not unknown_costs
+                 else 'PARTIAL_REPORTED' if known_costs
+                 else 'NOT_AVAILABLE_FROM_PROVIDER')
     return {'campaign_id':str(campaign.id),'source_window_limit':300,
         'source_window_truncated':len(links)>300,
         'authorized_source_posts':len(relevant_post_ids),
@@ -60,9 +78,11 @@ def campaign_usage_diagnostics(db,p,raw_campaign_id):
             'requests_with_provider_token_counts':sum(bool(x.usage_reported) for x in usage),
             'input_tokens_reported':sum(x.input_tokens for x in usage if x.usage_reported),
             'output_tokens_reported':sum(x.output_tokens for x in usage if x.usage_reported),
-            'request_costs_unknown':sum(x.cost_status!='REPORTED' for x in usage),
-            'actual_total_usd':None,
-            'cost_status':'NOT_AVAILABLE_FROM_PROVIDER'},
+            'request_costs_unknown':unknown_costs,
+            'requests_with_reported_cost':len(known_costs),
+            'reported_cost_subtotal_usd':str(reported_cost) if known_costs else None,
+            'actual_total_usd':str(reported_cost) if cost_status=='COMPLETE_REPORTED' else None,
+            'cost_status':cost_status},
         'budget_reservations':{'lifetime':sum(x.reserved_requests for x in reservations
                                              if x.budget_period=='lifetime'),
             'daily_periods_recorded':len([x for x in reservations

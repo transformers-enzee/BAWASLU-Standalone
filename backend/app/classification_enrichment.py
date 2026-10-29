@@ -3,6 +3,7 @@
 No inferred guilt, no inferred geography, no automated enforcement. All output
 is a provisional AI suggestion until a separate officer review is recorded.
 """
+import hashlib
 import json
 import re
 from .processing_hints import communication_context, public_concern_cues
@@ -94,6 +95,8 @@ def normalize_summaries(value,source_text,relevance):
             continue
         result.append({'player':player,'summary':text,
             'source_quote':quote.strip(),
+            'provenance':'PRODUCTION_AI_PIPELINE',
+            'source_text_sha256':hashlib.sha256(str(source_text or '').strip().encode('utf-8')).hexdigest(),
             'status':'AI_DRAFT_REQUIRES_HUMAN_REVIEW',
             'legal_violation_confirmed':False})
     return result

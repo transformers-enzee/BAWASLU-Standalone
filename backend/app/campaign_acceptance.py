@@ -32,7 +32,12 @@ def campaign_acceptance_snapshot(db,p,raw_id):
     players=summary.get('intelligence_players') or {}
     total_players=sum(int(x.get('count') or 0) for x in players.values())
     total_topics=sum(bool(x.get('topic_labels')) for x in rows)
-    draft_count=sum(bool(x.get('player_summaries')) for x in rows)
+    from .summary_readiness import validated_summary_buckets
+    summary_buckets=[validated_summary_buckets(x) for x in rows]
+    development_count=sum(bool(x['development']) for x in summary_buckets)
+    pipeline_count=sum(bool(x['pipeline']) for x in summary_buckets)
+    unattributed_count=sum(bool(x['unattributed']) for x in summary_buckets)
+    draft_count=sum(bool(any(x.values())) for x in summary_buckets)
     reviews=sum(len(x.get('flag_review_history') or []) for x in rows)
     issue_posts=sum(bool(x.get('potential_issues')) for x in rows)
     verified_locations=sum(bool(x.get('incident_jurisdiction_verified')) for x in rows)
@@ -46,6 +51,8 @@ def campaign_acceptance_snapshot(db,p,raw_id):
         if reviewed[kind]:return 'OFFICER_REVIEWED'
         if stored[kind]:return 'SAVED_PENDING_OFFICER_REVIEW'
         if candidate_counts[kind]:return 'PROPOSALS_READY_TO_SAVE'
+        if coverage['unassessed_posts'] or relevant_truncated or duplicate_truncated:
+            return 'ASSESSMENT_COVERAGE_INCOMPLETE'
         return 'NO_QUALIFYING_PROPOSALS_IN_SAVED_EVIDENCE'
     ledger=[
        item(1,'Import posts','SAVED_SOURCE_EVIDENCE',
@@ -82,9 +89,12 @@ def campaign_acceptance_snapshot(db,p,raw_id):
             'NO_SAVED_ISSUE_OR_FLAG_FOR_TRIAGE',
             players.get('Needs Attention',{}).get('count') or 0,
             'Human flag or saved issue required'),
-       item(12,'AI player summaries','SAVED_DRAFT_EVIDENCE'
-            if draft_count else 'NEEDS_SAVED_AI_SUMMARIES',draft_count,
-            'Drafts need verbatim source quotes'),
+       item(12,'AI player summaries',
+            'PIPELINE_DRAFTS_PENDING_HUMAN_REVIEW' if pipeline_count else
+            'DEVELOPMENT_SAMPLES_NOT_PIPELINE_ACCEPTANCE' if development_count else
+            'UNTAGGED_LEGACY_DRAFTS_NOT_PIPELINE_VERIFIED' if unattributed_count else
+            'NEEDS_SAVED_AI_SUMMARIES',draft_count,
+            'Only source-fingerprinted pipeline drafts count as pipeline evidence; no automatic officer acceptance'),
        item(13,'Cross-module reuse','SAVED_ASSESSMENTS_AVAILABLE'
             if rows else 'NO_RELEVANT_SAVED_ASSESSMENTS',len(rows),
             'Reuses saved assessment versions'),
@@ -114,15 +124,24 @@ def campaign_acceptance_snapshot(db,p,raw_id):
             'source_groups':candidate_counts['NARRATIVE_CANDIDATE'],
             'permission_required':'human_validation'})
     elif not candidate_counts['NARRATIVE_CANDIDATE']:
+        incomplete=bool(coverage['unassessed_posts'] or relevant_truncated or duplicate_truncated)
         next_actions.append({'item':9,'kind':'DATA_DEPENDENCY',
-            'status':'NO_QUALIFYING_NARRATIVE_SOURCES',
-            'instruction':'Do not fabricate a narrative: the current saved relevant posts do not meet the recurring-source threshold.',
+            'status':'ASSESSMENT_COVERAGE_INCOMPLETE' if incomplete else 'NO_QUALIFYING_NARRATIVE_SOURCES',
+            'instruction':('Finish or disposition unassessed posts before calling absence of narratives conclusive.' if incomplete else
+                           'No qualifying recent independent-source narrative in the assessed evidence; do not fabricate one.'),
             'source_groups':0})
-    if not draft_count:
+    if not pipeline_count:
         next_actions.append({'item':12,'kind':'PAID_AI_DEPENDENCY',
-            'status':'NO_SAVED_AI_SUMMARIES',
-            'instruction':'A small explicitly authorized AI assessment sample is needed; verbatim source extracts are not AI summaries.',
+            'status':('DEVELOPMENT_SAMPLES_NOT_PIPELINE_ACCEPTANCE' if development_count
+                      else 'LEGACY_DRAFT_PROVENANCE_UNVERIFIED' if unattributed_count
+                      else 'NO_SAVED_AI_SUMMARIES'),
+            'instruction':'Run a small explicitly authorized production-pipeline sample; development and untagged legacy drafts cannot establish pipeline acceptance.',
             'source_groups':0})
+    else:
+        next_actions.append({'item':12,'kind':'OFFICER_WORKFLOW',
+            'status':'PIPELINE_SUMMARIES_PENDING_HUMAN_QA',
+            'instruction':'Independently verify source quotes and summary accuracy; pipeline output alone is not signoff.',
+            'source_groups':pipeline_count,'permission_required':'human_validation'})
     next_actions.append({'item':14,'kind':'QA_AND_HUMAN_DEPENDENCY',
         'status':'REFERENCE_SIGNOFF_AND_MEASURED_EVALUATION_REQUIRED',
         'instruction':'An analyst must reconcile reference labels; the unvalidated V18 draft requires a separate authorized measured test.',
@@ -135,6 +154,9 @@ def campaign_acceptance_snapshot(db,p,raw_id):
         'relevant_posts':coverage['relevant_posts'],
         'unassessed_posts':coverage['unassessed_posts'],
         'group_proposals_by_type':candidate_counts,
+        'summary_evidence':{'development_only_posts':development_count,
+            'pipeline_posts':pipeline_count,'legacy_unattributed_posts':unattributed_count,
+            'no_officer_summary_approval_inferred':True},
         'saved_groups_count':len(saved),
         'officer_accepted_groups':sum(reviewed.values()),
         'assessment_window_truncated':relevant_truncated or duplicate_truncated,

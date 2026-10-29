@@ -85,6 +85,8 @@ def test_ai_summaries_are_source_quoted_drafts_and_reject_guilt_claims():
     ],SOURCE,'RELEVANT')
     assert len(result)==1
     assert result[0]['status']=='AI_DRAFT_REQUIRES_HUMAN_REVIEW'
+    assert result[0]['provenance']=='PRODUCTION_AI_PIPELINE'
+    assert len(result[0]['source_text_sha256'])==64
     assert result[0]['legal_violation_confirmed'] is False
 
 

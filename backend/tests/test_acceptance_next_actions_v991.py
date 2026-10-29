@@ -25,7 +25,7 @@ def test_actionable_duplicate_review_is_not_auto_saved():
         actions={x['item']:x for x in response['next_actions']}
         assert actions[8]['status']=='READY_FOR_OFFICER_TO_SAVE'
         assert actions[8]['source_groups']==1
-        assert actions[9]['status']=='NO_QUALIFYING_NARRATIVE_SOURCES'
+        assert actions[9]['status']=='ASSESSMENT_COVERAGE_INCOMPLETE'
         assert actions[12]['status']=='NO_SAVED_AI_SUMMARIES'
         assert actions[14]['status']=='REFERENCE_SIGNOFF_AND_MEASURED_EVALUATION_REQUIRED'
         assert response['fully_completed_items_not_inferred'] is True

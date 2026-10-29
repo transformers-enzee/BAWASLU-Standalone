@@ -139,3 +139,23 @@ def test_development_classification_preview_is_strictly_bounded():
     assert '.limit(sample_limit)' in body
     assert "'paid_provider_called':False" in body
     assert "'classification_writes':0" in body
+
+def test_duplicate_text_across_distinct_urls_and_transitive_groups():
+    from app.processing_hints import exact_source_groups
+    records=[
+        {'id':'1','campaign_id':'1','canonical_url':'https://a.test/one','text_content':'Same body'},
+        {'id':'2','campaign_id':'1','canonical_url':'https://a.test/two','text_content':' same   BODY '},
+        {'id':'3','campaign_id':'1','canonical_url':'https://a.test/two','text_content':'Different body'},
+        {'id':'4','campaign_id':'2','canonical_url':'https://a.test/two','text_content':'Same body'},
+    ]
+    groups=exact_source_groups(records)
+    assert len(groups)==1
+    assert groups[0]['post_ids']==['1','2','3']
+    assert groups[0]['incident_verified'] is False
+
+def test_keyword_topics_do_not_infer_reputation_from_generic_bawaslu_mention():
+    from app.processing_hints import source_hints
+    greeting=source_hints('Selamat Hari Sumpah Pemuda #Bawaslu')
+    assert greeting['topic_suggestions']==[]
+    election=source_hints('KPU memulai pengawasan pemilu di Jawa Timur')
+    assert 'Electoral Operations' in election['topic_suggestions']

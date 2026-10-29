@@ -127,12 +127,34 @@ def exact_source_groups(records):
     grouped=defaultdict(list)
     for row in records:
         source=str(row.get('canonical_url') or '').strip().lower()
-        if not source:
-            source=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        fingerprint=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        campaign=str(row.get('campaign_id') or '')
+        # Index both canonical URL and normalized content to catch cross-post
+        # duplicate text. Use connected components to avoid double counting.
+        rid=str(row.get('id') or '')
         if source:
-            grouped[(str(row.get('campaign_id') or ''),source)].append(str(row.get('id') or ''))
-    return [{'campaign_id':key[0],'post_ids':ids,'incident_verified':False}
-            for key,ids in grouped.items() if len(ids)>1]
+            grouped[(campaign,'url',source)].append(rid)
+        if fingerprint:
+            grouped[(campaign,'text',fingerprint)].append(rid)
+    parents={}
+    def root(x):
+        parents.setdefault(x,x)
+        if parents[x]!=x:parents[x]=root(parents[x])
+        return parents[x]
+    for ids in grouped.values():
+        if len(ids)<2:continue
+        first=ids[0]
+        for other in ids[1:]:
+            a,b=root(first),root(other)
+            if a!=b:parents[b]=a
+    components=defaultdict(set)
+    for (campaign,_,_),ids in grouped.items():
+        for rid in ids:
+            if rid in parents:components[(campaign,root(rid))].add(rid)
+    return [{'campaign_id':key[0],'post_ids':sorted(ids,key=str),
+             'incident_verified':False}
+            for key,ids in sorted(components.items())
+            if len(ids)>1]
 
 
 def summarize_scoped_findings(records):

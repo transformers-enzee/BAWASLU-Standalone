@@ -70,3 +70,31 @@ def test_attention_requires_evidence_not_keyword_alarm():
  assert checked['supported_quote_count']==1
  assert checked['actionability']=='HUMAN_TRIAGE_ONLY'
  assert checked['legal_violation_confirmed'] is False
+
+def test_emerging_narrative_requires_independent_authors_and_dates():
+ from app.processing_hints import emerging_narrative_candidates
+ from datetime import date,timedelta
+ def row(n,author,days,text='Warga mempertanyakan daftar pemilih nomor '+str(1)):
+  return {'id':str(n),'campaign_id':'91','relevance_label':'RELEVANT',
+    'author_name':author,'canonical_url':'https://example.test/narrative/'+str(n),
+    'text_content':text+str(n),'published_at':str(date(2026,10,1)+timedelta(days=days))}
+ distinct=[row(1,'a',0),row(2,'b',1),row(3,'c',2)]
+ found=emerging_narrative_candidates(distinct)
+ assert len(found)==1
+ assert found[0]['status']=='RECURRING_DISCUSSION_CANDIDATE'
+ assert found[0]['incident_verified'] is False
+ assert found[0]['distinct_authors']==3
+ same_author=[{**x,'author_name':'same'} for x in distinct]
+ assert emerging_narrative_candidates(same_author)==[]
+ outside=[row(1,'a',0),row(2,'b',120),row(3,'c',250)]
+ assert emerging_narrative_candidates(outside)==[]
+
+def test_duplicate_text_does_not_prove_incident_or_merge_campaigns():
+ from app.processing_hints import exact_source_groups
+ rows=[{'id':str(i),'campaign_id':c,'text_content':'identical source wording'}
+       for i,c in [(1,'91'),(2,'91'),(3,'92')]]
+ groups=exact_source_groups(rows)
+ assert len(groups)==1
+ assert groups[0]['campaign_id']=='91'
+ assert groups[0]['post_ids']==['1','2']
+ assert groups[0]['incident_verified'] is False

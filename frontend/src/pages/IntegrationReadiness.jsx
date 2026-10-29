@@ -71,7 +71,7 @@ export default function IntegrationReadiness() {
     </section>}
     {metrics && <section className="bg-white border rounded-xl p-4 space-y-3">
       <h2 className="font-semibold text-lg">Classification and processing quality</h2>
-      <p className="text-xs text-slate-600">Read-only counts of saved records. No paid AI calls, inferred sentiment, or verified jurisdiction are implied.</p>
+      <p className="text-xs text-slate-600">Read-only counts of saved records. No paid AI calls, inferred sentiment, or verified jurisdiction are implied. Job attempts are not token-cost accounting.</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div><p className="text-slate-500">Saved assessments</p><p className="text-xl font-semibold">{metrics.assessment_quality?.total ?? '—'}</p></div>
         <div><p className="text-slate-500">AI-relevant</p><p className="text-xl font-semibold">{metrics.assessment_quality?.relevant ?? '—'}</p></div>
@@ -80,6 +80,9 @@ export default function IntegrationReadiness() {
         <div><p className="text-slate-500">Campaign evidence links</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.linked ?? '—'}</p></div>
         <div><p className="text-slate-500">Missing campaign source URLs</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.missing_url ?? '—'}</p></div>
         <div><p className="text-slate-500">Repeated-text groups</p><p className="text-xl font-semibold">{metrics.campaign_duplicate_text?.duplicate_groups ?? '—'}</p></div>
+        <div><p className="text-slate-500">Assessment jobs with errors</p><p className="text-xl font-semibold">{metrics.assessment_jobs?.with_error_message ?? '—'}</p></div>
+        <div><p className="text-slate-500">AI assessment attempts</p><p className="text-xl font-semibold">{metrics.assessment_jobs?.attempts ?? '—'}</p></div>
+        <div><p className="text-slate-500">Accepted potential issue signals</p><p className="text-xl font-semibold">{metrics.assessment_signal_diagnostics?.accepted_signals ?? '—'}</p></div>
         <div><p className="text-slate-500">Smart Radar pilot posts</p><p className="text-xl font-semibold">{metrics.smart_radar_pilot_posts ?? '—'}</p></div>
       </div>
     </section>}

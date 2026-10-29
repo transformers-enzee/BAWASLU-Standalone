@@ -47,6 +47,17 @@ METRICS={
   (SELECT COUNT(*) FROM campaign_runs) AS collection_runs,
   (SELECT COUNT(*) FROM campaign_evidence) AS linked_evidence,
   (SELECT COUNT(*) FROM evidence_assessments) AS assessments""",
+ "assessment_jobs": """SELECT COUNT(*) AS total,
+  COUNT(*) FILTER(WHERE state IN ('FAILED','ERROR','NEEDS_ATTENTION')) AS failed,
+  COUNT(*) FILTER(WHERE state IN ('PENDING','QUEUED','PROCESSING','RUNNING')) AS pending_or_running,
+  COUNT(*) FILTER(WHERE state IN ('COMPLETED','DONE')) AS completed,
+  COALESCE(SUM(attempts),0) AS attempts,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(last_error),'') IS NOT NULL) AS with_error_message
+  FROM ai_assessment_jobs""",
+ "assessment_signal_diagnostics": """SELECT COUNT(*) AS total,
+  COALESCE(SUM(candidate_count),0) AS candidate_signals,
+  COALESCE(SUM(accepted_count),0) AS accepted_signals
+  FROM assessment_signal_diagnostics""",
  "assessment_quality": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE relevance_label IN ('RELEVANT','HIGHLY_RELEVANT')) AS relevant,
   COUNT(*) FILTER(WHERE relevance_label IN ('IRRELEVANT','NOT_RELEVANT')) AS irrelevant,

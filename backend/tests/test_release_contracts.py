@@ -206,3 +206,15 @@ def test_v92_5_admin_quality_visible_and_no_paid_trigger():
     assert 'No paid AI calls' in page
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
     assert 'v92.5' in shell
+
+
+def test_v92_6_processing_failures_and_signal_acceptance_are_auditable():
+    from app import integration_readiness
+    metrics=integration_readiness.METRICS
+    assert 'last_error' in metrics['assessment_jobs']
+    assert 'SUM(attempts)' in metrics['assessment_jobs']
+    assert 'SUM(accepted_count)' in metrics['assessment_signal_diagnostics']
+    page=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
+    assert 'metrics.assessment_jobs?.with_error_message' in page
+    assert 'not token-cost accounting' in page
+    assert 'v92.6' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')

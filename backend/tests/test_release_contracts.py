@@ -241,3 +241,13 @@ def test_v92_9_sentiment_does_not_erase_prior_relevance_or_issue_signals():
     for name in ('relevance_label','candidate_signals_json','geographic_signals_json','potential_issue_signals_json'):
         assert name+'=prior.'+name in sentiment
     assert 'confirm_ai_cost' in sentiment
+
+
+def test_v93_0_sidebar_health_and_frontend_versions_agree():
+    from app import main
+    metadata=main.health()
+    assert metadata['build_version']=='93.0'
+    nav=(FRONTEND/'components'/'intel'/'AccessNavigation.jsx').read_text(encoding='utf-8')
+    assert "useState({build_version:null})" in nav
+    shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert 'v93.0' in shell

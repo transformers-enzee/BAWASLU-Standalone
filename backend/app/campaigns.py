@@ -1069,6 +1069,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         # Invalidate cached analytics immediately when campaign evidence changes.
         from .models import EvidenceAssessment
         from .sentiment_processing import latest_saved_sentiments
+        from .topic_themes import latest_saved_categories,UNCATEGORIZED
         from sqlalchemy import func
         evidence_revision=db.query(func.count(CampaignEvidence.id),
             func.max(CampaignEvidence.id)).filter(CampaignEvidence.campaign_id==c.id).one()
@@ -1090,13 +1091,16 @@ def campaign_action(db:Session,p,action,data,id=None):
         # The original full-entity query was expensive on 40k+ evidence rows.
         from types import SimpleNamespace
         saved_sentiments=latest_saved_sentiments(db,c.id)
+        saved_topics=latest_saved_categories(db,c.id)
+        theme_counts=Counter();theme_sentiments={};theme_samples={}
         columns=(CampaignEvidence.matched_fields_json,
             SocialListeningResult.run_id,SocialListeningResult.published_at,
             SocialListeningResult.language,SocialListeningResult.geography_json,
             SocialListeningResult.text_content,SocialListeningResult.platform,
             SocialListeningResult.author_name,SocialListeningResult.engagement_json,
             SocialListeningResult.raw_payload_json,SocialListeningResult.content_type,
-            SocialListeningResult.review_state, SocialListeningResult.id)
+            SocialListeningResult.review_state, SocialListeningResult.id,
+            SocialListeningResult.canonical_url)
         links=query.with_entities(*columns).order_by(CampaignEvidence.id.desc()).yield_per(1000)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
         primary_terms=json.loads(c.primary_keywords_json or '[]')
@@ -1115,7 +1119,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         province_counts=Counter(); province_mentions=Counter(); province_connected=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         from types import SimpleNamespace
         for record in links:
-            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state,result_id)=record
+            (matched_fields,run_id,published_at,language,geography_json,text_content,platform,author_name,engagement_json,raw_payload_json,content_type,review_state,result_id,source_url)=record
             item=SimpleNamespace(run_id=run_id,published_at=published_at,language=language,geography_json=geography_json,text_content=text_content,platform=platform,author_name=author_name,engagement_json=engagement_json,raw_payload_json=raw_payload_json,content_type=content_type,review_state=review_state)
             if not _result_in_scope(db,p,item): continue
             source_day=str(item.published_at or '')[:10]
@@ -1185,7 +1189,16 @@ def campaign_action(db:Session,p,action,data,id=None):
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
-            sentiment[saved_sentiments.get(result_id,'Unclassified')]+=1
+            tone=saved_sentiments.get(result_id,'Unclassified')
+            sentiment[tone]+=1
+            category=saved_topics.get(result_id,UNCATEGORIZED)
+            theme_counts[category]+=1
+            theme_sentiments.setdefault(category,Counter())[tone]+=1
+            sample=theme_samples.setdefault(category,[])
+            if len(sample)<8:
+                sample.append({'id':str(result_id),'author':author_name,'platform':platform,
+                               'date':published_at,'text':(text_content or '')[:900],
+                               'url':source_url or ''})
             try: geo=json.loads(item.geography_json or '{}')
             except (ValueError,TypeError): geo={}
             if isinstance(geo,dict):
@@ -1203,6 +1216,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
                 for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
+        topic_names=sorted(theme_counts,key=lambda key:(key==UNCATEGORIZED,-theme_counts[key],key))
+        topic_rows=[{'name':key,'count':theme_counts[key],
+                     'sentiment':{tone:int(theme_sentiments[key].get(tone,0))
+                                  for tone in ('Negative','Neutral','Positive','Unclassified')},
+                     'sample_posts':theme_samples.get(key,[])}
+                    for key in topic_names]
         result={'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
                 'platforms':dict(platforms),'review_states':dict(states),
                 'statistics':{'messages':visible,'engagement':total_engagement,'views':total_views,
@@ -1214,6 +1233,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'sentiment_classified_count':sum(sentiment.get(key,0) for key in ('Positive','Neutral','Negative')),
                 'sentiment_unclassified_count':int(sentiment.get('Unclassified',0)),
                 'sentiment_method':'SAVED_CAMPAIGN_AI_ASSESSMENTS',
+                'topics_and_themes':{'categories':topic_rows,'total_mentions':visible,
+                                     'categorized_mentions':visible-theme_counts.get(UNCATEGORIZED,0),
+                                     'uncategorized_mentions':theme_counts.get(UNCATEGORIZED,0),
+                                     'method':'SAVED_AI_TOPIC_ASSESSMENTS'},
                 'geographies':dict(geographies),
                 'province_distribution': [{'province':name,'count':count,'percentage':round(count*100/sum(province_counts.values()),1)} for name,count in province_counts.most_common()],
                 'province_coverage':sum(province_counts.values()),

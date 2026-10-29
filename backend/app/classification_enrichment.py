@@ -8,7 +8,7 @@ import json
 import re
 from .processing_hints import communication_context, public_concern_cues
 
-TOPICS={'Electoral Operations','BAWASLU Reputation'}
+TOPICS={'Public Information','Voter Registration','Electoral Operations','Campaign Rules','Public Concern','BAWASLU Reputation'}
 PLAYERS={'Potential Violations','Public Concerns','Emerging Narratives',
          'Needs Attention'}
 SCALES={'LOW','MEDIUM','HIGH','NOT_ASSESSED'}
@@ -28,11 +28,11 @@ def json_obj(text):
 def normalize_topics(value, source_text, relevance):
     if str(relevance or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
         return []
-    if communication_context(source_text)['category']=='ROUTINE_COMMUNICATION':
-        return []
     if not isinstance(value,list):return []
-    return [x for x in sorted(TOPICS)
-            if x in value]
+    categories=[x for x in sorted(TOPICS) if x in value]
+    if communication_context(source_text)['category']=='ROUTINE_COMMUNICATION':
+        return ['Public Information'] if 'Public Information' in categories else []
+    return categories
 
 def _valid_quote(quote,source,min_chars=15):
     return (isinstance(quote,str) and min_chars<=len(quote.strip())<=500 and

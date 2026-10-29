@@ -10,6 +10,8 @@ const radarRoute=read('src/pages/SmartRadar.jsx');
 const watchRoute=read('src/pages/Watchlist.jsx');
 const social=read('src/pages/SocialListening.jsx');
 const campaign=read('src/components/intel/CampaignPanel.jsx');
+const topicView=read('src/components/intel/TopicThemes.jsx');
+const themeEngine=read('../backend/app/topic_themes.py');
 const captured=read('src/components/intel/CapturedPostList.jsx');
 const campaignsApi=read('../backend/app/campaigns.py');
 const socialcrawl=read('../backend/app/socialcrawl.py');
@@ -44,12 +46,14 @@ assert.doesNotMatch(captured,/Demo citizen|Demo institutional|Export|Find post b
 assert.match(campaignsApi,/if action=='campaignCapturedPosts':/);
 assert.match(socialcrawl,/campaignCapturedPosts/,'The authenticated dispatcher must allow captured feed reads');
 const trendPosition=campaign.indexOf('aria-label="Campaign trend by platform"');
-const topicsPosition=campaign.indexOf('aria-label="Topics and Themes"');
+const topicsPosition=campaign.indexOf('<TopicThemes data={dashboard.topics_and_themes}/>');
 const capturedPosition=campaign.indexOf('aria-label="Captured posts"',trendPosition);
 assert.ok(trendPosition>=0 && trendPosition<topicsPosition && topicsPosition<capturedPosition,
   'Topics & Themes must appear immediately below the platform chart, before captured evidence');
-assert.match(campaign,/lg:col-span-2 rounded-\[13px\][^\n]+aria-label="Topics and Themes"/,
-  'Topics & Themes must span the dashboard grid on desktop');
+assert.ok(topicView.includes('lg:col-span-2'),'Topics & Themes must span the dashboard grid');
+assert.ok(topicView.includes('data?.categories'),'Topic categories must come from saved AI annotations');
+assert.ok(!topicView.includes('dashboard.main_keywords'),'Topic view must not use campaign keywords');
+assert.match(themeEngine,/latest_saved_categories/);
 assert.match(registry,/CampaignEvidence\.campaign_id==scoped_campaign\.id/);
 assert.match(watchBridge,/campaign_id/);
 assert.match(watchBridge,/campaignId\?\(Array\.isArray\(actor\.value\)/,'Campaign-earned mentions must consume the scoped evidence array, not the global actor response');

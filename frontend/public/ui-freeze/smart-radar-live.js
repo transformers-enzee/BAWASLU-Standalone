@@ -71,7 +71,7 @@
       player: (f.players || [])[0] || 'narratives', topics: f.topics || [],
       geo: 'all', published_at: f.published_at || '',
       day: 0, status: f.status || 'awareness',
-      summary: f.summary || '', insights: f.insights || {},
+      summary: f.summary || '', insights: f.insights || {}, ai_summary: Boolean(f.ai_summary), ai_model: f.ai_model || '', summary_evidence_sample: f.summary_evidence_sample || null,
       violation: (f.players || []).includes('violations'),
       posts: [], source_count: Number(f.supporting_posts ?? 0),
       human_reviewed: Boolean(f.human_reviewed), history: [],

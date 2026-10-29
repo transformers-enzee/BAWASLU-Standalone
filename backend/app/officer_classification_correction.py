@@ -4,7 +4,6 @@ from .access import allowed, has, audit
 from .models import (MonitoringCampaign, CampaignEvidence, SocialListeningResult,
                      EvidenceAssessment, EvidenceReview)
 from .socialcrawl import _result_in_scope
-from .classification_enrichment import normalize_concerns
 
 ALLOWED_TOPICS={'Electoral Operations','BAWASLU Reputation'}
 def correct_classification(db,p,campaign_id,payload):
@@ -44,11 +43,17 @@ def correct_classification(db,p,campaign_id,payload):
         quote=str(payload.get('source_quote') or '').strip()
         concern=str(payload.get('concern') or '').strip()
         if not 10<=len(concern)<=240:raise ValueError('Explain the public concern')
-        normalized=normalize_concerns([{'evidence_quote':quote,'concern':concern}],
-                                      post.text_content,old.relevance_label)
-        if len(normalized)!=1:raise ValueError('Explicit complaint and verbatim source quote required')
-        normalized[0]['status']='HUMAN_CONCERN_REVIEWED'
-        normalized[0]['provenance']='OFFICER_SOURCE_REVIEW'
+        if str(old.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+            raise ValueError('Post must have saved relevant classification')
+        if len(quote)<15 or quote.casefold() not in str(post.text_content or '').casefold():
+            raise ValueError('Verbatim source quotation of at least 15 characters required')
+        # Unlike AI classification, an authorized officer can attest an explicit
+        # complaint without a brittle keyword heuristic. It remains an
+        # unverified public concern, not a legal finding.
+        normalized=[{'evidence_quote':quote,'concern':concern,
+                     'status':'HUMAN_CONCERN_REVIEWED',
+                     'provenance':'OFFICER_SOURCE_REVIEW',
+                     'legal_violation_confirmed':False}]
         concerns=json.loads(old.public_concern_signals_json or '[]')
         if not isinstance(concerns,list):concerns=[]
         if any(x.get('evidence_quote')==quote for x in concerns if isinstance(x,dict)):

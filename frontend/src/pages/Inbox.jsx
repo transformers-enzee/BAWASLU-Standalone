@@ -37,6 +37,34 @@ function SocialEvidenceInbox(){
  return()=>{active=false}
  },[campaign]);
  useEffect(()=>{
+  // Read-only overview: source evidence is immediately visible on campaign
+  // selection, but saving a proposal still needs an explicit officer click.
+  let cancelled=false;
+  setGroupPreview(null);setGroupRows([]);setGroupEvidence(null);
+  setGroupError('');setGroupExpanded(false);
+  if(!campaign)return()=>{cancelled=true};
+  Promise.allSettled([
+   base44.functions.invoke('socialListening',{
+     action:'campaignFindingGroupsPreview',id:campaign,data:{}}),
+   base44.functions.invoke('socialListening',{
+     action:'campaignFindingGroupsList',id:campaign,data:{}})
+  ]).then(results=>{
+    if(cancelled)return;
+    if(results[0].status==='fulfilled'){
+      const preview=results[0].value.data;
+      setGroupPreview(preview);
+      if(preview.proposal_count>0)setGroupExpanded(true);
+    }
+    if(results[1].status==='fulfilled'){
+      const groups=results[1].value.data.groups||[];
+      setGroupRows(groups);if(groups.length)setGroupExpanded(true);
+    }
+    if(results.every(x=>x.status==='rejected'))
+      setGroupError('Group evidence preview unavailable. Retry using Preview groups.');
+  });
+  return()=>{cancelled=true};
+ },[campaign]);
+ useEffect(()=>{
   if(!watchProgress||!campaign)return;
   let cancelled=false,attempts=0;
   const refresh=async()=>{
@@ -357,7 +385,17 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <details className="text-xs"><summary className="cursor-pointer font-semibold">Coverage and evidence diagnostics</summary><p className="mt-2 text-slate-600">Missing source URLs: {processingSummary.processing_diagnostics?.missing_field_counts?.canonical_url??0} · Unclassified sentiment: {processingSummary.processing_diagnostics?.missing_field_counts?.sentiment??0} · Attention cues with a source quote: {processingSummary.processing_diagnostics?.posts_with_source_quoted_attention_evidence??0} · Officer follow-up requested: {processingSummary.processing_diagnostics?.human_follow_up_requested??0}. Source-specific model usage is available separately. Dollar costs remain unavailable unless reported by the provider.</p></details>
    <div className="space-y-2">
      <button type="button" className="intel-ghost text-xs" disabled={qaBusy} onClick={loadQAHistory}>Compare saved Shahrin QA results (admin · free)</button>
-     {qaHistory&&<div className="text-xs space-y-2"><p>Historical predictions only; holdout data excluded. Reference labels may be awaiting analyst sign-off. Target: {qaHistory.target_accuracy_percent}%.</p><div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
+     {qaHistory&&<div className="text-xs space-y-2">
+       <p>Historical predictions only; holdout data excluded. Target: {qaHistory.target_accuracy_percent}%.</p>
+       {qaHistory.reference_signoff&&<section className="rounded border border-amber-200 p-2 space-y-1">
+         <strong>Analyst-label sign-off: {qaHistory.reference_signoff.analyst_approved}/{qaHistory.reference_signoff.total_imported}</strong>
+         <p>{qaHistory.reference_signoff.remaining_unsigned} labels still need a human decision; {qaHistory.reference_signoff.duplicate_source_unresolved} approved duplicate-source records still need source-relation reconciliation. Imported category labels are not automatically approved.</p>
+         <a className="underline" href="/smart-radar/qa">Open the authenticated QA Lab for analyst review</a>
+       </section>}
+       {(qaHistory.analyst_reviewed_accuracy||[]).length>0&&<div className="rounded border p-2">
+         <strong>Accuracy on analyst-approved labels only (not historical score)</strong>
+         {qaHistory.analyst_reviewed_accuracy.slice(0,8).map((row,i)=><p key={i}>{row.prompt_version}: {row.matched}/{row.reviewed_posts} ({row.accuracy_percent}%) · {row.official_acceptance_eligible?'Reference coverage adequate':'Not ready for formal acceptance'}</p>)}
+       </div>}<div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
      {qaHistory?.error_patterns?.length>0&&<details className="rounded border p-2">
       <summary className="cursor-pointer font-semibold">Most common saved category confusions · no new AI inference</summary>
       <p>Historical Shahrin labels still await sign-off. Sealed holdout excluded.</p>
@@ -381,7 +419,22 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   </section>}
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">
    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Source-linked grouping review</h3><p className="text-xs text-slate-500">Exact duplicates, incident clusters and Emerging Narratives · saved separately from legal findings.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={previewFindingGroups}>Preview groups (free)</button><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={loadFindingGroups}>Saved groups</button></div></div>
-   {groupPreview&&<div className="text-xs space-y-1"><p>{groupPreview.proposal_count} grouping candidate(s) from {groupPreview.eligible_posts} assessed relevant posts. {groupPreview.source_window_truncated?'Only the first 300 linked posts were scanned.':''}</p><p>All proposed incidents and narratives require human source review. No shared incident is automatically verified.</p>{groupPreview.proposal_count>0&&<button type="button" className="intel-button text-xs" disabled={groupBusy} onClick={saveFindingGroups}>Save provisional groups for review</button>}</div>}
+   {groupPreview&&<div className="text-xs space-y-2">
+    <p>{groupPreview.proposal_count} proposed group(s) · {groupPreview.eligible_posts} relevant assessed posts for incident/narrative analysis · {groupPreview.exact_duplicate_source_posts} source posts checked for exact duplication regardless of assessment.
+      {groupPreview.source_window_truncated?' Only the first 300 linked posts were scanned.':''}</p>
+    <p className="text-slate-600">Read-only evidence preview. No group is accepted or saved automatically. Missing narrative candidates can be valid when independent relevant sources are insufficient.</p>
+    {!!groupPreview.proposal_evidence?.length&&<div className="space-y-2 max-h-64 overflow-y-auto">
+      {groupPreview.proposal_evidence.map((proposal,i)=><article key={i} className="rounded border border-slate-200 p-2">
+        <strong>{proposal.type.replaceAll('_',' ')} · {proposal.sources.length} source(s)</strong>
+        <div className="space-y-1 mt-1">{proposal.sources.slice(0,4).map(source=><div key={source.id} className="bg-slate-50 rounded p-2">
+          <p className="text-slate-800 whitespace-pre-wrap break-words">{source.text_excerpt||'No source text supplied'}</p>
+          <p className="text-slate-500">Source {source.id} · {source.author_name||'Unknown author'} · {source.relevance_label==='NOT_REQUIRED_FOR_EXACT_DUPLICATE'?'Relevance not required':source.relevance_label}</p>
+          {safeOriginalUrl(source.canonical_url)&&<a className="underline" href={safeOriginalUrl(source.canonical_url)} target="_blank" rel="noreferrer">Inspect original source</a>}
+        </div>)}</div>
+      </article>)}
+    </div>}
+    {groupPreview.proposal_count>0&&<button type="button" className="intel-button text-xs" disabled={groupBusy} onClick={saveFindingGroups}>Save provisional groups for officer review</button>}
+  </div>}
    {groupExpanded&&groupRows.length===0&&!groupBusy&&<p className="text-xs text-slate-500">No saved review groups yet. Preview existing assessed posts, then save proposed groups before officer review.</p>}
    {!!groupRows.length&&<div className="space-y-2 max-h-64 overflow-y-auto">{groupRows.map(row=><div className="rounded-lg border border-slate-200 p-2 text-xs flex flex-wrap justify-between gap-2" key={row.id}><div><strong>{row.group_type.replaceAll('_',' ')} · {row.label}</strong><p className="text-slate-600">Source posts: {row.source_ids.length} · {row.review_status}</p><p className="text-slate-500">Human grouping decisions do not establish a legal violation.</p><button type="button" className="intel-ghost text-xs mt-1" disabled={groupBusy} onClick={()=>inspectGroupEvidence(row)}>View all group evidence</button><div className="flex flex-wrap gap-1 mt-1">{row.source_ids.map(id=><button key={id} type="button" className="intel-ghost text-xs" onClick={()=>{const source=findings.find(x=>String(x.id)===String(id)&&String(x.campaign_id)===String(row.campaign_id));if(source){setSelected(source);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}else{setGroupError('This source is outside the currently loaded Inbox findings. Open the matching campaign evidence view to inspect it.')}}}>Inspect source {id}</button>)}</div></div>{groupEvidence?.group_id===row.id&&<div className="basis-full space-y-2 border-t pt-2" aria-label="Source evidence for review">{groupEvidence.sources.map(src=><article key={src.id} className="border rounded p-2"><strong>Source {src.id} · {src.relevance_label}</strong><p className="whitespace-pre-wrap break-words mt-1">{src.text_content||'Source text unavailable'}</p><p className="text-slate-500">{src.author_name||'Unknown author'} · {src.published_at||'Date unavailable'}</p>{safeOriginalUrl(src.canonical_url)&&<a className="underline" href={safeOriginalUrl(src.canonical_url)} target="_blank" rel="noreferrer">Open original source</a>}</article>)}</div>}{row.review_status==='PROPOSED'&&<div className="flex gap-2"><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'ACCEPTED')}>Accept group</button><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'REJECTED')}>Reject group</button></div>}</div>)}</div>}
    {groupNotice&&<p className="text-xs text-emerald-700" role="status">{groupNotice}</p>}{groupError&&<p className="text-xs text-red-700" role="alert">{groupError}</p>}

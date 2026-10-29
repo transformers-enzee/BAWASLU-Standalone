@@ -69,7 +69,10 @@ def duplicate_source_rows(db,p,campaign,limit=MAX_SOURCE_ROWS):
         post=db.get(SocialListeningResult,link.result_id)
         if post and _result_in_scope(db,p,post):
             rows.append({'id':str(post.id),'campaign_id':str(campaign.id),
-                'text_content':post.text_content})
+                'text_content':post.text_content,
+                'canonical_url':post.canonical_url,
+                'author_name':post.author_name,
+                'published_at':post.published_at})
     return rows,len(links)>limit
 
 
@@ -236,6 +239,23 @@ def finding_group_action(db,p,action,data,id=None):
         proposals=propose_groups(rows,duplicates)
         readiness=grouping_readiness(db,p,campaign)
         category_counts=grouping_candidate_counts(rows,duplicates)
+        # Preview gives a reviewer evidence BEFORE deciding to save a group.
+        # Both source pools have already passed campaign and geographic scope.
+        index={row['id']:row for row in duplicates}
+        for row in rows:
+            index[row['id']]=row
+        evidence_preview=[]
+        for proposal in proposals[:MAX_GROUPS_PER_SAVE]:
+            evidence_preview.append({
+                'type':proposal['type'],'source_ids':proposal['source_ids'],
+                'sources':[{
+                    'id':source_id,
+                    'text_excerpt':str(index.get(str(source_id),{}).get('text_content') or '')[:320],
+                    'canonical_url':index.get(str(source_id),{}).get('canonical_url'),
+                    'author_name':index.get(str(source_id),{}).get('author_name'),
+                    'relevance_label':index.get(str(source_id),{}).get('relevance_label')
+                        or 'NOT_REQUIRED_FOR_EXACT_DUPLICATE'
+                } for source_id in proposal['source_ids'] if str(source_id) in index]})
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
             'readiness':readiness,
             'candidate_counts_by_type':category_counts,
@@ -248,6 +268,8 @@ def finding_group_action(db,p,action,data,id=None):
             'manual_review_required':True,
             'sample_window_limit':MAX_SOURCE_ROWS,'source_window_truncated':truncated or duplicates_truncated,
             'proposals':proposals[:MAX_GROUPS_PER_SAVE],
+            'proposal_evidence':evidence_preview,
+            'preview_contains_only_authorized_source_excerpts':True,
             'proposal_count':len(proposals),'shown_count':min(len(proposals),MAX_GROUPS_PER_SAVE),
             'max_groups_per_save':MAX_GROUPS_PER_SAVE,
             'verification_status':'PROVISIONAL_REQUIRES_HUMAN_REVIEW',

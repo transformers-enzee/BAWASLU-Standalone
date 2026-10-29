@@ -101,10 +101,18 @@ def attach_candidate_ids(db,p,rows):
         row['candidate_identity_matches']=matches
         row['canonical_candidate_ids']=[m['canonical_candidate_id'] for m in matches
             if m.get('canonical_candidate_id')]
+        # An absent, generic, unknown or ambiguous identity is a valid
+        # no-candidate classification, not a processing failure.
+        row['candidate_classification']='MATCHED' if row['canonical_candidate_ids'] else 'NO_CANDIDATE'
+        row['candidate_classification_requires_manual_qa']=False
         match_count+=sum(bool(x.get('canonical_candidate_id')) for x in matches)
         unmatched_count+=sum(x['identity_status']=='UNMATCHED_CANDIDATE_NAME' for x in matches)
         ambiguous_count+=sum(x['identity_status']=='AMBIGUOUS_CANDIDATE_ALIAS' for x in matches)
-    return {'matched_mentions':match_count,'unmatched_mentions':unmatched_count,
+    return {'no_candidate_posts':sum(
+                row['candidate_classification']=='NO_CANDIDATE' for row in rows),
+            'candidate_absence_is_valid':True,
+            'requires_candidate_manual_qa':False,
+            'matched_mentions':match_count,'unmatched_mentions':unmatched_count,
             'ambiguous_mentions':ambiguous_count,
             'registry_candidates_in_scope':len({t[0] for v in idx.values() for t in v}),
             'identity_is_legally_verified':False,

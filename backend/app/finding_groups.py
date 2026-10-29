@@ -129,6 +129,8 @@ def finding_group_action(db,p,action,data,id=None):
         rows,truncated=eligible_source_rows(db,p,campaign)
         proposals=propose_groups(rows)
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
+            'no_matching_groups_is_valid':True,
+            'grouping_evidence_missing_not_an_error':len(rows)==0,
             'relevant_post_coverage_warning':len(rows)<2,
             'manual_review_required':True,
             'sample_window_limit':MAX_SOURCE_ROWS,'source_window_truncated':truncated,

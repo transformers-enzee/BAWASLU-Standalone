@@ -91,13 +91,30 @@ def resolve_signals(signals,index):
                 'identity_status':'UNMATCHED_CANDIDATE_NAME'})
     return resolved
 
+def explicit_candidate_mentions(text,index):
+    """Only exact full registered names from source text, no inferred identities."""
+    import re
+    body=str(text or '').casefold()
+    found=[]
+    for alias,identities in index.items():
+        if len(alias.split())<2 or len(alias)<8 or len(identities)!=1:
+            continue
+        if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',body):
+            found.append(alias)
+    return sorted(set(found),key=lambda x:(-len(x),x))
+
+
 def attach_candidate_ids(db,p,rows):
     idx=candidate_index(db,p)
     match_count=0
     unmatched_count=0
     ambiguous_count=0
     for row in rows:
-        matches=resolve_signals(row.get('candidate_signals') or [],idx)
+        raw_signals=row.get('candidate_signals') or []
+        explicit=explicit_candidate_mentions(row.get('text_content'),idx)
+        matches=resolve_signals([*raw_signals,*explicit],idx)
+        row['candidate_text_match_method']='SAVED_SIGNALS_AND_EXPLICIT_FULL_NAME'
+        row['candidate_text_mentions_unverified']=explicit
         row['candidate_identity_matches']=matches
         row['canonical_candidate_ids']=[m['canonical_candidate_id'] for m in matches
             if m.get('canonical_candidate_id')]

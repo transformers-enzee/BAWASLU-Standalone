@@ -403,7 +403,8 @@ def _classify_campaign_sentiment(db,p,c,data):
 def campaign_action(db:Session,p,action,data,id=None):
     if not has(p,'view_intelligence'): raise PermissionError('No intelligence access')
     if action in ('campaignFindingGroupsPreview','campaignFindingGroupsSave',
-                  'campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness'):
+                  'campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness',
+                  'campaignFindingGroupSources'):
         from .finding_groups import finding_group_action
         return finding_group_action(db,p,action,data or {},id)
     if action in ('campaignJurisdictionPreview','campaignJurisdictionReview'):

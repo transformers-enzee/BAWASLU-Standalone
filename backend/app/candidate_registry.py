@@ -104,6 +104,21 @@ def explicit_candidate_mentions(text,index):
     return sorted(set(found),key=lambda x:(-len(x),x))
 
 
+def resolve_post_candidate_mentions(signals,text,index):
+    """Same canonical IDs for Inbox and shared assessment views; no duplicates."""
+    names=signals if isinstance(signals,list) else []
+    matches=resolve_signals([*names,*explicit_candidate_mentions(text,index)],index)
+    unique=[]
+    keys=set()
+    for match in matches:
+        key=match.get('canonical_candidate_id') or (
+            'unmatched:'+str(match.get('source_name') or '').casefold())
+        if key in keys:continue
+        keys.add(key)
+        unique.append(match)
+    return unique
+
+
 def attach_candidate_ids(db,p,rows):
     idx=candidate_index(db,p)
     match_count=0
@@ -112,7 +127,7 @@ def attach_candidate_ids(db,p,rows):
     for row in rows:
         raw_signals=row.get('candidate_signals') or []
         explicit=explicit_candidate_mentions(row.get('text_content'),idx)
-        matches=resolve_signals([*raw_signals,*explicit],idx)
+        matches=resolve_post_candidate_mentions(raw_signals,row.get('text_content'),idx)
         row['candidate_text_match_method']='SAVED_SIGNALS_AND_EXPLICIT_FULL_NAME'
         row['candidate_text_mentions_unverified']=explicit
         row['candidate_identity_matches']=matches

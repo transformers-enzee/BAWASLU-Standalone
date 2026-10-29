@@ -64,7 +64,7 @@ def saved_classifications_for_posts(db, user_profile, posts):
         key=(campaign_id,result_id)
         if key in relevant and key not in decisions:
             decisions[key]=review.decision
-    from .candidate_registry import candidate_index, resolve_signals
+    from .candidate_registry import candidate_index, resolve_post_candidate_mentions
     scoped_candidate_index=candidate_index(db,user_profile)
     posts_by_id={post.id:post for post in posts}
     for (campaign_id,result_id),assessment in sorted(relevant.items()):
@@ -95,9 +95,14 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'sentiment_confidence':assessment.sentiment_confidence or '',
             'sentiment_explanation':assessment.sentiment_explanation or '',
             'sentiment_model':assessment.sentiment_model or '',
-            'candidate_identity_matches':resolve_signals(
+            'candidate_identity_matches':resolve_post_candidate_mentions(
                 _safe_candidate_signals(assessment.candidate_signals_json),
-                scoped_candidate_index),
+                post.text_content,scoped_candidate_index),
+            'candidate_classification':'MATCHED' if any(
+                match.get('canonical_candidate_id') for match in
+                resolve_post_candidate_mentions(
+                    _safe_candidate_signals(assessment.candidate_signals_json),
+                    post.text_content,scoped_candidate_index)) else 'NO_CANDIDATE',
             'incident_jurisdiction_review':location_review,
             'topic_labels':_safe_candidate_signals(assessment.topic_labels_json),
             'public_concern_signals':_safe_candidate_signals(assessment.public_concern_signals_json),

@@ -44,6 +44,15 @@ def jurisdiction_status(db,campaign_id,result_id,post):
         return {'decision':'STALE_SOURCE_CHANGED',
                 'incident_jurisdiction_verified':False}
     verified=row.decision=='CONFIRMED'
+    if verified:
+        latest=(db.query(EvidenceAssessment).filter_by(
+            campaign_id=int(campaign_id),result_id=int(result_id))
+            .order_by(EvidenceAssessment.assessment_version.desc(),
+                      EvidenceAssessment.id.desc()).first())
+        if not latest or str(latest.relevance_label or '').upper() not in (
+                'RELEVANT','HIGHLY_RELEVANT'):
+            return {'decision':'STALE_RELEVANCE_CHANGED',
+                    'incident_jurisdiction_verified':False}
     return {'decision':row.decision,
         'incident_province':row.province if verified else None,
         'incident_jurisdiction_verified':verified,

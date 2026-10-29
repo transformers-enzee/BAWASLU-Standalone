@@ -56,6 +56,23 @@ def eligible_source_rows(db,p,campaign,limit=MAX_SOURCE_ROWS):
     return rows,len(links)>limit
 
 
+def duplicate_source_rows(db,p,campaign,limit=MAX_SOURCE_ROWS):
+    """All authorized linked source text is eligible for exact duplicate checks.
+
+    Unlike incident/narrative classifications, exact textual duplication
+    requires no relevance label and never establishes a shared incident.
+    """
+    links=(db.query(CampaignEvidence).filter_by(campaign_id=campaign.id)
+           .order_by(CampaignEvidence.id.asc()).limit(limit+1).all())
+    rows=[]
+    for link in links[:limit]:
+        post=db.get(SocialListeningResult,link.result_id)
+        if post and _result_in_scope(db,p,post):
+            rows.append({'id':str(post.id),'campaign_id':str(campaign.id),
+                'text_content':post.text_content})
+    return rows,len(links)>limit
+
+
 def grouping_readiness(db,p,campaign):
     """Free, read-only acceptance coverage without inferring a negative finding.
 
@@ -99,9 +116,9 @@ def grouping_readiness(db,p,campaign):
     return coverage
 
 
-def grouping_candidate_counts(rows):
+def grouping_candidate_counts(rows,duplicate_rows=None):
     """Conservative zero-cost split between duplicates, incidents and narratives."""
-    proposals=propose_groups(rows)
+    proposals=propose_groups(rows,duplicate_rows)
     return {'exact_duplicates':sum(x['type']=='EXACT_DUPLICATE' for x in proposals),
         'incident_review_candidates':sum(x['type']=='INCIDENT_CANDIDATE' for x in proposals),
         'narrative_review_candidates':sum(x['type']=='NARRATIVE_CANDIDATE' for x in proposals),
@@ -109,9 +126,9 @@ def grouping_candidate_counts(rows):
         'requires_candidate_identity':False}
 
 
-def propose_groups(rows):
+def propose_groups(rows,duplicate_rows=None):
     proposals=[]
-    for group in exact_source_groups(rows):
+    for group in exact_source_groups(rows if duplicate_rows is None else duplicate_rows):
         proposals.append({'type':'EXACT_DUPLICATE','label':'Repeated normalized source content',
                           'source_ids':group['post_ids'],'incident_verified':False})
     for group in incident_cluster_candidates(rows):
@@ -148,7 +165,8 @@ def serialize_group(group):
 def current_group_keys(db,p,campaign):
     """Recompute proposals against current relevant evidence before approval."""
     rows,truncated=eligible_source_rows(db,p,campaign)
-    return {group_key(campaign.id,item) for item in propose_groups(rows)},truncated
+    duplicates,duplicate_truncated=duplicate_source_rows(db,p,campaign)
+    return {group_key(campaign.id,item) for item in propose_groups(rows,duplicates)},(truncated or duplicate_truncated)
 
 
 def visible_saved_groups(db,p,campaign):
@@ -174,6 +192,38 @@ def finding_group_action(db,p,action,data,id=None):
     campaign=campaign_for(db,p,id or data.get('campaign_id'))
     if action=='campaignFindingGroupsReadiness':
         return grouping_readiness(db,p,campaign)
+    if action=='campaignFindingGroupSources':
+        raw=data.get('group_id')
+        if not str(raw or '').isdigit():raise ValueError('Valid group ID required')
+        group=db.get(CampaignFindingGroup,int(raw))
+        if not group or group.campaign_id!=campaign.id:
+            raise PermissionError('Group unavailable')
+        visible={item['id'] for item in visible_saved_groups(db,p,campaign)}
+        if str(group.id) not in visible:
+            raise PermissionError('Group evidence is outside your authorized source scope')
+        source_ids=json.loads(group.source_ids_json or '[]')
+        sources=[]
+        for source_id in source_ids:
+            if not str(source_id).isdigit():
+                raise PermissionError('Invalid source reference')
+            post=db.get(SocialListeningResult,int(source_id))
+            link=db.query(CampaignEvidence).filter_by(
+                campaign_id=campaign.id,result_id=int(source_id)).first()
+            if not post or not link or not _result_in_scope(db,p,post):
+                raise PermissionError('Group evidence is no longer available')
+            assessment=(db.query(EvidenceAssessment).filter_by(
+                campaign_id=campaign.id,result_id=post.id)
+                .order_by(EvidenceAssessment.assessment_version.desc(),
+                          EvidenceAssessment.id.desc()).first())
+            sources.append({'id':str(post.id),'canonical_source_id':'social:'+str(post.id),
+                'text_content':post.text_content,'canonical_url':post.canonical_url,
+                'author_name':post.author_name,'published_at':str(post.published_at or ''),
+                'relevance_label':str(assessment.relevance_label or 'UNASSESSED')
+                    if assessment else 'UNASSESSED'})
+        return {'group_id':str(group.id),'group_type':group.group_type,
+            'sources':sources,'source_count':len(sources),
+            'evidence_review_status':group.review_status,'legal_violation_confirmed':False,
+            'paid_provider_called':False}
     if action=='campaignFindingGroupsList':
         saved=visible_saved_groups(db,p,campaign)
         return {'groups':saved,'count':len(saved),
@@ -182,18 +232,21 @@ def finding_group_action(db,p,action,data,id=None):
             'paid_provider_called':False}
     if action in ('campaignFindingGroupsPreview','campaignFindingGroupsSave'):
         rows,truncated=eligible_source_rows(db,p,campaign)
-        proposals=propose_groups(rows)
+        duplicates,duplicates_truncated=duplicate_source_rows(db,p,campaign)
+        proposals=propose_groups(rows,duplicates)
         readiness=grouping_readiness(db,p,campaign)
-        category_counts=grouping_candidate_counts(rows)
+        category_counts=grouping_candidate_counts(rows,duplicates)
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
             'readiness':readiness,
             'candidate_counts_by_type':category_counts,
+            'exact_duplicate_source_posts':len(duplicates),
+            'duplicate_scan_requires_ai':False,
             'no_matching_groups_is_valid':True,
             'zero_group_result_is_conclusive':readiness['zero_group_result_is_conclusive'],
             'grouping_evidence_missing_not_an_error':len(rows)==0,
             'relevant_post_coverage_warning':len(rows)<2,
             'manual_review_required':True,
-            'sample_window_limit':MAX_SOURCE_ROWS,'source_window_truncated':truncated,
+            'sample_window_limit':MAX_SOURCE_ROWS,'source_window_truncated':truncated or duplicates_truncated,
             'proposals':proposals[:MAX_GROUPS_PER_SAVE],
             'proposal_count':len(proposals),'shown_count':min(len(proposals),MAX_GROUPS_PER_SAVE),
             'max_groups_per_save':MAX_GROUPS_PER_SAVE,
@@ -220,7 +273,7 @@ def finding_group_action(db,p,action,data,id=None):
         for item in created:db.refresh(item)
         if created:audit(db,p,'CampaignFindingGroup',str(campaign.id),
             'PROVISIONAL_GROUPS_SAVED',{'count':len(created),
-                'source_window_truncated':truncated})
+                'source_window_truncated':truncated or duplicates_truncated})
         return {**summary,'newly_saved':len(created),
                 'already_saved':len(proposals[:MAX_GROUPS_PER_SAVE])-len(created),
                 'saved_group_ids':[str(row.id) for row in created]}

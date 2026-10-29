@@ -24,7 +24,9 @@ for(const marker of ['addCandidate','sentimentPie','stopTrack','candidateSearch'
  assert.ok(watch.includes(marker),'Watchlist prototype lacks '+marker);
 }
 assert.match(radarRoute,/smart-radar-v6_2\.html/);
-assert.match(watchRoute,/watchlist-v2_2\.html/);
+assert.match(watchRoute,/social-listening\?tab=watchlist/);
+assert.match(social,/watchlist-v2_2\.html/);
+assert.match(social,/Candidate Watchlist/);
 assert.match(smartBridge,/\/api\/smart-radar\/dashboard/);
 assert.match(smartBridge,/\/api\/smart-radar\/finding/);
 assert.match(smartBridge,/\/api\/smart-radar\/decision/);

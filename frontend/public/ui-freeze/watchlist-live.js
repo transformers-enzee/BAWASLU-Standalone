@@ -4,6 +4,7 @@
   const $=selector=>document.querySelector(selector);
   const token=()=>localStorage.getItem('bawaslu_access_token')||'';
   const campaignId=new URLSearchParams(window.location.search).get('campaign_id');
+  if(campaignId)document.documentElement.classList.add('campaign-embedded');
   let permitted=false,loading=new Set(),loaded=new Set();
   const safeUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:''}catch{return ''}};
   async function registry(action,data={},id=null){

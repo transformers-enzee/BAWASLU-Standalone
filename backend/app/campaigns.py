@@ -481,7 +481,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         rationale=str(payload.get('rationale') or '').strip()
         if not 10<=len(rationale)<=1500:
             raise ValueError('Rationale must contain 10 to 1500 characters')
-        latest=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
+        # A sentiment-only version must not hide an earlier human decision.
+        latest=(db.query(EvidenceReview)
+                .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                .filter(EvidenceAssessment.campaign_id==campaign.id,
+                        EvidenceAssessment.result_id==item.id,
+                        EvidenceReview.decision.in_(
+                            ('FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION')))
                 .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
         if latest and latest.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION'):
             raise ValueError('Existing active flag must be reviewed before flagging again')
@@ -527,7 +533,12 @@ def campaign_action(db:Session,p,action,data,id=None):
         try: raw_signals=json.loads(assessment.potential_issue_signals_json or '[]')
         except (TypeError,ValueError): raw_signals=[]
         valid_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
-        latest_manual=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
+        latest_manual=(db.query(EvidenceReview)
+                       .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                       .filter(EvidenceAssessment.campaign_id==campaign.id,
+                               EvidenceAssessment.result_id==item.id,
+                               EvidenceReview.decision.in_(
+                                   ('FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION')))
                        .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
         manual_pending=bool(latest_manual and latest_manual.decision=='FURTHER_INVESTIGATION'
                             and (latest_manual.rationale or '').startswith('[Manual flag: '))
@@ -689,7 +700,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         active_categories={x.id:x.name for x in active_category_rows}
         from .models import IssueCategoryPhrase
         active_phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True).all()
-        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
+        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'keyword_review_lead_posts':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
         reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
@@ -741,8 +752,13 @@ def campaign_action(db:Session,p,action,data,id=None):
                 from .issue_signals import validated_issue_signals, rejected_issue_signal_reasons, rejected_issue_type_summary, phrase_screening_candidates
                 raw_signals=parse_list(assessment.potential_issue_signals_json)
                 issue_signals=validated_issue_signals(raw_signals,active_categories,item.text_content)
-                if not issue_signals:
-                    issue_signals=phrase_screening_candidates(item.text_content,active_category_rows,active_phrases)
+                # Keyword matches are provisional leads, not independently
+                # validated AI violation signals and never auto-flag posts.
+                issue_review_leads=(phrase_screening_candidates(
+                    item.text_content,active_category_rows,active_phrases)
+                    if not issue_signals else [])
+                if issue_review_leads:
+                    violation_diagnostics['keyword_review_lead_posts']+=1
                 violation_diagnostics['assessed_relevant']+=1
                 violation_diagnostics['raw_signals']+=len(raw_signals)
                 violation_diagnostics['accepted_signals']+=len(issue_signals)
@@ -783,10 +799,15 @@ def campaign_action(db:Session,p,action,data,id=None):
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
                     'author_name':item.author_name,'published_at':item.published_at,
-                    'engagement_total':captured_engagement,'views':captured_views,'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
+                    'engagement_total':captured_engagement,'views':captured_views,
+                    'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
+                    'sentiment_confidence':assessment.sentiment_confidence or '',
+                    'sentiment_explanation':assessment.sentiment_explanation or '',
+                    'sentiment_model':assessment.sentiment_model or '',
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
-                    'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
+                    'candidate_signals':parse_list(assessment.candidate_signals_json),
+                    'potential_issues':issue_signals,'issue_review_leads':issue_review_leads,
                     'processing_hints':{**processing,'triage_disposition':__import__('app.processing_hints',fromlist=['triage_disposition']).triage_disposition(item.text_content,assessment.relevance_label)},
                     'normalized_candidate_names':__import__('app.processing_hints',fromlist=['normalize_candidate_signals']).normalize_candidate_signals(parse_list(assessment.candidate_signals_json)),'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,

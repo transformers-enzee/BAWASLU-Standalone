@@ -88,11 +88,15 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'model_version':assessment.model_version,
             'relevance_label':assessment.relevance_label,
             'sentiment':str(assessment.sentiment or 'UNCLASSIFIED').upper(),
+            'sentiment_confidence':assessment.sentiment_confidence or '',
+            'sentiment_explanation':assessment.sentiment_explanation or '',
+            'sentiment_model':assessment.sentiment_model or '',
             'potential_issues':signals,
             'signal_source':source,
             'review_status':decision,
-            'is_flagged':not dismissed and (bool(signals) or
-                         decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')),
+            'is_flagged':not dismissed and (
+                (source=='SAVED_ASSESSMENT' and bool(signals)) or
+                decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')),
             'human_validation_required':True,
             'assessment_persisted':True,
         })

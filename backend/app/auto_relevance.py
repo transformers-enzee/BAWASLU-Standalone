@@ -201,8 +201,13 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         for link in links:
             if target_result_id is not None and link.result_id!=int(target_result_id):continue
             if used>=limit: break
-            exists=db.query(EvidenceAssessment.id).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
-            if (exists and not reanalysis) or (reanalysis and not exists):continue
+            from .sentiment_processing import relevance_is_assessed, sentiment_is_assessed
+            previous=(db.query(EvidenceAssessment).filter_by(
+                campaign_id=campaign.id,result_id=link.result_id)
+                .order_by(EvidenceAssessment.assessment_version.desc(),
+                          EvidenceAssessment.id.desc()).first())
+            already_relevant=relevance_is_assessed(previous)
+            if (already_relevant and not reanalysis) or (reanalysis and not already_relevant):continue
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if job and (job.state=='PROCESSING' or (job.state=='COMPLETED' and not reanalysis)):continue
             if job and job.attempts>=3 and not reanalysis:continue
@@ -278,12 +283,29 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 reported=validated_reported_incident_signals(
                     out.get('reported_incident_signals'),category_names,item.text_content)
                 signals.extend(reported)
-                record=EvidenceAssessment(campaign_id=campaign.id,result_id=item.id,assessment_version=(db.query(EvidenceAssessment.assessment_version).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc()).first()[0]+1 if reanalysis else 1),
+                # A standalone sentiment analysis can precede relevance assessment.
+                # Preserve that confirmed, paid annotation and append a new version
+                # without re-billing or erasing the independent classification.
+                if previous and sentiment_is_assessed(previous) and not reanalysis:
+                    saved_sentiment=str(previous.sentiment or 'UNCLASSIFIED').upper()
+                    sentiment_data={
+                        'sentiment':saved_sentiment if saved_sentiment in
+                            ('POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED') else 'UNCLASSIFIED',
+                        'sentiment_confidence':previous.sentiment_confidence or 'LOW',
+                        'sentiment_explanation':previous.sentiment_explanation or '',
+                        'sentiment_model':previous.sentiment_model or previous.model_version or ''}
+                else:
+                    # Even a malformed/uncertain provider label used a paid call.
+                    # Record the attempt so UNCLASSIFIED will not be re-billed.
+                    sentiment_data['sentiment_model']=model
+                record=EvidenceAssessment(
+                    campaign_id=campaign.id,result_id=item.id,
+                    assessment_version=previous.assessment_version+1 if previous else 1,
                     model_version=model,relevance_label=label,relevance_confidence=confidence,
                     sentiment=sentiment_data['sentiment'],
                     sentiment_confidence=sentiment_data['sentiment_confidence'],
                     sentiment_explanation=sentiment_data['sentiment_explanation'],
-                    sentiment_model=model if sentiment_data['valid'] else '',
+                    sentiment_model=sentiment_data['sentiment_model'],
                     explanation=str(out.get('explanation') or '')[:1200],candidate_signals_json=json.dumps(strings('candidates')),
                     geographic_signals_json=json.dumps(structured_location_signals(out.get('locations'))),
                     potential_issue_signals_json=json.dumps(signals))

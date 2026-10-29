@@ -33,6 +33,12 @@ def sentiment_is_assessed(record):
     model=str(getattr(record,'sentiment_model','') or '').strip()
     return bool(model) or label in ('POSITIVE','NEUTRAL','NEGATIVE')
 
+def relevance_is_assessed(record):
+    """Sentiment-only annotations must not suppress the main AI assessment."""
+    return bool(record and str(getattr(record,'relevance_label','') or '').upper()
+                in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'))
+
+
 def latest_saved_sentiments(db,campaign_id):
     """One bulk DB query for the latest annotation per campaign post."""
     from .models import EvidenceAssessment

@@ -159,3 +159,29 @@ def test_keyword_topics_do_not_infer_reputation_from_generic_bawaslu_mention():
     assert greeting['topic_suggestions']==[]
     election=source_hints('KPU memulai pengawasan pemilu di Jawa Timur')
     assert 'Electoral Operations' in election['topic_suggestions']
+
+def test_candidate_whitespace_is_normalized_without_merging_distinct_people():
+    from app.processing_hints import normalize_candidate_signals
+    result=normalize_candidate_signals(['  Gibran   Rakabuming  Raka  ',
+        'Gibran Rakabuming Raka', 'Gibran Another Person'])
+    assert result==['Gibran Rakabuming Raka','Gibran Another Person']
+
+def test_issue_phrase_matching_recognizes_word_boundaries_without_confirming_violation():
+    from app.processing_hints import classification_evidence
+    result=classification_evidence('Ada dugaan pelanggaran dan politik uang.')
+    assert result['potential_issue_phrase_matches']==['dugaan pelanggaran','politik uang']
+    assert result['potential_violation_confirmed'] is False
+    assert classification_evidence('bukanpolitik uangan')['potential_issue_phrase_matches']==[]
+
+def test_summary_duplicate_groups_match_transitive_source_components():
+    from app.processing_hints import summarize_scoped_findings
+    records=[
+        {'id':'1','campaign_id':'1','canonical_url':'https://a.test/a','text_content':'same'},
+        {'id':'2','campaign_id':'1','canonical_url':'https://a.test/b','text_content':' SAME '},
+        {'id':'3','campaign_id':'1','canonical_url':'https://a.test/b','text_content':'different'},
+        {'id':'4','campaign_id':'2','canonical_url':'https://a.test/b','text_content':'same'},
+    ]
+    summary=summarize_scoped_findings(records)
+    assert summary['exact_duplicate_groups']==[
+        {'campaign_id':'1','source_ids':['1','2','3'],'basis':'EXACT_URL_OR_TEXT'}]
+    assert summary['exact_source_groups'][0]['incident_verified'] is False

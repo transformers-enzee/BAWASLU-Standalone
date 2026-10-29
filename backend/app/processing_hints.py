@@ -52,7 +52,7 @@ def normalize_candidate_signals(signals):
             name=signal.get('name') or signal.get('value') or ''
         else:
             continue
-        clean=re.sub(r'\\s+',' ',str(name)).strip()
+        clean=re.sub(r'\s+',' ',str(name)).strip()
         if not clean:continue
         canonical=next((person for person,aliases in CANDIDATE_ALIASES.items()
             if clean.casefold() in aliases),clean)
@@ -63,7 +63,7 @@ def classification_evidence(text):
     """Issue terminology is a review cue, never a finding or legal verdict."""
     value=str(text or '')
     terms=('dugaan pelanggaran','laporan pelanggaran','sengketa pemilu','politik uang','kecurangan pemilu')
-    matches=[term for term in terms if re.search(r'(?<!\\w)'+re.escape(term)+r'(?!\\w)',value.casefold())]
+    matches=[term for term in terms if re.search(r'(?<!\w)'+re.escape(term)+r'(?!\w)',value.casefold())]
     return {'potential_issue_phrase_matches':matches,
             'potential_violation_confirmed':False,
             'needs_human_validation':bool(matches),
@@ -195,8 +195,8 @@ def summarize_scoped_findings(records):
             players['Needs Attention'].append({**key,'status':'PENDING_HUMAN_TRIAGE'})
         # Text alone cannot prove a public concern or an emerging narrative.
         # Those players intentionally remain empty until supporting assessments exist.
-    duplicates=[{'campaign_id':key[0],'source_ids':ids,'basis':'EXACT_URL_OR_TEXT'}
-        for key,ids in buckets.items() if len(ids)>1]
+    duplicates=[{'campaign_id':group['campaign_id'],'source_ids':group['post_ids'],
+                 'basis':'EXACT_URL_OR_TEXT'} for group in exact_source_groups(records)]
     return {'visible_relevant_count':len(records),
         'classification_contracts':[classification_contract(x) for x in records],
         'exact_source_groups':exact_source_groups(records),

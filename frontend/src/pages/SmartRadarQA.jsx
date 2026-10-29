@@ -54,6 +54,11 @@ const wording={
 const bx='rounded-lg border border-slate-200 p-4 bg-white';
 const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white';
 
+function LineageClosureAudit(){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function inspect(){setBusy(true);setError('');try{const res=await fetch('/api/source-lineage/crosswalk-status',{cache:'no-store',headers:{Authorization:'Bearer '+token()}});const d=await res.json().catch(()=>({}));if(!res.ok)throw new Error(d.detail||'Source audit unavailable');setData(d);}catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"><h2 className="font-semibold">#13 — Historical Radar / Social Listening lineage audit (free)</h2><p className="text-sm text-slate-600">Read-only source-identity check. No AI credits, officer decisions, source merging or Smart Radar layout changes. An absent exact match is not evidence that the two datasets refer to the same post.</p><button type="button" className="intel-ghost" disabled={busy} onClick={inspect}>{busy?'Checking…':'Check source crosswalk (free)'}</button>{error&&<p role="alert" className="text-sm text-red-700">{error}</p>}{data&&<div className="text-sm space-y-1"><p>Historical pilot URLs: {data.pilot_source_url_count}; visible Social URLs: {data.social_source_url_count}</p><p>Exact URL overlaps: <b>{data.exact_url_overlap_count}</b> · Automatically linked: <b>{data.auto_linked_count}</b></p><p>Result: <b>{data.status}</b></p><p>Historical assessment reuse permitted: {data.assessment_reuse_permitted?'Yes':'No — identity verification required'}</p></div>}</section>;
+}
 function PaidPilotControls(){
  const [busy,setBusy]=useState(''),[note,setNote]=useState(''),[audit,setAudit]=useState(null);
  const auth=()=>({Authorization:'Bearer '+token(),'Content-Type':'application/json'});
@@ -125,6 +130,7 @@ export default function SmartRadarQA(){
  const canReview=Boolean(access?.permissions?.review_ai_suggestions||access?.permissions?.administration);
  if(!canReview)return <p className="p-6 text-red-700">{t('access')}</p>;
  return <div className="max-w-[1400px] mx-auto space-y-5">\n   {canImport&&<PaidPilotControls/>}
+   {canImport&&<LineageClosureAudit/>}
    <div className="rounded-xl bg-gradient-to-r from-[#16364a] to-[#147968] text-white px-6 py-5 flex flex-wrap gap-4 justify-between items-center">
     <div><Link to="/" className="text-xs text-white/80 inline-flex gap-1 items-center"><ArrowLeft size={14}/>{t('back')}</Link>
      <h1 className="font-semibold text-2xl mt-2 flex items-center gap-2"><FlaskConical/> {t('title')}</h1>

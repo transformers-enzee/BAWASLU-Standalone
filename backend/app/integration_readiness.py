@@ -82,6 +82,19 @@ METRICS={
   COUNT(*) FILTER(WHERE NULLIF(TRIM(s.platform),'') IS NULL) AS missing_platform,
   COUNT(*) FILTER(WHERE NULLIF(TRIM(s.author_name),'') IS NULL) AS missing_author
   FROM campaign_evidence ce JOIN social_listening_results s ON s.id=ce.result_id""",
+ "incident_jurisdiction_readiness": """SELECT COUNT(*) AS linked_posts,
+  COUNT(*) FILTER(WHERE r.query_json IS NULL OR NULLIF(TRIM(r.query_json),'') IS NULL OR COALESCE(r.query_json::jsonb->>'province','')='') AS unscoped_collection_posts,
+  COUNT(*) FILTER(WHERE COALESCE(r.query_json::jsonb->>'province','')<>'') AS province_scoped_collection_posts,
+  COUNT(*) FILTER(WHERE s.geography_json IS NULL OR TRIM(s.geography_json) IN ('','{}','null')) AS without_structured_geography
+  FROM campaign_evidence ce
+  JOIN social_listening_results s ON s.id=ce.result_id
+  LEFT JOIN social_listening_runs r ON r.id=s.run_id""",
+ "current_assessment_coverage": """SELECT COUNT(*) AS latest_assessments,
+  COUNT(*) FILTER(WHERE a.relevance_label IN ('RELEVANT','HIGHLY_RELEVANT')) AS latest_relevant,
+  COUNT(*) FILTER(WHERE a.sentiment IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS latest_sentiment_classified,
+  COUNT(*) FILTER(WHERE a.geographic_signals_json IS NOT NULL AND TRIM(a.geographic_signals_json) NOT IN ('','[]','null')) AS latest_with_location_signals
+  FROM evidence_assessments a
+  WHERE a.id IN (SELECT MAX(id) FROM evidence_assessments GROUP BY campaign_id,result_id)""",
  "campaign_duplicate_urls": """SELECT COUNT(*) AS duplicate_url_groups FROM (
   SELECT LOWER(TRIM(s.canonical_url)) FROM campaign_evidence ce JOIN social_listening_results s ON s.id=ce.result_id
   WHERE NULLIF(TRIM(s.canonical_url),'') IS NOT NULL

@@ -71,7 +71,7 @@ export default function IntegrationReadiness() {
     </section>}
     {metrics && <section className="bg-white border rounded-xl p-4 space-y-3">
       <h2 className="font-semibold text-lg">Classification and processing quality</h2>
-      <p className="text-xs text-slate-600">Read-only counts of saved records. No paid AI calls, inferred sentiment, or verified jurisdiction are implied. Job attempts are not token-cost accounting.</p>
+      <p className="text-xs text-slate-600">Read-only counts of saved records. Collection scope and AI location signals are not confirmed incident jurisdiction. No paid AI calls or inferred sentiment are implied. Job attempts are not token-cost accounting.</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div><p className="text-slate-500">Saved assessments</p><p className="text-xl font-semibold">{metrics.assessment_quality?.total ?? '—'}</p></div>
         <div><p className="text-slate-500">AI-relevant</p><p className="text-xl font-semibold">{metrics.assessment_quality?.relevant ?? '—'}</p></div>
@@ -79,6 +79,10 @@ export default function IntegrationReadiness() {
         <div><p className="text-slate-500">Potential issue signals absent</p><p className="text-xl font-semibold">{metrics.assessment_quality?.no_potential_issue_signals ?? '—'}</p></div>
         <div><p className="text-slate-500">Campaign evidence links</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.linked ?? '—'}</p></div>
         <div><p className="text-slate-500">Missing campaign source URLs</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.missing_url ?? '—'}</p></div>
+        <div><p className="text-slate-500">Unscoped collection posts</p><p className="text-xl font-semibold">{metrics.incident_jurisdiction_readiness?.unscoped_collection_posts ?? '—'}</p></div>
+        <div><p className="text-slate-500">Posts without structured geography</p><p className="text-xl font-semibold">{metrics.incident_jurisdiction_readiness?.without_structured_geography ?? '—'}</p></div>
+        <div><p className="text-slate-500">Latest assessed posts</p><p className="text-xl font-semibold">{metrics.current_assessment_coverage?.latest_assessments ?? '—'}</p></div>
+        <div><p className="text-slate-500">Latest assessed with sentiment</p><p className="text-xl font-semibold">{metrics.current_assessment_coverage?.latest_sentiment_classified ?? '—'}</p></div>
         <div><p className="text-slate-500">Duplicate source URL groups</p><p className="text-xl font-semibold">{metrics.campaign_duplicate_urls?.duplicate_url_groups ?? '—'}</p></div>
         <div><p className="text-slate-500">Relevant posts awaiting sentiment</p><p className="text-xl font-semibold">{metrics.assessment_coverage?.relevant_without_sentiment ?? '—'}</p></div>
         <div><p className="text-slate-500">Posts with incident-location signals</p><p className="text-xl font-semibold">{metrics.assessment_coverage?.posts_with_location_signals ?? '—'}</p></div>

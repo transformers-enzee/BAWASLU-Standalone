@@ -251,3 +251,18 @@ def test_v93_0_sidebar_health_and_frontend_versions_agree():
     assert "useState({build_version:null})" in nav
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
     assert 'v93.0' in shell
+
+
+def test_v93_1_jurisdiction_audit_separates_collection_scope_from_incident_assignment():
+    from app import integration_readiness
+    metrics=integration_readiness.METRICS
+    assert "incident_jurisdiction_readiness" in metrics
+    assert "unscoped_collection_posts" in metrics["incident_jurisdiction_readiness"]
+    assert "without_structured_geography" in metrics["incident_jurisdiction_readiness"]
+    assert "current_assessment_coverage" in metrics
+    assert "GROUP BY campaign_id,result_id" in metrics["current_assessment_coverage"]
+    page=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
+    assert 'not confirmed incident jurisdiction' in page
+    assert 'v93.1' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    from app import main
+    assert main.health()['build_version']=='93.1'

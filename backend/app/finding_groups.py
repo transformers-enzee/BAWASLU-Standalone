@@ -99,6 +99,16 @@ def grouping_readiness(db,p,campaign):
     return coverage
 
 
+def grouping_candidate_counts(rows):
+    """Conservative zero-cost split between duplicates, incidents and narratives."""
+    proposals=propose_groups(rows)
+    return {'exact_duplicates':sum(x['type']=='EXACT_DUPLICATE' for x in proposals),
+        'incident_review_candidates':sum(x['type']=='INCIDENT_CANDIDATE' for x in proposals),
+        'narrative_review_candidates':sum(x['type']=='NARRATIVE_CANDIDATE' for x in proposals),
+        'total':len(proposals),'legal_findings_verified':0,
+        'requires_candidate_identity':False}
+
+
 def propose_groups(rows):
     proposals=[]
     for group in exact_source_groups(rows):
@@ -174,8 +184,10 @@ def finding_group_action(db,p,action,data,id=None):
         rows,truncated=eligible_source_rows(db,p,campaign)
         proposals=propose_groups(rows)
         readiness=grouping_readiness(db,p,campaign)
+        category_counts=grouping_candidate_counts(rows)
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
             'readiness':readiness,
+            'candidate_counts_by_type':category_counts,
             'no_matching_groups_is_valid':True,
             'zero_group_result_is_conclusive':readiness['zero_group_result_is_conclusive'],
             'grouping_evidence_missing_not_an_error':len(rows)==0,

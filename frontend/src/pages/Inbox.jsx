@@ -13,6 +13,7 @@ function SocialEvidenceInbox(){
  const deepLink=new URLSearchParams(window.location.search);
  const requestedCampaign=deepLink.get('campaign_id')||'';
  const requestedPost=deepLink.get('result_id')||'';
+ const [processingSummary,setProcessingSummary]=useState(null);
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const watchBaseline=useRef(null);
@@ -25,7 +26,7 @@ function SocialEvidenceInbox(){
   const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
   if(found)setSelected(found);
  }
- setIssueCategories(r.data.issue_categories||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'')})
+ setIssueCategories(r.data.issue_categories||[]);setCampaigns(r.data.campaigns||[]);setUnassessed(r.data.unassessed_count||0);setAssessmentCounts(r.data.assessment_counts||null);setViolationDiagnostics(r.data.violation_diagnostics||null);setJobCounts(r.data.job_counts||null);setReconciliation(r.data.reconciliation||null);setProcessingStatus(r.data.processing_status||'');setProcessingSummary(r.data.classification_processing||null)})
  .catch(e=>{if(active)setError(e.response?.data?.detail||e.message||'Inbox unavailable')})
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
@@ -40,7 +41,7 @@ function SocialEvidenceInbox(){
     const payload=response.data||{};
     setFindings(payload.findings||[]);setAssessmentCounts(payload.assessment_counts||null);setViolationDiagnostics(payload.violation_diagnostics||null);
     setJobCounts(payload.job_counts||null);setUnassessed(payload.unassessed_count||0);
-    setReconciliation(payload.reconciliation||null);setProcessingStatus(payload.processing_status||'');
+    setReconciliation(payload.reconciliation||null);setProcessingStatus(payload.processing_status||'');setProcessingSummary(payload.classification_processing||null);
     setWatchSnapshot(payload.job_counts||{});
     const current=payload.job_counts||{},previous=watchBaseline.current;
     if(previous&&((current.COMPLETED||0)>(previous.COMPLETED||0)||(current.FAILED||0)>(previous.FAILED||0))){
@@ -170,6 +171,12 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
+  {processingSummary&&<section className="intel-card p-3 space-y-2" aria-label="Five intelligence player screening snapshot">
+   <div className="flex flex-wrap justify-between gap-2"><h3 className="text-sm font-semibold">Five Intelligence Players · saved evidence screening</h3><span className="text-[11px] text-slate-500">Authorized assessed posts · snapshot at last refresh</span></div>
+   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">{['Potential Violations','Public Concerns','Emerging Narratives','Needs Attention','Reviewed History'].map(name=><div key={name} className="rounded-md bg-slate-50 p-2"><p className="text-[11px] text-slate-600">{name}</p><p className="font-semibold tabular-nums">{processingSummary.intelligence_players?.[name]?.count??0}</p></div>)}</div>
+   <p className="text-[11px] text-slate-500">Counts are provisional saved-evidence screening, not verified incidents or legal findings. Emerging Narratives and Public Concerns require human review. No AI call is made to display these results.</p>
+   <details className="text-xs"><summary className="cursor-pointer font-semibold">Coverage and evidence diagnostics</summary><p className="mt-2 text-slate-600">Missing source URLs: {processingSummary.processing_diagnostics?.missing_field_counts?.canonical_url??0} · Unclassified sentiment: {processingSummary.processing_diagnostics?.missing_field_counts?.sentiment??0} · Attention cues with a source quote: {processingSummary.processing_diagnostics?.posts_with_source_quoted_attention_evidence??0} · Officer follow-up requested: {processingSummary.processing_diagnostics?.human_follow_up_requested??0}. Model usage and costs are not available in this snapshot.</p></details>
+  </section>}
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-stretch">

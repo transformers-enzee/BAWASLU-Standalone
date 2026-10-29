@@ -442,8 +442,15 @@ def registry_action(db:Session,p,action,data,id=None):
             province=p.get('province') or ''
         if scope!='Nationwide' and not province: raise ValueError('Province required')
         if scope=='Regency/City' and not city: raise ValueError('Regency / City required')
-        perms=data.get('permissions') or default_permissions(role)
-        perms={k:bool(perms.get(k,False)) for k in PERMISSION_LABELS}
+        # Omitted permissions use the selected role's defaults. An explicitly
+        # empty object means revoke all permissions; never silently re-grant.
+        if 'permissions' in data:
+            raw_permissions=data['permissions']
+            if not isinstance(raw_permissions,dict):
+                raise ValueError('Permissions must be an object')
+        else:
+            raw_permissions=default_permissions(role)
+        perms={key:raw_permissions.get(key) is True for key in PERMISSION_LABELS}
         for key,enabled in perms.items():
             if enabled and not p.get('permissions',{}).get(key,False):
                 raise PermissionError('Cannot delegate a permission the administrator does not hold')

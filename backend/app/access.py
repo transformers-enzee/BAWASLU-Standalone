@@ -29,8 +29,13 @@ def default_permissions(role):
 def profile(db:Session,user:User):
     grant=db.query(AccessGrant).filter(AccessGrant.user_id==user.id).one_or_none()
     role=grant.access_role if grant else 'Viewer'
-    perms=json.loads(grant.permissions_json or '{}') if grant else {}
-    if not perms: perms=default_permissions(role)
+    # An explicitly empty or malformed grant must never restore role defaults.
+    # Defaults are used when creating an assignment, not when enforcing one.
+    try:
+        raw_permissions=json.loads(grant.permissions_json) if grant else None
+    except (ValueError,TypeError):
+        raw_permissions=None
+    perms={key:raw_permissions.get(key) is True for key in PERMISSION_LABELS} if isinstance(raw_permissions,dict) else {}
     province=grant.province if grant else ''
     regency_city=grant.regency_city if grant else ''
     province_code,regency_city_code=profile_region_codes(province,regency_city)

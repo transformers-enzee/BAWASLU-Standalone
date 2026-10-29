@@ -51,12 +51,11 @@ def crosswalk_status(user:User=Depends(current_user),db:Session=Depends(get_db))
     if not has(p,"view_intelligence") or p.get("geographic_scope")!="Nationwide":
         raise HTTPException(403,"Nationwide intelligence access required")
     from .smart_radar import fetch_sources
-    from sqlalchemy import func
     # Exact URL is necessary for automatic identity; even then human verification
     # is required before reusing any prior assessment as historical pilot evidence.
     pilot_urls={str(x.get("source_url") or "").strip() for x in fetch_sources(db)}
     pilot_urls.discard("")
-    social_urls={str(row[0]).strip() for row in db.query(SocialListeningResult.canonical_url).filter(SocialListeningResult.canonical_url.isnot(None)).all()}
+    social_urls={str(row.canonical_url).strip() for row in db.query(SocialListeningResult).filter(SocialListeningResult.canonical_url.isnot(None)).all() if _result_in_scope(db,p,row)}
     overlap=pilot_urls.intersection(social_urls)
     return {"pilot_source_url_count":len(pilot_urls),"social_source_url_count":len(social_urls),
             "exact_url_overlap_count":len(overlap),"auto_linked_count":0,

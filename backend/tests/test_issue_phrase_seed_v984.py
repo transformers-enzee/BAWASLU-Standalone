@@ -29,6 +29,7 @@ def test_seed_initializes_active_phrases_only_once():
         assert created==10
         assert db.query(IssueCategoryPhrase).count()==10
         assert all(row.active for row in db.query(IssueCategoryPhrase))
+        db.commit()  # Queries opened a read transaction; start a clean second transaction.
         with db.begin():
             assert seed_default_issue_phrases(db.connection())==0
         assert db.query(IssueCategoryPhrase).count()==10

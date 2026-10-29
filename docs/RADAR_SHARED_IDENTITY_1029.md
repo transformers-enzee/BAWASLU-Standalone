@@ -1,0 +1,3 @@
+# v102.9 shared identity and officer visibility
+
+Future Smart Radar records from Intelligence Inbox carry the original canonical social source ID and an explicit shared-social-source namespace; legacy Radar pilot IDs are never guessed. Officers can view all records in the selected Inbox feed rather than a silent first-12-row cap. UI no longer implies that saved evidence is independently verified. This removes two acceptance hazards, but does not create historical dataset matches or human review. Original #13 historical lineage remains not fully accepted (zero URL/text matches); #12 and #14 also remain open.

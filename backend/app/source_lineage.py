@@ -84,6 +84,8 @@ def inbox_radar_feed(campaign_id:str,user:User=Depends(current_user),db:Session=
             continue
         entries.append({
           'canonical_source_id':'social:'+source_id,
+          'source_identity_namespace':'social',
+          'cross_module_lineage':'SHARED_SOCIAL_SOURCE_ID',
           'campaign_id':str(campaign_id),
           'assessment_version':row.get('assessment_version'),
           'relevance_label':row.get('relevance_label'),

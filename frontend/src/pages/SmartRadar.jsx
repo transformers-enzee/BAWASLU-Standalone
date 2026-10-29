@@ -44,12 +44,12 @@ export default function SmartRadar(){
   <div className="bg-white border-b border-[#dce5ea] px-5 py-2"><label className="text-xs text-[#122f46]" htmlFor="radar-campaign">Intelligence Inbox campaign: </label><select id="radar-campaign" aria-label="Intelligence Inbox campaign" className="border rounded px-2 py-1 text-xs" value={validCampaign?campaignId:''} onChange={event=>{const p=new URLSearchParams(params);if(event.target.value)p.set('campaign_id',event.target.value);else p.delete('campaign_id');setParams(p);}}><option value="">Historical Radar pilot (no campaign selected)</option>{campaigns.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></div>
   {validCampaign&&<div className="border-b border-[#dce5ea] bg-white px-5 py-3 text-sm">
    <div className="font-semibold text-[#122f46]">Intelligence Inbox evidence feed · Campaign {campaignId}</div>
-   <div className="text-xs text-[#526575]">Verified social-source assessments; legacy Radar pilot records remain separate.</div>
+   <div className="text-xs text-[#526575]">Saved campaign-scoped social-source assessments (not independently verified findings); legacy Radar pilot records remain separate.</div>
    {state.loading&&<div role="status">Loading saved assessment evidence…</div>}
    {state.error&&<div role="alert">Unable to load campaign evidence: {state.error}. No alternate or pilot data is substituted for this campaign.</div>}
-   {state.data&&<div role="status">{entries.length} saved relevant assessments available to Smart Radar.</div>}
+   {state.data&&<div role="status">{entries.length} saved relevant assessments available to Smart Radar. Shared social-source IDs are reused across modules without implying historical Radar pilot matches.</div>}
    {state.data&&<div className="mt-2 flex gap-2"><button type="button" onClick={()=>setPerspective('inbox')} aria-pressed={perspective==='inbox'} className="rounded border px-3 py-1">Inbox evidence</button><button type="button" onClick={()=>setPerspective('pilot')} aria-pressed={perspective==='pilot'} className="rounded border px-3 py-1">Historic Radar pilot</button></div>}
-   {entries.length>0&&perspective==='inbox'&&<div className="mt-2 flex flex-wrap gap-2">{entries.slice(0,12).map(x=>
+   {entries.length>0&&perspective==='inbox'&&<div className="mt-2 flex flex-wrap gap-2">{entries.map(x=>
     <a key={x.canonical_source_id} href={'/inbox?campaign_id='+encodeURIComponent(campaignId)+'&result_id='+encodeURIComponent(x.canonical_source_id.slice(7))}
      className="rounded border border-[#dce5ea] px-2 py-1 text-xs text-[#174663]">
      {x.canonical_source_id} · v{x.assessment_version||'?'} · {(x.topic_labels||[]).join(', ')||'No topic'}

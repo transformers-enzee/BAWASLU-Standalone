@@ -53,6 +53,15 @@ const wording={
 };
 const bx='rounded-lg border border-slate-200 p-4 bg-white';
 const input='w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white';
+
+function PaidPilotControls(){
+ const [busy,setBusy]=useState(''),[note,setNote]=useState(''),[audit,setAudit]=useState(null);
+ const auth=()=>({Authorization:'Bearer '+token(),'Content-Type':'application/json'});
+ async function request(path,body){const res=await fetch(path,{method:body?'POST':'GET',cache:'no-store',headers:auth(),...(body?{body:JSON.stringify(body)}:{})});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(typeof data.detail==='string'?data.detail:'Operation unavailable');return data;}
+ async function check(){setBusy('status');setNote('');try{const d=await request('/api/smart-radar/qa/tuning/exemplar-audit?version_id=18');setAudit(d);}catch(e){setNote(e.message);}finally{setBusy('');}}
+ async function run(type){if(!window.confirm(type==='summary'?'Generate ONE paid source-grounded Smart Radar topic summary?':'Run up to THREE paid v18 Shahrin reference evaluations?'))return;setBusy(type);setNote('');try{const d=type==='summary'?await request('/api/smart-radar/summarize-topic',{}):await request('/api/smart-radar/qa/tuning/exemplar-audit/run',{version_id:18,limit:3,retry_failed:false});setNote(JSON.stringify(d));if(type==='audit')await check();}catch(e){setNote(e.message)}finally{setBusy('')}}
+ return <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"><h2 className="font-semibold">Administrator-only paid AI verification · #12 / #14</h2><p className="text-sm text-slate-600">No AI requests occur on page load. Each confirmed click runs one protected operation; server permissions, cost gates and rate limits apply. Historical Smart Radar V6.2 is unchanged.</p><div className="flex flex-wrap gap-3"><button type="button" className="intel-button" disabled={!!busy} onClick={()=>run('summary')}>Generate 1 Radar topic summary (#12)</button><button type="button" className="intel-button" disabled={!!busy} onClick={()=>run('audit')}>Evaluate up to 3 v18 cases (#14)</button><button type="button" className="intel-ghost" disabled={!!busy} onClick={check}>Read v18 audit status (free)</button></div>{audit&&<pre className="text-xs whitespace-pre-wrap max-h-56 overflow-auto">{JSON.stringify(audit,null,2)}</pre>}{note&&<p role="status" className="text-xs whitespace-pre-wrap break-all">{note}</p>}</section>;
+}
 export default function SmartRadarQA(){
  const {access}=useOutletContext();
  const {language}=useLanguage();const t=key=>(wording[language]||wording.en)[key]||key;
@@ -115,7 +124,7 @@ export default function SmartRadarQA(){
  const canImport=access?.role==='National Administrator'&&access?.permissions?.administration;
  const canReview=Boolean(access?.permissions?.review_ai_suggestions||access?.permissions?.administration);
  if(!canReview)return <p className="p-6 text-red-700">{t('access')}</p>;
- return <div className="max-w-[1400px] mx-auto space-y-5">
+ return <div className="max-w-[1400px] mx-auto space-y-5">\n   {canImport&&<PaidPilotControls/>}
    <div className="rounded-xl bg-gradient-to-r from-[#16364a] to-[#147968] text-white px-6 py-5 flex flex-wrap gap-4 justify-between items-center">
     <div><Link to="/" className="text-xs text-white/80 inline-flex gap-1 items-center"><ArrowLeft size={14}/>{t('back')}</Link>
      <h1 className="font-semibold text-2xl mt-2 flex items-center gap-2"><FlaskConical/> {t('title')}</h1>

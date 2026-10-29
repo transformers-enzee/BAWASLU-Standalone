@@ -142,17 +142,22 @@
         collectedPosts(id),campaignId?scopedMentions(candidate):intel('actorPicture',{actor_id:id})
       ]);
       const own=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
-      const records=actor.status==='fulfilled'?(actor.value.records||[]):[];
+      const records=actor.status==='fulfilled'?(campaignId?(Array.isArray(actor.value)?actor.value:[]):(actor.value.records||[])):[];
       // Campaign views must never mix unscoped intelligence from other campaigns.
       const related=campaignId?records:records.map(mapEarned);
       const known=new Set(own.map(post=>post.url).filter(Boolean));
       candidate.posts=[...own,...related.filter(post=>!post.url||!known.has(post.url))]
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-      candidate.findings=[];
+      // Reuse only flags returned by the saved assessment view; never infer a legal violation.
+      candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
+        id:'FLAG-'+post.id,title:'Potential violation indicator · unverified',
+        summary:'A saved assessment flagged this source record. Inspect the original evidence before any officer decision.',
+        status:'Unverified',postIds:[post.id]
+      }));
       loaded.add(id);
       ui.renderProfile(id);
-      if(captured.status==='rejected'&&actor.status==='rejected')
-        ui.notify('Source feeds unavailable. The registered candidate profile is still available.');
+      if(captured.status==='rejected'||actor.status==='rejected')
+        ui.notify('Some campaign evidence could not load. Counts may be incomplete; review source availability.');
       // Preserve original links in the post detail dialogs.
     }catch(error){ui.notify('Unable to load candidate evidence: '+error.message);}
     finally{loading.delete(id);}

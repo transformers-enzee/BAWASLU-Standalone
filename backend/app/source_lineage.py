@@ -79,3 +79,55 @@ def resolve_source(reference:str,user:User=Depends(current_user),db:Session=Depe
         "publication_time_verified":bool((row.published_at or "").strip()),
         "source_evidence_verified":False,
     }
+
+
+@router.get("/inbox-radar-feed/{campaign_id}")
+def inbox_radar_feed(campaign_id:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Future Smart Radar feed: reuse *actual* scoped Intelligence Inbox assessments.
+
+    Historic Radar pilot post IDs remain an independent dataset. This feed
+    never guesses a crosswalk or calls a provider.
+    """
+    p=profile(db,user)
+    if not has(p,'view_intelligence'):
+        raise HTTPException(403,'Intelligence access required')
+    from .campaigns import campaign_action
+    try:
+        inbox=campaign_action(db,p,'campaignIntelligenceInbox',
+                              {'campaign_id':str(campaign_id)})
+    except (PermissionError,ValueError) as exc:
+        raise HTTPException(403,'Campaign unavailable or inaccessible') from exc
+    entries=[]
+    for row in inbox.get('findings') or []:
+        if str(row.get('campaign_id'))!=str(campaign_id):
+            continue
+        source_id=str(row.get('id') or '')
+        if not source_id.isdigit():
+            continue
+        entries.append({
+          'canonical_source_id':'social:'+source_id,
+          'campaign_id':str(campaign_id),
+          'assessment_version':row.get('assessment_version'),
+          'relevance_label':row.get('relevance_label'),
+          'sentiment':row.get('sentiment'),
+          'topic_labels':row.get('topic_labels') or [],
+          'candidate_signals':row.get('candidate_signals') or [],
+          'public_concern_signals':row.get('public_concern_signals') or [],
+          'potential_issues':row.get('potential_issues') or [],
+          'attention_assessment':row.get('attention_assessment') or {},
+          'player_summaries':row.get('player_summaries') or [],
+          'incident_jurisdiction_review':row.get('incident_jurisdiction_review') or {},
+          'source_url':row.get('canonical_url'),
+          'published_at':row.get('published_at'),
+          'source_excerpt':str(row.get('text_content') or '')[:280],
+          'source_evidence_verified':False,
+          'human_validation_required':True,
+        })
+    return {
+       'campaign_id':str(campaign_id),
+       'feed_source':'SAVED_INTELLIGENCE_INBOX_ASSESSMENTS',
+       'historical_radar_pilot_id_mapping':'NOT_ATTEMPTED',
+       'entry_count':len(entries),'entries':entries,
+       'truncated_to_inbox_window':len(inbox.get('findings') or [])>=300,
+       'paid_provider_called':False,'socialcrawl_credits':0
+    }

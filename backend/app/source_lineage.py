@@ -116,6 +116,7 @@ def inbox_radar_feed(campaign_id:str,user:User=Depends(current_user),db:Session=
           'potential_issues':row.get('potential_issues') or [],
           'attention_assessment':row.get('attention_assessment') or {},
           'player_summaries':row.get('player_summaries') or [],
+          'summary_verification':__import__('app.summary_readiness',fromlist=['validated_summary_buckets']).validated_summary_buckets(row),
           'incident_jurisdiction_review':row.get('incident_jurisdiction_review') or {},
           'source_url':row.get('canonical_url'),
           'published_at':row.get('published_at'),

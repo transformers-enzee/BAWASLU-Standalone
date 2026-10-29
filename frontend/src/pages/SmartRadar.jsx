@@ -12,6 +12,7 @@ export default function SmartRadar(){
  const [state,setState]=useState({loading:false,data:null,error:''});
  const [perspective,setPerspective]=useState('inbox');
  const [selectedTopic,setSelectedTopic]=useState('');
+ const [showSummaries,setShowSummaries]=useState(false);
  useEffect(()=>{
   if(!validCampaign){setState({loading:false,data:null,error:''});return;}
   let cancelled=false;
@@ -25,6 +26,7 @@ export default function SmartRadar(){
   return ()=>{cancelled=true;};
  },[campaignId,validCampaign]);
  const entries=state.data?.entries||[];
+ const summaryRows=entries.filter(x=>(x.summary_verification?.pipeline||[]).length);
  const topicNames=row=>(row.topic_labels||[]).map(topic=>typeof topic==='string'?topic:topic?.topic||topic?.label).filter(Boolean);
  const topicCounts=Object.entries(entries.reduce((acc,row)=>{for(const topic of row.topic_labels||[]){const key=typeof topic==='string'?topic:topic?.topic||topic?.label;if(key)acc[key]=(acc[key]||0)+1;}return acc;},{})).sort((a,b)=>b[1]-a[1]);
  return <section aria-label="Smart Radar V6.2" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#f1f5f7]">
@@ -47,6 +49,8 @@ export default function SmartRadar(){
    <div className="rounded border p-3"><strong>Public Concerns</strong><div>{entries.filter(x=>(x.public_concern_signals||[]).length).length} posts with saved signals</div></div>
    <div className="rounded border p-3"><strong>Potential Issues</strong><div>{entries.filter(x=>(x.potential_issues||[]).length).length} posts with preliminary signals</div></div></div>
    {selectedTopic&&<div className="mt-3"><button type="button" className="text-xs underline" onClick={()=>setSelectedTopic('')}>Clear topic filter</button><div className="mt-2 flex flex-wrap gap-2">{entries.filter(row=>topicNames(row).includes(selectedTopic)).map(row=><a key={row.canonical_source_id} href={'/inbox?campaign_id='+encodeURIComponent(campaignId)+'&result_id='+encodeURIComponent(row.canonical_source_id.slice(7))} className="rounded border px-2 py-1 text-xs">{row.canonical_source_id} · {row.relevance_label||'Assessed'} · v{row.assessment_version||'?'}</a>)}</div></div>}
+   <button type="button" onClick={()=>setShowSummaries(!showSummaries)} className="mt-2 rounded border p-2 text-xs">Production AI drafts: {summaryRows.length} posts · {showSummaries?'Hide':'View'} source-verified drafts</button>
+   {showSummaries&&<div>{summaryRows.length===0?<p className="text-xs">No source-verified production AI drafts saved.</p>:summaryRows.map(x=><div className="border p-2 mt-1 text-xs" key={x.canonical_source_id}><strong>{x.canonical_source_id}</strong>{x.summary_verification.pipeline.map((draft,i)=><p key={i}>{draft.player}: {draft.summary} · AI draft, awaiting human review</p>)}</div>)}</div>}
    {topicCounts.length===0&&<p className="mt-2 text-xs text-[#526575]">No saved topic classifications in these assessed posts.</p>}
    <p className="mt-2 text-xs text-[#526575]">Counts describe saved relevant Inbox assessments, not corroborated incidents or representative public opinion.</p>
   </div>}

@@ -119,6 +119,18 @@
       url:safeUrl(record.source_url),description:'Evidence-linked intelligence record'
     };
   }
+  async function scopedMentions(candidate){
+    const response=await fetch('/api/functions/socialListening',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},body:JSON.stringify({action:'campaignEvidence',id:campaignId,data:{}})});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(payload.detail||payload.error||'Campaign evidence unavailable');
+    const aliases=[candidate.name,...candidate.aliases].map(x=>String(x||'').trim()).filter(x=>x.length>=3);
+    const phrases=aliases.map(value=>new RegExp('(^|[^\\p{L}\\p{N}])'+value.replace(/[.*+?^${}()|[\\]\\]/g,'\\  ui.onProfile=async id=>{')+'(?=$|[^\\p{L}\\p{N}])','iu'));
+    return (payload.evidence||[]).filter(post=>phrases.some(pattern=>pattern.test(String(post.text_content||'')))).map(post=>({
+      id:'CAM-'+post.id,kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
+      date:String(post.published_at||''),text:post.text_content||'',sentiment:(()=>{const s=String(post.sentiment||'').toLowerCase();return ['positive','negative','neutral'].includes(s)?s[0].toUpperCase()+s.slice(1):'Unknown'})(),
+      flag:false,url:safeUrl(post.canonical_url),description:'Candidate name or alias mentioned in this campaign. Attribution and context require officer review.'
+    }));
+  }
   ui.onProfile=async id=>{
     if(loaded.has(id)||loading.has(id))return;
     const candidate=ui.getCandidate(id);
@@ -126,12 +138,12 @@
     loading.add(id);
     try{
       const [captured,actor]=await Promise.allSettled([
-        collectedPosts(id),intel('actorPicture',{actor_id:id})
+        collectedPosts(id),campaignId?scopedMentions(candidate):intel('actorPicture',{actor_id:id})
       ]);
       const own=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
       const records=actor.status==='fulfilled'?(actor.value.records||[]):[];
       // Campaign views must never mix unscoped intelligence from other campaigns.
-      const related=campaignId?[]:records.map(mapEarned);
+      const related=campaignId?records:records.map(mapEarned);
       const known=new Set(own.map(post=>post.url).filter(Boolean));
       candidate.posts=[...own,...related.filter(post=>!post.url||!known.has(post.url))]
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));

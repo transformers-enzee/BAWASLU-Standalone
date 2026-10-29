@@ -17,6 +17,26 @@ TOPIC_TERMS={
     'Electoral Operations':('kpu','pemilu','pemilihan','pengawasan','dkpp','pencalonan','pelanggaran pemilu'),
     'BAWASLU Reputation':('reputasi bawaslu','kepercayaan publik terhadap bawaslu','kritik terhadap bawaslu','citra bawaslu'),
 }
+
+NARRATIVE_ANCHORS={
+    'Voter register accuracy':('daftar pemilih','pdpb','daftar pemilih tetap'),
+    'Election money politics':('politik uang','serangan fajar'),
+    'BAWASLU institutional trust':('reputasi bawaslu','kepercayaan publik terhadap bawaslu',
+        'kritik terhadap bawaslu','citra bawaslu','bawaslu tidak netral','bawaslu berpihak'),
+    'Election dispute proceedings':('sengketa pemilu','sengketa pilkada','putusan dkpp'),
+    'Candidate nomination process':('proses pencalonan','pendaftaran calon','verifikasi calon'),
+}
+def _term_present(body,term):
+    return bool(re.search(r'(?<!\w)'+re.escape(term)+r'(?!\w)',body))
+
+def narrative_anchors(text):
+    """Specific recurring-discussion cues, never proof of a shared incident."""
+    body=str(text or '').casefold()
+    if not body or communication_context(body)['category']=='ROUTINE_COMMUNICATION':
+        return []
+    return [name for name,terms in NARRATIVE_ANCHORS.items()
+            if any(_term_present(body,term) for term in terms)]
+
 ROUTINE_MARKERS=('selamat hari','sumpah pemuda','dirgahayu','selamat ulang tahun','ucapan selamat','memperingati hari')
 SUBSTANTIVE_MARKERS=('pelanggaran','dugaan','laporan','investigasi','pengawasan pemilu','pemungutan suara','sengketa','kecurangan','putusan dkpp','temuan')
 def communication_context(text):
@@ -76,12 +96,13 @@ def classification_evidence(text):
 def source_hints(text):
     body=str(text or '')
     folded=body.casefold()
-    topics=[name for name,terms in TOPIC_TERMS.items() if any(re.search(r'(?<!\w)'+re.escape(t)+r'(?!\w)',folded) for t in terms)]
+    topics=[] if communication_context(body)['category']=='ROUTINE_COMMUNICATION' else [name for name,terms in TOPIC_TERMS.items() if any(_term_present(folded,t) for t in terms)]
     provinces=sorted({standard for alias,standard in PROVINCE_ALIASES.items()
         if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',folded)})
     normalized=re.sub(r'\s+',' ',folded).strip()
     return {
         'topic_suggestions':topics,
+        'narrative_anchors':narrative_anchors(body),
         'issue_screening':classification_evidence(body),
         'communication_context':communication_context(body),
         'province_mentions':provinces,
@@ -118,6 +139,7 @@ def classification_contract(row):
             'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
             'candidate_names':normalize_candidate_signals(row.get('candidate_signals') or []),
             'topics':hints.get('topic_suggestions') or [],
+            'narrative_anchors':hints.get('narrative_anchors') or [],
             'location_mentions_unverified':hints.get('province_mentions') or [],
             'potential_issues':row.get('potential_issues') or [],
             'review_status':row.get('flag_review_status'),
@@ -125,49 +147,64 @@ def classification_contract(row):
 
 
 def exact_source_groups(records):
-    """Exact-source duplicate grouping only; never assert same incident."""
+    """Exact normalized-text duplicates, isolated per campaign.
+
+    A URL may host distinct comments or modified content; URL-only matches
+    must not merge incident evidence. Shared text does not verify an incident.
+    """
+    from collections import defaultdict
+    groups=defaultdict(set)
+    for row in records:
+        campaign=str(row.get('campaign_id') or '')
+        rid=str(row.get('id') or '')
+        fingerprint=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        if rid and fingerprint:
+            groups[(campaign,fingerprint)].add(rid)
+    return [{'campaign_id':campaign,'post_ids':sorted(ids),
+             'incident_verified':False}
+            for (campaign,_),ids in sorted(groups.items()) if len(ids)>1]
+
+
+def emerging_narrative_candidates(records):
+    """Unverified recurring discussions, never confirmed incident clusters.
+
+    Require three distinct relevant posts, URLs and posting accounts.
+    Reposted identical text contributes only one post to a candidate.
+    """
     from collections import defaultdict
     grouped=defaultdict(list)
     for row in records:
-        source=str(row.get('canonical_url') or '').strip().lower()
-        fingerprint=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        if str(row.get('relevance_label') or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
+            continue
         campaign=str(row.get('campaign_id') or '')
-        # Index both canonical URL and normalized content to catch cross-post
-        # duplicate text. Use connected components to avoid double counting.
         rid=str(row.get('id') or '')
-        if not rid:continue
-        scoped_id=(campaign,rid)
-        if source:
-            grouped[(campaign,'url',source)].append(scoped_id)
-        if fingerprint:
-            grouped[(campaign,'text',fingerprint)].append(scoped_id)
-    parents={}
-    def root(x):
-        parents.setdefault(x,x)
-        if parents[x]!=x:parents[x]=root(parents[x])
-        return parents[x]
-    for ids in grouped.values():
-        if len(ids)<2:continue
-        first=ids[0]
-        for other in ids[1:]:
-            a,b=root(first),root(other)
-            if a!=b:parents[b]=a
-    components=defaultdict(set)
-    for (campaign,_,_),ids in grouped.items():
-        for rid in ids:
-            if rid in parents:components[(campaign,root(rid))].add(rid[1])
-    return [{'campaign_id':key[0],'post_ids':sorted(ids,key=str),
-             'incident_verified':False}
-            for key,ids in sorted(components.items())
-            if len(ids)>1]
+        author=str(row.get('author_name') or '').strip().casefold()
+        url=str(row.get('canonical_url') or '').strip().casefold()
+        body=row.get('text_content')
+        fingerprint=source_hints(body)['exact_text_fingerprint']
+        if not (campaign and rid and author and url and fingerprint):
+            continue
+        for anchor in narrative_anchors(body):
+            grouped[(campaign,anchor)].append((rid,author,url,fingerprint))
+    candidates=[]
+    for (campaign,anchor),items in sorted(grouped.items()):
+        by_fingerprint={}
+        for item in items:
+            by_fingerprint.setdefault(item[3],item)
+        evidence=list(by_fingerprint.values())
+        if len(evidence)<3 or len({x[1] for x in evidence})<3 or len({x[2] for x in evidence})<3:
+            continue
+        candidates.append({'campaign_id':campaign,'anchor':anchor,
+            'source_ids':sorted(x[0] for x in evidence),'distinct_posts':len(evidence),
+            'distinct_authors':len({x[1] for x in evidence}),
+            'distinct_urls':len({x[2] for x in evidence}),
+            'status':'RECURRING_DISCUSSION_CANDIDATE',
+            'evidence_independence':'UNVERIFIED','incident_verified':False})
+    return candidates
 
 
 def summarize_scoped_findings(records):
-    """Deterministic, read-only aggregation of ALREADY authorized relevant findings.
-
-    Grouping is preliminary: exact duplicate fingerprints and source URLs are
-    not incident identity. Topic grouping is not emerging-narrative detection.
-    """
+    """Read-only, authorized saved-assessment aggregation; no model requests."""
     from collections import defaultdict
     topic_groups=defaultdict(list)
     attention=[]
@@ -182,35 +219,49 @@ def summarize_scoped_findings(records):
         key={'result_id':rid,'campaign_id':campaign}
         issue=bool(row.get('potential_issues'))
         flag=bool(row.get('is_flagged'))
-        reviewed=bool(row.get('flag_review_status'))
-        if issue:
+        status=str(row.get('flag_review_status') or '').upper()
+        dismissed=status=='FLAG_DISMISSED'
+        if issue and not dismissed:
             players['Potential Violations'].append({**key,'status':'PRELIMINARY_SIGNAL'})
-        if reviewed:
-            players['Reviewed History'].append({**key,'review_status':row.get('flag_review_status')})
-        if issue or flag:
-            attention.append({**key,'reason':'EXISTING_ISSUE_OR_HUMAN_FLAG','status':'PRELIMINARY_REVIEW'})
+        if status:
+            players['Reviewed History'].append({**key,'review_status':status})
+        if (issue or flag) and not dismissed:
+            attention.append({**key,'reason':'SAVED_ISSUE_OR_HUMAN_FLAG',
+                'status':'FURTHER_INVESTIGATION' if status=='FURTHER_INVESTIGATION' else 'PRELIMINARY_REVIEW',
+                'seriousness':'NOT_ASSESSED','urgency':'NOT_ASSESSED',
+                'evidence_quality':'UNVERIFIED','actionability':'HUMAN_TRIAGE_ONLY'})
             players['Needs Attention'].append({**key,'status':'PENDING_HUMAN_TRIAGE'})
-        # Text alone cannot prove a public concern or an emerging narrative.
-        # Those players intentionally remain empty until supporting assessments exist.
     duplicates=[{'campaign_id':group['campaign_id'],'source_ids':group['post_ids'],
-                 'basis':'EXACT_URL_OR_TEXT'} for group in exact_source_groups(records)]
-    missing_fields={'text_content':0,'canonical_url':0,'campaign_id':0,'sentiment':0,'assessment_version':0}
+                 'basis':'EXACT_NORMALIZED_TEXT'} for group in exact_source_groups(records)]
+    narratives=emerging_narrative_candidates(records)
+    for narrative in narratives:
+        players['Emerging Narratives'].append({
+            'campaign_id':narrative['campaign_id'],
+            'source_ids':narrative['source_ids'],
+            'anchor':narrative['anchor'],
+            'status':'REQUIRES_HUMAN_REVIEW'})
+    missing_fields={'text_content':0,'canonical_url':0,'campaign_id':0,
+                    'sentiment':0,'assessment_version':0}
     for row in records:
         for field in missing_fields:
-            if not row.get(field):missing_fields[field]+=1
+            value=row.get(field)
+            if value is None or value=='' or value=='UNKNOWN' or value=='UNCLASSIFIED':
+                missing_fields[field]+=1
     return {'visible_relevant_count':len(records),
-        'classification_contracts':[classification_contract(x) for x in records],
+        'classification_contracts':[classification_contract(row) for row in records],
         'exact_source_groups':exact_source_groups(records),
         'exact_duplicate_groups':duplicates,
-        'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),'status':'KEYWORD_GROUP_ONLY'}
-            for name,ids in sorted(topic_groups.items())],
+        'emerging_narrative_candidates':narratives,
+        'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),
+                         'status':'KEYWORD_GROUP_ONLY'}
+                        for name,ids in sorted(topic_groups.items())],
         'needs_attention_candidates':attention,
-        'intelligence_players':{name:{'entries':items,'count':len(items)} for name,items in players.items()},
-        'player_classification_scope':'EXISTING_SIGNALS_AND_REVIEWS_ONLY',
+        'intelligence_players':{name:{'entries':items,'count':len(items)}
+                                for name,items in players.items()},
+        'player_classification_scope':'SAVED_SIGNALS_AND_UNVERIFIED_RECURRING_DISCUSSION_CANDIDATES',
         'processing_diagnostics':{'missing_field_counts':missing_fields,
             'failed_classifications_reported':False,
             'ai_usage_cost_reported':False,'scope':'VISIBLE_ROWS_ONLY'},
-        'incident_clusters_verified':0,
-        'narratives_verified':0,
+        'incident_clusters_verified':0,'narratives_verified':0,
         'status':'DERIVED_FROM_AUTHORIZED_SAVED_ASSESSMENTS',
         'paid_provider_called':False}

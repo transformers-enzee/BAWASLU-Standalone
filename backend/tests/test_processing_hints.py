@@ -66,7 +66,7 @@ def test_scoped_classification_aggregation_is_read_only_and_conservative():
        'text_content':'dugaan pelanggaran','potential_issues':[{'category_name':'Preliminary'}]}
     result=summarize_scoped_findings([a,b,c])
     assert result['visible_relevant_count']==3
-    assert result['exact_duplicate_groups']==[{'campaign_id':'1','source_ids':['10','11'],'basis':'EXACT_URL_OR_TEXT'}]
+    assert result['exact_duplicate_groups']==[{'campaign_id':'1','source_ids':['10','11'],'basis':'EXACT_NORMALIZED_TEXT'}]
     assert result['topic_groups'][0]['status']=='KEYWORD_GROUP_ONLY'
     assert result['needs_attention_candidates'][0]['result_id']=='12'
     assert result['incident_clusters_verified']==0
@@ -150,7 +150,7 @@ def test_duplicate_text_across_distinct_urls_and_transitive_groups():
     ]
     groups=exact_source_groups(records)
     assert len(groups)==1
-    assert groups[0]['post_ids']==['1','2','3']
+    assert groups[0]['post_ids']==['1','2']
     assert groups[0]['incident_verified'] is False
 
 def test_keyword_topics_do_not_infer_reputation_from_generic_bawaslu_mention():
@@ -183,7 +183,7 @@ def test_summary_duplicate_groups_match_transitive_source_components():
     ]
     summary=summarize_scoped_findings(records)
     assert summary['exact_duplicate_groups']==[
-        {'campaign_id':'1','source_ids':['1','2','3'],'basis':'EXACT_URL_OR_TEXT'}]
+        {'campaign_id':'1','source_ids':['1','2'],'basis':'EXACT_NORMALIZED_TEXT'}]
     assert summary['exact_source_groups'][0]['incident_verified'] is False
 
 def test_duplicate_ids_in_different_campaigns_do_not_collide():
@@ -195,8 +195,7 @@ def test_duplicate_ids_in_different_campaigns_do_not_collide():
         {'id':'3','campaign_id':'B','canonical_url':'y','text_content':'d'},
     ]
     groups=exact_source_groups(rows)
-    assert [(g['campaign_id'],g['post_ids']) for g in groups]==[
-        ('A',['1','2']),('B',['1','3'])]
+    assert groups==[]  # Shared URLs with different content are not exact duplicates
 
 def test_candidate_name_deduplication_is_case_insensitive():
     from app.processing_hints import normalize_candidate_signals
@@ -211,3 +210,61 @@ def test_readonly_diagnostics_disclose_missing_data_without_claiming_cost_covera
     assert diagnostics['failed_classifications_reported'] is False
     assert diagnostics['ai_usage_cost_reported'] is False
     assert result['paid_provider_called'] is False
+
+
+def test_same_url_distinct_comments_never_auto_merge():
+    from app.processing_hints import exact_source_groups,summarize_scoped_findings
+    rows=[{'id':'1','campaign_id':'A','canonical_url':'https://example.test/thread',
+           'text_content':'Comment supporting the election'},
+          {'id':'2','campaign_id':'A','canonical_url':'https://example.test/thread',
+           'text_content':'Different comment alleging misconduct'}]
+    assert exact_source_groups(rows)==[]
+    assert summarize_scoped_findings(rows)['exact_duplicate_groups']==[]
+
+def test_same_content_different_urls_is_duplicate_not_confirmed_incident():
+    from app.processing_hints import exact_source_groups
+    rows=[{'id':'1','campaign_id':'A','canonical_url':'a','text_content':'Same incident text'},
+          {'id':'2','campaign_id':'A','canonical_url':'b','text_content':' same  INCIDENT text '}]
+    assert exact_source_groups(rows)==[
+        {'campaign_id':'A','post_ids':['1','2'],'incident_verified':False}]
+
+def test_narrative_requires_three_distinct_authors_urls_and_texts():
+    from app.processing_hints import emerging_narrative_candidates,summarize_scoped_findings
+    rows=[{'id':str(i),'campaign_id':'A','canonical_url':f'https://example.test/{i}',
+           'text_content':f'Laporan daftar pemilih nomor {i} dipersoalkan di pemilu',
+           'author_name':f'Author {i}','relevance_label':'RELEVANT'}
+          for i in range(1,4)]
+    candidates=emerging_narrative_candidates(rows)
+    assert len(candidates)==1
+    assert candidates[0]['anchor']=='Voter register accuracy'
+    assert candidates[0]['evidence_independence']=='UNVERIFIED'
+    summary=summarize_scoped_findings(rows)
+    assert summary['intelligence_players']['Emerging Narratives']['count']==1
+    assert summary['narratives_verified']==0
+
+def test_narrative_reposts_and_unassessed_are_not_independent_sources():
+    from app.processing_hints import emerging_narrative_candidates
+    rows=[{'id':str(i),'campaign_id':'A','canonical_url':f'url{i}',
+           'text_content':'Daftar pemilih pemilu perlu diteliti',
+           'author_name':f'Author {i}','relevance_label':'RELEVANT'}
+          for i in range(1,4)]
+    assert emerging_narrative_candidates(rows)==[]
+    rows[2]['text_content']='Daftar pemilih pemilu perlu diteliti kembali'
+    rows[2]['relevance_label']='UNASSESSED'
+    assert emerging_narrative_candidates(rows)==[]
+
+def test_dismissed_violations_do_not_reappear_in_attention_queue():
+    from app.processing_hints import summarize_scoped_findings
+    row={'id':'5','campaign_id':'A','text_content':'dugaan pelanggaran',
+         'potential_issues':[{'category_name':'Unverified'}],
+         'flag_review_status':'FLAG_DISMISSED','is_flagged':True}
+    summary=summarize_scoped_findings([row])
+    assert summary['intelligence_players']['Needs Attention']['count']==0
+    assert summary['intelligence_players']['Potential Violations']['count']==0
+    assert summary['intelligence_players']['Reviewed History']['count']==1
+
+def test_routine_election_greeting_does_not_create_topic_or_narrative():
+    from app.processing_hints import source_hints
+    hints=source_hints('Selamat Hari Pemilu! #Bawaslu')
+    assert hints['topic_suggestions']==[]
+    assert hints['narrative_anchors']==[]

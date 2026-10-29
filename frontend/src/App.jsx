@@ -69,7 +69,7 @@ const AuthenticatedApp = () => {
             <Route path="/smart-radar/qa" element={<SmartRadarQA />} />
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
-            <Route path="/legacy-home" element={<Home />} />
+            <Route path="/legacy-home" element={<Navigate to="/" replace />} />
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/watchlist/:id" element={<WatchlistProfile />} />
             <Route path="/watchlist/:id/posts" element={<WatchlistPosts />} />

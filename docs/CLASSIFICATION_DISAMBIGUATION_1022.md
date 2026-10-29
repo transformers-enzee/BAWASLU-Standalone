@@ -1,0 +1,3 @@
+# v102.2 accuracy-targeted prompt improvement
+
+The saved v17 historical audit was 20/33 (60.6%), with 6 cases confusing Disputes / Legal for Allegations / Violations. This change adds explicit formal-proceedings versus alleged-misconduct disambiguation to the *separate optional Smart Radar pilot* prompt; no provider invocation, and it cannot retroactively improve the saved v17 benchmark. Future optional pilot runs require explicit administrator enablement and credits. #14 stays OPEN pending a new independently measured evaluation; do not claim historical 100% accuracy. Release includes no real officer decisions.

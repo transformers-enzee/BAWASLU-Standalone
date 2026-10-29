@@ -64,7 +64,16 @@ Relevance criteria: context 35, significance 25, Indonesia 15, actors 10, source
 Priority criteria: severity 35, urgency 25, independent corroboration 20, impact 10, amplification 10.
 Scores are provisional heuristic assessments, not verified findings. Do not treat reposts as independent corroboration.
 Missing evidence must reduce certainty, not trigger an accusation. Do not infer geographic location, coordination or guilt.
-Do not manufacture allegations. Account handles are not verified actor identities. Treat uncertain election relation as uncertain."""
+Do not manufacture allegations. Account handles are not verified actor identities. Treat uncertain election relation as uncertain.
+CATEGORY DISAMBIGUATION: Disputes / Legal concerns formal case proceedings, named legal challenges,
+appeals, hearings, court or tribunal decisions and documented dispute resolution, regardless of whether
+an underlying allegation was reported. Allegations / Violations concerns a concrete suspected misconduct
+or violation report without the central focus being a formal dispute or legal proceeding. When both
+appear, choose Disputes / Legal if the main new development is a hearing, judgment, appeal or case;
+otherwise choose Allegations / Violations only with a direct source-supported misconduct claim.
+Do not infer legal proceedings from the word sengketa alone without context. For informal grievances
+without formal proceedings or explicit concrete wrongdoing, consider Citizen Reports / Public Concerns.
+Keep uncertainty explicit; never rewrite historical predictions or mark benchmark accuracy improved."""
         try:
             response=httpx.post("https://api.openai.com/v1/chat/completions",
              headers={"Authorization":"Bearer "+key},json={"model":model,"messages":[{"role":"system","content":instruction},

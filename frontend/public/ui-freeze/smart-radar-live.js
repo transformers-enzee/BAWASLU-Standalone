@@ -16,7 +16,7 @@
     const token = accessToken();
     if (cacheToken !== token) { clearReadCache(); cacheToken = token; }
     const method = (options.method || 'GET').toUpperCase();
-    const eligible = method === 'GET' && /^\\/api\\/smart-radar\\/(dashboard|finding\\/|history\\/)/.test(path);
+    const eligible = method === 'GET' && (path === '/api/smart-radar/dashboard' || path.startsWith('/api/smart-radar/finding/') || path.startsWith('/api/smart-radar/history/'));
     const ttl = path.includes('/history/') ? 10000 : path.includes('/finding/') ? 60000 : 30000;
     const now = Date.now();
     const key = path;

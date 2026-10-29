@@ -185,3 +185,29 @@ def test_summary_duplicate_groups_match_transitive_source_components():
     assert summary['exact_duplicate_groups']==[
         {'campaign_id':'1','source_ids':['1','2','3'],'basis':'EXACT_URL_OR_TEXT'}]
     assert summary['exact_source_groups'][0]['incident_verified'] is False
+
+def test_duplicate_ids_in_different_campaigns_do_not_collide():
+    from app.processing_hints import exact_source_groups
+    rows=[
+        {'id':'1','campaign_id':'A','canonical_url':'x','text_content':'a'},
+        {'id':'2','campaign_id':'A','canonical_url':'x','text_content':'b'},
+        {'id':'1','campaign_id':'B','canonical_url':'y','text_content':'c'},
+        {'id':'3','campaign_id':'B','canonical_url':'y','text_content':'d'},
+    ]
+    groups=exact_source_groups(rows)
+    assert [(g['campaign_id'],g['post_ids']) for g in groups]==[
+        ('A',['1','2']),('B',['1','3'])]
+
+def test_candidate_name_deduplication_is_case_insensitive():
+    from app.processing_hints import normalize_candidate_signals
+    assert normalize_candidate_signals(['Unknown Person','unknown person'])==['Unknown Person']
+
+def test_readonly_diagnostics_disclose_missing_data_without_claiming_cost_coverage():
+    from app.processing_hints import summarize_scoped_findings
+    result=summarize_scoped_findings([{'id':'5','campaign_id':'A','text_content':'KPU'}])
+    diagnostics=result['processing_diagnostics']
+    assert diagnostics['missing_field_counts']['sentiment']==1
+    assert diagnostics['missing_field_counts']['canonical_url']==1
+    assert diagnostics['failed_classifications_reported'] is False
+    assert diagnostics['ai_usage_cost_reported'] is False
+    assert result['paid_provider_called'] is False

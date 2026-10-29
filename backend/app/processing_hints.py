@@ -45,6 +45,7 @@ CANDIDATE_ALIASES={
 def normalize_candidate_signals(signals):
     """Resolve only an explicitly known full-name alias; retain unknowns unaltered."""
     resolved=[]
+    seen=set()
     for signal in signals or []:
         if isinstance(signal,str):
             name=signal
@@ -56,7 +57,9 @@ def normalize_candidate_signals(signals):
         if not clean:continue
         canonical=next((person for person,aliases in CANDIDATE_ALIASES.items()
             if clean.casefold() in aliases),clean)
-        if canonical not in resolved:resolved.append(canonical)
+        if canonical.casefold() not in seen:
+            resolved.append(canonical)
+            seen.add(canonical.casefold())
     return resolved
 
 def classification_evidence(text):
@@ -132,10 +135,12 @@ def exact_source_groups(records):
         # Index both canonical URL and normalized content to catch cross-post
         # duplicate text. Use connected components to avoid double counting.
         rid=str(row.get('id') or '')
+        if not rid:continue
+        scoped_id=(campaign,rid)
         if source:
-            grouped[(campaign,'url',source)].append(rid)
+            grouped[(campaign,'url',source)].append(scoped_id)
         if fingerprint:
-            grouped[(campaign,'text',fingerprint)].append(rid)
+            grouped[(campaign,'text',fingerprint)].append(scoped_id)
     parents={}
     def root(x):
         parents.setdefault(x,x)
@@ -150,7 +155,7 @@ def exact_source_groups(records):
     components=defaultdict(set)
     for (campaign,_,_),ids in grouped.items():
         for rid in ids:
-            if rid in parents:components[(campaign,root(rid))].add(rid)
+            if rid in parents:components[(campaign,root(rid))].add(rid[1])
     return [{'campaign_id':key[0],'post_ids':sorted(ids,key=str),
              'incident_verified':False}
             for key,ids in sorted(components.items())
@@ -164,7 +169,6 @@ def summarize_scoped_findings(records):
     not incident identity. Topic grouping is not emerging-narrative detection.
     """
     from collections import defaultdict
-    buckets=defaultdict(list)
     topic_groups=defaultdict(list)
     attention=[]
     players={'Potential Violations':[],'Public Concerns':[],
@@ -173,13 +177,6 @@ def summarize_scoped_findings(records):
         rid=str(row.get('id') or '')
         campaign=str(row.get('campaign_id') or '')
         metadata=row.get('processing_hints') or source_hints(row.get('text_content'))
-        fingerprint=metadata.get('exact_text_fingerprint')
-        url=str(row.get('canonical_url') or '').strip().casefold()
-        # Campaign-specific grouping never crosses visibility boundaries.
-        if url:
-            buckets[(campaign,'url',url)].append(rid)
-        elif fingerprint:
-            buckets[(campaign,'text',fingerprint)].append(rid)
         for topic in metadata.get('topic_suggestions') or []:
             topic_groups[topic].append(rid)
         key={'result_id':rid,'campaign_id':campaign}
@@ -197,6 +194,10 @@ def summarize_scoped_findings(records):
         # Those players intentionally remain empty until supporting assessments exist.
     duplicates=[{'campaign_id':group['campaign_id'],'source_ids':group['post_ids'],
                  'basis':'EXACT_URL_OR_TEXT'} for group in exact_source_groups(records)]
+    missing_fields={'text_content':0,'canonical_url':0,'campaign_id':0,'sentiment':0,'assessment_version':0}
+    for row in records:
+        for field in missing_fields:
+            if not row.get(field):missing_fields[field]+=1
     return {'visible_relevant_count':len(records),
         'classification_contracts':[classification_contract(x) for x in records],
         'exact_source_groups':exact_source_groups(records),
@@ -206,6 +207,9 @@ def summarize_scoped_findings(records):
         'needs_attention_candidates':attention,
         'intelligence_players':{name:{'entries':items,'count':len(items)} for name,items in players.items()},
         'player_classification_scope':'EXISTING_SIGNALS_AND_REVIEWS_ONLY',
+        'processing_diagnostics':{'missing_field_counts':missing_fields,
+            'failed_classifications_reported':False,
+            'ai_usage_cost_reported':False,'scope':'VISIBLE_ROWS_ONLY'},
         'incident_clusters_verified':0,
         'narratives_verified':0,
         'status':'DERIVED_FROM_AUTHORIZED_SAVED_ASSESSMENTS',

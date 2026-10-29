@@ -112,8 +112,7 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
- const [routineView,setRoutineView]=useState('all');
- const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState('');
+const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState('');
  const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
  const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
  const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
@@ -131,8 +130,6 @@ function SocialEvidenceInbox(){
  const uncategorizedCandidateCount=useMemo(()=>findings.filter(x=>candidatesFor(x).length===0).length,[findings]);
  const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
   const filtered=useMemo(()=>findings.filter(x=>{
-  if(routineView==='review'&&x.processing_hints?.triage_disposition!=='REVIEW_RELEVANCE')return false;
-  if(routineView==='exclude'&&x.processing_hints?.triage_disposition==='REVIEW_RELEVANCE')return false;
   if(jurisdiction==='location'&&chosenLocation==='__unresolved__'&&provinceFor(x).length>0)return false;
   if(jurisdiction==='location'&&chosenLocation&&chosenLocation!=='__unresolved__'&&!provinceFor(x).includes(chosenLocation))return false;
   if(jurisdiction==='unresolved'&&locationsFor(x).length>0)return false;
@@ -147,7 +144,7 @@ function SocialEvidenceInbox(){
   const date=String(x.published_at||x.post_time||x.created_at||'').slice(0,10);
   if((dateFrom||dateTo)&&(!date||(dateFrom&&date<dateFrom)||(dateTo&&date>dateTo)))return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo,routineView]);
+ }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
  const ordered=useMemo(()=>[...filtered].sort((a,b)=>{const da=Date.parse(a.published_at||a.post_time||a.created_at||0)||0,db=Date.parse(b.published_at||b.post_time||b.created_at||0)||0;return sortDate==='newest'?db-da:da-db}),[filtered,sortDate]);
  const summary=useMemo(()=>{const counts={POSITIVE:0,NEGATIVE:0,NEUTRAL:0,UNCLASSIFIED:0};let engagement=0,views=0,engagementAvailable=0,viewsAvailable=0;for(const item of filtered){if(typeof item.engagement_total==='number'){engagement+=item.engagement_total;engagementAvailable++}if(typeof item.views==='number'){views+=item.views;viewsAvailable++}const raw=String(item.sentiment||'').toUpperCase();counts[['POSITIVE','NEGATIVE','NEUTRAL'].includes(raw)?raw:'UNCLASSIFIED']++}return {engagement,views,engagementAvailable,viewsAvailable,counts}},[filtered]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
@@ -170,7 +167,6 @@ function SocialEvidenceInbox(){
     <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-    <label className="flex flex-col text-xs font-medium">Routine communication triage<select aria-label="Routine communication triage" className="intel-input min-h-10" value={routineView} onChange={e=>setRoutineView(e.target.value)}><option value="all">All AI-relevant findings</option><option value="review">Routine posts needing relevance review</option><option value="exclude">Hide routine review candidates</option></select></label>
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>

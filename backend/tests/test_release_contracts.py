@@ -218,3 +218,17 @@ def test_v92_6_processing_failures_and_signal_acceptance_are_auditable():
     assert 'metrics.assessment_jobs?.with_error_message' in page
     assert 'not token-cost accounting' in page
     assert 'v92.6' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+
+
+def test_v92_8_bulk_quality_and_officer_checks():
+    from app import integration_readiness
+    metrics=integration_readiness.METRICS
+    for key in ('campaign_duplicate_urls','assessment_coverage','assessment_jobs','assessment_quality','campaign_source_quality'):
+        assert key in metrics
+    assert 'relevant_without_sentiment' in metrics['assessment_coverage']
+    assert 'posts_with_location_signals' in metrics['assessment_coverage']
+    assert 'HAVING COUNT(*)>1' in metrics['campaign_duplicate_urls']
+    screen=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
+    assert 'metrics.assessment_coverage?.relevant_without_sentiment' in screen
+    assert 'metrics.campaign_duplicate_urls?.duplicate_url_groups' in screen
+    assert 'v92.8' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')

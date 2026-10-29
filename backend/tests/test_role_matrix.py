@@ -27,3 +27,16 @@ def test_viewer_is_strictly_read_only():
     p=default_permissions('Viewer')
     assert p['view_intelligence'] is True
     assert all(not value for key,value in p.items() if key!='view_intelligence')
+
+
+def test_inactive_permissions_fail_closed():
+    user={'status':'Inactive','permissions':default_permissions('National Administrator')}
+    assert not has(user,'administration')
+    assert not has(user,'view_intelligence')
+
+def test_active_officer_and_analyst_permissions_not_inflated():
+    officer={'status':'Active','permissions':default_permissions('Regency/City Officer')}
+    analyst={'status':'Active','permissions':default_permissions('Provincial Analyst')}
+    for profile in (officer,analyst):
+        assert has(profile,'view_intelligence') and has(profile,'add_intelligence')
+        assert not has(profile,'administration') and not has(profile,'human_validation')

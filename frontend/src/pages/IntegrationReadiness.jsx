@@ -79,6 +79,10 @@ export default function IntegrationReadiness() {
         <div><p className="text-slate-500">Potential issue signals absent</p><p className="text-xl font-semibold">{metrics.assessment_quality?.no_potential_issue_signals ?? '—'}</p></div>
         <div><p className="text-slate-500">Campaign evidence links</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.linked ?? '—'}</p></div>
         <div><p className="text-slate-500">Missing campaign source URLs</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.missing_url ?? '—'}</p></div>
+        <div><p className="text-slate-500">Duplicate source URL groups</p><p className="text-xl font-semibold">{metrics.campaign_duplicate_urls?.duplicate_url_groups ?? '—'}</p></div>
+        <div><p className="text-slate-500">Relevant posts awaiting sentiment</p><p className="text-xl font-semibold">{metrics.assessment_coverage?.relevant_without_sentiment ?? '—'}</p></div>
+        <div><p className="text-slate-500">Posts with incident-location signals</p><p className="text-xl font-semibold">{metrics.assessment_coverage?.posts_with_location_signals ?? '—'}</p></div>
+        <div><p className="text-slate-500">Posts with potential-issue signals</p><p className="text-xl font-semibold">{metrics.assessment_coverage?.posts_with_issue_signals ?? '—'}</p></div>
         <div><p className="text-slate-500">Repeated-text groups</p><p className="text-xl font-semibold">{metrics.campaign_duplicate_text?.duplicate_groups ?? '—'}</p></div>
         <div><p className="text-slate-500">Assessment jobs with errors</p><p className="text-xl font-semibold">{metrics.assessment_jobs?.with_error_message ?? '—'}</p></div>
         <div><p className="text-slate-500">AI assessment attempts</p><p className="text-xl font-semibold">{metrics.assessment_jobs?.attempts ?? '—'}</p></div>

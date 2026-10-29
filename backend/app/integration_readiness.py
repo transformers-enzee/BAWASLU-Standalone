@@ -47,6 +47,13 @@ METRICS={
   (SELECT COUNT(*) FROM campaign_runs) AS collection_runs,
   (SELECT COUNT(*) FROM campaign_evidence) AS linked_evidence,
   (SELECT COUNT(*) FROM evidence_assessments) AS assessments""",
+ "assessment_coverage": """SELECT COUNT(*) AS assessed_posts,
+  COUNT(*) FILTER(WHERE a.sentiment IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS sentiment_ready,
+  COUNT(*) FILTER(WHERE a.relevance_label IN ('RELEVANT','HIGHLY_RELEVANT') AND a.sentiment NOT IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS relevant_without_sentiment,
+  COUNT(*) FILTER(WHERE a.potential_issue_signals_json IS NOT NULL AND a.potential_issue_signals_json NOT IN ('[]','')) AS posts_with_issue_signals,
+  COUNT(*) FILTER(WHERE a.candidate_signals_json IS NOT NULL AND a.candidate_signals_json NOT IN ('[]','')) AS posts_with_candidate_signals,
+  COUNT(*) FILTER(WHERE a.geographic_signals_json IS NOT NULL AND a.geographic_signals_json NOT IN ('[]','')) AS posts_with_location_signals
+  FROM evidence_assessments a""",
  "assessment_jobs": """SELECT COUNT(*) AS total,
   COUNT(*) FILTER(WHERE state IN ('FAILED','ERROR','NEEDS_ATTENTION')) AS failed,
   COUNT(*) FILTER(WHERE state IN ('PENDING','QUEUED','PROCESSING','RUNNING')) AS pending_or_running,
@@ -75,6 +82,11 @@ METRICS={
   COUNT(*) FILTER(WHERE NULLIF(TRIM(s.platform),'') IS NULL) AS missing_platform,
   COUNT(*) FILTER(WHERE NULLIF(TRIM(s.author_name),'') IS NULL) AS missing_author
   FROM campaign_evidence ce JOIN social_listening_results s ON s.id=ce.result_id""",
+ "campaign_duplicate_urls": """SELECT COUNT(*) AS duplicate_url_groups FROM (
+  SELECT LOWER(TRIM(s.canonical_url)) FROM campaign_evidence ce JOIN social_listening_results s ON s.id=ce.result_id
+  WHERE NULLIF(TRIM(s.canonical_url),'') IS NOT NULL
+  GROUP BY LOWER(TRIM(s.canonical_url)) HAVING COUNT(*)>1
+  ) duplicates""",
  "campaign_duplicate_text": """SELECT COUNT(*) AS duplicate_groups FROM (
   SELECT LOWER(TRIM(s.text_content)) AS body FROM campaign_evidence ce
   JOIN social_listening_results s ON s.id=ce.result_id

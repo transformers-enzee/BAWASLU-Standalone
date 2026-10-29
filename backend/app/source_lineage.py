@@ -52,7 +52,7 @@ def inbox_campaigns(user:User=Depends(current_user),db:Session=Depends(get_db)):
         raise HTTPException(403,'Intelligence access required')
     from .models import MonitoringCampaign
     campaigns=(db.query(MonitoringCampaign).order_by(MonitoringCampaign.id.desc())
-               .limit(500).all())
+               .all())
     return {'campaigns':[{'id':str(c.id),'name':c.name}
             for c in campaigns if allowed(p,c)],
             'paid_provider_called':False}

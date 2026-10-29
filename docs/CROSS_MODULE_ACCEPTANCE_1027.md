@@ -1,0 +1,3 @@
+# v102.7 cross-module evidence contract
+
+The authorized Smart Radar view consumes actual saved, campaign-scoped Inbox assessments and canonical social IDs, including versioned topics, public concerns, evidence drilldowns, and provenance-gated summary drafts. A further regression verifies source version, cross-campaign isolation, and that raw unvalidated AI summaries are not leaked. Candidate source list no longer truncates at an unannounced 500 campaigns. This supports engineering closure review for #13 but **does not establish parity with the historical Radar pilot or map pilot IDs**; do not mark complete unless that scoped Inbox-as-source-of-truth acceptance is the agreed requirement. #12 and #14 remain OPEN.

@@ -24,6 +24,7 @@ function SocialEvidenceInbox(){
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const watchBaseline=useRef(null);
  const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState(''),[manualCue,setManualCue]=useState(null);
+ const [correctionType,setCorrectionType]=useState('TOPICS'),[correctionTopics,setCorrectionTopics]=useState([]),[correctionQuote,setCorrectionQuote]=useState(''),[correctionConcern,setCorrectionConcern]=useState(''),[correctionRationale,setCorrectionRationale]=useState(''),[correctionBusy,setCorrectionBusy]=useState(false),[correctionMessage,setCorrectionMessage]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  useEffect(()=>{let active=true;setLoading(true);setError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost}})
@@ -198,6 +199,24 @@ function SocialEvidenceInbox(){
    setJurisdictionMessage('Officer jurisdiction decision saved; source permissions unchanged.');
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
+ }
+ async function saveOfficerClassification(){
+  if(!selected||correctionBusy)return;
+  if(!window.confirm('Save a new officer-reviewed assessment version? The original AI assessment will remain unchanged.'))return;
+  setCorrectionBusy(true);setCorrectionMessage('');
+  try{
+   const payload={result_id:selected.id,expected_version:selected.assessment_version,
+    correction_type:correctionType,rationale:correctionRationale.trim(),
+    ...(correctionType==='TOPICS'?{topics:correctionTopics}:{source_quote:correctionQuote.trim(),concern:correctionConcern.trim()})};
+   await base44.functions.invoke('socialListening',{action:'campaignOfficerClassificationCorrection',
+     id:selected.campaign_id,data:payload});
+   const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',
+     data:{campaign_id:selected.campaign_id,result_id:selected.id}});
+   const record=(response.data.findings||[]).find(x=>String(x.id)===String(selected.id));
+   if(record){setSelected(record);setFindings(rows=>rows.map(x=>String(x.id)===String(record.id)&&String(x.campaign_id)===String(record.campaign_id)?record:x));}
+   setCorrectionMessage('Officer correction saved as a new assessment version.');
+  }catch(e){setCorrectionMessage(e.response?.data?.detail||e.response?.data?.error||e.message||'Correction failed')}
+  finally{setCorrectionBusy(false)}
  }
  async function loadSummaryReadiness(){
   if(!campaign)return;
@@ -523,6 +542,15 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       {jurisdictionPreview&&<div className="space-y-1"><p>Explicit incident-context provinces: {(jurisdictionPreview.source_context_provinces_unverified||[]).join(', ')||'None identified'} · Assessment relevant: {jurisdictionPreview.source_post_relevance_assessed?'Yes':'No'}</p>{selected.can_review_flag&&jurisdictionPreview.source_post_relevance_assessed&&<div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy||(jurisdictionPreview.source_context_provinces_unverified||[]).length!==1} onClick={()=>confirmIncidentJurisdiction('CONFIRMED')}>Verify incident province</button><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={()=>confirmIncidentJurisdiction('REJECTED')}>Reject location cue</button></div>}</div>}
       {jurisdictionMessage&&<p role="status" className="text-slate-600">{jurisdictionMessage}</p>}
      </div><p><strong>Communication context (review hint):</strong> {selected.processing_hints?.communication_context?.category||'UNRESOLVED'} · Actionability not established; existing AI and human decisions remain unchanged.</p><p><strong>Topic suggestions (text-only):</strong> {(selected.processing_hints?.topic_suggestions||[]).join(', ')||'None'}</p><p><strong>Province mentions (not verified incident location):</strong> {(selected.processing_hints?.province_mentions||[]).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p>{(selected.topic_labels||[]).length>0&&<p><strong>AI topic classification:</strong> {selected.topic_labels.join(', ')} · Based on saved assessment, not keyword hints.</p>}
+     {selected.can_review_flag&&<section className="rounded-lg border border-teal-200 p-3 space-y-2" aria-label="Officer classification corrections">
+      <h4 className="font-semibold">Officer topic / Public Concerns correction</h4>
+      <p className="text-xs text-slate-500">Creates a new audited assessment version. Does not replace the original AI output or prove wrongdoing.</p>
+      <select aria-label="Correction type" className="intel-input w-full" value={correctionType} onChange={e=>setCorrectionType(e.target.value)}><option value="TOPICS">Correct topic classification</option><option value="PUBLIC_CONCERN">Record source-grounded Public Concern</option></select>
+      {correctionType==='TOPICS'?<div className="space-y-1">{['Electoral Operations','BAWASLU Reputation'].map(topic=><label className="flex gap-2 items-center text-xs" key={topic}><input type="checkbox" checked={correctionTopics.includes(topic)} onChange={e=>setCorrectionTopics(old=>e.target.checked?[...old,topic]:old.filter(x=>x!==topic))}/>{topic}</label>)}<p className="text-xs text-slate-500">Leave both unchecked to remove unsupported topic labels.</p></div>:<><textarea aria-label="Verbatim concern evidence" className="intel-input w-full" value={correctionQuote} onChange={e=>setCorrectionQuote(e.target.value)} placeholder="Copy a verbatim source excerpt (15+ characters)" rows={2}/><input aria-label="Public concern description" className="intel-input w-full" value={correctionConcern} onChange={e=>setCorrectionConcern(e.target.value)} placeholder="Concise description of the public concern"/></>}
+      <textarea aria-label="Officer correction rationale" className="intel-input w-full" rows={2} value={correctionRationale} onChange={e=>setCorrectionRationale(e.target.value)} placeholder="Independent review rationale (15+ characters)" />
+      <button type="button" className="intel-button" disabled={correctionBusy||correctionRationale.trim().length<15||(correctionType==='PUBLIC_CONCERN'&&(correctionQuote.trim().length<15||correctionConcern.trim().length<10))} onClick={saveOfficerClassification}>{correctionBusy?'Saving…':'Save officer classification review'}</button>
+      {correctionMessage&&<p role="status" className="text-xs">{correctionMessage}</p>}
+     </section>}
      {(selected.public_concern_signals||[]).length>0&&<section className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><strong>Public Concerns · unverified source quotations</strong>{selected.public_concern_signals.map((item,i)=><p key={i} className="text-xs">“{item.evidence_quote}” · {item.concern}</p>)}</section>}
      {selected.attention_assessment?.status==='AI_ASSESSMENT_UNVERIFIED'&&<p><strong>AI Needs Attention suggestion:</strong> Seriousness {selected.attention_assessment.seriousness} · Urgency {selected.attention_assessment.urgency} · Human triage required, not an automatic order.</p>}
      {(selected.player_summaries||[]).length>0&&<section className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1" aria-label="AI player summary drafts"><strong>Source-referenced AI summary drafts</strong>{selected.player_summaries.map((item,i)=><p key={i} className="text-xs"><strong>{item.player}:</strong> {item.summary} <span className="text-slate-500">Evidence: “{item.source_quote}” · Human verification required</span></p>)}</section>}

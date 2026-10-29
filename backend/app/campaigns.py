@@ -410,6 +410,9 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action in ('campaignJurisdictionPreview','campaignJurisdictionReview'):
         from .jurisdiction_review import jurisdiction_action
         return jurisdiction_action(db,p,action,data or {},id)
+    if action=='campaignOfficerClassificationCorrection':
+        from .officer_classification_correction import correct_classification
+        return correct_classification(db,p,id or (data or {}).get('campaign_id'),data)
     if action=='campaignSummaryReadiness':
         from .summary_readiness import campaign_summary_readiness
         return campaign_summary_readiness(db,p,id or (data or {}).get('campaign_id'))

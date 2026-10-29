@@ -14,6 +14,7 @@ function SocialEvidenceInbox(){
  const requestedCampaign=deepLink.get('campaign_id')||'';
  const requestedPost=deepLink.get('result_id')||'';
  const [processingSummary,setProcessingSummary]=useState(null);
+ const [qaHistory,setQAHistory]=useState(null),[qaBusy,setQABusy]=useState(false),[qaError,setQAError]=useState('');
  const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState(''),[groupExpanded,setGroupExpanded]=useState(false),[groupEvidence,setGroupEvidence]=useState(null);
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
@@ -132,6 +133,17 @@ function SocialEvidenceInbox(){
    setJurisdictionMessage('Officer jurisdiction decision saved; source permissions unchanged.');
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
+ }
+ async function loadQAHistory(){
+  setQABusy(true);setQAError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignQAHistorySummary',data:{}});setQAHistory(r.data)}
+  catch(e){setQAError(e.response?.data?.detail||e.message)}
+  finally{setQABusy(false)}
+ }
+ function focusPlayerEvidence(resultId){
+  const item=findings.find(row=>String(row.id)===String(resultId));
+  if(item){setSelected(item);setError('')}
+  else setError('This evidence is outside the current visible Inbox page.');
  }
  async function previewFindingGroups(){
   if(!campaign){setGroupError('Select a campaign to preview groups.');return;}
@@ -276,7 +288,33 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <div className="flex flex-wrap justify-between gap-2"><h3 className="text-sm font-semibold">Five Intelligence Players · saved evidence screening</h3><span className="text-[11px] text-slate-500">Authorized assessed posts · snapshot at last refresh</span></div>
    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">{['Potential Violations','Public Concerns','Emerging Narratives','Needs Attention','Reviewed History'].map(name=><div key={name} className="rounded-md bg-slate-50 p-2"><p className="text-[11px] text-slate-600">{name}</p><p className="font-semibold tabular-nums">{processingSummary.intelligence_players?.[name]?.count??0}</p></div>)}</div>
    <p className="text-[11px] text-slate-500">Counts are provisional saved-evidence screening, not verified incidents or legal findings. Emerging Narratives and Public Concerns require human review. No AI call is made to display these results.</p>
+   <details className="text-xs rounded-md border border-slate-200 p-2" open>
+    <summary className="cursor-pointer font-semibold">Open saved intelligence findings and source-grounded summaries</summary>
+    <div className="space-y-3 mt-3">
+      {['Potential Violations','Public Concerns','Emerging Narratives','Needs Attention','Reviewed History'].map(name=><div key={name} className="space-y-1">
+       <strong>{name} ({processingSummary.intelligence_players?.[name]?.count??0})</strong>
+       {(processingSummary.intelligence_players?.[name]?.entries||[]).length===0?<p className="text-slate-500">No saved source-qualified entries in this view.</p>:
+        <div className="grid gap-2">{(processingSummary.intelligence_players?.[name]?.entries||[]).slice(0,40).map((entry,i)=><article key={String(entry.result_id||entry.source_ids?.join('-')||i)} className="rounded-md bg-slate-50 border border-slate-200 p-2">
+         <p className="font-medium">{entry.anchor||entry.status||entry.review_status||'Provisional evidence'} · {entry.seriousness&&entry.seriousness!=='NOT_ASSESSED'?'Seriousness: '+entry.seriousness+' · ':''}{entry.urgency&&entry.urgency!=='NOT_ASSESSED'?'Urgency: '+entry.urgency:''}</p>
+         {entry.source_cues?.length>0&&<p className="mt-1 text-slate-700">Source evidence: {entry.source_cues.slice(0,2).join(' · ')}</p>}
+         {entry.ai_summary_draft&&<p className="mt-1"><strong>Saved AI draft (unverified):</strong> {entry.ai_summary_draft.summary} · <em>Quote: {entry.ai_summary_draft.source_quote}</em></p>}
+         {(entry.ai_summary_drafts||[]).map((draft,k)=><p key={k}><strong>Saved post draft (unverified):</strong> {draft.summary} · <em>{draft.source_quote}</em></p>)}
+         <div className="flex flex-wrap gap-2 mt-2">{(entry.source_ids||[entry.result_id]).filter(Boolean).map(id=><button type="button" key={id} className="intel-ghost text-xs" onClick={()=>focusPlayerEvidence(id)}>Inspect source {id}</button>)}</div>
+         <p className="text-slate-500 mt-1">Officer review required for intelligence validation.</p>
+        </article>)}</div>}
+       </div>)}
+    </div>
+   </details>
+   <details className="text-xs rounded-md border border-slate-200 p-2">
+    <summary className="cursor-pointer font-semibold">Electoral Operations / BAWASLU Reputation · topic evidence</summary>
+    <div className="mt-2 grid gap-2">{(processingSummary.topic_groups||[]).length===0?<p>No recorded topic groups in visible saved evidence.</p>:(processingSummary.topic_groups||[]).map((group,i)=><div key={i} className="rounded border p-2"><strong>{group.topic}</strong> · {group.status==='SAVED_AI_TOPIC'?'Saved AI classification':'Keyword suggestion, not AI-confirmed'} · {group.count} source(s)<div className="flex flex-wrap gap-2 mt-1">{group.source_ids.slice(0,40).map(id=><button key={id} type="button" className="intel-ghost text-xs" onClick={()=>focusPlayerEvidence(id)}>Inspect source {id}</button>)}</div></div>)}</div>
+   </details>
    <details className="text-xs"><summary className="cursor-pointer font-semibold">Coverage and evidence diagnostics</summary><p className="mt-2 text-slate-600">Missing source URLs: {processingSummary.processing_diagnostics?.missing_field_counts?.canonical_url??0} · Unclassified sentiment: {processingSummary.processing_diagnostics?.missing_field_counts?.sentiment??0} · Attention cues with a source quote: {processingSummary.processing_diagnostics?.posts_with_source_quoted_attention_evidence??0} · Officer follow-up requested: {processingSummary.processing_diagnostics?.human_follow_up_requested??0}. Source-specific model usage is available separately. Dollar costs remain unavailable unless reported by the provider.</p></details>
+   <div className="space-y-2">
+     <button type="button" className="intel-ghost text-xs" disabled={qaBusy} onClick={loadQAHistory}>Compare saved Shahrin QA results (admin · free)</button>
+     {qaHistory&&<div className="text-xs space-y-2"><p>Historical predictions only; holdout data excluded. Reference labels may be awaiting analyst sign-off. Target: {qaHistory.target_accuracy_percent}%.</p><div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
+     {qaError&&<p role="alert" className="text-red-700">{qaError}</p>}
+   </div>
    {campaign&&<div className="space-y-2"><button type="button" className="intel-ghost text-xs" disabled={usageBusy} onClick={loadUsageDiagnostics}>Load AI usage and failure diagnostics (free)</button>{usageDiagnostics&&<p className="text-xs text-slate-600">Posts assessed: {usageDiagnostics.posts_with_assessment_version} / {usageDiagnostics.authorized_source_posts} · Failed jobs: {usageDiagnostics.failed_jobs} · Provider-reported tokens: {usageDiagnostics.ai_usage?.input_tokens_reported??0} input / {usageDiagnostics.ai_usage?.output_tokens_reported??0} output · Costs: {usageDiagnostics.ai_usage?.cost_status||'UNAVAILABLE'} · Missing source text: {usageDiagnostics.missing_fields?.content??0}</p>}{usageError&&<p role="alert" className="text-xs text-red-700">{usageError}</p>}</div>}
   </section>}
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">

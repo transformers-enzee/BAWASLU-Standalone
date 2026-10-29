@@ -410,6 +410,9 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action in ('campaignJurisdictionPreview','campaignJurisdictionReview'):
         from .jurisdiction_review import jurisdiction_action
         return jurisdiction_action(db,p,action,data or {},id)
+    if action=='campaignQAHistorySummary':
+        from .qa_saved_accuracy import qa_history_summary
+        return qa_history_summary(db,p)
     if action=='campaignUsageDiagnostics':
         from .assessment_usage import campaign_usage_diagnostics
         return campaign_usage_diagnostics(db,p,id or (data or {}).get('campaign_id'))

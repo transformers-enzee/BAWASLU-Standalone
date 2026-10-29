@@ -401,58 +401,102 @@ def summarize_scoped_findings(records):
         topic_basis='SAVED_AI_TOPIC' if saved_topics else 'KEYWORD_GROUP_ONLY'
         for topic in saved_topics or metadata.get('topic_suggestions') or []:
             topic_groups[(topic,topic_basis)].append(rid)
+        source_text=str(row.get('text_content') or '')
         player_drafts={x.get('player'):x for x in
             (row.get('player_summaries') or []) if isinstance(x,dict)
-            and x.get('status')=='AI_DRAFT_REQUIRES_HUMAN_REVIEW'}
+            and x.get('status')=='AI_DRAFT_REQUIRES_HUMAN_REVIEW'
+            and len(str(x.get('source_quote') or '').strip())>=15
+            and str(x.get('source_quote') or '').strip().casefold()
+                in source_text.casefold()}
         key={'result_id':rid,'campaign_id':campaign}
         issue=bool(row.get('potential_issues'))
         flag=bool(row.get('is_flagged'))
         status=str(row.get('flag_review_status') or '').upper()
         dismissed=status=='FLAG_DISMISSED'
         if issue and not dismissed:
+            quotes=[str(x.get('evidence_quote')).strip() for x in
+                (row.get('potential_issues') or []) if isinstance(x,dict)
+                and len(str(x.get('evidence_quote') or '').strip())>=12
+                and str(x.get('evidence_quote') or '').strip().casefold()
+                    in source_text.casefold()]
             players['Potential Violations'].append({**key,'status':'PRELIMINARY_SIGNAL',
+                'source_cues':quotes[:4],'evidence_verified':False,
                 'ai_summary_draft':player_drafts.get('Potential Violations')})
         if status:
             players['Reviewed History'].append({**key,'review_status':status})
         # Only assessed relevant posts enter this view. A phrase is a cue
         # for human review, not an independently verified public concern.
-        if not issue and not flag and not dismissed:
-            concerns=row.get('public_concern_signals') or []
-            cues=metadata.get('public_concern_cues') or public_concern_cues(row.get('text_content'))
-            if concerns:
+        concerns=row.get('public_concern_signals') or []
+        valid_concerns=[x for x in concerns if isinstance(x,dict)
+            and len(str(x.get('evidence_quote') or '').strip())>=15
+            and str(x.get('evidence_quote') or '').strip().casefold()
+                in source_text.casefold()]
+        if not dismissed:
+            cues=metadata.get('public_concern_cues') or public_concern_cues(source_text)
+            if valid_concerns:
                 players['Public Concerns'].append({**key,
-                    'source_cues':[x['evidence_quote'] for x in concerns[:4] if isinstance(x,dict) and x.get('evidence_quote')],
+                    'source_cues':[x['evidence_quote'] for x in valid_concerns[:4]],
                     'status':'SAVED_AI_CONCERN_REQUIRES_REVIEW',
                     'ai_summary_draft':player_drafts.get('Public Concerns'),
                     'evidence_verified':False})
             elif cues:
                 players['Public Concerns'].append({**key,
                     'source_cues':cues[:4],'status':'TEXTUAL_CONCERN_REVIEW_CANDIDATE',
+                    'ai_summary_draft':player_drafts.get('Public Concerns'),
                     'evidence_verified':False})
-        if (issue or flag) and not dismissed:
+        proposed=row.get('attention_assessment') or {}
+        saved_quote=str(proposed.get('evidence_quote') or '').strip()
+        saved_attention_valid=(proposed.get('status')=='AI_ASSESSMENT_UNVERIFIED'
+            and len(saved_quote)>=20
+            and saved_quote.casefold() in source_text.casefold()
+            and bool(issue or valid_concerns))
+        if (issue or flag or saved_attention_valid) and not dismissed:
             posture=attention_evidence_readiness(row)
-            proposed=row.get('attention_assessment') or {}
-            if proposed.get('status')=='AI_ASSESSMENT_UNVERIFIED':
+            if saved_attention_valid:
                 posture['seriousness']=proposed.get('seriousness','NOT_ASSESSED')
                 if posture['urgency']!='OFFICER_REQUESTED_FOLLOW_UP':
                     posture['urgency']=proposed.get('urgency','NOT_ASSESSED')
                 posture['ai_attention_is_provisional']=True
-            attention.append({**key,'reason':'SAVED_ISSUE_OR_HUMAN_FLAG',
+            if saved_attention_valid:
+                posture['evidence_quality']='SOURCE_QUOTED_UNCORROBORATED'
+            attention.append({**key,'reason':'SAVED_ISSUE_OR_HUMAN_FLAG'
+                if issue or flag else 'SOURCE_QUOTED_SAVED_AI_ATTENTION',
                 'ai_summary_draft':player_drafts.get('Needs Attention'),
+                'source_quote':saved_quote if saved_attention_valid else None,
                 'status':'FURTHER_INVESTIGATION' if status=='FURTHER_INVESTIGATION' else 'PRELIMINARY_REVIEW',
                 **posture})
             players['Needs Attention'].append({**key,'status':'PENDING_HUMAN_TRIAGE',
-                'urgency':posture['urgency'],'evidence_quality':posture['evidence_quality']})
+                'seriousness':posture['seriousness'],
+                'urgency':posture['urgency'],'actionability':posture['actionability'],
+                'evidence_quality':posture['evidence_quality'],
+                'source_cues':[saved_quote] if saved_attention_valid else [],
+                'ai_summary_draft':player_drafts.get('Needs Attention'),
+                'legal_violation_confirmed':False})
     duplicates=[{'campaign_id':group['campaign_id'],'source_ids':group['post_ids'],
                  'basis':'EXACT_NORMALIZED_TEXT'} for group in exact_source_groups(records)]
     narratives=emerging_narrative_candidates(records)
     incident_candidates=incident_cluster_candidates(records)
     candidate_identities=canonical_candidate_candidates(records)
+    source_by_id={str(row.get('id')):row for row in records}
     for narrative in narratives:
+        eligible_drafts=[]
+        for sid in narrative['source_ids']:
+            source=source_by_id.get(str(sid)) or {}
+            body=str(source.get('text_content') or '')
+            for draft in source.get('player_summaries') or []:
+                if isinstance(draft,dict) and draft.get('player')=='Emerging Narratives' and (
+                        draft.get('status')=='AI_DRAFT_REQUIRES_HUMAN_REVIEW') and (
+                        len(str(draft.get('source_quote') or '').strip())>=15) and (
+                        str(draft.get('source_quote') or '').strip().casefold()
+                        in body.casefold()):
+                    eligible_drafts.append({'result_id':str(sid),**draft})
+                    break
         players['Emerging Narratives'].append({
             'campaign_id':narrative['campaign_id'],
             'source_ids':narrative['source_ids'],
             'anchor':narrative['anchor'],
+            'ai_summary_drafts':eligible_drafts[:3],
+            'evidence_verified':False,
             'status':'REQUIRES_HUMAN_REVIEW'})
     missing_fields={'text_content':0,'canonical_url':0,'campaign_id':0,
                     'sentiment':0,'assessment_version':0}

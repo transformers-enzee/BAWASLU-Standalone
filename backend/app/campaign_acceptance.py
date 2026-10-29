@@ -103,6 +103,34 @@ def campaign_acceptance_snapshot(db,p,raw_id):
        item(15,'Processing diagnostics','COVERAGE_AVAILABLE',
             coverage['authorized_posts'],'No paid requests or assumed zero cost'),
     ]
+    # One explicit release-level acceptance matrix for Batch 1. This is
+    # evidence readiness, never an implied human signoff.
+    batch1={
+      '6': {'workflow_tested':True,
+            'production_state':'OFFICER_VERIFIED' if verified_locations else 'REVIEW_REQUIRED',
+            'officer_accepted':bool(verified_locations),
+            'blocker':None if verified_locations else 'No independently officer-confirmed incident geography'},
+      '8': {'workflow_tested':True,
+            'production_state':'OFFICER_REVIEWED' if reviewed['EXACT_DUPLICATE']
+                else 'SAVED_PENDING_REVIEW' if stored['EXACT_DUPLICATE']
+                else 'PROPOSAL_READY' if candidate_counts['EXACT_DUPLICATE']
+                else 'NO_EXACT_DUPLICATE_EVIDENCE',
+            'officer_accepted':bool(reviewed['EXACT_DUPLICATE']),
+            'blocker':None if reviewed['EXACT_DUPLICATE'] else
+                'Officer acceptance of saved duplicate evidence not recorded'},
+      '9': {'workflow_tested':True,
+            'production_state':group_state('NARRATIVE_CANDIDATE'),
+            'officer_accepted':bool(reviewed['NARRATIVE_CANDIDATE']),
+            'blocker':None if reviewed['NARRATIVE_CANDIDATE'] else
+                'Independent-source narrative evidence and officer decision not complete'},
+      '11':{'workflow_tested':True,
+            'production_state':'SAVED_TRIAGE_EVIDENCE' if players.get('Needs Attention',{}).get('count')
+                else 'NO_QUALIFYING_SAVED_TRIAGE',
+            'officer_accepted':False,
+            'blocker':'Saved attention candidates are not independent officer triage approval'
+                if players.get('Needs Attention',{}).get('count') else
+                'No qualifying saved Needs Attention evidence to verify positive production path'}
+    }
     # Next actions are honest evidence gates, not inferred DONE statuses.
     next_actions=[]
     if candidate_counts['EXACT_DUPLICATE'] and not stored['EXACT_DUPLICATE']:
@@ -161,6 +189,9 @@ def campaign_acceptance_snapshot(db,p,raw_id):
         'instruction':'An analyst must reconcile reference labels; the unvalidated V18 draft requires a separate authorized measured test.',
         'source_groups':0})
     return {'campaign_id':str(campaign.id),'campaign_name':campaign.name,
+        'batch1_acceptance':batch1,
+        'batch1_all_officer_accepted':all(row['officer_accepted'] for row in batch1.values()),
+        'batch1_paid_provider_called':False,
         'next_actions':next_actions,
         'fully_completed_items_not_inferred':True,
         'items':ledger,'linked_posts':coverage['linked_posts'],

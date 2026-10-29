@@ -395,6 +395,10 @@ class EvidenceAssessment(Base):
     candidate_signals_json: Mapped[str] = mapped_column(Text, default='[]')
     geographic_signals_json: Mapped[str] = mapped_column(Text, default='[]')
     potential_issue_signals_json: Mapped[str] = mapped_column(Text, default='[]')
+    topic_labels_json: Mapped[str] = mapped_column(Text, default='[]')
+    public_concern_signals_json: Mapped[str] = mapped_column(Text, default='[]')
+    attention_assessment_json: Mapped[str] = mapped_column(Text, default='{}')
+    player_summaries_json: Mapped[str] = mapped_column(Text, default='[]')
     explanation: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__=(UniqueConstraint('campaign_id','result_id','assessment_version',name='uq_evidence_assessment_version'),)
@@ -414,6 +418,22 @@ class CampaignFindingGroup(Base):
     reviewed_by: Mapped[str] = mapped_column(String(128), default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     reviewed_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+
+class AssessmentAIUsage(Base):
+    """Provider-reported token usage only; cost is unknown unless reported."""
+    __tablename__='assessment_ai_usage'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_id: Mapped[int] = mapped_column(
+        ForeignKey('evidence_assessments.id'),unique=True,index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'),index=True)
+    provider_model: Mapped[str] = mapped_column(String(100),default='')
+    request_kind: Mapped[str] = mapped_column(String(40),default='')
+    input_tokens: Mapped[int] = mapped_column(Integer,default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer,default=0)
+    usage_reported: Mapped[bool] = mapped_column(Boolean,default=False)
+    cost_usd: Mapped[str] = mapped_column(String(64),default='')
+    cost_status: Mapped[str] = mapped_column(String(64),default='NOT_REPORTED')
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
 
 class AssessmentSignalDiagnostic(Base):
     """Non-sensitive AI candidate and validation counts, never raw model output."""

@@ -379,28 +379,49 @@ def summarize_scoped_findings(records):
         rid=str(row.get('id') or '')
         campaign=str(row.get('campaign_id') or '')
         metadata=row.get('processing_hints') or source_hints(row.get('text_content'))
-        for topic in metadata.get('topic_suggestions') or []:
-            topic_groups[topic].append(rid)
+        saved_topics=[x for x in (row.get('topic_labels') or [])
+                      if x in ('Electoral Operations','BAWASLU Reputation')]
+        topic_basis='SAVED_AI_TOPIC' if saved_topics else 'KEYWORD_GROUP_ONLY'
+        for topic in saved_topics or metadata.get('topic_suggestions') or []:
+            topic_groups[(topic,topic_basis)].append(rid)
+        player_drafts={x.get('player'):x for x in
+            (row.get('player_summaries') or []) if isinstance(x,dict)
+            and x.get('status')=='AI_DRAFT_REQUIRES_HUMAN_REVIEW'}
         key={'result_id':rid,'campaign_id':campaign}
         issue=bool(row.get('potential_issues'))
         flag=bool(row.get('is_flagged'))
         status=str(row.get('flag_review_status') or '').upper()
         dismissed=status=='FLAG_DISMISSED'
         if issue and not dismissed:
-            players['Potential Violations'].append({**key,'status':'PRELIMINARY_SIGNAL'})
+            players['Potential Violations'].append({**key,'status':'PRELIMINARY_SIGNAL',
+                'ai_summary_draft':player_drafts.get('Potential Violations')})
         if status:
             players['Reviewed History'].append({**key,'review_status':status})
         # Only assessed relevant posts enter this view. A phrase is a cue
         # for human review, not an independently verified public concern.
         if not issue and not flag and not dismissed:
+            concerns=row.get('public_concern_signals') or []
             cues=metadata.get('public_concern_cues') or public_concern_cues(row.get('text_content'))
-            if cues:
+            if concerns:
+                players['Public Concerns'].append({**key,
+                    'source_cues':[x['evidence_quote'] for x in concerns[:4] if isinstance(x,dict) and x.get('evidence_quote')],
+                    'status':'SAVED_AI_CONCERN_REQUIRES_REVIEW',
+                    'ai_summary_draft':player_drafts.get('Public Concerns'),
+                    'evidence_verified':False})
+            elif cues:
                 players['Public Concerns'].append({**key,
                     'source_cues':cues[:4],'status':'TEXTUAL_CONCERN_REVIEW_CANDIDATE',
                     'evidence_verified':False})
         if (issue or flag) and not dismissed:
             posture=attention_evidence_readiness(row)
+            proposed=row.get('attention_assessment') or {}
+            if proposed.get('status')=='AI_ASSESSMENT_UNVERIFIED':
+                posture['seriousness']=proposed.get('seriousness','NOT_ASSESSED')
+                if posture['urgency']!='OFFICER_REQUESTED_FOLLOW_UP':
+                    posture['urgency']=proposed.get('urgency','NOT_ASSESSED')
+                posture['ai_attention_is_provisional']=True
             attention.append({**key,'reason':'SAVED_ISSUE_OR_HUMAN_FLAG',
+                'ai_summary_draft':player_drafts.get('Needs Attention'),
                 'status':'FURTHER_INVESTIGATION' if status=='FURTHER_INVESTIGATION' else 'PRELIMINARY_REVIEW',
                 **posture})
             players['Needs Attention'].append({**key,'status':'PENDING_HUMAN_TRIAGE',
@@ -432,8 +453,8 @@ def summarize_scoped_findings(records):
         'incident_cluster_candidates':incident_candidates,
         'canonical_candidate_candidates':candidate_identities,
         'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),
-                         'status':'KEYWORD_GROUP_ONLY'}
-                        for name,ids in sorted(topic_groups.items())],
+                         'status':basis}
+                        for (name,basis),ids in sorted(topic_groups.items())],
         'needs_attention_candidates':attention,
         'intelligence_players':{name:{'entries':items,'count':len(items)}
                                 for name,items in players.items()},
@@ -443,6 +464,12 @@ def summarize_scoped_findings(records):
                 x.get('supported_quote_count',0)>0 for x in attention),
             'human_follow_up_requested':sum(
                 x['urgency']=='OFFICER_REQUESTED_FOLLOW_UP' for x in attention),
+            'posts_with_saved_ai_topics':sum(bool(x.get('topic_labels')) for x in records),
+            'posts_with_saved_concern_signals':sum(bool(x.get('public_concern_signals')) for x in records),
+            'posts_with_saved_ai_summary_drafts':sum(bool(x.get('player_summaries')) for x in records),
+            'posts_with_provisional_ai_attention':sum(
+                (x.get('attention_assessment') or {}).get('status')=='AI_ASSESSMENT_UNVERIFIED'
+                for x in records),
             'failed_classifications_reported':False,
             'ai_usage_cost_reported':False,'scope':'VISIBLE_ROWS_ONLY'},
         'incident_clusters_verified':0,'narratives_verified':0,

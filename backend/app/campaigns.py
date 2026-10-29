@@ -394,6 +394,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                   'campaignFindingGroupsList','campaignFindingGroupsReview'):
         from .finding_groups import finding_group_action
         return finding_group_action(db,p,action,data or {},id)
+    if action=='campaignUsageDiagnostics':
+        from .assessment_usage import campaign_usage_diagnostics
+        return campaign_usage_diagnostics(db,p,id or (data or {}).get('campaign_id'))
     if action=='campaignAssessmentPilotPreview':
         from .assessment_pilot import assessment_pilot_preview
         return assessment_pilot_preview(db,p,data,id)

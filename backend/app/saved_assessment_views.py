@@ -96,6 +96,10 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'candidate_identity_matches':resolve_signals(
                 _safe_candidate_signals(assessment.candidate_signals_json),
                 scoped_candidate_index),
+            'topic_labels':_safe_candidate_signals(assessment.topic_labels_json),
+            'public_concern_signals':_safe_candidate_signals(assessment.public_concern_signals_json),
+            'attention_assessment':_safe_object(assessment.attention_assessment_json),
+            'player_summary_drafts':_safe_candidate_signals(assessment.player_summaries_json),
             'potential_issues':signals,
             'signal_source':source,
             'review_status':decision,
@@ -113,3 +117,10 @@ def _safe_candidate_signals(raw):
     except (TypeError,ValueError):
         return []
     return value if isinstance(value,list) else []
+
+def _safe_object(raw):
+    try:
+        value=json.loads(raw or '{}')
+    except (TypeError,ValueError):
+        return {}
+    return value if isinstance(value,dict) else {}

@@ -379,8 +379,20 @@ def _classify_campaign_sentiment(db,p,c,data):
         candidate_signals_json=prior.candidate_signals_json if prior else '[]',
         geographic_signals_json=prior.geographic_signals_json if prior else '[]',
         potential_issue_signals_json=prior.potential_issue_signals_json if prior else '[]',
+        topic_labels_json=prior.topic_labels_json if prior else '[]',
+        public_concern_signals_json=prior.public_concern_signals_json if prior else '[]',
+        attention_assessment_json=prior.attention_assessment_json if prior else '{}',
+        player_summaries_json=prior.player_summaries_json if prior else '[]',
         explanation=prior.explanation if prior else '')
-    db.add(record);db.commit()
+    db.add(record);db.flush()
+    from .models import AssessmentAIUsage
+    from .classification_enrichment import token_usage
+    db.add(AssessmentAIUsage(
+        assessment_id=record.id,campaign_id=c.id,
+        provider_model=str(payload.get('model') or model),
+        request_kind='STANDALONE_SENTIMENT',
+        **token_usage(payload.get('usage'))))
+    db.commit()
     audit(db,p,'EvidenceAssessment',record.id,'AI_POST_SENTIMENT_CLASSIFIED',
           {'sentiment':{'new':label},'model':{'new':record.sentiment_model}})
     return {'sentiment':label.title() if label!='UNCLASSIFIED' else 'Unclassified',
@@ -607,6 +619,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 candidate_signals_json=old.candidate_signals_json,
                 geographic_signals_json=old.geographic_signals_json,
                 potential_issue_signals_json=old.potential_issue_signals_json,
+                topic_labels_json=old.topic_labels_json,
+                public_concern_signals_json=old.public_concern_signals_json,
+                attention_assessment_json=old.attention_assessment_json,
+                player_summaries_json=old.player_summaries_json,
                 explanation='Human correction: '+rationale[:1100])
             db.add(new);db.flush()
             db.add(EvidenceReview(assessment_id=new.id,reviewer_id=str(p['id']),decision=decision,rationale=rationale[:1500]))
@@ -838,6 +854,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
                     'candidate_signals':parse_list(assessment.candidate_signals_json),
+                    'topic_labels':parse_list(assessment.topic_labels_json),
+                    'public_concern_signals':parse_list(assessment.public_concern_signals_json),
+                    'attention_assessment':__import__('app.classification_enrichment',fromlist=['json_obj']).json_obj(assessment.attention_assessment_json),
+                    'player_summaries':parse_list(assessment.player_summaries_json),
                     'potential_issues':issue_signals,'issue_review_leads':issue_review_leads,
                     'processing_hints':{**processing,'triage_disposition':__import__('app.processing_hints',fromlist=['triage_disposition']).triage_disposition(item.text_content,assessment.relevance_label)},
                     'normalized_candidate_names':__import__('app.processing_hints',fromlist=['normalize_candidate_signals']).normalize_candidate_signals(parse_list(assessment.candidate_signals_json)),'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),

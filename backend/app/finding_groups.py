@@ -161,6 +161,8 @@ def serialize_group(group):
         'review_rationale':group.review_rationale,
         'reviewed_by':group.reviewed_by,
         'grouping_reviewed':group.review_status in ('ACCEPTED','REJECTED'),
+        'proposed_by_automation':str(group.created_by or '').startswith('system:'),
+        'proposer_record':group.created_by,
         'legal_violation_confirmed':False,
         'paid_provider_called':False}
 

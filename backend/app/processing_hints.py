@@ -4,6 +4,7 @@ These are descriptive candidates, not legal conclusions or jurisdiction grants.
 """
 import hashlib
 import re
+from datetime import datetime
 
 PROVINCE_ALIASES={
     'riau':'Riau', 'jawa timur':'Jawa Timur','jatim':'Jawa Timur',
@@ -25,6 +26,7 @@ NARRATIVE_ANCHORS={
         'kritik terhadap bawaslu','citra bawaslu','bawaslu tidak netral','bawaslu berpihak'),
     'Election dispute proceedings':('sengketa pemilu','sengketa pilkada','putusan dkpp'),
     'Candidate nomination process':('proses pencalonan','pendaftaran calon','verifikasi calon'),
+    'Participatory election oversight':('pengawasan partisipatif','pengawas partisipatif'),
 }
 def _term_present(body,term):
     return bool(re.search(r'(?<!\w)'+re.escape(term)+r'(?!\w)',body))
@@ -309,6 +311,12 @@ def exact_source_groups(records):
             for (campaign,_),ids in sorted(groups.items()) if len(ids)>1]
 
 
+def _published_day(raw):
+    """Safe date-only extraction; absence remains explicitly unverified."""
+    try:return datetime.fromisoformat(str(raw)[:10]).date()
+    except (ValueError,TypeError):return None
+
+
 def emerging_narrative_candidates(records):
     """Unverified recurring discussions, never confirmed incident clusters.
 
@@ -329,16 +337,31 @@ def emerging_narrative_candidates(records):
         if not (campaign and rid and author and url and fingerprint):
             continue
         for anchor in narrative_anchors(body):
-            grouped[(campaign,anchor)].append((rid,author,url,fingerprint))
+            grouped[(campaign,anchor)].append(
+                (rid,author,url,fingerprint,_published_day(row.get('published_at'))))
     candidates=[]
     for (campaign,anchor),items in sorted(grouped.items()):
         by_fingerprint={}
         for item in sorted(items,key=lambda value:value[0]):
             by_fingerprint.setdefault(item[3],item)
         evidence=list(by_fingerprint.values())
+        # "Emerging" must not silently combine a 2025 post with two 2026
+        # posts. Use a 90-day window when every source has a real timestamp.
+        time_basis='SOURCE_DATES_UNVERIFIED'
+        if evidence and all(item[4] for item in evidence):
+            ordered=sorted(evidence,key=lambda item:(item[4],item[0]))
+            windows=[]
+            for first in ordered:
+                window=[item for item in ordered
+                    if first[4]<=item[4] and (item[4]-first[4]).days<=90]
+                windows.append(window)
+            evidence=sorted(windows,key=lambda window:(
+                -len(window),tuple(sorted(x[0] for x in window))))[0]
+            time_basis='SOURCE_PUBLICATION_WITHIN_90_DAYS'
         if len(evidence)<3 or len({x[1] for x in evidence})<3 or len({x[2] for x in evidence})<3:
             continue
         candidates.append({'campaign_id':campaign,'anchor':anchor,
+            'time_basis':time_basis,
             'source_ids':sorted(x[0] for x in evidence),'distinct_posts':len(evidence),
             'distinct_authors':len({x[1] for x in evidence}),
             'distinct_urls':len({x[2] for x in evidence}),

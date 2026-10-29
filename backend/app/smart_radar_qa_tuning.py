@@ -371,6 +371,13 @@ EXEMPLAR_V17_PILOT_LIMIT=105  # upper ceiling; current eligible cohort may be sm
 def exemplar_audit_key(vid):
     return "qa-exemplar-audit-v"+str(vid)
 
+def eligible_exemplar_audit_targets(records,blocked,approved,limit=EXEMPLAR_V17_PILOT_LIMIT):
+    """Eligible source-cohort count, not an impossible assumed 105-post target."""
+    pool=[row for row in records if row.get("cohort")=="exemplar"
+          and row["qa_id"] not in blocked and row["qa_id"] in approved]
+    pool=sorted(pool,key=lambda r:hashlib.sha256(r["qa_id"].encode()).hexdigest())
+    return pool[:limit]
+
 @router.get("/tuning/exemplar-audit")
 def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends(current_user),db:Session=Depends(get_db)):
     reviewer(db,user)
@@ -390,26 +397,49 @@ def exemplar_audit_status(version_id:int=Query(17,ge=14,le=17),user:User=Depends
     paired = [x for x in rows if x["qa_id"] in baseline]
     baseline_matches = sum(baseline[x["qa_id"]] == x["gold"] for x in paired)
     n=len(rows)
-    target=EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT
+    target=EXEMPLAR_AUDIT_LIMIT
+    eligible_exemplars=0
+    blocked_or_ineligible=0
+    completed_in_active_pool=n
+    if version_id==17:
+        version=db.execute(text("""
+            SELECT created_at FROM pilot_smart_radar.qa_prompt_versions WHERE id=:vid
+        """),{"vid":version_id}).mappings().first()
+        approved={x["qa_id"] for x in db.execute(text("""
+            SELECT qa_id FROM pilot_smart_radar.qa_shahrin_exemplars
+            WHERE eligible=true
+        """)).mappings().all()}
+        eligible_exemplars=len(approved)
+        records=_cohort_rows(db,as_of=version["created_at"] if version else None)
+        blocked=blocked_references(db)
+        pool=eligible_exemplar_audit_targets(records,blocked,approved)
+        active_ids={x["qa_id"] for x in pool}
+        completed_in_active_pool=sum(x["qa_id"] in active_ids for x in rows)
+        blocked_or_ineligible=max(0,len(records)-len(pool))
+        target=len(pool)
     matched=sum(x["predicted"]==x["gold"] for x in rows)
-    pilot_slots=max(0,EXEMPLAR_V17_PILOT_LIMIT-n) if version_id==17 else 0
+    pilot_slots=max(0,target-completed_in_active_pool) if version_id==17 else 0
     return {"version_id":version_id,"completed":n,"target":target,"matched":matched,
+       "requested_exemplar_ceiling":EXEMPLAR_V17_PILOT_LIMIT if version_id==17 else EXEMPLAR_AUDIT_LIMIT,
+       "eligible_reference_examples":eligible_exemplars if version_id==17 else None,
+       "completed_in_current_eligible_pool":completed_in_active_pool,
+       "excluded_or_blocked_records":blocked_or_ineligible if version_id==17 else None,
        "baseline_paired_n":len(paired),
        "baseline_paired_matched":baseline_matches,
        "baseline_paired_agreement":round(baseline_matches/len(paired),4) if paired else None,
        "agreement":round(matched/n,4) if n else None,
-       "remaining":max(0,target-n),
+       "remaining":pilot_slots if version_id==17 else max(0,target-n),
        "pilot_slots_remaining":pilot_slots,
        "with_references":sum(x["reference_count"]>0 for x in rows),
        "quote_warnings":sum(x["quote_status"]!="verified_verbatim" for x in rows),
-       "warning":"In-sample exemplar agreement only. Historical V14/V15 were no-reference audits, while V16/V17 use text-based reference lookup. V17 capped at 105, but restricted to eligible exemplar targets; designated holdout excluded. Holdout excluded."}
+       "warning":"In-sample exemplar agreement only. The 105-post figure is a ceiling, not the current number of eligible exemplars. Blocked records, development records, and sealed holdout are excluded. Human labels may still need sign-off."}
 
 @router.post("/tuning/exemplar-audit/run")
 def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
                        db:Session=Depends(get_db)):
     qa_admin(db,user)
     if body.version_id != 17 or body.retry_failed:
-        raise HTTPException(422,"Only V17 paired 18-post pilot accepts new paid batches; retries disabled")
+        raise HTTPException(422,"Only V17 eligible-exemplar audit accepts manually approved batches; retries disabled")
     if not _LOCK.acquire(blocking=False):
         raise HTTPException(409,"Another QA batch is running")
     try:
@@ -424,15 +454,11 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
         # The audit deliberately uses eligible exemplars, never development or holdout.
         records=_cohort_rows(db,as_of=version["created_at"])
         excluded=blocked_references(db)
-        pool=[r for r in records if r["cohort"]=="exemplar"
-             and r["qa_id"] not in excluded]
-        approved={r["qa_id"]:r for r in db.execute(text("""
+        approved={r["qa_id"] for r in db.execute(text("""
             SELECT qa_id FROM pilot_smart_radar.qa_shahrin_exemplars
             WHERE eligible=true""")).mappings().all()}
-        pool=[r for r in pool if r["qa_id"] in approved]
-        # Stable hash order limits selection bias from numeric QA IDs.
-        pool=sorted(pool,key=lambda r:hashlib.sha256(r["qa_id"].encode()).hexdigest())
-        targets=pool[:EXEMPLAR_V17_PILOT_LIMIT]
+        pool=eligible_exemplar_audit_targets(records,excluded,approved)
+        targets=pool
         if not targets:
             raise HTTPException(409,"No eligible exemplar targets available")
         cfg=qa_config()
@@ -454,7 +480,7 @@ def run_exemplar_audit(body:RunAudit,user:User=Depends(current_user),
             raise HTTPException(409,"QA paid requests are disabled")
         selected=pending[:min(body.limit,15)]
         if not selected:
-            raise HTTPException(429,"Dedicated V17 18-request extension exhausted")
+            raise HTTPException(429,"No eligible new exemplar targets remain")
         cfg=readiness
         saved=[];errors=[]
         for record in selected:

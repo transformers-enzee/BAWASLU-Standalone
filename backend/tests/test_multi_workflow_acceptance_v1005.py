@@ -54,3 +54,19 @@ def test_source_jurisdiction_preview_does_not_grant_unverified_scope():
   assert result['paid_provider_called'] is False
   assert result['source_post_relevance_assessed'] is True
  finally: db.close()
+
+def test_source_location_cue_distinguishes_incident_from_profile_location():
+ from app.processing_hints import incident_location_cues
+ assert incident_location_cues('Dugaan pelanggaran di Jawa Timur diselidiki Bawaslu')==['Jawa Timur']
+ assert incident_location_cues('Akun dari Jawa Timur membahas pemilu')==[]
+
+def test_attention_requires_evidence_not_keyword_alarm():
+ from app.processing_hints import attention_evidence_readiness
+ evidence='Warga melaporkan dugaan pelanggaran di Jawa Timur.'
+ base={'text_content':evidence,'potential_issues':[]}
+ assert attention_evidence_readiness(base)['supported_quote_count']==0
+ with_quote={**base,'potential_issues':[{'evidence_quote':'dugaan pelanggaran di Jawa Timur'}]}
+ checked=attention_evidence_readiness(with_quote)
+ assert checked['supported_quote_count']==1
+ assert checked['actionability']=='HUMAN_TRIAGE_ONLY'
+ assert checked['legal_violation_confirmed'] is False

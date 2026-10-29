@@ -72,3 +72,20 @@ def test_scoped_classification_aggregation_is_read_only_and_conservative():
     assert result['incident_clusters_verified']==0
     assert result['narratives_verified']==0
     assert result['paid_provider_called'] is False
+
+def test_five_players_only_use_stored_review_evidence():
+    from app.processing_hints import summarize_scoped_findings
+    rows=[{'id':'20','campaign_id':'1','text_content':'People are concerned about an election',
+           'potential_issues':[],'is_flagged':False},
+          {'id':'21','campaign_id':'1','text_content':'Alleged violation',
+           'potential_issues':[{'category_name':'Election Administration'}],
+           'is_flagged':True,'flag_review_status':'FURTHER_INVESTIGATION'}]
+    result=summarize_scoped_findings(rows)
+    players=result['intelligence_players']
+    assert len(players)==5
+    assert players['Potential Violations']['count']==1
+    assert players['Needs Attention']['count']==1
+    assert players['Reviewed History']['count']==1
+    assert players['Public Concerns']['count']==0
+    assert players['Emerging Narratives']['count']==0
+    assert result['player_classification_scope']=='EXISTING_SIGNALS_AND_REVIEWS_ONLY'

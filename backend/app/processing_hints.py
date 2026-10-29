@@ -98,6 +98,8 @@ def summarize_scoped_findings(records):
     buckets=defaultdict(list)
     topic_groups=defaultdict(list)
     attention=[]
+    players={'Potential Violations':[],'Public Concerns':[],
+        'Emerging Narratives':[],'Needs Attention':[],'Reviewed History':[]}
     for row in records:
         rid=str(row.get('id') or '')
         campaign=str(row.get('campaign_id') or '')
@@ -111,9 +113,19 @@ def summarize_scoped_findings(records):
             buckets[(campaign,'text',fingerprint)].append(rid)
         for topic in metadata.get('topic_suggestions') or []:
             topic_groups[topic].append(rid)
-        if row.get('potential_issues') or row.get('is_flagged'):
-            attention.append({'result_id':rid,'campaign_id':campaign,
-                'reason':'EXISTING_ISSUE_OR_HUMAN_FLAG','status':'PRELIMINARY_REVIEW'})
+        key={'result_id':rid,'campaign_id':campaign}
+        issue=bool(row.get('potential_issues'))
+        flag=bool(row.get('is_flagged'))
+        reviewed=bool(row.get('flag_review_status'))
+        if issue:
+            players['Potential Violations'].append({**key,'status':'PRELIMINARY_SIGNAL'})
+        if reviewed:
+            players['Reviewed History'].append({**key,'review_status':row.get('flag_review_status')})
+        if issue or flag:
+            attention.append({**key,'reason':'EXISTING_ISSUE_OR_HUMAN_FLAG','status':'PRELIMINARY_REVIEW'})
+            players['Needs Attention'].append({**key,'status':'PENDING_HUMAN_TRIAGE'})
+        # Text alone cannot prove a public concern or an emerging narrative.
+        # Those players intentionally remain empty until supporting assessments exist.
     duplicates=[{'campaign_id':key[0],'source_ids':ids,'basis':'EXACT_URL_OR_TEXT'}
         for key,ids in buckets.items() if len(ids)>1]
     return {'visible_relevant_count':len(records),
@@ -121,6 +133,8 @@ def summarize_scoped_findings(records):
         'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),'status':'KEYWORD_GROUP_ONLY'}
             for name,ids in sorted(topic_groups.items())],
         'needs_attention_candidates':attention,
+        'intelligence_players':{name:{'entries':items,'count':len(items)} for name,items in players.items()},
+        'player_classification_scope':'EXISTING_SIGNALS_AND_REVIEWS_ONLY',
         'incident_clusters_verified':0,
         'narratives_verified':0,
         'status':'DERIVED_FROM_AUTHORIZED_SAVED_ASSESSMENTS',

@@ -112,6 +112,7 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
+ const [routineView,setRoutineView]=useState('all');
  const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState('');
  const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
  const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
@@ -130,6 +131,8 @@ function SocialEvidenceInbox(){
  const uncategorizedCandidateCount=useMemo(()=>findings.filter(x=>candidatesFor(x).length===0).length,[findings]);
  const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
   const filtered=useMemo(()=>findings.filter(x=>{
+  if(routineView==='review'&&x.processing_hints?.triage_disposition!=='REVIEW_RELEVANCE')return false;
+  if(routineView==='exclude'&&x.processing_hints?.triage_disposition==='REVIEW_RELEVANCE')return false;
   if(jurisdiction==='location'&&chosenLocation==='__unresolved__'&&provinceFor(x).length>0)return false;
   if(jurisdiction==='location'&&chosenLocation&&chosenLocation!=='__unresolved__'&&!provinceFor(x).includes(chosenLocation))return false;
   if(jurisdiction==='unresolved'&&locationsFor(x).length>0)return false;
@@ -167,7 +170,8 @@ function SocialEvidenceInbox(){
     <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-    <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
+    <label className="flex flex-col text-xs font-medium">Routine communication triage<select aria-label="Routine communication triage" className="intel-input min-h-10" value={routineView} onChange={e=>setRoutineView(e.target.value)}><option value="all">All AI-relevant findings</option><option value="review">Routine posts needing relevance review</option><option value="exclude">Hide routine review candidates</option></select></label>
+  <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
@@ -259,6 +263,7 @@ function SocialEvidenceInbox(){
   {assessmentCounts&&<div className="intel-card p-3 space-y-2" aria-label="AI assessment diagnostics"><h3 className="text-sm font-semibold">Assessment diagnostics · stored results</h3><div className="grid grid-cols-2 sm:grid-cols-5 gap-2">{[['Pending','PENDING'],['Relevant','RELEVANT'],['Irrelevant','IRRELEVANT'],['Uncertain','UNCERTAIN'],['Other','OTHER']].map(([label,key])=><div key={key} className="rounded-md bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold">{assessmentCounts[key]||0}</p></div>)}</div><p className="text-xs text-slate-500">{processingStatus}. This panel never triggers AI calls.</p></div>}
   <div className="intel-card p-3 space-y-3"><div className="flex flex-wrap gap-2 items-center"><strong className="text-sm">Assessment audit</strong><button type="button" className="intel-ghost text-xs" disabled={auditBusy} onClick={loadAudit}>{auditBusy?'Loading…':'Review AI decisions (free)'}</button></div>
    {auditError&&<p role="alert" className="text-sm text-red-600">{auditError}</p>}
+   {auditOpen&&<p className="text-xs text-slate-600">Human correction records a new assessment version. Routine suggestions never silently change the AI label.</p>}
    {auditOpen&&<div className="max-h-96 overflow-y-auto space-y-3">{auditRows.map(x=><div key={x.campaign_id+'-'+x.result_id} className="border rounded-lg p-3 space-y-2 text-sm">
     <p className="text-xs text-slate-500">{x.campaign_name} · {x.relevance_label} · {x.confidence||'No confidence'} · v{x.assessment_version} · {x.model_version}</p>
     <p className="whitespace-pre-wrap">{x.text_content}</p><p><strong>Reason:</strong> {x.explanation||'No AI explanation recorded'}</p>

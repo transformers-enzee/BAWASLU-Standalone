@@ -28,6 +28,16 @@ def communication_context(text):
         return {'category':'ROUTINE_COMMUNICATION','actionability':'NOT_ESTABLISHED','requires_human_review':True}
     return {'category':'UNRESOLVED','actionability':'NOT_ESTABLISHED','requires_human_review':True}
 
+def triage_disposition(text, relevance_label):
+    """Advisory only. Never modifies saved assessment or bypasses review."""
+    context=communication_context(text)
+    label=str(relevance_label or '').upper()
+    if context['category']=='ROUTINE_COMMUNICATION' and label in ('RELEVANT','HIGHLY_RELEVANT'):
+        return 'REVIEW_RELEVANCE'
+    if label in ('RELEVANT','HIGHLY_RELEVANT'):
+        return 'RELEVANT_REVIEWED_BY_AI'
+    return 'NOT_AI_RELEVANT'
+
 def source_hints(text):
     body=str(text or '')
     folded=body.casefold()

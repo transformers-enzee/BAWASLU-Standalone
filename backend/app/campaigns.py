@@ -554,6 +554,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'relevance_label':assessment.relevance_label,'confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'model_version':assessment.model_version,
                     'assessment_version':assessment.assessment_version,
+                    'processing_hints':__import__('app.processing_hints',fromlist=['source_hints']).source_hints(item.text_content),
                     'main_keywords':_safe_json_list(campaign.primary_keywords_json),
                     'secondary_keywords':_safe_json_list(campaign.secondary_keywords_json),
                     'can_correct':_editable(p,campaign)})
@@ -710,7 +711,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
                     'candidate_signals':parse_list(assessment.candidate_signals_json),'potential_issues':issue_signals,
-                    'processing_hints':processing,'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
+                    'processing_hints':{**processing,'triage_disposition':__import__('app.processing_hints',fromlist=['triage_disposition']).triage_disposition(item.text_content,assessment.relevance_label)},'is_flagged':bool(latest_review and latest_review.decision in ('FLAG_CONFIRMED','FURTHER_INVESTIGATION')) or (bool(issue_signals) and not latest_review),
                     'assessment_version':assessment.assessment_version,'model_version':assessment.model_version,
                     'flag_review_status':latest_review.decision if latest_review else None,
                     'flag_reviewed_at':latest_review.created_at.isoformat() if latest_review else None,

@@ -30,3 +30,10 @@ def test_incident_greeting_mixed_content_not_suppressed():
     result=source_hints('Selamat hari ini. Ada laporan dugaan pelanggaran pemilu di Riau')
     assert result['communication_context']['category']=='UNRESOLVED'
     assert result['incident_jurisdiction_status']=='UNVERIFIED'
+
+def test_routine_relevant_requires_human_relevance_review():
+    from app.processing_hints import triage_disposition
+    text='Selamat Hari Sumpah Pemuda ke-98 Tahun #Bawaslu'
+    assert triage_disposition(text,'RELEVANT')=='REVIEW_RELEVANCE'
+    assert triage_disposition(text,'IRRELEVANT')=='NOT_AI_RELEVANT'
+    assert triage_disposition('Dugaan pelanggaran pemilu di Riau','RELEVANT')=='RELEVANT_REVIEWED_BY_AI'

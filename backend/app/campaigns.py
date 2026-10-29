@@ -596,6 +596,47 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not _editable(p,campaign):raise PermissionError('Only a campaign editor may reconcile job records')
         created=enqueue_campaign_evidence(campaign.id)
         return {'created_pending_jobs':created,'paid_provider_called':False,'socialcrawl_credits':0}
+    if action=='campaignClassificationBatchPreview':
+        # Complete saved-evidence coverage, including unassessed source rows.
+        # Read only: no paid provider call, no regional authorization expansion.
+        from .models import SocialListeningResult, EvidenceAssessment
+        from .socialcrawl import _result_in_scope
+        from .processing_hints import source_hints, normalize_candidate_signals
+        from collections import Counter
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        if not selected.isdigit():raise ValueError('Select a valid campaign')
+        campaign=db.get(MonitoringCampaign,int(selected))
+        if not campaign or not allowed(p,campaign):raise PermissionError('Campaign unavailable')
+        links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        coverage=Counter()
+        samples=[]
+        for link in links:
+            post=db.get(SocialListeningResult,link.result_id)
+            if not post or not _result_in_scope(db,p,post):continue
+            current=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=post.id)
+                     .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+            hints=source_hints(post.text_content)
+            label=str(current.relevance_label or 'UNASSESSED').upper() if current else 'UNASSESSED'
+            sentiment=str(current.sentiment or 'UNCLASSIFIED').upper() if current else 'UNCLASSIFIED'
+            coverage['authorized_posts']+=1
+            coverage['assessed' if current else 'unassessed']+=1
+            coverage['relevant' if label in ('RELEVANT','HIGHLY_RELEVANT') else 'not_relevant_or_unassessed']+=1
+            coverage['sentiment_classified' if sentiment in ('POSITIVE','NEGATIVE','NEUTRAL') else 'sentiment_unclassified']+=1
+            if hints['province_mentions']:coverage['posts_with_province_mentions']+=1
+            if hints['topic_suggestions']:coverage['posts_with_topic_hints']+=1
+            if hints['issue_screening']['potential_issue_phrase_matches']:coverage['posts_with_issue_phrase_matches']+=1
+            if current and current.candidate_signals_json:
+                try: names=normalize_candidate_signals(json.loads(current.candidate_signals_json))
+                except (ValueError,TypeError):names=[]
+                if names:coverage['posts_with_candidate_signals']+=1
+            if len(samples)<300:
+                samples.append({'source_id':str(post.id),'relevance':label,'sentiment':sentiment,
+                    'topic_hints':hints['topic_suggestions'],'province_mentions_unverified':hints['province_mentions'],
+                    'issue_phrase_matches_unverified':hints['issue_screening']['potential_issue_phrase_matches'],
+                    'assessment_version':current.assessment_version if current else None})
+        return {'campaign_id':selected,'coverage':dict(coverage),'samples':samples,
+                'scope':'AUTHORIZED_POSTS_ONLY','verified_jurisdictions_created':0,
+                'classification_writes':0,'paid_provider_called':False}
     if action=='campaignIntelligenceInbox':
         from .models import SocialListeningResult, EvidenceAssessment, EvidenceReview, IssueCategory, AIAssessmentJob
         from .socialcrawl import _result_in_scope

@@ -116,3 +116,15 @@ def test_classification_contract_and_exact_grouping():
     assert len(groups)==1
     assert groups[0]['post_ids']==['1','2']
     assert groups[0]['incident_verified'] is False
+
+def test_batch_preview_routes_and_never_spends_provider_credits():
+    from pathlib import Path
+    from app import campaigns,socialcrawl
+    source=Path(campaigns.__file__).read_text(encoding='utf-8')
+    routing=Path(socialcrawl.__file__).read_text(encoding='utf-8')
+    part=source.split("if action=='campaignClassificationBatchPreview':",1)[1].split("if action=='campaignIntelligenceInbox':",1)[0]
+    assert 'campaignClassificationBatchPreview' in routing
+    assert '_result_in_scope(db,p,post)' in part
+    assert "classification_writes':0" in part
+    assert "paid_provider_called':False" in part
+    assert 'assessment_version.desc()' in part

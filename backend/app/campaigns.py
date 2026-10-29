@@ -607,7 +607,12 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not selected.isdigit():raise ValueError('Select a valid campaign')
         campaign=db.get(MonitoringCampaign,int(selected))
         if not campaign or not allowed(p,campaign):raise PermissionError('Campaign unavailable')
-        links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        raw_limit=(data or {}).get('sample_limit',10)
+        try: sample_limit=int(raw_limit)
+        except (TypeError,ValueError):raise ValueError('Sample limit must be an integer')
+        if not 1<=sample_limit<=20:raise ValueError('Development sample limit must be between 1 and 20')
+        # Stable sample: earliest linked posts, reproducible during QA.
+        links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.asc()).limit(sample_limit).all()
         coverage=Counter()
         samples=[]
         for link in links:
@@ -634,7 +639,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'topic_hints':hints['topic_suggestions'],'province_mentions_unverified':hints['province_mentions'],
                     'issue_phrase_matches_unverified':hints['issue_screening']['potential_issue_phrase_matches'],
                     'assessment_version':current.assessment_version if current else None})
-        return {'campaign_id':selected,'coverage':dict(coverage),'samples':samples,
+        return {'campaign_id':selected,'development_sample_limit':sample_limit,'sampled_link_count':len(links),'coverage':dict(coverage),'samples':samples,
                 'scope':'AUTHORIZED_POSTS_ONLY','verified_jurisdictions_created':0,
                 'classification_writes':0,'paid_provider_called':False}
     if action=='campaignIntelligenceInbox':

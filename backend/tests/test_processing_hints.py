@@ -128,3 +128,14 @@ def test_batch_preview_routes_and_never_spends_provider_credits():
     assert "classification_writes':0" in part
     assert "paid_provider_called':False" in part
     assert 'assessment_version.desc()' in part
+
+def test_development_classification_preview_is_strictly_bounded():
+    from pathlib import Path
+    from app import campaigns
+    source=Path(campaigns.__file__).read_text(encoding='utf-8')
+    body=source.split("if action=='campaignClassificationBatchPreview':",1)[1].split("if action=='campaignIntelligenceInbox':",1)[0]
+    assert "sample_limit',10" in body
+    assert '1<=sample_limit<=20' in body
+    assert '.limit(sample_limit)' in body
+    assert "'paid_provider_called':False" in body
+    assert "'classification_writes':0" in body

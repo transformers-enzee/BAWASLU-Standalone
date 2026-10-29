@@ -186,6 +186,16 @@ def test_campaign_dashboard_cache_invalidates_on_new_evidence():
     assert "int(evidence_revision[0] or 0)" in dashboard
 
 
+def assert_current_build_at_least(minimum):
+    from app import main
+    current = main.health()['build_version']
+    actual = tuple(int(x) for x in current.split('.'))
+    minimum_pair = tuple(int(x) for x in minimum.split('.'))
+    assert actual >= minimum_pair
+    shell = (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert 'data-build-version="'+current+'"' in shell
+    assert 'v'+current in shell
+
 def test_v92_4_readiness_tracks_classification_and_source_quality_without_paid_calls():
     from app import integration_readiness
     metrics=integration_readiness.METRICS
@@ -195,7 +205,7 @@ def test_v92_4_readiness_tracks_classification_and_source_quality_without_paid_c
     assert 'no_potential_issue_signals' in metrics['assessment_quality']
     assert 'HAVING COUNT(*)>1' in metrics['campaign_duplicate_text']
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
-    assert 'v92.4' in shell
+    assert_current_build_at_least('92.4')
 
 
 def test_v92_5_admin_quality_visible_and_no_paid_trigger():
@@ -205,7 +215,7 @@ def test_v92_5_admin_quality_visible_and_no_paid_trigger():
     assert 'metrics.campaign_duplicate_text?.duplicate_groups' in page
     assert 'No paid AI calls' in page
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
-    assert 'v92.5' in shell
+    assert_current_build_at_least('92.5')
 
 
 def test_v92_6_processing_failures_and_signal_acceptance_are_auditable():
@@ -217,7 +227,7 @@ def test_v92_6_processing_failures_and_signal_acceptance_are_auditable():
     page=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
     assert 'metrics.assessment_jobs?.with_error_message' in page
     assert 'not token-cost accounting' in page
-    assert 'v92.6' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert_current_build_at_least('92.6')
 
 
 def test_v92_8_bulk_quality_and_officer_checks():
@@ -231,7 +241,7 @@ def test_v92_8_bulk_quality_and_officer_checks():
     screen=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
     assert 'metrics.assessment_coverage?.relevant_without_sentiment' in screen
     assert 'metrics.campaign_duplicate_urls?.duplicate_url_groups' in screen
-    assert 'v92.8' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert_current_build_at_least('92.8')
 
 
 def test_v92_9_sentiment_does_not_erase_prior_relevance_or_issue_signals():
@@ -246,11 +256,11 @@ def test_v92_9_sentiment_does_not_erase_prior_relevance_or_issue_signals():
 def test_v93_0_sidebar_health_and_frontend_versions_agree():
     from app import main
     metadata=main.health()
-    assert metadata['build_version']=='93.0'
+    assert_current_build_at_least('93.0')
     nav=(FRONTEND/'components'/'intel'/'AccessNavigation.jsx').read_text(encoding='utf-8')
     assert "useState({build_version:null})" in nav
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
-    assert 'v93.0' in shell
+    assert_current_build_at_least('93.0')
 
 
 def test_v93_1_jurisdiction_audit_separates_collection_scope_from_incident_assignment():
@@ -263,9 +273,9 @@ def test_v93_1_jurisdiction_audit_separates_collection_scope_from_incident_assig
     assert "GROUP BY campaign_id,result_id" in metrics["current_assessment_coverage"]
     page=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
     assert 'not confirmed incident jurisdiction' in page
-    assert 'v93.1' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert_current_build_at_least('93.1')
     from app import main
-    assert main.health()['build_version']=='93.1'
+    assert_current_build_at_least('93.1')
 
 
 def test_v93_2_incident_location_suggestions_never_grant_regional_access():
@@ -277,5 +287,5 @@ def test_v93_2_incident_location_suggestions_never_grant_regional_access():
     from app import socialcrawl
     source=Path(socialcrawl.__file__).read_text(encoding='utf-8')
     assert "if not query.get('province'):" in source
-    assert main.health()['build_version']=='93.2'
-    assert 'v93.2' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert_current_build_at_least('93.2')
+    assert_current_build_at_least('93.2')

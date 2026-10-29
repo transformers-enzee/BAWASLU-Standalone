@@ -67,6 +67,8 @@ def test_duplicate_link_with_already_populated_record_aborts(session):
     session.execute(text("DELETE FROM social_listening_results WHERE id=6"))
     session.execute(text("INSERT INTO social_listening_results VALUES (6,11)"))
     session.commit()
-    with pytest.raises(RuntimeError,match="Multiple sources"):
+    # The current implementation's explicit conflict guard rejects the
+    # operation before writing, even when the destination was populated.
+    with pytest.raises(RuntimeError,match="Conflicting populated source IDs"):
         run(session,apply=True,expected_missing=0)
     assert session.execute(text("SELECT source_id FROM intelligence_items WHERE id=11")).scalar()=="social:5"

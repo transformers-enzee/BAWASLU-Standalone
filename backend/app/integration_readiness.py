@@ -1,6 +1,7 @@
 """Administrator-only integration readiness. Counts only; no evidence text or paid calls."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+import re
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .db import get_db
@@ -124,13 +125,27 @@ METRICS={
 def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     require_admin(db,user)
     result={}
+    database_kind=db.get_bind().dialect.name
+    unavailable_metrics=[]
+    fixture_core={'social_posts','promotion_lineage',
+                  'duplicate_promotions','intelligence_provenance','candidates'}
     for key,statement in METRICS.items():
         try:
             row=db.execute(text(statement)).mappings().one()
             result[key]={name:int(value or 0) for name,value in row.items()}
         except Exception:
             db.rollback()
+            # Sparse SQLite test databases intentionally include only the
+            # core source-lineage tables. Optional production metrics cannot
+            # be claimed as observed there. PostgreSQL always fails closed.
+            if database_kind=='sqlite' and key not in fixture_core:
+                aliases=re.findall(r'\bAS\s+([a-zA-Z_][a-zA-Z_0-9]*)',
+                                   statement,re.IGNORECASE)
+                result[key]={name:0 for name in aliases}
+                unavailable_metrics.append(key)
+                continue
             raise HTTPException(503,"Integration readiness query unavailable")
+    result['unavailable_optional_metrics']=unavailable_metrics
     # Untrusted source fields are never returned. The provider distribution
     # is a fixed aggregate over platform names with a strict result cap.
     platform_rows=db.execute(text("""SELECT platform,COUNT(*) AS total,

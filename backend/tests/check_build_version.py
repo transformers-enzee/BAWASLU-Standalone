@@ -37,7 +37,13 @@ def verify():
     backend = BACKEND.read_text(encoding="utf-8")
     sidebar = SIDEBAR.read_text(encoding="utf-8")
     server = read_version(backend, r"'build_version':'([^']+)'", "backend")
-    client = read_version(sidebar, r"useState\(\{build_version:'([^']+)'", "sidebar")
+    # AccessNavigation intentionally fetches the current backend health version
+    # instead of freezing a stale static value in shipped JavaScript.
+    if "useState({build_version:null})" in sidebar and "fetch('/api/health'" in sidebar:
+        assert "build.build_version" in sidebar, "Sidebar must show fetched backend build"
+        client = server
+    else:
+        client = read_version(sidebar, r"useState\(\{build_version:'([^']+)'", "sidebar")
     assert server == client, f"Build mismatch: backend {server}, sidebar {client}"
 
     previous = subprocess.run(

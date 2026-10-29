@@ -88,6 +88,24 @@ def source_hints(text):
         'classification_method':'RULE_HINTS_V1',
     }
 
+def assessment_quality_snapshot(records):
+    """Read-only classification coverage on authorized current assessment findings."""
+    sentiments={'POSITIVE':0,'NEUTRAL':0,'NEGATIVE':0,'UNCLASSIFIED':0}
+    issue_posts=0
+    candidate_posts=0
+    verified_locations=0
+    for row in records:
+        sentiment=str(row.get('sentiment') or 'UNCLASSIFIED').upper()
+        sentiments[sentiment if sentiment in sentiments else 'UNCLASSIFIED']+=1
+        issue_posts+=bool(row.get('potential_issues'))
+        candidate_posts+=bool(row.get('normalized_candidate_names') or row.get('candidate_signals'))
+        verified_locations+=bool(row.get('incident_jurisdiction_verified') is True)
+    return {'visible_relevant_posts':len(records),'sentiment_counts':sentiments,
+            'posts_with_existing_issue_signals':issue_posts,
+            'posts_with_candidate_signals':candidate_posts,
+            'verified_incident_jurisdiction_posts':verified_locations,
+            'source':'AUTHORIZED_SAVED_FINDINGS_ONLY','paid_provider_called':False}
+
 def summarize_scoped_findings(records):
     """Deterministic, read-only aggregation of ALREADY authorized relevant findings.
 

@@ -89,3 +89,16 @@ def test_five_players_only_use_stored_review_evidence():
     assert players['Public Concerns']['count']==0
     assert players['Emerging Narratives']['count']==0
     assert result['player_classification_scope']=='EXISTING_SIGNALS_AND_REVIEWS_ONLY'
+
+def test_assessment_quality_snapshot_does_not_invent_sentiment():
+    from app.processing_hints import assessment_quality_snapshot
+    rows=[{'id':'1','sentiment':'NEGATIVE','potential_issues':[{'category_name':'Test'}],
+           'candidate_signals':[{'name':'Example'}]},
+          {'id':'2','sentiment':'UNKNOWN','potential_issues':[]},
+          {'id':'3','sentiment':'Neutral','incident_jurisdiction_verified':False}]
+    snapshot=assessment_quality_snapshot(rows)
+    assert snapshot['sentiment_counts']=={'POSITIVE':0,'NEUTRAL':1,'NEGATIVE':1,'UNCLASSIFIED':1}
+    assert snapshot['posts_with_existing_issue_signals']==1
+    assert snapshot['posts_with_candidate_signals']==1
+    assert snapshot['verified_incident_jurisdiction_posts']==0
+    assert snapshot['paid_provider_called'] is False

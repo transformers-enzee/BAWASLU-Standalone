@@ -124,8 +124,9 @@
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw Error(payload.detail||payload.error||'Campaign evidence unavailable');
     const aliases=[candidate.name,...candidate.aliases].map(x=>String(x||'').trim()).filter(x=>x.length>=3);
-    const phrases=aliases.map(value=>new RegExp('(^|[^\\p{L}\\p{N}])'+value.replace(/[.*+?^${}()|[\\]\\]/g,'\\  ui.onProfile=async id=>{')+'(?=$|[^\\p{L}\\p{N}])','iu'));
-    return (payload.evidence||[]).filter(post=>phrases.some(pattern=>pattern.test(String(post.text_content||'')))).map(post=>({
+    const normalize=value=>' '+String(value||'').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()+' ';
+    const candidateNames=aliases.map(normalize);
+    return (payload.evidence||[]).filter(post=>candidateNames.some(name=>normalize(post.text_content).includes(name))).map(post=>({
       id:'CAM-'+post.id,kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
       date:String(post.published_at||''),text:post.text_content||'',sentiment:(()=>{const s=String(post.sentiment||'').toLowerCase();return ['positive','negative','neutral'].includes(s)?s[0].toUpperCase()+s.slice(1):'Unknown'})(),
       flag:false,url:safeUrl(post.canonical_url),description:'Candidate name or alias mentioned in this campaign. Attribution and context require officer review.'

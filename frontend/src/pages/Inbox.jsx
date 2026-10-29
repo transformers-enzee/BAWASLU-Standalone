@@ -15,6 +15,7 @@ function SocialEvidenceInbox(){
  const requestedPost=deepLink.get('result_id')||'';
  const [processingSummary,setProcessingSummary]=useState(null);
  const [qaHistory,setQAHistory]=useState(null),[qaBusy,setQABusy]=useState(false),[qaError,setQAError]=useState('');
+ const [acceptance,setAcceptance]=useState(null),[acceptanceBusy,setAcceptanceBusy]=useState(false),[acceptanceError,setAcceptanceError]=useState('');
  const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState(''),[groupExpanded,setGroupExpanded]=useState(false),[groupEvidence,setGroupEvidence]=useState(null);
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
@@ -168,6 +169,15 @@ function SocialEvidenceInbox(){
    setJurisdictionMessage('Officer jurisdiction decision saved; source permissions unchanged.');
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
+ }
+ async function loadAcceptance(){
+  if(!campaign)return;
+  setAcceptanceBusy(true);setAcceptanceError('');
+  try{const r=await base44.functions.invoke('socialListening',{
+    action:'campaignAcceptanceSnapshot',id:campaign,data:{}});
+    setAcceptance(r.data);
+  }catch(e){setAcceptanceError(e.response?.data?.detail||e.message)}
+  finally{setAcceptanceBusy(false)}
  }
  async function loadQAHistory(){
   setQABusy(true);setQAError('');
@@ -348,8 +358,25 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <div className="space-y-2">
      <button type="button" className="intel-ghost text-xs" disabled={qaBusy} onClick={loadQAHistory}>Compare saved Shahrin QA results (admin · free)</button>
      {qaHistory&&<div className="text-xs space-y-2"><p>Historical predictions only; holdout data excluded. Reference labels may be awaiting analyst sign-off. Target: {qaHistory.target_accuracy_percent}%.</p><div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
+     {qaHistory?.error_patterns?.length>0&&<details className="rounded border p-2">
+      <summary className="cursor-pointer font-semibold">Most common saved category confusions · no new AI inference</summary>
+      <p>Historical Shahrin labels still await sign-off. Sealed holdout excluded.</p>
+      <div className="max-h-48 overflow-auto mt-2"><table className="w-full text-left"><thead><tr><th>Version</th><th>Expected</th><th>Predicted</th><th>Errors</th></tr></thead><tbody>
+       {qaHistory.error_patterns.map((x,i)=><tr key={i}><td>{x.prompt_version} · {x.cohort}</td><td>{x.expected_category}</td><td>{x.predicted_category}</td><td>{x.error_count}</td></tr>)}
+      </tbody></table></div>
+     </details>}
      {qaError&&<p role="alert" className="text-red-700">{qaError}</p>}
    </div>
+   {campaign&&<div className="space-y-2 border-t pt-2">
+      <button type="button" className="intel-ghost text-xs" disabled={acceptanceBusy} onClick={loadAcceptance}>Load production acceptance evidence (free)</button>
+      {acceptance&&<div className="space-y-2">
+       <p className="text-xs">{acceptance.relevant_posts} relevant saved / {acceptance.authorized_posts} authorized posts · {acceptance.unassessed_posts} unassessed · {acceptance.saved_groups_count} saved groups. No item below represents formal officer sign-off.</p>
+       <div className="max-h-72 overflow-y-auto space-y-1">{(acceptance.items||[]).map(x=><div key={x.number} className="rounded border p-2 text-xs">
+        <strong>#{x.number} · {x.name}</strong> — {x.production_state.replaceAll('_',' ')} · {x.supporting_records} supporting record(s)
+        <p className="text-slate-600">{x.note}</p></div>)}</div>
+      </div>}
+      {acceptanceError&&<p role="alert" className="text-xs text-red-700">{acceptanceError}</p>}
+    </div>}
    {campaign&&<div className="space-y-2"><button type="button" className="intel-ghost text-xs" disabled={usageBusy} onClick={loadUsageDiagnostics}>Load AI usage and failure diagnostics (free)</button>{usageDiagnostics&&<p className="text-xs text-slate-600">Posts assessed: {usageDiagnostics.posts_with_assessment_version} / {usageDiagnostics.authorized_source_posts} · Failed jobs: {usageDiagnostics.failed_jobs} · Provider-reported tokens: {usageDiagnostics.ai_usage?.input_tokens_reported??0} input / {usageDiagnostics.ai_usage?.output_tokens_reported??0} output · Costs: {usageDiagnostics.ai_usage?.cost_status||'UNAVAILABLE'} · Missing source text: {usageDiagnostics.missing_fields?.content??0}</p>}{usageError&&<p role="alert" className="text-xs text-red-700">{usageError}</p>}</div>}
   </section>}
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">

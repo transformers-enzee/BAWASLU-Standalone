@@ -12,8 +12,12 @@ branch_labels=None
 depends_on=None
 
 def upgrade():
-    op.add_column('watchlist_items',sa.Column('candidate_aliases_json',sa.Text(),
-        nullable=False,server_default='[]'))
+    bind=op.get_bind()
+    if 'candidate_aliases_json' not in {c['name'] for c in sa.inspect(bind).get_columns('watchlist_items')}:
+        op.add_column('watchlist_items',sa.Column('candidate_aliases_json',sa.Text(),
+            nullable=False,server_default='[]'))
+    if 'campaign_finding_groups' in sa.inspect(bind).get_table_names():
+        return
     op.create_table('campaign_finding_groups',
         sa.Column('id',sa.Integer(),primary_key=True,autoincrement=True),
         sa.Column('campaign_id',sa.Integer(),sa.ForeignKey('monitoring_campaigns.id'),

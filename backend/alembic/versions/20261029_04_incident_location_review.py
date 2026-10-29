@@ -11,6 +11,8 @@ branch_labels=None
 depends_on=None
 
 def upgrade():
+    if 'campaign_jurisdiction_reviews' in sa.inspect(op.get_bind()).get_table_names():
+        return
     op.create_table('campaign_jurisdiction_reviews',
         sa.Column('id',sa.Integer(),primary_key=True,autoincrement=True),
         sa.Column('campaign_id',sa.Integer(),sa.ForeignKey('monitoring_campaigns.id'),nullable=False),

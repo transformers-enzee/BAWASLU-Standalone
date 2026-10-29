@@ -12,13 +12,19 @@ branch_labels=None
 depends_on=None
 
 def upgrade():
+    bind=op.get_bind()
+    existing={c['name'] for c in sa.inspect(bind).get_columns('evidence_assessments')}
     for name,default in (
         ('topic_labels_json','[]'),
         ('public_concern_signals_json','[]'),
         ('attention_assessment_json','{}'),
         ('player_summaries_json','[]')):
+        if name in existing:
+            continue
         op.add_column('evidence_assessments',sa.Column(name,sa.Text(),
             nullable=False,server_default=default))
+    if 'assessment_ai_usage' in sa.inspect(bind).get_table_names():
+        return
     op.create_table('assessment_ai_usage',
         sa.Column('id',sa.Integer(),primary_key=True,autoincrement=True),
         sa.Column('assessment_id',sa.Integer(),

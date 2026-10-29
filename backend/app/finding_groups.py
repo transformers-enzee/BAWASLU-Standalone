@@ -56,6 +56,49 @@ def eligible_source_rows(db,p,campaign,limit=MAX_SOURCE_ROWS):
     return rows,len(links)>limit
 
 
+def grouping_readiness(db,p,campaign):
+    """Free, read-only acceptance coverage without inferring a negative finding.
+
+    A source without a saved relevance decision is a processing backlog, not
+    evidence that no incident or narrative exists.
+    """
+    from .sentiment_processing import relevance_is_assessed
+    links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).all()
+    coverage={'linked_posts':len(links),'authorized_posts':0,'unassessed_posts':0,
+        'relevant_posts':0,'irrelevant_posts':0,'uncertain_posts':0,
+        'missing_source_posts':0,'missing_source_text':0,
+        'candidate_identity_required':False,'paid_provider_called':False}
+    for link in links:
+        post=db.get(SocialListeningResult,link.result_id)
+        if not post:
+            coverage['missing_source_posts']+=1
+            continue
+        if not _result_in_scope(db,p,post):
+            continue
+        coverage['authorized_posts']+=1
+        if not str(post.text_content or '').strip():coverage['missing_source_text']+=1
+        assessment=(db.query(EvidenceAssessment).filter_by(
+            campaign_id=campaign.id,result_id=post.id).order_by(
+            EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+        if not relevance_is_assessed(assessment):
+            coverage['unassessed_posts']+=1
+            continue
+        label=str(assessment.relevance_label or '').upper()
+        if label in ('RELEVANT','HIGHLY_RELEVANT'):
+            coverage['relevant_posts']+=1
+        elif label=='IRRELEVANT':
+            coverage['irrelevant_posts']+=1
+        else:
+            coverage['uncertain_posts']+=1
+    coverage['assessment_backlog_exists']=coverage['unassessed_posts']>0
+    coverage['complete_evidence_classification']=coverage['unassessed_posts']==0
+    coverage['grouping_acceptance_ready']=coverage['complete_evidence_classification'] and coverage['relevant_posts']>=3
+    coverage['zero_group_result_is_conclusive']=coverage['complete_evidence_classification']
+    coverage['status']=('NEEDS_RELEVANCE_ASSESSMENTS' if coverage['assessment_backlog_exists']
+        else 'READY_FOR_GROUPING_REVIEW')
+    return coverage
+
+
 def propose_groups(rows):
     proposals=[]
     for group in exact_source_groups(rows):
@@ -119,6 +162,8 @@ def finding_group_action(db,p,action,data,id=None):
     if not has(p,'view_intelligence'):
         raise PermissionError('Viewing intelligence is required')
     campaign=campaign_for(db,p,id or data.get('campaign_id'))
+    if action=='campaignFindingGroupsReadiness':
+        return grouping_readiness(db,p,campaign)
     if action=='campaignFindingGroupsList':
         saved=visible_saved_groups(db,p,campaign)
         return {'groups':saved,'count':len(saved),
@@ -128,8 +173,11 @@ def finding_group_action(db,p,action,data,id=None):
     if action in ('campaignFindingGroupsPreview','campaignFindingGroupsSave'):
         rows,truncated=eligible_source_rows(db,p,campaign)
         proposals=propose_groups(rows)
+        readiness=grouping_readiness(db,p,campaign)
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
+            'readiness':readiness,
             'no_matching_groups_is_valid':True,
+            'zero_group_result_is_conclusive':readiness['zero_group_result_is_conclusive'],
             'grouping_evidence_missing_not_an_error':len(rows)==0,
             'relevant_post_coverage_warning':len(rows)<2,
             'manual_review_required':True,

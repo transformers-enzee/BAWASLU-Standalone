@@ -88,7 +88,7 @@ def test_five_players_only_use_stored_review_evidence():
     assert players['Reviewed History']['count']==1
     assert players['Public Concerns']['count']==0
     assert players['Emerging Narratives']['count']==0
-    assert result['player_classification_scope']=='EXISTING_SIGNALS_AND_REVIEWS_ONLY'
+    assert result['player_classification_scope']=='SAVED_SIGNALS_AND_UNVERIFIED_RECURRING_DISCUSSION_CANDIDATES'
 
 def test_assessment_quality_snapshot_does_not_invent_sentiment():
     from app.processing_hints import assessment_quality_snapshot
@@ -268,3 +268,17 @@ def test_routine_election_greeting_does_not_create_topic_or_narrative():
     hints=source_hints('Selamat Hari Pemilu! #Bawaslu')
     assert hints['topic_suggestions']==[]
     assert hints['narrative_anchors']==[]
+
+
+def test_narrative_candidates_do_not_become_verified_findings():
+    from app.processing_hints import summarize_scoped_findings
+    rows=[{'id':str(i),'campaign_id':'A','canonical_url':f'https://example.test/{i}',
+           'text_content':f'Daftar pemilih dikritik pada catatan {i}',
+           'author_name':f'Account {i}','relevance_label':'RELEVANT'}
+          for i in range(3)]
+    result=summarize_scoped_findings(rows)
+    assert result['intelligence_players']['Emerging Narratives']['count']==1
+    assert result['narratives_verified']==0
+    assert result['incident_clusters_verified']==0
+    assert all(x['status']=='REQUIRES_HUMAN_REVIEW' for x in
+               result['intelligence_players']['Emerging Narratives']['entries'])

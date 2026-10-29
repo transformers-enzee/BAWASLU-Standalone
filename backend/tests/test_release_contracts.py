@@ -196,3 +196,13 @@ def test_v92_4_readiness_tracks_classification_and_source_quality_without_paid_c
     assert 'HAVING COUNT(*)>1' in metrics['campaign_duplicate_text']
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
     assert 'v92.4' in shell
+
+
+def test_v92_5_admin_quality_visible_and_no_paid_trigger():
+    page=(FRONTEND/'pages'/'IntegrationReadiness.jsx').read_text(encoding='utf-8')
+    assert 'Classification and processing quality' in page
+    assert 'metrics.assessment_quality?.sentiment_classified' in page
+    assert 'metrics.campaign_duplicate_text?.duplicate_groups' in page
+    assert 'No paid AI calls' in page
+    shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert 'v92.5' in shell

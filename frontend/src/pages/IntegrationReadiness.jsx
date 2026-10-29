@@ -69,6 +69,20 @@ export default function IntegrationReadiness() {
       </div>
       <p className="text-sm mt-3 text-slate-600">Release status: {metrics.release_gates?.database_population_verified === false ? 'Data source unverified' : metrics.release_gates?.promoted_source_id_integrity?'ID integrity passed':'ID backfill required'} · {metrics.release_gates?.database_population_verified === false ? 'Provenance cannot be assessed' : metrics.release_gates?.social_source_provenance_complete?'Provenance complete':'Provenance review required'}. Final role/browser UAT remains mandatory.</p>
     </section>}
+    {metrics && <section className="bg-white border rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold text-lg">Classification and processing quality</h2>
+      <p className="text-xs text-slate-600">Read-only counts of saved records. No paid AI calls, inferred sentiment, or verified jurisdiction are implied.</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div><p className="text-slate-500">Saved assessments</p><p className="text-xl font-semibold">{metrics.assessment_quality?.total ?? '—'}</p></div>
+        <div><p className="text-slate-500">AI-relevant</p><p className="text-xl font-semibold">{metrics.assessment_quality?.relevant ?? '—'}</p></div>
+        <div><p className="text-slate-500">Sentiment classified</p><p className="text-xl font-semibold">{metrics.assessment_quality?.sentiment_classified ?? '—'}</p></div>
+        <div><p className="text-slate-500">Potential issue signals absent</p><p className="text-xl font-semibold">{metrics.assessment_quality?.no_potential_issue_signals ?? '—'}</p></div>
+        <div><p className="text-slate-500">Campaign evidence links</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.linked ?? '—'}</p></div>
+        <div><p className="text-slate-500">Missing campaign source URLs</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.missing_url ?? '—'}</p></div>
+        <div><p className="text-slate-500">Repeated-text groups</p><p className="text-xl font-semibold">{metrics.campaign_duplicate_text?.duplicate_groups ?? '—'}</p></div>
+        <div><p className="text-slate-500">Smart Radar pilot posts</p><p className="text-xl font-semibold">{metrics.smart_radar_pilot_posts ?? '—'}</p></div>
+      </div>
+    </section>}
     {preview && <section className="bg-white border rounded-xl p-4 space-y-3">
       <h2 className="text-lg font-semibold">Historical source-ID repair</h2>
       <p className="text-sm text-slate-700">Linked: {preview.linked}. Eligible missing IDs: {preview.eligible_missing_ids}. Conflicts: {preview.conflicting_nonblank_ids}. Only saved Social Listening promotion links may be repaired.</p>

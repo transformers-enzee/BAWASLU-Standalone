@@ -406,6 +406,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                   'campaignFindingGroupsList','campaignFindingGroupsReview'):
         from .finding_groups import finding_group_action
         return finding_group_action(db,p,action,data or {},id)
+    if action in ('campaignJurisdictionPreview','campaignJurisdictionReview'):
+        from .jurisdiction_review import jurisdiction_action
+        return jurisdiction_action(db,p,action,data or {},id)
     if action=='campaignUsageDiagnostics':
         from .assessment_usage import campaign_usage_diagnostics
         return campaign_usage_diagnostics(db,p,id or (data or {}).get('campaign_id'))
@@ -870,6 +873,13 @@ def campaign_action(db:Session,p,action,data,id=None):
             records.sort(key=lambda row:int(str(row['id'])==requested_result and str(row['campaign_id'])==campaign_id),reverse=True)
         from .candidate_registry import attach_candidate_ids
         candidate_registry_diagnostics=attach_candidate_ids(db,p,records)
+        from .jurisdiction_review import jurisdiction_status
+        from .models import SocialListeningResult
+        for row in records:
+            post=db.get(SocialListeningResult,int(row['id']))
+            review=jurisdiction_status(db,row['campaign_id'],row['id'],post)
+            row['incident_jurisdiction_review']=review
+            row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
                 'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',

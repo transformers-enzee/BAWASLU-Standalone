@@ -13,6 +13,32 @@ from .socialcrawl import _result_in_scope
 
 router=APIRouter(prefix="/api/source-lineage",tags=["source-lineage"])
 
+@router.get("/saved-assessments/{reference:path}")
+def resolve_saved_assessments(reference:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Shared Inbox/Watchlist/Smart Radar lookup for existing *social* source IDs.
+
+    Radar pilot IDs are NOT assumed to refer to the same post.
+    """
+    p=profile(db,user)
+    if not has(p,'view_intelligence'):
+        raise HTTPException(403,'Intelligence access required')
+    try:
+        namespace,raw_id=parse_canonical_source_id(reference)
+    except ValueError:
+        raise HTTPException(422,'Invalid canonical source reference')
+    if namespace!='social':
+        raise HTTPException(409,'No verified mapping from Radar pilot IDs to Social Listening source IDs')
+    post=db.get(SocialListeningResult,int(raw_id))
+    if not post or not _result_in_scope(db,p,post):
+        raise HTTPException(404,'Source unavailable')
+    from .saved_assessment_views import saved_classifications_for_posts
+    assessments=saved_classifications_for_posts(db,p,[post]).get(post.id,[])
+    return {'canonical_source_id':reference,'saved_assessments':assessments,
+        'assessment_count':len(assessments),'shared_review_provenance':'SAVED_CAMPAIGN_ASSESSMENTS',
+        'radar_pilot_identity_crosswalk_verified':False,
+        'paid_provider_called':False}
+
+
 @router.get("/{reference:path}")
 def resolve_source(reference:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)

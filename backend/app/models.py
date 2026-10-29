@@ -419,6 +419,20 @@ class CampaignFindingGroup(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     reviewed_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
+class CampaignJurisdictionReview(Base):
+    """Officer-sourced incident location, never an account-profile location."""
+    __tablename__='campaign_jurisdiction_reviews'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'), index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'), index=True)
+    province: Mapped[str] = mapped_column(String(128), default='')
+    evidence_fingerprint: Mapped[str] = mapped_column(String(64), default='')
+    decision: Mapped[str] = mapped_column(String(24), default='UNVERIFIED')
+    rationale: Mapped[str] = mapped_column(Text, default='')
+    reviewer_id: Mapped[str] = mapped_column(String(128), default='')
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__=(UniqueConstraint('campaign_id','result_id',name='uq_campaign_incident_location'),)
+
 class AssessmentAIUsage(Base):
     """Provider-reported token usage only; cost is unknown unless reported."""
     __tablename__='assessment_ai_usage'

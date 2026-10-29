@@ -81,6 +81,8 @@ def saved_classifications_for_posts(db, user_profile, posts):
             signals=phrase_screening_candidates(post.text_content,categories,phrases)
             if signals:source='KEYWORD_REVIEW_LEAD'
         decision=decisions.get((campaign_id,result_id))
+        from .jurisdiction_review import jurisdiction_status
+        location_review=jurisdiction_status(db,campaign_id,result_id,post)
         dismissed=decision=='FLAG_DISMISSED'
         result[result_id].append({
             'canonical_source_id':canonical_source_id('social',result_id),
@@ -96,6 +98,7 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'candidate_identity_matches':resolve_signals(
                 _safe_candidate_signals(assessment.candidate_signals_json),
                 scoped_candidate_index),
+            'incident_jurisdiction_review':location_review,
             'topic_labels':_safe_candidate_signals(assessment.topic_labels_json),
             'public_concern_signals':_safe_candidate_signals(assessment.public_concern_signals_json),
             'attention_assessment':_safe_object(assessment.attention_assessment_json),

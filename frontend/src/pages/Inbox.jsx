@@ -15,6 +15,7 @@ function SocialEvidenceInbox(){
  const requestedPost=deepLink.get('result_id')||'';
  const [processingSummary,setProcessingSummary]=useState(null);
  const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState('');
+ const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
@@ -94,6 +95,43 @@ function SocialEvidenceInbox(){
    setUsageDiagnostics(r.data);
   }catch(e){setUsageError(e.response?.data?.detail||e.message)}
   finally{setUsageBusy(false)}
+ }
+
+ async function previewIncidentJurisdiction(){
+  if(!selected)return;
+  setJurisdictionBusy(true);setJurisdictionMessage('');setJurisdictionPreview(null);
+  try{
+   const r=await base44.functions.invoke('socialListening',{action:'campaignJurisdictionPreview',
+    id:selected.campaign_id,data:{result_id:selected.id}});
+   setJurisdictionPreview(r.data);
+  }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
+  finally{setJurisdictionBusy(false)}
+ }
+ async function confirmIncidentJurisdiction(decision){
+  if(!selected||!jurisdictionPreview)return;
+  const possible=jurisdictionPreview.source_context_provinces_unverified||[];
+  if(decision==='CONFIRMED'&&possible.length!==1){
+   setJurisdictionMessage('Incident location is ambiguous or missing. Confirmation is not allowed.');return;
+  }
+  const rationale=window.prompt('Explain which explicit source passage supports your jurisdiction decision (at least 10 characters):');
+  if(rationale===null)return;
+  if(rationale.trim().length<10){setJurisdictionMessage('Provide at least 10 characters.');return;}
+  if(!window.confirm('Store the officer jurisdiction review? This does not change regional access permissions.'))return;
+  setJurisdictionBusy(true);setJurisdictionMessage('');
+  try{
+   const r=await base44.functions.invoke('socialListening',{
+    action:'campaignJurisdictionReview',id:selected.campaign_id,
+    data:{result_id:selected.id,decision,province:decision==='CONFIRMED'?possible[0]:'',
+          rationale:rationale.trim()}});
+   setJurisdictionPreview(r.data);
+   const review=r.data.latest_review;
+   const updated={...selected,incident_jurisdiction_review:review,
+     incident_jurisdiction_verified:review.incident_jurisdiction_verified};
+   setSelected(updated);
+   setFindings(all=>all.map(item=>item.id===updated.id&&item.campaign_id===updated.campaign_id?updated:item));
+   setJurisdictionMessage('Officer jurisdiction decision saved; source permissions unchanged.');
+  }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
+  finally{setJurisdictionBusy(false)}
  }
  async function previewFindingGroups(){
   if(!campaign){setGroupError('Select a campaign to preview groups.');return;}
@@ -283,7 +321,13 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <p className="text-xs text-slate-600">Published: {selected.published_at||'Publication time not recorded'}</p>
       {safeOriginalUrl(selected.canonical_url)?<a href={safeOriginalUrl(selected.canonical_url)} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[#147b67] hover:underline">Open original source ↗</a>:<p className="text-xs text-amber-700">Source URL not available; do not treat this record as independently verifiable.</p>}
      </section>
-     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation?' · '+selected.sentiment_explanation:''} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p><p><strong>Communication context (review hint):</strong> {selected.processing_hints?.communication_context?.category||'UNRESOLVED'} · Actionability not established; existing AI and human decisions remain unchanged.</p><p><strong>Topic suggestions (text-only):</strong> {(selected.processing_hints?.topic_suggestions||[]).join(', ')||'None'}</p><p><strong>Province mentions (not verified incident location):</strong> {(selected.processing_hints?.province_mentions||[]).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p>{(selected.topic_labels||[]).length>0&&<p><strong>AI topic classification:</strong> {selected.topic_labels.join(', ')} · Based on saved assessment, not keyword hints.</p>}
+     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation?' · '+selected.sentiment_explanation:''} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
+     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
+      <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
+      <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={previewIncidentJurisdiction}>Preview source-grounded location (free)</button>
+      {jurisdictionPreview&&<div className="space-y-1"><p>Explicit incident-context provinces: {(jurisdictionPreview.source_context_provinces_unverified||[]).join(', ')||'None identified'} · Assessment relevant: {jurisdictionPreview.source_post_relevance_assessed?'Yes':'No'}</p>{selected.can_review_flag&&jurisdictionPreview.source_post_relevance_assessed&&<div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy||(jurisdictionPreview.source_context_provinces_unverified||[]).length!==1} onClick={()=>confirmIncidentJurisdiction('CONFIRMED')}>Verify incident province</button><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={()=>confirmIncidentJurisdiction('REJECTED')}>Reject location cue</button></div>}</div>}
+      {jurisdictionMessage&&<p role="status" className="text-slate-600">{jurisdictionMessage}</p>}
+     </div><p><strong>Communication context (review hint):</strong> {selected.processing_hints?.communication_context?.category||'UNRESOLVED'} · Actionability not established; existing AI and human decisions remain unchanged.</p><p><strong>Topic suggestions (text-only):</strong> {(selected.processing_hints?.topic_suggestions||[]).join(', ')||'None'}</p><p><strong>Province mentions (not verified incident location):</strong> {(selected.processing_hints?.province_mentions||[]).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p>{(selected.topic_labels||[]).length>0&&<p><strong>AI topic classification:</strong> {selected.topic_labels.join(', ')} · Based on saved assessment, not keyword hints.</p>}
      {(selected.public_concern_signals||[]).length>0&&<section className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><strong>Public Concerns · unverified source quotations</strong>{selected.public_concern_signals.map((item,i)=><p key={i} className="text-xs">“{item.evidence_quote}” · {item.concern}</p>)}</section>}
      {selected.attention_assessment?.status==='AI_ASSESSMENT_UNVERIFIED'&&<p><strong>AI Needs Attention suggestion:</strong> Seriousness {selected.attention_assessment.seriousness} · Urgency {selected.attention_assessment.urgency} · Human triage required, not an automatic order.</p>}
      {(selected.player_summaries||[]).length>0&&<section className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1" aria-label="AI player summary drafts"><strong>Source-referenced AI summary drafts</strong>{selected.player_summaries.map((item,i)=><p key={i} className="text-xs"><strong>{item.player}:</strong> {item.summary} <span className="text-slate-500">Evidence: “{item.source_quote}” · Human verification required</span></p>)}</section>}

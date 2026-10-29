@@ -266,3 +266,16 @@ def test_v93_1_jurisdiction_audit_separates_collection_scope_from_incident_assig
     assert 'v93.1' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
     from app import main
     assert main.health()['build_version']=='93.1'
+
+
+def test_v93_2_incident_location_suggestions_never_grant_regional_access():
+    from app import integration_readiness, main
+    sql=integration_readiness.METRICS['incident_location_review_queue']
+    assert 'geographic_signals_json' in sql
+    assert 'social_listening_runs' in sql
+    assert 'source_url' in sql
+    from app import socialcrawl
+    source=Path(socialcrawl.__file__).read_text(encoding='utf-8')
+    assert "if not query.get('province'):" in source
+    assert main.health()['build_version']=='93.2'
+    assert 'v93.2' in (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')

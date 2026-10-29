@@ -79,6 +79,8 @@ export default function IntegrationReadiness() {
         <div><p className="text-slate-500">Potential issue signals absent</p><p className="text-xl font-semibold">{metrics.assessment_quality?.no_potential_issue_signals ?? '—'}</p></div>
         <div><p className="text-slate-500">Campaign evidence links</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.linked ?? '—'}</p></div>
         <div><p className="text-slate-500">Missing campaign source URLs</p><p className="text-xl font-semibold">{metrics.campaign_source_quality?.missing_url ?? '—'}</p></div>
+        <div><p className="text-slate-500">AI location suggestions needing review</p><p className="text-xl font-semibold">{metrics.incident_location_review_queue?.ai_location_signal_posts ?? '—'}</p></div>
+        <div><p className="text-slate-500">Location suggestions from national runs</p><p className="text-xl font-semibold">{metrics.incident_location_review_queue?.from_unscoped_collection ?? '—'}</p></div>
         <div><p className="text-slate-500">Unscoped collection posts</p><p className="text-xl font-semibold">{metrics.incident_jurisdiction_readiness?.unscoped_collection_posts ?? '—'}</p></div>
         <div><p className="text-slate-500">Posts without structured geography</p><p className="text-xl font-semibold">{metrics.incident_jurisdiction_readiness?.without_structured_geography ?? '—'}</p></div>
         <div><p className="text-slate-500">Latest assessed posts</p><p className="text-xl font-semibold">{metrics.current_assessment_coverage?.latest_assessments ?? '—'}</p></div>

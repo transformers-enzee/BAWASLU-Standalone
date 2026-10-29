@@ -89,6 +89,15 @@ METRICS={
   FROM campaign_evidence ce
   JOIN social_listening_results s ON s.id=ce.result_id
   LEFT JOIN social_listening_runs r ON r.id=s.run_id""",
+ "incident_location_review_queue": """SELECT COUNT(*) AS ai_location_signal_posts,
+  COUNT(*) FILTER(WHERE COALESCE(r.query_json::jsonb->>'province','')='') AS from_unscoped_collection,
+  COUNT(*) FILTER(WHERE NULLIF(TRIM(s.canonical_url),'') IS NULL) AS missing_source_url
+  FROM evidence_assessments a
+  JOIN social_listening_results s ON s.id=a.result_id
+  LEFT JOIN social_listening_runs r ON r.id=s.run_id
+  WHERE a.id IN (SELECT MAX(id) FROM evidence_assessments GROUP BY campaign_id,result_id)
+    AND a.geographic_signals_json IS NOT NULL
+    AND TRIM(a.geographic_signals_json) NOT IN ('','[]','null')""",
  "current_assessment_coverage": """SELECT COUNT(*) AS latest_assessments,
   COUNT(*) FILTER(WHERE a.relevance_label IN ('RELEVANT','HIGHLY_RELEVANT')) AS latest_relevant,
   COUNT(*) FILTER(WHERE a.sentiment IN ('POSITIVE','NEUTRAL','NEGATIVE')) AS latest_sentiment_classified,

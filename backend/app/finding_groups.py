@@ -92,6 +92,12 @@ def serialize_group(group):
         'paid_provider_called':False}
 
 
+def current_group_keys(db,p,campaign):
+    """Recompute proposals against current relevant evidence before approval."""
+    rows,truncated=eligible_source_rows(db,p,campaign)
+    return {group_key(campaign.id,item) for item in propose_groups(rows)},truncated
+
+
 def visible_saved_groups(db,p,campaign):
     groups=(db.query(CampaignFindingGroup).filter_by(campaign_id=campaign.id)
             .order_by(CampaignFindingGroup.id.desc()).limit(100).all())
@@ -123,6 +129,8 @@ def finding_group_action(db,p,action,data,id=None):
         rows,truncated=eligible_source_rows(db,p,campaign)
         proposals=propose_groups(rows)
         summary={'campaign_id':str(campaign.id),'eligible_posts':len(rows),
+            'relevant_post_coverage_warning':len(rows)<2,
+            'manual_review_required':True,
             'sample_window_limit':MAX_SOURCE_ROWS,'source_window_truncated':truncated,
             'proposals':proposals[:MAX_GROUPS_PER_SAVE],
             'proposal_count':len(proposals),'shown_count':min(len(proposals),MAX_GROUPS_PER_SAVE),
@@ -170,6 +178,13 @@ def finding_group_action(db,p,action,data,id=None):
             raise ValueError('Provide 10-1200 characters of human review rationale')
         if group.review_status!='PROPOSED':
             raise ValueError('Reviewed grouping is immutable; create a new proposal for changes')
+        # A source may have been edited, de-linked or reassessed since the
+        # original proposal. Accept only a currently reproducible grouping.
+        current_keys,source_window_truncated=current_group_keys(db,p,campaign)
+        if source_window_truncated:
+            raise ValueError('Source scan is incomplete; review cannot safely proceed')
+        if group.group_key not in current_keys:
+            raise ValueError('Grouping evidence is stale; refresh and save a new proposal')
         # Recheck source-level authorization before returning or reviewing group.
         visible={row['id'] for row in visible_saved_groups(db,p,campaign)}
         if str(group.id) not in visible:

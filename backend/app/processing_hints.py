@@ -202,6 +202,8 @@ def classification_contract(row):
             'relevance':str(row.get('relevance_label') or 'UNASSESSED').upper(),
             'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
             'candidate_names':normalize_candidate_signals(row.get('candidate_signals') or []),
+            'candidate_absence_is_valid':True,
+            'requires_watchlist_workflow':False,
             'topics':row.get('topic_labels') or [],
             'topic_status':'SAVED_AI_CLASSIFICATION' if row.get('topic_labels') else 'NOT_AI_CLASSIFIED',
             'topic_keyword_hints_unverified':hints.get('topic_suggestions') or [],
@@ -272,7 +274,11 @@ def incident_cluster_candidates(records):
             grouped[(campaign,provinces[0],anchor,period)].append((rid,author,url,fp))
     result=[]
     for (campaign,province,anchor,period),rows in sorted(grouped.items()):
-        unique={item[3]:item for item in rows}
+        # Keep the first observed source when identical material is reposted.
+        # Sorting here ensures source IDs do not depend on database row order.
+        unique={}
+        for item in sorted(rows,key=lambda value:value[0]):
+            unique.setdefault(item[3],item)
         evidence=list(unique.values())
         if len(evidence)<2 or len({x[1] for x in evidence})<2 or len({x[2] for x in evidence})<2:
             continue
@@ -327,7 +333,7 @@ def emerging_narrative_candidates(records):
     candidates=[]
     for (campaign,anchor),items in sorted(grouped.items()):
         by_fingerprint={}
-        for item in items:
+        for item in sorted(items,key=lambda value:value[0]):
             by_fingerprint.setdefault(item[3],item)
         evidence=list(by_fingerprint.values())
         if len(evidence)<3 or len({x[1] for x in evidence})<3 or len({x[2] for x in evidence})<3:

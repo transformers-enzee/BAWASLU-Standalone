@@ -33,8 +33,13 @@ def resolve_saved_assessments(reference:str,user:User=Depends(current_user),db:S
         raise HTTPException(404,'Source unavailable')
     from .saved_assessment_views import saved_classifications_for_posts
     assessments=saved_classifications_for_posts(db,p,[post]).get(post.id,[])
+    # This contract is shared by Inbox/Watchlist and any Smart Radar view
+    # explicitly carrying a canonical social:* identifier. Pilot-only Radar IDs
+    # must never be silently treated as Social Listening record IDs.
     return {'canonical_source_id':reference,'saved_assessments':assessments,
         'assessment_count':len(assessments),'shared_review_provenance':'SAVED_CAMPAIGN_ASSESSMENTS',
+        'reusable_by':['Intelligence Inbox','Watchlist','Smart Radar canonical-social-source view'],
+        'identity_scope':'SOCIAL_SOURCE_ONLY',
         'radar_pilot_identity_crosswalk_verified':False,
         'paid_provider_called':False}
 

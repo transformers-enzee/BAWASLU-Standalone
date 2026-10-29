@@ -194,6 +194,9 @@ def registry_action(db:Session,p,action,data,id=None):
             explicit=db.query(WatchlistAccountEvidence.result_id).filter(
                 WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
             match_conditions.append(SocialListeningResult.id.in_(explicit))
+        # Never run an unfiltered query when account handles cannot be resolved.
+        if not match_conditions:
+            return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
         query=db.query(SocialListeningResult).filter(or_(*match_conditions))
         if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
         if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
@@ -211,6 +214,8 @@ def registry_action(db:Session,p,action,data,id=None):
                 if not _result_in_scope(db,p,item):continue
                 if start<=total<start+page_size:rows.append(item)
                 total+=1
+        from .saved_assessment_views import saved_classifications_for_posts
+        saved_views=saved_classifications_for_posts(db,p,rows)
         def serialize_post(item):
             platform=platform_key(item.platform)
             observed=str(item.observed_handle or '').strip().lstrip('@').casefold()
@@ -227,6 +232,7 @@ def registry_action(db:Session,p,action,data,id=None):
                 'published_at':item.published_at,'url':item.canonical_url,
                 'author_name':item.author_name,'content_type':item.content_type,
                 'match_method':'registered_account' if linked else 'observed_handle' if observed else 'author_name_unverified',
+                'saved_assessments':saved_views.get(item.id,[]),
                 **metrics}
         return {**base,'posts':[serialize_post(item) for item in rows],
                 'page':page,'page_size':page_size,'total':total}

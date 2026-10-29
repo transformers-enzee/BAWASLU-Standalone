@@ -116,6 +116,12 @@ export default function WatchlistPosts(){
       <span>Shares: {post.shares==null?'—':number(post.shares)}</span>
       <span>Engagement: {post.engagement_total==null?'—':number(post.engagement_total)}</span>
      </div>
+     {(post.saved_assessments||[]).map(assessment=><div key={assessment.campaign_id+'-'+assessment.assessment_version} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2" aria-label="Saved campaign classification">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong>Saved assessment · {assessment.campaign_name}</strong><span className="text-slate-600">v{assessment.assessment_version} · {assessment.sentiment==='UNKNOWN'?'Unclassified':assessment.sentiment}</span></div>
+      <p className="text-xs text-slate-600">{assessment.review_status==='FLAG_DISMISSED'?'Human review: dismissed':assessment.review_status?'Human review: '+assessment.review_status.replaceAll('_',' ').toLowerCase():'Requires human review'} · {assessment.signal_source==='KEYWORD_REVIEW_LEAD'?'Text-only review cue, not an AI violation finding':'Stored campaign assessment'}</p>
+      {(assessment.potential_issues||[]).length>0&&<p className="text-xs text-amber-800">{(assessment.potential_issues||[]).map(s=>s.category_name).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ')} · Unverified{assessment.review_status==='FLAG_DISMISSED'?' · dismissed':''}</p>}
+      <Link className="text-xs font-semibold text-[#126d91] hover:underline" to={'/inbox?campaign_id='+encodeURIComponent(assessment.campaign_id)+'&result_id='+encodeURIComponent(post.id)}>Open original saved assessment in Inbox</Link>
+     </div>)}
      {sourceUrl(post.url)&&<a className="text-xs font-semibold text-[#126d91] hover:underline" href={sourceUrl(post.url)} target="_blank" rel="noopener noreferrer">View original post ↗</a>}
     </article>)}
     {!posts.length&&<div className="intel-card p-6 text-sm text-slate-500">{linked.length?'No previously captured posts matched these accounts and filters. This does not mean the accounts have no published posts.':'Add public account URLs and handles in Watchlist to begin matching stored evidence.'}</div>}

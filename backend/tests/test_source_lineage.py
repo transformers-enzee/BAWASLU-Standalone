@@ -32,11 +32,24 @@ def test_resolver_rejects_noncanonical_ids(monkeypatch):
         module.resolve_source("social:00101",user(),FakeDb())
     assert err.value.status_code==422
 
-def test_resolver_refuses_cross_store_lookup(monkeypatch):
+def test_resolver_returns_independent_real_pilot_source(monkeypatch):
     monkeypatch.setattr(module,"profile",lambda db,user:grant())
+    from app import smart_radar
+    monkeypatch.setattr(smart_radar,"fetch_sources",lambda db:[
+        {"pilot_post_id":"POST-001","message_original":"A recorded election source",
+         "source_url":"https://example.test/post","platform":"Twitter",
+         "published_at_raw":"2026-01-01"}])
+    result=module.resolve_source("radar:POST-001",user(),FakeDb())
+    assert result["canonical_source_id"]=="radar:POST-001"
+    assert result["linked_social_source_id"] is None
+    assert result["source_evidence_verified"] is False
+    assert result["radar_pilot_identity_crosswalk_verified"] is False
+
+def test_radar_source_fails_closed_for_regional_user(monkeypatch):
+    monkeypatch.setattr(module,"profile",lambda db,user:{**grant(),"geographic_scope":"Provincial"})
     with pytest.raises(HTTPException) as err:
         module.resolve_source("radar:POST-001",user(),FakeDb())
-    assert err.value.status_code==409
+    assert err.value.status_code==403
 
 def test_resolver_scopes_source_before_returning(monkeypatch):
     monkeypatch.setattr(module,"profile",lambda db,user:grant())

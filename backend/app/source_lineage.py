@@ -125,10 +125,28 @@ def resolve_source(reference:str,user:User=Depends(current_user),db:Session=Depe
         namespace,source_id=parse_canonical_source_id(reference)
     except ValueError:
         raise HTTPException(422,"Invalid canonical source reference")
+    if namespace=="radar":
+        # Historical pilot sources are real and independently addressable.
+        # Never convert radar:* to social:* without a verified crosswalk.
+        if p.get("geographic_scope")!="Nationwide":
+            raise HTTPException(403,"Pilot jurisdiction has not been verified for regional access")
+        from .smart_radar import fetch_sources
+        post=next((x for x in fetch_sources(db)
+                   if str(x.get("pilot_post_id"))==source_id),None)
+        if not post:
+            raise HTTPException(404,"Pilot source unavailable")
+        return {"canonical_source_id":reference,"identity_scope":"RADAR_PILOT_ONLY",
+                "source_url":post.get("source_url") or None,
+                "platform":post.get("platform") or None,
+                "published_at":post.get("published_at_raw") or None,
+                "source_excerpt":str(post.get("message_original") or "")[:350],
+                "source_evidence_verified":False,
+                "human_validation_required":True,
+                "radar_pilot_identity_crosswalk_verified":False,
+                "linked_social_source_id":None,
+                "paid_provider_called":False}
     if namespace!="social":
-        # Radar source evidence lives in a distinct Supabase pilot schema and
-        # must be accessed using its existing scope-protected Smart Radar API.
-        raise HTTPException(409,"Radar sources require Smart Radar's pilot evidence API")
+        raise HTTPException(422,"Unsupported source namespace")
     row=db.get(SocialListeningResult,int(source_id))
     if not row or not _result_in_scope(db,p,row):
         raise HTTPException(404,"Source unavailable")

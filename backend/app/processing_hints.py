@@ -106,6 +106,35 @@ def assessment_quality_snapshot(records):
             'verified_incident_jurisdiction_posts':verified_locations,
             'source':'AUTHORIZED_SAVED_FINDINGS_ONLY','paid_provider_called':False}
 
+def classification_contract(row):
+    """Reuse saved annotations; unverified mentions cannot grant regional access."""
+    hints=row.get('processing_hints') or source_hints(row.get('text_content'))
+    return {'result_id':str(row.get('id') or ''),
+            'campaign_id':str(row.get('campaign_id') or ''),
+            'relevance':str(row.get('relevance_label') or 'UNASSESSED').upper(),
+            'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
+            'candidate_names':normalize_candidate_signals(row.get('candidate_signals') or []),
+            'topics':hints.get('topic_suggestions') or [],
+            'location_mentions_unverified':hints.get('province_mentions') or [],
+            'potential_issues':row.get('potential_issues') or [],
+            'review_status':row.get('flag_review_status'),
+            'assessment_version':row.get('assessment_version')}
+
+
+def exact_source_groups(records):
+    """Exact-source duplicate grouping only; never assert same incident."""
+    from collections import defaultdict
+    grouped=defaultdict(list)
+    for row in records:
+        source=str(row.get('canonical_url') or '').strip().lower()
+        if not source:
+            source=source_hints(row.get('text_content'))['exact_text_fingerprint']
+        if source:
+            grouped[(str(row.get('campaign_id') or ''),source)].append(str(row.get('id') or ''))
+    return [{'campaign_id':key[0],'post_ids':ids,'incident_verified':False}
+            for key,ids in grouped.items() if len(ids)>1]
+
+
 def summarize_scoped_findings(records):
     """Deterministic, read-only aggregation of ALREADY authorized relevant findings.
 
@@ -147,6 +176,8 @@ def summarize_scoped_findings(records):
     duplicates=[{'campaign_id':key[0],'source_ids':ids,'basis':'EXACT_URL_OR_TEXT'}
         for key,ids in buckets.items() if len(ids)>1]
     return {'visible_relevant_count':len(records),
+        'classification_contracts':[classification_contract(x) for x in records],
+        'exact_source_groups':exact_source_groups(records),
         'exact_duplicate_groups':duplicates,
         'topic_groups':[{'topic':name,'source_ids':ids,'count':len(ids),'status':'KEYWORD_GROUP_ONLY'}
             for name,ids in sorted(topic_groups.items())],

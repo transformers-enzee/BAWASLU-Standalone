@@ -102,3 +102,17 @@ def test_assessment_quality_snapshot_does_not_invent_sentiment():
     assert snapshot['posts_with_candidate_signals']==1
     assert snapshot['verified_incident_jurisdiction_posts']==0
     assert snapshot['paid_provider_called'] is False
+
+def test_classification_contract_and_exact_grouping():
+    from app.processing_hints import classification_contract,exact_source_groups
+    item={'id':'1','campaign_id':'1','relevance_label':'RELEVANT',
+          'sentiment':'NEGATIVE','candidate_signals':[{'name':'Gibran Rakabuming'}],
+          'text_content':'Riau','canonical_url':'https://example.org/a'}
+    result=classification_contract(item)
+    assert result['candidate_names']==['Gibran Rakabuming Raka']
+    assert result['location_mentions_unverified']==['Riau']
+    assert result['sentiment']=='NEGATIVE'
+    groups=exact_source_groups([item,{**item,'id':'2'},{**item,'id':'3','campaign_id':'2'}])
+    assert len(groups)==1
+    assert groups[0]['post_ids']==['1','2']
+    assert groups[0]['incident_verified'] is False

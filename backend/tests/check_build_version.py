@@ -10,7 +10,7 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend/app/main.py"
 SIDEBAR = ROOT / "frontend/src/components/intel/AccessNavigation.jsx"
-VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[1-9])?\Z")
+VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9])?\Z")
 
 
 def following(value):
@@ -19,7 +19,7 @@ def following(value):
     if not minor:
         return f"{major}.1"
     if minor[0] == "9":
-        return str(int(major) + 1)
+        return f"{int(major) + 1}.0"
     return f"{major}.{int(minor[0]) + 1}"
 
 
@@ -28,7 +28,7 @@ def read_version(source, pattern, name):
     assert match, f"Missing {name} build version"
     value = match.group(1)
     assert VERSION.fullmatch(value), (
-        f"Invalid {name} build version {value}; use 90, 90.1 ... 90.9, 91, not .10"
+        f"Invalid {name} build version {value}; use 90.0, 90.1 ... 90.9, 91.0, not .10"
     )
     return value
 
@@ -61,9 +61,9 @@ def verify():
         assert server == expected, (
             f"Each commit must advance exactly one build: {old} -> {expected}; got {server}"
         )
-    assert following("89.9") == "90"
+    assert following("89.9") == "90.0"
     assert following("90") == "90.1"
-    assert following("90.9") == "91"
+    assert following("90.9") == "91.0"
     assert not VERSION.fullmatch("89.10")
     assert not VERSION.fullmatch("89.11")
     print("Build version OK:", server)

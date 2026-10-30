@@ -5,6 +5,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
+  let issueDistribution = null, issueAnalysisBusy=false;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
   let watchOffset=0;
   function renderInboxLineage(){
@@ -212,13 +213,31 @@
       (mentions.length>watchSize?'<div class="row small" style="margin-top:10px;gap:10px"><button type="button" class="button" data-watch-page="previous" '+(watchOffset===0?'disabled':'')+'>← Previous 2</button><span class="muted">'+(watchOffset+1)+'–'+Math.min(watchOffset+watchSize,mentions.length)+' of '+mentions.length+'</span><button type="button" class="button" data-watch-page="next" '+(watchOffset+watchSize>=mentions.length?'disabled':'')+'>Next 2 →</button></div>':'')+
       '<p class="small"><a class="watch-link" href="/social-listening?tab=watchlist" target="_top">Open Candidate Watchlist in Social Listening →</a></p>';
     $('#watch').removeAttribute('data-insight');
+
     const topicCounts = {};
     filtered.forEach(f => (f.topics||[]).forEach(t => {topicCounts[t] = (topicCounts[t]||0)+1;}));
     const topics = asRows(topicCounts);
-    const topicMax = Math.max(1,...topics.map(row=>row[1]));
-    $('#issues').innerHTML = miniBars(topics.slice(0,8),topicMax);
-    $('#cloud').innerHTML = topics.slice(0,12).map(([name],i) =>
+    const aiTopics=issueDistribution?.[perspective];
+    const analysis=aiTopics?.topics||[];
+    const highest=Math.max(1,...analysis.map(x=>x.count));
+    const colors={POSITIVE:'#18886a',NEGATIVE:'#bd544a',NEUTRAL:'#67849a',MIXED:'#b18638'};
+    $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
+      (perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
+      ' · AI-classified primary conversation topics</div>'+
+      (analysis.length===5?analysis.map(t=>'<div class="issue-theme" style="margin-bottom:10px" title="'+label(t.description||'')+
+        '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:12px"><span style="line-height:1.4">'+
+        label(t.title)+'</span><b>'+Number(t.count||0)+'</b></div><div class="small muted">'+
+        label(t.sentiment||'NEUTRAL')+' · '+label(t.description||'')+
+        '</div><div style="background:#e8eeee;border-radius:6px;height:7px;margin-top:4px"><div style="height:100%;border-radius:6px;background:'+
+        (colors[t.sentiment]||colors.NEUTRAL)+';width:'+(Number(t.count||0)/highest*100)+'%"></div></div></div>').join('')+
+        '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':
+        '<p class="small muted">Run OpenAI topic analysis to generate five evidence-grounded themes. Generic saved topic labels are not used as substitutes.</p>')+
+      '<button id="analyzeIssueDistribution" type="button" class="button" '+(issueAnalysisBusy?'disabled':'')+
+      ' style="margin-top:9px;font-size:12px">'+(issueAnalysisBusy?'Generating AI topics…':'Generate '+(perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+' topics with OpenAI')+'</button>'+
+      '<p class="small muted" id="issueAnalysisStatus" style="margin-top:6px">Admin-only · explicit paid request · cached for unchanged evidence</p>';
+    $('#cloud').innerHTML = (analysis.length?analysis.map(t=>t.title):topics.slice(0,12).map(([name])=>name)).slice(0,12).map((name,i)=>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
+
     const dayRows=asRows(addCounts(filtered,'day_counts')).sort((a,b)=>a[0].localeCompare(b[0]));
     $('#trend').innerHTML=trendSvg(dayRows);
     $('#trend').removeAttribute('data-insight');
@@ -250,11 +269,34 @@
   ui.decorate = decorate;
   async function refresh() {
     dashboard = await request('/api/smart-radar/dashboard');
+    try{issueDistribution=await request('/api/smart-radar/issue-distribution')}catch(error){issueDistribution=null;console.warn('AI issue topics unavailable',error.message)}
     if(dashboard.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
     ui.setData((dashboard.findings || []).map(mapFinding));
     renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
   }
+  document.addEventListener('click',async event=>{
+    const button=event.target.closest?.('#analyzeIssueDistribution');
+    if(!button||issueAnalysisBusy)return;
+    event.preventDefault();event.stopPropagation();
+    const perspective=$('#operations').classList.contains('active')?'operations':'reputation';
+    if(!window.confirm('Generate five '+(perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
+      ' topics and classify each relevant saved source with OpenAI? A paid model request may be charged.'))return;
+    issueAnalysisBusy=true;button.disabled=true;button.textContent='Generating AI topics…';
+    try{
+      const result=await request('/api/smart-radar/issue-distribution/analyze?perspective='+perspective,
+        {method:'POST',body:'{}'});
+      issueDistribution=issueDistribution||{};
+      issueDistribution[perspective]=result.result;
+      decorate();
+    }catch(error){
+      issueAnalysisBusy=false;
+      button.disabled=false;button.textContent='Retry OpenAI topic analysis';
+      const status=$('#issueAnalysisStatus');if(status)status.textContent='Analysis failed: '+error.message;
+      return;
+    }
+    issueAnalysisBusy=false;decorate();
+  });
   async function boot() {
     let access = null;
     try {

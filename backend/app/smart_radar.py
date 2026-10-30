@@ -249,7 +249,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         source=str(record.get('text_content') or '').casefold()
         if not source:continue
         for word in main_by_campaign.get(cid,[]):
-            if re.search(r'(?<!\\w)'+re.escape(word.casefold())+r'(?!\\w)',source):
+            if re.search(r'(?<!\w)'+re.escape(word.casefold())+r'(?!\w)',source):
                 keyword_counts[word]+=1
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})

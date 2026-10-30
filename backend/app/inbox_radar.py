@@ -347,6 +347,11 @@ def compile_inbox_findings(rows,states=None):
         label=re.sub(r'\\s+',' ',label).strip()
         words=label.split()
         finding['title']=' '.join(words[:10]) if len(words)>10 else label
+    title_counts=Counter(g['title'].casefold() for g in findings)
+    for g in findings:
+        if title_counts[g['title'].casefold()]>1:
+            # Short stable disambiguator, not an excerpt copied from the post.
+            g['title']=g['title']+' · '+g['id'].split('-')[-1]
     return sorted(findings,key=lambda x:(x['status']!='pending',-x['supporting_posts'],x['title'],x['id']))
 
 def live_inbox_findings(db,principal,states=None):

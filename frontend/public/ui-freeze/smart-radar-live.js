@@ -118,7 +118,7 @@
     const stops=valid.map(([,v],i)=>{const start=offset;offset+=v/total*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';});
     const legend=valid.map(([name,count],i)=>'<button type="button" class="insightclick" data-insight="'+prefix+encodeURIComponent(name)+'" style="display:flex;gap:9px;align-items:center;width:100%;padding:5px;text-align:left">'+
       '<span style="width:10px;height:10px;border-radius:50%;background:'+colors[i%colors.length]+'"></span>'+
-      '<span style="flex:1">'+label(name==='UNCLASSIFIED'?'Unclassified':name)+'</span><b>'+count+' <span class="muted">('+Math.round(count/total*100)+'%)</span></b></button>').join('');
+      '<span style="flex:1">'+label(prefix==='platform:'?({x:'X',twitter:'X',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',youtube:'YouTube',reddit:'Reddit',threads:'Threads',linkedin:'LinkedIn'}[String(name).toLowerCase()]||name):(name==='UNCLASSIFIED'?'Unclassified':name))+'</span><b>'+count+' <span class="muted">('+Math.round(count/total*100)+'%)</span></b></button>').join('');
     return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;justify-content:center;padding:14px 0">'+
       '<div role="img" aria-label="'+label(valid.map(x=>x[0]+': '+x[1]).join(', '))+'" style="width:150px;height:150px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient('+stops.join(',')+')">'+
       '<div style="width:94px;height:94px;background:white;border-radius:50%;display:grid;place-items:center;text-align:center"><div><b style="font-size:24px">'+total+'</b><div class="small muted">posts</div></div></div></div>'+

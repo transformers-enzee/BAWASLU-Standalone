@@ -210,11 +210,28 @@ def attach_live_ai_summaries(db,findings):
         finding['summary_evidence_sample']=(insight.get('source_ids') or [])[:5]
     return findings
 
+import copy
+_DASHBOARD_LOCK=threading.RLock()
+_DASHBOARD_RESPONSES={}
+_DASHBOARD_TTL=30.0
+
+def invalidate_dashboard_cache():
+    with _DASHBOARD_LOCK:_DASHBOARD_RESPONSES.clear()
+
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
     response.headers["Cache-Control"]="private, no-store"
     from .inbox_radar import live_inbox_findings
     principal=authorised(db,user)
+    import hashlib
+    cache_identity=hashlib.sha256(json.dumps([user.id,principal],sort_keys=True,default=str).encode()).hexdigest()
+    now=time.monotonic()
+    with _DASHBOARD_LOCK:
+        cached=_DASHBOARD_RESPONSES.get(cache_identity)
+        if cached and cached[0]>now:
+            response.headers["X-Radar-Cache"]="HIT"
+            return copy.deepcopy(cached[1])
+    response.headers["X-Radar-Cache"]="MISS"
     findings,inbox=live_inbox_findings(db,principal,fetch_states(db))
     attach_live_ai_summaries(db,findings)
     posts=[post for finding in findings for post in finding["posts"]]
@@ -253,7 +270,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
                 keyword_counts[word]+=1
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})
-    return {"batch_id":None,"source_total":len(posts),
+    payload={"batch_id":None,"source_total":len(posts),
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),
@@ -274,6 +291,12 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         "truncated_to_inbox_window":len(inbox.get("findings") or [])>=300,
         "disclaimer":"Only authorized, relevant saved Inbox assessments. Topic groups do not establish a shared incident or legal conclusion. No AI calls.",
         "jurisdictions":[],"timezone":"Asia/Jakarta","paid_provider_called":False}
+    with _DASHBOARD_LOCK:
+        _DASHBOARD_RESPONSES[cache_identity]=(time.monotonic()+_DASHBOARD_TTL,copy.deepcopy(payload))
+        if len(_DASHBOARD_RESPONSES)>64:
+            for old in list(_DASHBOARD_RESPONSES)[:16]:
+                _DASHBOARD_RESPONSES.pop(old,None)
+    return payload
 
 @router.get("/finding/{finding_id}")
 def finding_detail(finding_id:str,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):

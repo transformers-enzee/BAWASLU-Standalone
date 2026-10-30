@@ -12,7 +12,7 @@ const nodes=new Map(),listeners=new Map(),requests=[];
 function el(key){
   if(!nodes.has(key))nodes.set(key,{id:key,innerHTML:'',textContent:'',value:'',style:{},dataset:{},
     classList:{add(){},remove(){},contains(){return false}},
-    focus(){},setSelectionRange(){},setAttribute(){},
+    focus(){},setSelectionRange(){},setAttribute(){},addEventListener(){},
     insertAdjacentHTML(_where,markup){this.innerHTML+=markup}});
   return nodes.get(key);
 }

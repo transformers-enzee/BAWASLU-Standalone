@@ -271,13 +271,23 @@
     // The HTML display is identical to the approved prototype; its values come from the API.
   }
   ui.decorate = decorate;
+  let dashboardEpoch=0;
   async function refresh() {
-    dashboard = await request('/api/smart-radar/dashboard');
-    try{issueDistribution=await request('/api/smart-radar/issue-distribution')}catch(error){issueDistribution=null;console.warn('AI issue topics unavailable',error.message)}
-    if(dashboard.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
-    ui.setData((dashboard.findings || []).map(mapFinding));
+    const epoch=++dashboardEpoch;
+    // Render the evidence dashboard first; expensive issue analysis never blocks first paint.
+    const primary=await request('/api/smart-radar/dashboard');
+    if(epoch!==dashboardEpoch)return;
+    if(primary.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
+    dashboard=primary;
+    ui.setData((dashboard.findings||[]).map(mapFinding));
     renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
+    // Refresh auxiliary topics after main paint. Failures must not clear existing topics.
+    request('/api/smart-radar/issue-distribution').then(topics=>{
+      if(epoch!==dashboardEpoch)return;
+      issueDistribution=topics;
+      decorate();
+    }).catch(error=>console.warn('AI issue topics unavailable',error.message));
   }
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-refresh-player]');
@@ -305,6 +315,8 @@
   async function boot() {
     let access = null;
     try {
+      // Access lookup and initial dashboard request are independent; start together.
+      const dashboardLoading=refresh();
       try {
         const a = await request('/api/functions/registry',{method:'POST',body:JSON.stringify({action:'myAccess',data:{}})});
         access = a.access || null;
@@ -317,7 +329,7 @@
           $('#geo').disabled = true;
         }
       } catch {ui.canReview=false;}
-      await refresh();
+      await dashboardLoading;
       fetch('/indonesia-provinces.geojson',{cache:'force-cache'})
         .then(r=>{if(!r.ok)throw Error('Map unavailable');return r.json()})
         .then(data=>{if(!Array.isArray(data?.features))throw Error('Invalid map');provinceGeo=data;decorate()})

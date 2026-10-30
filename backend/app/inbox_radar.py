@@ -346,6 +346,25 @@ def compile_inbox_findings(rows,states=None):
         g['day_counts']=dict(g['day_counts'])
         g['sentiment_counts']=dict(g['sentiment_counts'])
         g['actor_mentions']=dict(g['actor_mentions'])
+        # Province-scoped rollups are derived only from original saved source posts.
+        # A source mentioned in two provinces is counted once in each selected
+        # province, never mistaken for a verified incident location.
+        by_region={}
+        for post in g['posts']:
+            for region in set(post.get('geographic_mentions_unverified') or []):
+                region=str(region).strip()
+                if not region:continue
+                entry=by_region.setdefault(region,{'supporting_posts':0,
+                    'platform_counts':{},'sentiment_counts':{},'day_counts':{}})
+                entry['supporting_posts']+=1
+                platform=post.get('platform') or 'Unknown'
+                entry['platform_counts'][platform]=entry['platform_counts'].get(platform,0)+1
+                sentiment=post.get('sentiment') or 'UNCLASSIFIED'
+                entry['sentiment_counts'][sentiment]=entry['sentiment_counts'].get(sentiment,0)+1
+                day=str(post.get('published_at_raw') or '')[:10]
+                if re.fullmatch(r'\\d{4}-\\d{2}-\\d{2}',day):
+                    entry['day_counts'][day]=entry['day_counts'].get(day,0)+1
+        g['province_breakdown']=by_region
         g['geo_signal_counts']=dict(g['geo_signal_counts'])
         g['verified_incident_counts']=dict(g['verified_incident_counts'])
         g['recurring_discussion']=recurring

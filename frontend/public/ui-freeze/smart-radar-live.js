@@ -98,6 +98,7 @@
       actor_mentions: f.actor_mentions || {},
       sentiment_counts: f.sentiment_counts || {},
       geo_signal_counts: f.geo_signal_counts || {},
+      province_breakdown: f.province_breakdown || {},
       verified_incident_counts: f.verified_incident_counts || {},
       next_followup: f.next_followup || '',
       source_ids: f.source_ids || [],followup: f.next_followup || ''

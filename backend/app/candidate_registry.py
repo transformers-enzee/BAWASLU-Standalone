@@ -11,7 +11,7 @@ BLOCKED_ALIASES={'pemilu','pilkada','caleg','calon','presiden','bawaslu','kpu','
 MAX_ALIASES=30
 
 def normalized(value):
-    return re.sub(r'[^\\w]+','',str(value or '').casefold()).replace('_','')
+    return ' '.join(str(value or '').casefold().split())
 
 def validate_aliases(value,canonical=''):
     if not isinstance(value,list) or len(value)>MAX_ALIASES:

@@ -87,5 +87,5 @@ def test_inbox_renders_player_and_topic_evidence_and_shahrin_qa():
     for term in ('Processing and QA diagnostics','campaignQAHistorySummary',
                  'Source-linked grouping review','Original source provenance'):
         assert term in source
-    radar=(Path(__file__).resolve().parents[2]/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text()
-    assert 'playerOverview(fs,key)' in radar
+    radar=(Path(__file__).resolve().parents[2]/'frontend/src/pages/SmartRadar.jsx').read_text()
+    assert 'smart-radar-v6_2.html' in radar

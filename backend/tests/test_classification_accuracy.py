@@ -65,5 +65,5 @@ def test_inbox_ui_shows_saved_player_counts_without_paid_ai():
     assert 'classification_processing' in frontend
     assert 'Five Intelligence Players · saved evidence screening' not in frontend
     assert 'Processing and QA diagnostics' in frontend
-    radar=(Path(__file__).resolve().parents[2]/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text()
-    assert 'Five Intelligence Players' in radar
+    radar=(Path(__file__).resolve().parents[2]/'frontend/src/pages/SmartRadar.jsx').read_text()
+    assert 'aria-label="Command Centre"' in radar

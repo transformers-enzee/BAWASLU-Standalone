@@ -107,7 +107,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'113.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'113.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -221,6 +221,9 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
                                   'campaignFindingGroupsPreview','campaignFindingGroupsList'):
                 invalidate_inbox()
             result=social_listening_action(db,p,body.action,body.data,body.id)
+        if body.action=='campaignDiscoverStart' and result.get('started'):
+            from .prism_discover import execute as execute_prism
+            background_tasks.add_task(execute_prism,int(result['run_id']))
         if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0 and os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true':
             from .auto_relevance import assess_pending_campaign
             background_tasks.add_task(assess_pending_campaign,int(body.id))

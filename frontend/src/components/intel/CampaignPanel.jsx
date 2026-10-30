@@ -52,6 +52,43 @@ export default function CampaignPanel({campaignId=null}){
  const [creating,setCreating]=useState(false),[editing,setEditing]=useState(null);
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
+ const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
+ const [candidateSuggestions,setCandidateSuggestions]=useState(null);
+ async function checkDiscover(c){
+   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
+     setDiscoverPreview(r.data)}
+   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Discover credit preview failed')}
+   finally{setDiscoverBusy(false)}
+ }
+ async function launchDiscover(){
+   if(!discoverCampaign||!discoverPreview||discoverBusy)return;
+   if(!window.confirm('Run a separate paid SocialCrawl Discover search? Up to '+discoverPreview.credit_cap+' credits, at most 50 kept posts, plus OpenAI enrichment charges. No scheduled crawl is enabled.'))return;
+   setDiscoverBusy(true);setDiscoverError('');
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
+      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun(r.data)}
+   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Unable to start Discover')}
+   finally{setDiscoverBusy(false)}
+ }
+ async function refreshDiscover(){
+   if(!discoverCampaign||!discoverRun)return;
+   setDiscoverBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',
+     id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});setDiscoverRun(r.data);
+     if(['COMPLETED','PARTIAL'].includes(r.data.status))await refresh()}
+   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Status unavailable')}
+   finally{setDiscoverBusy(false)}
+ }
+ useEffect(()=>{
+   if(!selected||campaignSection!=='watchlist')return;
+   let ok=true;
+   base44.functions.invoke('socialListening',{action:'campaignCandidateSuggestions',id:selected.id,data:{}})
+     .then(r=>{if(ok)setCandidateSuggestions(r.data?.candidates||[])})
+     .catch(()=>{if(ok)setCandidateSuggestions([])});
+   return()=>{ok=false};
+ },[selected?.id,campaignSection]);
+
  const [total,setTotal]=useState(0);
  const [sampleText,setSampleText]=useState(''),[keywordPreview,setKeywordPreview]=useState(null),[previewBusy,setPreviewBusy]=useState(false),[previewError,setPreviewError]=useState('');
  const keywordPreviewRequest=useRef(0);
@@ -459,8 +496,18 @@ export default function CampaignPanel({campaignId=null}){
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
       <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
-     </article>)}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Discover · 50 posts</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+     </article>)}{discoverCampaign&&<div className="rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm space-y-2" role="region" aria-label="Separate SocialCrawl Discover run">
+  <div className="flex justify-between gap-3"><strong>Prism Discover · {discoverCampaign.name} · 50 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
+  <p className="text-xs">Independent of Manual SocialCrawl. First 8 main keywords only, 7-day search window and hard cap of {discoverPreview?.credit_cap||100} provider credits. OpenAI enrichment is separately billed. No automatic schedule.</p>
+  {discoverBusy&&<p role="status">Checking provider…</p>}
+  {discoverError&&<p role="alert" className="text-red-700">{discoverError}</p>}
+  {discoverPreview&&!discoverRun&&<div className="space-y-2"><p className="text-xs">Provider preview: {JSON.stringify(discoverPreview.estimate).slice(0,950)}</p>
+    <p className="text-xs">Keywords: {(discoverPreview.keywords_used||[]).join(', ')} ({(discoverPreview.keywords_total||0)} configured) · Platforms: {(discoverPreview.platforms||[]).join(', ')} · {discoverPreview.incremental?'Incremental since last run':'Initial collection'}</p>
+    <button type="button" className="intel-button text-xs" disabled={discoverBusy} onClick={launchDiscover}>Confirm paid Discover run</button>
+  </div>}
+  {discoverRun&&<div className="space-y-2" role="status"><p>Run #{discoverRun.run_id} · {discoverRun.status} · {discoverRun.posts_saved||0} saved posts · {discoverRun.credits_used||0} SocialCrawl credits</p><button type="button" className="intel-ghost text-xs" onClick={refreshDiscover} disabled={discoverBusy}>Refresh run status</button></div>}
+ </div>}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
    </section>
    <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords and platforms, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
   </section>}
@@ -486,6 +533,12 @@ export default function CampaignPanel({campaignId=null}){
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
+   {campaignSection==='watchlist'&&<section className="rounded-lg bg-teal-50 border border-teal-200 p-3 space-y-2" aria-label="AI detected candidate suggestions">
+    <h4 className="text-sm font-semibold">Candidates mentioned in saved posts · suggestions</h4>
+    <p className="text-xs">AI-detected names require an officer to verify official cross-platform accounts before tracking. A mention is not proof of endorsement or wrongdoing.</p>
+    <div className="flex flex-wrap gap-2">{(candidateSuggestions||[]).slice(0,10).map(x=><span key={x.name} className="rounded bg-white border border-teal-200 px-3 py-1 text-xs">{x.name} · {x.matching_posts} mentions</span>)}</div>
+    {!candidateSuggestions?.length&&<p className="text-xs">No AI candidate suggestions are available yet.</p>}
+  </section>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 

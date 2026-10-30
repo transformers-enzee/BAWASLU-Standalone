@@ -706,6 +706,9 @@ def serialize_result(x):
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     # Fail closed before routing any collection, inspection or mutation action.
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+    if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverStatus','campaignCandidateSuggestions'}:
+        from .prism_discover import action as prism_action
+        return prism_action(db,p,action,data,id)
     if action in {'listCampaigns','createCampaign','updateCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignThumbnailRecovery','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:
         from .campaigns import campaign_action
         return campaign_action(db,p,action,data,id)

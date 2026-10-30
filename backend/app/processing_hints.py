@@ -126,6 +126,10 @@ CANDIDATE_ALIASES={
     'Prabowo Subianto':('prabowo subianto','prabowo'),
     'Gibran Rakabuming Raka':('gibran rakabuming raka','gibran rakabuming','gibran'),
     'Anies Baswedan':('anies baswedan','anies','anisbaswedan','anis baswedan'),
+    'Ganjar Pranowo':('ganjar pranowo','ganjarpranowo','ganjar'),
+    'Joko Widodo':('joko widodo','jokowi'),
+    'Muhaimin Iskandar':('muhaimin iskandar','cak imin'),
+    'Mahfud MD':('mahfud md','mahfud'),
 }
 def normalize_candidate_signals(signals):
     """Resolve only an explicitly known full-name alias; retain unknowns unaltered."""

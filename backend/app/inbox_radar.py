@@ -20,6 +20,29 @@ def _safe_strings(values):
             out.append(value.strip()[:120])
     return list(dict.fromkeys(out))
 
+def _geo_mentions(row):
+    """Geographic labels recorded in saved assessment; NOT incident verification."""
+    found=set()
+    for entry in row.get('location_signals') or []:
+        if not isinstance(entry,dict):continue
+        label=entry.get('province') or entry.get('name')
+        if not isinstance(label,str):continue
+        label=' '.join(label.split())[:128]
+        if label and len(label)>1:
+            found.add(label)
+    return sorted(found)
+
+
+def _verified_incident_province(row):
+    """Only a current human-confirmed incident jurisdiction can count as verified."""
+    review=row.get('incident_jurisdiction_review') or {}
+    if not isinstance(review,dict):return ''
+    if review.get('decision')!='CONFIRMED' or not review.get('incident_jurisdiction_verified'):
+        return ''
+    province=review.get('incident_province')
+    return ' '.join(province.split())[:128] if isinstance(province,str) else ''
+
+
 def _candidate_names(row):
     from .processing_hints import normalize_candidate_signals
     names=normalize_candidate_signals(_safe_strings(row.get('normalized_candidate_names')))
@@ -51,6 +74,8 @@ def _source(row):
         'platform':str(row.get('platform') or 'Unknown'),
         'assessment_version':row.get('assessment_version'),
         'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
+        'geographic_mentions_unverified':_geo_mentions(row),
+        'verified_incident_province':_verified_incident_province(row),
         'review_status':row.get('flag_review_status'),
         'source_verification_status':'SAVED_INBOX_ASSESSMENT_UNVERIFIED',
     }
@@ -142,6 +167,7 @@ def compile_inbox_findings(rows,states=None):
                 'players':players,'perspectives':set(),'topics':set(),
                 'posts':[],'platform_counts':Counter(),'day_counts':Counter(),
                 'sentiment_counts':Counter(),'actor_mentions':Counter(),
+                'geo_signal_counts':Counter(),'verified_incident_counts':Counter(),
                 'published_at':'','source_ids':[],
                 'attention':bool(flagged or has_concern),
                 'source_assessment_versions':[],
@@ -159,6 +185,9 @@ def compile_inbox_findings(rows,states=None):
         sentiment=source['sentiment']
         g['sentiment_counts'][sentiment if sentiment in ('POSITIVE','NEGATIVE','NEUTRAL') else 'UNCLASSIFIED']+=1
         g['actor_mentions'].update(_candidate_names(row))
+        g['geo_signal_counts'].update(source['geographic_mentions_unverified'])
+        if source['verified_incident_province']:
+            g['verified_incident_counts'][source['verified_incident_province']]+=1
         g['topics'].update(topics)
         if flagged:g['topics'].add('Potential Violations')
         if has_concern:g['topics'].add('Public Concerns')
@@ -209,6 +238,8 @@ def compile_inbox_findings(rows,states=None):
         g['day_counts']=dict(g['day_counts'])
         g['sentiment_counts']=dict(g['sentiment_counts'])
         g['actor_mentions']=dict(g['actor_mentions'])
+        g['geo_signal_counts']=dict(g['geo_signal_counts'])
+        g['verified_incident_counts']=dict(g['verified_incident_counts'])
         g['recurring_discussion']=recurring
         g['source_evidence_verified']=False
         g['paid_provider_called']=False

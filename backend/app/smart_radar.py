@@ -196,14 +196,27 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     platforms=Counter(post["platform"] for post in posts)
     candidates=Counter()
     sentiments=Counter()
+    geo_mentions=Counter()
+    verified_locations=Counter()
     for finding in findings:
         candidates.update(finding.get("actor_mentions") or {})
         sentiments.update(finding.get("sentiment_counts") or {})
+        geo_mentions.update(finding.get("geo_signal_counts") or {})
+        verified_locations.update(finding.get("verified_incident_counts") or {})
+    from .registry import registry_action
+    watchlist=registry_action(db,principal,'watchlistSummary',{})
     return {"batch_id":None,"source_total":len(posts),
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),
         "sentiment_counts":dict(sentiments),
+        "geo_signal_counts":dict(geo_mentions),
+        "verified_incident_counts":dict(verified_locations),
+        "watchlist_profiles":watchlist['items'],
+        "watchlist_source":watchlist['source'],
+        "sentiment_coverage":{'classified':sum(sentiments.get(v,0) for v in ('POSITIVE','NEGATIVE','NEUTRAL')),
+                              'unclassified':sentiments.get('UNCLASSIFIED',0)},
+        "geographic_scope_note":"Saved location labels are unverified context; verified incidents require human confirmation.",
         "reviewed_total":sum(bool(finding["human_reviewed"]) for finding in findings),
         "mode":"SAVED_INBOX_SOURCE_OF_TRUTH","scoring_ready":False,
         "feed_source":"CAMPAIGN_INTELLIGENCE_INBOX_SAVED_ASSESSMENTS",

@@ -90,7 +90,11 @@
       human_reviewed: Boolean(f.human_reviewed), history: [],
       priority_score: f.priority_score, priority_label: f.priority_label || 'Not AI-scored',
       platform_counts: f.platform_counts || {}, day_counts: f.day_counts || {},
-      actor_mentions: f.actor_mentions || {}, next_followup: f.next_followup || '',
+      actor_mentions: f.actor_mentions || {},
+      sentiment_counts: f.sentiment_counts || {},
+      geo_signal_counts: f.geo_signal_counts || {},
+      verified_incident_counts: f.verified_incident_counts || {},
+      next_followup: f.next_followup || '',
       source_ids: f.source_ids || [],followup: f.next_followup || ''
     };
   }
@@ -136,9 +140,20 @@
       '<p class="small muted">No candidate mentions in this selection.</p>';
     $('#ranking').removeAttribute('data-insight');
     $('#rankTitle').textContent = perspective === 'operations' ? 'Top 10 Candidate Mentions' : 'Most Discussed Institutional Themes';
-    $('#watch').innerHTML = '<p class="small"><b>Candidate Watchlist</b> — Candidate profiles are managed inside Social Listening. Own posts and earned mentions are separate saved evidence, not proof of wrongdoing.</p><div class="divider"></div>' +
-      '<a class="watch-link" href="/social-listening" target="_top">Open Social Listening Candidate Watchlist →</a>' +
-      '<p class="small muted">A mention alone is not evidence of wrongdoing.</p>';
+    const profiles=(dashboard?.watchlist_profiles||[])
+      .filter(p=>['Active','Under Review'].includes(p.status))
+      .sort((a,b)=>(['Critical','High','Medium','Low'].indexOf(a.priority)-
+                     ['Critical','High','Medium','Low'].indexOf(b.priority))||String(a.name).localeCompare(String(b.name)));
+    $('#watch').innerHTML='<p class="small muted">Registered candidate profiles · priority and status set by officers, not AI risk scores.</p>'+
+      (profiles.length?profiles.slice(0,10).map(p=>{
+        const registered=String(p.name||'');
+        const count=mentions.find(([name])=>name.toLocaleLowerCase()===registered.toLocaleLowerCase())?.[1]||0;
+        return '<div style="padding:9px 0;border-bottom:1px solid #e3e9ee"><b>'+label(registered)+'</b>'+
+          '<div class="small muted">Officer priority: '+label(p.priority)+' · '+label(p.status)+
+          ' · '+count+' saved Inbox mention'+(count===1?'':'s')+'</div></div>';
+      }).join(''):'<p class="small muted">No active or under-review candidate profiles in your permitted scope.</p>')+
+      '<p class="small"><a class="watch-link" href="/social-listening?tab=watchlist" target="_top">Open Social Listening Candidate Watchlist →</a></p>'+
+      '<p class="small muted">Monitoring priority and mentions are not evidence of wrongdoing.</p>';
     $('#watch').removeAttribute('data-insight');
     const topicCounts = {};
     filtered.forEach(f => (f.topics||[]).forEach(t => {topicCounts[t] = (topicCounts[t]||0)+1;}));
@@ -148,11 +163,35 @@
     $('#cloud').innerHTML = topics.slice(0,12).map(([name],i) =>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
     $('#trend').innerHTML = trendSvg(asRows(addCounts(filtered,'day_counts')));$('#trend').setAttribute('data-insight','trend');
-    $('#regions').innerHTML = '<p class="small muted">Campaign and regional permissions follow Intelligence Inbox. Incident geography is not inferred from account or monitoring locations.</p>';
+    const unverifiedLocations=asRows(addCounts(filtered,'geo_signal_counts'));
+    const verifiedLocations=asRows(addCounts(filtered,'verified_incident_counts'));
+    const verifiedTotal=verifiedLocations.reduce((sum,[,count])=>sum+count,0);
+    $('#regions').innerHTML='<p class="small"><b>'+verifiedTotal+' verified incident-location post'+(verifiedTotal===1?'':'s')+
+      '</b> · verified only after officer review.</p>'+
+      (verifiedLocations.length?'<p class="small muted">Confirmed incident jurisdiction</p>'+
+         verifiedLocations.map(([place,count])=>'<button type="button" class="insightclick region-bar" data-insight="geo-verified:'+encodeURIComponent(place)+'">'+
+         '<div class="row small"><span>'+label(place)+'</span><b>'+count+'</b></div></button>').join(''):'')+
+      '<p class="small muted">Unverified geographic references from saved Inbox assessments (not incident locations):</p>'+
+      (unverifiedLocations.length?unverifiedLocations.slice(0,12).map(([place,count])=>
+       '<button type="button" class="insightclick region-bar" data-insight="geo:'+encodeURIComponent(place)+'">'+
+       '<div class="row small"><span>'+label(place)+'</span><b>'+count+'</b></div>'+
+       '<div class="track"><div class="fill" style="width:'+(count/Math.max(1,...unverifiedLocations.map(x=>x[1]))*100)+'%"></div></div></button>').join(''):
+      '<p class="small muted">No location references have been saved in the selected Inbox evidence.</p>')+
+      '<p class="small muted">Profile addresses and candidate constituencies are never interpreted as incident locations.</p>';
     $('#regions').removeAttribute('data-insight');
-    $('#sentimentExplain').textContent = 'Saved sentiment classifications from relevant Inbox posts. Unclassified is not Neutral.';
-    const sentimentRows=asRows(addCounts(filtered,'sentiment_counts'));
-    $('#sentiments').innerHTML = miniBars(sentimentRows,Math.max(1,...sentimentRows.map(r=>r[1])));
+    $('#regions').querySelectorAll('.region-bar').forEach(btn=>btn.setAttribute('type','button'));
+    const sentimentCounts=addCounts(filtered,'sentiment_counts');
+    const sentimentRows=['POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED']
+      .map(name=>[name,Number(sentimentCounts[name]||0)]);
+    const classified=sentimentRows.slice(0,3).reduce((n,r)=>n+r[1],0);
+    const total=classified+sentimentRows[3][1];
+    $('#sentimentExplain').textContent=classified+' of '+total+' relevant posts have saved sentiment labels. Unclassified is NOT Neutral; no AI calls are made on this page.';
+    const maxSentiment=Math.max(1,...sentimentRows.map(r=>r[1]));
+    $('#sentiments').innerHTML=sentimentRows.map(([name,count])=>
+      '<button type="button" class="insightclick" data-insight="sentiment:'+name+
+      '"><div class="row small"><span>'+label(name==='UNCLASSIFIED'?'Unclassified':name)+
+      '</span><b>'+count+'</b></div><div class="track"><div class="fill" style="width:'+
+      (count/maxSentiment*100)+'%"></div></div></button>').join('');
     const platforms = asRows(addCounts(filtered,'platform_counts'));
     $('#platforms').innerHTML = platforms.map(([name,count]) =>
       '<button class="insightclick" data-insight="platform:'+label(name)+'"><div class="row small"><span>'+label(name)+
@@ -223,7 +262,10 @@
       post.message_original || '',
       post.source_url || '',
       post.canonical_source_id || '',
-      post.platform || ''
+      post.platform || '',
+      post.sentiment || 'UNCLASSIFIED',
+      Array.isArray(post.geographic_mentions_unverified)?post.geographic_mentions_unverified:[],
+      post.verified_incident_province || ''
     ]);
     try {
       const history = await request('/api/smart-radar/history/'+encodeURIComponent(id));
@@ -254,7 +296,21 @@
   };
   ui.insightView = id => id.startsWith('platform:') ?
     ui.view().filter(f=>Object.entries(f.platform_counts||{}).some(([k,v])=>k.toLowerCase()===id.slice(9).toLowerCase()&&v>0)) :
+    id.startsWith('sentiment:') ?
+    ui.view().filter(f=>Number(f.sentiment_counts?.[id.slice(10).toUpperCase()]||0)>0) :
+    id.startsWith('geo:') ?
+    ui.view().filter(f=>Number(f.geo_signal_counts?.[decodeURIComponent(id.slice(4))]||0)>0) :
+    id.startsWith('geo-verified:') ?
+    ui.view().filter(f=>Number(f.verified_incident_counts?.[decodeURIComponent(id.slice(13))]||0)>0) :
     ui.view();
+  ui.insightMatchesPost = (id,post) => id.startsWith('platform:') ?
+    String(post[5]||'').toLowerCase()===id.slice(9).toLowerCase() :
+    id.startsWith('sentiment:') ?
+    String(post[6]||'UNCLASSIFIED').toUpperCase()===id.slice(10).toUpperCase() :
+    id.startsWith('geo:') ?
+    (post[7]||[]).includes(decodeURIComponent(id.slice(4))) :
+    id.startsWith('geo-verified:') ?
+    post[8]===decodeURIComponent(id.slice(13)) : true;
   ui.openInsight = async id => {
     if (id === 'watchlist') {window.top.location.assign('/watchlist');return;}
     if (busy) return;
@@ -264,7 +320,7 @@
       await Promise.all(rows.map(f=>fetchFinding(f.id)));
       ui.openPanel('insight',id);
       const sources=$('#drawerBody').querySelectorAll('.source');
-      const posts=rows.flatMap(f=>(f.posts||[]).filter(p=>!id.startsWith('platform:')||String(p[5]||'').toLowerCase()===id.slice(9).toLowerCase()));
+      const posts=rows.flatMap(f=>(f.posts||[]).filter(p=>ui.insightMatchesPost(id,p)));
       posts.forEach((post,i)=>{
         const href=safeUrl(post[3]);
         if(!href||!sources[i])return;

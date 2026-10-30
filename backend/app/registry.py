@@ -100,6 +100,16 @@ def registry_action(db:Session,p,action,data,id=None):
     if action=='myAccess': return {'access':p}
     # Protect every Watchlist, source and account listing action at the API boundary.
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
+    if action=='watchlistSummary':
+        # Lightweight, permission-scoped registry context for Command Centre.
+        # Priority is officer-assigned monitoring priority, never AI risk.
+        items=[x for x in db.query(WatchlistItem).filter(WatchlistItem.type=='Candidate')
+               .order_by(WatchlistItem.id).all() if allowed(p,x)]
+        return {'items':[{'id':str(x.id),'name':x.name,'priority':x.priority,
+                          'status':x.status,'type':x.type}
+                         for x in items],
+                'source':'REGISTERED_WATCHLIST_PROFILES',
+                'paid_provider_called':False}
     if action=='list':
         items=[x for x in db.query(WatchlistItem).order_by(WatchlistItem.created_at.desc()).all() if allowed(p,x)]
         ids={x.id for x in items}

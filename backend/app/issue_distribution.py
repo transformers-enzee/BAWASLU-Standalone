@@ -63,8 +63,21 @@ def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user
     signature=_signature(posts)
     operations=_read(db,"operations",signature)
     reputation=_read(db,"reputation",signature)
-    if posts and (operations is None or reputation is None):
+    # Missing per-finding AI briefings must be queued independently of topic
+    # classification, otherwise cached topic sets permanently suppress them.
+    from .smart_radar import access_findings, _live_summary_signature
+    findings=[f for f in access_findings(db,user)
+              if f.get("kind") in ("discussion","narrative_candidate") and f.get("posts")]
+    saved={r["finding_id"]:r for r in db.execute(text(
+        "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries"
+    )).mappings()}
+    missing_summaries=sum(
+        saved.get(f["id"],{}).get("source_signature")!=_live_summary_signature(f)
+        or saved.get(f["id"],{}).get("prompt_version")!="live-evidence-v3"
+        for f in findings)
+    if posts and (operations is None or reputation is None or missing_summaries):
         _schedule_topics(background_tasks,user.id,signature)
+    db.commit()
     return {"source_total":len(posts),"operations":operations,
             "reputation":reputation,
             "note":"Only matching source signatures display saved AI results; each record has one primary topic or Others."}
@@ -89,7 +102,8 @@ def _refresh_topics(user_id,signature):
                 try:
                     current=_records(db,user)
                     if _signature(current)!=signature:return
-                    analyze(perspective,user,db)
+                    if _read(db,perspective,signature) is None:
+                        analyze(perspective,user,db)
                 except Exception:
                     db.rollback()
                     log.exception("Automatic topic analysis failed for %s",perspective)

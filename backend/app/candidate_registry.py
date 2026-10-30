@@ -39,11 +39,20 @@ def aliases_for(row):
 
 def ensure_aliases_available(db, candidate_id, canonical_name, aliases):
     """Fail closed on collisions, including existing canonical registry names."""
-    requested={normalized(n) for n in [canonical_name,*aliases]}
+    from .processing_hints import normalize_candidate_signals
+    # Known aliases and abbreviated names must resolve to a single existing
+    # canonical identity before any new candidate is persisted.
+    def identity_keys(names):
+        keys={normalized(n) for n in names if normalized(n)}
+        for name in names:
+            canonical=normalize_candidate_signals([name])
+            if canonical: keys.add(normalized(canonical[0]))
+        return keys
+    requested=identity_keys([canonical_name,*aliases])
     for row in db.query(WatchlistItem).all():
         if row.id==candidate_id or row.type.casefold()!='candidate':
             continue
-        existing={normalized(row.name),*(normalized(a) for a in aliases_for(row))}
+        existing=identity_keys([row.name,*aliases_for(row)])
         if requested & existing:
             raise ValueError('Candidate name or alias conflicts with another tracked candidate')
 

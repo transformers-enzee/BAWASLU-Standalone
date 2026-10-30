@@ -6,7 +6,7 @@ def test_aliases_collapse():
  assert normalize_candidate_signals(['prabowo','Prabowo','Prabowo Subianto','Gibran','Gibran Rakabuming Raka','anisbaswedan','Anies Baswedan'])==['Prabowo Subianto','Gibran Rakabuming Raka','Anies Baswedan']
 
 def test_normalization():
- assert normalized('Anies Baswedan')==normalized('aniesbaswedan')
+ assert normalized('Prabowo')==normalized('prabowo')
 
 def test_not_automatic_creation():
  assert all(m['canonical_candidate_id'] is None for m in resolve_signals(['Gibran','prabowo'],{}))

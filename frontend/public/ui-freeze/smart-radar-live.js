@@ -5,6 +5,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
+  const refreshingPlayers=new Set();
   let issueDistribution = null;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
   let watchOffset=0;
@@ -273,6 +274,24 @@
     renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
   }
+  document.addEventListener('click',async event=>{
+    const button=event.target.closest?.('[data-refresh-player]');
+    if(!button)return;
+    event.preventDefault();event.stopPropagation();
+    const player=button.dataset.refreshPlayer;
+    if(!['violations','concerns','narratives'].includes(player)||refreshingPlayers.has(player))return;
+    if(!window.confirm('Regenerate only the '+player+' AI intelligence summary using OpenAI? A paid request may be charged.'))return;
+    refreshingPlayers.add(player);button.disabled=true;button.textContent='⟳';
+    try{
+      const result=await request('/api/smart-radar/summarize-live?player='+encodeURIComponent(player)+'&force=true',
+        {method:'POST',body:'{}'});
+      await refresh();
+      const resultText=(result.generated||[]).length+' intelligence summaries regenerated.';
+      const toast=$('#toast');if(toast){toast.textContent=resultText;toast.style.display='block';}
+    }catch(error){
+      const toast=$('#toast');if(toast){toast.textContent='AI regeneration failed: '+error.message;toast.style.display='block';}
+    }finally{refreshingPlayers.delete(player);button.disabled=false;button.textContent='↻';}
+  });
   async function boot() {
     let access = null;
     try {

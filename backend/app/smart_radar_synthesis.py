@@ -142,23 +142,26 @@ If reputation is not supported, explicitly say so. Return ONLY JSON."""
         LOCK.release()
 
 @router.post("/summarize-live")
-def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
+def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),player:str='',force:bool=False):
     """Explicit paid request: synthesize up to two unsummarized live Inbox themes."""
     import hashlib
     from .smart_radar import _live_summary_signature
     from .openai_triage import openai_triage_model, _response_output_text, OPENAI_DEFAULT_BASE_URL
     _permission(db,user)
+    if player and player not in ('violations','concerns','narratives'):
+        raise HTTPException(400,'Unknown intelligence player')
     key=os.getenv('OPENAI_API_KEY','').strip()
     if not key:raise HTTPException(409,'OpenAI is not configured')
     if not LOCK.acquire(blocking=False):raise HTTPException(409,'A synthesis is already running')
     generated=[]
     try:
         findings=[f for f in access_findings(db,user)
-                  if f.get('kind') in ('discussion','narrative_candidate') and f.get('posts')]
+                  if f.get('kind') in ('source_review','discussion','narrative_candidate') and f.get('posts')
+                  and (not player or {'violations':'source_review','concerns':'discussion','narratives':'narrative_candidate'}[player]==f.get('kind'))]
         existing={x['finding_id']:dict(x) for x in db.execute(text(
             "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries")).mappings()}
-        pending=[f for f in findings if existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)
-                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v3']
+        pending=[f for f in findings if force or existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)
+                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v4']
         # Do not retain DB transaction or Supabase pool connection during OpenAI calls.
         db.commit()
         # Topic guidance is optional and never substitutes for original evidence.
@@ -169,7 +172,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
         topic_set=_read(db,'operations',signature) or {}
         saved_topics={t['id']:t for t in topic_set.get('topics',[])}
         topic_assignments=topic_set.get('assignments') or {}
-        for f in pending[:2]:
+        for f in pending[:(5 if player else 2)]:
             posts=f['posts'][:8]
             samples=[{'id':str(p.get('canonical_source_id') or p.get('result_id')),
                       'text':str(p.get('message_original') or '')[:1100]} for p in posts]
@@ -184,6 +187,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
             related_topics=[saved_topics[k]['title'] for k in sorted(frequencies,key=lambda k:-frequencies[k])[:2]]
             instructions=(
                'Write a politically neutral election-monitoring intelligence briefing in 55-90 words. '
+               'For source_review: distinguish the reported potential violation, source context, and specific verification steps without asserting guilt. '
                'For discussion: explain what citizens report or request, and the practical procedural or service concern. Use the current source-grounded electoral operations topic only when it matches evidence. '
                'For narrative_candidate: identify the repeated framing or allegation, how posts relate, and connect relevant current conversational topics without inferring a fabricated trend. '
                'what remains unverified, and why the discussion matters to election oversight. '
@@ -226,7 +230,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
                     output_tokens=excluded.output_tokens,generated_at=now()"""),
                     {'id':f['id'],'sig':_live_summary_signature(f),
                      'model':str(response.json().get('model') or openai_triage_model()),
-                     'version':'live-evidence-v3','insights':json.dumps(insights),
+                     'version':'live-evidence-v4','insights':json.dumps(insights),
                      'count':len(samples),
                      'input':int((response.json().get('usage') or {}).get('input_tokens') or 0),
                      'output':int((response.json().get('usage') or {}).get('output_tokens') or 0)})
@@ -237,7 +241,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
                 log.warning('Live synthesis failed for finding %s: %s',f['id'],type(exc).__name__)
                 raise HTTPException(502,'Live AI synthesis failed; previously saved summaries remain available') from exc
         invalidate_topic_cache()
-        return {'generated':generated,'remaining':max(0,len(pending)-len(generated)),
+        return {'player':player or 'automatic','generated':generated,'remaining':max(0,len(pending)-len(generated)),
                 'provider_calls':len(generated)}
     finally:
         LOCK.release()

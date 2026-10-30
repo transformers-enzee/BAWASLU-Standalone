@@ -313,7 +313,7 @@ def _batch_preview(db,p,c,data=None):
             missing_text+=1;continue
         prior=_current_assessment(db,c.id,item.id)
         if sentiment_is_assessed(prior):prior_count+=1
-        if not sentiment_is_assessed(prior) or str(prior.sentiment or '').upper()=='UNCLASSIFIED':eligible.append(str(item.id))
+        if not sentiment_is_assessed(prior) or (payload.get('retry_unclassified') is True and str(prior.sentiment or '').upper()=='UNCLASSIFIED'):eligible.append(str(item.id))
     selection=eligible if payload.get('all_remaining') is True else eligible[:limit]
     return {'unclassified':len(eligible),
             'selected_ids':selection,'sample_limit':limit,
@@ -340,7 +340,7 @@ def _classify_campaign_sentiment(db,p,c,data):
         raise ValueError('Evidence record is not accessible')
     from .sentiment_processing import sentiment_is_assessed, normalize_sentiment_output
     prior=_current_assessment(db,c.id,row.id)
-    if sentiment_is_assessed(prior) and str(prior.sentiment or '').upper()!='UNCLASSIFIED':
+    if sentiment_is_assessed(prior) and not ((data or {}).get('retry_unclassified') is True and str(prior.sentiment or '').upper()=='UNCLASSIFIED'):
         return {'sentiment':_latest_sentiment(db,c.id,row.id),
                 'confidence':prior.sentiment_confidence or '',
                 'explanation':prior.sentiment_explanation or '',

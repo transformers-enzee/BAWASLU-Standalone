@@ -256,7 +256,7 @@ export default function CampaignPanel({campaignId=null}){
   if(!window.confirm('Process '+batchPreview.estimated_ai_calls+' posts? OpenAI API charges may apply; exact monetary cost is unknown.'))return;
   setAiBusy(true);setAiError('');let completed=0;
   for(const result_id of batchPreview.selected_ids){
-   try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentClassify',id:selected.id,data:{result_id,confirm_ai_cost:true}});completed++;
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignSentimentClassify',id:selected.id,data:{result_id,confirm_ai_cost:true,retry_unclassified:true}});completed++;
       setEvidence(old=>old.map(x=>x.id===result_id?{...x,sentiment:r.data.sentiment,sentiment_details:{confidence:r.data.confidence,explanation:r.data.explanation,model:r.data.model}}:x))}
    catch(e){setAiError('Batch stopped: '+(e.response?.data?.detail||e.message));break}
   }
@@ -271,7 +271,7 @@ export default function CampaignPanel({campaignId=null}){
   try{
     preview=(await base44.functions.invoke('socialListening',{
       action:'campaignSentimentBatchPreview',id:selected.id,
-      data:{sample_limit:20,all_remaining:true}})).data;
+      data:{sample_limit:20,all_remaining:true,retry_unclassified:true}})).data;
   }catch(e){setAiError('Unable to inspect campaign: '+(e.response?.data?.detail||e.message));return}
   const ids=preview.selected_ids||[];
   if(!ids.length){setBatchNotice('No eligible posts with source text in this campaign.');return}

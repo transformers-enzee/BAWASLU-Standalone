@@ -48,22 +48,30 @@ def test_spreadsheet_category_alone_does_not_create_violation_flag():
     assert len(f)==1
     assert 'violations' not in f[0]['players']
 
-def test_only_multiple_independent_sources_create_recurring_topic_label():
+def test_only_specific_repeated_source_pattern_creates_narrative():
     one=compile_inbox_findings([post(1)])
     assert len(one)==1 and not one[0]['recurring_discussion']
-    two=compile_inbox_findings([post(1),post(2)])
+    unclassified=compile_inbox_findings([post(1),post(2)])
+    assert len(unclassified)==2
+    assert all('narratives' not in f['players'] for f in unclassified)
+    two=compile_inbox_findings([
+        post(1,text_content='Discussion on daftar pemilih tetap'),
+        post(2,text_content='Questions about daftar pemilih tetap')])
     assert len(two)==1 and two[0]['recurring_discussion']
     assert two[0]['supporting_posts']==2
 
 def test_saved_sentiment_and_candidate_mentions_are_reused():
-    f=compile_inbox_findings([post(1,normalized_candidate_names=['Candidate A'],sentiment='POSITIVE'),
-                              post(2,normalized_candidate_names=['Candidate B'],sentiment='NEGATIVE')])[0]
+    f=compile_inbox_findings([
+        post(1,text_content='Daftar pemilih tetap update',normalized_candidate_names=['Candidate A'],sentiment='POSITIVE'),
+        post(2,text_content='Daftar pemilih tetap discussed',normalized_candidate_names=['Candidate B'],sentiment='NEGATIVE')])[0]
     assert f['sentiment_counts']=={'POSITIVE':1,'NEGATIVE':1}
     assert f['actor_mentions']=={'Candidate A':1,'Candidate B':1}
 
 def test_previous_review_state_is_reused_without_modifying_assessment():
-    key='INBOX-T-'+__import__('hashlib').sha256('electoral operations'.encode()).hexdigest()[:16]
-    f=compile_inbox_findings([post(1)],{key:{'status':'monitoring','first_reviewed_at':'2026-10-01'}})[0]
+    key='INBOX-N-'+__import__('hashlib').sha256('voter register accuracy'.encode()).hexdigest()[:16]
+    f=compile_inbox_findings([post(1,text_content='Discussion daftar pemilih tetap'),
+                              post(2,text_content='Questions on daftar pemilih tetap')],
+                             {key:{'status':'monitoring','first_reviewed_at':'2026-10-01'}})[0]
     assert f['status']=='monitoring' and f['human_reviewed']
 
 def test_source_geography_is_not_guessed_from_profile_location():

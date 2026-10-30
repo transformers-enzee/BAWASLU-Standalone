@@ -102,7 +102,7 @@ def compile_inbox_findings(rows,states=None):
         else:
             key='INBOX-S-'+cid+'-'+rid
             title='Relevant source for officer review'
-            players=['narratives']
+            players=[]
             kind='source_awareness'
         if key not in grouped:
             grouped[key]={
@@ -131,7 +131,9 @@ def compile_inbox_findings(rows,states=None):
         if flagged:g['topics'].add('Potential Violations')
         if has_concern:g['topics'].add('Public Concerns')
         if 'BAWASLU Reputation' in topics:g['perspectives'].add('reputation')
-        if 'Electoral Operations' in topics or 'BAWASLU Reputation' not in topics:
+        # Operational alerts and complaints must remain available in the
+        # primary Command Centre view even when they concern BAWASLU itself.
+        if flagged or has_concern or 'Electoral Operations' in topics or 'BAWASLU Reputation' not in topics:
             g['perspectives'].add('operations')
         g['published_at']=max(g['published_at'],source['published_at_raw'])
     findings=[]

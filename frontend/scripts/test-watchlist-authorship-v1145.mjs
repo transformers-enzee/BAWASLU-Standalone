@@ -59,7 +59,7 @@ assert.equal(el('#pEarned').textContent,16,'Mentions KPI must count news publish
 assert.equal(profile.posts[0].source,'ntvnews.id'||'reporter_15');
 ui.showAccountTab();
 assert.ok(el('#tabbody').innerHTML.includes('Register public account'),'Account registration must be available');
-assert.ok(el('#tabbody').innerHTML.includes('collection is disabled'),'Disabled collection must be explained');
+assert.ok(el('#tabbody').innerHTML.includes('No account posts will be collected'),'Disabled collection must be explained');
 for(const fn of listeners.get('click')||[])fn({target:{closest:()=>({id:'addTrackedAccount',dataset:{},hasAttribute(){return false}})}});
 assert.ok(el('#modalBody').innerHTML.includes('accountProfileUrl'),'Officer can register a verified profile URL');
 assert.ok(!requests.some(r=>/discover|crawl|openai/i.test(r.action)),'No paid provider calls');

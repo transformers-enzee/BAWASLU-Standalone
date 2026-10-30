@@ -137,6 +137,7 @@ def registry_action(db:Session,p,action,data,id=None):
         if w.status!='Active':raise ValueError('Activate candidate tracking first')
         campaign_id=str(payload.get('campaign_id') or '').strip()
         if campaign_id:
+            from .models import MonitoringCampaign
             campaign=db.get(MonitoringCampaign,int(campaign_id)) if campaign_id.isdigit() else None
             if not campaign or not allowed(p,campaign):
                 raise ValueError('Campaign unavailable or inaccessible')

@@ -20,9 +20,9 @@ export default function Shell(){
   {!deniedView&&open&&<div className="fixed inset-0 z-40 lg:hidden"><button aria-label={t('close_menu')} onClick={()=>setOpen(false)} className="absolute inset-0 bg-black/50"/><aside className="relative h-full w-[260px] flex flex-col bg-[#122f46] text-white overflow-y-auto">{nav}</aside></div>}
   <div className={deniedView?'min-h-screen':'min-w-0 flex-1'}>
    {!deniedView&&<header className="h-[76px] bg-white border-b border-[#e4e9ef] flex items-center justify-between px-5 md:px-9"><div className="flex items-center gap-3"><button onClick={()=>setOpen(true)} className="lg:hidden" aria-label={t('open_menu')}><Menu size={22}/></button><span className="text-[11px] font-bold uppercase tracking-[.18em] text-[#7790a2]">{t('election_supervision_intelligence')}</span></div><div className="flex items-center gap-2"><div className="inline-flex rounded-lg border border-[#d9e2e8] bg-[#f7fafb] p-1"><button type="button" onClick={()=>setLanguage('en')} className={'px-2.5 py-1.5 rounded-md text-xs font-semibold '+(language==='en'?'bg-white text-[#163750] shadow-sm':'text-[#718398]')}>EN</button><button type="button" onClick={()=>setLanguage('id')} className={'px-2.5 py-1.5 rounded-md text-xs font-semibold '+(language==='id'?'bg-white text-[#163750] shadow-sm':'text-[#718398]')}>ID</button></div>{access.permissions?.add_intelligence===true&&<Link to="/add" className="intel-button"><Plus size={16}/><span className="hidden sm:inline">{t('add_intelligence')}</span><span className="sm:hidden">{t('add')}</span></Link>}<button type="button" onClick={logout} className="intel-ghost" aria-label={t('log_out')}><LogOut size={16}/><span className="hidden md:inline">{t('log_out')}</span></button></div></header>}
-   <div className="sr-only" data-build-version="114.7">BAWASLU build v114.7</div>
+   <div className="sr-only" data-build-version="114.8">BAWASLU build v114.8</div>
    <main className={deniedView?'min-h-screen flex items-center justify-center p-5 md:p-9':'max-w-[1530px] mx-auto p-5 md:p-9'}><Outlet context={{access,setDeniedView}}/></main>
-   <footer className="px-5 pb-2 text-[10px] text-slate-400 text-right" aria-label="Build version">v114.7</footer>
+   <footer className="px-5 pb-2 text-[10px] text-slate-400 text-right" aria-label="Build version">v114.8</footer>
   </div>
  </div>;
 }

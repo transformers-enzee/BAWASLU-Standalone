@@ -5,6 +5,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
+  let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
   function renderInboxLineage(){
     const anchor=$('#kpis');if(!anchor)return;
     let panel=$('#sharedCampaignViolationAssessments');
@@ -106,6 +107,49 @@
       (maxValue ? Math.max(0,Math.min(100,count/maxValue*100)) : 0) +
       '%;background:' + color + '"></div></div></div>').join('');
   }
+  function donut(rows,prefix,colors) {
+    const valid=rows.filter(([,v])=>Number(v)>0),total=valid.reduce((n,[,v])=>n+Number(v),0);
+    if(!total)return '<p class="small muted">No classified evidence available.</p>';
+    let offset=0;
+    const stops=valid.map(([,v],i)=>{const start=offset;offset+=v/total*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';});
+    const legend=valid.map(([name,count],i)=>'<button type="button" class="insightclick" data-insight="'+prefix+encodeURIComponent(name)+'" style="display:flex;gap:9px;align-items:center;width:100%;padding:5px;text-align:left">'+
+      '<span style="width:10px;height:10px;border-radius:50%;background:'+colors[i%colors.length]+'"></span>'+
+      '<span style="flex:1">'+label(name==='UNCLASSIFIED'?'Unclassified':name)+'</span><b>'+count+' <span class="muted">('+Math.round(count/total*100)+'%)</span></b></button>').join('');
+    return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;justify-content:center;padding:14px 0">'+
+      '<div role="img" aria-label="'+label(valid.map(x=>x[0]+': '+x[1]).join(', '))+'" style="width:150px;height:150px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient('+stops.join(',')+')">'+
+      '<div style="width:94px;height:94px;background:white;border-radius:50%;display:grid;place-items:center;text-align:center"><div><b style="font-size:24px">'+total+'</b><div class="small muted">posts</div></div></div></div>'+
+      '<div style="min-width:165px;flex:1">'+legend+'</div></div>';
+  }
+  const regionAlias={'jakarta':'dki jakarta','daerah khusus ibukota jakarta':'dki jakarta','yogyakarta':'di yogyakarta','central java':'jawa tengah','west java':'jawa barat','east java':'jawa timur','east nusa tenggara':'nusa tenggara timur','sumatra selatan':'sumatera selatan'};
+  const regionKey=v=>{const key=String(v||'').trim().toLocaleLowerCase('id-ID');return regionAlias[key]||key;};
+  const candidateKey=name=>{
+    const key=String(name||'').toLocaleLowerCase('id-ID').replace(/[^a-z0-9]+/g,'');
+    const known={'prabowo':'prabowosubianto','gibran':'gibranrakabumingraka',
+      'anies':'aniesbaswedan','anisbaswedan':'aniesbaswedan','ganjar':'ganjarpranowo',
+      'jokowi':'jokowidodo','jokowidodo':'jokowidodo',
+      'cakimin':'muhaiminiskandar'};
+    return known[key]||key;
+  };
+  const mapRing=ring=>ring.map((pt,i)=>{const x=(pt[0]-94)*21.25,y=(7.7-pt[1])*21.25;return (i?'L':'M')+x.toFixed(1)+','+y.toFixed(1)}).join(' ')+'Z';
+  const mapPath=g=>(g.type==='Polygon'?[g.coordinates]:(g.coordinates||[])).map(poly=>poly.map(mapRing).join(' ')).join(' ');
+  function geoHeatmap(mentions,verified) {
+    const confirmed=verified.reduce((n,[,v])=>n+v,0);
+    const head='<p class="small muted"><b>'+confirmed+'</b> posts have human-verified incident geography. Map colours represent saved <b>unverified location references</b>, not incident locations.</p>';
+    if(provinceGeoFailed)return head+'<p class="small muted">Map unavailable. Saved labels:</p>'+miniBars(mentions,Math.max(1,...mentions.map(x=>x[1])));
+    if(!provinceGeo)return head+'<p class="small muted">Loading Indonesia province map…</p>';
+    const scores=new Map(mentions.map(([k,v])=>[regionKey(k),Number(v)]));
+    const max=Math.max(1,...mentions.map(x=>x[1])),shades=['#fff4c2','#fbd56b','#f59e35','#e85a2a','#bd2026'];
+    const shapes=(provinceGeo.features||[]).map(f=>{
+      const name=String(f.properties?.PROVINSI||''),count=scores.get(regionKey(name))||0;
+      const intensity=count?Math.log1p(count)/Math.log1p(max):0;
+      const fill=count?shades[Math.min(4,Math.floor(intensity*4.99))]:'#d9e3e8';
+      return '<path d="'+mapPath(f.geometry)+'" fill="'+fill+'" stroke="#fff" stroke-width="1" fill-rule="evenodd" data-insight="geo:'+encodeURIComponent(name)+'" style="cursor:pointer">'+
+        '<title>'+label(name)+': '+count+' saved mentions (unverified)</title></path>';
+    }).join('');
+    return head+'<svg viewBox="0 0 1050 460" role="img" aria-label="Indonesia province heatmap of saved unverified geographic mentions" style="width:100%;height:auto;background:#f6fafb;border-radius:9px">'+shapes+'</svg>'+
+      '<p class="small muted">Grey: no mapped mentions. Low <span style="display:inline-block;width:90px;height:9px;background:linear-gradient(90deg,#fff4c2,#fbd56b,#f59e35,#e85a2a,#bd2026)"></span> High. Select a province for source posts.</p>'+
+      '<p class="small muted">'+(mentions.length?mentions.map(([n,v])=>label(n)+': '+v).join(' · '):'No saved geographic references.')+'</p>';
+  }
   function trendSvg(rows) {
     if (!rows.length) return '<p class="small muted">No publication timestamps in this selection.</p>';
     const dates = rows.sort((a,b) => a[0].localeCompare(b[0])).slice(-12);
@@ -140,20 +184,17 @@
       '<p class="small muted">No candidate mentions in this selection.</p>';
     $('#ranking').removeAttribute('data-insight');
     $('#rankTitle').textContent = perspective === 'operations' ? 'Top 10 Candidate Mentions' : 'Most Discussed Institutional Themes';
-    const profiles=(dashboard?.watchlist_profiles||[])
-      .filter(p=>['Active','Under Review'].includes(p.status))
-      .sort((a,b)=>(['Critical','High','Medium','Low'].indexOf(a.priority)-
-                     ['Critical','High','Medium','Low'].indexOf(b.priority))||String(a.name).localeCompare(String(b.name)));
-    $('#watch').innerHTML='<p class="small muted">Registered candidate profiles · priority and status set by officers, not AI risk scores.</p>'+
-      (profiles.length?profiles.slice(0,10).map(p=>{
-        const registered=String(p.name||'');
-        const count=mentions.find(([name])=>name.toLocaleLowerCase()===registered.toLocaleLowerCase())?.[1]||0;
-        return '<div style="padding:9px 0;border-bottom:1px solid #e3e9ee"><b>'+label(registered)+'</b>'+
-          '<div class="small muted">Officer priority: '+label(p.priority)+' · '+label(p.status)+
-          ' · '+count+' saved Inbox mention'+(count===1?'':'s')+'</div></div>';
-      }).join(''):'<p class="small muted">No active or under-review candidate profiles in your permitted scope.</p>')+
-      '<p class="small"><a class="watch-link" href="/social-listening?tab=watchlist" target="_top">Open Social Listening Candidate Watchlist →</a></p>'+
-      '<p class="small muted">Monitoring priority and mentions are not evidence of wrongdoing.</p>';
+    const known=new Map((dashboard?.watchlist_profiles||[]).map(p=>[candidateKey(p.name),p]));
+    $('#watch').innerHTML='<p class="small muted">Top 10 candidate mentions in relevant Inbox evidence. A mention is not evidence of wrongdoing.</p>'+
+      (mentions.length?mentions.map(([name,count])=>{
+        const profile=known.get(candidateKey(name));
+        return '<div style="padding:9px 0;border-bottom:1px solid #e3e9ee;display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+          '<div><b>'+label(name)+'</b><div class="small muted">'+count+' mentions · '+(profile?label(profile.status)+' · Priority: '+label(profile.priority):'Not on Watchlist')+'</div></div>'+
+          (profile?'<span class="small" style="color:#087a60">Registered ✓</span>':
+          canManageWatchlist?'<button type="button" data-watch-add="'+encodeURIComponent(name)+'" style="border:1px solid #187c6c;border-radius:8px;padding:7px 10px;color:#116d5a;font-weight:bold">+ Add to Watchlist</button>':
+          '<span class="small muted">Officer permission needed</span>')+'</div>';
+      }).join(''):'<p class="small muted">No recorded candidate mentions in this selection.</p>')+
+      '<p class="small"><a class="watch-link" href="/social-listening?tab=watchlist" target="_top">Open Candidate Watchlist in Social Listening →</a></p>';
     $('#watch').removeAttribute('data-insight');
     const topicCounts = {};
     filtered.forEach(f => (f.topics||[]).forEach(t => {topicCounts[t] = (topicCounts[t]||0)+1;}));
@@ -162,43 +203,29 @@
     $('#issues').innerHTML = miniBars(topics.slice(0,8),topicMax);
     $('#cloud').innerHTML = topics.slice(0,12).map(([name],i) =>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
-    $('#trend').innerHTML = trendSvg(asRows(addCounts(filtered,'day_counts')));$('#trend').setAttribute('data-insight','trend');
+    const dayRows=asRows(addCounts(filtered,'day_counts')).sort((a,b)=>a[0].localeCompare(b[0]));
+    $('#trend').innerHTML=trendSvg(dayRows);
+    const peak=[...dayRows].sort((a,b)=>b[1]-a[1])[0];
+    const dated=dayRows.reduce((n,[,v])=>n+v,0);
+    $('#trend').innerHTML+='<p class="small muted" style="line-height:1.8;padding:10px 0">'+
+      '<b>'+dated+'</b> dated posts across <b>'+dayRows.length+'</b> observed publication days. '+
+      (dayRows.length?'Period: '+label(dayRows[0][0])+' to '+label(dayRows[dayRows.length-1][0])+'. ':'')+
+      (peak?'Busiest date: <b>'+label(peak[0])+'</b> ('+peak[1]+' posts). ':'')+
+      'The chart displays the 12 most recent recorded days, not an independent estimate of public attention.</p>';
+    $('#trend').setAttribute('data-insight','trend');
     const unverifiedLocations=asRows(addCounts(filtered,'geo_signal_counts'));
     const verifiedLocations=asRows(addCounts(filtered,'verified_incident_counts'));
-    const verifiedTotal=verifiedLocations.reduce((sum,[,count])=>sum+count,0);
-    $('#regions').innerHTML='<p class="small"><b>'+verifiedTotal+' verified incident-location post'+(verifiedTotal===1?'':'s')+
-      '</b> · verified only after officer review.</p>'+
-      (verifiedLocations.length?'<p class="small muted">Confirmed incident jurisdiction</p>'+
-         verifiedLocations.map(([place,count])=>'<button type="button" class="insightclick region-bar" data-insight="geo-verified:'+encodeURIComponent(place)+'">'+
-         '<div class="row small"><span>'+label(place)+'</span><b>'+count+'</b></div></button>').join(''):'')+
-      '<p class="small muted">Unverified geographic references from saved Inbox assessments (not incident locations):</p>'+
-      (unverifiedLocations.length?unverifiedLocations.slice(0,12).map(([place,count])=>
-       '<button type="button" class="insightclick region-bar" data-insight="geo:'+encodeURIComponent(place)+'">'+
-       '<div class="row small"><span>'+label(place)+'</span><b>'+count+'</b></div>'+
-       '<div class="track"><div class="fill" style="width:'+(count/Math.max(1,...unverifiedLocations.map(x=>x[1]))*100)+'%"></div></div></button>').join(''):
-      '<p class="small muted">No location references have been saved in the selected Inbox evidence.</p>')+
-      '<p class="small muted">Profile addresses and candidate constituencies are never interpreted as incident locations.</p>';
+    $('#regions').innerHTML=geoHeatmap(unverifiedLocations,verifiedLocations);
     $('#regions').removeAttribute('data-insight');
-    $('#regions').querySelectorAll('.region-bar').forEach(btn=>btn.setAttribute('type','button'));
     const sentimentCounts=addCounts(filtered,'sentiment_counts');
     const sentimentRows=['POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED']
       .map(name=>[name,Number(sentimentCounts[name]||0)]);
     const classified=sentimentRows.slice(0,3).reduce((n,r)=>n+r[1],0);
     const total=classified+sentimentRows[3][1];
     $('#sentimentExplain').textContent=classified+' of '+total+' relevant posts have saved sentiment labels. Unclassified is NOT Neutral; no AI calls are made on this page.';
-    const maxSentiment=Math.max(1,...sentimentRows.map(r=>r[1]));
-    $('#sentiments').innerHTML=sentimentRows.map(([name,count])=>
-      '<button type="button" class="insightclick" data-insight="sentiment:'+name+
-      '"><div class="row small"><span>'+label(name==='UNCLASSIFIED'?'Unclassified':name)+
-      '</span><b>'+count+'</b></div><div class="track"><div class="fill" style="width:'+
-      (count/maxSentiment*100)+'%"></div></div></button>').join('');
-    const platforms = asRows(addCounts(filtered,'platform_counts'));
-    $('#platforms').innerHTML = platforms.map(([name,count]) =>
-      '<button class="insightclick" data-insight="platform:'+label(name)+'"><div class="row small"><span>'+label(name)+
-      '</span><b>'+count+'</b></div><div class="track"><div class="fill" style="width:'+
-      (count/Math.max(1,...platforms.map(row=>row[1]))*100)+
-      '%;background:#5588a8"></div></div></button>').join('') ||
-      '<p class="small muted">No saved platforms for this view.</p>';
+    $('#sentiments').innerHTML=donut(sentimentRows,'sentiment:',['#18a087','#91a5b4','#dc994d','#d5dde2']);
+    const platforms=asRows(addCounts(filtered,'platform_counts'));
+    $('#platforms').innerHTML=donut(platforms,'platform:',['#228a9d','#e0aa59','#7597b9','#9284bc','#bf8491','#809a91']);
     $('#trendsAiSummary').textContent = nPosts + ' relevant saved Inbox posts support ' + filtered.length +
       ' preliminary groups. Activity, platforms and sentiment reuse saved source annotations; no additional AI processing occurs.';
     $('#strategy').textContent = 'Review supporting posts and saved assessments before prioritising officer action. Unverified mentions and discussion levels are not proof of electoral violations.';
@@ -226,6 +253,8 @@
         const a = await request('/api/functions/registry',{method:'POST',body:JSON.stringify({action:'myAccess',data:{}})});
         access = a.access || null;
         ui.canReview = access?.permissions?.human_validation === true;
+        canManageWatchlist=access?.permissions?.manage_watchlist===true;
+        monitoringProvince=access?.geographic_scope==='Nationwide'?'':String(access?.province||'');
         if (access?.geographic_scope !== 'Nationwide' && $('#geo')) {
           const region = access.province || 'Assigned region';
           $('#geo').options[0].textContent = region + ' — regional access only';
@@ -233,6 +262,11 @@
         }
       } catch {ui.canReview=false;}
       await refresh();
+      fetch('/indonesia-provinces.geojson',{cache:'force-cache'})
+        .then(r=>{if(!r.ok)throw Error('Map unavailable');return r.json()})
+        .then(data=>{if(!Array.isArray(data?.features))throw Error('Invalid map');provinceGeo=data;decorate()})
+        .catch(()=>{provinceGeoFailed=true;decorate()});
+
     } catch (error) {
       document.body.classList.add('bawaslu-ready');
       const region = access?.province || 'your assigned scope';
@@ -295,24 +329,22 @@
     finally{busy=false;}
   };
   ui.insightView = id => id.startsWith('platform:') ?
-    ui.view().filter(f=>Object.entries(f.platform_counts||{}).some(([k,v])=>k.toLowerCase()===id.slice(9).toLowerCase()&&v>0)) :
+    ui.view().filter(f=>Number(f.platform_counts?.[decodeURIComponent(id.slice(9))]||0)>0) :
     id.startsWith('sentiment:') ?
-    ui.view().filter(f=>Number(f.sentiment_counts?.[id.slice(10).toUpperCase()]||0)>0) :
+    ui.view().filter(f=>Number(f.sentiment_counts?.[decodeURIComponent(id.slice(10)).toUpperCase()]||0)>0) :
     id.startsWith('geo:') ?
-    ui.view().filter(f=>Number(f.geo_signal_counts?.[decodeURIComponent(id.slice(4))]||0)>0) :
+    ui.view().filter(f=>Object.entries(f.geo_signal_counts||{}).some(([k,n])=>regionKey(k)===regionKey(decodeURIComponent(id.slice(4)))&&n>0)) :
     id.startsWith('geo-verified:') ?
     ui.view().filter(f=>Number(f.verified_incident_counts?.[decodeURIComponent(id.slice(13))]||0)>0) :
     ui.view();
-  ui.insightMatchesPost = (id,post) => id.startsWith('platform:') ?
-    String(post[5]||'').toLowerCase()===id.slice(9).toLowerCase() :
+  ui.insightMatchesPost=(id,p)=>id.startsWith('platform:') ?
+    String(p[5]||'').toLowerCase()===decodeURIComponent(id.slice(9)).toLowerCase() :
     id.startsWith('sentiment:') ?
-    String(post[6]||'UNCLASSIFIED').toUpperCase()===id.slice(10).toUpperCase() :
-    id.startsWith('geo:') ?
-    (post[7]||[]).includes(decodeURIComponent(id.slice(4))) :
-    id.startsWith('geo-verified:') ?
-    post[8]===decodeURIComponent(id.slice(13)) : true;
+    String(p[6]||'UNCLASSIFIED').toUpperCase()===decodeURIComponent(id.slice(10)).toUpperCase() :
+    id.startsWith('geo:') ? (p[7]||[]).some(n=>regionKey(n)===regionKey(decodeURIComponent(id.slice(4)))) :
+    id.startsWith('geo-verified:') ? p[8]===decodeURIComponent(id.slice(13)) : true;
   ui.openInsight = async id => {
-    if (id === 'watchlist') {window.top.location.assign('/watchlist');return;}
+    if (id === 'watchlist') {window.top.location.assign('/social-listening?tab=watchlist');return;}
     if (busy) return;
     busy=true;
     try {
@@ -331,6 +363,28 @@
     } catch(error) {ui.notify('Unable to open source evidence: '+error.message);}
     finally{busy=false;}
   };
+  document.addEventListener('click',async event=>{
+    const button=event.target.closest('[data-watch-add]');
+    if(!button)return;
+    event.preventDefault();event.stopPropagation();
+    if(!canManageWatchlist){ui.notify('Watchlist management permission required.');return;}
+    const name=decodeURIComponent(button.dataset.watchAdd||'');
+    if(!dashboard||!name)return;
+    if((dashboard.watchlist_profiles||[]).some(x=>candidateKey(x.name)===candidateKey(name))){
+      ui.notify('This candidate is already registered.');return;
+    }
+    if(!window.confirm('Add '+name+' to the Social Listening Candidate Watchlist as Under Review? This does not imply wrongdoing.'))return;
+    button.disabled=true;
+    try{
+      const saved=await request('/api/functions/registry',{method:'POST',body:JSON.stringify({
+        action:'createWatchlist',data:{name,type:'Candidate',status:'Under Review',priority:'Medium',...(monitoringProvince?{province:monitoringProvince}:{})}
+      })});
+      dashboard.watchlist_profiles=[...(dashboard.watchlist_profiles||[]),{
+        id:saved.item?.id||'',name,priority:'Medium',status:'Under Review'
+      }];
+      decorate();ui.notify('Candidate added to Watchlist for human review.');
+    }catch(e){ui.notify('Could not add candidate: '+e.message);button.disabled=false;}
+  });
   ui.onAction = async action => {
     if(!ui.canReview){ui.notify('Officer permission is required.');return;}
     const detail = $('#drawerSubtitle').textContent || '';

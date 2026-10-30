@@ -61,6 +61,38 @@ def _category(row):
             return signal['category_name'][:120]
     return ''
 
+def _surface_issues(evidence):
+    """Describe only phrases grounded in saved source evidence; no new legal verdict."""
+    patterns=(
+        (r'mencoblos lebih dari sekali|multiple ballots|multiple voting','possible repeat voting'),
+        (r'demo|demonstrasi|people power|unjuk rasa','public demonstrations questioning election oversight'),
+        (r'kecurangan|fraud|dicurangi','allegations of election irregularities'),
+        (r'netralitas|tidak netral|keberpihakan','questions about officials\' impartiality'),
+        (r'politik uang|serangan fajar|money politics','possible vote buying'),
+        (r'daftar pemilih|voter registration','questions about voter-registration records'),
+    )
+    topics=[]
+    for source in evidence:
+        body=str(source.get('message_original') or '').casefold()
+        for expression,description in patterns:
+            if re.search(expression,body) and description not in topics:
+                topics.append(description)
+    return topics[:3]
+
+def _saved_concern_summary(row):
+    signal=next((x for x in row.get('public_concern_signals') or []
+        if isinstance(x,dict) and (x.get('concern') or x.get('evidence_quote'))),None)
+    if not signal:
+        return 'A public concern was recorded and remains subject to further review.'
+    description=str(signal.get('concern') or '').strip()
+    if description:
+        description=re.sub(r'\s+',' ',description)[:220].rstrip(' .')
+        return 'Citizens report concerns: '+description+'. The claims and their wider impact require checking.'
+    quote=str(signal.get('evidence_quote') or '')
+    if quote:
+        return 'A public concern refers to: “'+re.sub(r'\s+',' ',quote)[:140].strip()+'”. The report requires checking.'
+    return 'A public concern was recorded and remains subject to further review.'
+
 def _source(row):
     rid=str(row.get('id') or '')
     cid=str(row.get('campaign_id') or '')
@@ -170,6 +202,7 @@ def compile_inbox_findings(rows,states=None):
                 'geo_signal_counts':Counter(),'verified_incident_counts':Counter(),
                 'published_at':'','source_ids':[],
                 'attention':bool(flagged or has_concern),
+                'concern_descriptions':[],
                 'source_assessment_versions':[],
                 'priority_score':None,'priority_label':'Not AI-scored',
             }
@@ -190,7 +223,9 @@ def compile_inbox_findings(rows,states=None):
             g['verified_incident_counts'][source['verified_incident_province']]+=1
         g['topics'].update(topics)
         if flagged:g['topics'].add('Potential Violations')
-        if has_concern:g['topics'].add('Public Concerns')
+        if has_concern:
+            g['topics'].add('Public Concerns')
+            g['concern_descriptions'].append(_saved_concern_summary(row))
         if 'BAWASLU Reputation' in topics:g['perspectives'].add('reputation')
         # Operational alerts and complaints must remain available in the
         # primary Command Centre view even when they concern BAWASLU itself.
@@ -209,13 +244,17 @@ def compile_inbox_findings(rows,states=None):
         if g['kind']=='discussion' and recurring:
             g['title']=g['title'].replace('Monitored discussion','Recurring discussion')
         if g['kind']=='source_review':
-            g['summary']='A post raises a possible election-rule concern. The claim has not been confirmed and needs checking.'
+            subjects=_surface_issues(evidence)
+            g['summary']=('Reports raise '+(', '.join(subjects))+'. These allegations require verification.'
+                          if subjects else
+                          'An original post contains a saved potential election-rule concern. Its allegations still require verification.')
         elif g['kind']=='narrative_candidate':
             subject=g['title'].split(' · ',1)[-1]
             g['summary']=narrative_summary(subject,len(evidence),g['actor_mentions'])
         elif g['kind']=='discussion':
-            g['summary']=('People are discussing '+(g['title'].split(' · ',1)[-1] if ' · ' in g['title'] else 'an election-related issue')+
-                '. '+('The subject appears in several posts.' if recurring else 'This is an early discussion worth watching.'))
+            g['summary']=g['concern_descriptions'][0] if g['concern_descriptions'] else (
+                'Several source posts discuss '+(g['title'].split(' · ',1)[-1] if ' · ' in g['title'] else 'a public issue')+
+                '. Any reported problems require independent checking.')
         else:
             g['summary']='This election-related post is being monitored. Its topic has not yet been identified.'
         state=states.get(key) or {}
@@ -245,6 +284,7 @@ def compile_inbox_findings(rows,states=None):
         g['paid_provider_called']=False
         g['geography']='Incident geography not inferred'
         g.pop('attention')
+        g.pop('concern_descriptions',None)
         findings.append(g)
     return sorted(findings,key=lambda x:(x['status']!='pending',-x['supporting_posts'],x['title'],x['id']))
 

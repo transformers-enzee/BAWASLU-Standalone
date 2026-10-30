@@ -329,7 +329,7 @@ function SocialEvidenceInbox(){
   catch(e){setAuditError(e.response?.data?.detail||e.message||'Correction failed')}
   finally{setAuditBusy(false)}
  }
-const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState('');
+const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState(''),[sentimentFilter,setSentimentFilter]=useState('ALL');
  const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
  const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
  const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
@@ -356,12 +356,13 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   if(chosenCandidate==='__no_candidate__'&&candidatesFor(x).length>0)return false;
   if(chosenCandidate&&chosenCandidate!=='__no_candidate__'&&!candidatesFor(x).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.is_flagged??((x.potential_issues||[]).length>0)))return false;
+   if(sentimentFilter!=='ALL'&&(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(x.sentiment||'').toUpperCase())?String(x.sentiment||'').toUpperCase():'UNCLASSIFIED')!==sentimentFilter)return false;
   if(reviewStatusFilter==='AWAITING_REVIEW'&&(x.flag_review_status||((x.is_flagged??((x.potential_issues||[]).length>0))?'AWAITING_REVIEW':'NONE'))!=='AWAITING_REVIEW')return false;
   if(reviewStatusFilter&&reviewStatusFilter!=='AWAITING_REVIEW'&&x.flag_review_status!==reviewStatusFilter)return false;
   const date=String(x.published_at||x.post_time||x.created_at||'').slice(0,10);
   if((dateFrom||dateTo)&&(!date||(dateFrom&&date<dateFrom)||(dateTo&&date>dateTo)))return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
+ }),[findings,view,term,sentimentFilter,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
  const ordered=useMemo(()=>[...filtered].sort((a,b)=>{const da=Date.parse(a.published_at||a.post_time||a.created_at||0)||0,db=Date.parse(b.published_at||b.post_time||b.created_at||0)||0;return sortDate==='newest'?db-da:da-db}),[filtered,sortDate]);
  const summary=useMemo(()=>{const counts={POSITIVE:0,NEGATIVE:0,NEUTRAL:0,UNCLASSIFIED:0};let engagement=0,views=0,engagementAvailable=0,viewsAvailable=0;for(const item of filtered){if(typeof item.engagement_total==='number'){engagement+=item.engagement_total;engagementAvailable++}if(typeof item.views==='number'){views+=item.views;viewsAvailable++}const raw=String(item.sentiment||'').toUpperCase();counts[['POSITIVE','NEGATIVE','NEUTRAL'].includes(raw)?raw:'UNCLASSIFIED']++}return {engagement,views,engagementAvailable,viewsAvailable,counts}},[filtered]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
@@ -369,13 +370,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
  const [showAdvancedFilters,setShowAdvancedFilters]=useState(false);
  const issueGroups=signals=>Object.entries((signals||[]).reduce((groups,signal)=>{const category=String(signal.category_name||'Uncategorized potential issue');(groups[category] ||= []).push(signal);return groups;},{}));
- const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter)].filter(Boolean).length;
+ const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter),sentimentFilter!=='ALL'].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
-  <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-[minmax(180px,2fr)_minmax(105px,.75fr)_minmax(145px,1fr)_minmax(155px,1fr)_minmax(155px,1fr)] gap-2 items-end" aria-label="Campaign dates and totals">
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end" aria-label="Campaign dates and totals">
    <label className="text-xs min-w-0 flex flex-col justify-end h-[70px]">Campaign<select className="intel-input mt-1 w-full h-10 min-w-0" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-   <div className="text-xs min-w-0 flex flex-col justify-end h-[70px]"><span>Posts shown</span><div className="intel-card mt-1 px-3 h-10 min-w-0 flex items-center"><strong className="text-lg font-semibold tabular-nums">{filtered.length}</strong></div></div>
-   <div className="text-xs min-w-0 flex flex-col justify-end h-[70px]"><span title="Preliminary signals only, not confirmed violations">Potential violations</span><div className="intel-card mt-1 px-3 h-10 min-w-0 flex items-center"><strong className="text-lg font-semibold text-amber-700 tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</strong><span className="ml-2 text-[10px] text-slate-500 whitespace-nowrap">Signals</span></div></div>
    <label className="text-xs min-w-0 flex flex-col justify-end h-[70px]">From date<input type="date" className="intel-input mt-1 w-full h-10 min-w-0" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
    <label className="text-xs min-w-0 flex flex-col justify-end h-[70px]">To date<input type="date" className="intel-input mt-1 w-full h-10 min-w-0" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
   </div>
@@ -383,7 +382,8 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">
     <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
-    <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+    <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option><option value="UNCLASSIFIED">Unclassified</option></select></label>
+     <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
@@ -496,9 +496,18 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span></div>
     <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" tabIndex={0} aria-label="Post list, scroll to see more">
      {ordered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{item.campaign_name} · {platformLabel(item.platform)}</span>{reviewState(item)&&<span className={'text-xs font-semibold '+reviewState(item).cls}>{reviewState(item).label}</span>}</div>
-      <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
-      <p className="text-xs text-[#146a8b]">View source and assessment →</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+         <div className="text-xs text-slate-500">{item.campaign_name} · {platformLabel(item.platform)}</div>
+         <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
+         <p className="text-xs text-[#146a8b]">View source and assessment →</p>
+        </div>
+        <div className="shrink-0 flex flex-col gap-1 items-end text-right" aria-label="Saved flag and sentiment indicators">
+         <span className={'rounded-md border px-2 py-1 text-[11px] font-semibold '+((item.is_flagged??((item.potential_issues||[]).length>0))?'bg-amber-50 border-amber-300 text-amber-800':'bg-slate-50 border-slate-200 text-slate-600')}>{(item.is_flagged??((item.potential_issues||[]).length>0))?'⚑ Flagged · unverified':'Not flagged'}</span>
+         <span className={'rounded-md border px-2 py-1 text-[11px] font-semibold '+(String(item.sentiment||'').toUpperCase()==='POSITIVE'?'bg-teal-50 border-teal-200 text-teal-800':String(item.sentiment||'').toUpperCase()==='NEGATIVE'?'bg-orange-50 border-orange-200 text-orange-800':'bg-slate-50 border-slate-200 text-slate-600')}>{['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(item.sentiment||'').toUpperCase())?String(item.sentiment).toUpperCase():'UNCLASSIFIED'}</span>
+         {reviewState(item)&&<span className={'text-[10px] max-w-[125px] '+reviewState(item).cls}>{reviewState(item).label}</span>}
+        </div>
+       </div>
      </button>)}
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection, assessment and relevance checks. The separate historical Intelligence and Smart Radar pilot records are not counted as campaign findings.</p>}
     </div>
@@ -507,6 +516,8 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <aside className="intel-card p-4 space-y-4 h-full min-h-0" aria-label="Inbox statistics">
     <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered assessed posts</p></div>
     <div className="grid grid-cols-2 gap-2">
+      <div className="rounded-lg bg-teal-50 p-3"><p className="text-xs text-teal-900">Posts shown</p><strong className="text-lg tabular-nums">{filtered.length}</strong><p className="text-[10px] text-slate-500">Relevant, filtered</p></div>
+      <div className="rounded-lg bg-amber-50 p-3"><p className="text-xs text-amber-900">Potential violations</p><strong className="text-lg tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</strong><p className="text-[10px] text-slate-500">Preliminary signals</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>
     </div>

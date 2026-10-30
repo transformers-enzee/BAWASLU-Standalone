@@ -2,11 +2,11 @@ import os
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
-from app.db import Base
+from app.db import Base, DATABASE_URL
 from app import models  # noqa: F401
 config = context.config
 if config.config_file_name is not None: fileConfig(config.config_file_name)
-database_url = os.getenv('DATABASE_URL')
+database_url = DATABASE_URL
 if database_url:
     # Alembic uses configparser, where literal percent signs must be doubled.
     # Keep URL-encoded password characters intact for SQLAlchemy.

@@ -1,5 +1,6 @@
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -9,7 +10,13 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./bawaslu.db')
 if DATABASE_URL.startswith('postgresql://'):
     DATABASE_URL = 'postgresql+psycopg://' + DATABASE_URL[len('postgresql://'):]
 
+if DATABASE_URL.startswith('postgresql'):
+    parsed = make_url(DATABASE_URL)
+    if parsed.host and parsed.host.endswith('.pooler.supabase.com') and parsed.port == 5432:
+        DATABASE_URL = parsed.set(port=6543).render_as_string(hide_password=False)
 connect_args = {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
+if DATABASE_URL.startswith('postgresql'):
+    connect_args['prepare_threshold'] = None
 engine_kwargs = {'future': True, 'connect_args': connect_args}
 if not DATABASE_URL.startswith('sqlite'):
     # Bound connections against the shared Supabase session pool.

@@ -152,17 +152,28 @@
       '<p class="small muted">'+(mentions.length?mentions.map(([n,v])=>label(n)+': '+v).join(' · '):'No saved geographic references.')+'</p>';
   }
   function trendSvg(rows) {
-    if (!rows.length) return '<p class="small muted">No publication timestamps in this selection.</p>';
-    const dates = rows.sort((a,b) => a[0].localeCompare(b[0])).slice(-12);
-    const max = Math.max(1,...dates.map(row => row[1]));
-    const points = dates.map(([day,value],i) =>
-      (23+i*(dates.length>1 ? 275/(dates.length-1) : 0)) + ',' + (125-value/max*95)).join(' ');
-    return '<svg viewBox="0 0 320 145" width="100%" role="img" aria-label="Recorded conversation activity trend">' +
-      '<line x1="18" y1="124" x2="305" y2="124" stroke="#9ca8b2"/>' +
-      '<polyline points="' + points + '" fill="none" stroke="#278d7a" stroke-width="3"/>' +
-      '<text x="18" y="141" font-size="10">' + label(dates[0][0]) + '</text>' +
-      '<text x="245" y="141" font-size="10">' + label(dates[dates.length-1][0]) + '</text></svg>';
+    if(!rows.length)return '<p class="small muted">No publication dates in this selection.</p>';
+    const dates=[...rows].sort((a,b)=>a[0].localeCompare(b[0])).slice(-12);
+    const max=Math.max(1,...dates.map(x=>Number(x[1])));
+    const pts=dates.map(([day,count],i)=>({day,count:Number(count),x:23+i*(dates.length>1?275/(dates.length-1):0),y:125-Number(count)/max*95}));
+    return '<div style="position:relative"><svg viewBox="0 0 320 155" width="100%" aria-label="Daily post activity: hover or focus a point for the exact count" role="img">'+
+      '<line x1="18" y1="125" x2="305" y2="125" stroke="#9ca8b2"/>'+
+      '<polyline fill="none" stroke="#278d7a" stroke-width="3" points="'+pts.map(p=>p.x+','+p.y).join(' ')+'"/>'+
+      pts.map(p=>'<circle tabindex="0" data-activity-day="'+label(p.day)+'" data-activity-count="'+p.count+'" role="button" aria-label="'+label(p.day)+': '+p.count+' posts" cx="'+p.x+'" cy="'+p.y+'" r="7" fill="#278d7a" stroke="white" stroke-width="2"><title>'+label(p.day)+': '+p.count+' posts</title></circle>').join('')+
+      '<text x="18" y="149" font-size="10">'+label(dates[0][0])+'</text><text x="239" y="149" font-size="10">'+label(dates[dates.length-1][0])+'</text></svg>'+
+      '<div id="activityTooltip" role="status" style="display:none;position:absolute;top:0;right:0;background:#14354c;color:white;padding:8px 12px;border-radius:8px;pointer-events:none"></div></div>'+
+      '<p class="small muted">Hover or focus a point for the exact date and recorded post count.</p>';
   }
+  function activityHover(event,visible){
+    const point=event.target.closest?.('[data-activity-day]'),tip=$('#activityTooltip');
+    if(!point||!tip)return;
+    tip.style.display=visible?'block':'none';
+    if(visible)tip.textContent=point.dataset.activityDay+' · '+point.dataset.activityCount+' posts';
+  }
+  document.addEventListener('pointerover',e=>activityHover(e,true));
+  document.addEventListener('pointerout',e=>activityHover(e,false));
+  document.addEventListener('focusin',e=>activityHover(e,true));
+  document.addEventListener('focusout',e=>activityHover(e,false));
   function decorate() {
     const filtered = ui.view();
     const perspective = $('#operations').classList.contains('active') ? 'operations' : 'reputation';
@@ -210,14 +221,7 @@
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
     const dayRows=asRows(addCounts(filtered,'day_counts')).sort((a,b)=>a[0].localeCompare(b[0]));
     $('#trend').innerHTML=trendSvg(dayRows);
-    const peak=[...dayRows].sort((a,b)=>b[1]-a[1])[0];
-    const dated=dayRows.reduce((n,[,v])=>n+v,0);
-    $('#trend').innerHTML+='<p class="small muted" style="line-height:1.8;padding:10px 0">'+
-      '<b>'+dated+'</b> dated posts across <b>'+dayRows.length+'</b> observed publication days. '+
-      (dayRows.length?'Period: '+label(dayRows[0][0])+' to '+label(dayRows[dayRows.length-1][0])+'. ':'')+
-      (peak?'Busiest date: <b>'+label(peak[0])+'</b> ('+peak[1]+' posts). ':'')+
-      'The chart displays the 12 most recent recorded days, not an independent estimate of public attention.</p>';
-    $('#trend').setAttribute('data-insight','trend');
+    $('#trend').removeAttribute('data-insight');
     const unverifiedLocations=asRows(addCounts(filtered,'geo_signal_counts'));
     const verifiedLocations=asRows(addCounts(filtered,'verified_incident_counts'));
     $('#regions').innerHTML=geoHeatmap(unverifiedLocations,verifiedLocations);

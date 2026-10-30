@@ -48,15 +48,18 @@ function playerOverview(fs,key){
     '. The reported incidents and any responsibility remain unverified.';
  }
  if(key==='concerns'){
-  const concerns=[...new Set(fs.map(f=>String(f.summary||'').replace(/^Citizens report concerns: /,'')
-    .replace(/\. The claims and their wider impact require checking\.?$/,'').trim()).filter(Boolean))];
-  return 'Public concerns focus on '+(concerns.length?concerns.slice(0,2).join('; '):'questions raised by citizens')+
-    '. The extent and impact should be checked against the original reports.';
+  const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Public Concern: /,'').trim()).filter(Boolean))];
+  const count=fs.reduce((n,f)=>n+(f.source_count||0),0);
+  return count+' saved source post(s) discuss '+(subjects.slice(0,2).join('; ')||'public concerns')+
+    '. These reports are not independently verified. Open the supporting evidence to review the original context.';
  }
  if(key==='narratives'){
-  const summaries=[...new Set(fs.map(f=>String(f.summary||'').trim()).filter(Boolean))];
-  if(!summaries.length)return 'No specific recurring discussion has been established in this selection.';
-  return summaries.slice(0,2).join(' ')+(summaries.length>2?' More discussions appear in the details.':'');
+  const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Emerging Narrative: /,'').trim()).filter(Boolean))];
+  const count=fs.reduce((n,f)=>n+(f.source_count||0),0);
+  const actors=[...new Set(fs.flatMap(f=>Object.keys(f.actor_mentions||{})))].slice(0,2);
+  return count+' recorded posts discuss '+(subjects.slice(0,2).join('; ')||'an unresolved topic')+
+    (actors.length?'. Mentioned actors: '+actors.join(', '):'')+
+    '. The discussion does not establish the truth of any underlying claim. Select to inspect the sources.';
  }
  return fs[0]?.summary||'Review the original posts for details.';
 }

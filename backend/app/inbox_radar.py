@@ -180,11 +180,11 @@ def narrative_summary(subject,count,candidate_mentions):
     may be named as contextual mention, never as an alleged wrongdoer.
     """
     description,caveat=NARRATIVE_DESCRIPTION.get(subject,(
-        'a recurring election-related topic','The underlying claims need independent checking.'))
+        'the issue named in the saved finding','The underlying claims need independent checking.'))
     mentions=sorted((candidate_mentions or {}).items(),key=lambda pair:(-pair[1],pair[0]))
     candidate_note=(' The posts also mention '+', '.join(name for name,_ in mentions[:2])+'.'
                     if mentions and count>=2 else '')
-    return ('Discussion trends: '+str(count)+' posts from different sources refer to '+
+    return ('Recurring narrative — '+subject+': '+str(count)+' recorded source posts discuss '+
             description+'. '+caveat+candidate_note)
 
 def compile_inbox_findings(rows,states=None):

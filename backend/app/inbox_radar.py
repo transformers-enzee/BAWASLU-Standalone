@@ -95,10 +95,19 @@ def compile_inbox_findings(rows,states=None):
             players=['concerns']
             kind='discussion'
         elif topic:
-            key='INBOX-T-'+sha256(topic.casefold().encode()).hexdigest()[:16]
-            title='Monitored discussion · '+topic
-            players=['narratives']
-            kind='discussion'
+            from .processing_hints import narrative_anchors
+            anchors=narrative_anchors(row.get('text_content'))
+            if anchors:
+                anchor=anchors[0]
+                key='INBOX-N-'+sha256(anchor.casefold().encode()).hexdigest()[:16]
+                title='Discussion · '+anchor
+                players=['narratives']
+                kind='narrative_candidate'
+            else:
+                key='INBOX-S-'+cid+'-'+rid
+                title='Relevant source for officer review'
+                players=[]
+                kind='source_awareness'
         else:
             key='INBOX-S-'+cid+'-'+rid
             title='Relevant source for officer review'
@@ -142,10 +151,16 @@ def compile_inbox_findings(rows,states=None):
         unique_urls={p['source_url'] for p in evidence if p['source_url']}
         unique_authors={p['account_raw'].casefold() for p in evidence if p['account_raw']!='Unknown account'}
         recurring=len(unique_urls)>=2 and len(unique_authors)>=2
+        if g['kind']=='narrative_candidate' and not recurring:
+            g['players']=[]
+            g['kind']='source_awareness'
         if g['kind']=='discussion' and recurring:
             g['title']=g['title'].replace('Monitored discussion','Recurring discussion')
         if g['kind']=='source_review':
             g['summary']='A post raises a possible election-rule concern. The claim has not been confirmed and needs checking.'
+        elif g['kind']=='narrative_candidate':
+            subject=g['title'].split(' · ',1)[-1]
+            g['summary']='Multiple independent sources discuss '+subject.lower()+'. Review the posts to understand the claims and whether attention is increasing.'
         elif g['kind']=='discussion':
             g['summary']=('People are discussing '+(g['title'].split(' · ',1)[-1] if ' · ' in g['title'] else 'an election-related issue')+
                 '. '+('The subject appears in several posts.' if recurring else 'This is an early discussion worth watching.'))

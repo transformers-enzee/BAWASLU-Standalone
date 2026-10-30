@@ -1,17 +1,19 @@
-"""Source-grounded, explicitly triggered OpenAI issue distribution for two distinct perspectives.
+"""Source-grounded, automatically refreshed OpenAI issue distribution for two distinct perspectives.
 
 Only saved authorized Inbox posts. Exactly five dynamically generated themes
-and a primary assignment (or Others) per source. No AI calls on dashboard reads.
+and a primary assignment (or Others) per source. No paid calls within dashboard requests; source changes queue bounded background refresh.
 """
 import hashlib
 import json
 import os
 import threading
+import logging
+import time
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from .db import get_db
+from .db import get_db, SessionLocal
 from .auth import current_user
 from .models import User
 from .smart_radar import authorised, fetch_states
@@ -21,6 +23,10 @@ from .access import profile, has
 
 router=APIRouter(prefix="/api/smart-radar",tags=["issue-distribution"])
 LOCK=threading.Lock()
+SCHEDULE_LOCK=threading.Lock()
+SCHEDULED=set()
+ATTEMPTED={}
+log=logging.getLogger(__name__)
 VERSION="issue-topics-two-perspectives-v1"
 VALID_SENTIMENT={"POSITIVE","NEUTRAL","NEGATIVE","MIXED"}
 
@@ -52,12 +58,50 @@ def _read(db,perspective,signature):
     return dict(result,model=row["model"],generated_at=str(row["generated_at"]))
 
 @router.get("/issue-distribution")
-def distribution(user:User=Depends(current_user),db:Session=Depends(get_db)):
+def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     posts=_records(db,user)
     signature=_signature(posts)
-    return {"source_total":len(posts),"operations":_read(db,"operations",signature),
-            "reputation":_read(db,"reputation",signature),
+    operations=_read(db,"operations",signature)
+    reputation=_read(db,"reputation",signature)
+    if posts and (operations is None or reputation is None):
+        _schedule_topics(background_tasks,user.id,signature)
+    return {"source_total":len(posts),"operations":operations,
+            "reputation":reputation,
             "note":"Only matching source signatures display saved AI results; each record has one primary topic or Others."}
+
+def _schedule_topics(background_tasks,user_id,signature):
+    # At most one queued refresh per evidence signature; do not retry provider
+    # failures more than once per hour or charge on each dashboard refresh.
+    now=time.monotonic()
+    with SCHEDULE_LOCK:
+        if signature in SCHEDULED or now-ATTEMPTED.get(signature,0)<3600:
+            return
+        ATTEMPTED[signature]=now
+        SCHEDULED.add(signature)
+    background_tasks.add_task(_refresh_topics,user_id,signature)
+
+def _refresh_topics(user_id,signature):
+    try:
+        with SessionLocal() as db:
+            user=db.get(User,user_id)
+            if user is None:return
+            for perspective in ("operations","reputation"):
+                try:
+                    current=_records(db,user)
+                    if _signature(current)!=signature:return
+                    analyze(perspective,user,db)
+                except Exception:
+                    db.rollback()
+                    log.exception("Automatic topic analysis failed for %s",perspective)
+            # Briefings are regenerated after the two topical lenses update.
+            try:
+                from .smart_radar_synthesis import summarize_live
+                summarize_live(user,db)
+            except Exception:
+                db.rollback()
+                log.exception("Automatic public concern / narrative synthesis failed")
+    finally:
+        with SCHEDULE_LOCK:SCHEDULED.discard(signature)
 
 def _prompt(perspective):
     base="""You are a neutral Indonesian electoral social-listening intelligence analyst.

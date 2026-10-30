@@ -339,17 +339,14 @@ def compile_inbox_findings(rows,states=None):
         g.pop('concern_descriptions',None)
         findings.append(g)
     # Distinguish independent reports with the same issue label, preserving IDs.
-    counts=Counter(f['title'].casefold() for f in findings)
-    used=set()
     for finding in findings:
-        title=finding['title']
-        if counts[title.casefold()]>1:
-            excerpt=_headline(finding['posts'][0].get('message_original'),62)
-            candidate=title+' — '+excerpt if excerpt and excerpt.casefold() not in title.casefold() else title
-            if candidate.casefold() in used or candidate==title:
-                candidate=title+' · Source '+finding['id'].split('-')[-1]
-            finding['title']=candidate[:200]
-        used.add(finding['title'].casefold())
+        # Titles are issue labels, never pasted captions; the original post
+        # remains attached as supporting evidence in the detail drawer.
+        label=str(finding['title'] or '').split(' — ')[0]
+        label=label.split(' · Source ')[0]
+        label=re.sub(r'\\s+',' ',label).strip()
+        words=label.split()
+        finding['title']=' '.join(words[:10]) if len(words)>10 else label
     return sorted(findings,key=lambda x:(x['status']!='pending',-x['supporting_posts'],x['title'],x['id']))
 
 def live_inbox_findings(db,principal,states=None):

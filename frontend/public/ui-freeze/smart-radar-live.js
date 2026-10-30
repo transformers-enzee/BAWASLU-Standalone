@@ -5,7 +5,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
-  let issueDistribution = null, issueAnalysisBusy=false;
+  let issueDistribution = null;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
   let watchOffset=0;
   function renderInboxLineage(){
@@ -231,10 +231,8 @@
         '</div><div style="background:#e8eeee;border-radius:6px;height:7px;margin-top:4px"><div style="height:100%;border-radius:6px;background:'+
         (colors[t.sentiment]||colors.NEUTRAL)+';width:'+(Number(t.count||0)/highest*100)+'%"></div></div></div>').join('')+
         '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':
-        '<p class="small muted">Run OpenAI topic analysis to generate five evidence-grounded themes. Generic saved topic labels are not used as substitutes.</p>')+
-      '<button id="analyzeIssueDistribution" type="button" class="button" '+(issueAnalysisBusy?'disabled':'')+
-      ' style="margin-top:9px;font-size:12px">'+(issueAnalysisBusy?'Generating AI topics…':'Generate '+(perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+' topics with OpenAI')+'</button>'+
-      '<p class="small muted" id="issueAnalysisStatus" style="margin-top:6px">Admin-only · explicit paid request · cached for unchanged evidence</p>';
+        '<p class="small muted">AI is preparing the five evidence-grounded topics. The previous cached analysis is reused when sources are unchanged.</p>')+
+      '<p class="small muted" style="margin-top:6px">AI topics update automatically when new source evidence arrives; existing results are reused.</p>';
     $('#cloud').innerHTML = (analysis.length?analysis.map(t=>t.title):topics.slice(0,12).map(([name])=>name)).slice(0,12).map((name,i)=>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
 
@@ -275,28 +273,6 @@
     renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
   }
-  document.addEventListener('click',async event=>{
-    const button=event.target.closest?.('#analyzeIssueDistribution');
-    if(!button||issueAnalysisBusy)return;
-    event.preventDefault();event.stopPropagation();
-    const perspective=$('#operations').classList.contains('active')?'operations':'reputation';
-    if(!window.confirm('Generate five '+(perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
-      ' topics and classify each relevant saved source with OpenAI? A paid model request may be charged.'))return;
-    issueAnalysisBusy=true;button.disabled=true;button.textContent='Generating AI topics…';
-    try{
-      const result=await request('/api/smart-radar/issue-distribution/analyze?perspective='+perspective,
-        {method:'POST',body:'{}'});
-      issueDistribution=issueDistribution||{};
-      issueDistribution[perspective]=result.result;
-      decorate();
-    }catch(error){
-      issueAnalysisBusy=false;
-      button.disabled=false;button.textContent='Retry OpenAI topic analysis';
-      const status=$('#issueAnalysisStatus');if(status)status.textContent='Analysis failed: '+error.message;
-      return;
-    }
-    issueAnalysisBusy=false;decorate();
-  });
   async function boot() {
     let access = null;
     try {

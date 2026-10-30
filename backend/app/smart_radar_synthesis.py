@@ -168,8 +168,8 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
             approved={p['id'] for p in samples}
             instructions=(
                'Write a politically neutral election-monitoring intelligence briefing in 55-90 words. '
-               'For discussion: explain what citizens report or request, and the practical procedural or service concern. '
-               'For narrative_candidate: identify the repeated framing or allegation, how posts relate, '
+               'For discussion: explain what citizens report or request, and the practical procedural or service concern. Use the current source-grounded electoral operations topic only when it matches evidence. '
+               'For narrative_candidate: identify the repeated framing or allegation, how posts relate, and connect relevant current conversational topics without inferring a fabricated trend. '
                'what remains unverified, and why the discussion matters to election oversight. '
                'Summarize the shared theme: do not copy an entire caption or generalize beyond the '
                'sample. Do not infer public consensus, coordination, misconduct or an official verdict. '

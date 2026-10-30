@@ -107,7 +107,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'114.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'114.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -192,6 +192,10 @@ def registry(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(
             from .watchlist_auto import readiness, sync_account
             if readiness()['enabled']:
                 background_tasks.add_task(sync_account,int(result['account']['id']))
+        if body.action=='requestAccountFetch' and result.get('status')=='QUEUED':
+            from .watchlist_auto import sync_account
+            background_tasks.add_task(sync_account,int(result['account_id']),
+                                      None,result.get('campaign_id'),True)
         return result
     except PermissionError as e: raise HTTPException(403,str(e))
     except ValueError as e: raise HTTPException(400,str(e))

@@ -133,7 +133,8 @@
       context:item.related_election||item.type||'Approved registry candidate',
       summary:item.description||'No officer-approved activity summary has been recorded. Review the original evidence before making an assessment.',
       posts:[],findings:[],accounts:accounts.filter(a=>String(a.watchlist_id)===String(item.id)).map(a=>({
-        platform:a.platform,handle:a.handle||a.url,status:'Registered account · affiliation verification required',url:a.url
+        id:String(a.id),platform:a.platform,handle:a.handle||a.url,
+        status:'Registered public account · affiliation requires officer verification',url:a.url
       }))
     };
   }
@@ -182,6 +183,45 @@
       ui.showAccountTab();
       ui.notify('Account registered. Own posts appear only when its published posts have been collected and the author matches its handle.');
     }catch(error){ui.notify('Account not registered: '+error.message);}
+  };
+  ui.onRefreshProfile=id=>{
+    if(loading.has(id))return;
+    loaded.delete(id);
+    ui.renderProfile(id);
+  };
+  ui.onFetchAccount=async (candidateId,accountId)=>{
+    if(!permitted){ui.notify('Watchlist management permission required.');return;}
+    const candidate=ui.getCandidate(candidateId);
+    const account=candidate?.accounts.find(a=>a.id===String(accountId));
+    if(!account){ui.notify('Registered account unavailable.');return;}
+    if(!candidate.manualFetchAvailable){
+      ui.notify('Manual collection requires a configured SocialCrawl API key and daily credit budget of at least 2.');
+      return;
+    }
+    if(!window.confirm('Fetch the first page of public posts from '+account.platform+' '+account.handle+
+      '? SocialCrawl can charge up to about 2 credits for this request. Continue?'))return;
+    try{
+      const response=await registry('requestAccountFetch',{
+        account_id:String(accountId),...(campaignId?{campaign_id:campaignId}:{})
+      },candidateId);
+      if(response.status!=='QUEUED'){
+        ui.notify(response.reason||('Account fetch status: '+response.status));return;
+      }
+      ui.notify('Account fetch queued. Checking collection status...');
+      const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+      for(let i=0;i<15;i++){
+        await wait(3500);
+        const check=await registry('watchlistSyncStatus',{},candidateId);
+        const state=(check.accounts||[]).find(x=>x.account_id===String(accountId));
+        if(state&&['WAITING','ERROR','UNSUPPORTED','NEEDS_HANDLE','BUDGET_PAUSED'].includes(state.state)){
+          ui.notify(state.state==='WAITING'?'Account posts saved. Refreshing Watchlist evidence.':
+            'Account collection: '+state.state+(state.last_error?' · '+state.last_error:''));
+          ui.onRefreshProfile(candidateId);
+          return;
+        }
+      }
+      ui.notify('Account collection is still processing. Use Refresh Results to check the latest saved posts.');
+    }catch(error){ui.notify('Unable to start account fetch: '+error.message);}
   };
   ui.onCreate=async (rawName,rawAliases='')=>{
     if(!permitted){ui.notify('Watchlist management permission required.');return;}
@@ -290,13 +330,14 @@
       }));
       try{
         const status=await registry('watchlistSyncStatus',{},id);
+        candidate.manualFetchAvailable=status.manual_fetch_available===true;
         candidate.collectionStatus=status.enabled
-          ?'Automatic public-account collection is configured. Check individual account statuses for coverage.'
-          :status.feature_enabled
-            ?'Automatic collection is waiting for a configured API key and sufficient credit budget.'
-            :'Automatic public-account collection is disabled. Register official account profiles and enable a budget-capped collector to retrieve new own posts.';
+          ?'Automatic account collection is enabled.'
+          :status.manual_fetch_available
+            ?'Automatic collection is disabled, but a manual account-post fetch is available.'
+            :'No account posts will be collected until the server has a SocialCrawl API key and daily credit budget of at least 2. Registering an account alone never fetches its posts.';
         candidate.accountSyncStates=Array.isArray(status.accounts)?status.accounts:[];
-      }catch{candidate.collectionStatus='Account collection status unavailable.'}
+      }catch{candidate.collectionStatus='Account collection status unavailable.';candidate.manualFetchAvailable=false}
       loaded.add(id);
       ui.renderProfile(id);
       if(captured.status==='rejected'||actor.status==='rejected')

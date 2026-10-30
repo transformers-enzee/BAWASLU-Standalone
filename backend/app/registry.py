@@ -1,6 +1,6 @@
 import json
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse, urlunparse
 from sqlalchemy.orm import Session
 from .models import *
@@ -124,6 +124,38 @@ def registry_action(db:Session,p,action,data,id=None):
         from .watchlist_auto import status_for
         watch=_require_watchlist(db,p,id)
         return status_for(db,watch.id)
+
+    if action=='requestAccountFetch':
+        if not has(p,'manage_watchlist'):raise PermissionError('Not permitted')
+        payload=data if isinstance(data,dict) else {}
+        w=_require_watchlist(db,p,id)
+        account_id=str(payload.get('account_id') or '').strip()
+        if not account_id.isdigit():raise ValueError('Select a registered account')
+        account=db.get(SourceAccount,int(account_id))
+        if not account or account.watchlist_id!=w.id:
+            raise ValueError('Account does not belong to this candidate')
+        if w.status!='Active':raise ValueError('Activate candidate tracking first')
+        campaign_id=str(payload.get('campaign_id') or '').strip()
+        if campaign_id:
+            campaign=db.get(MonitoringCampaign,int(campaign_id)) if campaign_id.isdigit() else None
+            if not campaign or not allowed(p,campaign):
+                raise ValueError('Campaign unavailable or inaccessible')
+        from .watchlist_auto import readiness
+        config=readiness()
+        if not config['manual_fetch_available']:
+            return {'status':'BLOCKED','reason':'Manual fetching requires SOCIALCRAWL_API_KEY and BAWASLU_WATCHLIST_DAILY_CREDIT_BUDGET of at least 2. Automatic collection may remain disabled.',
+                    'paid_provider_called':False}
+        from .models import WatchlistAccountSync
+        sync=db.get(WatchlistAccountSync,account.id)
+        if sync and sync.state=='RUNNING':
+            return {'status':'RUNNING','account_id':str(account.id),'paid_provider_called':False}
+        if sync and sync.last_checked_at and sync.last_checked_at>datetime.utcnow()-timedelta(minutes=15):
+            return {'status':'COOLDOWN','account_id':str(account.id),
+                    'reason':'This account was checked within the last 15 minutes.',
+                    'paid_provider_called':False}
+        return {'status':'QUEUED','account_id':str(account.id),
+                'campaign_id':int(campaign_id) if campaign_id else None,
+                'max_credits_estimate':2,'paid_provider_called':False}
 
     if action=='watchlistCapturedFeed':
         # Paginated, read-only evidence matching. Never call a crawl provider here.

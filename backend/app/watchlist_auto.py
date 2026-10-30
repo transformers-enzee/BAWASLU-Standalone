@@ -40,6 +40,7 @@ def interval_minutes():
 def readiness():
     return {'enabled':auto_enabled() and daily_budget()>=RESERVED_CREDITS and bool(os.getenv('SOCIALCRAWL_API_KEY')),
             'feature_enabled':auto_enabled(),
+            'manual_fetch_available':daily_budget()>=RESERVED_CREDITS and bool(os.getenv('SOCIALCRAWL_API_KEY')),
             'daily_credit_limit':daily_budget(),'estimated_max_credits_per_check':RESERVED_CREDITS,
             'interval_minutes':interval_minutes(),
             'provider_configured':bool(os.getenv('SOCIALCRAWL_API_KEY')),
@@ -93,9 +94,10 @@ def mark_pending(db,account_id):
     row.last_error=''
     db.commit()
 
-def _claim(db,account_id):
+def _claim(db,account_id,manual=False):
     now=datetime.utcnow()
-    if not readiness()['enabled']:return False
+    ready=readiness()
+    if not (ready['manual_fetch_available'] if manual else ready['enabled']):return False
     if db.bind.dialect.name=='postgresql':
         db.execute(text('SELECT pg_advisory_xact_lock(8700875)'))
     row=db.query(WatchlistAccountSync).filter(
@@ -107,7 +109,9 @@ def _claim(db,account_id):
         db.rollback();return False
     if row.state in ('UNSUPPORTED','NEEDS_HANDLE'):
         db.rollback();return False
-    if row.next_check_at and row.next_check_at>now:
+    if row.next_check_at and row.next_check_at>now and not manual:
+        db.rollback();return False
+    if manual and row.last_checked_at and row.last_checked_at>now-timedelta(minutes=15):
         db.rollback();return False
     platform,handle=identity(account)
     if platform not in SUPPORTED or not handle:
@@ -127,11 +131,11 @@ def _claim(db,account_id):
     row.state='RUNNING';row.started_at=now;row.last_error=''
     db.commit();return True
 
-def sync_account(account_id,client=None):
+def sync_account(account_id,client=None,campaign_id=None,manual=False):
     """Run one idempotent, capped first-page sync; injected client permits offline tests."""
     db=SessionLocal()
     try:
-        if not _claim(db,account_id):return {'status':'SKIPPED'}
+        if not _claim(db,account_id,manual=manual):return {'status':'SKIPPED'}
         account=db.get(SourceAccount,account_id)
         watch=db.get(WatchlistItem,account.watchlist_id)
         platform,handle=identity(account)
@@ -176,14 +180,29 @@ def sync_account(account_id,client=None):
             items=post_block.get('items') or []
             if not isinstance(items,list):items=[]
             from .socialcrawl import _map_result
-            new_count=0;linked=0;last_post=''
-            for raw in items[:100]:
+            from .models import CampaignEvidence
+            profile_author=(first.get('data') or {}).get('author') or {}
+            profile_handle=str(profile_author.get('username') or '').lstrip('@').casefold() if isinstance(profile_author,dict) else ''
+            if profile_handle and profile_handle!=handle:
+                raise ValueError('Provider profile identity does not match the registered account handle')
+            new_count=0;linked=0;last_post='';skipped_attribution=0
+            for raw in items[:20]:
                 if not isinstance(raw,dict):continue
                 normalized={'platform':platform,**raw}
                 mapped=_map_result(db,normalized,default_platform=platform)
                 mapped['platform']=platform
+                actual_author=str(mapped['observed_handle'] or '').strip().lstrip('@').casefold()
+                # Never overwrite an actual, conflicting source author with the
+                # requested profile handle: that turns news/reshared content into
+                # a false candidate-owned post.
+                if actual_author and actual_author!=handle:
+                    skipped_attribution+=1
+                    continue
+                if not actual_author and profile_handle!=handle:
+                    skipped_attribution+=1
+                    continue
                 mapped['observed_handle']='@'+handle
-                mapped['author_name']=mapped['author_name'] or handle
+                mapped['author_name']=mapped['author_name'] or profile_handle or handle
                 url=mapped['canonical_url']
                 if not url and not mapped['provider_result_id']:continue
                 # Reuse stored evidence instead of rewriting other collection sources.
@@ -210,11 +229,20 @@ def sync_account(account_id,client=None):
                     db.add(row);db.flush();new_count+=1
                 if not db.get(WatchlistAccountEvidence,{'account_id':account.id,'result_id':row.id}):
                     db.add(WatchlistAccountEvidence(account_id=account.id,result_id=row.id));linked+=1
+                if campaign_id is not None and not db.query(CampaignEvidence.id).filter(
+                    CampaignEvidence.campaign_id==campaign_id,
+                    CampaignEvidence.result_id==row.id).first():
+                    db.add(CampaignEvidence(campaign_id=campaign_id,
+                        result_id=row.id,match_method='WATCHLIST_ACCOUNT'))
+                    db.flush()
                 if not last_post:last_post=mapped['provider_result_id'] or url
             run.status='COMPLETED';run.credits_used=credits
             run.credits_remaining=int(env.get('credits_remaining') or 0)
             run.provider_request_id=str(env.get('request_id') or '')
             run.result_count=linked
+            if skipped_attribution:
+                LOG.warning('Skipped %s returned posts with unverified authorship for account %s',
+                            skipped_attribution,account_id)
             db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',
                 endpoint='/v1/prism/profiles?include=posts',
                 provider_request_id=run.provider_request_id,credits_used=credits,

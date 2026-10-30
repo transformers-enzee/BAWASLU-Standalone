@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const html=fs.readFileSync(new URL('../public/ui-freeze/watchlist-v2_2.html',import.meta.url),'utf8');
+const adapter=fs.readFileSync(new URL('../public/ui-freeze/watchlist-live.js',import.meta.url),'utf8');
+const api=fs.readFileSync(new URL('../../backend/app/registry.py',import.meta.url),'utf8');
+const worker=fs.readFileSync(new URL('../../backend/app/watchlist_auto.py',import.meta.url),'utf8');
+assert.match(html,/data-fetch-account/,'Manual Fetch Own Posts button');
+assert.match(html,/refreshAccountResults/,'Refresh Results control');
+assert.match(adapter,/requestAccountFetch/,'Authenticated registry fetch action');
+assert.match(adapter,/window\.confirm/,'Paid operation needs explicit officer confirmation');
+assert.match(adapter,/manual_fetch_available/,'Unavailable provider or budget must disable fetching');
+assert.match(adapter,/campaign_id:campaignId/,'Campaign evidence must be linked to source posts');
+assert.match(api,/requestAccountFetch/,'Server validates account and privileges');
+assert.match(worker,/CampaignEvidence\(campaign_id=campaign_id/,'Fetched posts must appear in campaign');
+assert.doesNotMatch(worker,/mapped\['observed_handle'\]='@'\+handle\n\s*mapped\['author_name'\]/,'Cannot overwrite source author before checking match');
+console.log('PASS: Watchlist manual account-post fetch, confirmation, budget and campaign wiring');

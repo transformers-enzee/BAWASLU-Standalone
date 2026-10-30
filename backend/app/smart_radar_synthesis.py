@@ -158,14 +158,30 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
         existing={x['finding_id']:dict(x) for x in db.execute(text(
             "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries")).mappings()}
         pending=[f for f in findings if existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)
-                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v2']
+                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v3']
         # Do not retain DB transaction or Supabase pool connection during OpenAI calls.
         db.commit()
+        # Topic guidance is optional and never substitutes for original evidence.
+        # A topic label is only context if its source assignments intersect the finding.
+        from .issue_distribution import _read, _records, _signature
+        scoped_posts=_records(db,user)
+        signature=_signature(scoped_posts)
+        topic_set=_read(db,'operations',signature) or {}
+        saved_topics={t['id']:t for t in topic_set.get('topics',[])}
+        topic_assignments=topic_set.get('assignments') or {}
         for f in pending[:2]:
             posts=f['posts'][:8]
             samples=[{'id':str(p.get('canonical_source_id') or p.get('result_id')),
                       'text':str(p.get('message_original') or '')[:1100]} for p in posts]
             approved={p['id'] for p in samples}
+            matching_ids={str(p.get('canonical_source_id') or p.get('result_id') or '')
+                          for p in posts}
+            frequencies={}
+            for source_id in matching_ids:
+                topic_id=topic_assignments.get(source_id)
+                if topic_id and topic_id in saved_topics:
+                    frequencies[topic_id]=frequencies.get(topic_id,0)+1
+            related_topics=[saved_topics[k]['title'] for k in sorted(frequencies,key=lambda k:-frequencies[k])[:2]]
             instructions=(
                'Write a politically neutral election-monitoring intelligence briefing in 55-90 words. '
                'For discussion: explain what citizens report or request, and the practical procedural or service concern. Use the current source-grounded electoral operations topic only when it matches evidence. '
@@ -183,7 +199,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
                'input':[{'role':'system','content':instructions},
                         {'role':'user','content':json.dumps({
                            'category':f['kind'],'topic':f['title'],
-                           'supporting_posts':len(f['posts']),'sampled_posts':samples},ensure_ascii=False)}],
+                           'supporting_posts':len(f['posts']),'related_electoral_topics':related_topics,'sampled_posts':samples},ensure_ascii=False)}],
                'text':{'format':{'type':'json_schema','name':'bawaslu_live_summary',
                                  'strict':True,'schema':schema}},
                'max_output_tokens':300}
@@ -210,7 +226,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
                     output_tokens=excluded.output_tokens,generated_at=now()"""),
                     {'id':f['id'],'sig':_live_summary_signature(f),
                      'model':str(response.json().get('model') or openai_triage_model()),
-                     'version':'live-evidence-v2','insights':json.dumps(insights),
+                     'version':'live-evidence-v3','insights':json.dumps(insights),
                      'count':len(samples),
                      'input':int((response.json().get('usage') or {}).get('input_tokens') or 0),
                      'output':int((response.json().get('usage') or {}).get('output_tokens') or 0)})

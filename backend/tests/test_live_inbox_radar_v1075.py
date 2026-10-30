@@ -78,3 +78,30 @@ def test_source_geography_is_not_guessed_from_profile_location():
     f=compile_inbox_findings([post(1)])[0]
     assert f['geography']=='Incident geography not inferred'
     assert f['source_evidence_verified'] is False
+
+def test_province_counts_use_only_matching_sources_and_candidates():
+    data=[
+        post(195,text_content='Discussion daftar pemilih tetap',normalized_candidate_names=['Gibran Rakabuming Raka'],
+             sentiment='POSITIVE',location_signals=[{'name':'Nusa Tenggara Timur','province':'Nusa Tenggara Timur'}]),
+        post(196,text_content='Another daftar pemilih tetap discussion',normalized_candidate_names=['Ganjar Pranowo'],
+             sentiment='NEGATIVE',location_signals=[{'name':'Nusa Tenggara Timur','province':'Nusa Tenggara Timur'}]),
+        post(197,text_content='Third daftar pemilih tetap discussion',normalized_candidate_names=['Prabowo Subianto'],
+             sentiment='NEUTRAL',location_signals=[{'name':'Riau','province':'Riau'}])]
+    items=compile_inbox_findings(data)
+    grouped=next(x for x in items if x['supporting_posts']==3)
+    ntt=grouped['province_breakdown']['Nusa Tenggara Timur']
+    assert ntt['supporting_posts']==2
+    assert ntt['sentiment_counts']=={'POSITIVE':1,'NEGATIVE':1}
+    assert ntt['actor_mentions']=={'Gibran Rakabuming Raka':1,'Ganjar Pranowo':1}
+    assert ntt['day_counts']['2026-10-29']==2
+    assert grouped['province_breakdown']['Riau']['supporting_posts']==1
+
+
+def test_discover_only_allows_socialcrawl_host_and_maps_topic_stance():
+    from app.prism_discover import safe_url,STANCE
+    import pytest
+    assert safe_url('/v1/prism/discover').startswith('https://www.socialcrawl.dev/')
+    with pytest.raises(ValueError):
+        safe_url('https://socialcrawl.dev.attacker.example/v1/prism/discover')
+    assert STANCE['positive']=='POSITIVE'
+    assert STANCE['no_opinion']=='NEUTRAL'

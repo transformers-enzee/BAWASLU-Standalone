@@ -9,6 +9,10 @@ def _list(value):
     return parsed if isinstance(parsed,list) else []
 def category_for_assessment(relevance,topics,concerns):
     if str(relevance or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):return UNCATEGORIZED
+    # Explicit, source-quoted public concerns take priority in the primary
+    # Social Listening theme; underlying operations/reputation labels remain saved.
+    if any(isinstance(c,dict) and c.get('evidence_quote') for c in _list(concerns)):
+        return 'Public Concern'
     # Future assessment outputs have one primary topic, old records may have more.
     for topic in _list(topics):
         if isinstance(topic,str) and topic in CATEGORIES:return topic

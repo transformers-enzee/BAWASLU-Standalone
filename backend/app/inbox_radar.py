@@ -55,6 +55,29 @@ def _source(row):
         'source_verification_status':'SAVED_INBOX_ASSESSMENT_UNVERIFIED',
     }
 
+NARRATIVE_DESCRIPTION={
+    'Voter register accuracy':('questions about voter-register accuracy and whether registration information is up to date','These posts do not establish that voter records are incorrect.'),
+    'Election money politics':('reports and discussion about possible vote buying','The allegations require checking; they are not proof of wrongdoing.'),
+    'BAWASLU institutional trust':('public confidence in BAWASLU and questions about institutional impartiality','Opinions and accusations about impartiality should not be treated as established facts.'),
+    'Election dispute proceedings':('election-related disputes and official proceedings','References to a dispute do not establish that any party acted improperly.'),
+    'Candidate nomination process':('questions about candidate nomination and verification procedures','A procedural discussion is not itself a violation allegation.'),
+    'Participatory election oversight':('citizen participation in monitoring elections','The discussion does not by itself indicate a breach of election rules.'),
+}
+
+def narrative_summary(subject,count,candidate_mentions):
+    """Two-sentence, plain-language, strictly evidence-limited thematic overview.
+
+    Only anchored patterns from source text are summarized here. A candidate
+    may be named as contextual mention, never as an alleged wrongdoer.
+    """
+    description,caveat=NARRATIVE_DESCRIPTION.get(subject,(
+        'a recurring election-related topic','The underlying claims need independent checking.'))
+    mentions=sorted((candidate_mentions or {}).items(),key=lambda pair:(-pair[1],pair[0]))
+    candidate_note=(' The posts also mention '+', '.join(name for name,_ in mentions[:2])+'.'
+                    if mentions and count>=2 else '')
+    return ('Discussion trends: '+str(count)+' posts from different sources refer to '+
+            description+'. '+caveat+candidate_note)
+
 def compile_inbox_findings(rows,states=None):
     """Pure, deterministic grouping of saved, relevant Inbox records.
 
@@ -160,7 +183,7 @@ def compile_inbox_findings(rows,states=None):
             g['summary']='A post raises a possible election-rule concern. The claim has not been confirmed and needs checking.'
         elif g['kind']=='narrative_candidate':
             subject=g['title'].split(' · ',1)[-1]
-            g['summary']='Multiple independent sources discuss '+subject.lower()+'. Review the posts to understand the claims and whether attention is increasing.'
+            g['summary']=narrative_summary(subject,len(evidence),g['actor_mentions'])
         elif g['kind']=='discussion':
             g['summary']=('People are discussing '+(g['title'].split(' · ',1)[-1] if ' · ' in g['title'] else 'an election-related issue')+
                 '. '+('The subject appears in several posts.' if recurring else 'This is an early discussion worth watching.'))

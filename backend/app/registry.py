@@ -192,9 +192,8 @@ def registry_action(db:Session,p,action,data,id=None):
                 specs.setdefault((platform,handle),account)
         base={'linked_accounts':len(accounts),'matchable_accounts':len(specs),
               'paid_provider_called':False,
-              'status':'Stored captured evidence only. No automatic monitoring or provider requests.'}
-        if not specs and not accounts:return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
-        match_conditions=[]
+              'status':'Stored own-account posts and unverified third-party mentions. No provider requests on feed reads.'}
+         match_conditions=[]
         for (platform,handle),account in specs.items():
             platform_condition=func.lower(SocialListeningResult.platform).in_(
                 ['x','twitter'] if platform=='x' else [platform])
@@ -213,7 +212,19 @@ def registry_action(db:Session,p,action,data,id=None):
             explicit=db.query(WatchlistAccountEvidence.result_id).filter(
                 WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
             match_conditions.append(SocialListeningResult.id.in_(explicit))
-        # Never run an unfiltered query when account handles cannot be resolved.
+        # Candidate mentions are separate from own posts. They are source-text
+        # matches, not verified identity, endorsement or legal findings.
+        own_conditions=list(match_conditions)
+        from .candidate_registry import aliases_for
+        aliases=[w.name,*aliases_for(w)] if w.type=='Candidate' and not account_filter else []
+        aliases=list(dict.fromkeys(a.strip() for a in aliases if isinstance(a,str)
+            and len(a.strip())>=5))
+        for alias in aliases:
+            escaped=alias.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+            match_conditions.append(SocialListeningResult.text_content.ilike(
+                '%'+escaped+'%',escape='\\'))
+        # Never run an unfiltered query when neither accounts nor candidate
+        # names have an evidence-backed search condition.
         if not match_conditions:
             return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
         query=db.query(SocialListeningResult).filter(or_(*match_conditions))
@@ -229,13 +240,20 @@ def registry_action(db:Session,p,action,data,id=None):
             query=query.filter(SocialListeningResult.text_content.ilike('%'+escaped+'%',escape='\\'))
         query=query.order_by(SocialListeningResult.published_at.desc(),SocialListeningResult.id.desc())
         # Regional users must not learn the existence/count of out-of-scope records.
+        def owner_match(item):
+            platform=platform_key(item.platform)
+            observed=str(item.observed_handle or '').strip().lstrip('@').casefold()
+            author=str(item.author_name or '').strip().lstrip('@').casefold()
+            return (platform,observed) in specs or (not observed and (platform,author) in specs)
         if p.get('geographic_scope')=='Nationwide':
             total=query.order_by(None).count()
+            own_count=query.filter(or_(*own_conditions)).order_by(None).count() if own_conditions else 0
             rows=query.offset((page-1)*page_size).limit(page_size).all()
         else:
-            total=0;rows=[];start=(page-1)*page_size
+            total=0;own_count=0;rows=[];start=(page-1)*page_size
             for item in query.yield_per(200):
                 if not _result_in_scope(db,p,item):continue
+                if owner_match(item):own_count+=1
                 if start<=total<start+page_size:rows.append(item)
                 total+=1
         from .saved_assessment_views import saved_classifications_for_posts
@@ -252,13 +270,21 @@ def registry_action(db:Session,p,action,data,id=None):
             matched=linked or matched
             metrics=_captured_post_metrics(item.engagement_json)
             return {'id':str(item.id),'platform':item.platform,'account':matched.handle or '@'+inferred_handle(matched) if matched else '',
+                'relation':'OWN_POST' if matched or owner_match(item) else 'THIRD_PARTY_MENTION',
                 'text':(item.text_content or '')[:5000],
                 'published_at':item.published_at,'url':item.canonical_url,
                 'author_name':item.author_name,'content_type':item.content_type,
-                'match_method':'registered_account' if linked else 'observed_handle' if observed else 'author_name_unverified',
+                'match_method':'registered_account' if linked else 'observed_handle' if matched and observed else 'author_name_unverified' if matched else 'candidate_text_mention_unverified',
                 'saved_assessments':saved_views.get(item.id,[]),
                 **metrics}
+        saved_page=[assessment for post in rows for assessment in saved_views.get(post.id,[])[:1]]
+        tones=Counter(str(x.get('sentiment') or 'UNKNOWN').upper() for x in saved_page)
         return {**base,'posts':[serialize_post(item) for item in rows],
+                'own_posts':own_count,'mentions_by_others':max(0,total-own_count),
+                'sentiment_distribution_on_page':{name:int(tones.get(name,0))
+                    for name in ('POSITIVE','NEUTRAL','NEGATIVE','UNKNOWN')},
+                'potential_violation_posts_on_page':sum(1 for x in saved_page
+                    if x.get('potential_issues') and x.get('review_status')!='FLAG_DISMISSED'),
                 'page':page,'page_size':page_size,'total':total}
 
     if action=='createWatchlist':

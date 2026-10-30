@@ -8,6 +8,7 @@ import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
+import { registry } from '@/components/intel/useIntel';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
@@ -55,6 +56,21 @@ export default function CampaignPanel({campaignId=null}){
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const [candidateSuggestions,setCandidateSuggestions]=useState(null);
+ const [candidateAdding,setCandidateAdding]=useState(''),[candidateAddNotice,setCandidateAddNotice]=useState('');
+ async function addSuggestedCandidate(candidate){
+  if(candidateAdding||candidate.tracked||!selected)return;
+  if(!window.confirm('Add '+candidate.name+' to Candidate Watchlist? This does not verify any official account.'))return;
+  setCandidateAdding(candidate.name);setCandidateAddNotice('');
+  try{
+   const response=await registry('createWatchlist',{name:candidate.name,type:'Candidate',
+     status:'Active',priority:'Medium',description:'Officer-added from '+selected.name+
+     ' candidate mention suggestions. Verify official account URLs before activating account collection.'});
+   setCandidateSuggestions(existing=>(existing||[]).map(x=>x.name===candidate.name?
+     {...x,tracked:true,watchlist_id:response.item?.id}:x));
+   setCandidateAddNotice(candidate.name+' added to Watchlist. Register and verify official account URLs to monitor own posts.');
+  }catch(e){setCandidateAddNotice(e.response?.data?.detail||e.response?.data?.error||e.message||'Unable to add candidate.')}
+  finally{setCandidateAdding('')}
+ }
  async function checkDiscover(c){
    setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
@@ -507,7 +523,7 @@ export default function CampaignPanel({campaignId=null}){
     <p className="text-xs">Keywords: {(discoverPreview.keywords_used||[]).join(', ')} ({(discoverPreview.keywords_total||0)} configured) · Platforms: {(discoverPreview.platforms||[]).join(', ')} · {discoverPreview.incremental?'Incremental since last run':'Initial collection'}</p>
     <button type="button" className="intel-button text-xs" disabled={discoverBusy} onClick={launchDiscover}>Confirm paid Discover run</button>
   </div>}
-  {discoverRun&&<div className="space-y-2" role="status"><p>Run #{discoverRun.run_id} · {discoverRun.status} · {discoverRun.posts_saved||0} saved posts · {discoverRun.credits_used||0} SocialCrawl credits</p><button type="button" className="intel-ghost text-xs" onClick={refreshDiscover} disabled={discoverBusy}>Refresh run status</button></div>}
+  {discoverRun&&<div className="space-y-2" role="status"><p>Run #{discoverRun.run_id} · {discoverRun.status} · {discoverRun.posts_saved||0} saved posts · {discoverRun.credits_used||0} SocialCrawl credits · {discoverRun.ai_analyzed_posts||0} AI-analyzed · {discoverRun.ai_pending_posts||0} AI-pending</p><button type="button" className="intel-ghost text-xs" onClick={refreshDiscover} disabled={discoverBusy}>Refresh run status</button></div>}
  </div>}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
    </section>
    <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords and platforms, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
@@ -537,7 +553,8 @@ export default function CampaignPanel({campaignId=null}){
    {campaignSection==='watchlist'&&<section className="rounded-lg bg-teal-50 border border-teal-200 p-3 space-y-2" aria-label="AI detected candidate suggestions">
     <h4 className="text-sm font-semibold">Candidates mentioned in saved posts · suggestions</h4>
     <p className="text-xs">AI-detected names require an officer to verify official cross-platform accounts before tracking. A mention is not proof of endorsement or wrongdoing.</p>
-    <div className="flex flex-wrap gap-2">{(candidateSuggestions||[]).slice(0,10).map(x=><span key={x.name} className="rounded bg-white border border-teal-200 px-3 py-1 text-xs">{x.name} · {x.matching_posts} mentions</span>)}</div>
+    <div className="flex flex-wrap gap-2">{(candidateSuggestions||[]).slice(0,10).map(x=><div key={x.name} className="flex items-center gap-2 rounded border border-teal-200 bg-white px-3 py-2 text-xs"><span>{x.name} · {x.matching_posts} mentions</span><button type="button" className="font-semibold text-teal-700 disabled:text-slate-400" disabled={x.tracked||!!candidateAdding} onClick={()=>addSuggestedCandidate(x)}>{x.tracked?'Tracking':candidateAdding===x.name?'Adding…':'Add to Watchlist'}</button></div>)}</div>
+    {candidateAddNotice&&<p role="status" className="text-xs text-teal-800">{candidateAddNotice}</p>
     {!candidateSuggestions?.length&&<p className="text-xs">No AI candidate suggestions are available yet.</p>}
   </section>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}

@@ -19,7 +19,7 @@ export default function WatchlistPosts(){
  const [searchText,setSearchText]=useState('');
  const [search,setSearch]=useState('');
  const [page,setPage]=useState(1);
- const [result,setResult]=useState({posts:[],total:0,page_size:PAGE_SIZE,linked_accounts:0,matchable_accounts:0});
+ const [result,setResult]=useState({posts:[],total:0,page_size:PAGE_SIZE,linked_accounts:0,matchable_accounts:0,own_posts:0,mentions_by_others:0});
  const [busy,setBusy]=useState(false),[feedError,setFeedError]=useState('');
  const [syncInfo,setSyncInfo]=useState(null);
  const [refreshTick,setRefreshTick]=useState(0);
@@ -59,7 +59,7 @@ export default function WatchlistPosts(){
     <div>
      <p className="text-xs uppercase tracking-wider text-slate-500">Watchlist / Captured account posts</p>
      <h1 className="intel-heading mt-1">{item.name}</h1>
-     <p className="text-sm text-slate-500 mt-1">{linked.length} registered account{linked.length===1?'':'s'} · Posts already stored in BAWASLU</p>
+     <p className="text-sm text-slate-500 mt-1">{linked.length} registered account{linked.length===1?'':'s'} · Captured own posts and third-party mentions (not official identity verification)</p>
     </div>
     <Link to="/watchlist" className="intel-ghost text-xs">Manage account URLs</Link>
    </div>
@@ -96,15 +96,16 @@ export default function WatchlistPosts(){
    </div>
   </form>
   <div className="grid grid-cols-3 gap-2">
-   {[['Matching posts',number(total)],['Views · this page',number(totals.views)],['Engagement · this page',number(totals.engagement)]].map(([label,value])=><div key={label} className="intel-card px-3 py-3 min-w-0"><p className="text-xs text-slate-500">{label}</p><strong className="text-lg tabular-nums break-words">{value}</strong></div>)}
+   {[['Matching posts',number(total)],['Own posts',number(result.own_posts)],['Mentions by others',number(result.mentions_by_others)]].map(([label,value])=><div key={label} className="intel-card px-3 py-3 min-w-0"><p className="text-xs text-slate-500">{label}</p><strong className="text-lg tabular-nums break-words">{value}</strong></div>)}
   </div>
+  <section className="intel-card p-3 text-xs text-slate-600" aria-label="Current page candidate intelligence"><strong>Saved sentiment · this page</strong><p className="mt-1">{['POSITIVE','NEUTRAL','NEGATIVE','UNKNOWN'].map(tone=>tone+': '+(result.sentiment_distribution_on_page?.[tone]||0)).join(' · ')}</p><p className="mt-1">Potential violation indicators (unverified, this page): {result.potential_violation_posts_on_page||0} · Views: {number(totals.views)} · Engagement: {number(totals.engagement)}</p></section>
   {result.matchable_accounts===0&&linked.length>0&&<p role="note" className="text-sm text-amber-800">None of these account URLs has an identifiable profile handle. Add a valid public profile URL and account handle to enable exact matching.</p>}
   {feedError&&<p role="alert" className="intel-card p-3 text-sm text-red-700">{feedError}</p>}
   {busy?<p role="status" className="text-sm text-slate-500">Loading captured account posts…</p>:!feedError&&<>
    <section className="space-y-2" aria-label="Matched captured posts">
     {posts.map(post=><article key={post.id} className="intel-card p-4 space-y-2">
      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-      <span className="font-semibold text-slate-700">{post.platform||'Unknown platform'} · {post.account||post.author_name||'Unknown account'}</span>
+      <span className="font-semibold text-slate-700">{post.platform||'Unknown platform'} · {post.account||post.author_name||'Unknown account'}</span><span className={'rounded px-2 py-0.5 font-semibold '+(post.relation==='OWN_POST'?'bg-teal-50 text-teal-800':'bg-amber-50 text-amber-800')}>{post.relation==='OWN_POST'?'Own account post':'Third-party mention · unverified'}</span>
       <span>{post.published_at?String(post.published_at).slice(0,16).replace('T',' '):'Date unavailable'}</span>
       {post.match_method==='author_name_unverified'&&<span className="text-amber-700">Author-name match · unverified</span>}
      </div>
@@ -124,7 +125,7 @@ export default function WatchlistPosts(){
      </div>)}
      {sourceUrl(post.url)&&<a className="text-xs font-semibold text-[#126d91] hover:underline" href={sourceUrl(post.url)} target="_blank" rel="noopener noreferrer">View original post ↗</a>}
     </article>)}
-    {!posts.length&&<div className="intel-card p-6 text-sm text-slate-500">{linked.length?'No previously captured posts matched these accounts and filters. This does not mean the accounts have no published posts.':'Add public account URLs and handles in Watchlist to begin matching stored evidence.'}</div>}
+    {!posts.length&&<div className="intel-card p-6 text-sm text-slate-500">{linked.length?'No stored own posts or candidate mentions match these filters. This does not mean no posts exist.':'No stored candidate mentions yet. Register public official account URLs after verification to collect own posts.'}</div>}
    </section>
    <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
     <span>{total?('Showing '+number((page-1)*PAGE_SIZE+1)+'–'+number(Math.min(page*PAGE_SIZE,total))+' of '+number(total)):'No matching records'}</span>

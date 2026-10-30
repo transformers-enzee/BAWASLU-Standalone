@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const bridge=readFileSync('public/ui-freeze/smart-radar-live.js','utf8');
+const html=readFileSync('public/ui-freeze/smart-radar-v6_2.html','utf8');
+assert.match(bridge,/const watchSize=2/);
+assert.match(bridge,/visibleCandidates=mentions.slice\(watchOffset,watchOffset\+watchSize\)/);
+assert.match(bridge,/data-watch-page="next"/);
+assert.match(bridge,/Opening saved evidence/);
+assert.match(bridge,/ui.openFindingOriginal\(id,origin\);[\s\S]*?const model=await fetchFinding\(id\)/);
+assert.match(bridge,/ui.loadHistory = async id/);
+assert.match(html,/if\(history\)window.__bawaslu\?\.loadHistory\?\./);
+console.log('v109.7 frontend interaction contracts PASS');

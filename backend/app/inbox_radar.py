@@ -79,6 +79,58 @@ def _surface_issues(evidence):
                 topics.append(description)
     return topics[:3]
 
+
+# Human-readable issue labels come only from saved Inbox evidence (not new AI analysis).
+_REVIEW_ISSUES=(
+ (r'mencoblos lebih dari sekali|multiple ballots|multiple voting|vote twice','Allegation of Repeat Voting'),
+ (r'politik uang|serangan fajar|money politics|vote buying','Alleged Vote Buying'),
+ (r'demo|demonstrasi|unjuk rasa|people power','Demonstrations Questioning Election Oversight'),
+ (r'kecurangan|fraud|dicurangi|irregularit','Reported Election Irregularities'),
+ (r'netralitas|tidak netral|keberpihakan|impartiality','Questions About Official Neutrality'),
+ (r'daftar pemilih|voter registration|voter register|\bdpt\b','Voter Registration Concerns'),
+ (r'penghitungan|rekapitulasi|vote tally|vote count','Reported Vote Counting Concerns'),
+ (r'intimidasi|ancaman|intimidation','Reported Voter Intimidation'),
+)
+_CONCERN_ISSUES=(
+ (r'pendaftaran|registrasi|registration|daftar pemilih','Voter Registration Information'),
+ (r'pelayanan|service|lambat|slow response','Public Service Responsiveness'),
+ (r'netralitas|tidak netral|neutrality|impartiality','Oversight Neutrality'),
+ (r'demo|demonstrasi|unjuk rasa|pengawasan|oversight','Election Oversight'),
+ (r'penghitungan|rekapitulasi|vote counting','Vote Counting Transparency'),
+ (r'logistik|polling station|tempat pemungutan|\btps\b','Polling Station Logistics'),
+)
+
+def _headline(value, limit=86):
+    """Bounded, source-grounded excerpt for cases without a specific issue pattern."""
+    value=re.sub(r'\s+',' ',str(value or '')).strip().strip(' .,;:')
+    if len(value)>limit:
+        value=value[:limit].rsplit(' ',1)[0].rstrip(' .,;:')
+    return value
+
+def _evidence_title(row, kind, topic=''):
+    body=str(row.get('text_content') or '')
+    if kind=='source_review':
+        signals=row.get('potential_issues') or []
+        details=' '.join(str(s.get('evidence_quote') or s.get('description') or '')
+                         for s in signals if isinstance(s,dict))
+        for pattern,title in _REVIEW_ISSUES:
+            if re.search(pattern,body+' '+details,re.IGNORECASE):
+                return title
+        category=_category(row)
+        if category and category.casefold() not in ('electoral violation','potential violation',
+              'reported violation','officer-reviewed signal','other','general'):
+            return 'Reported Concern: '+_headline(category,92)
+        return 'Potential Violation Report: '+(_headline(body,90) or 'Unspecified Source Concern')
+    if kind=='discussion':
+        signals=row.get('public_concern_signals') or []
+        concern=' '.join(str(s.get('concern') or s.get('evidence_quote') or '')
+                         for s in signals if isinstance(s,dict))
+        for pattern,title in _CONCERN_ISSUES:
+            if re.search(pattern,concern+' '+body,re.IGNORECASE):
+                return 'Public Concern: '+title
+        return 'Public Concern: '+(_headline(concern,90) or _headline(body,90) or _headline(topic,90) or 'Unspecified Report')
+    return 'Emerging Narrative: '+(_headline(topic,105) or 'Unspecified Topic')
+
 def _saved_concern_summary(row):
     signal=next((x for x in row.get('public_concern_signals') or []
         if isinstance(x,dict) and (x.get('concern') or x.get('evidence_quote'))),None)
@@ -165,13 +217,13 @@ def compile_inbox_findings(rows,states=None):
         topic=topics[0] if topics else ''
         if flagged:
             key='INBOX-V-'+cid+'-'+rid
-            title='Potential violation review · '+(_category(row) or 'Officer-reviewed signal')
+            title=_evidence_title(row,'source_review')
             players=['violations']
             if has_concern:players.append('concerns')
             kind='source_review'
         elif has_concern:
             key=('INBOX-C-'+sha256(topic.casefold().encode()).hexdigest()[:16]) if topic else 'INBOX-C-'+cid+'-'+rid
-            title='Public concern discussion'+(' · '+topic if topic else '')
+            title=_evidence_title(row,'discussion',topic)
             players=['concerns']
             kind='discussion'
         elif topic:
@@ -180,7 +232,7 @@ def compile_inbox_findings(rows,states=None):
             if anchors:
                 anchor=anchors[0]
                 key='INBOX-N-'+sha256(anchor.casefold().encode()).hexdigest()[:16]
-                title='Discussion · '+anchor
+                title=_evidence_title(row,'narrative_candidate',anchor)
                 players=['narratives']
                 kind='narrative_candidate'
             else:
@@ -286,6 +338,18 @@ def compile_inbox_findings(rows,states=None):
         g.pop('attention')
         g.pop('concern_descriptions',None)
         findings.append(g)
+    # Distinguish independent reports with the same issue label, preserving IDs.
+    counts=Counter(f['title'].casefold() for f in findings)
+    used=set()
+    for finding in findings:
+        title=finding['title']
+        if counts[title.casefold()]>1:
+            excerpt=_headline(finding['posts'][0].get('message_original'),62)
+            candidate=title+' — '+excerpt if excerpt and excerpt.casefold() not in title.casefold() else title
+            if candidate.casefold() in used or candidate==title:
+                candidate=title+' · Source '+finding['id'].split('-')[-1]
+            finding['title']=candidate[:200]
+        used.add(finding['title'].casefold())
     return sorted(findings,key=lambda x:(x['status']!='pending',-x['supporting_posts'],x['title'],x['id']))
 
 def live_inbox_findings(db,principal,states=None):

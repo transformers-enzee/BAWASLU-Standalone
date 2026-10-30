@@ -6,6 +6,7 @@
   const label = value => escapeHtml(value);
   let dashboard = null;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
+  let watchOffset=0;
   function renderInboxLineage(){
     const anchor=$('#kpis');if(!anchor)return;
     let panel=$('#sharedCampaignViolationAssessments');
@@ -88,7 +89,7 @@
       summary: f.summary || '', insights: f.insights || {}, ai_summary: Boolean(f.ai_summary), ai_model: f.ai_model || '', summary_evidence_sample: f.summary_evidence_sample || null,
       violation: (f.players || []).includes('violations'),
       posts: [], source_count: Number(f.supporting_posts ?? 0),
-      human_reviewed: Boolean(f.human_reviewed), history: [],
+      human_reviewed: Boolean(f.human_reviewed), history: [], history_loaded:false, history_loading:false,
       priority_score: f.priority_score, priority_label: f.priority_label || 'Not AI-scored',
       platform_counts: f.platform_counts || {}, day_counts: f.day_counts || {},
       actor_mentions: f.actor_mentions || {},
@@ -185,8 +186,11 @@
     $('#ranking').removeAttribute('data-insight');
     $('#rankTitle').textContent = perspective === 'operations' ? 'Top 10 Candidate Mentions' : 'Most Discussed Institutional Themes';
     const known=new Map((dashboard?.watchlist_profiles||[]).map(p=>[candidateKey(p.name),p]));
-    $('#watch').innerHTML='<p class="small muted">Top 10 candidate mentions in relevant Inbox evidence. A mention is not evidence of wrongdoing.</p>'+
-      (mentions.length?mentions.map(([name,count])=>{
+    const watchSize=2;
+    if(watchOffset>=mentions.length)watchOffset=Math.max(0,Math.ceil(mentions.length/watchSize)-1)*watchSize;
+    const visibleCandidates=mentions.slice(watchOffset,watchOffset+watchSize);
+    $('#watch').innerHTML='<p class="small muted">Top 10 candidate mentions in relevant Inbox evidence. Displaying up to two at a time; a mention is not evidence of wrongdoing.</p>'+
+      (visibleCandidates.length?visibleCandidates.map(([name,count])=>{
         const profile=known.get(candidateKey(name));
         return '<div style="padding:9px 0;border-bottom:1px solid #e3e9ee;display:flex;align-items:center;justify-content:space-between;gap:8px">'+
           '<div><b>'+label(name)+'</b><div class="small muted">'+count+' mentions · '+(profile?label(profile.status)+' · Priority: '+label(profile.priority):'Not on Watchlist')+'</div></div>'+
@@ -194,6 +198,7 @@
           canManageWatchlist?'<button type="button" data-watch-add="'+encodeURIComponent(name)+'" style="border:1px solid #187c6c;border-radius:8px;padding:7px 10px;color:#116d5a;font-weight:bold">+ Add to Watchlist</button>':
           '<span class="small muted">Officer permission needed</span>')+'</div>';
       }).join(''):'<p class="small muted">No recorded candidate mentions in this selection.</p>')+
+      (mentions.length>watchSize?'<div class="row small" style="margin-top:10px;gap:10px"><button type="button" class="button" data-watch-page="previous" '+(watchOffset===0?'disabled':'')+'>← Previous 2</button><span class="muted">'+(watchOffset+1)+'–'+Math.min(watchOffset+watchSize,mentions.length)+' of '+mentions.length+'</span><button type="button" class="button" data-watch-page="next" '+(watchOffset+watchSize>=mentions.length?'disabled':'')+'>Next 2 →</button></div>':'')+
       '<p class="small"><a class="watch-link" href="/social-listening?tab=watchlist" target="_top">Open Candidate Watchlist in Social Listening →</a></p>';
     $('#watch').removeAttribute('data-insight');
     const topicCounts = {};
@@ -301,23 +306,44 @@
       Array.isArray(post.geographic_mentions_unverified)?post.geographic_mentions_unverified:[],
       post.verified_incident_province || ''
     ]);
-    try {
-      const history = await request('/api/smart-radar/history/'+encodeURIComponent(id));
-      model.history = (history.events||[]).map(e=>({
-        title: String(e.action||'Review action'), when: String(e.created_at||''),
-        note: e.note || 'Officer action recorded.'
-      }));
-    } catch {model.history=[];}
     return model;
   }
-  ui.openFinding = async (id, origin) => {
-    if(busy) return;
-    busy=true;
+  // Fetch history on demand, avoiding a second sequential query on record open.
+  ui.loadHistory = async id => {
+    const model=ui.db().find(f=>f.id===id);
+    if(!model||model.history_loaded||model.history_loading)return;
+    model.history_loading=true;
     try {
-      const model = await fetchFinding(id);
-      if(!model) throw Error('Finding not found');
+      const result=await request('/api/smart-radar/history/'+encodeURIComponent(id));
+      model.history=(result.events||[]).map(e=>({
+        title:String(e.action||'Review action'),when:String(e.created_at||''),
+        note:e.note||'Officer action recorded.'
+      }));
+      model.history_loaded=true;
+    } catch(error) {model.history_error=error.message;}
+    finally {
+      model.history_loading=false;
+      if($('#historyLoading') && $('#drawerTitle')?.textContent==='Finding Details')
+        ui.refreshDrawer?.();
+    }
+  };
+  let openingSequence=0;
+  ui.openFinding = async (id, origin) => {
+    // Open immediately; fetch the source evidence without blocking navigation.
+    const sequence=String(++openingSequence);
+    ui.openFindingOriginal(id,origin);
+    const body=$('#drawerBody');
+    body.dataset.findingRequest=sequence;
+    body.innerHTML='<div class="soft" role="status" style="margin-top:16px"><strong>Opening saved evidence…</strong><p class="small">Loading original Inbox posts and supporting source links.</p></div>';
+    try {
+      const model=await fetchFinding(id);
+      if(!model)throw Error('Finding not found');
+      if($('#drawerBody').dataset.findingRequest!==sequence ||
+         !$('#overlay').classList.contains('open') ||
+         $('#drawerTitle').textContent!=='Finding Details')return;
       ui.openFindingOriginal(id,origin);
-      const originals = $('#drawerBody').querySelectorAll('.source');
+      $('#drawerBody').dataset.findingRequest=sequence;
+      const originals=$('#drawerBody').querySelectorAll('.source');
       model.posts.forEach((post,i)=>{
         const href=safeUrl(post[3]);
         if(!href||!originals[i])return;
@@ -325,8 +351,12 @@
         a.textContent='View original source →';a.className='source-link';
         originals[i].appendChild(a);
       });
-    } catch(error){ui.notify('Cannot load source evidence: '+error.message);}
-    finally{busy=false;}
+    } catch(error) {
+      if($('#drawerBody').dataset.findingRequest!==sequence ||
+         !$('#overlay').classList.contains('open'))return;
+      $('#drawerBody').innerHTML='<div role="alert" class="soft" style="margin-top:16px"><strong>Source evidence could not be loaded.</strong><p class="small">'+label(error.message)+'</p><p class="small">No review action has been submitted.</p></div>'+
+        '<button class="button" data-finding="'+label(id)+'" type="button">Retry opening this record →</button>';
+    }
   };
   ui.insightView = id => id.startsWith('platform:') ?
     ui.view().filter(f=>Number(f.platform_counts?.[decodeURIComponent(id.slice(9))]||0)>0) :
@@ -363,6 +393,13 @@
     } catch(error) {ui.notify('Unable to open source evidence: '+error.message);}
     finally{busy=false;}
   };
+  document.addEventListener('click',event=>{
+    const control=event.target.closest('[data-watch-page]');
+    if(!control)return;
+    event.preventDefault();event.stopPropagation();
+    watchOffset=Math.max(0,watchOffset+(control.dataset.watchPage==='next'?2:-2));
+    decorate();
+  });
   document.addEventListener('click',async event=>{
     const button=event.target.closest('[data-watch-add]');
     if(!button)return;

@@ -179,6 +179,8 @@ def compile_inbox_findings(rows,states=None):
 
 def live_inbox_findings(db,principal,states=None):
     from .campaigns import campaign_action
-    inbox=campaign_action(db,principal,'campaignIntelligenceInbox',{})
+    from .inbox_read_cache import read as cached_inbox
+    inbox=cached_inbox(principal,{'campaign_id':None,'result_id':None,'id':None},
+        lambda:campaign_action(db,principal,'campaignIntelligenceInbox',{}))
     rows=inbox.get('findings') or []
     return compile_inbox_findings(rows,states),inbox

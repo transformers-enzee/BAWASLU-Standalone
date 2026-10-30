@@ -96,7 +96,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'108.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'108.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -198,7 +198,18 @@ def executive_command_center(body:dict,user:User=Depends(current_user),db:Sessio
 def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
     try:
-        result=social_listening_action(db,p,body.action,body.data,body.id)
+        from .inbox_read_cache import read as cached_inbox, invalidate as invalidate_inbox
+        if body.action=='campaignIntelligenceInbox':
+            result=cached_inbox(p,{'campaign_id':(body.data or {}).get('campaign_id'),
+                'result_id':(body.data or {}).get('result_id'),'id':body.id},
+                lambda:social_listening_action(db,p,body.action,body.data,body.id))
+        else:
+            # Evict when any campaign/source/assessment action may alter data.
+            # Some actions are read-only, but conservative eviction is safe.
+            if body.action not in ('campaignDashboard','campaignEvidence',
+                                  'campaignFindingGroupsPreview','campaignFindingGroupsList'):
+                invalidate_inbox()
+            result=social_listening_action(db,p,body.action,body.data,body.id)
         if body.action=='campaignManualRun' and body.id and result.get('linked_evidence',0)>0 and os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true':
             from .auto_relevance import assess_pending_campaign
             background_tasks.add_task(assess_pending_campaign,int(body.id))

@@ -239,8 +239,13 @@
         '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':
         '<p class="small muted">AI is preparing the five evidence-grounded topics. The previous cached analysis is reused when sources are unchanged.</p>')+
       '<p class="small muted" style="margin-top:6px">AI topics update automatically when new source evidence arrives; existing results are reused.</p>';
-    $('#cloud').innerHTML = (analysis.length?analysis.map(t=>t.title):topics.slice(0,12).map(([name])=>name)).slice(0,12).map((name,i)=>
-      '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
+    const keywords=dashboard?.main_keyword_cloud||[];
+    const maxKeyword=Math.max(1,...keywords.map(x=>Number(x.count||0)));
+    $('#cloud').innerHTML=keywords.length?keywords.map(x=>{
+      const count=Number(x.count||0);
+      const size=13+Math.round(18*Math.sqrt(count/maxKeyword));
+      return '<span title="'+label(count+' saved posts')+'" style="font-size:'+size+'px;display:inline-block;margin:4px 7px;line-height:1.3">'+label(x.keyword)+'</span>';
+    }).join(''):'<span class="small muted">No configured main keywords matched the relevant saved posts.</span>';
 
     const dayRows=asRows(addCounts(filtered,'day_counts')).sort((a,b)=>a[0].localeCompare(b[0]));
     $('#trend').innerHTML=trendSvg(dayRows);

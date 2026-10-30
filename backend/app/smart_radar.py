@@ -228,12 +228,36 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         sentiments.update(finding.get("sentiment_counts") or {})
         geo_mentions.update(finding.get("geo_signal_counts") or {})
         verified_locations.update(finding.get("verified_incident_counts") or {})
+    # Keyword cloud is derived from the main keywords saved for each permitted
+    # campaign, counted against actual relevant saved post text (not topic labels).
+    # No additional source-row reads; the Inbox payload is already authorized.
+    from .models import MonitoringCampaign
+    from .access import allowed
+    keyword_counts=Counter()
+    linked_campaigns={int(r['campaign_id']) for r in inbox.get('findings',[])
+                      if str(r.get('campaign_id') or '').isdigit()}
+    configs=db.query(MonitoringCampaign).filter(MonitoringCampaign.id.in_(linked_campaigns)).all() if linked_campaigns else []
+    main_by_campaign={}
+    for campaign in configs:
+        if not allowed(principal,campaign):continue
+        try: values=json.loads(campaign.primary_keywords_json or '[]')
+        except (ValueError,TypeError): values=[]
+        main_by_campaign[campaign.id]=[
+            str(v).strip() for v in values if isinstance(v,str) and len(v.strip())>=3][:600]
+    for record in inbox.get('findings',[]):
+        cid=int(record.get('campaign_id') or 0)
+        source=str(record.get('text_content') or '').casefold()
+        if not source:continue
+        for word in main_by_campaign.get(cid,[]):
+            if re.search(r'(?<!\\w)'+re.escape(word.casefold())+r'(?!\\w)',source):
+                keyword_counts[word]+=1
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})
     return {"batch_id":None,"source_total":len(posts),
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),
+        "main_keyword_cloud":[{"keyword":k,"count":v} for k,v in keyword_counts.most_common(24)],
         "sentiment_counts":dict(sentiments),
         "geo_signal_counts":dict(geo_mentions),
         "verified_incident_counts":dict(verified_locations),

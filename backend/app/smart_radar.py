@@ -186,12 +186,37 @@ def access_findings(db,user):
     findings,_=live_inbox_findings(db,principal,fetch_states(db))
     return findings
 
+
+def _live_summary_signature(finding):
+    import hashlib
+    evidence=[(str(p.get('canonical_source_id') or p.get('result_id') or ''),
+               str(p.get('message_original') or '')) for p in finding.get('posts') or []]
+    return hashlib.sha256(json.dumps([finding['id'],evidence],ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+
+def attach_live_ai_summaries(db,findings):
+    saved=fetch_topic_summaries(db)
+    for finding in findings:
+        if finding.get('kind') not in ('discussion','narrative_candidate'):continue
+        row=saved.get(finding['id'])
+        if not row or row.get('source_signature')!=_live_summary_signature(finding):continue
+        details=row.get('insight_json')
+        if isinstance(details,str):details=json.loads(details)
+        insight=(details or {}).get('operations')
+        if not isinstance(insight,dict) or not insight.get('summary'):continue
+        finding['summary']=insight['summary']
+        finding['insights']={'operations':insight['summary']}
+        finding['ai_summary']=True
+        finding['ai_model']=row.get('model') or ''
+        finding['summary_evidence_sample']=(insight.get('source_ids') or [])[:5]
+    return findings
+
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
     response.headers["Cache-Control"]="private, no-store"
     from .inbox_radar import live_inbox_findings
     principal=authorised(db,user)
     findings,inbox=live_inbox_findings(db,principal,fetch_states(db))
+    attach_live_ai_summaries(db,findings)
     posts=[post for finding in findings for post in finding["posts"]]
     platforms=Counter(post["platform"] for post in posts)
     candidates=Counter()
@@ -229,7 +254,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
 @router.get("/finding/{finding_id}")
 def finding_detail(finding_id:str,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
     response.headers["Cache-Control"]="private, no-store"
-    result=next((f for f in access_findings(db,user) if f["id"]==finding_id),None)
+    result=next((f for f in attach_live_ai_summaries(db,access_findings(db,user)) if f["id"]==finding_id),None)
     if result is None:raise HTTPException(404,"Finding unavailable")
     return result
 

@@ -21,7 +21,8 @@ def _safe_strings(values):
     return list(dict.fromkeys(out))
 
 def _candidate_names(row):
-    names=_safe_strings(row.get('normalized_candidate_names'))
+    from .processing_hints import normalize_candidate_signals
+    names=normalize_candidate_signals(_safe_strings(row.get('normalized_candidate_names')))
     if names:return names
     raw=row.get('candidate_signals') or []
     if not isinstance(raw,list):return []
@@ -29,7 +30,7 @@ def _candidate_names(row):
     for item in raw:
         name=item if isinstance(item,str) else (item.get('name') or item.get('value') or '') if isinstance(item,dict) else ''
         if isinstance(name,str) and name.strip():result.append(name.strip()[:120])
-    return list(dict.fromkeys(result))
+    return normalize_candidate_signals(result)
 
 def _category(row):
     for signal in row.get('potential_issues') or []:
@@ -142,13 +143,12 @@ def compile_inbox_findings(rows,states=None):
         if g['kind']=='discussion' and recurring:
             g['title']=g['title'].replace('Monitored discussion','Recurring discussion')
         if g['kind']=='source_review':
-            g['summary']='Saved relevant Inbox evidence contains a preliminary, quote-validated potential violation or officer-review flag. Verify the original source and recorded officer decision; no legal determination is implied.'
+            g['summary']='A post raises a possible election-rule concern. The claim has not been confirmed and needs checking.'
         elif g['kind']=='discussion':
-            g['summary']=(str(len(evidence))+' distinct relevant Inbox source'+('s' if len(evidence)!=1 else '')+
-                ' discuss this saved topic. '+('Recurring discussion across at least two independent URLs and source accounts.' if recurring else
-                'This does not establish an emerging narrative, coordinated activity or a shared incident.'))
+            g['summary']=('People are discussing '+(g['title'].split(' · ',1)[-1] if ' · ' in g['title'] else 'an election-related issue')+
+                '. '+('The subject appears in several posts.' if recurring else 'This is an early discussion worth watching.'))
         else:
-            g['summary']='Relevant saved Inbox source without a classified topic. Original content requires officer interpretation.'
+            g['summary']='This election-related post is being monitored. Its topic has not yet been identified.'
         state=states.get(key) or {}
         g['status']=state.get('status') or ('pending' if g['attention'] else 'awareness')
         g['human_reviewed']=bool(state.get('first_reviewed_at'))

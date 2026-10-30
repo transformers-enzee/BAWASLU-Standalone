@@ -11,7 +11,7 @@ BLOCKED_ALIASES={'pemilu','pilkada','caleg','calon','presiden','bawaslu','kpu','
 MAX_ALIASES=30
 
 def normalized(value):
-    return ' '.join(str(value or '').casefold().split())
+    return re.sub(r'[^\\w]+','',str(value or '').casefold()).replace('_','')
 
 def validate_aliases(value,canonical=''):
     if not isinstance(value,list) or len(value)>MAX_ALIASES:
@@ -53,7 +53,11 @@ def candidate_index(db,p):
     for item in db.query(WatchlistItem).filter(WatchlistItem.type=='Candidate').all():
         if item.status=='Inactive' or not allowed(p,item):
             continue
+        from .processing_hints import CANDIDATE_ALIASES,normalize_candidate_signals
         names=[item.name,*aliases_for(item)]
+        canonical=normalize_candidate_signals([item.name])
+        if canonical and canonical[0] in CANDIDATE_ALIASES:
+            names.extend(CANDIDATE_ALIASES[canonical[0]])
         for n in names:
             key=normalized(n)
             if key:
@@ -97,9 +101,9 @@ def explicit_candidate_mentions(text,index):
     body=str(text or '').casefold()
     found=[]
     for alias,identities in index.items():
-        if len(alias.split())<2 or len(alias)<8 or len(identities)!=1:
+        if len(alias)<5 or len(identities)!=1:
             continue
-        if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',body):
+        if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',normalized(body)):
             found.append(alias)
     return sorted(set(found),key=lambda x:(-len(x),x))
 

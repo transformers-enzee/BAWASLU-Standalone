@@ -123,8 +123,9 @@ def triage_disposition(text, relevance_label):
     return 'NOT_AI_RELEVANT'
 
 CANDIDATE_ALIASES={
-    'Prabowo Subianto':('prabowo subianto',),
-    'Gibran Rakabuming Raka':('gibran rakabuming raka','gibran rakabuming'),
+    'Prabowo Subianto':('prabowo subianto','prabowo'),
+    'Gibran Rakabuming Raka':('gibran rakabuming raka','gibran rakabuming','gibran'),
+    'Anies Baswedan':('anies baswedan','anies','anisbaswedan','anis baswedan'),
 }
 def normalize_candidate_signals(signals):
     """Resolve only an explicitly known full-name alias; retain unknowns unaltered."""
@@ -140,7 +141,7 @@ def normalize_candidate_signals(signals):
         clean=re.sub(r'\s+',' ',str(name)).strip()
         if not clean:continue
         canonical=next((person for person,aliases in CANDIDATE_ALIASES.items()
-            if clean.casefold() in aliases),clean)
+            if re.sub(r'[^a-z0-9]+','',clean.casefold()) in {re.sub(r'[^a-z0-9]+','',a.casefold()) for a in aliases}),clean)
         if canonical.casefold() not in seen:
             resolved.append(canonical)
             seen.add(canonical.casefold())

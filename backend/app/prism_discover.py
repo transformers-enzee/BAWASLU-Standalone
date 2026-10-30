@@ -209,13 +209,17 @@ def store(db,run,c,items):
     existing=(db.query(SocialListeningResult).filter(or_(
         SocialListeningResult.provider_result_id.in_(ids),
         SocialListeningResult.canonical_url.in_(urls))).all())
-    by_id={str(x.provider_result_id):x for x in existing}
+    # SessionLocal uses autoflush=False. Deduplicate the provider's results
+    # before inserting assessments; a query inside the loop cannot see pending
+    # EvidenceAssessment rows and used to violate uq_evidence_assessment_version.
+    by_id={(str(x.platform).casefold(),str(x.provider_result_id)):x for x in existing}
     by_url={str(x.canonical_url):x for x in existing if x.canonical_url}
     pairs=[]
+    seen_result_ids=set()
     for raw in kept:
         source_id=str(raw['id'])[:255];platform=str(raw['platform'])[:100]
         url=str(raw.get('url') or '')[:2000]
-        row=by_id.get(source_id) or by_url.get(url)
+        row=by_id.get((platform.casefold(),source_id)) or (by_url.get(url) if url else None)
         if row is None:
             author=raw.get('author') or {}
             txt=str(raw.get('text') or '')[:8000]
@@ -234,11 +238,18 @@ def store(db,run,c,items):
                        'matched_keywords':raw.get('matched_keywords')})[:3000],
                 content_fingerprint=hashlib.sha256((platform+'|'+url+'|'+txt).encode()).hexdigest())
             db.add(row);db.flush()
-            by_id[source_id]=row
-        pairs.append((row,raw))
+        by_id[(platform.casefold(),source_id)]=row
+        if url:by_url[url]=row
+        if row.id not in seen_result_ids:
+            pairs.append((row,raw))
+            seen_result_ids.add(row.id)
+    result_ids=[r.id for r,_ in pairs]
     links={x[0] for x in db.query(CampaignEvidence.result_id).filter(
         CampaignEvidence.campaign_id==c.id,
-        CampaignEvidence.result_id.in_([r.id for r,_ in pairs])).all()}
+        CampaignEvidence.result_id.in_(result_ids)).all()}
+    assessed={x[0] for x in db.query(EvidenceAssessment.result_id).filter(
+        EvidenceAssessment.campaign_id==c.id,
+        EvidenceAssessment.result_id.in_(result_ids)).all()}
     new=[]
     for row,raw in pairs:
         if row.id not in links:
@@ -246,9 +257,9 @@ def store(db,run,c,items):
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
                     {'matched_keywords':raw.get('matched_keywords') or []})))
             links.add(row.id)
-        prev=db.query(EvidenceAssessment.id).filter(
-            EvidenceAssessment.campaign_id==c.id,EvidenceAssessment.result_id==row.id).first()
-        if prev:continue
+        # Preserve existing human/AI assessment versions and never create a
+        # second version=1 for a repeated source within the same batch.
+        if row.id in assessed:continue
         stance=((raw.get('judgments') or {}).get('stance') or {})
         relevance=((raw.get('judgments') or {}).get('relevance') or {}).get('p')
         provider_relevant=isinstance(relevance,(int,float)) and relevance>=0.5
@@ -260,6 +271,7 @@ def store(db,run,c,items):
             sentiment_explanation='Stance toward monitored campaign topic; not a general endorsement',
             explanation='Provider Discover collected; awaiting OpenAI topic analysis')
         db.add(assessment);new.append((row,assessment))
+        assessed.add(row.id)
     db.commit()
     enrich(db,c,new)
     return len(pairs)

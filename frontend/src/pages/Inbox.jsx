@@ -90,7 +90,7 @@ function SocialEvidenceInbox(){
   const interval=window.setInterval(refresh,5000);
   return()=>{cancelled=true;window.clearInterval(interval)};
  },[watchProgress,campaign]);
- async function refreshReviewedPost(post){
+ async function refreshReviewedPost(post,expectedStatus=null){
   try{
    const response=await base44.functions.invoke('socialListening',{
     action:'campaignIntelligenceInbox',
@@ -98,6 +98,8 @@ function SocialEvidenceInbox(){
    const refreshed=(response.data.findings||[]).find(item=>
     String(item.id)===String(post.id)&&String(item.campaign_id)===String(post.campaign_id));
    if(refreshed){
+    // Avoid overwriting a server-acknowledged decision with an older cached response.
+    if(expectedStatus&&refreshed.flag_review_status!==expectedStatus)return;
     setSelected(refreshed);
     setFindings(previous=>previous.map(item=>
      String(item.id)===String(post.id)&&String(item.campaign_id)===String(post.campaign_id)
@@ -129,7 +131,7 @@ function SocialEvidenceInbox(){
    const updated={...selected,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'};
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
    setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
-   await refreshReviewedPost(selected);
+   await refreshReviewedPost(selected,reviewDecision);
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
   finally{setReviewBusy(false)}
  }
@@ -149,7 +151,7 @@ function SocialEvidenceInbox(){
    setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
    setManualCategory('');setManualRationale('');setManualCue(null);
    setReviewNotice('Human-origin preliminary flag saved for further investigation; AI evidence unchanged.');
-   await refreshReviewedPost(selected);
+   await refreshReviewedPost(selected,'FURTHER_INVESTIGATION');
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save manual flag')}
   finally{setReviewBusy(false)}
  }
@@ -499,6 +501,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
          <div className="text-xs text-slate-500">{item.campaign_name} · {platformLabel(item.platform)}</div>
+         {String(item.model_version||'').toLowerCase()==='mock-fixture'&&<span className="inline-flex rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-800">Synthetic QA example</span>}
          <p className="line-clamp-2 text-sm text-slate-700 whitespace-pre-wrap">{item.text_content||'No text available'}</p>
          <p className="text-xs text-[#146a8b]">View source and assessment →</p>
         </div>
@@ -539,6 +542,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">
     <div className="p-4 border-b flex justify-between gap-3 items-center"><h3 className="font-semibold">Post preview · AI assessment</h3><button autoFocus type="button" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button></div>
     <div className="p-4 overflow-y-auto space-y-3 text-sm">
+      {String(selected.model_version||'').toLowerCase()==='mock-fixture'&&<div role="note" className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><strong>Synthetic QA example.</strong> This is not a real social-media post. Human verification required; do not treat this fixture as election evidence.</div>}
      <section className="rounded-xl border border-[#dce6e8] bg-[#f5f9f9] p-4 space-y-2">
       <h4 className="font-bold text-sm text-[#184e48]">Original source provenance</h4>
       <p className="text-xs text-slate-600">Source post ID: <code className="break-all">{selected.id||'Not supplied'}</code></p>

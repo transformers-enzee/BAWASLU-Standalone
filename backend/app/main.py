@@ -107,7 +107,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'113.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'113.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -508,13 +508,24 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     from .intelligence_assistant import (
       select_assistant_records,assistant_evidence_record,assistant_record_view,assistant_query_semantics,
       generate_openai_assistant_answer,format_assistant_answer,deterministic_assistant_answer,
-      AssistantProviderError
+      AssistantProviderError,is_general_knowledge_question,generate_general_openai_answer
     )
     p=profile(db,user)
     q=str(body.get('question','')).strip()
     if not q: raise HTTPException(400,'Question is required')
     if len(q)>500: raise HTTPException(400,'Question is too long')
     previous=str(body.get('previousQuestion','')).strip()[:500]
+    if is_general_knowledge_question(q):
+        try:
+            answer,provider=generate_general_openai_answer(q,previous)
+        except AssistantProviderError as exc:
+            raise HTTPException(503,'General knowledge AI unavailable: '+exc.code)
+        return {'answer':answer,'records':[],'provider':provider,
+                'grounding':{'accessible_count':0,'selected_count':0,
+                  'supporting_count':0,'scope':'OPENAI_GENERAL_NO_SYSTEM_DATA',
+                  'date_basis':'not_applicable','date_basis_label':'General knowledge',
+                  'date_basis_note':'No BAWASLU system records were accessed.',
+                  'window':None}}
     accessible=list_intelligence(db,p)
     selected=select_assistant_records(q,accessible,limit=12)
     evidence=[assistant_evidence_record(x) for x in selected]

@@ -396,3 +396,43 @@ def deterministic_assistant_answer(question, records, reason=''):
       'cited_record_ids':ids
     }
     return {'answer':format_assistant_answer(result),'cited_record_ids':ids}
+
+def is_general_knowledge_question(question):
+    """Conservative route: never send election or BAWASLU questions to ungrounded mode."""
+    q=str(question or '').casefold()
+    institutional=('bawaslu','kpu','pemilu','pilkada','pilpres','pemilihan','election','electoral',
+      'vote','voting','ballot','candidate','politic','politik','campaign','kampanye',
+      'intelligence','inbox','watchlist','source','evidence','sumber','bukti','data',
+      'pengawasan','violation','pelanggaran','public concern','social listening')
+    return not any(term in q for term in institutional)
+
+def generate_general_openai_answer(question, previous_question=''):
+    """General questions use OpenAI without exporting private system records."""
+    key=os.getenv('OPENAI_API_KEY','').strip()
+    if not key:raise AssistantProviderError('not_configured','OpenAI is not configured')
+    model=openai_triage_model()
+    base=os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL).strip().rstrip('/')
+    request={'model':model,'input':[
+      {'role':'system','content':(
+        'You are a general-purpose assistant. Answer the user question using general '
+        'knowledge and sound reasoning. You have not searched the web or accessed BAWASLU '
+        'records. Do not claim access to current live information or private records. '
+        'For time-sensitive facts, acknowledge that verification may be required. '
+        'Do not invent citations. Reply in the language of the question. Be concise.')},
+      {'role':'user','content':str(previous_question or '')[:300]+'\\n'+str(question or '')[:500]}
+    ],'max_output_tokens':650}
+    try:
+        with httpx.Client(timeout=25.0) as client:
+            response=client.post(base+'/responses',headers={
+              'Authorization':'Bearer '+key,'Content-Type':'application/json'},json=request)
+    except httpx.TimeoutException as exc:
+        raise AssistantProviderError('provider_timeout') from exc
+    except httpx.HTTPError as exc:
+        raise AssistantProviderError('provider_network') from exc
+    if response.status_code>=400:
+        raise AssistantProviderError('provider_http_'+str(response.status_code))
+    payload=response.json()
+    answer=_response_output_text(payload).strip()
+    if not answer:raise AssistantProviderError('provider_empty_output')
+    return answer,{'mode':'OPENAI_GENERAL_KNOWLEDGE','model':payload.get('model') or model,
+                   'response_id':payload.get('id') or ''}

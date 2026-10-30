@@ -295,10 +295,10 @@ def compile_inbox_findings(rows,states=None):
         if has_concern:
             g['topics'].add('Public Concerns')
             g['concern_descriptions'].append(_saved_concern_summary(row))
-        if 'BAWASLU Reputation' in topics:g['perspectives'].add('reputation')
+        if 'BAWASLU Reputation' in topics or (has_concern and not flagged):g['perspectives'].add('reputation')
         # Operational alerts and complaints must remain available in the
         # primary Command Centre view even when they concern BAWASLU itself.
-        if flagged or has_concern or 'Electoral Operations' in topics or 'BAWASLU Reputation' not in topics:
+        if flagged or 'Electoral Operations' in topics or ('BAWASLU Reputation' not in topics and not has_concern):
             g['perspectives'].add('operations')
         g['published_at']=max(g['published_at'],source['published_at_raw'])
     findings=[]

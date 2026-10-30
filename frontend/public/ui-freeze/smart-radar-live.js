@@ -284,6 +284,17 @@
     if(epoch!==dashboardEpoch)return;
     if(primary.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
     dashboard=primary;
+    // Geographic options reflect saved source mentions, not confirmed incident location.
+    const geoSelect=$('#geo');
+    if(geoSelect&&!geoSelect.disabled){
+      const current=geoSelect.value;
+      const provinces=Object.entries(dashboard.geo_signal_counts||{})
+        .filter(([name,count])=>name&&Number(count)>0&&name.toLowerCase()!=='indonesia')
+        .map(([name])=>name).sort((a,b)=>a.localeCompare(b));
+      geoSelect.innerHTML='<option value="all">Indonesia — National</option>'+provinces.map(name=>
+        '<option value="'+label(name)+'">'+label(name)+' (source mention · unverified)</option>').join('');
+      geoSelect.value=provinces.includes(current)?current:'all';
+    }
     ui.setData((dashboard.findings||[]).map(mapFinding));
     renderInboxLineage();
     document.body.classList.add('bawaslu-ready');

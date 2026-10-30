@@ -338,7 +338,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
  const locationsFor=x=>signalNames(x.location_signals).map(normalizedLocation);
  const structuredPlaces=x=>(x.location_signals||[]).filter(s=>s&&typeof s==='object'&&s.province&&s.regency_city).map(s=>({province:normalizedLocation(s.province),regency:String(s.regency_city).trim()}));
- const canonicalCandidate=name=>{const raw=String(name||'').trim(),key=raw.toLocaleLowerCase('id-ID');return {'prabowo':'Prabowo Subianto','prabowo subianto':'Prabowo Subianto','gibran':'Gibran Rakabuming Raka','gibran rakabuming':'Gibran Rakabuming Raka','gibran rakabuming raka':'Gibran Rakabuming Raka','cindymonica.id':'Cindy Monica','cindy monica':'Cindy Monica'}[key]||raw};
+ const canonicalCandidate=name=>{const raw=String(name||'').trim(),key=raw.toLocaleLowerCase('id-ID').replace(/^@/,'').replace(/[_\-.\s]+/g,'');return {prabowo:'Prabowo Subianto',prabowosubianto:'Prabowo Subianto',gibran:'Gibran Rakabuming Raka',gibranrakabuming:'Gibran Rakabuming Raka',gibranrakabumingraka:'Gibran Rakabuming Raka',anies:'Anies Baswedan',anis:'Anies Baswedan',aniesbaswedan:'Anies Baswedan',anisbaswedan:'Anies Baswedan',ganjar:'Ganjar Pranowo',ganjarpranowo:'Ganjar Pranowo',jokowi:'Joko Widodo',jokowidodo:'Joko Widodo',cakimin:'Muhaimin Iskandar',muhaiminiskandar:'Muhaimin Iskandar',cindymonicaid:'Cindy Monica',cindymonica:'Cindy Monica'}[key]||raw};
  const candidatesFor=x=>[...new Set(signalNames(x.candidate_signals).map(canonicalCandidate).filter(name=>name&&!name.startsWith('@')&&(!/^[a-z0-9_-]+[.][a-z0-9._-]+$/i.test(name)||name==='Cindy Monica')))];
  const unlocatedCount=useMemo(()=>findings.filter(x=>locationsFor(x).length===0).length,[findings]);
  const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
@@ -398,72 +398,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">
     <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
-    <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option><option value="UNCLASSIFIED">Unclassified</option></select></label>
+    <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option></select></label>
      <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
-  <section className="intel-card p-3 space-y-2" aria-label="Normalized Topics word cloud">
-    <h3 className="text-sm font-semibold">Normalized Topics · Keyword Word Cloud</h3>
-    <p className="text-xs text-slate-500">Most frequent saved topic and keyword labels in the currently filtered evidence. Size reflects distinct post mentions, not AI confidence.</p>
-    <div className="flex flex-wrap gap-x-3 gap-y-2 items-center min-h-16 max-h-44 overflow-auto" role="list">
-      {keywordCloud.length?keywordCloud.map(item=><span role="listitem" key={item.name} title={item.count+' matching posts'} className="text-teal-800 leading-snug" style={{fontSize:(12+Math.min(18,Math.sqrt(item.count)*4))+'px',fontWeight:item.count>=3?650:450}}>{item.name} <sup className="text-xs">{item.count}</sup></span>):<p className="text-xs text-slate-500">No saved topic labels in the current selection.</p>}
-    </div>
-  </section>
-  {processingSummary&&<section className="intel-card p-3 space-y-2" aria-label="Processing and QA diagnostics">
-   <h3 className="text-sm font-semibold">Processing and QA diagnostics</h3>
-   <p className="text-xs text-slate-500">Detailed classification screening stays in Command Centre. These controls are for assessment quality, coverage and acceptance checks.</p>
-   <details className="text-xs"><summary className="cursor-pointer font-semibold">Coverage and evidence diagnostics</summary><p className="mt-2 text-slate-600">Missing source URLs: {processingSummary.processing_diagnostics?.missing_field_counts?.canonical_url??0} · Unclassified sentiment: {processingSummary.processing_diagnostics?.missing_field_counts?.sentiment??0} · Attention cues with a source quote: {processingSummary.processing_diagnostics?.posts_with_source_quoted_attention_evidence??0} · Officer follow-up requested: {processingSummary.processing_diagnostics?.human_follow_up_requested??0}. Source-specific model usage is available separately. Dollar costs remain unavailable unless reported by the provider.</p></details>
-   <div className="space-y-2">
-     <button type="button" className="intel-ghost text-xs" disabled={qaBusy} onClick={loadQAHistory}>Compare saved Shahrin QA results (admin · free)</button>
-     {qaHistory&&<div className="text-xs space-y-2">
-       <p>Historical predictions only; holdout data excluded. Target: {qaHistory.target_accuracy_percent}%.</p>
-       {qaHistory.reference_signoff&&<section className="rounded border border-amber-200 p-2 space-y-1">
-         <strong>Analyst-label sign-off: {qaHistory.reference_signoff.analyst_approved}/{qaHistory.reference_signoff.total_imported}</strong>
-         <p>{qaHistory.reference_signoff.remaining_unsigned} labels still need a human decision; {qaHistory.reference_signoff.duplicate_source_unresolved} approved duplicate-source records still need source-relation reconciliation. Imported category labels are not automatically approved.</p>
-         <a className="underline" href="/smart-radar/qa">Open the authenticated QA Lab for analyst review</a>
-       </section>}
-       {(qaHistory.analyst_reviewed_accuracy||[]).length>0&&<div className="rounded border p-2">
-         <strong>Accuracy on analyst-approved labels only (not historical score)</strong>
-         {qaHistory.analyst_reviewed_accuracy.slice(0,8).map((row,i)=><p key={i}>{row.prompt_version}: {row.matched}/{row.reviewed_posts} ({row.accuracy_percent}%) · {row.official_acceptance_eligible?'Reference coverage adequate':'Not ready for formal acceptance'}</p>)}
-       </div>}<div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
-     {qaHistory?.error_patterns?.length>0&&<details className="rounded border p-2">
-      <summary className="cursor-pointer font-semibold">Most common saved category confusions · no new AI inference</summary>
-      <p>Historical Shahrin labels still await sign-off. Sealed holdout excluded.</p>
-      <div className="max-h-48 overflow-auto mt-2"><table className="w-full text-left"><thead><tr><th>Version</th><th>Expected</th><th>Predicted</th><th>Errors</th></tr></thead><tbody>
-       {qaHistory.error_patterns.map((x,i)=><tr key={i}><td>{x.prompt_version} · {x.cohort}</td><td>{x.expected_category}</td><td>{x.predicted_category}</td><td>{x.error_count}</td></tr>)}
-      </tbody></table></div>
-     </details>}
-     {qaError&&<p role="alert" className="text-red-700">{qaError}</p>}
-   </div>
-   {campaign&&<div className="space-y-2 border-t pt-2">
-      <button type="button" className="intel-ghost text-xs" disabled={summaryBusy} onClick={loadSummaryReadiness}>Inspect #12 AI summary readiness (free)</button>
-      {summaryReadiness&&<div className="text-xs rounded border p-2 space-y-1">
-       <strong>#12 remains IN PROGRESS until real saved AI drafts are verified.</strong>
-       <p>{summaryReadiness.posts_with_valid_saved_ai_drafts} / {summaryReadiness.visible_relevant_posts} relevant saved posts contain source-matched AI drafts. {summaryReadiness.posts_with_development_chatgpt_samples||0} are GPT-6 development samples; {summaryReadiness.posts_with_pipeline_ai_drafts||0} have app-pipeline drafts. {summaryReadiness.posts_needing_ai_drafts} still lack drafts.</p>
-       <p>Development drafts do not count as app-pipeline acceptance or human approval.</p>
-       <p>Suggested representative pilot source IDs: {(summaryReadiness.suggested_small_pilot_ids||[]).join(', ')||'None'}.</p>
-       <p>Viewing this evidence never calls an AI provider. Source excerpts are NOT AI summaries.</p>
-      </div>}
-      {summaryError&&<p role="alert" className="text-red-700 text-xs">{summaryError}</p>}
-      <button type="button" className="intel-ghost text-xs" disabled={acceptanceBusy} onClick={loadAcceptance}>Load production acceptance evidence (free)</button>
-      {acceptance&&<div className="space-y-2">
-       <p className="text-xs">{acceptance.relevant_posts} relevant saved / {acceptance.authorized_posts} authorized posts · {acceptance.unassessed_posts} unassessed · {acceptance.saved_groups_count} saved groups. No item below represents formal officer sign-off.</p>
-       <div className="rounded border p-2 space-y-1 text-xs">
-        <strong>Unfinished production acceptance — concrete next actions</strong>
-        {(acceptance.next_actions||[]).map((item,i)=><p key={i}>
-         <b>#{item.item} · {item.status.replaceAll('_',' ')}:</b> {item.instruction}
-        </p>)}
-        <p className="text-slate-500">Not marked DONE until all required evidence and approvals exist.</p>
-       </div>
-       <div className="max-h-72 overflow-y-auto space-y-1">{(acceptance.items||[]).map(x=><div key={x.number} className="rounded border p-2 text-xs">
-        <strong>#{x.number} · {x.name}</strong> — {x.production_state.replaceAll('_',' ')} · {x.supporting_records} supporting record(s)
-        <p className="text-slate-600">{x.note}</p></div>)}</div>
-      </div>}
-      {acceptanceError&&<p role="alert" className="text-xs text-red-700">{acceptanceError}</p>}
-    </div>}
-   {campaign&&<div className="space-y-2"><button type="button" className="intel-ghost text-xs" disabled={usageBusy} onClick={loadUsageDiagnostics}>Load AI usage and failure diagnostics (free)</button>{usageDiagnostics&&<p className="text-xs text-slate-600">Posts assessed: {usageDiagnostics.posts_with_assessment_version} / {usageDiagnostics.authorized_source_posts} · Failed jobs: {usageDiagnostics.failed_jobs} · Provider-reported tokens: {usageDiagnostics.ai_usage?.input_tokens_reported??0} input / {usageDiagnostics.ai_usage?.output_tokens_reported??0} output · Costs: {usageDiagnostics.ai_usage?.cost_status||'UNAVAILABLE'} · Missing source text: {usageDiagnostics.missing_fields?.content??0}</p>}{usageError&&<p role="alert" className="text-xs text-red-700">{usageError}</p>}</div>}
-  </section>}
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">
    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Source-linked grouping review</h3><p className="text-xs text-slate-500">Exact duplicates, incident clusters and Emerging Narratives · saved separately from legal findings.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={previewFindingGroups}>Preview groups (free)</button><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={loadFindingGroups}>Saved groups</button></div></div>
    {groupPreview&&<div className="text-xs space-y-2">
@@ -520,7 +459,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>
     </div>
-    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#0d9488'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706'],['UNCLASSIFIED','Unclassified','#cbd5e1']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
+    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#0d9488'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
     <p className="text-[11px] text-slate-500">Metrics are summed only where providers reported them. Missing values are not treated as zero. Sentiment is based on stored assessments.</p>
    </aside>
    <section className="intel-card p-3 h-full min-h-0" aria-label="Channel distribution"><h4 className="text-sm font-semibold text-[#365269]">Channel distribution</h4><div className="mt-3">

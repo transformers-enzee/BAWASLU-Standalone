@@ -11,6 +11,11 @@ if DATABASE_URL.startswith('postgresql://'):
 
 connect_args = {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
 engine_kwargs = {'future': True, 'connect_args': connect_args}
+if not DATABASE_URL.startswith('sqlite'):
+    # Bound connections against the shared Supabase session pool.
+    engine_kwargs.update(pool_size=2, max_overflow=0, pool_timeout=8,
+                         pool_recycle=120, pool_pre_ping=True)
+    connect_args['options'] = '-c idle_in_transaction_session_timeout=60000'
 if DATABASE_URL in ('sqlite:///:memory:', 'sqlite://'):
     engine_kwargs['poolclass'] = StaticPool
 engine = create_engine(DATABASE_URL, **engine_kwargs)

@@ -292,7 +292,7 @@
         .filter(([name,count])=>name&&Number(count)>0&&name.toLowerCase()!=='indonesia')
         .map(([name])=>name).sort((a,b)=>a.localeCompare(b));
       geoSelect.innerHTML='<option value="all">Indonesia — National</option>'+provinces.map(name=>
-        '<option value="'+label(name)+'">'+label(name)+' (source mention · unverified)</option>').join('');
+        '<option value="'+label(name)+'">'+label(name)+'</option>').join('');
       geoSelect.value=provinces.includes(current)?current:'all';
     }
     ui.setData((dashboard.findings||[]).map(mapFinding));

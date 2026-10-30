@@ -84,7 +84,8 @@ def test_private_qa_history_requires_admin_and_excludes_holdout():
 def test_inbox_renders_player_and_topic_evidence_and_shahrin_qa():
     from pathlib import Path
     source=(Path(__file__).resolve().parents[2]/'frontend/src/pages/Inbox.jsx').read_text()
-    for term in ('Open saved intelligence findings and source-grounded summaries',
-                'SAVED_AI_TOPIC','Saved AI draft (unverified)',
-                'campaignQAHistorySummary','Inspect source {id}'):
+    for term in ('Processing and QA diagnostics','campaignQAHistorySummary',
+                 'Source-linked grouping review','Original source provenance'):
         assert term in source
+    radar=(Path(__file__).resolve().parents[2]/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text()
+    assert 'playerOverview(fs,key)' in radar

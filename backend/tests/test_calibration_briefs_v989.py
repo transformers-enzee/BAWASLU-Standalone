@@ -37,5 +37,6 @@ def test_workbench_requires_explicit_click_before_saving_or_running():
          "calibration-draft","V18 candidate draft loaded"):
         assert needle in workbench
     assert "Saving a new immutable version is a separate action" in workbench
-    assert 'Source extract (not AI summary)' in inbox
+    assert 'Processing and QA diagnostics' in inbox
+    assert 'Original source provenance' in inbox
     assert 'paid_provider_called' not in "automatic model requests"

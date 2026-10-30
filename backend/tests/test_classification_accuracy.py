@@ -63,5 +63,7 @@ def test_inbox_ui_shows_saved_player_counts_without_paid_ai():
     from pathlib import Path
     frontend=(Path(__file__).resolve().parents[2]/'frontend/src/pages/Inbox.jsx').read_text(encoding='utf-8')
     assert 'classification_processing' in frontend
-    assert 'Five Intelligence Players · saved evidence screening' in frontend
-    assert 'No AI call is made to display these results' in frontend
+    assert 'Five Intelligence Players · saved evidence screening' not in frontend
+    assert 'Processing and QA diagnostics' in frontend
+    radar=(Path(__file__).resolve().parents[2]/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text()
+    assert 'Five Intelligence Players' in radar

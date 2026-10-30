@@ -80,7 +80,7 @@
   };
   function mapFinding(f) {
     return {
-      id: String(f.id), title: f.title || String(f.id),
+      id: String(f.id), kind:f.kind || '', title: f.title || String(f.id),
       p: (f.perspectives || [])[0] || 'operations',
       perspectives: f.perspectives || ['operations'], players: f.players || [],
       player: (f.players || [])[0] || 'narratives', topics: f.topics || [],

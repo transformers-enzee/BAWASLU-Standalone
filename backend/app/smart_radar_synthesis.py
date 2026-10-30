@@ -156,8 +156,9 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db)):
         findings=[f for f in access_findings(db,user)
                   if f.get('kind') in ('discussion','narrative_candidate') and f.get('posts')]
         existing={x['finding_id']:dict(x) for x in db.execute(text(
-            "SELECT finding_id,source_signature FROM pilot_smart_radar.topic_summaries")).mappings()}
-        pending=[f for f in findings if existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)]
+            "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries")).mappings()}
+        pending=[f for f in findings if existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)
+                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v2']
         # Do not retain DB transaction or Supabase pool connection during OpenAI calls.
         db.commit()
         for f in pending[:2]:

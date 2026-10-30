@@ -271,18 +271,18 @@ export default function CampaignPanel({campaignId=null}){
   try{
     preview=(await base44.functions.invoke('socialListening',{
       action:'campaignSentimentBatchPreview',id:selected.id,
-      data:{sample_limit:20,all_posts:true}})).data;
+      data:{sample_limit:20,all_remaining:true}})).data;
   }catch(e){setAiError('Unable to inspect campaign: '+(e.response?.data?.detail||e.message));return}
   const ids=preview.selected_ids||[];
   if(!ids.length){setBatchNotice('No eligible posts with source text in this campaign.');return}
-  if(!window.confirm('Re-analyze ALL '+ids.length+' accessible campaign posts using OpenAI, including posts with existing sentiment? Estimated '+ids.length+' billable API requests. '+(preview.missing_text||0)+' posts without text cannot be assessed. Every result is saved as a new assessment version. Continue?'))return;
+  if(!window.confirm('Analyze '+ids.length+' campaign posts with missing or Unclassified sentiment using OpenAI? Estimated '+ids.length+' billable API requests. '+(preview.missing_text||0)+' posts without text cannot be assessed. Every result is saved as a new assessment version. Continue?'))return;
   setAiBusy(true);setAiError('');
   let processed=0,classified=0,uncertain=0,failed=0;
   for(const result_id of ids){
     try{
       const response=await base44.functions.invoke('socialListening',{
         action:'campaignSentimentClassify',id:selected.id,
-        data:{result_id,confirm_ai_cost:true,force_ai_reassessment:true}});
+        data:{result_id,confirm_ai_cost:true}});
       processed++;
       if(String(response.data.sentiment).toUpperCase()==='UNCLASSIFIED')uncertain++;else classified++;
       setBatchNotice('OpenAI all-post analysis: '+processed+' / '+ids.length+' processed; '+classified+' classified, '+uncertain+' uncertain.');
@@ -558,8 +558,8 @@ export default function CampaignPanel({campaignId=null}){
  {thumbnailRecoveryMessage&&<p className="text-xs text-slate-600" role="status">{thumbnailRecoveryMessage}</p>}
  <div className="flex flex-wrap items-end gap-2"><label className="text-xs">Sentiment batch size<select aria-label="Sentiment batch size" className="intel-input mt-1" value={sentimentBatchSize} disabled={aiBusy} onChange={e=>{setSentimentBatchSize(Number(e.target.value));setBatchPreview(null)}}>{[1,5,10,20].map(n=><option key={n} value={n}>{n} posts</option>)}</select></label><button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview sentiment AI (free)</button></div>
  {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} potentially billable OpenAI requests for existing posts (up to {batchPreview.sample_limit}; no new crawl). Token costs are unknown. No processing starts until you confirm.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm sentiment analysis</button></div>}
- <button type="button" className="intel-button text-xs" disabled={aiBusy||!selected} onClick={analyzeAllCampaignSentiment}>{aiBusy?'Analyzing…':'Temporary: Re-analyze ALL campaign posts with OpenAI'}</button>
- <p className="text-xs text-slate-500">Explicit confirmation required. An OpenAI request is made for every accessible campaign post, including those with existing labels. Ambiguous or missing-text records are reported, not silently assigned Neutral.</p>
+ <button type="button" className="intel-button text-xs" disabled={aiBusy||!selected} onClick={analyzeAllCampaignSentiment}>{aiBusy?'Analyzing…':'Temporary: Analyze all Unclassified posts with OpenAI'}</button>
+ <p className="text-xs text-slate-500">Explicit confirmation required. Only missing/Unclassified posts are sent to OpenAI; existing classified labels remain unchanged. Ambiguous or missing-text records are reported, not silently assigned Neutral.</p>
  {batchNotice&&<p role="status" className="text-xs">{batchNotice}</p>}
  {aiError&&<p role="alert" className="text-xs text-red-700">{aiError}</p>}
  <button type="button" className="intel-ghost text-xs" disabled={!evidence.length} onClick={exportEvidenceCsv}>Export top posts to CSV (up to 200)</button> <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{await base44.externalImport.downloadCampaign(selected.id)}catch(e){setEvidenceError(e.message)}}}>Export all campaign records (CSV)</button>

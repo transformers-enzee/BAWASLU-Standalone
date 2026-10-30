@@ -48,7 +48,7 @@ function playerOverview(fs,key){
     '. The reported incidents and any responsibility remain unverified.';
  }
  if(key==='concerns'){
-  const ai=fs.filter(f=>f.ai_summary&&f.summary).map(f=>f.summary);
+  const ai=fs.filter(f=>f.kind==='discussion'&&f.ai_summary&&f.summary).map(f=>f.summary);
   if(ai.length)return ai.slice(0,2).join(' ');
   const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Public Concern: /,'').trim()).filter(Boolean))];
   const count=fs.reduce((n,f)=>n+(f.source_count||0),0);
@@ -56,7 +56,7 @@ function playerOverview(fs,key){
     '. These reports are not independently verified. Open the supporting evidence to review the original context.';
  }
  if(key==='narratives'){
-  const ai=fs.filter(f=>f.ai_summary&&f.summary).map(f=>f.summary);
+  const ai=fs.filter(f=>f.kind==='narrative_candidate'&&f.ai_summary&&f.summary).map(f=>f.summary);
   if(ai.length)return ai.slice(0,2).join(' ');
   const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Emerging Narrative: /,'').trim()).filter(Boolean))];
   const count=fs.reduce((n,f)=>n+(f.source_count||0),0);

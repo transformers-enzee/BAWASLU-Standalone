@@ -84,10 +84,10 @@ function SocialEvidenceInbox(){
     }
    }catch(e){if(!cancelled)setBacklogStatus('Progress refresh failed: '+(e.response?.data?.detail||e.message||'Unknown error'))}
    attempts++;
-   if(!cancelled&&attempts>=60){setWatchProgress(false);setBacklogStatus('Progress checking paused after five minutes. No assessment completion is implied.')}
+   if(!cancelled&&attempts>=15){setWatchProgress(false);setBacklogStatus('Progress checking paused after five minutes. No assessment completion is implied.')}
   };
   refresh();
-  const interval=window.setInterval(refresh,5000);
+  const interval=window.setInterval(refresh,20000);
   return()=>{cancelled=true;window.clearInterval(interval)};
  },[watchProgress,campaign]);
  async function refreshReviewedPost(post,expectedStatus=null){
@@ -403,6 +403,60 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
+  {processingSummary&&new URLSearchParams(window.location.search).get("debug")==="qa"&&<section className="intel-card p-3 space-y-2" aria-label="Processing and QA diagnostics">
+   <h3 className="text-sm font-semibold">Processing and QA diagnostics</h3>
+   <p className="text-xs text-slate-500">Detailed classification screening stays in Command Centre. These controls are for assessment quality, coverage and acceptance checks.</p>
+   <details className="text-xs"><summary className="cursor-pointer font-semibold">Coverage and evidence diagnostics</summary><p className="mt-2 text-slate-600">Missing source URLs: {processingSummary.processing_diagnostics?.missing_field_counts?.canonical_url??0} · Unclassified sentiment: {processingSummary.processing_diagnostics?.missing_field_counts?.sentiment??0} · Attention cues with a source quote: {processingSummary.processing_diagnostics?.posts_with_source_quoted_attention_evidence??0} · Officer follow-up requested: {processingSummary.processing_diagnostics?.human_follow_up_requested??0}. Source-specific model usage is available separately. Dollar costs remain unavailable unless reported by the provider.</p></details>
+   <div className="space-y-2">
+     <button type="button" className="intel-ghost text-xs" disabled={qaBusy} onClick={loadQAHistory}>Compare saved Shahrin QA results (admin · free)</button>
+     {qaHistory&&<div className="text-xs space-y-2">
+       <p>Historical predictions only; holdout data excluded. Target: {qaHistory.target_accuracy_percent}%.</p>
+       {qaHistory.reference_signoff&&<section className="rounded border border-amber-200 p-2 space-y-1">
+         <strong>Analyst-label sign-off: {qaHistory.reference_signoff.analyst_approved}/{qaHistory.reference_signoff.total_imported}</strong>
+         <p>{qaHistory.reference_signoff.remaining_unsigned} labels still need a human decision; {qaHistory.reference_signoff.duplicate_source_unresolved} approved duplicate-source records still need source-relation reconciliation. Imported category labels are not automatically approved.</p>
+         <a className="underline" href="/smart-radar/qa">Open the authenticated QA Lab for analyst review</a>
+       </section>}
+       {(qaHistory.analyst_reviewed_accuracy||[]).length>0&&<div className="rounded border p-2">
+         <strong>Accuracy on analyst-approved labels only (not historical score)</strong>
+         {qaHistory.analyst_reviewed_accuracy.slice(0,8).map((row,i)=><p key={i}>{row.prompt_version}: {row.matched}/{row.reviewed_posts} ({row.accuracy_percent}%) · {row.official_acceptance_eligible?'Reference coverage adequate':'Not ready for formal acceptance'}</p>)}
+       </div>}<div className="max-h-52 overflow-y-auto"><table className="w-full text-left"><thead><tr><th>Version</th><th>Correct</th><th>Accuracy</th><th>Reference status</th></tr></thead><tbody>{(qaHistory.versions||[]).map(v=><tr key={v.prompt_version+v.model}><td>{v.prompt_version}</td><td>{v.correct}/{v.evaluated}</td><td>{v.accuracy_percent??'N/A'}%</td><td>{v.unsigned_reference_labels?'Pending sign-off':'Approved labels'}</td></tr>)}</tbody></table></div></div>}
+     {qaHistory?.error_patterns?.length>0&&<details className="rounded border p-2">
+      <summary className="cursor-pointer font-semibold">Most common saved category confusions · no new AI inference</summary>
+      <p>Historical Shahrin labels still await sign-off. Sealed holdout excluded.</p>
+      <div className="max-h-48 overflow-auto mt-2"><table className="w-full text-left"><thead><tr><th>Version</th><th>Expected</th><th>Predicted</th><th>Errors</th></tr></thead><tbody>
+       {qaHistory.error_patterns.map((x,i)=><tr key={i}><td>{x.prompt_version} · {x.cohort}</td><td>{x.expected_category}</td><td>{x.predicted_category}</td><td>{x.error_count}</td></tr>)}
+      </tbody></table></div>
+     </details>}
+     {qaError&&<p role="alert" className="text-red-700">{qaError}</p>}
+   </div>
+   {campaign&&<div className="space-y-2 border-t pt-2">
+      <button type="button" className="intel-ghost text-xs" disabled={summaryBusy} onClick={loadSummaryReadiness}>Inspect #12 AI summary readiness (free)</button>
+      {summaryReadiness&&<div className="text-xs rounded border p-2 space-y-1">
+       <strong>#12 remains IN PROGRESS until real saved AI drafts are verified.</strong>
+       <p>{summaryReadiness.posts_with_valid_saved_ai_drafts} / {summaryReadiness.visible_relevant_posts} relevant saved posts contain source-matched AI drafts. {summaryReadiness.posts_with_development_chatgpt_samples||0} are GPT-6 development samples; {summaryReadiness.posts_with_pipeline_ai_drafts||0} have app-pipeline drafts. {summaryReadiness.posts_needing_ai_drafts} still lack drafts.</p>
+       <p>Development drafts do not count as app-pipeline acceptance or human approval.</p>
+       <p>Suggested representative pilot source IDs: {(summaryReadiness.suggested_small_pilot_ids||[]).join(', ')||'None'}.</p>
+       <p>Viewing this evidence never calls an AI provider. Source excerpts are NOT AI summaries.</p>
+      </div>}
+      {summaryError&&<p role="alert" className="text-red-700 text-xs">{summaryError}</p>}
+      <button type="button" className="intel-ghost text-xs" disabled={acceptanceBusy} onClick={loadAcceptance}>Load production acceptance evidence (free)</button>
+      {acceptance&&<div className="space-y-2">
+       <p className="text-xs">{acceptance.relevant_posts} relevant saved / {acceptance.authorized_posts} authorized posts · {acceptance.unassessed_posts} unassessed · {acceptance.saved_groups_count} saved groups. No item below represents formal officer sign-off.</p>
+       <div className="rounded border p-2 space-y-1 text-xs">
+        <strong>Unfinished production acceptance — concrete next actions</strong>
+        {(acceptance.next_actions||[]).map((item,i)=><p key={i}>
+         <b>#{item.item} · {item.status.replaceAll('_',' ')}:</b> {item.instruction}
+        </p>)}
+        <p className="text-slate-500">Not marked DONE until all required evidence and approvals exist.</p>
+       </div>
+       <div className="max-h-72 overflow-y-auto space-y-1">{(acceptance.items||[]).map(x=><div key={x.number} className="rounded border p-2 text-xs">
+        <strong>#{x.number} · {x.name}</strong> — {x.production_state.replaceAll('_',' ')} · {x.supporting_records} supporting record(s)
+        <p className="text-slate-600">{x.note}</p></div>)}</div>
+      </div>}
+      {acceptanceError&&<p role="alert" className="text-xs text-red-700">{acceptanceError}</p>}
+    </div>}
+   {campaign&&<div className="space-y-2"><button type="button" className="intel-ghost text-xs" disabled={usageBusy} onClick={loadUsageDiagnostics}>Load AI usage and failure diagnostics (free)</button>{usageDiagnostics&&<p className="text-xs text-slate-600">Posts assessed: {usageDiagnostics.posts_with_assessment_version} / {usageDiagnostics.authorized_source_posts} · Failed jobs: {usageDiagnostics.failed_jobs} · Provider-reported tokens: {usageDiagnostics.ai_usage?.input_tokens_reported??0} input / {usageDiagnostics.ai_usage?.output_tokens_reported??0} output · Costs: {usageDiagnostics.ai_usage?.cost_status||'UNAVAILABLE'} · Missing source text: {usageDiagnostics.missing_fields?.content??0}</p>}{usageError&&<p role="alert" className="text-xs text-red-700">{usageError}</p>}</div>}
+  </section>}
   {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">
    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Source-linked grouping review</h3><p className="text-xs text-slate-500">Exact duplicates, incident clusters and Emerging Narratives · saved separately from legal findings.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={previewFindingGroups}>Preview groups (free)</button><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={loadFindingGroups}>Saved groups</button></div></div>
    {groupPreview&&<div className="text-xs space-y-2">
@@ -538,7 +592,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   {backlog&&<div className="text-xs space-y-1"><p>{backlog.unassessed} pending links in this campaign · up to {backlog.batch_limit} AI requests this batch · 0 SocialCrawl credits.</p><p>AI provider: {backlog.ai_key_configured?'configured':'not configured'} · AI token costs vary by usage. No assessment is started by preview.</p><button className="intel-button text-xs" type="button" disabled={backlogBusy||!backlog.ai_key_configured||!backlog.batch_limit} onClick={startBacklog}>Confirm and assess up to {backlog.batch_limit} posts</button></div>}
   {backlogStatus&&<p className="text-xs" role="status">{backlogStatus}</p>}
   {(watchProgress||watchSnapshot)&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2" role="status" aria-live="polite">
-   <div className="flex justify-between gap-2 text-xs"><strong>Manual AI status</strong><span>{watchProgress?'Updating every 5 seconds':'Updates paused'}</span></div>
+   <div className="flex justify-between gap-2 text-xs"><strong>Manual AI status</strong><span>{watchProgress?'Updating every 20 seconds':'Updates paused'}</span></div>
    <div className="flex flex-wrap gap-4 text-xs"><span>Pending: {watchSnapshot?.PENDING??'—'}</span><span>Processing: {watchSnapshot?.PROCESSING??'—'}</span><span>Completed: {watchSnapshot?.COMPLETED??'—'}</span><span>Failed: {watchSnapshot?.FAILED??'—'}</span></div>
    <p className="text-[11px] text-slate-500">Campaign-wide stored job counts, not a batch percentage. Status checks make no paid AI or crawl requests.</p>
    <button type="button" className="intel-ghost text-xs" onClick={()=>setWatchProgress(v=>!v)}>{watchProgress?'Pause updates':'Resume free updates'}</button>

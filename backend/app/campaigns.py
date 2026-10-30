@@ -107,8 +107,8 @@ def _cloud_terms(text,counts):
 def _keywords(value,label,mandatory=False):
     if not isinstance(value,list):
         raise ValueError(label+' must be a list of keywords')
-    if len(value)>MAX_KEYWORDS:
-        raise ValueError(label+' exceeds 30 keywords')
+    if len(value)>600:
+        raise ValueError(label+' exceeds 600 keywords')
     found={}
     for entry in value:
         if not isinstance(entry,str):
@@ -199,7 +199,7 @@ def _keyword_search_plan(db,p,c):
     base=campaign_query(c)
     keywords=json.loads(c.primary_keywords_json or '[]')
     searches=[]
-    for keyword in keywords:
+    for keyword in keywords[:30]:
         filters={**base,'query':keyword}
         pre=search_preflight(db,p,filters)
         searches.append({'keyword':keyword,'filters':filters,'credits':int(pre['estimated_credits']),

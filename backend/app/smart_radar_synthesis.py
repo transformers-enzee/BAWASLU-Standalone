@@ -161,7 +161,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),pl
         existing={x['finding_id']:dict(x) for x in db.execute(text(
             "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries")).mappings()}
         pending=[f for f in findings if force or existing.get(f['id'],{}).get('source_signature')!=_live_summary_signature(f)
-                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v5']
+                 or existing.get(f['id'],{}).get('prompt_version')!='live-evidence-v6']
         # Do not retain DB transaction or Supabase pool connection during OpenAI calls.
         db.commit()
         # Topic guidance is optional and never substitutes for original evidence.
@@ -186,7 +186,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),pl
                     frequencies[topic_id]=frequencies.get(topic_id,0)+1
             related_topics=[saved_topics[k]['title'] for k in sorted(frequencies,key=lambda k:-frequencies[k])[:2]]
             instructions=(
-               'Write only in clear analytical English, with ONE paragraph of 45-65 words. ' 'Use a consistent structure: issue or public narrative; what the supporting posts say; what requires verification or monitoring. ' 'Avoid copying a caption, procedural filler, or a generic disclaimer. '
+               'Write only in clear analytical English, with ONE paragraph of 45-65 words. Never answer in Indonesian. ' 'Use a consistent structure: issue or public narrative; what the supporting posts say; what requires verification or monitoring. ' 'Avoid copying a caption, procedural filler, or a generic disclaimer. '
                'For source_review: distinguish the reported potential violation, source context, and specific verification steps without asserting guilt. '
                'For discussion: explain what citizens report or request, and the practical procedural or service concern. Use the current source-grounded electoral operations topic only when it matches evidence. '
                'For narrative_candidate: identify the repeated framing or allegation, how posts relate, and connect relevant current conversational topics without inferring a fabricated trend. '
@@ -206,7 +206,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),pl
                            'supporting_posts':len(f['posts']),'related_electoral_topics':related_topics,'sampled_posts':samples},ensure_ascii=False)}],
                'text':{'format':{'type':'json_schema','name':'bawaslu_live_summary',
                                  'strict':True,'schema':schema}},
-               'max_output_tokens':450}
+               'max_output_tokens':800}
             try:
                 with httpx.Client(timeout=45) as client:
                     response=client.post(
@@ -230,7 +230,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),pl
                     output_tokens=excluded.output_tokens,generated_at=now()"""),
                     {'id':f['id'],'sig':_live_summary_signature(f),
                      'model':str(response.json().get('model') or openai_triage_model()),
-                     'version':'live-evidence-v5','insights':json.dumps(insights),
+                     'version':'live-evidence-v6','insights':json.dumps(insights),
                      'count':len(samples),
                      'input':int((response.json().get('usage') or {}).get('input_tokens') or 0),
                      'output':int((response.json().get('usage') or {}).get('output_tokens') or 0)})
@@ -238,7 +238,7 @@ def summarize_live(user:User=Depends(current_user),db:Session=Depends(get_db),pl
                 generated.append(f['id'])
             except (httpx.HTTPError,ValueError,KeyError,TypeError,json.JSONDecodeError) as exc:
                 db.rollback()
-                log.warning('Live synthesis failed for finding %s: %s: %s',f['id'],type(exc).__name__,str(exc)[:160])
+                log.exception('Live synthesis failed for finding %s: %s: %s',f['id'],type(exc).__name__,str(exc)[:160])
                 raise HTTPException(502,'Live AI synthesis failed; previously saved summaries remain available') from exc
         invalidate_topic_cache()
         return {'player':player or 'automatic','generated':generated,'remaining':max(0,len(pending)-len(generated)),

@@ -286,10 +286,10 @@
       const result=await request('/api/smart-radar/summarize-live?player='+encodeURIComponent(player)+'&force=true',
         {method:'POST',body:'{}'});
       await refresh();
-      const resultText=(result.generated||[]).length+' intelligence summaries regenerated.';
+      const resultText=(result.generated||[]).length+' intelligence summaries regenerated; '+(result.remaining||0)+' findings remaining.';
       const toast=$('#toast');if(toast){toast.textContent=resultText;toast.style.display='block';}
     }catch(error){
-      const toast=$('#toast');if(toast){toast.textContent='AI regeneration failed: '+error.message;toast.style.display='block';}
+      const toast=$('#toast');if(toast){toast.textContent='AI regeneration failed: '+error.message;toast.style.display='block';}console.warn('Player refresh failed',player,error);
     }finally{refreshingPlayers.delete(player);button.disabled=false;button.textContent='↻';}
   });
   async function boot() {

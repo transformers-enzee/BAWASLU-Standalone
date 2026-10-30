@@ -1,6 +1,6 @@
-"""Phase-3 Smart Radar API. Reads original 109 source posts, not synthetic demo data.
-This is a PILOT heuristic view; AI-scored findings should replace heuristic groups after review.
-No Supabase credentials are sent to the browser. Routes use app authentication and role grants.
+"""Smart Radar API: operational evidence comes only from saved Intelligence Inbox.
+
+Historical pilot helpers stay for archival source lineage, not live findings.
 """
 from collections import Counter, defaultdict
 import json
@@ -35,10 +35,7 @@ def authorised(db, user, decision=False):
     p = profile(db, user)
     if not has(p, "human_validation" if decision else "view_intelligence"):
         raise HTTPException(403, "BAWASLU permission required")
-    # Pilot records have no verified event-location assignments. Showing them as a
-    # provincial feed would violate geographic ACL and imply false precision.
-    if p.get("geographic_scope") != "Nationwide":
-        raise HTTPException(403, "Pilot records require verified jurisdiction before regional access")
+    # Inbox enforces campaign and source-level regional permissions.
     return p
 
 # Per-instance bounded cache of static pilot data only, never officer decisions.
@@ -183,48 +180,38 @@ def build_findings(posts, states, assessments=None):
     return build_topic_findings(posts, states, assessments or {}, actors, source_view)
 
 def access_findings(db,user):
-    authorised(db,user)
-    findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
-    cached=fetch_topic_summaries(db)
-    for f in findings:
-        row=cached.get(f["id"])
-        if not row or row.get("source_signature")!=f["source_signature"]:
-            continue
-        output=row.get("insight_json") or {}
-        if isinstance(output,str):
-            try:output=json.loads(output)
-            except ValueError:output={}
-        if not isinstance(output,dict):continue
-        matched=False
-        for lens in f["perspectives"]:
-            item=output.get(lens)
-            if isinstance(item,dict) and isinstance(item.get("summary"),str) and item["summary"].strip():
-                f["insights"][lens]=item["summary"].strip()[:900]
-                f.setdefault("insight_sources",{})[lens]=item.get("source_ids",[])
-                matched=True
-        if matched:
-            f["ai_summary"]=True
-            f["summary"]=f["insights"].get("operations") or f["insights"].get("reputation")
-            f["ai_model"]=row.get("model")
-            f["summary_evidence_sample"]=row.get("sample_count")
-    return attach_geo_to_findings(findings,db)
+    """Dashboard and finding details use the SAME saved Inbox source of truth."""
+    from .inbox_radar import live_inbox_findings
+    principal=authorised(db,user)
+    findings,_=live_inbox_findings(db,principal,fetch_states(db))
+    return findings
 
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
     response.headers["Cache-Control"]="private, no-store"
-    findings=access_findings(db,user)
-    posts=fetch_sources(db)
-    platform_counts=Counter((p.get("platform") or "Unknown").title() for p in posts)
-    mention_counts=Counter()
-    for p in posts: mention_counts.update(set(actors(p["message_original"])))
-    return {"batch_id":BATCH,"source_total":len(posts),"source_unique_urls":len(set(p["source_url"] for p in posts)),
-        "findings":[{k:v for k,v in f.items() if k!="posts"} for f in findings],
-        "platform_counts":dict(platform_counts),
-        "candidate_mentions":mention_counts.most_common(10),
-        "reviewed_total":sum(x["human_reviewed"] for x in findings),
-        "mode":"PARTIAL_ASSESSMENT" if fetch_assessments(db) else "PRELIMINARY_TOPIC_GROUPING", "scoring_ready":bool(fetch_assessments(db)),
-        "disclaimer":"Evidence-linked themes are preliminary. Suggested officer reviews are not legal findings; only saved AI assessments have scores. All source claims remain unverified.",
-        "jurisdictions":["Indonesia - National"],"timezone":"Asia/Jakarta"}
+    from .inbox_radar import live_inbox_findings
+    principal=authorised(db,user)
+    findings,inbox=live_inbox_findings(db,principal,fetch_states(db))
+    posts=[post for finding in findings for post in finding["posts"]]
+    platforms=Counter(post["platform"] for post in posts)
+    candidates=Counter()
+    sentiments=Counter()
+    for finding in findings:
+        candidates.update(finding.get("actor_mentions") or {})
+        sentiments.update(finding.get("sentiment_counts") or {})
+    return {"batch_id":None,"source_total":len(posts),
+        "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
+        "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
+        "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),
+        "sentiment_counts":dict(sentiments),
+        "reviewed_total":sum(bool(finding["human_reviewed"]) for finding in findings),
+        "mode":"SAVED_INBOX_SOURCE_OF_TRUTH","scoring_ready":False,
+        "feed_source":"CAMPAIGN_INTELLIGENCE_INBOX_SAVED_ASSESSMENTS",
+        "inbox_source_scope":"PERMISSION_SCOPED_RELEVANT_ONLY",
+        "inbox_window_limit":300,
+        "truncated_to_inbox_window":len(inbox.get("findings") or [])>=300,
+        "disclaimer":"Only authorized, relevant saved Inbox assessments. Topic groups do not establish a shared incident or legal conclusion. No AI calls.",
+        "jurisdictions":[],"timezone":"Asia/Jakarta","paid_provider_called":False}
 
 @router.get("/finding/{finding_id}")
 def finding_detail(finding_id:str,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -257,7 +244,8 @@ class Decision(BaseModel):
 @router.post("/decision")
 def decision(body:Decision,user:User=Depends(current_user),db:Session=Depends(get_db)):
     authorised(db,user,decision=True)
-    findings=build_findings(fetch_sources(db),fetch_states(db),fetch_assessments(db))
+    # Never permit old pilot finding IDs to receive new operational decisions.
+    findings=access_findings(db,user)
     f=next((x for x in findings if x["id"]==body.finding_id),None)
     if not f:raise HTTPException(404,"Finding does not exist")
     old=f["status"]

@@ -5,22 +5,18 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
-  let savedCampaignFlags=null;
-  function renderSharedFlags(){
-    const host=$('#kpis');if(!host)return;
+  function renderInboxLineage(){
+    const anchor=$('#kpis');if(!anchor)return;
     let panel=$('#sharedCampaignViolationAssessments');
-    if(!panel){panel=document.createElement('section');panel.id='sharedCampaignViolationAssessments';
-      panel.setAttribute('aria-label','Shared saved potential-violation assessments');
-      panel.style.cssText='margin:14px 0;padding:18px;border:1px solid #bdded6;border-radius:12px;background:#f3fbf8';
-      host.insertAdjacentElement('afterend',panel);}
-    if(!savedCampaignFlags){panel.innerHTML='<b>Shared Campaign Potential Violations</b><p class="small muted">Campaign assessment feed unavailable. Pilot findings remain separate.</p>';return;}
-    const rows=savedCampaignFlags.alerts||[], total=Number(savedCampaignFlags.indicators?.potential_alerts||0);
-    panel.innerHTML='<b>Shared Campaign Potential Violations · '+total+' saved flags</b>'+
-      '<p class="small muted">Same saved assessment versions and officer decisions as Intelligence Inbox and Watchlist. Preliminary, not legal findings. Campaign evidence is separate from historical pilot groups.</p>'+
-      (rows.length?rows.slice(0,10).map(a=>'<p class="small" style="padding:10px;background:white;border:1px solid #dce5ed;border-radius:8px"><b>'+
-      escapeHtml(a.category||'Potential issue')+'</b> · '+escapeHtml(a.violation_uncertainty||'UNVERIFIED_AI_INDICATOR')+
-      ' · Assessment v'+escapeHtml(a.assessment_version||'—')+
-      '<a href="/inbox?campaign_id='+encodeURIComponent(a.campaign_id)+'&result_id='+encodeURIComponent(a.result_id)+'" target="_top"> · Open same source in Inbox →</a></p>').join(''):'<p class="small muted">No saved flags in authorized campaign evidence; no coverage guarantee.</p>');
+    if(!panel){panel=document.createElement('section');
+      panel.id='sharedCampaignViolationAssessments';
+      panel.setAttribute('aria-label','Current Intelligence Inbox evidence source');
+      panel.style.cssText='margin:12px 0;padding:12px 16px;border:1px solid #bdded6;border-radius:10px;background:#f3fbf8';
+      anchor.insertAdjacentElement('afterend',panel);}
+    const total=Number(dashboard?.source_total||0);
+    panel.innerHTML='<b>Live Intelligence Inbox · '+total+' relevant saved source'+(total===1?'':'s')+'</b>'+
+      '<p class="small muted">All operational findings below reuse the authorized Intelligence Inbox classifications and original source IDs. Legacy pilot posts are not included. Review decisions do not establish legal guilt.</p>'+
+      (dashboard?.truncated_to_inbox_window?'<p class="small" role="status">The Inbox response currently caps findings at 300; this view may be incomplete.</p>':'');
   }
   let busy = false;
   const accessToken = () => localStorage.getItem('bawaslu_access_token') || '';
@@ -125,10 +121,10 @@
     const reviewed = filtered.filter(f => f.human_reviewed).length;
     const nPosts = countPosts(filtered);
     $('#executive').textContent = dashboard ?
-      'The current evidence-linked staging view contains ' + filtered.length + ' intelligence groups covering ' +
-      nPosts + ' original source posts. ' + pending + ' group(s) await officer review and ' +
-      reviewed + ' have a recorded review. Source claims remain unverified until assessed.' :
-      'Loading authorised staging data...';
+      'Intelligence Inbox provides '+nPosts+' relevant saved source posts across '+filtered.length+
+      ' evidence-linked groups. '+pending+' group(s) await officer review and '+reviewed+
+      ' have recorded triage decisions. Relevant is not equivalent to a verified legal violation.' :
+      'Loading authorized Inbox evidence...';
     $('#kpis').innerHTML = [[filtered.length,'Issues Identified'],[pending,'Pending Reviews'],[reviewed,'Reviewed Issues'],[nPosts,'Supporting Posts']]
       .map(([value, name]) => '<div><strong>' + value + '</strong><span>' + name + '</span></div>').join('');
     const mentions = asRows(addCounts(filtered,'actor_mentions')).slice(0,10);
@@ -140,8 +136,8 @@
       '<p class="small muted">No candidate mentions in this selection.</p>';
     $('#ranking').removeAttribute('data-insight');
     $('#rankTitle').textContent = perspective === 'operations' ? 'Top 10 Candidate Mentions' : 'Most Discussed Institutional Themes';
-    $('#watch').innerHTML = '<p class="small"><b>Candidate Watchlist</b> — Activated candidate profiles are managed in a separate module. Their own verified posts and mentions by others are tracked separately.</p><div class="divider"></div>' +
-      '<a class="watch-link" href="/watchlist" target="_top">Open Candidate Watchlist →</a>' +
+    $('#watch').innerHTML = '<p class="small"><b>Candidate Watchlist</b> — Candidate profiles are managed inside Social Listening. Own posts and earned mentions are separate saved evidence, not proof of wrongdoing.</p><div class="divider"></div>' +
+      '<a class="watch-link" href="/social-listening" target="_top">Open Social Listening Candidate Watchlist →</a>' +
       '<p class="small muted">A mention alone is not evidence of wrongdoing.</p>';
     $('#watch').removeAttribute('data-insight');
     const topicCounts = {};
@@ -152,10 +148,11 @@
     $('#cloud').innerHTML = topics.slice(0,12).map(([name],i) =>
       '<span style="font-size:'+(18-i%3*2)+'px">'+label(name)+'</span>').join('');
     $('#trend').innerHTML = trendSvg(asRows(addCounts(filtered,'day_counts')));$('#trend').setAttribute('data-insight','trend');
-    $('#regions').innerHTML = '<p class="small muted">Incident-level geography has not been verified for this pilot batch. No province totals are inferred from account locations.</p>';
+    $('#regions').innerHTML = '<p class="small muted">Campaign and regional permissions follow Intelligence Inbox. Incident geography is not inferred from account or monitoring locations.</p>';
     $('#regions').removeAttribute('data-insight');
-    $('#sentimentExplain').textContent = 'No post-level sentiment labels are supplied by the current Smart Radar pilot API.';
-    $('#sentiments').innerHTML = '<p class="small muted">No verified sentiment distribution available.</p>';
+    $('#sentimentExplain').textContent = 'Saved sentiment classifications from relevant Inbox posts. Unclassified is not Neutral.';
+    const sentimentRows=asRows(addCounts(filtered,'sentiment_counts'));
+    $('#sentiments').innerHTML = miniBars(sentimentRows,Math.max(1,...sentimentRows.map(r=>r[1])));
     const platforms = asRows(addCounts(filtered,'platform_counts'));
     $('#platforms').innerHTML = platforms.map(([name,count]) =>
       '<button class="insightclick" data-insight="platform:'+label(name)+'"><div class="row small"><span>'+label(name)+
@@ -163,8 +160,8 @@
       (count/Math.max(1,...platforms.map(row=>row[1]))*100)+
       '%;background:#5588a8"></div></div></button>').join('') ||
       '<p class="small muted">No saved platforms for this view.</p>';
-    $('#trendsAiSummary').textContent = nPosts + ' linked posts are distributed across ' + filtered.length +
-      ' preliminary groups. The activity and platform charts use saved source data. No independent geographic or sentiment conclusions have been generated.';
+    $('#trendsAiSummary').textContent = nPosts + ' relevant saved Inbox posts support ' + filtered.length +
+      ' preliminary groups. Activity, platforms and sentiment reuse saved source annotations; no additional AI processing occurs.';
     $('#strategy').textContent = 'Review supporting posts and saved assessments before prioritising officer action. Unverified mentions and discussion levels are not proof of electoral violations.';
     $('#trend').closest('.chartcard').querySelector('.small').textContent = 'Recorded source-post publication dates';
     document.querySelectorAll('.demo').forEach(el => {
@@ -178,11 +175,9 @@
   ui.decorate = decorate;
   async function refresh() {
     dashboard = await request('/api/smart-radar/dashboard');
+    if(dashboard.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
     ui.setData((dashboard.findings || []).map(mapFinding));
-    try{savedCampaignFlags=await request('/api/functions/commandCenter',
-      {method:'POST',body:JSON.stringify({period:'all'})});}
-    catch(error){savedCampaignFlags=null;}
-    renderSharedFlags();
+    renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
   }
   async function boot() {
@@ -201,32 +196,11 @@
       await refresh();
     } catch (error) {
       document.body.classList.add('bawaslu-ready');
-      const regionalPilotBlocked = error.message.includes('Pilot records require verified jurisdiction before regional access');
-      const region = access?.province || 'your assigned region';
-      const role = access?.role || 'Viewer';
-      if (regionalPilotBlocked) {
-        const jurisdiction=$('#geo');
-        if (jurisdiction) {
-          jurisdiction.options[0].textContent=region+' — regional access only';
-          jurisdiction.disabled=true;
-        }
-        const scope=$('#scopeLabel');
-        if (scope) scope.textContent=region+' · Restricted pilot';
-      }
-      const message = regionalPilotBlocked
-        ? 'Smart Radar pilot data is not available for ' + region + ' (' + role + '). These national pilot posts have no verified event-level jurisdiction and cannot be displayed as regional intelligence. No authorised regional findings are available in this pilot view.'
-        : 'Unable to load authorised Smart Radar data: ' + error.message;
+      const region = access?.province || 'your assigned scope';
+      const message = 'Unable to load authorized Intelligence Inbox evidence for Smart Radar: '+error.message;
       ui.setData([]);
-      // setData renders the frozen prototype and rewrites scopeLabel to National.
-      // Apply the verified access scope after that render, never to the source data.
-      if (regionalPilotBlocked && $('#scopeLabel')) $('#scopeLabel').textContent=region+' · Restricted pilot';
-      if (regionalPilotBlocked) {
-        const welcome=$('.noticebar');
-        if (welcome) {
-          welcome.setAttribute('aria-label','Pilot data unavailable for regional Viewer');
-          const intro=welcome.querySelector('p');
-          if (intro) intro.textContent='No verified regional pilot baseline is available for this account. The national pilot cannot be used to claim new East Java issues.';
-        }
+      if (access?.geographic_scope !== 'Nationwide' && $('#scopeLabel')) {
+        $('#scopeLabel').textContent=region+' · Source-scope restricted';
       }
       $('#executive').textContent = message;
       const status=$('#startup-status');
@@ -248,7 +222,7 @@
       post.published_at_raw || 'Unknown time',
       post.message_original || '',
       post.source_url || '',
-      post.pilot_post_id || '',
+      post.canonical_source_id || '',
       post.platform || ''
     ]);
     try {
@@ -306,7 +280,7 @@
     const detail = $('#drawerSubtitle').textContent || '';
     const findingId = (ui.db().find(f=>detail.includes(f.id))||{}).id;
     if(!findingId) {ui.notify('Open a finding before submitting a decision.');return;}
-    const map={closed:'close',investigating:'investigate',monitoring:'monitor',escalated:'escalate',reopen:'reopen',update:'update'};
+    const map={queue:'queue',closed:'close',investigating:'investigate',monitoring:'monitor',escalated:'escalate',reopen:'reopen',update:'update'};
     const note=$('#note')?.value?.trim()||'';
     const next_followup=$('#follow')?.value||null;
     try {

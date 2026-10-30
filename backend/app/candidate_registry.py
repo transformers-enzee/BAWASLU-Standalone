@@ -103,7 +103,7 @@ def explicit_candidate_mentions(text,index):
     for alias,identities in index.items():
         if len(alias)<5 or len(identities)!=1:
             continue
-        if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',normalized(body)):
+        if re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',body):
             found.append(alias)
     return sorted(set(found),key=lambda x:(-len(x),x))
 

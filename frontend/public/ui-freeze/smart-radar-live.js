@@ -5,6 +5,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const label = value => escapeHtml(value);
   let dashboard = null;
+  let activityWindow='30';
   const refreshingPlayers=new Set();
   let issueDistribution = null;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
@@ -155,7 +156,11 @@
   }
   function trendSvg(rows) {
     if(!rows.length)return '<p class="small muted">No publication dates in this selection.</p>';
-    const dates=[...rows].sort((a,b)=>a[0].localeCompare(b[0])).slice(-12);
+    const sorted=[...rows].sort((a,b)=>a[0].localeCompare(b[0]));
+    const latest=new Date(sorted[sorted.length-1][0]+'T00:00:00Z');
+    const days=Number(activityWindow);
+    const cutoff=new Date(latest.getTime()-(days-1)*86400000).toISOString().slice(0,10);
+    const dates=(activityWindow==='all'?sorted:sorted.filter(([d])=>d>=cutoff)).slice(-90);
     const max=Math.max(1,...dates.map(x=>Number(x[1])));
     const pts=dates.map(([day,count],i)=>({day,count:Number(count),x:23+i*(dates.length>1?275/(dates.length-1):0),y:125-Number(count)/max*95}));
     return '<div style="position:relative"><svg viewBox="0 0 320 155" width="100%" aria-label="Daily post activity: hover or focus a point for the exact count" role="img">'+
@@ -291,6 +296,11 @@
     }catch(error){
       const toast=$('#toast');if(toast){toast.textContent='AI regeneration failed: '+error.message;toast.style.display='block';}console.warn('Player refresh failed',player,error);
     }finally{refreshingPlayers.delete(player);button.disabled=false;button.textContent='↻';}
+  });
+  document.addEventListener('change',event=>{
+    if(event.target?.id!=='activityTimeframe')return;
+    activityWindow=event.target.value;
+    decorate();
   });
   async function boot() {
     let access = null;

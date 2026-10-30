@@ -367,6 +367,20 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  }),[findings,view,term,sentimentFilter,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
  const ordered=useMemo(()=>[...filtered].sort((a,b)=>{const da=Date.parse(a.published_at||a.post_time||a.created_at||0)||0,db=Date.parse(b.published_at||b.post_time||b.created_at||0)||0;return sortDate==='newest'?db-da:da-db}),[filtered,sortDate]);
  const summary=useMemo(()=>{const counts={POSITIVE:0,NEGATIVE:0,NEUTRAL:0,UNCLASSIFIED:0};let engagement=0,views=0,engagementAvailable=0,viewsAvailable=0;for(const item of filtered){if(typeof item.engagement_total==='number'){engagement+=item.engagement_total;engagementAvailable++}if(typeof item.views==='number'){views+=item.views;viewsAvailable++}const raw=String(item.sentiment||'').toUpperCase();counts[['POSITIVE','NEGATIVE','NEUTRAL'].includes(raw)?raw:'UNCLASSIFIED']++}return {engagement,views,engagementAvailable,viewsAvailable,counts}},[filtered]);
+ const keywordCloud=useMemo(()=>{
+  const counts=new Map();
+  for(const post of filtered){
+    const labels=[...(post.topic_labels||[]),...(post.main_keywords||[]),...(post.secondary_keywords||[])];
+    const seen=new Set();
+    for(const item of labels){
+      const name=String(typeof item==='string'?item:(item?.name||item?.label||'')).trim();
+      if(!name||seen.has(name.toLowerCase()))continue;
+      seen.add(name.toLowerCase());const key=name.toLowerCase();
+      const old=counts.get(key)||{name,count:0};old.count++;counts.set(key,old);
+    }
+  }
+  return [...counts.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,22);
+ },[filtered]);
  const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
@@ -389,6 +403,13 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
    </div>
   </div>
+  <section className="intel-card p-3 space-y-2" aria-label="Normalized Topics word cloud">
+    <h3 className="text-sm font-semibold">Normalized Topics · Keyword Word Cloud</h3>
+    <p className="text-xs text-slate-500">Most frequent saved topic and keyword labels in the currently filtered evidence. Size reflects distinct post mentions, not AI confidence.</p>
+    <div className="flex flex-wrap gap-x-3 gap-y-2 items-center min-h-16 max-h-44 overflow-auto" role="list">
+      {keywordCloud.length?keywordCloud.map(item=><span role="listitem" key={item.name} title={item.count+' matching posts'} className="text-teal-800 leading-snug" style={{fontSize:(12+Math.min(18,Math.sqrt(item.count)*4))+'px',fontWeight:item.count>=3?650:450}}>{item.name} <sup className="text-xs">{item.count}</sup></span>):<p className="text-xs text-slate-500">No saved topic labels in the current selection.</p>}
+    </div>
+  </section>
   {processingSummary&&<section className="intel-card p-3 space-y-2" aria-label="Processing and QA diagnostics">
    <h3 className="text-sm font-semibold">Processing and QA diagnostics</h3>
    <p className="text-xs text-slate-500">Detailed classification screening stays in Command Centre. These controls are for assessment quality, coverage and acceptance checks.</p>

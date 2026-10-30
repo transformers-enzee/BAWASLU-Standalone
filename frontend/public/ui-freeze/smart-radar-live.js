@@ -227,7 +227,7 @@
       (analysis.length===5?analysis.map(t=>'<div class="issue-theme" style="margin-bottom:10px" title="'+label(t.description||'')+
         '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:12px"><span style="line-height:1.4">'+
         label(t.title)+'</span><b>'+Number(t.count||0)+'</b></div><div class="small muted">'+
-        label(t.sentiment||'NEUTRAL')+' · '+label(t.description||'')+
+        label(t.sentiment||'NEUTRAL')+
         '</div><div style="background:#e8eeee;border-radius:6px;height:7px;margin-top:4px"><div style="height:100%;border-radius:6px;background:'+
         (colors[t.sentiment]||colors.NEUTRAL)+';width:'+(Number(t.count||0)/highest*100)+'%"></div></div></div>').join('')+
         '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':

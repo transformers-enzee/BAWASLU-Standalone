@@ -830,6 +830,22 @@ def campaign_action(db:Session,p,action,data,id=None):
                 EvidenceAssessment.assessment_version.desc(),
                 EvidenceAssessment.id.desc()).all() if ids else []
             assessment_by_id={row.result_id:row for row in latest}
+            # Batch relevant officer-review decisions, instead of querying
+            # each relevant source individually on every dashboard request.
+            from collections import defaultdict
+            review_by_result=defaultdict(list)
+            if ids:
+                review_rows_all=(db.query(EvidenceReview,EvidenceAssessment.result_id,
+                                         EvidenceAssessment.assessment_version)
+                    .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+                    .filter(EvidenceAssessment.campaign_id==campaign.id,
+                            EvidenceAssessment.result_id.in_(ids),
+                            EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).all())
+                for review,result_id,assessment_version in review_rows_all:
+                    if len(review_by_result[result_id])<10:
+                        review_by_result[result_id].append((review,assessment_version))
+
             for link in links:
                 item=post_by_id.get(link.result_id)
                 if not item or not _result_in_scope(db,p,item): continue
@@ -875,10 +891,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 else:violation_diagnostics['relevant_without_signal']+=1
                 if len(raw_signals)>len(issue_signals):
                     violation_diagnostics['relevant_with_rejected_signal']+=1
-                review_rows=(db.query(EvidenceReview,EvidenceAssessment.assessment_version).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
-                    .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id,
-                            EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
-                    .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).limit(10).all())
+                review_rows=review_by_result.get(item.id,[])
                 latest_review=review_rows[0][0] if review_rows else None
                 shared_flag=shared_violation_decision(issue_signals,latest_review.decision if latest_review else None)
                 review_history=[{'decision':review.decision,'reviewed_at':review.created_at.isoformat() if review.created_at else None,

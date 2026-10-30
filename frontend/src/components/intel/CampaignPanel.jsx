@@ -554,7 +554,7 @@ export default function CampaignPanel({campaignId=null}){
     <h4 className="text-sm font-semibold">Candidates mentioned in saved posts · suggestions</h4>
     <p className="text-xs">AI-detected names require an officer to verify official cross-platform accounts before tracking. A mention is not proof of endorsement or wrongdoing.</p>
     <div className="flex flex-wrap gap-2">{(candidateSuggestions||[]).slice(0,10).map(x=><div key={x.name} className="flex items-center gap-2 rounded border border-teal-200 bg-white px-3 py-2 text-xs"><span>{x.name} · {x.matching_posts} mentions</span><button type="button" className="font-semibold text-teal-700 disabled:text-slate-400" disabled={x.tracked||!!candidateAdding} onClick={()=>addSuggestedCandidate(x)}>{x.tracked?'Tracking':candidateAdding===x.name?'Adding…':'Add to Watchlist'}</button></div>)}</div>
-    {candidateAddNotice&&<p role="status" className="text-xs text-teal-800">{candidateAddNotice}</p>
+    {candidateAddNotice&&<p role="status" className="text-xs text-teal-800">{candidateAddNotice}</p>}
     {!candidateSuggestions?.length&&<p className="text-xs">No AI candidate suggestions are available yet.</p>}
   </section>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}

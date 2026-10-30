@@ -209,13 +209,15 @@ def registry_action(db:Session,p,action,data,id=None):
             a.platform.casefold()==platform_filter) and
             (not account_filter or str(a.id)==account_filter)]
         from .models import WatchlistAccountEvidence
+        # An account-evidence link indicates collection provenance, NOT authorship.
+        # Only an observed author matching a registered account can be an own post.
+        own_conditions=list(match_conditions)
         if explicit_account_ids:
             explicit=db.query(WatchlistAccountEvidence.result_id).filter(
                 WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
             match_conditions.append(SocialListeningResult.id.in_(explicit))
         # Candidate mentions are separate from own posts. They are source-text
         # matches, not verified identity, endorsement or legal findings.
-        own_conditions=list(match_conditions)
         from .candidate_registry import aliases_for
         aliases=[w.name,*aliases_for(w)] if w.type=='Candidate' and not account_filter else []
         aliases=list(dict.fromkeys(a.strip() for a in aliases if isinstance(a,str)
@@ -268,14 +270,18 @@ def registry_action(db:Session,p,action,data,id=None):
                 WatchlistAccountEvidence.account_id==SourceAccount.id).filter(
                 WatchlistAccountEvidence.result_id==item.id,
                 SourceAccount.id.in_(explicit_account_ids)).first() if explicit_account_ids else None
-            matched=linked or matched
+            is_own=owner_match(item)
+            # Do not present a linked third-party publisher as a candidate's own
+            # registered account when the source author does not match the handle.
+            if not is_own:matched=None
             metrics=_captured_post_metrics(item.engagement_json)
-            return {'id':str(item.id),'platform':item.platform,'account':matched.handle or '@'+inferred_handle(matched) if matched else '',
-                'relation':'OWN_POST' if matched or owner_match(item) else 'THIRD_PARTY_MENTION',
+            return {'id':str(item.id),'platform':item.platform,
+                'account':(matched.handle or '@'+inferred_handle(matched)) if matched else '',
+                'relation':'OWN_POST' if is_own else 'THIRD_PARTY_MENTION',
                 'text':(item.text_content or '')[:5000],
                 'published_at':item.published_at,'url':item.canonical_url,
                 'author_name':item.author_name,'content_type':item.content_type,
-                'match_method':'registered_account' if linked else 'observed_handle' if matched and observed else 'author_name_unverified' if matched else 'candidate_text_mention_unverified',
+                'match_method':'registered_account' if is_own and linked else 'observed_handle' if is_own and observed else 'author_name_unverified' if is_own else 'account_link_author_mismatch' if linked else 'candidate_text_mention_unverified',
                 'saved_assessments':saved_views.get(item.id,[]),
                 **metrics}
         saved_page=[assessment for post in rows for assessment in saved_views.get(post.id,[])[:1]]

@@ -171,6 +171,18 @@
       ui.notify('Officer-approved aliases saved to the canonical candidate identity.');
     }catch(error){ui.notify('Aliases not updated: '+error.message);}
   };
+  ui.onAddAccount=async (candidateId,platform,url,handle)=>{
+    if(!permitted){ui.notify('Watchlist management permission required.');return;}
+    if(!/^https:\/\//i.test(url||'')){ui.notify('Enter a valid HTTPS public profile URL.');return;}
+    try{
+      await registry('addAccount',{platform,url,handle},candidateId);
+      await reload();
+      ui.closeModal();
+      ui.renderProfile(candidateId);
+      ui.showAccountTab();
+      ui.notify('Account registered. Own posts appear only when its published posts have been collected and the author matches its handle.');
+    }catch(error){ui.notify('Account not registered: '+error.message);}
+  };
   ui.onCreate=async (rawName,rawAliases='')=>{
     if(!permitted){ui.notify('Watchlist management permission required.');return;}
     const name=String(rawName||'').trim();
@@ -203,12 +215,16 @@
       sentiments[0][0]+sentiments[0].slice(1).toLowerCase():'Unknown';
     const validatedFlag=(post.saved_assessments||[]).some(a=>a.is_flagged===true);
     return {
-      id:'SRC-'+post.id,kind:'own',platform:post.platform||'Unknown platform',
-      source:post.account||post.author_name||'Registered account · attribution not independently verified',
+      id:'SRC-'+post.id,sourceId:String(post.id),
+      kind:post.relation==='OWN_POST'?'own':'earned',
+      platform:post.platform||'Unknown platform',
+      source:post.author_name||post.account||'Unknown source author',
       date:String(post.published_at||''),text:post.text||'',
       sentiment,flag:validatedFlag,
       assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null, url:safeUrl(post.url),
-      description:'Stored captured account post; candidate affiliation requires human verification.'
+      description:post.relation==='OWN_POST'
+        ?'Published by an account registered for this candidate; verify identity and original authorship.'
+        :'Published by another account mentioning this candidate; NOT a candidate-authored post.'
     };
   }
   function mapEarned(record){
@@ -217,7 +233,7 @@
     const sentiment=['positive','negative','neutral'].includes(sentimentRaw)?
       sentimentRaw[0].toUpperCase()+sentimentRaw.slice(1):'Unknown';
     return {
-      id:'INT-'+id,kind:'earned',platform:record.platform||record.source_type||'Source',
+      id:'INT-'+id,sourceId:id,kind:'earned',platform:record.platform||record.source_type||'Source',
       source:record.author||record.observed_publisher_handle||record.source_name||'Public source',
       date:String(record.publication_datetime||record.publication_date||record.collection_datetime||''),
       text:record.original_content||record.title||'',sentiment,flag:false,
@@ -232,7 +248,7 @@
     const normalize=value=>' '+String(value||'').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()+' ';
     const candidateNames=aliases.map(normalize);
     return (payload.evidence||[]).filter(post=>candidateNames.some(name=>normalize(post.text_content).includes(name))).map(post=>({
-      id:'CAM-'+post.id,kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
+      id:'CAM-'+post.id,sourceId:String(post.id),kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
       date:String(post.published_at||''),text:post.text_content||'',sentiment:(()=>{const s=String(post.sentiment||'').toLowerCase();return ['positive','negative','neutral'].includes(s)?s[0].toUpperCase()+s.slice(1):'Unknown'})(),
       flag:(post.saved_assessments||[]).some(a=>a.is_flagged===true),
       assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null,
@@ -248,12 +264,21 @@
       const [captured,actor]=await Promise.allSettled([
         collectedPosts(id),campaignId?scopedMentions(candidate):intel('actorPicture',{actor_id:id})
       ]);
-      const own=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
+      const capturedRecords=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
       const records=actor.status==='fulfilled'?(campaignId?(Array.isArray(actor.value)?actor.value:[]):(actor.value.records||[])):[];
-      // Campaign views must never mix unscoped intelligence from other campaigns.
+      // The feed contains BOTH authored posts and third-party mentions. It is
+      // never safe to classify an entire captured feed as candidate-authored.
       const related=campaignId?records:records.map(mapEarned);
-      const known=new Set(own.map(post=>post.url).filter(Boolean));
-      candidate.posts=[...own,...related.filter(post=>!post.url||!known.has(post.url))]
+      const knownSources=new Set(capturedRecords.map(post=>post.sourceId).filter(Boolean));
+      const knownUrls=new Set(capturedRecords.map(post=>post.url).filter(Boolean));
+      const uniqueRelated=related.filter(post=>{
+        if((post.sourceId&&knownSources.has(post.sourceId))||
+           (post.url&&knownUrls.has(post.url)))return false;
+        if(post.sourceId)knownSources.add(post.sourceId);
+        if(post.url)knownUrls.add(post.url);
+        return true;
+      });
+      candidate.posts=[...capturedRecords,...uniqueRelated]
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
       // Reuse only flags returned by the saved assessment view; never infer a legal violation.
       candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
@@ -263,6 +288,15 @@
           '. Inspect original evidence before any officer decision.',
         status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
       }));
+      try{
+        const status=await registry('watchlistSyncStatus',{},id);
+        candidate.collectionStatus=status.enabled
+          ?'Automatic public-account collection is configured. Check individual account statuses for coverage.'
+          :status.feature_enabled
+            ?'Automatic collection is waiting for a configured API key and sufficient credit budget.'
+            :'Automatic public-account collection is disabled. Register official account profiles and enable a budget-capped collector to retrieve new own posts.';
+        candidate.accountSyncStates=Array.isArray(status.accounts)?status.accounts:[];
+      }catch{candidate.collectionStatus='Account collection status unavailable.'}
       loaded.add(id);
       ui.renderProfile(id);
       if(captured.status==='rejected'||actor.status==='rejected')
@@ -289,6 +323,7 @@
     try{
       const access=await registry('myAccess');
       permitted=access.access?.permissions?.manage_watchlist===true;
+      ui.canManage=permitted;
       await reload();
     }catch(error){
       $('.content').style.visibility='visible';

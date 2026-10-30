@@ -12,7 +12,7 @@ function element(key){
   if(elements.has(key))return elements.get(key);
   const classes=new Set();
   const node={
-    id:key, innerHTML:'', textContent:'', value:'', style:{},dataset:{},options:[{textContent:''}],
+    id:key, innerHTML:'', textContent:'', value:'', style:{},dataset:{},options:[{textContent:''}],scrollTop:0,
     disabled:false,
     classList:{
       add(name){classes.add(name)},remove(name){classes.delete(name)},
@@ -31,7 +31,7 @@ function element(key){
   return node;
 }
 const document={
-  body:element('body'),querySelector:element,createElement:tag=>element('created-'+tag),
+  body:element('body'),querySelector:element,querySelectorAll(){return []},createElement:tag=>element('created-'+tag),
   addEventListener(name,handler){events.set('document:'+name,[...(events.get('document:'+name)||[]),handler])}
 };
 class FakeDOMParser{parseFromString(){return {querySelectorAll(){return []}}}}
@@ -87,7 +87,9 @@ assert.match(element('#watch').innerHTML,/Candidate Gamma/);
 assert.match(element('#watch').innerHTML,/Candidate Delta/);
 assert.doesNotMatch(element('#watch').innerHTML,/Candidate Alpha/);
 assert.match(element('#watch').innerHTML,/3–4 of 4/);
+element('.drawer').scrollTop=240;
 const pending=ui.openFinding('INBOX-V-1-177',null);
+assert.equal(element('.drawer').scrollTop,0,'opening a new record resets drawer scroll');
 assert.ok(element('#overlay').classList.contains('open'),'drawer opens before network response');
 assert.match(element('#drawerBody').innerHTML,/Opening saved evidence/);
 assert.equal(findingRequests,1);

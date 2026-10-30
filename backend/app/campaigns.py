@@ -294,22 +294,34 @@ def _batch_preview(db,p,c,data=None):
     from .models import SocialListeningResult
     from .socialcrawl import _result_in_scope
     from .sentiment_processing import sentiment_is_assessed
-    try:limit=int((data or {}).get('sample_limit',10))
+    payload=data or {}
+    if not _editable(p,c):raise PermissionError('Campaign owner or national administrator required')
+    try:limit=int(payload.get('sample_limit',10))
     except (TypeError,ValueError):raise ValueError('Batch size must be an integer') from None
+    all_posts=payload.get('all_posts') is True
     if not 1<=limit<=20:raise ValueError('Choose between 1 and 20 posts per batch')
-    links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(
-        CampaignEvidence.id.desc()).all()
-    eligible=[]
-    for link in links:
-        item=db.get(SocialListeningResult,link.result_id)
-        if item and str(item.text_content or '').strip() and _result_in_scope(db,p,item) and not sentiment_is_assessed(
-                _current_assessment(db,c.id,item.id)):
-            eligible.append(str(item.id))
-    return {'unclassified':len(eligible),'selected_ids':eligible[:limit],
-            'sample_limit':limit,'estimated_ai_calls':min(len(eligible),limit),
-            'socialcrawl_credits':0,
+    # Exactly one entry per source, preserving campaign scope and visibility.
+    result_ids=[rid for (rid,) in db.query(CampaignEvidence.result_id).filter_by(
+        campaign_id=c.id).order_by(CampaignEvidence.id.desc()).all()]
+    eligible=[];seen=set();missing_text=0;prior_count=0
+    for rid in result_ids:
+        if rid in seen:continue
+        seen.add(rid)
+        item=db.get(SocialListeningResult,rid)
+        if not item or not _result_in_scope(db,p,item):continue
+        if not str(item.text_content or '').strip():
+            missing_text+=1;continue
+        prior=_current_assessment(db,c.id,item.id)
+        if sentiment_is_assessed(prior):prior_count+=1
+        if all_posts or not sentiment_is_assessed(prior):eligible.append(str(item.id))
+    selection=eligible if all_posts else eligible[:limit]
+    return {'unclassified':len(eligible) if not all_posts else max(0,len(eligible)-prior_count),
+            'selected_ids':selection,'sample_limit':limit,
+            'eligible_total':len(eligible),'already_labeled':prior_count,
+            'missing_text':missing_text,'mode':'ALL_POSTS' if all_posts else 'MISSING_ONLY',
+            'estimated_ai_calls':len(selection),'socialcrawl_credits':0,
             'paid_provider_called':False,
-            'notice':'Existing campaign posts only. Each requested post can incur a separate OpenAI API token charge. No SocialCrawl credits.'}
+            'notice':'All-post mode explicitly re-assesses existing labels via OpenAI and saves a new version per post. No SocialCrawl credits.'}
 
 def _classify_campaign_sentiment(db,p,c,data):
     """Explicit, single-record AI classification; never invoked during retrieval."""
@@ -328,7 +340,7 @@ def _classify_campaign_sentiment(db,p,c,data):
         raise ValueError('Evidence record is not accessible')
     from .sentiment_processing import sentiment_is_assessed, normalize_sentiment_output
     prior=_current_assessment(db,c.id,row.id)
-    if sentiment_is_assessed(prior):
+    if sentiment_is_assessed(prior) and (data or {}).get('force_ai_reassessment') is not True:
         return {'sentiment':_latest_sentiment(db,c.id,row.id),
                 'confidence':prior.sentiment_confidence or '',
                 'explanation':prior.sentiment_explanation or '',

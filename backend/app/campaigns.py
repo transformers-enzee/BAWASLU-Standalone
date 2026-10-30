@@ -16,14 +16,14 @@ from time import monotonic
 # Short-lived, process-local dashboard cache. Authorization is checked on every request.
 _DASH_CACHE={}
 _DASH_LOCK=Lock()
-_DASH_TTL_SECONDS=600
+_DASH_TTL_SECONDS=180
 _DASH_MAX_ENTRIES=60
 
 def _dashboard_cache_get(key):
     with _DASH_LOCK:
         entry=_DASH_CACHE.get(key)
         if entry and entry[0]>monotonic():
-            return entry[1].copy()
+            return __import__('copy').deepcopy(entry[1])
         if entry:_DASH_CACHE.pop(key,None)
     return None
 
@@ -34,7 +34,7 @@ def _dashboard_cache_put(key,value):
             if entry[0]<=now:_DASH_CACHE.pop(old,None)
         if len(_DASH_CACHE)>=_DASH_MAX_ENTRIES:
             _DASH_CACHE.pop(next(iter(_DASH_CACHE)))
-        _DASH_CACHE[key]=(now+_DASH_TTL_SECONDS,value.copy())
+        _DASH_CACHE[key]=(now+_DASH_TTL_SECONDS,__import__('copy').deepcopy(value))
 
 
 def _captured_post_metrics(raw):

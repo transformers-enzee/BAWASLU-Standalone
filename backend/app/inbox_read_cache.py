@@ -11,8 +11,8 @@ import threading
 import time
 from collections import OrderedDict
 
-_TTL=45.0
-_MAX=48
+_TTL=90.0
+_MAX=64
 _lock=threading.RLock()
 _entries=OrderedDict()
 _generation=0

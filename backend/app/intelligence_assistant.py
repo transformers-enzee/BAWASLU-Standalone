@@ -402,7 +402,7 @@ def is_general_knowledge_question(question):
     q=str(question or '').casefold()
     institutional=('bawaslu','kpu','pemilu','pilkada','pilpres','pemilihan','election','electoral',
       'vote','voting','ballot','candidate','politic','politik','campaign','kampanye',
-      'intelligence','inbox','watchlist','source','evidence','sumber','bukti','data',
+      'intelligence','inbox','watchlist','source','evidence','sumber','bukti',
       'pengawasan','violation','pelanggaran','public concern','social listening')
     return not any(term in q for term in institutional)
 
@@ -419,7 +419,7 @@ def generate_general_openai_answer(question, previous_question=''):
         'records. Do not claim access to current live information or private records. '
         'For time-sensitive facts, acknowledge that verification may be required. '
         'Do not invent citations. Reply in the language of the question. Be concise.')},
-      {'role':'user','content':str(previous_question or '')[:300]+'\\n'+str(question or '')[:500]}
+      {'role':'user','content':str(question or '')[:500]}
     ],'max_output_tokens':650}
     try:
         with httpx.Client(timeout=25.0) as client:

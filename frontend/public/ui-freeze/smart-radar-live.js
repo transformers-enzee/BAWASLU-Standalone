@@ -18,7 +18,8 @@
       panel.setAttribute('aria-label','Current Intelligence Inbox evidence source');
       panel.style.cssText='margin:12px 0;padding:12px 16px;border:1px solid #bdded6;border-radius:10px;background:#f3fbf8';
       anchor.insertAdjacentElement('afterend',panel);}
-    const total=Number(dashboard?.source_total||0);
+    const scope=($('#geo')?.value||'all');
+    const total=scope==='all'?Number(dashboard?.source_total||0):countPosts(ui.view());
     panel.innerHTML='<b>Live Intelligence Inbox · '+total+' relevant saved source'+(total===1?'':'s')+'</b>'+
       '<p class="small muted">All operational findings below reuse the authorized Intelligence Inbox classifications and original source IDs. Legacy pilot posts are not included. Review decisions do not establish legal guilt.</p>'+
       (dashboard?.truncated_to_inbox_window?'<p class="small" role="status">The Inbox response currently caps findings at 300; this view may be incomplete.</p>':'');
@@ -225,7 +226,7 @@
     filtered.forEach(f => (f.topics||[]).forEach(t => {topicCounts[t] = (topicCounts[t]||0)+1;}));
     const topics = asRows(topicCounts);
     const aiTopics=issueDistribution?.[perspective];
-    const analysis=aiTopics?.topics||[];
+    const analysis=$('#geo')?.value==='all'?(aiTopics?.topics||[]):[];
     const highest=Math.max(1,...analysis.map(x=>x.count));
     const colors={POSITIVE:'#18886a',NEGATIVE:'#bd544a',NEUTRAL:'#67849a',MIXED:'#b18638'};
     $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
@@ -238,15 +239,15 @@
         '</div><div style="background:#e8eeee;border-radius:6px;height:7px;margin-top:4px"><div style="height:100%;border-radius:6px;background:'+
         (colors[t.sentiment]||colors.NEUTRAL)+';width:'+(Number(t.count||0)/highest*100)+'%"></div></div></div>').join('')+
         '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':
-        '<p class="small muted">AI is preparing the five evidence-grounded topics. The previous cached analysis is reused when sources are unchanged.</p>')+
+        (($('#geo')?.value||'all')!=='all'?'<p class="small muted">Province-scoped saved topics:</p>'+miniBars(topics,Math.max(1,...topics.map(x=>x[1]))):'<p class="small muted">AI is preparing the five evidence-grounded topics. The previous cached analysis is reused when sources are unchanged.</p>'))+
       '<p class="small muted" style="margin-top:6px">AI topics update automatically when new source evidence arrives; existing results are reused.</p>';
-    const keywords=dashboard?.main_keyword_cloud||[];
+    const keywords=($('#geo')?.value||'all')==='all'?(dashboard?.main_keyword_cloud||[]):[];
     const maxKeyword=Math.max(1,...keywords.map(x=>Number(x.count||0)));
     $('#cloud').innerHTML=keywords.length?keywords.map(x=>{
       const count=Number(x.count||0);
       const size=13+Math.round(18*Math.sqrt(count/maxKeyword));
       return '<span title="'+label(count+' saved posts')+'" style="font-size:'+size+'px;display:inline-block;margin:4px 7px;line-height:1.3">'+label(x.keyword)+'</span>';
-    }).join(''):'<span class="small muted">No configured main keywords matched the relevant saved posts.</span>';
+    }).join(''):'<span class="small muted">'+(($('#geo')?.value||'all')==='all'?'No configured main keywords matched the relevant saved posts.':'Main-keyword cloud is national only; regional keywords are not inferred.')+'</span>';
 
     const dayRows=asRows(addCounts(filtered,'day_counts')).sort((a,b)=>a[0].localeCompare(b[0]));
     $('#trend').innerHTML=trendSvg(dayRows);

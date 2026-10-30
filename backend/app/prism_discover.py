@@ -26,7 +26,7 @@ def campaign(db,p,cid,write=False):
     return c
 
 def body_for(db,c):
-    words=list(dict.fromkeys(str(x).strip() for x in json.loads(c.primary_keywords_json or '[]') if str(x).strip()))[:8]
+    words=list(dict.fromkeys(str(x).strip() for x in json.loads(c.primary_keywords_json or '[]') if str(x).strip()))[:5]
     if not words:raise ValueError('Configure main keywords first')
     platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
     if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']

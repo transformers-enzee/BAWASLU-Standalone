@@ -80,6 +80,13 @@ export default function CampaignPanel({campaignId=null}){
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Status unavailable')}
    finally{setDiscoverBusy(false)}
  }
+
+ const [total,setTotal]=useState(0);
+ const [sampleText,setSampleText]=useState(''),[keywordPreview,setKeywordPreview]=useState(null),[previewBusy,setPreviewBusy]=useState(false),[previewError,setPreviewError]=useState('');
+ const keywordPreviewRequest=useRef(0);
+ function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
+ async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
+ const [campaignSection,setCampaignSection]=useState('overview');
  useEffect(()=>{
    if(!selected||campaignSection!=='watchlist')return;
    let ok=true;
@@ -89,12 +96,6 @@ export default function CampaignPanel({campaignId=null}){
    return()=>{ok=false};
  },[selected?.id,campaignSection]);
 
- const [total,setTotal]=useState(0);
- const [sampleText,setSampleText]=useState(''),[keywordPreview,setKeywordPreview]=useState(null),[previewBusy,setPreviewBusy]=useState(false),[previewError,setPreviewError]=useState('');
- const keywordPreviewRequest=useRef(0);
- function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
- async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
- const [campaignSection,setCampaignSection]=useState('overview');
  const [statusFilter,setStatusFilter]=useState('all');
  const [trendMetric,setTrendMetric]=useState('posts');
  const [chartDay,setChartDay]=useState(null);
@@ -499,7 +500,7 @@ export default function CampaignPanel({campaignId=null}){
       <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Discover · 50 posts</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
      </article>)}{discoverCampaign&&<div className="rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm space-y-2" role="region" aria-label="Separate SocialCrawl Discover run">
   <div className="flex justify-between gap-3"><strong>Prism Discover · {discoverCampaign.name} · 50 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
-  <p className="text-xs">Independent of Manual SocialCrawl. First 8 main keywords only, 7-day search window and hard cap of {discoverPreview?.credit_cap||100} provider credits. OpenAI enrichment is separately billed. No automatic schedule.</p>
+  <p className="text-xs">Independent of Manual SocialCrawl. First 5 main keywords only, 7-day search window and hard cap of {discoverPreview?.credit_cap||100} provider credits. OpenAI enrichment is separately billed. No automatic schedule.</p>
   {discoverBusy&&<p role="status">Checking provider…</p>}
   {discoverError&&<p role="alert" className="text-red-700">{discoverError}</p>}
   {discoverPreview&&!discoverRun&&<div className="space-y-2"><p className="text-xs">Provider preview: {JSON.stringify(discoverPreview.estimate).slice(0,950)}</p>

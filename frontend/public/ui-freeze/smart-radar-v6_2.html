@@ -42,7 +42,7 @@ body.bawaslu-ready #startup-status{display:none!important}
  const stats=match?.[1]||{};
  return {...f,source_count:Number(stats.supporting_posts||0),supporting_posts:Number(stats.supporting_posts||0),
    platform_counts:stats.platform_counts||{},sentiment_counts:stats.sentiment_counts||{},
-   day_counts:stats.day_counts||{},geo_signal_counts:{[geo]:Number(stats.supporting_posts||0)}};
+   day_counts:stats.day_counts||{},actor_mentions:stats.actor_mentions||{},geo_signal_counts:{[geo]:Number(stats.supporting_posts||0)}};
 });const priority=f=>typeof f.priority_score==='number'?(f.priority_score>=75?3:f.priority_score>=50?2:1):1;const playerMatches=(f,key)=>key==='validated'?!!f.human_reviewed:key==='attention'?f.status==='pending':key==='violations'?perspective==='operations'&&(f.players||[]).includes('violations'):((f.players||[f.player]).includes(key));const btn=(text,act,cls='')=>`<button class="button ${cls}" data-action="${act}">${text}</button>`;
 function playerOverview(fs,key){
  if(!fs.length)return 'No matching intelligence in the current selection.';

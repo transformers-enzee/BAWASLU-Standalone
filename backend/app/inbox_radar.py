@@ -176,6 +176,7 @@ def _source(row):
         'assessment_version':row.get('assessment_version'),
         'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
         'geographic_mentions_unverified':_geo_mentions(row),
+        'candidate_names':_candidate_names(row),
         'verified_incident_province':_verified_incident_province(row),
         'review_status':row.get('flag_review_status'),
         'source_verification_status':'SAVED_INBOX_ASSESSMENT_UNVERIFIED',
@@ -355,14 +356,16 @@ def compile_inbox_findings(rows,states=None):
                 region=str(region).strip()
                 if not region:continue
                 entry=by_region.setdefault(region,{'supporting_posts':0,
-                    'platform_counts':{},'sentiment_counts':{},'day_counts':{}})
+                    'platform_counts':{},'sentiment_counts':{},'day_counts':{},'actor_mentions':{}})
                 entry['supporting_posts']+=1
+                for candidate in post.get('candidate_names') or []:
+                    entry['actor_mentions'][candidate]=entry['actor_mentions'].get(candidate,0)+1
                 platform=post.get('platform') or 'Unknown'
                 entry['platform_counts'][platform]=entry['platform_counts'].get(platform,0)+1
                 sentiment=post.get('sentiment') or 'UNCLASSIFIED'
                 entry['sentiment_counts'][sentiment]=entry['sentiment_counts'].get(sentiment,0)+1
                 day=str(post.get('published_at_raw') or '')[:10]
-                if re.fullmatch(r'\\d{4}-\\d{2}-\\d{2}',day):
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}',day):
                     entry['day_counts'][day]=entry['day_counts'].get(day,0)+1
         g['province_breakdown']=by_region
         g['geo_signal_counts']=dict(g['geo_signal_counts'])

@@ -12,5 +12,8 @@ assert.match(adapter,/manual_fetch_available/,'Unavailable provider or budget mu
 assert.match(adapter,/campaign_id:campaignId/,'Campaign evidence must be linked to source posts');
 assert.match(api,/requestAccountFetch/,'Server validates account and privileges');
 assert.match(worker,/CampaignEvidence\(campaign_id=campaign_id/,'Fetched posts must appear in campaign');
-assert.doesNotMatch(worker,/mapped\['observed_handle'\]='@'\+handle\n\s*mapped\['author_name'\]/,'Cannot overwrite source author before checking match');
+assert.ok(worker.indexOf('if actual_author and actual_author!=handle:')>=0 &&
+  worker.indexOf("mapped['observed_handle']='@'+handle") >
+  worker.indexOf('if actual_author and actual_author!=handle:'),
+  'Post author must be validated BEFORE recording a registered account handle');
 console.log('PASS: Watchlist manual account-post fetch, confirmation, budget and campaign wiring');

@@ -191,10 +191,17 @@ def sync_account(account_id,client=None,campaign_id=None,manual=False):
                 normalized={'platform':platform,**raw}
                 mapped=_map_result(db,normalized,default_platform=platform)
                 mapped['platform']=platform
-                actual_author=str(mapped['observed_handle'] or '').strip().lstrip('@').casefold()
-                # Never overwrite an actual, conflicting source author with the
-                # requested profile handle: that turns news/reshared content into
-                # a false candidate-owned post.
+                # An Instagram post permalink is not a profile identifier.
+                # Resolve source authorship from the provider's POST AUTHOR
+                # before any URL-derived or display-name heuristics.
+                post_data=raw.get('post') if isinstance(raw.get('post'),dict) else raw
+                author_data=post_data.get('author') if isinstance(post_data,dict) else None
+                author_data=author_data if isinstance(author_data,dict) else {}
+                actual_author=str(author_data.get('username') or
+                    author_data.get('handle') or post_data.get('username') or
+                    post_data.get('handle') or '').strip().lstrip('@').casefold()
+                # A source-authored handle that conflicts with the monitored
+                # profile must never be rewritten into a candidate-owned post.
                 if actual_author and actual_author!=handle:
                     skipped_attribution+=1
                     continue

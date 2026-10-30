@@ -1,0 +1,15 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const client=readFileSync('src/api/base44Client.js','utf8');
+const radar=readFileSync('public/ui-freeze/smart-radar-live.js','utf8');
+assert.match(client,/inboxReadCache=new Map\(\)/);
+assert.match(client,/lastReadToken!==current/);
+assert.match(client,/expires:now\+45000/);
+assert.match(client,/if\(inboxReadCache.size>24\)/);
+assert.match(client,/if\(name==='socialListening'&&!inbox\)invalidateInboxCache\(\)/);
+assert.match(client,/if\(inboxReadCache.get\(key\)\?\.promise===pending\)inboxReadCache.delete\(key\)/);
+assert.match(client,/window.localStorage.removeItem\(TOKEN_KEY\);invalidateInboxCache\(\)/);
+assert.match(radar,/readCache = new Map\(\)/);
+assert.match(radar,/SAVED_INBOX_SOURCE_OF_TRUTH/);
+assert.match(radar,/clearReadCache\(\)/);
+console.log('Scoped RAM caching, expiry, single-flight and invalidation contracts passed');

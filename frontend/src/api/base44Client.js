@@ -1,5 +1,24 @@
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const TOKEN_KEY = 'bawaslu_access_token';
+// Bounded per-tab RAM cache: never localStorage, never shared across users.
+const inboxReadCache=new Map();
+let lastReadToken=null;
+export function invalidateInboxCache(){inboxReadCache.clear();}
+function cachedInboxRead(payload){
+  const current=token();
+  if(lastReadToken!==current){invalidateInboxCache();lastReadToken=current;}
+  const data=payload.data||{};
+  const key=JSON.stringify([current,data.campaign_id||'',data.result_id||'']);
+  const now=Date.now();
+  const cached=inboxReadCache.get(key);
+  if(cached&&cached.expires>now)return cached.promise;
+  inboxReadCache.delete(key);
+  const pending=request('/api/functions/socialListening',{method:'POST',body:JSON.stringify(payload)})
+    .catch(error=>{if(inboxReadCache.get(key)?.promise===pending)inboxReadCache.delete(key);throw error;});
+  inboxReadCache.set(key,{expires:now+45000,promise:pending});
+  if(inboxReadCache.size>24)inboxReadCache.delete(inboxReadCache.keys().next().value);
+  return pending;
+}
 
 function token(){ return window.localStorage.getItem(TOKEN_KEY) || ''; }
 function apiError(status, data){
@@ -21,12 +40,12 @@ export const base44 = {
   app:{ getPublicSettings:()=>request('/api/public-settings') },
   auth:{
     me:()=>request('/api/auth/me'),
-    async loginViaEmailPassword(email,password){ const r=await request('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}); window.localStorage.setItem(TOKEN_KEY,r.access_token); return r; },
+    async loginViaEmailPassword(email,password){ const r=await request('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}); window.localStorage.setItem(TOKEN_KEY,r.access_token);invalidateInboxCache();return r; },
     async register({email,password}){ sessionStorage.setItem('bawaslu_pending_email',email); sessionStorage.setItem('bawaslu_pending_password',password); return request('/api/auth/register',{method:'POST',body:JSON.stringify({email,password})}); },
     async verifyOtp({email}){ const password=sessionStorage.getItem('bawaslu_pending_password')||''; const r=await request('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}); window.localStorage.setItem(TOKEN_KEY,r.access_token); sessionStorage.removeItem('bawaslu_pending_password'); return r; },
     resendOtp:async()=>({ok:true}),
-    setToken:(v)=>window.localStorage.setItem(TOKEN_KEY,v),
-    async logout(redirect){ try{await request('/api/auth/logout',{method:'POST'});}catch{} window.localStorage.removeItem(TOKEN_KEY); if(redirect) window.location.href='/login'; },
+    setToken:(v)=>{invalidateInboxCache();window.localStorage.setItem(TOKEN_KEY,v);},
+    async logout(redirect){ try{await request('/api/auth/logout',{method:'POST'});}catch{} window.localStorage.removeItem(TOKEN_KEY);invalidateInboxCache(); if(redirect) window.location.href='/login'; },
     redirectToLogin:(returnTo='/')=>{ window.location.href=`/login?returnTo=${encodeURIComponent(returnTo)}`; },
     loginWithProvider:()=>{ throw new Error('Google login is not configured in standalone v0.1. Use email/password.'); },
     resetPasswordRequest:async()=>{ throw new Error('Password reset email is not configured in standalone v0.1. Contact an administrator.'); },
@@ -61,7 +80,12 @@ export const base44 = {
   functions:{
     async invoke(name,payload={}){
       const path = ['intelligence','registry'].includes(name) ? `/api/functions/${name}` : `/api/functions/${name}`;
-      const data = await request(path,{method:'POST',body:JSON.stringify(payload)});
+      const inbox=name==='socialListening'&&payload.action==='campaignIntelligenceInbox';
+      // A read-only Inbox call is the only cached POST. Every mutation
+      // invalidates cached Inbox evidence before reaching Supabase.
+      if(name==='socialListening'&&!inbox)invalidateInboxCache();
+      const data = inbox?await cachedInboxRead(payload):
+        await request(path,{method:'POST',body:JSON.stringify(payload)});
       return {data};
     }
   },

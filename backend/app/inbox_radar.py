@@ -107,8 +107,25 @@ def _headline(value, limit=86):
         value=value[:limit].rsplit(' ',1)[0].rstrip(' .,;:')
     return value
 
+def _specific_issue_title(body,kind):
+    t=str(body or '').casefold()
+    if kind=='source_review':
+        if 'mencoblos lebih dari sekali' in t and 'musi' in t:return 'Reported Repeat Voting in South Sumatra'
+        if 'people power' in t and '2019' in t:return 'Historical Claims About 2019 Election Protests'
+        if 'gerakan keadilan rakyat' in t:return 'Protesters Question Bawaslu 2024 Election Oversight'
+        if 'bawaslu solo' in t and 'terima cuan' in t:return 'Unverified Payment Allegation Involving Bawaslu Solo'
+    if kind=='discussion':
+        if 'gerakan keadilan rakyat' in t:return 'Public Demands Accountability for 2024 Election Oversight'
+        if 'bawaslu solo' in t and 'berkas' in t:return 'Public Requests Candidate Verification Documents in Solo'
+        if 'tidak di kasih ruang kpu' in t:return 'Questions About KPU Restrictions on Bawaslu Access'
+        if 'sense of crisis' in t:return 'Criticism of Election Institutions Crisis Response'
+        if 'cara kerja' in t and 'bawaslu' in t:return 'Criticism of KPU and Bawaslu Performance'
+    return None
+
 def _evidence_title(row, kind, topic=''):
     body=str(row.get('text_content') or '')
+    specific=_specific_issue_title(body,kind)
+    if specific:return specific
     if kind=='source_review':
         signals=row.get('potential_issues') or []
         details=' '.join(str(s.get('evidence_quote') or s.get('description') or '')

@@ -790,9 +790,14 @@ def campaign_action(db:Session,p,action,data,id=None):
             # Job-state counters are separate from assessment-label counters.
             # Count only scoped, linked evidence; never trigger processing here.
             campaign_links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            from sqlalchemy.orm import defer
+            ids={link.result_id for link in campaign_links}
+            post_by_id={row.id:row for row in db.query(SocialListeningResult)
+                .options(defer(SocialListeningResult.raw_payload_json))
+                .filter(SocialListeningResult.id.in_(ids)).all()} if ids else {}
             linked_ids=set()
             for link in campaign_links:
-                item=db.get(SocialListeningResult,link.result_id)
+                item=post_by_id.get(link.result_id)
                 if item and _result_in_scope(db,p,item):linked_ids.add(item.id)
             campaign_job_states={}
             if linked_ids:
@@ -810,12 +815,25 @@ def campaign_action(db:Session,p,action,data,id=None):
                     CampaignEvidence.result_id==int(requested_result)).first()
                 if exact and not any(link.result_id==exact.result_id for link in links):
                     links.append(exact)
+            missing={link.result_id for link in links}-set(post_by_id)
+            if missing:
+                for row in db.query(SocialListeningResult).options(
+                    defer(SocialListeningResult.raw_payload_json)).filter(
+                    SocialListeningResult.id.in_(missing)).all():
+                    post_by_id[row.id]=row
+            ids={link.result_id for link in links}
+            latest=db.query(EvidenceAssessment).filter(
+                EvidenceAssessment.campaign_id==campaign.id,
+                EvidenceAssessment.result_id.in_(ids)).distinct(
+                EvidenceAssessment.result_id).order_by(
+                EvidenceAssessment.result_id,
+                EvidenceAssessment.assessment_version.desc(),
+                EvidenceAssessment.id.desc()).all() if ids else []
+            assessment_by_id={row.result_id:row for row in latest}
             for link in links:
-                item=db.get(SocialListeningResult,link.result_id)
+                item=post_by_id.get(link.result_id)
                 if not item or not _result_in_scope(db,p,item): continue
-                assessment=(db.query(EvidenceAssessment)
-                    .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==item.id)
-                    .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+                assessment=assessment_by_id.get(item.id)
                 label=str(assessment.relevance_label or 'UNASSESSED').upper() if assessment else 'UNASSESSED'
                 state=campaign_job_states.get(item.id)
                 if state is None:
@@ -911,7 +929,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .jurisdiction_review import jurisdiction_status
         from .models import SocialListeningResult
         for row in records:
-            post=db.get(SocialListeningResult,int(row['id']))
+            post=post_by_id.get(int(row['id']))
             review=jurisdiction_status(db,row['campaign_id'],row['id'],post)
             row['incident_jurisdiction_review']=review
             row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']

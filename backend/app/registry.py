@@ -194,7 +194,7 @@ def registry_action(db:Session,p,action,data,id=None):
         base={'linked_accounts':len(accounts),'matchable_accounts':len(specs),
               'paid_provider_called':False,
               'status':'Stored own-account posts and unverified third-party mentions. No provider requests on feed reads.'}
-         match_conditions=[]
+        match_conditions=[]
         for (platform,handle),account in specs.items():
             platform_condition=func.lower(SocialListeningResult.platform).in_(
                 ['x','twitter'] if platform=='x' else [platform])

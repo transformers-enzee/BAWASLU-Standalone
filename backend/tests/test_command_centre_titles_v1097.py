@@ -40,9 +40,17 @@ def test_public_concern_uses_recorded_issue():
 
 def test_recurring_narrative_is_specific():
     items=compile_inbox_findings([
-        post(1,text_content='Questions about daftar pemilih tetap'),
-        post(2,text_content='Discussion about daftar pemilih tetap')])
+        post(1,text_content='Questions about daftar pemilih tetap',topic_labels=['Electoral Operations']),
+        post(2,text_content='Discussion about daftar pemilih tetap',topic_labels=['Electoral Operations'])])
     assert len(items)==1
     assert items[0]['title'].startswith('Emerging Narrative: ')
     assert 'Voter register accuracy' in items[0]['title']
     assert items[0]['supporting_posts']==2
+
+
+def test_absent_saved_topic_does_not_invent_recurring_narrative():
+    items=compile_inbox_findings([
+        post(1,text_content='Questions about daftar pemilih tetap'),
+        post(2,text_content='Discussion about daftar pemilih tetap')])
+    assert len(items)==2
+    assert all('narratives' not in item['players'] for item in items)

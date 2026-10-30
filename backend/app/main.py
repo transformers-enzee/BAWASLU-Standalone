@@ -91,12 +91,21 @@ def startup():
                 time.sleep(60)
         threading.Thread(target=worker_loop,name='bawaslu-ai-worker',daemon=True).start()
 
+    # Explicit, snapshot-bounded, user-authorized campaign sentiment run.
+    # It is OFF unless two Render administrator-controlled variables match.
+    from .sentiment_backfill_once import enabled as sentiment_backfill_enabled
+    if sentiment_backfill_enabled():
+        import threading
+        from .sentiment_backfill_once import run_once as sentiment_run_once
+        threading.Thread(target=sentiment_run_once,
+                         name='bawaslu-sentiment-one-time',daemon=True).start()
+
 class LoginIn(BaseModel): email:str; password:str
 class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'109.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'109.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

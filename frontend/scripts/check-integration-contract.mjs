@@ -83,6 +83,8 @@ assert.match(watchBridge,/updateWatchlist/);
 assert.match(campaign,/Open original source/);
 assert.match(campaign,/Analyze with AI/);
 assert.match(inbox,/Original source provenance/);
+assert.doesNotMatch(inbox,/Five intelligence player screening snapshot|Five Intelligence Players · saved evidence screening/,'Five Intelligence Players belong in Command Centre, not Inbox');
+assert.match(inbox,/Processing and QA diagnostics/);
 assert.match(inbox,/safeOriginalUrl/);
 assert.ok(!inbox.includes('synthetic-demo'),'Synthetic Inbox fixture must not ship');
 assert.match(assistant,/\/api\/assistant-history/);

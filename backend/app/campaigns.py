@@ -298,7 +298,7 @@ def _batch_preview(db,p,c,data=None):
     except (TypeError,ValueError):raise ValueError('Batch size must be an integer') from None
     if not 1<=limit<=20:raise ValueError('Choose between 1 and 20 posts per batch')
     links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(
-        CampaignEvidence.id.desc()).limit(300).all()
+        CampaignEvidence.id.desc()).all()
     eligible=[]
     for link in links:
         item=db.get(SocialListeningResult,link.result_id)

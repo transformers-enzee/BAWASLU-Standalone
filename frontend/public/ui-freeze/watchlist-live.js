@@ -23,6 +23,110 @@
     if(!response.ok)throw Error(result.detail||result.error||'Intelligence unavailable');
     return result;
   }
+
+  // Recommendations stay inside the existing Add Candidate modal, scoped to
+  // the current Social Listening campaign and backed by saved source IDs.
+  let suggestions=[],suggestionsLoading=false,suggestionsError='',suggestionsFetchedAt=0,suggestionsRequest=null;
+  const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[char]));
+  const normalizeName=value=>String(value||'').normalize('NFKC').toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  const exactCandidate=item=>ui.getCandidates().find(candidate=>
+    [candidate.name,...candidate.aliases].some(alias=>normalizeName(alias)===normalizeName(item.name)));
+  // Shared distinctive first name plus an additional token means review, not
+  // automatic merging, since matching text does not establish legal identity.
+  function possibleNameVariant(item){
+    const words=normalizeName(item.name).split(' ').filter(Boolean);
+    if(words.length<2||words[0].length<5)return null;
+    const peers=[
+      ...ui.getCandidates().map(x=>({name:x.name})),
+      ...suggestions.filter(x=>x!==item&&Number(x.matching_posts||0)>=Number(item.matching_posts||0))
+    ];
+    return peers.find(other=>{
+      const candidate=normalizeName(other.name),tokens=candidate.split(' ');
+      return candidate!==normalizeName(item.name)&&tokens[0]===words[0]&&
+        words.filter(word=>tokens.includes(word)).length>=2;
+    })||null;
+  }
+  function renderSuggestions(){
+    const target=$('#aiCandidateSuggestions');
+    if(!target||$('#modalTitle')?.textContent!=='Add Candidate')return;
+    if(!campaignId){
+      target.innerHTML='<h3>AI-suggested candidates</h3><p class="hint">Open Candidate Watchlist from a selected Social Listening campaign to view its AI recommendations.</p>';
+      return;
+    }
+    const query=normalizeName($('#candidateSearch')?.value||'');
+    let html='<h3>AI-suggested candidates</h3><p class="hint">Based on saved posts in this campaign. Candidate identity requires officer verification; source IDs support evidence review.</p>';
+    if(suggestionsLoading)html+='<p class="hint" role="status">Loading campaign recommendations...</p>';
+    if(suggestionsError)html+='<p class="hint" role="alert">'+escapeHTML(suggestionsError)+'</p>';
+    if(!suggestionsLoading&&!suggestionsError&&!suggestions.length)html+='<p class="hint">No AI-detected candidates have been recorded for this campaign yet.</p>';
+    let shown=0;
+    suggestions.slice(0,10).forEach((item,i)=>{
+      if(query&&!normalizeName(item.name).includes(query))return;
+      shown++;
+      const existing=exactCandidate(item),near=existing?null:possibleNameVariant(item);
+      const active=(existing&&ui.isActive?.(existing.id))||(!existing&&item.tracked===true);
+      const sources=(Array.isArray(item.source_ids)?item.source_ids:[]).slice(0,5)
+        .map(id=>'#'+escapeHTML(id)).join(', ');
+      const action=active?'<span class="pill tag-ok">Already tracking</span>':
+        near?'<button class="btn ghost" data-review-suggestion="'+i+'">Review identity</button>':
+        '<button class="btn primary" data-track-suggestion="'+i+'" '+(permitted?'':'disabled')+
+          '>'+(existing?'＋ Track existing':'＋ Add & Track')+'</button>';
+      html+='<div class="ai-suggestion"><div><strong>'+escapeHTML(item.name)+'</strong>'+
+        '<div class="ai-suggestion-details">'+Number(item.matching_posts||0).toLocaleString()+
+        ' saved mention(s)'+(sources?' · Evidence '+sources:'')+'</div>'+
+        (near?'<div class="ai-suggestion-status">Possible variant of '+escapeHTML(near.name)+
+          ' — review before creating another identity</div>':'')+
+        '</div>'+action+'</div>';
+    });
+    if(query&&!shown)html+='<p class="hint">No AI suggestions match this search.</p>';
+    html+='<p class="hint">AI-detected mentions do not confirm official accounts, endorsements or violations.</p>';
+    target.innerHTML=html;
+  }
+  ui.onOpenAdd=async()=>{
+    renderSuggestions();
+    if(!campaignId||suggestionsRequest)return;
+    if(suggestionsFetchedAt&&Date.now()-suggestionsFetchedAt<30000)return;
+    suggestionsLoading=true;suggestionsError='';renderSuggestions();
+    suggestionsRequest=(async()=>{
+      const response=await fetch('/api/functions/socialListening',{
+        method:'POST',cache:'no-store',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},
+        body:JSON.stringify({action:'campaignCandidateSuggestions',id:campaignId,data:{}})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(data.detail||data.error||'Candidate suggestions unavailable ('+response.status+')');
+      suggestions=Array.isArray(data.candidates)?data.candidates.slice(0,10):[];
+      suggestionsFetchedAt=Date.now();
+    })();
+    try{await suggestionsRequest}
+    catch(error){suggestionsError=error.message||'Unable to load campaign recommendations.'}
+    finally{suggestionsLoading=false;suggestionsRequest=null;renderSuggestions()}
+  };
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('button[data-track-suggestion],button[data-review-suggestion]');
+    if(!button)return;
+    const index=Number(button.dataset.trackSuggestion??button.dataset.reviewSuggestion);
+    const item=suggestions[index];
+    if(!item)return;
+    const existing=exactCandidate(item),near=existing?null:possibleNameVariant(item);
+    if(button.dataset.reviewSuggestion!==undefined||near){
+      ui.notify('Possible variant of '+(near?.name||item.name)+'. Verify the approved identity before tracking.');
+      $('#candidateSearch')?.focus();
+      return;
+    }
+    if(!permitted){ui.notify('Watchlist management permission required.');return}
+    if(existing){
+      if(ui.isActive?.(existing.id)){ui.notify('This candidate is already being tracked.');return}
+      ui.onActivate?.(existing.id);
+      return;
+    }
+    if(item.tracked){ui.notify('This candidate is already being tracked.');return}
+    if(!window.confirm('Register and track '+item.name+'? Verify the full identity first. No official account is verified by this action.'))return;
+    ui.onCreate?.(item.name,'');
+  });
+
   function candidate(item,accounts){
     return {
       id:String(item.id),name:item.name,aliases:Array.isArray(item.candidate_aliases)?item.candidate_aliases:[],jurisdiction:[item.regency_city,item.province].filter(Boolean).join(', ')||'National',

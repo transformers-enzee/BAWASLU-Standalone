@@ -35,6 +35,12 @@ assert.match(watchRoute,/social-listening/);
 assert.match(social,/CampaignPanel/);
 assert.doesNotMatch(social,/Discover sources|Review queue|Saved searches/);
 assert.match(campaign,/watchlist-v2_2\.html\?campaign_id/);
+assert.doesNotMatch(campaign,/Candidates mentioned in saved posts · suggestions/,
+  'Campaign recommendations should be inside the Add Candidate popup');
+assert.match(watch,/id="aiCandidateSuggestions"/);
+assert.match(watchBridge,/campaignCandidateSuggestions/);
+assert.match(watchBridge,/possibleNameVariant/);
+assert.match(watchBridge,/data-track-suggestion/);
 assert.match(campaign,/Captured Posts/);
 assert.match(campaign,/Candidate Watchlist/);
 assert.match(campaign,/campaignSection==='posts'&&<CapturedPostList/);

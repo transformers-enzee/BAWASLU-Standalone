@@ -8,7 +8,6 @@ import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
-import { registry } from '@/components/intel/useIntel';
 
 const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
@@ -55,22 +54,6 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
- const [candidateSuggestions,setCandidateSuggestions]=useState(null);
- const [candidateAdding,setCandidateAdding]=useState(''),[candidateAddNotice,setCandidateAddNotice]=useState('');
- async function addSuggestedCandidate(candidate){
-  if(candidateAdding||candidate.tracked||!selected)return;
-  if(!window.confirm('Add '+candidate.name+' to Candidate Watchlist? This does not verify any official account.'))return;
-  setCandidateAdding(candidate.name);setCandidateAddNotice('');
-  try{
-   const response=await registry('createWatchlist',{name:candidate.name,type:'Candidate',
-     status:'Active',priority:'Medium',description:'Officer-added from '+selected.name+
-     ' candidate mention suggestions. Verify official account URLs before activating account collection.'});
-   setCandidateSuggestions(existing=>(existing||[]).map(x=>x.name===candidate.name?
-     {...x,tracked:true,watchlist_id:response.item?.id}:x));
-   setCandidateAddNotice(candidate.name+' added to Watchlist. Register and verify official account URLs to monitor own posts.');
-  }catch(e){setCandidateAddNotice(e.response?.data?.detail||e.response?.data?.error||e.message||'Unable to add candidate.')}
-  finally{setCandidateAdding('')}
- }
  async function checkDiscover(c){
    setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
@@ -103,15 +86,6 @@ export default function CampaignPanel({campaignId=null}){
  function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
  async function checkKeywordPreview(){if(!selected||!sampleText.trim())return;const request=++keywordPreviewRequest.current;setPreviewBusy(true);setPreviewError('');setKeywordPreview(null);try{const response=await base44.functions.invoke('socialListening',{action:'campaignKeywordPreview',id:selected.id,data:{text:sampleText}});if(request===keywordPreviewRequest.current)setKeywordPreview(response.data.screening)}catch(e){if(request===keywordPreviewRequest.current)setPreviewError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{if(request===keywordPreviewRequest.current)setPreviewBusy(false)}}
  const [campaignSection,setCampaignSection]=useState('overview');
- useEffect(()=>{
-   if(!selected||campaignSection!=='watchlist')return;
-   let ok=true;
-   base44.functions.invoke('socialListening',{action:'campaignCandidateSuggestions',id:selected.id,data:{}})
-     .then(r=>{if(ok)setCandidateSuggestions(r.data?.candidates||[])})
-     .catch(()=>{if(ok)setCandidateSuggestions([])});
-   return()=>{ok=false};
- },[selected?.id,campaignSection]);
-
  const [statusFilter,setStatusFilter]=useState('all');
  const [trendMetric,setTrendMetric]=useState('posts');
  const [chartDay,setChartDay]=useState(null);
@@ -550,13 +524,6 @@ export default function CampaignPanel({campaignId=null}){
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
-   {campaignSection==='watchlist'&&<section className="rounded-lg bg-teal-50 border border-teal-200 p-3 space-y-2" aria-label="AI detected candidate suggestions">
-    <h4 className="text-sm font-semibold">Candidates mentioned in saved posts · suggestions</h4>
-    <p className="text-xs">AI-detected names require an officer to verify official cross-platform accounts before tracking. A mention is not proof of endorsement or wrongdoing.</p>
-    <div className="flex flex-wrap gap-2">{(candidateSuggestions||[]).slice(0,10).map(x=><div key={x.name} className="flex items-center gap-2 rounded border border-teal-200 bg-white px-3 py-2 text-xs"><span>{x.name} · {x.matching_posts} mentions</span><button type="button" className="font-semibold text-teal-700 disabled:text-slate-400" disabled={x.tracked||!!candidateAdding} onClick={()=>addSuggestedCandidate(x)}>{x.tracked?'Tracking':candidateAdding===x.name?'Adding…':'Add to Watchlist'}</button></div>)}</div>
-    {candidateAddNotice&&<p role="status" className="text-xs text-teal-800">{candidateAddNotice}</p>}
-    {!candidateSuggestions?.length&&<p className="text-xs">No AI candidate suggestions are available yet.</p>}
-  </section>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 

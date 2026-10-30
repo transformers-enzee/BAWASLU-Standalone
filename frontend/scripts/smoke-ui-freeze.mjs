@@ -13,7 +13,8 @@ function bootstrap(name){
     const object={
       id:key, textContent:'',innerHTML:'',value:'',style:{},dataset:{},
       classList:{add(){},remove(){},toggle(){},contains(){return false}},
-      setAttribute(){},getAttribute(){return null},focus(){},
+      setAttribute(){},getAttribute(){return null},focus(){},setSelectionRange(){},
+      insertAdjacentHTML(_position,markup){this.innerHTML+=markup},
       addEventListener(name,fn){events.set(key+':'+name,fn)},
       querySelector(sel){return elem(key+' '+sel)},
       querySelectorAll(){return []},
@@ -60,4 +61,10 @@ assert.ok(watchlist.elem('#trackedList').innerHTML.includes('Smoke Test Candidat
   'Watchlist renders saved candidate');
 watchlist.window.__watchlist.renderProfile('42');
 assert.equal(watchlist.elem('#candidateName').textContent,'Smoke Test Candidate');
+watchlist.events.get('document:click')({target:{closest:()=>({id:'addCandidate'})}});
+assert.ok(watchlist.elem('#modalBody').innerHTML.includes('aiCandidateSuggestions'),
+  'Add Candidate modal hosts AI suggestions inside the existing popup');
+assert.ok(watchlist.elem('#modalBody').innerHTML.indexOf('aiCandidateSuggestions')<
+  watchlist.elem('#modalBody').innerHTML.indexOf('candidateSearch'),
+  'Suggestions appear above the existing candidate search');
 console.log('PASS: Smart Radar and Watchlist offline startup/render smoke checks');

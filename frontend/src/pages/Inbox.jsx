@@ -542,7 +542,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">
     <div className="p-4 border-b flex justify-between gap-3 items-center"><h3 className="font-semibold">Post preview · AI assessment</h3><button autoFocus type="button" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button></div>
     <div className="p-4 overflow-y-auto space-y-3 text-sm">
-      {String(selected.model_version||'').toLowerCase()==='mock-fixture'&&<div role="note" className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><strong>Synthetic QA example.</strong> This is not a real social-media post. Human verification required; do not treat this fixture as election evidence.</div>}
+      {String(selected.model_version||'').toLowerCase()==='mock-fixture'&&<div role="note" className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><strong>Synthetic QA example.</strong> This is not a real social-media post. Officer review is required; do not treat this fixture as election evidence.</div>}
      <section className="rounded-xl border border-[#dce6e8] bg-[#f5f9f9] p-4 space-y-2">
       <h4 className="font-bold text-sm text-[#184e48]">Original source provenance</h4>
       <p className="text-xs text-slate-600">Source post ID: <code className="break-all">{selected.id||'Not supplied'}</code></p>

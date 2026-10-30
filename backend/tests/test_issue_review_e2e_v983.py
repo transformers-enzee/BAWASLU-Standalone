@@ -109,4 +109,8 @@ def test_frontend_cue_is_opt_in_and_human_rationale_is_not_generated():
     assert "setManualRationale('')" in source
     assert 'source_quote:verifiedCue' in source
     assert 'Your independent evidence assessment' in source
-    assert 'await refreshReviewedPost(selected)' in source
+    # Backend may be briefly stale after a successful officer review; do not
+    # overwrite the local saved decision until Inbox confirms the new status.
+    assert 'await refreshReviewedPost(selected,reviewDecision)' in source
+    assert "await refreshReviewedPost(selected,'FURTHER_INVESTIGATION')" in source
+    assert 'if(expectedStatus&&refreshed.flag_review_status!==expectedStatus)return' in source

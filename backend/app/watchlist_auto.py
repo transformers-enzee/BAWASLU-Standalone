@@ -141,7 +141,8 @@ def sync_account(account_id,client=None,campaign_id=None,manual=False):
         platform,handle=identity(account)
         now=datetime.utcnow()
         query={'watchlist_id':watch.id,'account_id':account.id,'platform':platform,
-               'handle':handle,'province':'','regency_city':''}
+               'handle':handle,'province':'','regency_city':'',
+               'campaign_id':campaign_id,'manual':bool(manual)}
         run=SocialListeningRun(query_json=json.dumps(query),executed_by='watchlist-auto',
                                status='RUNNING')
         db.add(run);db.commit();db.refresh(run)
@@ -285,6 +286,38 @@ def sync_account(account_id,client=None,campaign_id=None,manual=False):
             LOG.exception('Watchlist account sync failed for account id %s',account_id)
             return {'status':'ERROR','error':str(exc)[:350]}
     finally:db.close()
+
+
+def initial_collection_once(account_id,campaign_id):
+    """Run one budget-capped initial fetch only for a never-synced registered account.
+
+    Deployment restarts cannot re-fetch accounts that have an attempted sync.
+    This is distinct from opt-in recurring monitoring.
+    """
+    if not (str(account_id).isdigit() and str(campaign_id).isdigit()):
+        return {'status':'INVALID_CONFIGURATION'}
+    if not readiness()['manual_fetch_available']:
+        return {'status':'BLOCKED','reason':'Provider key or credit budget unavailable'}
+    db=SessionLocal()
+    try:
+        from .models import MonitoringCampaign
+        account=db.get(SourceAccount,int(account_id))
+        campaign=db.get(MonitoringCampaign,int(campaign_id))
+        watch=db.get(WatchlistItem,account.watchlist_id) if account else None
+        state=db.get(WatchlistAccountSync,int(account_id))
+        if not account or not campaign or not watch or watch.status!='Active':
+            return {'status':'SKIPPED','reason':'Account, candidate or campaign unavailable'}
+        if state is None:
+            state=WatchlistAccountSync(account_id=account.id,state='PENDING')
+            db.add(state);db.commit()
+        if state.state!='PENDING' or state.last_checked_at or state.started_at:
+            return {'status':'SKIPPED','reason':'Already checked or in progress'}
+        existing=db.query(WatchlistAccountEvidence.result_id).filter(
+            WatchlistAccountEvidence.account_id==account.id).first()
+        if existing:return {'status':'SKIPPED','reason':'Own-account evidence already exists'}
+    finally:
+        db.close()
+    return sync_account(int(account_id),campaign_id=int(campaign_id),manual=True)
 
 def run_due_cycle():
     db=SessionLocal()

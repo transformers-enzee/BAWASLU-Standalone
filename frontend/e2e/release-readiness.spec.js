@@ -15,14 +15,14 @@ async function uiLogin(page){
 test('release navigation exposes every completed administrator module',async({page})=>{
   await uiLogin(page);
   const nav=page.getByRole('navigation');
-  const modules=[
-    'Home','Watchlist','Social Listening','Intelligence Inbox',
-    'BAWASLU Intelligence Assistant','Data Sources',
-    'Validation','Administration'
-  ];
+  // V3 navigation embeds Candidate Watchlist inside Social Listening.
+  const modules=['Command Centre','Social Listening','Intelligence Inbox',
+    'Data Sources','Validation','Administration'];
   for(const name of modules){
     await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
   }
+  await expect(nav.getByRole('link',{name:/assistant/i})).toBeVisible();
+  await expect(nav.getByRole('link',{name:/^Watchlist$/i})).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();
 });

@@ -41,7 +41,8 @@ def assessment_pilot_preview(db,principal,data,campaign_id):
                     SocialListeningResult.published_at,SocialListeningResult.canonical_url,
                     func.substr(SocialListeningResult.text_content,1,300).label('excerpt'))
               .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
-              .filter(CampaignEvidence.campaign_id==c.id))
+              .filter(CampaignEvidence.campaign_id==c.id,
+                      CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
     if anchor is not None:query=query.filter(CampaignEvidence.id<=anchor)
     newest=query.order_by(CampaignEvidence.id.desc()).limit(500).all()
     if anchor is None:anchor=newest[0].link_id if newest else 0

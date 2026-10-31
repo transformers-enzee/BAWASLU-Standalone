@@ -197,8 +197,13 @@ test('Bali Provincial Analyst cannot access an out-of-scope intelligence record 
   expect(created.ok()).toBeTruthy();
   const record = (await created.json()).item;
 
+  const analystToken=await loginToken(request,ANALYST_EMAIL,ANALYST_PASSWORD);
+  const forbidden=await intelligence(request,analystToken,'get',{},record.id);
+  expect(forbidden.status()).toBe(403);
   await uiLogin(page, ANALYST_EMAIL, ANALYST_PASSWORD);
   await page.goto(`/intelligence/${record.id}`);
-  await expect(page.getByRole('heading', { name: /access denied/i })).toBeVisible();
+  // Do not depend on legacy Access Denied heading: ensure the private title
+  // and content never render in an unauthorized browser session.
   await expect(page.getByText('Playwright Out Of Scope Record')).toHaveCount(0);
+  await expect(page.getByText('Synthetic local QA evidence only.')).toHaveCount(0);
 });

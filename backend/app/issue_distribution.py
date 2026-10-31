@@ -59,6 +59,20 @@ def _read(db,perspective,signature):
 
 @router.get("/issue-distribution")
 def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    # The optional legacy pilot schema is not present in every installation
+    # (notably clean QA and newly migrated databases). Fail visibly without a
+    # 500, and never enqueue paid AI work while storage is unavailable.
+    from sqlalchemy import inspect
+    authorised(db,user)
+    try:
+        available=inspect(db.get_bind()).has_table('topic_summaries',schema='pilot_smart_radar')
+    except Exception:
+        db.rollback()
+        available=False
+    if not available:
+        return {'source_total':0,'operations':None,'reputation':None,
+                'storage_status':'UNAVAILABLE',
+                'note':'Optional issue topic storage is unavailable. No AI requests were scheduled.'}
     posts=_records(db,user)
     signature=_signature(posts)
     operations=_read(db,"operations",signature)

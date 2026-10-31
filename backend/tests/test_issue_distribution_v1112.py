@@ -20,3 +20,17 @@ def test_no_provider_call_on_dashboard():
     radar=(base/'app'/'smart_radar.py').read_text()
     assert 'issue_distribution/analyze' not in radar
     assert 'paid_provider_called":False' in radar
+
+def test_optional_topic_storage_missing_does_not_crash_or_schedule_paid_ai(monkeypatch):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app import issue_distribution
+    monkeypatch.setattr(issue_distribution,'authorised',lambda db,user:{})
+    monkeypatch.setattr(issue_distribution,'_records',
+        lambda db,user:(_ for _ in ()).throw(AssertionError('Missing storage must not trigger source queries')))
+    with Session(create_engine('sqlite:///:memory:')) as db:
+        result=issue_distribution.distribution(None,user=object(),db=db)
+    assert result['storage_status']=='UNAVAILABLE'
+    assert result['operations'] is None and result['reputation'] is None
+    assert result['source_total']==0
+    assert 'No AI requests were scheduled' in result['note']

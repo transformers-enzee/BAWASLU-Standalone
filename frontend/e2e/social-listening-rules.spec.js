@@ -1,372 +1,51 @@
 import { test, expect } from '@playwright/test';
 import config from '../playwright.config.js';
 
-const ADMIN_EMAIL='admin@bawaslu.local';
-const ADMIN_PASSWORD=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
-
-async function uiLogin(page){
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill(ADMIN_EMAIL);
-  await page.getByLabel(/^password$/i).fill(ADMIN_PASSWORD);
-  await page.getByRole('button',{name:/log in|masuk/i}).click();
-  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+const email='admin@bawaslu.local';
+const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
+async function login(page){
+ await page.goto('/login');
+ await page.getByLabel(/email/i).fill(email);
+ await page.getByLabel(/^password$/i).fill(password);
+ await page.getByRole('button',{name:/log in|masuk/i}).click();
+ await page.waitForURL(url=>!url.pathname.startsWith('/login'));
 }
-
-test('saved Social Listening search can pause resume and load filters without provider calls',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=search');
-
-  const name='QA Saved Search '+Date.now();
-  await page.getByLabel(/keyword/i).fill('bawaslu qa');
-  await page.getByPlaceholder(/saved search name/i).fill(name);
-  await page.getByRole('button',{name:/save search/i}).click();
-
-  await page.getByRole('button',{name:/saved searches/i}).click();
-  const card=page.locator('.intel-card').filter({hasText:name});
-  await expect(card).toBeVisible();
-  await expect(card.getByText('Active',{exact:true})).toBeVisible();
-  await expect(card.getByText('Mine',{exact:true})).toBeVisible();
-  await expect(card.getByText(/Created by:/i)).toBeVisible();
-  await expect(card.getByText(/Scope:/i)).toBeVisible();
-
-  await card.getByRole('button',{name:/pause/i}).click();
-  await expect(card.getByText('Inactive',{exact:true})).toBeVisible();
-
-  await card.getByRole('button',{name:/resume/i}).click();
-  await expect(card.getByText('Active',{exact:true})).toBeVisible();
-
-  await card.getByRole('button',{name:/load filters/i}).click();
-  await expect(page.getByLabel(/keyword/i)).toHaveValue('bawaslu qa');
+async function makeCampaign(request, name){
+ const auth=await request.post('/api/auth/login',{data:{email,password}});
+ expect(auth.ok()).toBeTruthy();
+ const token=(await auth.json()).access_token;
+ const created=await request.post('/api/functions/socialListening',{
+  headers:{Authorization:'Bearer '+token},
+  data:{action:'createCampaign',data:{
+    name,primary_keywords:['gibran'],platforms:['tiktok'],description:'Local E2E saved campaign'
+  }}
+ });
+ expect(created.ok()).toBeTruthy();
+ return {campaign:(await created.json()).campaign,token};
+}
+test('V3 Social Listening navigation shows campaigns, not retired Saved Searches or Review Queue',async({page})=>{
+ await login(page);
+ await page.goto('/social-listening');
+ await expect(page.getByRole('heading',{name:'Social Listening'})).toBeVisible();
+ await expect(page.getByRole('button',{name:/create campaign/i})).toBeVisible();
+ await expect(page.getByRole('button',{name:/saved searches|review queue|discover sources/i})).toHaveCount(0);
 });
-
-
-test('saved Social Listening search can edit and delete without provider calls',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=search');
-
-  const original='QA Lifecycle '+Date.now();
-  const renamed=original+' Renamed';
-  await page.getByLabel(/keyword/i).fill('bawaslu lifecycle');
-  await page.getByPlaceholder(/saved search name/i).fill(original);
-  await page.getByPlaceholder(/saved search description/i).fill('Initial QA description');
-  await page.getByRole('button',{name:/save search/i}).click();
-
-  await page.getByRole('button',{name:/saved searches/i}).click();
-  let card=page.locator('.intel-card').filter({hasText:original});
-  await expect(card).toBeVisible();
-  await card.getByRole('button',{name:/edit/i}).click();
-
-  await expect(page.getByText(/Editing saved search/i)).toBeVisible();
-  await page.getByPlaceholder(/saved search name/i).fill(renamed);
-  await page.getByPlaceholder(/saved search description/i).fill('Updated QA description');
-  await page.getByRole('button',{name:/update saved search/i}).click();
-
-  card=page.locator('.intel-card').filter({hasText:renamed});
-  await expect(card).toBeVisible();
-  await expect(card.getByText('Updated QA description')).toBeVisible();
-
-  page.once('dialog',dialog=>dialog.accept());
-  await card.getByRole('button',{name:/delete/i}).click();
-  await expect(page.locator('.intel-card').filter({hasText:renamed})).toHaveCount(0);
+test('V3 campaign captured posts and candidate watchlist stay in the selected campaign',async({page,request})=>{
+ const {campaign}=await makeCampaign(request,'QA Campaign tabs '+Date.now());
+ await login(page);
+ await page.goto('/social-listening/campaigns/'+campaign.id);
+ const sections=page.getByRole('navigation',{name:'Selected campaign sections'});
+ await expect(sections.getByRole('button',{name:'Overview'})).toBeVisible();
+ await sections.getByRole('button',{name:'Captured Posts'}).click();
+ await expect(page.getByRole('region',{name:'Captured posts'})).toBeVisible();
+ await sections.getByRole('button',{name:'Candidate Watchlist'}).click();
+ await expect(page.locator('iframe[src*="watchlist-v2_2.html"]')).toHaveCount(1);
 });
-
-
-test('Social Listening date filters are mutually exclusive without provider calls',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=search');
-
-  const lookback=page.getByLabel(/lookback days/i);
-  const dateFrom=page.getByLabel(/date from/i);
-  const dateTo=page.getByLabel(/date to/i);
-
-  await expect(lookback).toHaveValue('7');
-  await dateFrom.fill('2026-10-01');
-  await expect(lookback).toHaveValue('');
-  await dateTo.fill('2026-10-08');
-  await expect(dateFrom).toHaveValue('2026-10-01');
-
-  await lookback.fill('14');
-  await expect(dateFrom).toHaveValue('');
-  await expect(dateTo).toHaveValue('');
-});
-
-
-test('Social Listening tabs persist through browser reload without running provider searches', async ({ page }) => {
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=rules');
-  await expect(page.getByRole('button', { name: /Saved Searches/i }).first()).toBeVisible();
-  await expect(page).toHaveURL(/tab=rules/);
-  await page.reload();
-  await expect(page).toHaveURL(/tab=rules/);
-  await page.getByRole('button', { name: /Review Queue/i }).first().click();
-  await expect(page).toHaveURL(/tab=queue/);
-  await page.reload();
-  await expect(page).toHaveURL(/tab=queue/);
-});
-
-
-test('Review Queue refresh gives visible feedback without resetting filters', async ({ page }) => {
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=queue');
-  await expect(page.getByRole('button', { name: /Refresh queue/i })).toBeVisible();
-  await page.getByRole('button', { name: /Refresh queue/i }).click();
-  await expect(page.getByRole('status')).toContainText('Queue refreshed successfully.');
-  await expect(page).toHaveURL(/tab=queue/);
-});
-
-
-test('TikTok only displays native one-credit estimate without provider execution',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=search');
-  const sources=['Instagram','Youtube','X / Twitter','Threads','Reddit','Linkedin','Online News'];
-  for(const label of sources){const cb=page.getByRole('checkbox',{name:label,exact:true});if(await cb.isChecked())await cb.uncheck();}
-  const tiktok=page.getByRole('checkbox',{name:'Tiktok',exact:true});if(!(await tiktok.isChecked()))await tiktok.check();
-  await expect(page.getByText(/1 credits?/i).first()).toBeVisible();
-  await expect(page.getByRole('button',{name:/Search SocialCrawl.*1 credits?/i})).toBeVisible();
-});
-
-
-// Architecture v2 campaign-first entry point, stored configuration, and no paid crawls.
-test('Monitoring campaigns are saved as drafts and survive reload without provider calls',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening');
-  await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toBeVisible();
-  const name='QA Campaign '+Date.now();
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  await page.getByLabel(/Campaign name/i).fill(name);
-  await page.getByRole('textbox',{name:'Main keywords'}).fill('pemilu');
-  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
-  await page.getByRole('textbox',{name:'Main keywords'}).fill('gibran');
-  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
-  await page.getByRole('textbox',{name:'Secondary keywords'}).fill('wapres');
-  await page.getByRole('textbox',{name:'Secondary keywords'}).press('Enter');
-  await page.getByLabel(/Excluded keywords/i).fill('concert');
-  await page.getByRole('button',{name:'Save Draft'}).click();
-  await expect(page.getByRole('status')).toContainText('Campaign saved as draft');
-  await expect(page.getByRole('row').filter({hasText:name})).toBeVisible();
-  await page.reload();
-  const card=page.getByRole('row').filter({hasText:name});
-  await expect(card).toBeVisible();
-  await expect(card).toContainText('Draft');
-  await expect(card).toContainText('pemilu');
-  await expect(card).toContainText('gibran');
-  await expect(card).toContainText('0');
-  await card.getByRole('button',{name:'Pause'}).click();
-  await expect(card).toContainText('Paused');
-});
-
-
-test('Campaign schedule panel shows estimates and no automatic paid crawling',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening');
-  const name='QA Schedule '+Date.now();
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  await page.getByLabel(/Campaign name/i).fill(name);
-  await page.getByRole('textbox',{name:'Main keywords'}).fill('bawaslu');
-  await page.getByRole('textbox',{name:'Main keywords'}).press('Enter');
-  await page.getByRole('button',{name:'Save Draft'}).click();
-  const card=page.getByRole('row').filter({hasText:name});
-  await expect(card).toBeVisible();
-  await card.getByRole('button',{name:'Open Dashboard'}).click();
-  const manual=page.getByLabel('Manual campaign crawl');
-  await expect(manual).toBeVisible();
-  await expect(manual).toContainText('Scheduled crawling remains disabled.');
-  await manual.getByRole('button',{name:'Check manual crawl cost (free)'}).click();
-  await expect(manual.getByRole('status')).toContainText('Estimated cost:');
-});
-
-
-test('Campaign keyword tags support Enter, deduplication, removal and preserved phrase input',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening');
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  const dialog=page.getByRole('dialog');
-  const main=dialog.getByRole('textbox',{name:'Main keywords'});
-  const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
-  await main.fill('money politics');await main.press('Enter');
-  await expect(dialog.getByText('money politics',{exact:true})).toBeVisible();
-  await main.fill('MONEY POLITICS');await main.press('Enter');
-  await expect(dialog.getByRole('button',{name:'Remove money politics from Main keywords'})).toHaveCount(1);
-  await secondary.fill('election oversight');await secondary.locator('..').getByRole('button',{name:'Add'}).click();
-  await expect(dialog.getByText('election oversight',{exact:true})).toBeVisible();
-  const excluded=dialog.getByRole('textbox',{name:'Excluded keywords'});
-  await excluded.fill('irrelevant');await excluded.press('Enter');
-  await expect(dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'})).toHaveCount(1);
-  await dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'}).click();
-  await expect(dialog.getByRole('button',{name:'Remove irrelevant from Excluded keywords'})).toHaveCount(0);
-  await dialog.getByRole('button',{name:'Remove money politics from Main keywords'}).click();
-  await expect(dialog.getByText('money politics',{exact:true})).toHaveCount(0);
-  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();
-});
-
-
-test('Campaign credit preview shows per-source breakdown and clears when configuration changes',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=campaigns');
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  const dialog=page.getByRole('dialog');
-  await dialog.getByLabel(/Campaign name/i).fill('QA credit preview');
-  const main=dialog.getByRole('textbox',{name:'Main keywords'});
-  await main.fill('pemilu');await main.press('Enter');
-  await dialog.getByRole('button',{name:'Check estimated credits'}).click();
-  await expect(dialog.getByRole('status')).toContainText('Estimated cost:');
-  await expect(dialog.getByRole('list',{name:'Estimated credits by source'})).toContainText('Native social search');
-  await dialog.getByLabel(/Language/i).selectOption('id');
-  await expect(dialog.getByText('Estimated cost:')).toHaveCount(0);
-  await expect(dialog.getByRole('list',{name:'Estimated credits by source'})).toHaveCount(0);
-});
-
-
-test('Campaign keyword screening preview is free and distinguishes main, secondary and excluded terms',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=campaigns');
-  const name='QA Keyword Preview '+Date.now();
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  const dialog=page.getByRole('dialog');
-  await dialog.getByLabel(/Campaign name/i).fill(name);
-  const main=dialog.getByRole('textbox',{name:'Main keywords'});
-  await main.fill('pemilu');await main.press('Enter');
-  const secondary=dialog.getByRole('textbox',{name:'Secondary keywords'});
-  await secondary.fill('bawaslu');await secondary.press('Enter');
-  await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
-  await page.getByText('Keyword screening preview (free)',{exact:true}).click();
-  const preview=page.getByLabel('Campaign keyword screening preview');
-  await preview.getByRole('textbox',{name:'Sample social post'}).fill('Bawaslu mengawasi pemilu');
-  await preview.getByRole('button',{name:'Preview keyword match'}).click();
-  await expect(preview.getByRole('status')).toContainText('Matches campaign keywords');
-  await expect(preview.getByRole('status')).toContainText('Secondary context: bawaslu');
-  await preview.getByRole('textbox',{name:'Sample social post'}).fill('Topik lain');
-  await expect(preview.getByRole('status')).toHaveCount(0);
-  await preview.getByRole('button',{name:'Preview keyword match'}).click();
-  await expect(preview.getByRole('status')).toContainText('Does not match campaign keywords');
-});
-
-
-test('Campaign analytics date filtering uses stored evidence and validates date order',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=campaigns');
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  const dialog=page.getByRole('dialog');
-  const name='QA Analytics '+Date.now();
-  await dialog.getByLabel(/Campaign name/i).fill(name);
-  const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
-  await keyword.fill('pemilu');await keyword.press('Enter');
-  await dialog.getByRole('button',{name:'Save Draft'}).click();
-  await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
-  const filters=page.getByLabel('Campaign analytics date filters');
-  await expect(page.getByLabel('Campaign trend by platform')).toBeVisible();
-  await filters.getByLabel('From date').fill('2026-10-15');
-  await filters.getByLabel('To date').fill('2026-10-01');
-  await filters.getByRole('button',{name:'Apply filters'}).click();
-  await expect(page.getByRole('alert')).toContainText('Start date must not be after end date');
-  await filters.getByLabel('To date').fill('2026-10-15');
-  await filters.getByRole('button',{name:'Apply filters'}).click();
-  await expect(page.getByLabel('Campaign monitoring dashboard')).toContainText('No dated posts in this period');
-});
-
-
-test('Campaign editor explains invalid start/end dates and allows saving after correction',async({page})=>{
-  await uiLogin(page);
-  await page.goto('/social-listening?tab=campaigns');
-  await page.getByRole('button',{name:/New Campaign/i}).click();
-  const dialog=page.getByRole('dialog');
-  await dialog.getByLabel(/Campaign name/i).fill('QA date validation '+Date.now());
-  const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
-  await keyword.fill('pemilu');await keyword.press('Enter');
-  await dialog.getByLabel('Start date').fill('2026-10-20');
-  await dialog.getByLabel('End date').fill('2026-10-10');
-  await expect(dialog.getByRole('alert')).toContainText('Start date cannot be after end date');
-  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeDisabled();
-  await dialog.getByLabel('End date').fill('2026-10-25');
-  await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await expect(dialog.getByRole('button',{name:'Save Draft'})).toBeEnabled();
-});
-
-
-test('Campaign detail includes four evidence panels without calling paid providers',async({page})=>{
- const calls=[];page.on('request',req=>{if(/socialcrawl\\.dev/i.test(req.url()))calls.push(req.url())});
- await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
- await page.getByRole('button',{name:/New Campaign/i}).click();
- const dialog=page.getByRole('dialog');const name='QA Four Panels '+Date.now();
- await dialog.getByLabel(/Campaign name/i).fill(name);
- const input=dialog.getByRole('textbox',{name:'Main keywords'});
- await input.fill('pemilu');await input.press('Enter');
- await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- for(const label of ['Channel distribution','Campaign trend by platform','Captured posts','Campaign demographics'])await expect(page.getByLabel(label,{exact:true})).toBeVisible();
- await expect(page.getByLabel('Campaign demographics')).toContainText('Demographics');
- expect(calls).toEqual([]);
-});
-
-
-test('Campaign dashboard opens in separate deep-linkable page',async({page})=>{
- await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
- await page.getByRole('button',{name:/New Campaign/i}).click();
- const dialog=page.getByRole('dialog');const name='QA Dedicated Dashboard '+Date.now();
- await dialog.getByLabel(/Campaign name/i).fill(name);
- const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
- await keyword.fill('pemilu');await keyword.press('Enter');
- await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- await expect(page).toHaveURL(/\/social-listening\/campaigns\/\d+/);
- await expect(page.getByLabel('Channel distribution',{exact:true})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Monitoring Campaigns'})).toHaveCount(0);
- await page.reload();await expect(page.getByLabel('Campaign demographics')).toBeVisible();
- await page.getByRole('button',{name:/Back to campaigns/i}).click();
- await expect(page).toHaveURL(/\/social-listening\?tab=campaigns/);
-});
-
-
-test('Campaign trend panel spans the full row and supports metric toggling',async({page})=>{
- await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
- const name='QA Line Trend '+Date.now();
- await page.getByRole('button',{name:/New Campaign/i}).click();
- const dialog=page.getByRole('dialog');await dialog.getByLabel(/Campaign name/i).fill(name);
- const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
- await keyword.fill('pemilu');await keyword.press('Enter');
- await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- const panel=page.getByLabel('Campaign trend by platform');
- await expect(panel).toBeVisible();
- await expect(panel).toHaveClass(/lg:col-span-2/);
- await expect(panel.getByRole('group',{name:'Trend metric'})).toBeVisible();
- const captured=page.getByLabel('Captured posts',{exact:true});
- await expect(captured).toContainText('Hottest posts first');
- await expect(captured.getByRole('group',{name:'Captured post order'})).toHaveCount(0);
- await expect(captured.getByRole('button',{name:'Most viewed'})).toHaveCount(0);
- for (const metric of ['Posts','Engagement','Views']) {
-  await panel.getByRole('button',{name:metric,exact:true}).click();
-  await expect(panel.getByRole('button',{name:metric,exact:true})).toHaveAttribute('aria-pressed','true');
- }
- await expect(panel).toContainText('No dated posts in this period');
-});
-
-
-test('Campaign demographics and word cloud handle no-evidence state',async({page})=>{
- await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
- await page.getByRole('button',{name:/New Campaign/i}).click();
- const dialog=page.getByRole('dialog');const name='QA Wordcloud '+Date.now();
- await dialog.getByLabel(/Campaign name/i).fill(name);
- const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
- await keyword.fill('pemilu');await keyword.press('Enter');
- await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- await expect(page.getByLabel('Campaign demographics')).toContainText('unavailable');
- await expect(page.getByLabel('Campaign word cloud')).toContainText('No configured campaign keywords appear');
- await expect(page.getByLabel('Audience and geographic insights')).toHaveCount(0);
-});
-
-
-test('Dedicated campaign dashboard has full-width configured-keyword word cloud',async({page})=>{
- await uiLogin(page);await page.goto('/social-listening?tab=campaigns');
- await page.getByRole('button',{name:/New Campaign/i}).click();
- const dialog=page.getByRole('dialog');const name='QA Keywords Only '+Date.now();
- await dialog.getByLabel(/Campaign name/i).fill(name);
- const keyword=dialog.getByRole('textbox',{name:'Main keywords'});
- await keyword.fill('pemilu');await keyword.press('Enter');
- await dialog.getByRole('button',{name:'Save Draft'}).click();
- await page.getByRole('row').filter({hasText:name}).getByRole('button',{name:'Open Dashboard'}).click();
- await expect(page.getByLabel('Campaign demographics')).toBeVisible();
- await expect(page.getByLabel('Campaign word cloud')).toContainText('Only configured main and secondary keywords');
+test('V3 separate Discover is explicit and cannot silently execute on navigation',async({page,request})=>{
+ await makeCampaign(request,'QA Discover guard '+Date.now());
+ const paid=[];page.on('request',r=>{if(/socialcrawl\.dev|api\.openai\.com/.test(r.url()))paid.push(r.url())});
+ await login(page);
+ await page.goto('/social-listening');
+ await expect(page.getByRole('button',{name:/discover · 50 posts/i}).first()).toBeVisible();
+ expect(paid).toEqual([]);
 });

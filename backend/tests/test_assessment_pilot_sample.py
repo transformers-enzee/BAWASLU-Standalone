@@ -24,7 +24,7 @@ def test_pilot_never_includes_registered_account_only_posts():
     engine=create_engine('sqlite:///:memory:')
     Base.metadata.create_all(engine)
     with Session(engine) as db:
-        campaign=MonitoringCampaign(name='QA Test campaign',status='DRAFT',
+        campaign=MonitoringCampaign(name='QA Test campaign',created_by='1',status='DRAFT',
             primary_keywords_json='["gibran"]',platforms_json='["instagram"]')
         run=SocialListeningRun(provider='SOCIALCRAWL',status='COMPLETED')
         db.add_all([campaign,run]);db.flush()

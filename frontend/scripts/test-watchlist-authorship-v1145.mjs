@@ -16,6 +16,7 @@ function el(key){
     insertAdjacentHTML(_where,markup){this.innerHTML+=markup}});
   return nodes.get(key);
 }
+let simulateCapturedFeedFailure=false;
 const document={querySelector:el,querySelectorAll(){return []},
   documentElement:{classList:{add(){}}},
   addEventListener(kind,fn){const a=listeners.get(kind)||[];a.push(fn);listeners.set(kind,a)}};
@@ -34,7 +35,9 @@ async function fakeFetch(url,options){
   if(req.action==='myAccess')return json({access:{permissions:{manage_watchlist:true}}});
   if(req.action==='list')return json({items:[{id:3,type:'Candidate',name:'Gibran Rakabuming Raka',
     status:'Active',candidate_aliases:[]}],accounts:[]});
-  if(req.action==='watchlistCapturedFeed')return json({posts:records,total:16,own_posts:0,mentions_by_others:16});
+  if(req.action==='watchlistCapturedFeed')return simulateCapturedFeedFailure?
+    {ok:false,json:async()=>({detail:'Simulated captured-feed failure'})}:
+    json({posts:records,total:16,own_posts:0,mentions_by_others:16});
   if(req.action==='campaignEvidence')return json({evidence:records});
   if(req.action==='watchlistSyncStatus')return json({enabled:false,feature_enabled:false,accounts:[]});
   throw Error('Unexpected request '+req.action);
@@ -56,6 +59,20 @@ assert.equal(profile.posts.filter(p=>p.kind==='own').length,0,'News publisher mu
 assert.equal(profile.posts.filter(p=>p.kind==='earned').length,16);
 assert.equal(el('#pOwn').textContent,0,'Own Posts KPI must be zero');
 assert.equal(el('#pEarned').textContent,16,'Mentions KPI must count news publisher sources');
+assert.equal(profile.feedLoadState,'ready','Saved feed should complete without extra campaign evidence request');
+assert.equal(requests.filter(r=>r.action==='campaignEvidence').length,0,
+  'Do not block direct campaign feed on expensive secondary campaignEvidence API');
+simulateCapturedFeedFailure=true;
+ui.onRefreshProfile('3');
+await tick();await tick();await tick();
+assert.equal(profile.posts.length,16,'Fallback must preserve saved mentions when direct feed fails');
+assert.ok(profile.feedWarning.includes('fallback evidence source'),'Display evidence fallback status');
+assert.ok(el('#tabbody').innerHTML.includes('Evidence loading issue'),'Never silently show zero without an error');
+simulateCapturedFeedFailure=false;
+ui.onRefreshProfile('3');
+await tick();await tick();await tick();
+assert.equal(profile.posts.length,16,'Retry restores primary captured feed');
+assert.equal(profile.feedWarning,'','Successful retry clears prior warning');
 assert.equal(profile.posts[0].source,'ntvnews.id'||'reporter_15');
 ui.showAccountTab();
 assert.ok(el('#tabbody').innerHTML.includes('Register public account'),'Account registration must be available');

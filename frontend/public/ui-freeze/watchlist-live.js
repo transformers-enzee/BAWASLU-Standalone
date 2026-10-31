@@ -241,7 +241,14 @@
   async function collectedPosts(id){
     const posts=[];
     for(let page=1;page<=10;page++){
-      const result=await registry('watchlistCapturedFeed',{page,page_size:50,...(campaignId?{campaign_id:campaignId}:{})},id);
+      let result;
+      try{
+        result=await registry('watchlistCapturedFeed',{page,page_size:50,...(campaignId?{campaign_id:campaignId}:{})},id);
+      }catch(error){
+        if(!posts.length)throw error;
+        // A transient later-page failure must not erase records already loaded.
+        break;
+      }
       posts.push(...(result.posts||[]));
       if(posts.length>=Number(result.total||0)||!result.posts?.length)break;
     }
@@ -300,15 +307,38 @@
     const candidate=ui.getCandidate(id);
     if(!candidate)return;
     loading.add(id);
+    candidate.feedLoadState='loading';
+    candidate.feedWarning='';
+    ui.renderProfile(id);
     try{
-      const [captured,actor]=await Promise.allSettled([
-        collectedPosts(id),campaignId?scopedMentions(candidate):intel('actorPicture',{actor_id:id})
-      ]);
-      const capturedRecords=captured.status==='fulfilled'?captured.value.map(mapCaptured):[];
-      const records=actor.status==='fulfilled'?(campaignId?(Array.isArray(actor.value)?actor.value:[]):(actor.value.records||[])):[];
-      // The feed contains BOTH authored posts and third-party mentions. It is
-      // never safe to classify an entire captured feed as candidate-authored.
-      const related=campaignId?records:records.map(mapEarned);
+      let capturedRecords=[],related=[],capturedError=null;
+      try{
+        capturedRecords=(await collectedPosts(id)).map(mapCaptured);
+      }catch(error){
+        capturedError=error;
+        candidate.feedWarning='Captured-post feed unavailable: '+(error.message||'request failed');
+      }
+      // The campaign-filtered Watchlist feed is the authoritative source for
+      // BOTH own posts and third-party mentions. Do not block it on the much
+      // slower campaignEvidence endpoint or an unrelated actor-picture request.
+      if(campaignId&&(capturedError||capturedRecords.length===0)){
+        try{
+          related=await scopedMentions(candidate);
+          if(capturedError&&related.length)
+            candidate.feedWarning='Showing saved campaign mentions from the fallback evidence source. Direct Watchlist feed unavailable.';
+        }catch(error){
+          candidate.feedWarning=[candidate.feedWarning,
+            'Campaign evidence fallback unavailable: '+(error.message||'request failed')]
+            .filter(Boolean).join(' · ');
+        }
+      }else if(!campaignId){
+        try{
+          const actor=await intel('actorPicture',{actor_id:id});
+          related=(actor.records||[]).map(mapEarned);
+        }catch(error){
+          candidate.feedWarning='Additional intelligence unavailable: '+(error.message||'request failed');
+        }
+      }
       const knownSources=new Set(capturedRecords.map(post=>post.sourceId).filter(Boolean));
       const knownUrls=new Set(capturedRecords.map(post=>post.url).filter(Boolean));
       const uniqueRelated=related.filter(post=>{
@@ -320,7 +350,6 @@
       });
       candidate.posts=[...capturedRecords,...uniqueRelated]
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-      // Reuse only flags returned by the saved assessment view; never infer a legal violation.
       candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
         id:'FLAG-'+post.id,title:'Potential violation indicator · unverified',
         summary:'Saved assessment v'+(post.assessment?.assessment_version??'unknown')+
@@ -328,8 +357,12 @@
           '. Inspect original evidence before any officer decision.',
         status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
       }));
-      try{
-        const status=await registry('watchlistSyncStatus',{},id);
+      candidate.feedLoadState=capturedError&&!candidate.posts.length?'error':'ready';
+      loaded.add(id);
+      ui.renderProfile(id);
+      // Account-sync metadata is independent from the source evidence list.
+      // A delayed status call must not keep all captured posts at zero.
+      registry('watchlistSyncStatus',{},id).then(status=>{
         candidate.manualFetchAvailable=status.manual_fetch_available===true;
         candidate.collectionStatus=status.enabled
           ?'Automatic account collection is enabled.'
@@ -337,14 +370,17 @@
             ?'Automatic collection is disabled, but a manual account-post fetch is available.'
             :'No account posts will be collected until the server has a SocialCrawl API key and daily credit budget of at least 2. Registering an account alone never fetches its posts.';
         candidate.accountSyncStates=Array.isArray(status.accounts)?status.accounts:[];
-      }catch{candidate.collectionStatus='Account collection status unavailable.';candidate.manualFetchAvailable=false}
-      loaded.add(id);
+        if(ui.selected()===id)ui.renderProfile(id);
+      }).catch(error=>{
+        candidate.collectionStatus='Account collection status unavailable: '+(error.message||'request failed');
+        candidate.manualFetchAvailable=false;
+        if(ui.selected()===id)ui.renderProfile(id);
+      });
+    }catch(error){
+      candidate.feedLoadState='error';
+      candidate.feedWarning='Candidate evidence could not load: '+(error.message||'request failed');
       ui.renderProfile(id);
-      if(captured.status==='rejected'||actor.status==='rejected')
-        ui.notify('Some campaign evidence could not load. Counts may be incomplete; review source availability.');
-      // Preserve original links in the post detail dialogs.
-    }catch(error){ui.notify('Unable to load candidate evidence: '+error.message);}
-    finally{loading.delete(id);}
+    }finally{loading.delete(id);}
   };
   document.addEventListener('click',event=>{
     const target=event.target.closest('[data-post]');

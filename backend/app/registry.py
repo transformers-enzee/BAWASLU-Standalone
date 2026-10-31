@@ -252,7 +252,13 @@ def registry_action(db:Session,p,action,data,id=None):
         # Candidate mentions are separate from own posts. They are source-text
         # matches, not verified identity, endorsement or legal findings.
         from .candidate_registry import aliases_for
+        from .processing_hints import CANDIDATE_ALIASES, normalize_candidate_signals
         aliases=[w.name,*aliases_for(w)] if w.type=='Candidate' and not account_filter else []
+        # Use the same curated aliases as the candidate registry. Otherwise a
+        # campaign containing "Gibran" but not his full name appears empty.
+        canonical=normalize_candidate_signals([w.name])
+        if aliases and canonical:
+            aliases.extend(CANDIDATE_ALIASES.get(canonical[0],()))
         aliases=list(dict.fromkeys(a.strip() for a in aliases if isinstance(a,str)
             and len(a.strip())>=5))
         for alias in aliases:

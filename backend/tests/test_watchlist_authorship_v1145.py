@@ -86,3 +86,27 @@ def test_registered_matching_author_is_own_post():
     assert result['mentions_by_others']==0
     assert result['posts'][0]['relation']=='OWN_POST'
     db.close()
+
+def test_16_saved_mentions_remain_visible_after_instagram_registration():
+    """Candidate account registration must not erase campaign mentions."""
+    db,p,w,c,r=make_db()
+    db.add(SourceAccount(watchlist_id=w.id,platform='instagram',
+        handle='@gibran_rakabuming',
+        url='https://www.instagram.com/gibran_rakabuming'))
+    db.commit()
+    for index in range(16):
+        author='ntvnews.id' if index==0 else 'reporter_'+str(index)
+        # Typical provider results use the short candidate name, not the
+        # full registered Watchlist name.
+        add_post(db,r,c,author=author,handle=author,
+            text='Berita tentang Gibran dan pemilihan.')
+    result=feed(db,p,c,w)
+    assert result['total']==16
+    assert result['own_posts']==0
+    assert result['mentions_by_others']==16
+    assert len(result['posts'])==16
+    assert all(post['relation']=='THIRD_PARTY_MENTION'
+               for post in result['posts'])
+    assert any(post['author_name']=='ntvnews.id'
+               for post in result['posts'])
+    db.close()

@@ -15,16 +15,7 @@
     if(!response.ok)throw Error(result.detail||result.error||'Registry unavailable ('+response.status+')');
     return result;
   }
-  async function intel(action,data={}){
-    const response=await fetch('/api/functions/intelligence',{method:'POST',cache:'no-store',headers:{
-      'Content-Type':'application/json','Authorization':'Bearer '+token()
-    },body:JSON.stringify({action,data})});
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(result.detail||result.error||'Intelligence unavailable');
-    return result;
-  }
-
-  // Recommendations stay inside the existing Add Candidate modal, scoped to
+  // Recommendations stay inside the existing Add Candidate modal  // Recommendations stay inside the existing Add Candidate modal, scoped to
   // the current Social Listening campaign and backed by saved source IDs.
   let suggestions=[],suggestionsLoading=false,suggestionsError='',suggestionsFetchedAt=0,suggestionsRequest=null;
   const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,char=>({
@@ -239,18 +230,20 @@
     }catch(error){ui.notify('Candidate not created: '+error.message);}
   };
   async function collectedPosts(id){
-    const posts=[];
-    for(let page=1;page<=10;page++){
-      let result;
-      try{
-        result=await registry('watchlistCapturedFeed',{page,page_size:50,...(campaignId?{campaign_id:campaignId}:{})},id);
-      }catch(error){
-        if(!posts.length)throw error;
-        // A transient later-page failure must not erase records already loaded.
-        break;
+    const posts=[],seen=new Set();
+    // Page through the SAME saved campaign Captured Posts evidence used by
+    // Social Listening. This never calls SocialCrawl or OpenAI. Do not cap at
+    // the dashboard's 200-post preview or an arbitrary 500-record limit.
+    for(let page=1;page<=10000;page++){
+      const result=await registry('watchlistCapturedFeed',
+        {page,page_size:50,...(campaignId?{campaign_id:campaignId}:{})},id);
+      const records=Array.isArray(result.posts)?result.posts:[];
+      for(const item of records){
+        const key=String(item.id);
+        if(!seen.has(key)){posts.push(item);seen.add(key)}
       }
-      posts.push(...(result.posts||[]));
-      if(posts.length>=Number(result.total||0)||!result.posts?.length)break;
+      const total=Number(result.total||0);
+      if(page*50>=total||!records.length)break;
     }
     return posts;
   }
@@ -271,36 +264,8 @@
       assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null, url:safeUrl(post.url),
       description:post.relation==='OWN_POST'
         ?'Published by an account registered for this candidate; verify identity and original authorship.'
-        :'Published by another account mentioning this candidate; NOT a candidate-authored post.'
+        :'Existing Social Listening Captured Post mentioning this candidate; published by another account.'
     };
-  }
-  function mapEarned(record){
-    const id=String(record.source_id||record.intelligence_id||record.id);
-    const sentimentRaw=String(record.sentiment_label||record.sentiment||'').toLowerCase();
-    const sentiment=['positive','negative','neutral'].includes(sentimentRaw)?
-      sentimentRaw[0].toUpperCase()+sentimentRaw.slice(1):'Unknown';
-    return {
-      id:'INT-'+id,sourceId:id,kind:'earned',platform:record.platform||record.source_type||'Source',
-      source:record.author||record.observed_publisher_handle||record.source_name||'Public source',
-      date:String(record.publication_datetime||record.publication_date||record.collection_datetime||''),
-      text:record.original_content||record.title||'',sentiment,flag:false,
-      url:safeUrl(record.source_url),description:'Evidence-linked intelligence record'
-    };
-  }
-  async function scopedMentions(candidate){
-    const response=await fetch('/api/functions/socialListening',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},body:JSON.stringify({action:'campaignEvidence',id:campaignId,data:{}})});
-    const payload=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(payload.detail||payload.error||'Campaign evidence unavailable');
-    const aliases=[candidate.name,...candidate.aliases].map(x=>String(x||'').trim()).filter(x=>x.length>=3);
-    const normalize=value=>' '+String(value||'').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()+' ';
-    const candidateNames=aliases.map(normalize);
-    return (payload.evidence||[]).filter(post=>candidateNames.some(name=>normalize(post.text_content).includes(name))).map(post=>({
-      id:'CAM-'+post.id,sourceId:String(post.id),kind:'earned',platform:post.platform||'Source',source:post.author_name||'Public source',
-      date:String(post.published_at||''),text:post.text_content||'',sentiment:(()=>{const s=String(post.sentiment||'').toLowerCase();return ['positive','negative','neutral'].includes(s)?s[0].toUpperCase()+s.slice(1):'Unknown'})(),
-      flag:(post.saved_assessments||[]).some(a=>a.is_flagged===true),
-      assessment:(post.saved_assessments||[]).find(a=>a.is_flagged===true)||null,
-      url:safeUrl(post.canonical_url),description:'Candidate name or alias mentioned in this campaign. Attribution and context require officer review.'
-    }));
   }
   ui.onProfile=async id=>{
     if(loaded.has(id)||loading.has(id))return;
@@ -311,44 +276,10 @@
     candidate.feedWarning='';
     ui.renderProfile(id);
     try{
-      let capturedRecords=[],related=[],capturedError=null;
-      try{
-        capturedRecords=(await collectedPosts(id)).map(mapCaptured);
-      }catch(error){
-        capturedError=error;
-        candidate.feedWarning='Captured-post feed unavailable: '+(error.message||'request failed');
-      }
-      // The campaign-filtered Watchlist feed is the authoritative source for
-      // BOTH own posts and third-party mentions. Do not block it on the much
-      // slower campaignEvidence endpoint or an unrelated actor-picture request.
-      if(campaignId&&(capturedError||capturedRecords.length===0)){
-        try{
-          related=await scopedMentions(candidate);
-          if(capturedError&&related.length)
-            candidate.feedWarning='Showing saved campaign mentions from the fallback evidence source. Direct Watchlist feed unavailable.';
-        }catch(error){
-          candidate.feedWarning=[candidate.feedWarning,
-            'Campaign evidence fallback unavailable: '+(error.message||'request failed')]
-            .filter(Boolean).join(' · ');
-        }
-      }else if(!campaignId){
-        try{
-          const actor=await intel('actorPicture',{actor_id:id});
-          related=(actor.records||[]).map(mapEarned);
-        }catch(error){
-          candidate.feedWarning='Additional intelligence unavailable: '+(error.message||'request failed');
-        }
-      }
-      const knownSources=new Set(capturedRecords.map(post=>post.sourceId).filter(Boolean));
-      const knownUrls=new Set(capturedRecords.map(post=>post.url).filter(Boolean));
-      const uniqueRelated=related.filter(post=>{
-        if((post.sourceId&&knownSources.has(post.sourceId))||
-           (post.url&&knownUrls.has(post.url)))return false;
-        if(post.sourceId)knownSources.add(post.sourceId);
-        if(post.url)knownUrls.add(post.url);
-        return true;
-      });
-      candidate.posts=[...capturedRecords,...uniqueRelated]
+      // The ONLY candidate-post feed is the saved, campaign-scoped Social
+      // Listening source. No unscoped actor picture or secondary earned-media
+      // request may add records under Mentions by Others.
+      candidate.posts=(await collectedPosts(id)).map(mapCaptured)
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
       candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
         id:'FLAG-'+post.id,title:'Potential violation indicator · unverified',
@@ -357,11 +288,9 @@
           '. Inspect original evidence before any officer decision.',
         status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
       }));
-      candidate.feedLoadState=capturedError&&!candidate.posts.length?'error':'ready';
+      candidate.feedLoadState='ready';
       loaded.add(id);
       ui.renderProfile(id);
-      // Account-sync metadata is independent from the source evidence list.
-      // A delayed status call must not keep all captured posts at zero.
       registry('watchlistSyncStatus',{},id).then(status=>{
         candidate.manualFetchAvailable=status.manual_fetch_available===true;
         candidate.collectionStatus=status.enabled
@@ -377,8 +306,11 @@
         if(ui.selected()===id)ui.renderProfile(id);
       });
     }catch(error){
+      // Do not replace previously displayed source evidence with misleading
+      // empty KPIs when a read fails. Expose the error and a retry control.
       candidate.feedLoadState='error';
-      candidate.feedWarning='Candidate evidence could not load: '+(error.message||'request failed');
+      candidate.feedWarning='Saved campaign Captured Posts unavailable: '+
+        (error.message||'request failed')+'. No additional posts were fetched.';
       ui.renderProfile(id);
     }finally{loading.delete(id);}
   };

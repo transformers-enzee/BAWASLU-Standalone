@@ -49,6 +49,7 @@ jobs:
           node scripts/smoke-ui-freeze.mjs
           node scripts/test-watchlist-recommendations-v1144.mjs
           node scripts/test-watchlist-authorship-v1145.mjs
+          node scripts/test-watchlist-campaign-sources-v1154.mjs
           node scripts/test-watchlist-manual-fetch-v1147.mjs
       - uses: actions/setup-python@v5
         with:

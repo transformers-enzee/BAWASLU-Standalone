@@ -65,9 +65,12 @@ assert.equal(requests.filter(r=>r.action==='campaignEvidence').length,0,
 simulateCapturedFeedFailure=true;
 ui.onRefreshProfile('3');
 await tick();await tick();await tick();
-assert.equal(profile.posts.length,16,'Fallback must preserve saved mentions when direct feed fails');
-assert.ok(profile.feedWarning.includes('fallback evidence source'),'Display evidence fallback status');
+assert.equal(profile.posts.length,16,'A failed read must preserve previously loaded source evidence');
+assert.ok(profile.feedWarning.includes('Saved campaign Captured Posts unavailable'),
+  'Display selected-campaign feed error, not invented fallback mentions');
 assert.ok(el('#tabbody').innerHTML.includes('Evidence loading issue'),'Never silently show zero without an error');
+assert.equal(requests.filter(r=>r.action==='campaignEvidence').length,0,
+  'Failed captured read must never pull an unrelated earned-media feed');
 simulateCapturedFeedFailure=false;
 ui.onRefreshProfile('3');
 await tick();await tick();await tick();

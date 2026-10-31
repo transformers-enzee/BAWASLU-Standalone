@@ -62,8 +62,11 @@ assert.ok(!topicView.includes('dashboard.main_keywords'),'Topic view must not us
 assert.match(themeEngine,/latest_saved_categories/);
 assert.match(registry,/CampaignEvidence\.campaign_id==scoped_campaign\.id/);
 assert.match(watchBridge,/campaign_id/);
-assert.match(watchBridge,/capturedRecords=\(await collectedPosts\(id\)\)\.map\(mapCaptured\)/,'Campaign Watchlist must use the direct captured-post feed');
-assert.match(watchBridge,/if\(campaignId&&\(capturedError\|\|capturedRecords\.length===0\)\)/,'Secondary campaign evidence is only a fallback');
+assert.match(watchBridge,/watchlistCapturedFeed/,'Candidate Watchlist must use its saved campaign captured-post feed');
+assert.doesNotMatch(watchBridge,/campaignEvidence|actorPicture|scopedMentions|mapEarned/,
+  'Campaign Watchlist cannot silently fetch unrelated secondary earned-media data');
+assert.match(watchBridge,/candidate\.posts=\(await collectedPosts\(id\)\)\.map\(mapCaptured\)/,
+  'Both kinds of Watchlist posts are derived from the one saved campaign feed');
 assert.match(watchBridge,/candidate\.findings=candidate\.posts\.filter/,'Only saved potential-violation assessment flags appear on the profile');
 assert.match(campaign,/capturedSourceFilter/,'Captured evidence needs real source-type filtering');
 assert.match(campaign,/capturedTextFilter/,'Captured evidence needs a client-only search');

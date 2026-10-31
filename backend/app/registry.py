@@ -242,34 +242,40 @@ def registry_action(db:Session,p,action,data,id=None):
             a.platform.casefold()==platform_filter) and
             (not account_filter or str(a.id)==account_filter)]
         from .models import WatchlistAccountEvidence
-        # An account-evidence link indicates collection provenance, NOT authorship.
-        # Only an observed author matching a registered account can be an own post.
+        # Two independent, evidence-backed sources:
+        # 1. Own posts: actual authorship matching a registered candidate handle.
+        # 2. Mentions by others: ONLY existing Captured Posts from the selected
+        #    Social Listening campaign that mention the candidate or alias.
+        # Never use a separate crawl, a global intelligence feed, or a linked
+        # WatchlistAccountEvidence row to fabricate an authored post or mention.
         own_conditions=list(match_conditions)
-        if explicit_account_ids:
-            explicit=db.query(WatchlistAccountEvidence.result_id).filter(
-                WatchlistAccountEvidence.account_id.in_(explicit_account_ids))
-            match_conditions.append(SocialListeningResult.id.in_(explicit))
-        # Candidate mentions are separate from own posts. They are source-text
-        # matches, not verified identity, endorsement or legal findings.
         from .candidate_registry import aliases_for
         from .processing_hints import CANDIDATE_ALIASES, normalize_candidate_signals
-        aliases=[w.name,*aliases_for(w)] if w.type=='Candidate' and not account_filter else []
-        # Use the same curated aliases as the candidate registry. Otherwise a
-        # campaign containing "Gibran" but not his full name appears empty.
+        aliases=[w.name,*aliases_for(w)] if w.type=='Candidate' and not account_filter and scoped_campaign else []
         canonical=normalize_candidate_signals([w.name])
         if aliases and canonical:
             aliases.extend(CANDIDATE_ALIASES.get(canonical[0],()))
         aliases=list(dict.fromkeys(a.strip() for a in aliases if isinstance(a,str)
             and len(a.strip())>=5))
+        mention_conditions=[]
         for alias in aliases:
             escaped=alias.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
-            match_conditions.append(SocialListeningResult.text_content.ilike(
+            mention_conditions.append(SocialListeningResult.text_content.ilike(
                 '%'+escaped+'%',escape='\\'))
-        # Never run an unfiltered query when neither accounts nor candidate
-        # names have an evidence-backed search condition.
-        if not match_conditions:
-            return {**base,'posts':[],'page':page,'page_size':page_size,'total':0}
-        query=db.query(SocialListeningResult).filter(or_(*match_conditions))
+        candidates=[]
+        if own_conditions:candidates.append(or_(*own_conditions))
+        if scoped_campaign and mention_conditions:
+            # Account-only collection is not a source of third-party mentions.
+            # KEYWORD and PRISM_DISCOVER links originate in Captured Posts.
+            captured_ids=db.query(CampaignEvidence.result_id).filter(
+                CampaignEvidence.campaign_id==scoped_campaign.id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
+            candidates.append(and_(SocialListeningResult.id.in_(captured_ids),
+                                   or_(*mention_conditions)))
+        if not candidates:
+            return {**base,'posts':[],'page':page,'page_size':page_size,
+                    'total':0,'own_posts':0,'mentions_by_others':0}
+        query=db.query(SocialListeningResult).filter(or_(*candidates))
         if scoped_campaign is not None:
             query=query.filter(SocialListeningResult.id.in_(
                 db.query(CampaignEvidence.result_id).filter(
@@ -317,6 +323,8 @@ def registry_action(db:Session,p,action,data,id=None):
             return {'id':str(item.id),'platform':item.platform,
                 'account':(matched.handle or '@'+inferred_handle(matched)) if matched else '',
                 'relation':'OWN_POST' if is_own else 'THIRD_PARTY_MENTION',
+                'source_collection':'REGISTERED_CANDIDATE_ACCOUNT' if is_own else 'SOCIAL_LISTENING_CAPTURED',
+                'campaign_id':str(scoped_campaign.id) if scoped_campaign else None,
                 'text':(item.text_content or '')[:5000],
                 'published_at':item.published_at,'url':item.canonical_url,
                 'author_name':item.author_name,'content_type':item.content_type,

@@ -77,7 +77,8 @@ def enqueue_campaign_evidence(campaign_id):
     """Create durable pending rows; never calls an AI provider."""
     db=SessionLocal()
     try:
-        linked=db.query(CampaignEvidence).filter_by(campaign_id=campaign_id).limit(500).all()
+        linked=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign_id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').limit(500).all()
         added=0
         for link in linked:
             latest=db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=link.result_id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
@@ -191,13 +192,15 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         active_gates=db.query(RelevanceGateQuestion).filter(RelevanceGateQuestion.active==True).order_by(RelevanceGateQuestion.id).limit(20).all()
         if target_result_id is None:
             enqueue_campaign_evidence(campaign.id)
-            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
         else:
             # Paid pilot must use ONLY the explicitly approved evidence ID, even
             # when it falls outside the latest 300 links; never auto-enqueue unrelated posts.
             links=db.query(CampaignEvidence).filter(
                 CampaignEvidence.campaign_id==campaign.id,
-                CampaignEvidence.result_id==int(target_result_id)).limit(1).all()
+                CampaignEvidence.result_id==int(target_result_id),
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').limit(1).all()
         used=0
         for link in links:
             if target_result_id is not None and link.result_id!=int(target_result_id):continue

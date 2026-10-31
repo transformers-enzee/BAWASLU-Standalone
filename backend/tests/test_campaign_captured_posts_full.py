@@ -86,3 +86,38 @@ def test_watchlist_account_posts_never_enter_social_listening_captured_posts():
     assert action(db,p,'campaignEvidenceById',{'result_id':str(own_id)},cid)['found'] is False
     assert db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).count()==15
     db.close()
+
+def test_account_collection_does_not_inflate_dashboard_queues_or_command_centre():
+    from app.models import EvidenceAssessment
+    from app.command_center import build_command_center
+    db=SessionLocal();p=user(db,'sourceSeparation');cid=campaign(db,p,'Audit campaign')
+    add(db,cid,3)
+    run=SocialListeningRun(query_json='{}',credits_used=0)
+    db.add(run);db.flush()
+    for i in range(12):
+        own=SocialListeningResult(run_id=run.id,platform='instagram',
+            author_name='Gibran Rakabuming',observed_handle='@gibran_rakabuming',
+            text_content='Registered candidate profile post',
+            canonical_url=f'https://www.instagram.com/p/account{i}/',
+            published_at='2026-10-29T01:00:00Z',engagement_json='{}')
+        db.add(own);db.flush()
+        db.add(CampaignEvidence(campaign_id=int(cid),result_id=own.id,
+            match_method='WATCHLIST_ACCOUNT'))
+        # Even accidentally assessed Watchlist-only rows MUST NOT contaminate
+        # generic captured-post analytics or Command Centre electoral alerts.
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=own.id,
+            assessment_version=1,relevance_label='RELEVANT',
+            sentiment='NEGATIVE',candidate_signals_json='["Gibran"]'))
+    db.commit()
+    assert action(db,p,'campaignDashboard',{},cid)['evidence_count']==3
+    assert action(db,p,'campaignDashboard',{},cid)['sentiment']['Unclassified']==3
+    assert action(db,p,'campaignSentimentBatchPreview',{},cid)['eligible_total']==3
+    assert action(db,p,'campaignAssessmentBacklogPreview',
+        {'sample_limit':20},cid)['unassessed']==3
+    from app.prism_discover import action as prism_action
+    assert prism_action(db,p,'campaignCandidateSuggestions',{},cid)['candidates']==[]
+    cc=build_command_center(db,p,{'period':'all'})
+    assert cc['activity']['captured_mentions']==3
+    assert cc['indicators']['relevant_mentions']==0
+    assert cc['paid_provider_called'] is False
+    db.close()

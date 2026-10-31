@@ -58,6 +58,7 @@ def run_once():
                 source_ids=[row[0] for row in db.query(CampaignEvidence.result_id).
                     join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id).
                     filter(CampaignEvidence.campaign_id==CAMPAIGN_ID,
+                           CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
                            CampaignEvidence.result_id<=SOURCE_ID_CEILING,
                            SocialListeningResult.text_content.isnot(None),
                            SocialListeningResult.text_content!='').

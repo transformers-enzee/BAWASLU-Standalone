@@ -133,7 +133,8 @@ def build_command_center(db,p,data=None):
                               EvidenceAssessment.assessment_version==latest.c.ver))
             .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
             .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
-                                        CampaignEvidence.result_id==EvidenceAssessment.result_id))
+                                        CampaignEvidence.result_id==EvidenceAssessment.result_id,
+                                        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
             .filter(func.substr(SocialListeningResult.published_at,1,10)>=start,
                     func.substr(SocialListeningResult.published_at,1,10)<=end)
             .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc()).all())
@@ -211,6 +212,9 @@ def build_command_center(db,p,data=None):
     if campaigns_ids:
         all_recent=(db.query(EvidenceAssessment,SocialListeningResult)
           .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
+          .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
+                CampaignEvidence.result_id==EvidenceAssessment.result_id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
           .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
           .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc())
           .limit(300).all())
@@ -258,6 +262,7 @@ def build_command_center(db,p,data=None):
                                   SocialListeningResult.platform,SocialListeningResult.published_at)
             .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
             .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
                     func.substr(SocialListeningResult.published_at,1,10)>=start,
                     func.substr(SocialListeningResult.published_at,1,10)<=end)
             .yield_per(600))
@@ -291,6 +296,7 @@ def build_command_center(db,p,data=None):
     collected_query=(db.query(func.count(func.distinct(SocialListeningResult.id)))
         .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
         .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
                 SocialListeningResult.collected_at>=datetime.fromisoformat(start),
                 SocialListeningResult.collected_at<datetime.combine(date.fromisoformat(end)+timedelta(days=1),datetime.min.time()))) if campaigns_ids else None
     if collected_query is not None and p.get('geographic_scope')!='Nationwide':
@@ -298,6 +304,7 @@ def build_command_center(db,p,data=None):
         run_query=(db.query(SocialListeningResult.run_id)
             .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
             .filter(CampaignEvidence.campaign_id.in_(campaigns_ids),
+                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
                     SocialListeningResult.collected_at>=datetime.fromisoformat(start),
                     SocialListeningResult.collected_at<datetime.combine(date.fromisoformat(end)+timedelta(days=1),datetime.min.time()))
             .distinct())
@@ -337,6 +344,9 @@ def build_command_center(db,p,data=None):
                  EvidenceAssessment.result_id==latest_geo.c.rid,
                  EvidenceAssessment.assessment_version==latest_geo.c.ver))
             .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
+            .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
+                 CampaignEvidence.result_id==EvidenceAssessment.result_id,
+                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
             .all())
         for assessment,post in geo_rows:
             if not _result_in_scope(db,p,post):continue

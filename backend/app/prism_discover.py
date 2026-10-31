@@ -72,7 +72,9 @@ def action(db,p,verb,data,cid):
     if verb=='campaignCandidateSuggestions':
         from .processing_hints import normalize_candidate_signals
         ids=[x[0] for x in db.query(CampaignEvidence.result_id).filter(
-            CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(500).all()]
+            CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
+            .order_by(CampaignEvidence.id.desc()).limit(500).all()]
         if not ids:return {'candidates':[]}
         rows=(db.query(EvidenceAssessment).filter(EvidenceAssessment.campaign_id==c.id,
             EvidenceAssessment.result_id.in_(ids)).order_by(EvidenceAssessment.result_id,

@@ -172,7 +172,8 @@ def _normalize(db,p,data,existing=None):
 
 def _view(db,c):
     counts=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
-    evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).count()
+    evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').count()
     return {'id':str(c.id),'name':c.name,'description':c.description,
        'primary_keywords':json.loads(c.primary_keywords_json or '[]'),
        'secondary_keywords':json.loads(c.secondary_keywords_json or '[]'),
@@ -301,8 +302,9 @@ def _batch_preview(db,p,c,data=None):
     all_posts=False
     if not 1<=limit<=20:raise ValueError('Choose between 1 and 20 posts per batch')
     # Exactly one entry per source, preserving campaign scope and visibility.
-    result_ids=[rid for (rid,) in db.query(CampaignEvidence.result_id).filter_by(
-        campaign_id=c.id).order_by(CampaignEvidence.id.desc()).all()]
+    result_ids=[rid for (rid,) in db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==c.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).all()]
     eligible=[];seen=set();missing_text=0;prior_count=0
     for rid in result_ids:
         if rid in seen:continue
@@ -334,7 +336,9 @@ def _classify_campaign_sentiment(db,p,c,data):
         raise ValueError('Explicit AI processing confirmation required')
     rid=str((data or {}).get('result_id') or '')
     if not rid.isdigit(): raise ValueError('Select a valid evidence record')
-    link=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=int(rid)).first()
+    link=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+        CampaignEvidence.result_id==int(rid),
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
     row=db.get(SocialListeningResult,int(rid))
     if not link or not row or not _result_in_scope(db,p,row):
         raise ValueError('Evidence record is not accessible')
@@ -454,7 +458,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign=db.get(MonitoringCampaign,int(cid))
         if not campaign or not allowed(p,campaign):raise PermissionError('Campaign access required')
         if not _editable(p,campaign):raise PermissionError('Campaign editing permission required')
-        link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(rid)).first()
+        link=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.result_id==int(rid),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
         item=db.get(SocialListeningResult,int(rid))
         if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Post unavailable')
         from .sentiment_processing import relevance_is_assessed
@@ -492,7 +498,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
         from .sentiment_processing import relevance_is_assessed
-        links=db.query(CampaignEvidence).filter_by(campaign_id=c.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
         pending=0
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
@@ -532,7 +539,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign=db.get(MonitoringCampaign,int(campaign_id))
         if not campaign or not allowed(p,campaign) or not has(p,'human_validation'):
             raise PermissionError('Human review permission and campaign access required')
-        link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(result_id)).first()
+        link=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.result_id==int(result_id),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
         item=db.get(SocialListeningResult,int(result_id))
         if not link or not item or not _result_in_scope(db,p,item):
             raise ValueError('Evidence unavailable')
@@ -590,7 +599,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign=db.get(MonitoringCampaign,int(campaign_id))
         if not campaign or not allowed(p,campaign) or not has(p,'human_validation'):
             raise PermissionError('Human review permission and campaign access required')
-        link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(result_id)).first()
+        link=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.result_id==int(result_id),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
         item=db.get(SocialListeningResult,int(result_id))
         if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Evidence unavailable')
         assessment=db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
@@ -638,7 +649,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not campaign or not _editable(p,campaign):raise PermissionError('Not authorized to correct assessment')
             result_id=str((data or {}).get('result_id') or '')
             if not result_id.isdigit():raise ValueError('Invalid evidence id')
-            link=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id,result_id=int(result_id)).first()
+            link=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.result_id==int(result_id),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
             item=db.get(SocialListeningResult,int(result_id))
             if not link or not item or not _result_in_scope(db,p,item):raise ValueError('Evidence unavailable')
             old=db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=item.id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
@@ -668,7 +681,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             return {'saved':True,'assessment_version':new.assessment_version,'paid_provider_called':False}
         output=[]
         for campaign in visible:
-            links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
             for link in links:
                 item=db.get(SocialListeningResult,link.result_id)
                 if not item or not _result_in_scope(db,p,item):continue
@@ -737,7 +751,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         except (TypeError,ValueError):raise ValueError('Sample limit must be an integer')
         if not 1<=sample_limit<=20:raise ValueError('Development sample limit must be between 1 and 20')
         # Stable sample: earliest linked posts, reproducible during QA.
-        links=db.query(CampaignEvidence).filter_by(campaign_id=campaign.id).order_by(CampaignEvidence.id.asc()).limit(sample_limit).all()
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.asc()).limit(sample_limit).all()
         coverage=Counter()
         samples=[]
         for link in links:
@@ -789,7 +804,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
             # Count only scoped, linked evidence; never trigger processing here.
-            campaign_links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            campaign_links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
             from sqlalchemy.orm import defer
             ids={link.result_id for link in campaign_links}
             post_by_id={row.id:row for row in db.query(SocialListeningResult)
@@ -806,13 +822,15 @@ def campaign_action(db:Session,p,action,data,id=None):
                     AIAssessmentJob.result_id.in_(linked_ids)).limit(500).all():
                     if job.state in job_counts:job_counts[job.state]+=1
                     campaign_job_states[job.result_id]=job.state
-            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
             # Home deep links must resolve even when the normal Inbox window
             # (300 latest campaign links) has moved past the referenced record.
             if requested_result:
                 exact=db.query(CampaignEvidence).filter(
                     CampaignEvidence.campaign_id==campaign.id,
-                    CampaignEvidence.result_id==int(requested_result)).first()
+                    CampaignEvidence.result_id==int(requested_result),
+                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
                 if exact and not any(link.result_id==exact.result_id for link in links):
                     links.append(exact)
             missing={link.result_id for link in links}-set(post_by_id)
@@ -956,7 +974,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .socialcrawl import _result_in_scope
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
-        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()).limit(200).all()
+        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(200).all()
         counts={'instagram_missing':0,'instagram_with_url':0,'already_cached':0,'post_url_available':0}
         for link in links:
             item=db.get(SocialListeningResult,link.result_id)
@@ -981,7 +1000,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can recover thumbnails')
-        rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id)
+        rows=(db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+              CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
                 'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0,'payload_shapes':{},'platforms_checked':{},'post_fields':{},'post_media_fields':{}}}
@@ -1116,7 +1136,8 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .topic_themes import latest_saved_categories,UNCATEGORIZED
         from sqlalchemy import func
         evidence_revision=db.query(func.count(CampaignEvidence.id),
-            func.max(CampaignEvidence.id)).filter(CampaignEvidence.campaign_id==c.id).one()
+            func.max(CampaignEvidence.id)).filter(CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').one()
         assessment_revision=db.query(func.count(EvidenceAssessment.id),
             func.max(EvidenceAssessment.id)).filter(
                 EvidenceAssessment.campaign_id==c.id).one()
@@ -1125,7 +1146,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                    int(assessment_revision[0] or 0), int(assessment_revision[1] or 0))
         cached=_dashboard_cache_get(cache_key)
         if cached is not None:return cached
-        query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id)
+        query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
         # Push date limits down to SQL before transferring large post payloads.
         # Values are ISO dates and published_at begins with YYYY-MM-DD.
         if from_day:query=query.filter(SocialListeningResult.published_at>=from_day)

@@ -524,7 +524,7 @@ export default function CampaignPanel({campaignId=null}){
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
-   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)+"&v=115.4"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)+"&v=115.5"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}

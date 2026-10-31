@@ -1330,7 +1330,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Captured post page must be positive and page size 1-200')
         q=(db.query(CampaignEvidence,SocialListeningResult)
            .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
-           .filter(CampaignEvidence.campaign_id==c.id).order_by(CampaignEvidence.id.desc()))
+           .filter(CampaignEvidence.campaign_id==c.id,
+                   CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
+           .order_by(CampaignEvidence.id.desc()))
         start=(page-1)*page_size
         if p.get('geographic_scope')=='Nationwide':
             total=q.order_by(None).count()
@@ -1362,7 +1364,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         rid=str((data or {}).get('result_id') or '').strip()
         if not rid.isdigit():raise ValueError('Enter a numeric post ID')
         item=db.get(SocialListeningResult,int(rid))
-        link=db.query(CampaignEvidence.id).filter_by(campaign_id=c.id,result_id=int(rid)).first()
+        link=db.query(CampaignEvidence.id).filter(
+            CampaignEvidence.campaign_id==c.id,CampaignEvidence.result_id==int(rid),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').first()
         if not item or not link or not _result_in_scope(db,p,item):
             return {'found':False,'post':None,'paid_provider_called':False}
         prior=db.query(EvidenceAssessment.id).filter_by(campaign_id=c.id,result_id=item.id).first()
@@ -1388,7 +1392,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not on_day:raise ValueError('Select a date from the chart')
         q=(db.query(CampaignEvidence,SocialListeningResult)
            .join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id)
-           .filter(CampaignEvidence.campaign_id==c.id))
+           .filter(CampaignEvidence.campaign_id==c.id,
+                   CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
         if on_day:q=q.filter(SocialListeningResult.published_at.like(on_day+'%'))
         evidence_keyword=str(opts.get('keyword') or '').strip()[:120]
         if evidence_keyword:q=q.filter(SocialListeningResult.text_content.ilike('%'+evidence_keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))

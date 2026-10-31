@@ -61,3 +61,28 @@ def test_regional_scope_excludes_nationwide_sources():
     assert feed(db,bali,cid)['total']==2
     assert feed(db,admin,cid)['total']==4
     db.close()
+
+def test_watchlist_account_posts_never_enter_social_listening_captured_posts():
+    db=SessionLocal();p=user(db,'separateSources');cid=campaign(db,p,'Test')
+    add(db,cid,3)
+    run=SocialListeningRun(query_json='{}',credits_used=0)
+    db.add(run);db.flush()
+    for i in range(12):
+        row=SocialListeningResult(run_id=run.id,platform='instagram',
+            author_name='Gibran Rakabuming',observed_handle='@gibran_rakabuming',
+            text_content='Original candidate-authored content',
+            canonical_url=f'https://instagram.com/p/owned{i}',published_at='2026-10-30')
+        db.add(row);db.flush()
+        db.add(CampaignEvidence(campaign_id=int(cid),result_id=row.id,
+            match_method='WATCHLIST_ACCOUNT'))
+    db.commit()
+    captured=feed(db,p,cid)
+    assert captured['total']==len(captured['evidence'])==3
+    assert all(x['platform']=='tiktok' for x in captured['evidence'])
+    evidence=action(db,p,'campaignEvidence',{},cid)
+    assert evidence['total']==len(evidence['evidence'])==3
+    own_id=db.query(SocialListeningResult.id).filter(
+        SocialListeningResult.platform=='instagram').first()[0]
+    assert action(db,p,'campaignEvidenceById',{'result_id':str(own_id)},cid)['found'] is False
+    assert db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).count()==15
+    db.close()

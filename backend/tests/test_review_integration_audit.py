@@ -14,7 +14,9 @@ def setup_review(permission=True, linked=True):
     db.get.side_effect=lambda cls,id:campaign if cls is MonitoringCampaign else item
     def query(cls):
         q=MagicMock()
-        if cls is CampaignEvidence:q.filter_by.return_value.first.return_value=object() if linked else None
+        if cls is CampaignEvidence:
+            q.filter.return_value.first.return_value=object() if linked else None
+            q.filter_by.return_value.first.return_value=object() if linked else None
         if cls is EvidenceAssessment:q.filter_by.return_value.order_by.return_value.first.return_value=assessment
         if cls is IssueCategory:q.filter.return_value.all.return_value=[IssueCategory(id=7,name='Politik Uang',active=True)]
         return q

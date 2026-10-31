@@ -28,5 +28,7 @@ def test_relevant_without_topic_is_not_an_emerging_narrative():
 
 def test_genuine_saved_topic_remains_a_discussion_not_confirmed_incident():
     f=compile_inbox_findings([row(1,topic_labels=['Electoral Operations']),row(2,topic_labels=['Electoral Operations'])])
-    assert len(f)==1 and f[0]['players']==['narratives']
-    assert f[0]['recurring_discussion']
+    # A broad topic shared by unrelated source texts cannot fabricate a
+    # recurring narrative. Real quoted narrative anchors are required.
+    assert len(f)==2
+    assert all(item['kind']=='source_awareness' and not item['players'] for item in f)

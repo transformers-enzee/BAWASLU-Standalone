@@ -347,6 +347,8 @@ def build_command_center(db,p,data=None):
             .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
                  CampaignEvidence.result_id==EvidenceAssessment.result_id,
                  CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
+            .filter(func.substr(SocialListeningResult.published_at,1,10)>=start,
+                    func.substr(SocialListeningResult.published_at,1,10)<=end)
             .all())
         for assessment,post in geo_rows:
             if not _result_in_scope(db,p,post):continue

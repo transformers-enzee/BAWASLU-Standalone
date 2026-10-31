@@ -107,8 +107,8 @@ def _cloud_terms(text,counts):
 def _keywords(value,label,mandatory=False):
     if not isinstance(value,list):
         raise ValueError(label+' must be a list of keywords')
-    if len(value)>600:
-        raise ValueError(label+' exceeds 600 keywords')
+    if len(value)>MAX_KEYWORDS:
+        raise ValueError(label+' exceeds '+str(MAX_KEYWORDS)+' keywords')
     found={}
     for entry in value:
         if not isinstance(entry,str):

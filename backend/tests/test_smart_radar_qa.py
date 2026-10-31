@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from app.smart_radar_qa import balanced_sample,CATS,TARGET,source_hash
 
 def fake_records():
-    return [{"qa_id":"QA-"+str(i),"curated_category":cat,
+    return [{"qa_id":"QA-"+cat.replace(" ","_")+"-"+str(i),"curated_category":cat,
             "source_url":f"https://example.org/{cat.replace(' ','_')}/{i}"}
             for cat in CATS for i in range(20)]
 

@@ -236,7 +236,7 @@ def test_social_listening_geography_is_restricted_to_authorized_scope():
 def test_social_listening_queue_and_review_are_geographically_scoped():
     db=SessionLocal()
     national=admin(db)
-    bali=provincial_analyst(db,'Bali')
+    bali=provincial_admin(db,'Bali')
 
     bali_run=social_listening_action(db,bali,'search',{'filters':{'query':'bali election','platforms':['online_news']}},provider_client=fake_provider)
     bali_id=bali_run['results'][0]['id']

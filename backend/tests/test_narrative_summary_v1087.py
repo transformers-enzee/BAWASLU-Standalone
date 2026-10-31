@@ -20,4 +20,4 @@ def test_recurring_pattern_has_evidence_not_broad_category():
     results=compile_inbox_findings(rows)
     f=[x for x in results if 'narratives' in x['players']]
     assert len(f)==1
-    assert 'voter-register accuracy' in f[0]['summary'].casefold()
+    assert 'voter register accuracy' in f[0]['summary'].casefold()

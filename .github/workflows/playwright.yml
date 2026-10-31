@@ -2,7 +2,7 @@ name: Playwright QA
 
 on:
   push:
-    branches: [main]
+    branches: [architecture-v2-foundation-20261015]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 

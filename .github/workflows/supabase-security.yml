@@ -1,6 +1,8 @@
 name: Supabase Security Staging QA
 
 on:
+  push:
+    branches: [architecture-v2-foundation-20261015]
   pull_request:
     branches: [main]
   workflow_dispatch:

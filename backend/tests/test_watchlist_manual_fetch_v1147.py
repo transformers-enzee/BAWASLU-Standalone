@@ -107,3 +107,36 @@ def test_account_id_is_scoped_to_candidate(monkeypatch):
         assert 'does not belong' in str(e)
     else:assert False,'Cross-candidate account fetch must be denied'
     db.close()
+
+def test_one_time_bootstrap_only_pending_account_and_campaign(monkeypatch):
+    from datetime import datetime
+    from app import watchlist_auto
+    monkeypatch.setenv('SOCIALCRAWL_API_KEY','offline-test-only')
+    monkeypatch.setenv('BAWASLU_WATCHLIST_DAILY_CREDIT_BUDGET','7')
+    monkeypatch.setenv('BAWASLU_WATCHLIST_AUTO_FETCH_ENABLED','false')
+    db=SessionLocal();actor,watch,campaign,account=setup(db)
+    calls=[]
+    monkeypatch.setattr(watchlist_auto,'sync_account',
+        lambda account_id,**kwargs:(calls.append((account_id,kwargs)) or
+            {'status':'COMPLETED','new_posts':2,'credits_used':2}))
+    first=watchlist_auto.initial_collection_once(str(account.id),str(campaign.id))
+    assert first['status']=='COMPLETED'
+    assert calls==[(account.id,{'campaign_id':campaign.id,'manual':True})]
+    state=db.get(WatchlistAccountSync,account.id)
+    state.state='WAITING';state.last_checked_at=datetime.utcnow()
+    db.commit()
+    assert watchlist_auto.initial_collection_once(str(account.id),str(campaign.id))['status']=='SKIPPED'
+    assert len(calls)==1
+    db.close()
+
+def test_one_time_bootstrap_never_bypasses_budget_or_missing_provider(monkeypatch):
+    from app import watchlist_auto
+    db=SessionLocal();actor,watch,campaign,account=setup(db)
+    monkeypatch.delenv('SOCIALCRAWL_API_KEY',raising=False)
+    monkeypatch.setenv('BAWASLU_WATCHLIST_DAILY_CREDIT_BUDGET','7')
+    assert watchlist_auto.initial_collection_once(account.id,campaign.id)['status']=='BLOCKED'
+    monkeypatch.setenv('SOCIALCRAWL_API_KEY','offline-test-only')
+    monkeypatch.setenv('BAWASLU_WATCHLIST_DAILY_CREDIT_BUDGET','0')
+    assert watchlist_auto.initial_collection_once(account.id,campaign.id)['status']=='BLOCKED'
+    assert db.query(SocialListeningRun).count()==0
+    db.close()

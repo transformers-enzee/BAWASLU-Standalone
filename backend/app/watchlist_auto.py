@@ -258,7 +258,10 @@ def sync_account(account_id,client=None,campaign_id=None,manual=False):
             state=db.get(WatchlistAccountSync,account_id)
             state.state='WAITING';state.last_checked_at=now
             state.next_check_at=now+timedelta(minutes=interval_minutes())
-            state.started_at=None;state.last_error='';state.last_credits=credits
+            state.started_at=None
+            state.last_error=('SocialCrawl returned no attributable public posts for this account.'
+                if not linked and not new_count else '')
+            state.last_credits=credits
             state.last_new_posts=linked;state.total_posts=(state.total_posts or 0)+linked
             if last_post:state.last_post_id=last_post
             db.commit()

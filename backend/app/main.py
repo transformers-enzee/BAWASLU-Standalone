@@ -72,6 +72,25 @@ def startup():
         threading.Thread(target=watchlist_worker_loop,
                          name='bawaslu-watchlist-worker',daemon=True).start()
 
+    # A specifically authorized, one-time initial Watchlist fetch is separate
+    # from recurring monitoring. The worker checks DB state before spending,
+    # and the 24-hour credit cap remains enforced by watchlist_auto._claim.
+    if os.getenv('BAWASLU_WATCHLIST_INITIAL_FETCH_ENABLED','false').lower()=='true':
+        import logging,threading
+        from .watchlist_auto import initial_collection_once
+        def bootstrap_watchlist_account():
+            try:
+                result=initial_collection_once(
+                    os.getenv('BAWASLU_WATCHLIST_INITIAL_ACCOUNT_ID',''),
+                    os.getenv('BAWASLU_WATCHLIST_INITIAL_CAMPAIGN_ID',''))
+                logging.getLogger(__name__).info(
+                    'One-time Watchlist initial collection: status=%s, posts=%s, credits=%s',
+                    result.get('status'),result.get('new_posts',0),result.get('credits_used',0))
+            except Exception:
+                logging.getLogger(__name__).exception('One-time Watchlist initial collection failed')
+        threading.Thread(target=bootstrap_watchlist_account,
+                         name='bawaslu-watchlist-initial-fetch',daemon=True).start()
+
     # Opt-in only: do not initiate any paid work unless BOTH controls are enabled.
     if os.getenv('BAWASLU_AUTO_AI_SCREENING_ENABLED','false').lower()=='true' and os.getenv('BAWASLU_AI_WORKER_ENABLED','false').lower()=='true':
         from .auto_relevance import recover_stale_jobs, assess_pending_campaign
@@ -107,7 +126,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'115.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'115.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

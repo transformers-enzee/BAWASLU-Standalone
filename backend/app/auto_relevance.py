@@ -211,7 +211,8 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 .order_by(EvidenceAssessment.assessment_version.desc(),
                           EvidenceAssessment.id.desc()).first())
             already_relevant=relevance_is_assessed(previous)
-            if (already_relevant and not reanalysis) or (reanalysis and not already_relevant):continue
+            from .activation_assessment import needs_full_assessment
+            if (already_relevant and not needs_full_assessment(previous) and not reanalysis) or (reanalysis and not already_relevant):continue
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if job and (job.state=='PROCESSING' or (job.state=='COMPLETED' and not reanalysis)):continue
             if job and job.attempts>=3 and not reanalysis:continue

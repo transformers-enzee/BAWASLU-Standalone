@@ -447,6 +447,32 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action=='campaignUsageDiagnostics':
         from .assessment_usage import campaign_usage_diagnostics
         return campaign_usage_diagnostics(db,p,id or (data or {}).get('campaign_id'))
+    if action=='campaignAssessmentAllStart':
+        from .activation_assessment import start_all
+        return start_all(db,p,id or (data or {}).get('campaign_id'),data)
+    if action in ('campaignAssessmentAllStatus','campaignAssessmentAllResume'):
+        from .activation_assessment import status as all_status
+        campaign_id=id or (data or {}).get('campaign_id')
+        run_id=str((data or {}).get('run_id') or '')
+        if not str(campaign_id or '').isdigit() or not run_id.isdigit():
+            raise ValueError('Campaign and assessment run id required')
+        result=all_status(db,p,campaign_id,int(run_id))
+        if action=='campaignAssessmentAllResume':
+            from .access import has
+            c=db.get(MonitoringCampaign,int(campaign_id))
+            if not (p.get('role')=='National Administrator' and has(p,'administration')
+                    or str(c.created_by)==str(p.get('id')) and has(p,'add_intelligence')):
+                raise PermissionError('Campaign editor permission required')
+            if (data or {}).get('confirm_ai_cost') is not True:
+                raise ValueError('Confirm remaining paid assessment requests before resuming')
+            if result['processing']:
+                raise ValueError('Assessment processing already active; refresh status')
+            if not result['queued']:
+                raise ValueError('No saved queued posts to resume')
+            if result['budget']['available']<=0:
+                raise ValueError('AI request budget exhausted; queued work must wait for quota')
+            return {**result,'resume_accepted':True}
+        return result
     if action=='campaignAssessmentPilotPreview':
         from .assessment_pilot import assessment_pilot_preview
         return assessment_pilot_preview(db,p,data,id)
@@ -958,10 +984,11 @@ def campaign_action(db:Session,p,action,data,id=None):
                     reconciliation['pending_job_with_assessment']+=1
                 elif state=='COMPLETED' and label=='UNASSESSED':
                     reconciliation['completed_job_without_assessment']+=1
-                bucket='PENDING' if label=='UNASSESSED' else 'RELEVANT' if label in ('RELEVANT','HIGHLY_RELEVANT') else label if label in ('IRRELEVANT','UNCERTAIN') else 'OTHER'
+                preliminary=bool(assessment and assessment.model_version=='PRISM_PENDING_OPENAI')
+                bucket='PENDING' if label=='UNASSESSED' or preliminary else 'RELEVANT' if label in ('RELEVANT','HIGHLY_RELEVANT') else label if label in ('IRRELEVANT','UNCERTAIN') else 'OTHER'
                 assessment_counts[bucket]+=1
-                if not assessment or label not in ('RELEVANT','HIGHLY_RELEVANT'):
-                    if not assessment or assessment.relevance_label.upper()=='UNASSESSED': unassessed+=1
+                if preliminary or not assessment or label not in ('RELEVANT','HIGHLY_RELEVANT'):
+                    if preliminary or not assessment or assessment.relevance_label.upper()=='UNASSESSED': unassessed+=1
                     continue
                 def parse_list(value):
                     try: parsed=json.loads(value or '[]')

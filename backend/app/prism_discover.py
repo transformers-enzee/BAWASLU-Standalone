@@ -101,16 +101,8 @@ def action(db,p,verb,data,cid):
             .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.id==int(rid),
             SocialListeningRun.provider=='SOCIALCRAWL_PRISM').first())
         if not run:raise ValueError('Discover run unavailable')
-        summary=db.query(EvidenceAssessment.model_version,EvidenceAssessment.result_id).filter(
-            EvidenceAssessment.campaign_id==c.id,
-            EvidenceAssessment.result_id.in_(db.query(CampaignEvidence.result_id).filter(
-                CampaignEvidence.campaign_id==c.id,
-                CampaignEvidence.match_method=='PRISM_DISCOVER'))).all()
-        analysed=sum(1 for version,_ in summary if version=='PRISM_OPENAI_TOPIC_CLASSIFIER')
-        pending=sum(1 for version,_ in summary if version=='PRISM_PENDING_OPENAI')
-        return {'run_id':run.id,'status':run.status,'posts_saved':run.result_count,
-                'ai_analyzed_posts':analysed,'ai_pending_posts':pending,
-                'credits_used':run.credits_used,'error':run.error_text[:300]}
+        from .activation_assessment import status as activation_status
+        return activation_status(db,p,c.id,run.id)
     params,sig=body_for(db,c)
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
@@ -211,7 +203,7 @@ def enrich(db,c,entries):
             record.explanation='AI suggestion only; original source remains unverified.'
         db.commit()
 
-def store(db,run,c,items):
+def store(db,run,c,items,full_assessment=False):
     kept=[x for x in items[:100] if isinstance(x,dict) and x.get('id') and x.get('platform')]
     ids=[str(x['id']) for x in kept]
     urls=[str(x.get('url') or '') for x in kept if x.get('url')]
@@ -281,8 +273,14 @@ def store(db,run,c,items):
             explanation='Provider Discover collected; awaiting OpenAI topic analysis')
         db.add(assessment);new.append((row,assessment))
         assessed.add(row.id)
+    meta=json.loads(run.query_json or '{}')
+    meta['assessment_result_ids']=[row.id for row,_ in pairs]
+    run.query_json=json.dumps(meta,ensure_ascii=False)
     db.commit()
-    enrich(db,c,new)
+    # Legacy manual store still supports topic-only enrichment. The Activate
+    # pipeline uses the full intelligence assessor instead of two paid passes.
+    if not full_assessment:
+        enrich(db,c,new)
     return len(pairs)
 
 def execute(run_id):
@@ -326,13 +324,18 @@ def execute(run_id):
                     elif 'complete' not in obj:items.append(obj)
                     if len(items)>=100:break
                 if not cursor or len(items)>=100:break
-        run.result_count=store(db,run,c,items)
+        run.result_count=store(db,run,c,items,full_assessment=True)
         run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
         run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
+        meta=json.loads(run.query_json or '{}')
         meta['watermark']=nxt.get('watermark')
         run.query_json=json.dumps(meta,ensure_ascii=False)
         c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
+        # The full read-only classification worker tracks every captured result
+        # as a durable assessment job, not only the initial PRISM relevance pass.
+        from .activation_assessment import execute_run
+        execute_run(run.id)
         from .inbox_read_cache import invalidate
         invalidate()
         try:

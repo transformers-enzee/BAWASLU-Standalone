@@ -8,6 +8,7 @@ import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
+import AssessmentProgressDialog from '@/components/intel/AssessmentProgressDialog';
 
 const campaignPlatforms=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:[...campaignPlatforms],language:'',date_from:'',date_to:'',interval_minutes:120};
@@ -54,6 +55,66 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
+ const activationRestoreOnce=useRef(false);
+ const [activationSaved,setActivationSaved]=useState(()=>{
+  try{return JSON.parse(window.localStorage.getItem('bawaslu-active-discover-run')||'null')}catch{return null}
+ });
+ const [allRun,setAllRun]=useState(null),[allOpen,setAllOpen]=useState(false),[allBusy,setAllBusy]=useState(false),[allError,setAllError]=useState('');
+ const [allCampaign,setAllCampaign]=useState(null);
+ async function launchAssessAll(){
+  if(!selected||allBusy)return;
+  if(!window.confirm('Assess all remaining unassessed posts for '+selected.name+'? Every eligible post can incur a separately metered GPT request; previously completed and failed/ambiguous requests are not retried. SocialCrawl credits: 0.'))return;
+  setAllBusy(true);setAllError('');
+  try{
+   const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAllStart',id:selected.id,data:{confirm_ai_cost:true}});
+   if(r.data.no_unassessed){setNotice('All linked posts have already been assessed.');return}
+   setAllCampaign(selected);setAllOpen(true);setAllRun({...r.data,stage:'ASSESSING',status:'QUEUED',total:r.data.total||0,completed:0,queued:r.data.queued||0});
+  }catch(e){setAllError(e.response?.data?.detail||e.message||'Unable to start full AI assessment')}
+  finally{setAllBusy(false)}
+ }
+ async function refreshAll(silent=false){
+  if(!allCampaign||!allRun?.run_id)return;
+  if(!silent)setAllBusy(true);
+  try{
+   const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAllStatus',id:allCampaign.id,data:{run_id:allRun.run_id}});
+   setAllRun(r.data);
+  }catch(e){setAllError(e.response?.data?.detail||e.message||'Assessment status unavailable')}
+  finally{if(!silent)setAllBusy(false)}
+ }
+ async function resumeAssessment(run,campaign){
+  if(!run?.run_id||!campaign)return;
+  if(!window.confirm('Resume only saved queued requests? GPT token charges apply. Failed or ambiguous requests will not be retried.'))return;
+  setAllBusy(true);setAllError('');
+  try{
+   await base44.functions.invoke('socialListening',{action:'campaignAssessmentAllResume',id:campaign.id,data:{run_id:run.run_id,confirm_ai_cost:true}});
+   if(String(campaign.id)===String(allCampaign?.id))setAllRun(prev=>({...prev,stage:'ASSESSING'}));
+   else if(String(campaign.id)===String(discoverCampaign?.id))setDiscoverRun(prev=>({...prev,stage:'ASSESSING'}));
+  }catch(e){setAllError(e.response?.data?.detail||e.message||'Could not resume queued work')}
+  finally{setAllBusy(false)}
+ }
+ useEffect(()=>{
+  if(!allRun?.run_id||!allCampaign?.id||!['QUEUED','RUNNING','ASSESSING'].includes(allRun.stage||allRun.status))return;
+  const timer=setInterval(()=>refreshAll(true),4500);
+  return ()=>clearInterval(timer);
+ },[allRun?.run_id,allRun?.stage,allCampaign?.id]);
+ useEffect(()=>{
+  if(activationRestoreOnce.current||campaignId||!campaigns.length)return;
+  activationRestoreOnce.current=true;
+  if(!activationSaved?.run_id)return;
+  const match=campaigns.find(c=>String(c.id)===String(activationSaved.campaign_id));
+  if(match){setDiscoverCampaign(match);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});}
+ },[campaignId,campaigns,activationSaved?.run_id]);
+ useEffect(()=>{
+  if(!discoverRun?.run_id||!discoverCampaign?.id||
+   !['COLLECTING','ASSESSING','NEEDS_ATTENTION'].includes(discoverRun.stage||'COLLECTING'))return;
+  const timer=setInterval(()=>{
+   base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',id:discoverCampaign.id,data:{run_id:discoverRun.run_id}})
+    .then(r=>{setDiscoverRun(r.data);if(r.data.stage==='COMPLETED')refresh()})
+    .catch(e=>setDiscoverError(e.response?.data?.detail||e.message||'Progress refresh unavailable'));
+  },4000);
+  return ()=>clearInterval(timer);
+ },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
+
  async function checkDiscover(c){
    setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
@@ -66,7 +127,10 @@ export default function CampaignPanel({campaignId=null}){
    if(!window.confirm('Run a separate paid SocialCrawl Discover search? Up to '+discoverPreview.credit_cap+' credits, at most 100 kept posts, plus OpenAI enrichment charges. No scheduled crawl is enabled.'))return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun(r.data)}
+      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
+      window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
+      setActivationSaved(saved)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Unable to start Discover')}
    finally{setDiscoverBusy(false)}
  }
@@ -75,7 +139,7 @@ export default function CampaignPanel({campaignId=null}){
    setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',
      id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});setDiscoverRun(r.data);
-     if(['COMPLETED','PARTIAL'].includes(r.data.status))await refresh()}
+     if(r.data.stage==='COMPLETED')await refresh()}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Status unavailable')}
    finally{setDiscoverBusy(false)}
  }
@@ -481,18 +545,23 @@ export default function CampaignPanel({campaignId=null}){
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
       <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove campaign "+c.name} title={"Remove campaign "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
-     </article>)}{discoverCampaign&&<div className="rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm space-y-2" role="region" aria-label="Separate SocialCrawl Discover run">
-  <div className="flex justify-between gap-3"><strong>Activate · {discoverCampaign.name} · 100 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
-  <p className="text-xs">Activation starts one explicitly confirmed SocialCrawl collection of up to 100 posts across the seven default sources. First 5 main keywords, last 7 days. Provider budget capped at {discoverPreview?.credit_cap||100} credits; OpenAI enrichment is separately billed. This is not a recurring schedule.</p>
-  {discoverBusy&&<p role="status">Checking provider…</p>}
-  {discoverError&&<p role="alert" className="text-red-700">{discoverError}</p>}
-  {discoverPreview&&!discoverRun&&<div className="space-y-2"><p className="text-xs">Provider preview: {JSON.stringify(discoverPreview.estimate).slice(0,950)}</p>
-    <p className="text-xs">Keywords: {(discoverPreview.keywords_used||[]).join(', ')} ({(discoverPreview.keywords_total||0)} configured) · Platforms: {(discoverPreview.platforms||[]).join(', ')} · {discoverPreview.incremental?'Incremental since last run':'Initial collection'}</p>
-    <button type="button" className="intel-button text-xs" disabled={discoverBusy} onClick={launchDiscover}>Confirm paid activation</button>
-  </div>}
-  {discoverRun&&<div className="space-y-2" role="status"><p>Run #{discoverRun.run_id} · {discoverRun.status} · {discoverRun.posts_saved||0} saved posts · {discoverRun.credits_used||0} SocialCrawl credits · {discoverRun.ai_analyzed_posts||0} AI-analyzed · {discoverRun.ai_pending_posts||0} AI-pending</p><button type="button" className="intel-ghost text-xs" onClick={refreshDiscover} disabled={discoverBusy}>Refresh run status</button></div>}
- </div>}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>{
+        if(activationSaved&&String(activationSaved.campaign_id)===String(c.id)){
+         setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});setDiscoverError('');
+        }else checkDiscover(c)
+       }}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove campaign "+c.name} title={"Remove campaign "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+     </article>)}{discoverCampaign&&<AssessmentProgressDialog
+  title={'Activate · '+discoverCampaign.name}
+  preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy}
+  onConfirm={launchDiscover} onRefresh={()=>refreshDiscover()}
+  onResume={()=>resumeAssessment(discoverRun,discoverCampaign)}
+  onClose={()=>{
+    if(['COMPLETED','NO_NEW_POSTS','FAILED'].includes(discoverRun?.stage)){
+     window.localStorage.removeItem('bawaslu-active-discover-run');setActivationSaved(null);
+    }
+    setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');
+  }}
+ />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
    </section>
    <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords and platforms, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
   </section>}
@@ -708,7 +777,19 @@ export default function CampaignPanel({campaignId=null}){
     </div>}
     {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
    </section>
-   {campaignSection==='overview'&&<details className="rounded-xl border border-[#dce5ed] bg-white p-4"><summary className="cursor-pointer text-sm font-semibold text-[#19324a]">AI assessment tools and source review</summary><div className="mt-3"><AssessmentPilotPreview campaign={selected}/></div></details>}
+   {campaignSection==='overview'&&<div className="rounded-xl border border-[#b9e2d5] bg-[#f5fbf9] p-4 space-y-3">
+     <div className="flex flex-wrap items-center justify-between gap-3"><div>
+      <strong className="text-sm text-[#19324a]">Intelligence assessment</strong>
+      <p className="mt-1 text-xs text-slate-600">Assess all remaining posts, not a 10/40/50 sample. Completed assessments are reused; only qualifying signals flow into Intelligence Inbox.</p>
+     </div><button type="button" className="rounded-lg bg-[#137d69] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50" onClick={launchAssessAll} disabled={allBusy}>{allBusy?'Checking…':'Assess all unassessed posts'}</button></div>
+     {allError&&<p role="alert" className="text-xs text-red-700">{allError}</p>}
+     <details className="rounded-lg border border-slate-200 bg-white p-3"><summary className="cursor-pointer text-xs font-semibold">Advanced QA · Legacy sample assessment tools</summary><div className="mt-3"><AssessmentPilotPreview campaign={selected}/></div></details>
+    </div>}
+   {allOpen&&allCampaign&&<AssessmentProgressDialog
+     title={'Assess all · '+allCampaign.name} run={allRun} loading={allBusy} error={allError}
+     onRefresh={()=>refreshAll()} onResume={()=>resumeAssessment(allRun,allCampaign)}
+     onClose={()=>setAllOpen(false)}
+    />}
    {evidenceError&&<p role="alert" className="text-red-700 text-sm">{evidenceError}</p>}
   </div>
   </div>}

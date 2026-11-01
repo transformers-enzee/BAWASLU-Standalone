@@ -10,7 +10,7 @@ export default function AssistantAnswer({text}){
     const titled=headings.includes(first);
     return <section key={i} className={i?'border-t border-[#e4e9ef] pt-3':''}>
       {titled&&<h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#53657b]">{first}</h2>}
-      <p className="whitespace-pre-line leading-6 text-[#29445d]">{titled?rest.join('\n'):section}</p>
+      <p data-i18n-exempt className="whitespace-pre-line leading-6 text-[#29445d]">{titled?rest.join('\n'):section}</p>
     </section>;
   })}</div>;
 }

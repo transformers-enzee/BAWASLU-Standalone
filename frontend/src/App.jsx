@@ -33,6 +33,7 @@ import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
 import IntegrationReadiness from '@/pages/IntegrationReadiness';
 import { LanguageProvider } from '@/lib/LanguageContext';
+import UiLanguageLayer from '@/lib/UiLanguageLayer';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
@@ -106,6 +107,7 @@ function App() {
 
   return (
     <LanguageProvider>
+      <UiLanguageLayer />
       <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>

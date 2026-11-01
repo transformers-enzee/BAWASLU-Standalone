@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
+import { UI_LABEL_ID } from '@/lib/interfaceUiLabels';
+
 const LanguageContext=createContext(null);
 
 const translations={
@@ -286,6 +288,40 @@ const valueLabels={
     'PUBLISHER':'PENERBIT','MENTIONS':'MENYEBUT','FEATURES':'MENAMPILKAN','OTHER_REQUIRES_REVIEW':'LAINNYA / PERLU TINJAUAN','OTHER / REQUIRES REVIEW':'LAINNYA / PERLU TINJAUAN'
   }
 };
+
+// Translate interface literals that newer modules still render directly.
+// The original evidence, source language, user notes and database values are
+// never modified. UI components remain the source of truth for editable data.
+const literalTranslationMap=(()=>{
+ const data=new Map(Object.entries(UI_LABEL_ID));
+ for(const group of [translations,extendedTranslations]){
+  for(const [key,en] of Object.entries(group.en||{})){
+   const id=group.id?.[key];
+   if(typeof en==='string'&&typeof id==='string'&&en!==id)data.set(en,id);
+  }
+ }
+ for(const [en,id] of Object.entries(valueLabels.id||{})){
+  if(typeof id==='string')data.set(en,id);
+ }
+ return data;
+})();
+export function translateInterfaceLiteral(text,language='en'){
+ if(language!=='id'||typeof text!=='string')return text;
+ const translated=literalTranslationMap.get(text.trim());
+ if(translated&&translated!==text.trim()){
+  const initial=text.match(/^\s*/)?.[0]||'';
+  const ending=text.match(/\s*$/)?.[0]||'';
+  return initial+translated+ending;
+ }
+ // Bounded count labels emitted by charts; never translate a full source post.
+ const dynamic=text.trim().match(/^([0-9][0-9.,]*) (posts|mentions|records|supporting posts|issues identified)$/i);
+ if(dynamic){
+  const words={posts:'unggahan',mentions:'penyebutan',records:'catatan',
+   'supporting posts':'unggahan pendukung','issues identified':'isu teridentifikasi'};
+  return text.replace(dynamic[0],dynamic[1]+' '+words[dynamic[2].toLowerCase()]);
+ }
+ return text;
+}
 
 export function LanguageProvider({children}){
   const [language,setLanguageState]=useState(()=>localStorage.getItem('bawaslu-language')||'en');

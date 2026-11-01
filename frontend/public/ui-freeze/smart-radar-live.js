@@ -69,7 +69,7 @@
     }
     return pending;
   }
-  const countPosts = rows => rows.reduce((sum, row) => sum + Number(row.supporting_posts || 0), 0);
+  const countPosts = rows => rows.reduce((sum, row) => sum + Number(row.source_count ?? row.supporting_posts ?? 0), 0);
   const addCounts = (rows, key) => {
     const counts = {};
     rows.forEach(f => Object.entries(f[key] || {}).forEach(([name, value]) => {
@@ -92,7 +92,7 @@
       day: 0, status: f.status || 'awareness',
       summary: f.summary || '', insights: f.insights || {}, ai_summary: Boolean(f.ai_summary), ai_model: f.ai_model || '', summary_evidence_sample: f.summary_evidence_sample || null,
       violation: (f.players || []).includes('violations'),
-      posts: [], source_count: Number(f.supporting_posts ?? 0),
+      posts: [], source_count: Number(f.supporting_posts ?? 0), supporting_posts: Number(f.supporting_posts ?? 0),
       human_reviewed: Boolean(f.human_reviewed), history: [], history_loaded:false, history_loading:false,
       priority_score: f.priority_score, priority_label: f.priority_label || '',
       platform_counts: f.platform_counts || {}, day_counts: f.day_counts || {},

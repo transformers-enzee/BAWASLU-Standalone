@@ -113,14 +113,23 @@
       (maxValue ? Math.max(0,Math.min(100,count/maxValue*100)) : 0) +
       '%;background:' + color + '"></div></div></div>').join('');
   }
-  function donut(rows,prefix,colors) {
-    const valid=rows.filter(([,v])=>Number(v)>0),total=valid.reduce((n,[,v])=>n+Number(v),0);
+  const sentimentPalette={POSITIVE:'#15b87a',NEUTRAL:'#f5bd36',NEGATIVE:'#ef4444',UNCLASSIFIED:'#9ca3af'};
+  const platformPalette={youtube:'#ff0033',tiktok:'#111827',facebook:'#1877f2',instagram:'#d62976',twitter:'#111827',x:'#111827',threads:'#111827',online_news:'#2563eb',news:'#2563eb',reddit:'#ff4500',linkedin:'#0a66c2'};
+  function donut(rows,prefix,palette) {
+    const grouped=new Map();
+    for(const [raw,count] of rows){
+      const key=String(raw||'').toLowerCase()==='twitter'?'x':String(raw||'').toLowerCase();
+      grouped.set(key,(grouped.get(key)||0)+Number(count||0));
+    }
+    const valid=[...grouped].filter(([,n])=>n>0);
+    const total=valid.reduce((n,[,v])=>n+v,0);
     if(!total)return '<p class="small muted">No classified evidence available.</p>';
+    const shade=name=>palette[String(name).toUpperCase()]||palette[String(name).toLowerCase()]||'#64748b';
     let offset=0;
-    const stops=valid.map(([,v],i)=>{const start=offset;offset+=v/total*100;return colors[i%colors.length]+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';});
-    const legend=valid.map(([name,count],i)=>'<button type="button" class="insightclick" data-insight="'+prefix+encodeURIComponent(name)+'" style="display:flex;gap:9px;align-items:center;width:100%;padding:5px;text-align:left">'+
-      '<span style="width:10px;height:10px;border-radius:50%;background:'+colors[i%colors.length]+'"></span>'+
-      '<span style="flex:1">'+label(prefix==='platform:'?({x:'X',twitter:'X',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',youtube:'YouTube',reddit:'Reddit',threads:'Threads',linkedin:'LinkedIn'}[String(name).toLowerCase()]||name):(name==='UNCLASSIFIED'?'Unclassified':name))+'</span><b>'+count+' <span class="muted">('+Math.round(count/total*100)+'%)</span></b></button>').join('');
+    const stops=valid.map(([name,count])=>{const start=offset;offset+=count/total*100;return shade(name)+' '+start.toFixed(2)+'% '+offset.toFixed(2)+'%';});
+    const legend=valid.map(([name,count])=>'<button type="button" class="insightclick" data-insight="'+prefix+encodeURIComponent(name)+'" style="display:flex;gap:9px;align-items:center;width:100%;padding:5px;text-align:left">'+
+      '<span style="width:12px;height:12px;border-radius:50%;flex:none;background:'+shade(name)+'"></span>'+
+      '<span style="flex:1">'+label(prefix==='platform:'?({x:'X',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',youtube:'YouTube',threads:'Threads',online_news:'Online News'}[String(name).toLowerCase()]||name):String(name).toUpperCase())+'</span><b>'+count+' <span class="muted">('+Math.round(count/total*100)+'%)</span></b></button>').join('');
     return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;justify-content:center;padding:14px 0">'+
       '<div role="img" aria-label="'+label(valid.map(x=>x[0]+': '+x[1]).join(', '))+'" style="width:150px;height:150px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient('+stops.join(',')+')">'+
       '<div style="width:94px;height:94px;background:white;border-radius:50%;display:grid;place-items:center;text-align:center"><div><b style="font-size:24px">'+total+'</b><div class="small muted">posts</div></div></div></div>'+
@@ -225,7 +234,7 @@
     const pendingLabel=aiTopics?.refresh_pending?'Saved matching topics · updating new evidence':'Current saved AI topics';
     const topicsLoading=!aiTopics&&($('#geo')?.value==='all');
     const highest=Math.max(1,...analysis.map(x=>x.count));
-    const colors={POSITIVE:'#18886a',NEGATIVE:'#bd544a',NEUTRAL:'#67849a',MIXED:'#b18638'};
+    const colors={POSITIVE:'#15b87a',NEGATIVE:'#ef4444',NEUTRAL:'#f5bd36',MIXED:'#8b5cf6'};
     $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
       (perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
       ' · '+label(pendingLabel)+'</div>'+
@@ -257,14 +266,15 @@
     $('#regions').innerHTML=geoHeatmap(unverifiedLocations,verifiedLocations);
     $('#regions').removeAttribute('data-insight');
     const sentimentCounts=addCounts(filtered,'sentiment_counts');
+    // Any unclassified source counts remain explicit until persisted classification finishes.
     const sentimentRows=['POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED']
       .map(name=>[name,Number(sentimentCounts[name]||0)]);
     const classified=sentimentRows.slice(0,3).reduce((n,r)=>n+r[1],0);
     const total=classified+sentimentRows[3][1];
     $('#sentimentExplain').textContent=classified+' of '+total+' relevant posts have saved sentiment labels. Unclassified is NOT Neutral; no AI calls are made on this page.';
-    $('#sentiments').innerHTML=donut(sentimentRows,'sentiment:',['#18a087','#91a5b4','#dc994d','#d5dde2']);
+    $('#sentiments').innerHTML=donut(sentimentRows,'sentiment:',sentimentPalette);
     const platforms=asRows(addCounts(filtered,'platform_counts'));
-    $('#platforms').innerHTML=donut(platforms,'platform:',['#228a9d','#e0aa59','#7597b9','#9284bc','#bf8491','#809a91']);
+    $('#platforms').innerHTML=donut(platforms,'platform:',platformPalette);
     $('#trendsAiSummary').textContent = nPosts + ' relevant saved Inbox posts support ' + filtered.length +
       ' preliminary groups. Activity, platforms and sentiment reuse saved source annotations; no additional AI processing occurs.';
     $('#strategy').textContent = 'Review supporting posts and saved assessments before prioritising officer action. Unverified mentions and discussion levels are not proof of electoral violations.';

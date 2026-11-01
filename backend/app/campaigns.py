@@ -458,7 +458,6 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Campaign and assessment run id required')
         result=all_status(db,p,campaign_id,int(run_id))
         if action=='campaignAssessmentAllResume':
-            from .access import has
             c=db.get(MonitoringCampaign,int(campaign_id))
             if not (p.get('role')=='National Administrator' and has(p,'administration')
                     or str(c.created_by)==str(p.get('id')) and has(p,'add_intelligence')):

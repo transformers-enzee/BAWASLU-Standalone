@@ -43,3 +43,26 @@ def test_failed_reads_are_not_cached():
     for i in range(2):
         with pytest.raises(PermissionError):read({'id':'1'}, {},bad)
     assert len(counter)==2
+
+def test_concurrent_authorized_reads_share_one_loader():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, Lock
+    import time
+    invalidate()
+    entered,finish,guard=Event(),Event(),Lock()
+    calls=[0]
+    def load():
+        with guard:
+            calls[0]+=1
+        entered.set()
+        assert finish.wait(timeout=5)
+        return {'findings':[{'id':1001}]}
+    p={'id':'same-user','permissions':{'view_intelligence':True},'province':'Bali'}
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        jobs=[pool.submit(read,p,{'campaign_id':None},load) for _ in range(6)]
+        assert entered.wait(timeout=5)
+        time.sleep(.04)
+        finish.set()
+        values=[job.result(timeout=5) for job in jobs]
+    assert calls[0]==1
+    assert all(x['findings'][0]['id']==1001 for x in values)

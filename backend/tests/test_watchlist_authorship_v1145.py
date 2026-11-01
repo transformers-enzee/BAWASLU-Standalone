@@ -188,3 +188,23 @@ def test_all_captured_gibran_mentions_are_paginated_without_new_crawls():
     assert all(x['source_collection']=='SOCIAL_LISTENING_CAPTURED' for x in posts)
     assert db.query(SocialListeningProviderUsage).count()==0
     db.close()
+
+def test_account_registration_one_transaction_and_candidate_only_registry_view():
+    from app.models import WatchlistAccountSync,AuditEvent
+    db,p,w,c,r=make_db()
+    before=db.query(AuditEvent).count()
+    response=registry_action(db,p,'addAccount',{
+        'platform':'instagram',
+        'url':'https://www.instagram.com/qa_candidate_115/',
+        'handle':'@qa_candidate_115'},str(w.id))
+    account_id=int(response['account']['id'])
+    state=db.get(WatchlistAccountSync,account_id)
+    assert state and state.state=='PENDING'
+    assert db.query(AuditEvent).count()==before+1
+    slim=registry_action(db,p,'list',{'view':'candidate_watchlist'})
+    assert set(slim)=={'items','accounts'}
+    assert any(x['id']==str(account_id) for x in slim['accounts'])
+    assert any(x['id']==str(w.id) for x in slim['items'])
+    full=registry_action(db,p,'list',{})
+    assert 'categories' in full and 'sources' in full
+    db.close()

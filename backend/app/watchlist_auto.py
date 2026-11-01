@@ -84,7 +84,7 @@ def status_for(db,watchlist_id):
         'total_posts':rows[a.id].total_posts if a.id in rows else 0
     } for a in accounts]}
 
-def mark_pending(db,account_id):
+def mark_pending(db,account_id,commit=True):
     row=db.get(WatchlistAccountSync,account_id)
     if not row:
         row=WatchlistAccountSync(account_id=account_id)
@@ -92,7 +92,7 @@ def mark_pending(db,account_id):
     row.state='PENDING'
     row.next_check_at=datetime.utcnow()
     row.last_error=''
-    db.commit()
+    if commit:db.commit()
 
 def _claim(db,account_id,manual=False):
     now=datetime.utcnow()

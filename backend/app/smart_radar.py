@@ -221,6 +221,7 @@ def invalidate_dashboard_cache():
 @router.get("/dashboard")
 def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
     response.headers["Cache-Control"]="private, no-store"
+    total_started=time.perf_counter()
     from .inbox_radar import live_inbox_findings
     principal=authorised(db,user)
     import hashlib
@@ -230,9 +231,16 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         cached=_DASHBOARD_RESPONSES.get(cache_identity)
         if cached and cached[0]>now:
             response.headers["X-Radar-Cache"]="HIT"
+            response.headers["Server-Timing"]=f"dashboard;dur={(time.perf_counter()-total_started)*1000:.1f}"
             return copy.deepcopy(cached[1])
     response.headers["X-Radar-Cache"]="MISS"
-    findings,inbox=live_inbox_findings(db,principal,fetch_states(db))
+    # The read-only pilot states query would otherwise hold a Postgres pool
+    # connection while another concurrent request builds the shared Inbox cache.
+    states=fetch_states(db)
+    db.rollback()
+    inbox_started=time.perf_counter()
+    findings,inbox=live_inbox_findings(db,principal,states)
+    inbox_ms=(time.perf_counter()-inbox_started)*1000
     attach_live_ai_summaries(db,findings)
     posts=[post for finding in findings for post in finding["posts"]]
     platforms=Counter(post["platform"] for post in posts)
@@ -270,6 +278,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
                 keyword_counts[word]+=1
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})
+    assembled_ms=(time.perf_counter()-inbox_started)*1000-inbox_ms
     payload={"batch_id":None,"source_total":len(posts),
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
@@ -296,6 +305,14 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         if len(_DASHBOARD_RESPONSES)>64:
             for old in list(_DASHBOARD_RESPONSES)[:16]:
                 _DASHBOARD_RESPONSES.pop(old,None)
+    total_ms=(time.perf_counter()-total_started)*1000
+    response.headers["Server-Timing"]=(
+        f"dashboard;dur={total_ms:.1f}, inbox;dur={inbox_ms:.1f}, assembly;dur={assembled_ms:.1f}")
+    if total_ms>3000:
+        import logging
+        logging.getLogger(__name__).warning(
+            "SLOW_RADAR_DASHBOARD total_ms=%.0f inbox_ms=%.0f assembly_ms=%.0f",
+            total_ms,inbox_ms,assembled_ms)
     return payload
 
 @router.get("/finding/{finding_id}")

@@ -1,4 +1,4 @@
-import os, shutil, uuid
+import os, shutil, uuid, time, logging
 from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -126,7 +126,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'116.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'116.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -181,8 +181,18 @@ def login(body:LoginIn,db:Session=Depends(get_db)):
 
 @app.post('/api/auth/register')
 def register(body:RegisterIn,db:Session=Depends(get_db)):
+    started=time.perf_counter()
     if db.query(User).filter(User.email==body.email.lower()).first(): raise HTTPException(409,'Account already exists')
-    u=User(email=body.email.lower(),full_name=body.full_name,password_hash=hash_password(body.password)); db.add(u); db.commit(); db.refresh(u)
+    queried=time.perf_counter()
+    encrypted=hash_password(body.password)
+    hashed=time.perf_counter()
+    u=User(email=body.email.lower(),full_name=body.full_name,password_hash=encrypted)
+    db.add(u);db.commit();db.refresh(u)
+    total_ms=(time.perf_counter()-started)*1000
+    if total_ms>2000:
+        logging.getLogger(__name__).warning(
+            "SLOW_ACCOUNT_SIGNUP total_ms=%.0f lookup_ms=%.0f password_hash_ms=%.0f",
+            total_ms,(queried-started)*1000,(hashed-queried)*1000)
     return {'ok':True,'message':'Account created. An administrator must assign BAWASLU access before use.'}
 
 @app.get('/api/auth/me')
@@ -204,9 +214,14 @@ def intelligence(body:FunctionIn,user:User=Depends(current_user),db:Session=Depe
 
 @app.post('/api/functions/registry')
 def registry(body:FunctionIn,background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    started=time.perf_counter()
     p=profile(db,user)
     try:
         result=registry_action(db,p,body.action,body.data,body.id)
+        if body.action=='addAccount':
+            total_ms=(time.perf_counter()-started)*1000
+            if total_ms>1500:
+                logging.getLogger(__name__).warning("SLOW_WATCHLIST_ACCOUNT_REGISTRATION total_ms=%.0f",total_ms)
         if body.action in ('addAccount','updateAccount') and result.get('account'):
             from .watchlist_auto import readiness, sync_account
             if readiness()['enabled']:

@@ -15,6 +15,7 @@ _TTL=90.0
 _MAX=64
 _lock=threading.RLock()
 _entries=OrderedDict()
+_inflight={}
 _generation=0
 
 def invalidate():
@@ -22,30 +23,55 @@ def invalidate():
     with _lock:
         _generation+=1
         _entries.clear()
+        # Wake waiters so they can re-check the authorization-scoped generation.
+        for _,event in _inflight.values():event.set()
+        _inflight.clear()
 
 def read(principal,query,loader):
-    global _generation
-    # Including permissions, province, role, status, user ID and query scope
-    # prevents an authorized row leaking into a different access context.
+    """One expensive read per scoped principal/query, including cold concurrency.
+
+    Concurrent requests wait for a shared authorized result; they do not start
+    duplicated Postgres scans and exhaust the small shared connection pool.
+    Invalidation wakes all waiters. Failures are never cached.
+    """
     identity=json.dumps([principal,query],sort_keys=True,default=str,ensure_ascii=True)
     key=hashlib.sha256(identity.encode()).hexdigest()
-    now=time.monotonic()
-    with _lock:
-        item=_entries.get(key)
-        if item and item[0]>now and item[2]==_generation:
-            _entries.move_to_end(key)
-            return copy.deepcopy(item[1])
-        if item:_entries.pop(key,None)
-        generation=_generation
-    # Don't hold a lock while Supabase is queried.
-    result=loader()
-    # Copy to prevent downstream mutation of cached dicts.
-    with _lock:
-        if generation==_generation:
-            _entries[key]=(time.monotonic()+_TTL,copy.deepcopy(result),generation)
-            _entries.move_to_end(key)
-            while len(_entries)>_MAX:_entries.popitem(last=False)
-    return result
+    while True:
+        now=time.monotonic()
+        with _lock:
+            item=_entries.get(key)
+            if item and item[0]>now and item[2]==_generation:
+                _entries.move_to_end(key)
+                return copy.deepcopy(item[1])
+            if item:_entries.pop(key,None)
+            gen=_generation
+            pending=_inflight.get(key)
+            owner=pending is None or pending[0]!=gen
+            if owner:
+                event=threading.Event()
+                _inflight[key]=(gen,event)
+            else:
+                event=pending[1]
+        if not owner:
+            # A leader can fail, be invalidated or time out; retry authorization-
+            # scoped lookup when it finishes. Bounded wait avoids deadlock.
+            if not event.wait(timeout=60):
+                raise TimeoutError('Authorized Inbox read is busy; retry request')
+            continue
+        try:
+            result=loader()
+            with _lock:
+                if gen==_generation:
+                    _entries[key]=(time.monotonic()+_TTL,copy.deepcopy(result),gen)
+                    _entries.move_to_end(key)
+                    while len(_entries)>_MAX:_entries.popitem(last=False)
+            return result
+        finally:
+            with _lock:
+                current=_inflight.get(key)
+                if current and current[1] is event:
+                    _inflight.pop(key,None)
+                    event.set()
 
 def statistics():
     with _lock:

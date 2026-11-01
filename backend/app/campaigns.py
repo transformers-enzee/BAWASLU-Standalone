@@ -822,8 +822,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                     AIAssessmentJob.result_id.in_(linked_ids)).limit(500).all():
                     if job.state in job_counts:job_counts[job.state]+=1
                     campaign_job_states[job.result_id]=job.state
-            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
-                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
+            # Reuse the authorized campaign links instead of a duplicate SQL
+            # round trip on every Intelligence Inbox and Command Centre read.
+            links=list(campaign_links)
             # Home deep links must resolve even when the normal Inbox window
             # (300 latest campaign links) has moved past the referenced record.
             if requested_result:

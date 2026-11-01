@@ -130,7 +130,7 @@
     };
   }
   async function reload(){
-    const data=await registry('list');
+    const data=await registry('list',{view:'candidate_watchlist'});
     const candidates=(data.items||[]).filter(x=>String(x.type||'').toLowerCase()==='candidate')
       .map(x=>candidate(x,data.accounts||[]));
     const active=(data.items||[]).filter(x=>String(x.type||'').toLowerCase()==='candidate'&&x.status==='Active').map(x=>String(x.id));

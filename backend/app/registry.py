@@ -112,9 +112,17 @@ def registry_action(db:Session,p,action,data,id=None):
                 'source':'REGISTERED_WATCHLIST_PROFILES',
                 'paid_provider_called':False}
     if action=='list':
-        items=[x for x in db.query(WatchlistItem).order_by(WatchlistItem.created_at.desc()).all() if allowed(p,x)]
+        # Candidate-only view prevents unrelated taxonomy/source queries on
+        # every account registration; the full legacy response is unchanged.
+        candidate_only=(data or {}).get('view')=='candidate_watchlist' if isinstance(data,dict) else False
+        query=db.query(WatchlistItem)
+        if candidate_only:query=query.filter(WatchlistItem.type=='Candidate')
+        items=[x for x in query.order_by(WatchlistItem.created_at.desc()).all() if allowed(p,x)]
         ids={x.id for x in items}
-        accounts=[x for x in db.query(SourceAccount).all() if x.watchlist_id in ids]
+        accounts=db.query(SourceAccount).filter(SourceAccount.watchlist_id.in_(ids)).all() if ids else []
+        if candidate_only:
+            return {'items':[watchlist(x) for x in items],
+                    'accounts':[source_account(x) for x in accounts]}
         rels=[x for x in db.query(EntityRelationship).all() if x.from_id in ids and x.to_id in ids]
         sources=[x for x in db.query(DataSource).all() if allowed(p,x)]
         cats=db.query(IssueCategory).order_by(IssueCategory.sort_order,IssueCategory.name).all()
@@ -409,9 +417,11 @@ def registry_action(db:Session,p,action,data,id=None):
         _validate_account_domain(platform,url)
         if _account_duplicate(db,w.id,url,platform,handle): raise ValueError('This public account / URL is already registered for this watchlist item')
         a=SourceAccount(watchlist_id=w.id,platform=platform,url=url,handle=handle,province=w.province,regency_city=w.regency_city)
-        db.add(a); db.commit(); db.refresh(a)
+        # The account, pending sync state and audit event are one transaction.
+        # Avoid three sequential Supabase commits and redundant refreshes.
+        db.add(a); db.flush()
         from .watchlist_auto import mark_pending
-        mark_pending(db,a.id)
+        mark_pending(db,a.id,commit=False)
         audit(db,p,'WatchlistItem',w.id,'SOURCE_ACCOUNT_ADDED',{'account_id':{'new':str(a.id)},'url':{'new':a.url}})
         return {'account':source_account(a)}
 

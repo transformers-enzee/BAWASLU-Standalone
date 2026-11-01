@@ -308,16 +308,42 @@
       decorate();
     }).catch(error=>console.warn('AI issue topics unavailable',error.message));
   }
+  function issuePostHeadline(post){
+    const explicit=String(post.title||post.headline||'').replace(/\s+/g,' ').trim();
+    if(explicit && !/^post\s*\d+\s*[·:-]\s*(?:social:)?\d+$/i.test(explicit))return explicit.slice(0,155);
+    const text=String(post.text||'').replace(/https?:\/\/\S+/g,' ').replace(/\s+/g,' ').trim();
+    if(!text)return 'Saved source post';
+    // A source-grounded heading, not a new AI claim or a guessed violation.
+    const sentenceEnd=text.search(/[.!?](?:\s|$)/);
+    const first=sentenceEnd>=28&&sentenceEnd<=150?text.slice(0,sentenceEnd+1):text;
+    if(first.length<=122)return first;
+    const boundary=first.slice(0,123).lastIndexOf(' ');
+    return (boundary>70?first.slice(0,boundary):first.slice(0,120)).replace(/[\s,;:.]+$/,'')+'…';
+  }
+  let issueLastFocus=null;
   function closeIssueModal(){
     const modal=document.getElementById('issueSourceModal');
-    if(modal)modal.remove();
+    if(!modal)return;
+    modal.remove();
+    if(issueLastFocus?.isConnected)issueLastFocus.focus();
+    issueLastFocus=null;
   }
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeIssueModal();});
+  document.addEventListener('click',event=>{
+    const toggle=event.target.closest?.('[data-issue-post-toggle]');
+    if(!toggle)return;
+    const paragraph=document.getElementById(toggle.getAttribute('aria-controls'));
+    if(!paragraph)return;
+    const expanded=paragraph.classList.toggle('expanded');
+    toggle.setAttribute('aria-expanded',String(expanded));
+    toggle.textContent=expanded?'See less ↑':'See more ↓';
+  });
   document.addEventListener('click',async event=>{
     const hit=event.target.closest?.('[data-issue-id]');
     if(!hit)return;
     event.preventDefault();
     closeIssueModal();
+    issueLastFocus=hit;
     const name=decodeURIComponent(hit.dataset.issueTitle||'');
     const modal=document.createElement('div');
     modal.id='issueSourceModal';
@@ -325,11 +351,11 @@
     modal.setAttribute('aria-modal','true');
     modal.setAttribute('aria-label','Supporting posts: '+name);
     modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(8,27,40,.65);display:flex;align-items:center;justify-content:center;padding:18px';
-    modal.innerHTML='<div style="background:white;color:#17334a;width:min(760px,100%);max-height:86vh;border-radius:15px;box-shadow:0 15px 50px #0003;display:flex;flex-direction:column;overflow:hidden">'+
-      '<div style="padding:18px 20px;border-bottom:1px solid #e3e9ee;display:flex;justify-content:space-between;gap:12px;align-items:start">'+
-      '<div><strong style="font-size:17px">'+label(name)+'</strong><p class="small muted">Original saved posts assigned to this issue</p></div>'+
-      '<button type="button" data-close-issue aria-label="Close supporting posts" style="border:1px solid #dce7e8;background:white;border-radius:8px;padding:8px 12px">✕ Close</button></div>'+
-      '<div data-issue-content role="status" style="overflow:auto;padding:18px 20px">Loading source posts…</div></div>';
+    modal.innerHTML='<div class="issue-source-dialog">'+
+      '<div class="issue-source-dialog-header">'+
+      '<div><strong style="font-size:17px;line-height:1.4">'+label(name)+'</strong><p class="small muted" style="margin:6px 0 0">Saved source posts related to this issue</p></div>'+
+      '<button type="button" data-close-issue aria-label="Close supporting posts" class="issue-source-close">✕ Close</button></div>'+
+      '<div data-issue-content role="status" class="issue-source-list">Loading source posts…</div></div>';
     document.body.appendChild(modal);
     modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('[data-close-issue]'))closeIssueModal();});
     modal.querySelector('[data-close-issue]')?.focus();
@@ -338,9 +364,22 @@
       const result=await request('/api/smart-radar/issue-distribution/posts?perspective='+encodeURIComponent(hit.dataset.issuePerspective)+'&topic_id='+encodeURIComponent(hit.dataset.issueId));
       if(!modal.isConnected)return;
       const posts=result.posts||[];
-      content.innerHTML='<p class="small muted">'+Number(result.total||0)+' matching saved posts; showing up to 150.</p>'+
-        (posts.length?posts.map((p,i)=>'<article style="padding:14px 0;border-bottom:1px solid #e3e9ee"><b>Post '+(i+1)+' · '+label(p.id)+'</b><p style="white-space:pre-wrap;line-height:1.5">'+label(p.text)+'</p></article>').join(''):
-        '<p>No saved posts currently assigned to this issue.</p>');
+      content.removeAttribute('role');
+      content.innerHTML='<p class="small muted" style="margin:0 0 16px">'+Number(result.total||0)+' matching saved posts'+(Number(result.total||0)>posts.length?' · Showing first '+posts.length:'')+'</p>'+
+        (posts.length?posts.map((p,i)=>{
+          const detailId='issue-post-description-'+i;
+          const heading=issuePostHeadline(p);
+          return '<article class="issue-source-card"><h3 class="issue-source-heading">'+label(heading)+'</h3>'+
+            '<p id="'+detailId+'" class="issue-source-description">'+label(p.text||'')+'</p>'+
+            '<button type="button" class="issue-source-expand" data-issue-post-toggle aria-expanded="false" aria-controls="'+detailId+'" hidden>See more ↓</button>'+
+            '</article>';
+        }).join(''):'<p>No saved posts currently assigned to this issue.</p>');
+      content.querySelectorAll('[data-issue-post-toggle]').forEach(button=>{
+        const paragraph=document.getElementById(button.getAttribute('aria-controls'));
+        if(paragraph && (paragraph.scrollHeight>paragraph.clientHeight+2 || paragraph.textContent.length>260)){
+          button.hidden=false;
+        }
+      });
     }catch(error){if(modal.isConnected)content.innerHTML='<p role="alert">Could not load posts: '+label(error.message)+'</p>';}
   });
   document.addEventListener('click',async event=>{

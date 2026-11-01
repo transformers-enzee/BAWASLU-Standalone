@@ -267,6 +267,30 @@
         :'Existing Social Listening Captured Post mentioning this candidate; published by another account.'
     };
   }
+  function candidateActivitySummary(candidate){
+    const posts=(candidate.posts||[]).filter(p=>p.kind==='own'&&String(p.text||'').trim());
+    const other=(candidate.posts||[]).filter(p=>p.kind==='earned');
+    if(!posts.length){
+      return 'No saved posts from registered candidate accounts are available to summarize. '+other.length+
+        ' mentions by other accounts are tracked separately and do not establish what the candidate personally did.';
+    }
+    const labels=[
+      ['campaigning or public outreach',/kampanye|campaign|relawan|bertemu|mengunjungi|kunjungan|sapa warga|turun ke|dialog|silaturahmi/i],
+      ['public speeches or political statements',/pidato|menyatakan|mengatakan|menegaskan|berbicara|speech|statement|pernyataan|menyampaikan/i],
+      ['policy proposals or programs',/program|visi|misi|kebijakan|ekonomi|pendidikan|kesehatan|pembangunan|policy/i],
+      ['election and voting matters',/pemilu|pilpres|pilkada|suara|voting|debat|bawaslu|kpu|election/i],
+      ['community or organizational engagements',/masyarakat|komunitas|organisasi|acara|kegiatan|hadir|pertemuan/i]
+    ];
+    const matched=labels.map(([label,regex])=>({label,posts:posts.filter(p=>regex.test(p.text))})).filter(x=>x.posts.length);
+    const dates=posts.map(p=>String(p.date||'').slice(0,10)).filter(Boolean).sort();
+    const dateInfo=dates.length?' between '+dates[0]+' and '+dates[dates.length-1]:'';
+    const activity=matched.length?matched.slice(0,3).map(x=>x.label+' ('+x.posts.length+' saved post'+(x.posts.length===1?'':'s')+')').join('; '):'topics that cannot be reliably assigned to an activity type';
+    const examples=posts.slice(0,3).map(p=>String(p.text).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim().slice(0,140)).filter(Boolean);
+    return 'From '+posts.length+' saved post'+(posts.length===1?'':'s')+' by registered account(s)'+dateInfo+
+      ', observed activity includes '+activity+'.\n\nRecent published statements: '+
+      (examples.length?examples.map((x,i)=>(i+1)+') “'+x+(x.length>=140?'…':'')+'”').join('  '):'No readable text available.')+
+      '\n\n'+other.length+' posts by others mention this candidate; these are not treated as activities personally undertaken. Registered account ownership and the underlying claims require verification.';
+  }
   ui.onProfile=async id=>{
     if(loaded.has(id)||loading.has(id))return;
     const candidate=ui.getCandidate(id);
@@ -288,6 +312,7 @@
           '. Inspect original evidence before any officer decision.',
         status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
       }));
+      candidate.summary=candidateActivitySummary(candidate);
       candidate.feedLoadState='ready';
       loaded.add(id);
       ui.renderProfile(id);

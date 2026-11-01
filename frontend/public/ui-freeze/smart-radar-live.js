@@ -114,7 +114,7 @@
       '%;background:' + color + '"></div></div></div>').join('');
   }
   const sentimentPalette={POSITIVE:'#15b87a',NEUTRAL:'#f5bd36',NEGATIVE:'#ef4444',UNCLASSIFIED:'#9ca3af'};
-  const platformPalette={youtube:'#ff0033',tiktok:'#111827',facebook:'#1877f2',instagram:'#d62976',twitter:'#111827',x:'#111827',threads:'#111827',online_news:'#2563eb',news:'#2563eb',reddit:'#ff4500',linkedin:'#0a66c2'};
+  const platformPalette={youtube:'#ff0033',tiktok:'#04c8c8',facebook:'#1877f2',instagram:'#dd2a7b',twitter:'#6366f1',x:'#6366f1',threads:'#8957e5',online_news:'#f59e0b',news:'#f59e0b',reddit:'#ff4500',linkedin:'#0a66c2'};
   function donut(rows,prefix,palette) {
     const grouped=new Map();
     for(const [raw,count] of rows){

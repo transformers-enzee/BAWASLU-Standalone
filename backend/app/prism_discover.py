@@ -151,18 +151,22 @@ def enrich(db,c,entries):
         sample=[{'id':str(row.id),'text':row.text_content[:1200]} for row,_ in batch]
         prompt=('Analyze the social posts for BAWASLU. Return ONLY valid JSON: '
                 '{"items":[{"id":"post id","relevance":"RELEVANT|IRRELEVANT|UNCERTAIN",'
-                '"primary_topic":"Electoral Operations|Public Concern|BAWASLU Reputation|Not categorized",'
+                '"primary_topic":"Public Information|Voter Registration|Electoral Operations|Campaign Rules|Public Concern|BAWASLU Reputation|Not categorized",'
                 '"concerns":[{"concern":"short description","evidence_quote":"exact excerpt"}],'
                 '"candidates":[{"name":"public candidate name","evidence_quote":"exact excerpt"}],'
                 '"provinces":[{"name":"province name","province":"province name"}]}]}. '
-                'Electoral Operations means election procedures, administration and voting issues. '
+                'Public Information covers general election news, political developments, candidate statements, policy announcements, results, and routine civic information. ' 
+                'Voter Registration covers voter lists, eligibility, identity requirements, and registration access. ' 
+                'Electoral Operations means election procedures, voting, counting, election administration and oversight. ' 
+                'Campaign Rules covers campaign methods, political advertising, campaign finance and potential breaches discussed as unverified claims. ' 
                 'BAWASLU Reputation means criticism of public trust, neutrality and institution performance. '
                 'Select exactly one supported primary topic based on substance, including ordinary civic dialogue: Electoral Operations for election administration and voting, '
                 'Public Concern for a clearly described public complaint, oversight concern, or service problem, '
                 'BAWASLU Reputation for BAWASLU trust, neutrality, institutional actions, or performance. ' 
                 'Ordinary election news, civic discussion, election results, campaign activity, candidate statements and voter reactions are meaningful Electoral Operations topics even without a violation. ' 
                 'Public Concern includes explicit citizen complaints, concerns about fairness, access or public oversight, without assuming wrongdoing. ' 
-                'Only choose Not categorized when no topic is supported by the actual post. Do not invent evidence. '
+                'Choose the closest supported category for any substantive election or BAWASLU-related post, including news, neutral facts, opinions, questions, and brief posts. ' 
+                'Not categorized is reserved for unrelated, unintelligible, empty or source-insufficient content, not merely posts lacking a violation or complaint. Do not invent evidence. '
                 'A Public Concern must include an exact source quote in concerns. '
                 'Include candidate names only when '
                 'explicitly supported by the post text. Include province only when text explicitly names it. '
@@ -192,7 +196,7 @@ def enrich(db,c,entries):
                 and str(x.get('evidence_quote') or '') in row.text_content]
             topic=str(item.get('primary_topic') or '').strip()
             # A supported Public Concern topic does not require a verbatim quote; only detailed concern signals do.
-            if topic not in ('Electoral Operations','Public Concern','BAWASLU Reputation'):
+            if topic not in ('Public Information','Voter Registration','Electoral Operations','Campaign Rules','Public Concern','BAWASLU Reputation'):
                 topic='Not categorized'
             record.topic_labels_json=json.dumps([] if topic=='Not categorized' else [topic])
             record.public_concern_signals_json=json.dumps(concerns,ensure_ascii=False)

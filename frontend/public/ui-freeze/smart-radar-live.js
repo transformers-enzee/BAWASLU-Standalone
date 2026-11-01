@@ -232,7 +232,7 @@
     $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
       (perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
       ' · AI-classified primary conversation topics</div>'+
-      (analysis.length===5?analysis.map(t=>'<button type="button" class="issue-theme" data-issue-title="'+encodeURIComponent(t.title)+'" aria-label="View posts for '+label(t.title)+'" style="margin-bottom:10px" title="'+label(t.description||'')+
+      (analysis.length===5?analysis.map(t=>'<button type="button" class="issue-theme" data-issue-id="'+Number(t.id)+'" data-issue-perspective="'+perspective+'" data-issue-title="'+encodeURIComponent(t.title)+'" aria-label="View posts for '+label(t.title)+'" style="margin-bottom:10px" title="'+label(t.description||'')+
         '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:12px"><span style="line-height:1.4">'+
         label(t.title)+'</span><b>'+Number(t.count||0)+'</b></div><div class="small muted">'+
         label(t.sentiment||'NEUTRAL')+
@@ -307,7 +307,22 @@
       decorate();
     }).catch(error=>console.warn('AI issue topics unavailable',error.message));
   }
-  document.addEventListener('click',event=>{const hit=event.target.closest?.('[data-issue-title]');if(!hit)return;const name=decodeURIComponent(hit.dataset.issueTitle||'');const findings=(dashboard?.findings||[]).filter(f=>(f.topics||[]).some(t=>String(t).toLowerCase()===name.toLowerCase())||String(f.title||'').toLowerCase().includes(name.toLowerCase()));const host=$('#issues');if(!host)return;let panel=$('#issuePostDrilldown');if(!panel){panel=document.createElement('div');panel.id='issuePostDrilldown';host.appendChild(panel);}panel.innerHTML='<div class="soft"><strong>'+label(name)+' — saved supporting evidence</strong><p class="small muted">'+findings.length+' matching intelligence groups</p>'+findings.map(f=>'<button type="button" class="item" data-finding="'+label(String(f.id))+'"><b>'+label(f.title)+'</b><p class="small">'+label(f.summary||'')+'</p><span class="tiny muted">'+Number(f.supporting_posts||0)+' linked posts · Open →</span></button>').join('')+'</div>';});
+  document.addEventListener('click',async event=>{
+    const hit=event.target.closest?.('[data-issue-id]');
+    if(!hit)return;
+    event.preventDefault();
+    const name=decodeURIComponent(hit.dataset.issueTitle||'');
+    const host=$('#issues');if(!host)return;
+    let panel=$('#issuePostDrilldown');if(!panel){panel=document.createElement('section');panel.id='issuePostDrilldown';host.appendChild(panel);}
+    panel.innerHTML='<div class="soft" role="status">Loading saved posts for '+label(name)+'…</div>';
+    try{
+      const result=await request('/api/smart-radar/issue-distribution/posts?perspective='+encodeURIComponent(hit.dataset.issuePerspective)+'&topic_id='+encodeURIComponent(hit.dataset.issueId));
+      const posts=result.posts||[];
+      panel.innerHTML='<div class="soft"><strong>'+label(name)+'</strong><p class="small muted">'+Number(result.total||0)+' matching saved source post(s). Displaying up to 150.</p>'+
+        posts.map(p=>'<div class="source"><b>'+label(p.id)+'</b><p>'+label(p.text)+'</p></div>').join('')+
+        (posts.length?'':'<p class="small muted">No saved source posts available for this category.</p>')+'</div>';
+    }catch(error){panel.innerHTML='<div class="soft" role="alert">Unable to load category posts: '+label(error.message)+'</div>';}
+  });
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-refresh-player]');
     if(!button)return;

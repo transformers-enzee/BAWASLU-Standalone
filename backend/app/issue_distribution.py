@@ -158,6 +158,21 @@ consideration. Criticism of KPU, candidates, MK or election results is NOT autom
 criticism of Bawaslu. Neutral operational announcements are not automatically praise.
 Assign unrelated-to-Bawaslu-reputation posts to Others. Sentiment is TOWARDS BAWASLU."""
 
+@router.get("/issue-distribution/posts")
+def issue_posts(perspective:str,topic_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Read only saved, user-scoped primary assignments; never classify on click."""
+    authorised(db,user)
+    if perspective not in ("operations","reputation") or topic_id not in (0,1,2,3,4,5):
+        raise HTTPException(400,"Invalid topic")
+    posts=_records(db,user)
+    saved=_read(db,perspective,_signature(posts))
+    if not saved:
+        return {"posts":[],"total":0,"status":"NOT_READY"}
+    assignments=saved.get("assignments") or {}
+    matched=[post for post in posts if assignments.get(post["id"])==topic_id]
+    return {"posts":matched[:150],"total":len(matched),"status":"READY"}
+
+
 @router.post("/issue-distribution/analyze")
 def analyze(perspective:str,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)

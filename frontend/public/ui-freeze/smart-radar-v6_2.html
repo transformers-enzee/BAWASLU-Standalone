@@ -13,16 +13,14 @@
 .player-level{border:1px solid #dce5e8;border-radius:14px;padding:20px;margin-bottom:14px;background:#fff}.level-label{font-size:12px;font-weight:850;letter-spacing:.45px;color:#526b78;margin-bottom:14px}.players-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.single-player{display:grid;grid-template-columns:1fr}.player{min-height:205px}.single-player .player{min-height:150px}.player-level:nth-of-type(2){background:#f5faf8}.top a:hover{text-decoration:underline}@media(max-width:800px){.players-three{grid-template-columns:1fr}.player-level{padding:13px}}
 .reputation-layout{grid-template-columns:repeat(2,minmax(0,1fr))}.reputation-layout .player{min-height:260px;padding:24px}.attention-highlight{border:2px solid #e6ad42!important;background:linear-gradient(110deg,#fff8ea,#fffdf8)!important;box-shadow:0 7px 20px #bc7b1724!important}.attention-highlight h3{color:#8a5610}.ai-trends-summary{margin:20px 0 4px;border-left:4px solid #17816c;background:#f4faf8}.ai-trends-heading{font-weight:800;color:#17685d;margin-bottom:8px}@media(max-width:800px){.reputation-layout{grid-template-columns:1fr}}
 
-/* Level 1 Intelligence Players: equal-height cards, fixed footer alignment.
-   Grid cells must stretch their wrapper: the player buttons are nested one
-   element below the grid rather than being direct grid children. */
-#informationPlayers{grid-auto-rows:1fr;align-items:stretch}
-#informationPlayers>div{display:flex;min-width:0;min-height:0;align-self:stretch}
-#informationPlayers>div>.player{box-sizing:border-box;width:100%;height:100%;min-height:420px;min-width:0;display:flex;flex-direction:column}
-#informationPlayers>div>.player p{flex:1 1 auto;min-height:0;max-height:none!important;overflow-y:auto}
+/* Level 1: consistent compact cards with independently scrollable summaries */
+#informationPlayers{align-items:stretch;grid-auto-rows:340px}
+#informationPlayers>div{min-height:0;height:100%;display:flex;min-width:0;align-self:stretch}
+#informationPlayers>div>.player{box-sizing:border-box;width:100%;height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#informationPlayers>div>.player p{flex:1 1 auto;min-height:0;max-height:none!important;overflow-y:auto;overscroll-behavior:contain;padding-right:5px;scrollbar-width:thin}
 #informationPlayers>div>.player .foot{margin-top:auto;flex-shrink:0}
 #informationPlayers>div>.player>.small{flex-shrink:0}
-@media(max-width:800px){#informationPlayers>div>.player{min-height:350px}}
+@media(max-width:800px){#informationPlayers{grid-auto-rows:340px}}
 /* Issue Distribution: compact, readable source evidence popup */
 .issue-source-dialog{background:#fff;color:#17334a;width:min(760px,100%);max-height:86vh;border-radius:16px;box-shadow:0 20px 60px #0004;display:flex;flex-direction:column;overflow:hidden}
 .issue-source-dialog-header{padding:18px 22px;border-bottom:1px solid #e3e9ee;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-shrink:0}
@@ -115,4 +113,4 @@ pendingDecision=action;q('#confirmText').textContent='Are you sure you want to '
 function cancelConfirm(){pendingDecision=null;q('#confirmOverlay').style.display='none'}
 function submit(action){return window.__bawaslu?.onAction?.(action)}
 document.addEventListener('click',e=>{const b=e.target.closest('button,[data-insight]');if(!b)return;if(b.id==='deskOpen'){deskTab='review';open('desk');return}if(b.id==='closeDrawer'){close();return}if(b.id==='operations'||b.id==='reputation'){perspective=b.id;topic='all';render();return}if(b.id==='awayDismiss'){q('#awayCard').classList.add('hidden');notify('What You Missed dismissed. Your pending tasks are still available in Action Desk.');return}if(b.id==='awayToggle'){q('#awayDetails').classList.toggle('hidden');b.textContent=q('#awayDetails').classList.contains('hidden')?'View Details ▾':'Show Less ▴';b.setAttribute('aria-expanded',String(!q('#awayDetails').classList.contains('hidden')));return}if(b.dataset.insight){window.__bawaslu?.openInsight?.(b.dataset.insight);return}if(b.dataset.player){open('player',b.dataset.player);return}if(b.dataset.finding){window.__bawaslu?.openFinding?.(b.dataset.finding,panel?{...panel}:null);return}if(b.dataset.tab){deskTab=b.dataset.tab;draw();return}if(b.id==='back'){const previous=panel.origin;if(previous)open(previous.type,previous.id,previous.origin);else close();return}if(b.id==='history'){history=!history;draw();if(history)window.__bawaslu?.loadHistory?.(panel?.id);return}if(b.dataset.action){askConfirm(b.dataset.action);return}if(b.id==='confirmCancel'){cancelConfirm();return}if(b.id==='confirmYes'){if(pendingDecision){const action=pendingDecision;cancelConfirm();submit(action)}return}});q('#geo').addEventListener('change',e=>{geo=e.target.value;render()});q('#period').addEventListener('change',e=>{period=e.target.value;render()});q('#topic').addEventListener('change',e=>{topic=e.target.value;render()});q('#overlay').addEventListener('click',e=>{if(e.target===q('#overlay'))close()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&pendingDecision)cancelConfirm();else if(e.key==='Escape'&&panel)close()});window.__bawaslu={db:()=>db,view,render,openFindingOriginal:(id,origin)=>open('finding',id,origin),openPanel:open,closePanel:close,notify,setData:(rows)=>{db=rows;liveDataReceived=true;render()},decorate:null,canReview:false,onAction:null,openFinding:null,openInsight:null,insightView:null,loadHistory:null,refreshDrawer:draw};q('#period').value='historical';})();
-</script><script src="/ui-freeze/smart-radar-live.js?build=119.3"></script></body></html>
+</script><script src="/ui-freeze/smart-radar-live.js?build=119.4"></script></body></html>

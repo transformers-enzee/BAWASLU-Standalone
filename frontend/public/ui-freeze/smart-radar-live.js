@@ -222,11 +222,12 @@
     const topics = asRows(topicCounts);
     const aiTopics=issueDistribution?.[perspective];
     const analysis=$('#geo')?.value==='all'?(aiTopics?.topics||[]):[];
+    const pendingLabel=aiTopics?.refresh_pending?'Saved matching topics · updating new evidence':'Current saved AI topics';
     const highest=Math.max(1,...analysis.map(x=>x.count));
     const colors={POSITIVE:'#18886a',NEGATIVE:'#bd544a',NEUTRAL:'#67849a',MIXED:'#b18638'};
     $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
       (perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
-      ' · AI-classified primary conversation topics</div>'+
+      ' · '+label(pendingLabel)+'</div>'+
       (analysis.length===5?analysis.map(t=>'<button type="button" class="issue-theme" data-issue-id="'+Number(t.id)+'" data-issue-perspective="'+perspective+'" data-issue-title="'+encodeURIComponent(t.title)+'" aria-label="View posts for '+label(t.title)+'" style="margin-bottom:10px" title="'+label(t.description||'')+
         '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:12px"><span style="line-height:1.4">'+
         label(t.title)+'</span><b>'+Number(t.count||0)+'</b></div><div class="small muted">'+

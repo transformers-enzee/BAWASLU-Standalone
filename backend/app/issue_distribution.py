@@ -57,6 +57,30 @@ def _read(db,perspective,signature):
     if isinstance(result,str):result=json.loads(result)
     return dict(result,model=row["model"],generated_at=str(row["generated_at"]))
 
+def _saved_matching_posts(db,perspective,posts,signature):
+    """Display saved assignments for unchanged source IDs only while AI refreshes."""
+    row=db.execute(text("""SELECT insight_json,source_signature,model,generated_at
+        FROM pilot_smart_radar.topic_summaries WHERE finding_id=:id"""),
+        {"id":_key(perspective)}).mappings().first()
+    if not row:return None
+    raw=row["insight_json"]
+    if isinstance(raw,str):raw=json.loads(raw)
+    saved_assignments=raw.get("assignments") or {}
+    if not isinstance(saved_assignments,dict):return None
+    ids={post["id"] for post in posts}
+    matched={pid:topic for pid,topic in saved_assignments.items() if pid in ids}
+    if not matched:return None
+    counts={i:0 for i in range(6)}
+    for value in matched.values():
+        if str(value).isdigit() and int(value) in counts:counts[int(value)]+=1
+    topics=[dict(topic,count=counts.get(int(topic.get("id") or 0),0))
+            for topic in raw.get("topics",[]) if isinstance(topic,dict)]
+    return {"topics":topics,"assignments":matched,"others":counts[0],
+            "total":len(matched),"current_source_total":len(posts),
+            "refresh_pending":row["source_signature"]!=signature,
+            "generated_at":str(row["generated_at"]),"model":row["model"],
+            "note":"Saved topic classifications for source IDs still in the authorized feed; new and changed sources await refresh."}
+
 @router.get("/issue-distribution")
 def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user),db:Session=Depends(get_db)):
     # The optional legacy pilot schema is not present in every installation
@@ -75,8 +99,8 @@ def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user
                 'note':'Optional issue topic storage is unavailable. No AI requests were scheduled.'}
     posts=_records(db,user)
     signature=_signature(posts)
-    operations=_read(db,"operations",signature)
-    reputation=_read(db,"reputation",signature)
+    operations=_saved_matching_posts(db,"operations",posts,signature)
+    reputation=_saved_matching_posts(db,"reputation",posts,signature)
     # Missing per-finding AI briefings must be queued independently of topic
     # classification, otherwise cached topic sets permanently suppress them.
     from .smart_radar import access_findings, _live_summary_signature
@@ -89,7 +113,7 @@ def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user
         saved.get(f["id"],{}).get("source_signature")!=_live_summary_signature(f)
         or saved.get(f["id"],{}).get("prompt_version")!="live-evidence-v3"
         for f in findings)
-    if posts and (operations is None or reputation is None or missing_summaries):
+    if posts and (operations is None or reputation is None or operations.get("refresh_pending") or reputation.get("refresh_pending") or missing_summaries):
         _schedule_topics(background_tasks,user.id,signature)
     db.commit()
     return {"source_total":len(posts),"operations":operations,
@@ -165,7 +189,7 @@ def issue_posts(perspective:str,topic_id:int,user:User=Depends(current_user),db:
     if perspective not in ("operations","reputation") or topic_id not in (0,1,2,3,4,5):
         raise HTTPException(400,"Invalid topic")
     posts=_records(db,user)
-    saved=_read(db,perspective,_signature(posts))
+    saved=_saved_matching_posts(db,perspective,posts,_signature(posts))
     if not saved:
         return {"posts":[],"total":0,"status":"NOT_READY"}
     assignments=saved.get("assignments") or {}

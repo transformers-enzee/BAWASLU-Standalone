@@ -285,6 +285,7 @@
     const primary=await request('/api/smart-radar/dashboard');
     if(epoch!==dashboardEpoch)return;
     if(primary.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
+    if(!Array.isArray(primary.findings))throw Error('Incomplete authorized dashboard response');
     dashboard=primary;
     // Geographic options reflect saved source mentions, not confirmed incident location.
     const geoSelect=$('#geo');
@@ -373,16 +374,17 @@
       document.body.classList.add('bawaslu-ready');
       const region = access?.province || 'your assigned scope';
       const message = 'Unable to load authorized Intelligence Inbox evidence for Smart Radar: '+error.message;
-      ui.setData([]);
+      // Do not fabricate zero intelligence on failed reads; retain last valid data.
       if (access?.geographic_scope !== 'Nationwide' && $('#scopeLabel')) {
         $('#scopeLabel').textContent=region+' · Source-scope restricted';
       }
-      $('#executive').textContent = message;
+      const retiredExecutive=$('#executive');if(retiredExecutive)retiredExecutive.textContent=message;
       const status=$('#startup-status');
-      if(status){status.textContent=message;status.classList.add('error');status.setAttribute('role','alert');}
+      if(status){status.innerHTML='<strong>Command Centre data temporarily unavailable</strong><p>'+label(message)+'</p><button type="button" id="retryRadarLoad" style="margin-top:10px;padding:9px 14px;background:#117f6d;color:white;border:0;border-radius:8px;cursor:pointer">Retry loading</button>';status.classList.add('error');status.setAttribute('role','alert');}
       document.body.classList.add('bawaslu-ready');
     }
   }
+  document.addEventListener('click',e=>{if(e.target?.id==='retryRadarLoad'){const status=$('#startup-status');if(status){status.classList.remove('error');status.textContent='Retrying authorised intelligence…';}document.body.classList.remove('bawaslu-ready');clearReadCache();boot();}});
   async function fetchFinding(id) {
     const finding = await request('/api/smart-radar/finding/'+encodeURIComponent(id));
     const model = ui.db().find(f => f.id===id);

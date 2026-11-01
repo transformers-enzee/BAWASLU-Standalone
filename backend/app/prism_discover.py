@@ -267,7 +267,7 @@ def store(db,run,c,items):
         provider_relevant=isinstance(relevance,(int,float)) and relevance>=0.5
         assessment=EvidenceAssessment(campaign_id=c.id,result_id=row.id,assessment_version=1,
             model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT' if provider_relevant else 'UNASSESSED',
-            sentiment=STANCE.get(str(stance.get('label') or '').lower(),'UNKNOWN'),
+            sentiment=STANCE.get(str(stance.get('label') or '').lower(),'UNCLASSIFIED'),
             sentiment_confidence=str(stance.get('confidence') or '')[:32],
             sentiment_model='socialcrawl-prism-stance',
             sentiment_explanation='Stance toward monitored campaign topic; not a general endorsement',

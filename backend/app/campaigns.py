@@ -376,6 +376,12 @@ def _classify_campaign_sentiment(db,p,c,data):
     label=outcome.get('sentiment')
     if label not in ('POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED'):
         raise ValueError('AI returned an unsupported sentiment')
+    if label=='UNCLASSIFIED':
+        # Last fallback is clearly marked neutral-by-default, not an observed neutral opinion.
+        outcome['sentiment']='NEUTRAL'
+        outcome['confidence']='LOW'
+        outcome['explanation']='Neutral display fallback: AI could not establish a reliable sentiment; not evidence of neutrality.'
+        label='NEUTRAL'
     # Normalize confidence without ever repurposing relevance confidence.
     normalized=normalize_sentiment_output({
         'sentiment':label,'sentiment_confidence':outcome.get('confidence'),
@@ -487,6 +493,71 @@ def campaign_action(db:Session,p,action,data,id=None):
             db.commit()
         return {**preview,'single_assessment_accepted':True,'reanalysis':reanalysis,
                 'job_queued':True}
+    if action=='campaignTopicRefresh':
+    # Explicitly paid, bounded, resumable classification of saved uncategorized sources.
+    # Existing version history and human review are not overwritten.
+    from .models import EvidenceAssessment, SocialListeningResult
+    from .topic_themes import category_for_assessment, UNCATEGORIZED
+    from .socialcrawl import _result_in_scope
+    from .openai_triage import openai_triage_configured
+    from .prism_discover import enrich
+    from sqlalchemy.inspection import inspect as sa_inspect
+    payload=data or {}
+    cid=str(id or payload.get('campaign_id') or '')
+    if not cid.isdigit():raise ValueError('Select a campaign')
+    campaign=db.get(MonitoringCampaign,int(cid))
+    if not campaign or not allowed(p,campaign):raise PermissionError('Campaign unavailable')
+    if not _editable(p,campaign):raise PermissionError('Campaign editor permission required')
+    if payload.get('confirm_ai_cost') is not True:raise ValueError('Explicit paid AI confirmation required')
+    if not openai_triage_configured():raise ValueError('OpenAI configuration is missing')
+    try:
+        cursor=max(0,int(payload.get('after_result_id') or 0))
+        limit=int(payload.get('batch_limit',5))
+    except (TypeError,ValueError):raise ValueError('Invalid cursor or batch size')
+    if not 1<=limit<=5:raise ValueError('Maximum five posts per paid batch')
+    candidates=(db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==campaign.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+        CampaignEvidence.result_id>cursor).distinct().order_by(
+        CampaignEvidence.result_id.asc()).limit(100).all())
+    selected=[];scanned=0;last_cursor=cursor
+    for (result_id,) in candidates:
+        scanned+=1;last_cursor=result_id
+        source=db.get(SocialListeningResult,result_id)
+        if not source or not _result_in_scope(db,p,source):continue
+        latest=_current_assessment(db,campaign.id,result_id)
+        if latest and category_for_assessment(latest.relevance_label,
+                latest.topic_labels_json,latest.public_concern_signals_json)!=UNCATEGORIZED:continue
+        if not (source.text_content or '').strip():continue
+        selected.append((source,latest))
+        if len(selected)==limit:break
+    entries=[]
+    for source,latest in selected:
+        if latest:
+            fields={column.key:getattr(latest,column.key) for column in sa_inspect(EvidenceAssessment).columns
+                    if column.key not in ('id','assessment_version')}
+            fields['assessment_version']=latest.assessment_version+1
+            record=EvidenceAssessment(**fields)
+        else:
+            record=EvidenceAssessment(campaign_id=campaign.id,result_id=source.id,
+                assessment_version=1,model_version='PRISM_PENDING_OPENAI',
+                relevance_label='UNASSESSED')
+        db.add(record)
+        entries.append((source,record))
+    if entries:
+        db.flush()
+        enrich(db,campaign,entries)
+    categorized=sum(category_for_assessment(record.relevance_label,
+        record.topic_labels_json,record.public_concern_signals_json)!=UNCATEGORIZED
+        for _,record in entries)
+    has_more=bool(db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==campaign.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+        CampaignEvidence.result_id>last_cursor).first())
+    with _DASH_LOCK:_DASH_CACHE.clear()
+    return {'processed':len(entries),'categorized':categorized,'scanned':scanned,
+            'next_cursor':last_cursor,'has_more':has_more,
+            'paid_provider_called':bool(entries),'socialcrawl_credits':0}
     if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
         from .models import EvidenceAssessment
         from .socialcrawl import _result_in_scope
@@ -522,71 +593,6 @@ def campaign_action(db:Session,p,action,data,id=None):
                  'socialcrawl_credits':0,'estimated_ai_requests':maximum,
                  'ai_token_cost_estimate':'Variable; provider token pricing applies',
                  'paid_ai_executed':False}
-        if action=='campaignTopicRefresh':
-        # Explicitly paid, bounded, resumable classification of saved uncategorized sources.
-        # Existing version history and human review are not overwritten.
-        from .models import EvidenceAssessment, SocialListeningResult
-        from .topic_themes import category_for_assessment, UNCATEGORIZED
-        from .socialcrawl import _result_in_scope
-        from .openai_triage import openai_triage_configured
-        from .prism_discover import enrich
-        from sqlalchemy.inspection import inspect as sa_inspect
-        payload=data or {}
-        cid=str(id or payload.get('campaign_id') or '')
-        if not cid.isdigit():raise ValueError('Select a campaign')
-        campaign=db.get(MonitoringCampaign,int(cid))
-        if not campaign or not allowed(p,campaign):raise PermissionError('Campaign unavailable')
-        if not _editable(p,campaign):raise PermissionError('Campaign editor permission required')
-        if payload.get('confirm_ai_cost') is not True:raise ValueError('Explicit paid AI confirmation required')
-        if not openai_triage_configured():raise ValueError('OpenAI configuration is missing')
-        try:
-            cursor=max(0,int(payload.get('after_result_id') or 0))
-            limit=int(payload.get('batch_limit',5))
-        except (TypeError,ValueError):raise ValueError('Invalid cursor or batch size')
-        if not 1<=limit<=5:raise ValueError('Maximum five posts per paid batch')
-        candidates=(db.query(CampaignEvidence.result_id).filter(
-            CampaignEvidence.campaign_id==campaign.id,
-            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
-            CampaignEvidence.result_id>cursor).distinct().order_by(
-            CampaignEvidence.result_id.asc()).limit(100).all())
-        selected=[];scanned=0;last_cursor=cursor
-        for (result_id,) in candidates:
-            scanned+=1;last_cursor=result_id
-            source=db.get(SocialListeningResult,result_id)
-            if not source or not _result_in_scope(db,p,source):continue
-            latest=_current_assessment(db,campaign.id,result_id)
-            if latest and category_for_assessment(latest.relevance_label,
-                    latest.topic_labels_json,latest.public_concern_signals_json)!=UNCATEGORIZED:continue
-            if not (source.text_content or '').strip():continue
-            selected.append((source,latest))
-            if len(selected)==limit:break
-        entries=[]
-        for source,latest in selected:
-            if latest:
-                fields={column.key:getattr(latest,column.key) for column in sa_inspect(EvidenceAssessment).columns
-                        if column.key not in ('id','assessment_version')}
-                fields['assessment_version']=latest.assessment_version+1
-                record=EvidenceAssessment(**fields)
-            else:
-                record=EvidenceAssessment(campaign_id=campaign.id,result_id=source.id,
-                    assessment_version=1,model_version='PRISM_PENDING_OPENAI',
-                    relevance_label='UNASSESSED')
-            db.add(record)
-            entries.append((source,record))
-        if entries:
-            db.flush()
-            enrich(db,campaign,entries)
-        categorized=sum(category_for_assessment(record.relevance_label,
-            record.topic_labels_json,record.public_concern_signals_json)!=UNCATEGORIZED
-            for _,record in entries)
-        has_more=bool(db.query(CampaignEvidence.result_id).filter(
-            CampaignEvidence.campaign_id==campaign.id,
-            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
-            CampaignEvidence.result_id>last_cursor).first())
-        with _DASH_LOCK:_DASH_CACHE.clear()
-        return {'processed':len(entries),'categorized':categorized,'scanned':scanned,
-                'next_cursor':last_cursor,'has_more':has_more,
-                'paid_provider_called':bool(entries),'socialcrawl_credits':0}
     if action=='campaignAssessmentBacklogPreview':return preview
         if (data or {}).get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
         if not preview['ai_key_configured']:raise ValueError('AI key is not configured')

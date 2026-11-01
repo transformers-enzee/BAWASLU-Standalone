@@ -50,6 +50,7 @@ def has(p,key): return p.get('status')=='Active' and p.get('permissions',{}).get
 
 def allowed(p,record):
     if p.get('status')!='Active': return False
+    if record.__class__.__name__=='MonitoringCampaign' and getattr(record,'status',None)=='DELETED': return False
     scope=p.get('geographic_scope')
     if scope=='Nationwide': return True
 

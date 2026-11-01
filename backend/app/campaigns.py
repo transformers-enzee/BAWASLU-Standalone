@@ -1580,6 +1580,18 @@ def campaign_action(db:Session,p,action,data,id=None):
         db.add(c);db.commit();db.refresh(c)
         audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_CREATED',{'name':{'new':c.name},'status':{'new':'DRAFT'}})
         return {'campaign':_view(db,c),'message':'Campaign saved in draft; scheduled paid crawling is not enabled'}
+    if action=='deleteCampaign':
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c):raise ValueError('Campaign not available')
+        if not _editable(p,c):raise PermissionError('Only campaign owner or national administrator can remove campaigns')
+        if not isinstance(data,dict) or data.get('confirm_name')!=c.name:
+            raise ValueError('Enter the exact campaign name to confirm removal')
+        c.status='DELETED'
+        c.next_run_at=None
+        c.updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+        audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_REMOVED',{'name':{'old':c.name},'status':{'new':'DELETED'},'shared_evidence_preserved':{'new':True}})
+        return {'removed':True,'campaign_id':str(c.id),'evidence_preserved':True}
     if action=='updateCampaign':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')

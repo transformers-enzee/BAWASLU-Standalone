@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
+import {Trash2,  ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import KeywordTags from '@/components/intel/KeywordTags';
@@ -405,6 +405,19 @@ export default function CampaignPanel({campaignId=null}){
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Campaign save failed')}
   finally{setSaving(false)}
  }
+ async function removeCampaign(c){
+  if(saving)return;
+  const typed=window.prompt('Remove campaign "'+c.name+'"? This hides the campaign while preserving collected posts and audit history. Type the exact campaign name to confirm:');
+  if(typed===null)return;
+  if(typed!==c.name){setError('Campaign removal cancelled: name did not match.');return;}
+  setSaving(true);setError('');setNotice('');
+  try{
+   await base44.functions.invoke('socialListening',{action:'deleteCampaign',id:c.id,data:{confirm_name:typed}});
+   await refresh();
+   setNotice('Campaign removed. Shared source records and assessment history were preserved.');
+  }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Campaign removal failed');}
+  finally{setSaving(false)}
+ }
  async function pause(c){
   if(c.status==='PAUSED')return;
   setSaving(true);setError('');
@@ -468,7 +481,7 @@ export default function CampaignPanel({campaignId=null}){
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
       <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove campaign "+c.name} title={"Remove campaign "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
      </article>)}{discoverCampaign&&<div className="rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm space-y-2" role="region" aria-label="Separate SocialCrawl Discover run">
   <div className="flex justify-between gap-3"><strong>Activate · {discoverCampaign.name} · 100 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
   <p className="text-xs">Activation starts one explicitly confirmed SocialCrawl collection of up to 100 posts across the seven default sources. First 5 main keywords, last 7 days. Provider budget capped at {discoverPreview?.credit_cap||100} credits; OpenAI enrichment is separately billed. This is not a recurring schedule.</p>

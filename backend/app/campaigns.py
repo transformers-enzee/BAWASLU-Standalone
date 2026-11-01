@@ -1113,14 +1113,14 @@ def campaign_action(db:Session,p,action,data,id=None):
               .order_by(CampaignEvidence.id.desc()).limit(200).all())
         report={'checked':0,'recovered':0,'already_saved':0,'unavailable':0,'remaining':0,
                 'paid_provider_called':False,'failure_reasons':{},'source_metadata':{'source_items':0,'with_thumbnail_field':0,'without_thumbnail_field':0,'invalid_payload':0,'payload_shapes':{},'platforms_checked':{},'post_fields':{},'post_media_fields':{}}}
-        budget=12
+        budget=200
         for link in rows:
             item=db.get(SocialListeningResult,link.result_id)
             if not item or not _result_in_scope(db,p,item): continue
             if db.get(SocialMediaThumbnail,item.id):
                 report['already_saved']+=1
                 continue
-            if not (item.platform or '').lower().startswith(('instagram','tiktok')): continue
+            if not item.platform: continue
             if report['checked']>=budget:
                 report['remaining']+=1
                 continue
@@ -1478,8 +1478,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not _result_in_scope(db,p,item): continue
             rows.append({'id':str(item.id),'platform':item.platform,
                          'content_type':item.content_type,'published_at':item.published_at,
-                         'author_name':item.author_name,'text_content':item.text_content,
-                         'canonical_url':item.canonical_url,
+                         'author_name':item.author_name,'observed_handle':item.observed_handle,
+                         'text_content':item.text_content,'canonical_url':item.canonical_url,
                          'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
                          'sentiment':_latest_sentiment(db,c.id,item.id),
                          'sentiment_details':_sentiment_details(db,c.id,item.id)})

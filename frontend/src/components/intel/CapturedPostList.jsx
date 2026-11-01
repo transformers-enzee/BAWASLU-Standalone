@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {ExternalLink,ImageOff,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
+import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
 function Post({post}){
@@ -8,9 +8,9 @@ function Post({post}){
  const [Icon,color,name]=sentiment==='positive'?[Smile,'text-green-700','Positive']:sentiment==='neutral'?[Meh,'text-amber-600','Neutral']:sentiment==='negative'?[Frown,'text-red-700','Negative']:[CircleHelp,'text-slate-400','Unclassified'];
  const url=/^https:\/\//i.test(post.canonical_url||'')?post.canonical_url:'';
  return <article aria-label={'Source post '+post.id} className="flex items-start gap-3 border-b border-[#e5ebef] py-4 last:border-0">
-  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">{post.thumbnail_url&&!imageError?<img src={post.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setImageError(true)}/>:<ImageOff size={20} className="text-slate-400"/>}</div>
+  {post.thumbnail_url&&!imageError&&<div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100"><img src={post.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setImageError(true)}/></div>}
   <div className="min-w-0 flex-1">
-   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{post.author_name||'Source account unavailable'}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
+   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{(post.author_name&&!['UNKNOWN','N/A','NULL'].includes(String(post.author_name).trim().toUpperCase())?post.author_name:(post.observed_handle&&String(post.observed_handle).trim()?post.observed_handle:(String(post.platform||'').toLowerCase().startsWith('facebook')?'Facebook commenter':'Source author unavailable')))}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||'No source text available'}</p>
    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#117c6c] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
   </div>

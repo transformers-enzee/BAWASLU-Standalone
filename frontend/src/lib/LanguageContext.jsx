@@ -326,6 +326,8 @@ export function translateInterfaceLiteral(text,language='en'){
 export function LanguageProvider({children}){
   const [language,setLanguageState]=useState(()=>localStorage.getItem('bawaslu-language')||'en');
   const setLanguage=next=>setLanguageState(next==='id'?'id':'en');
+  // Synchronize a choice made in another tab; leave evidence and database untouched.
+  useEffect(()=>{const onStorage=event=>{if(event.key==='bawaslu-language')setLanguageState(event.newValue==='id'?'id':'en');};window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage);},[]);
   useEffect(()=>{
     localStorage.setItem('bawaslu-language',language);
     document.documentElement.lang=language==='id'?'id':'en';

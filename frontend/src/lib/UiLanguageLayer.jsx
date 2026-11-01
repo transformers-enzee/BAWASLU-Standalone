@@ -13,8 +13,8 @@ const sourceSelectors=[
  '.whitespace-pre-wrap','.source-post-text','[data-source-body]',
  '[data-assistant-message]','[data-user-message]'
 ].join(',');
-const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','INPUT','SVG','PATH']);
-const attributes=['placeholder','title','aria-label','alt'];
+const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','SVG','PATH']);
+const attributes=['placeholder','title','aria-label','aria-description','aria-placeholder','data-placeholder','alt'];
 // Preserve the English originals across locale toggles and React rerenders.
 const originalText=new WeakMap(),lastRenderedText=new WeakMap();
 const originalAttributes=new WeakMap(),lastRenderedAttributes=new WeakMap();
@@ -61,6 +61,14 @@ export default function UiLanguageLayer(){
     const intended=translate(originalsForEl[name]);
     if(current!==intended)el.setAttribute(name,intended);
     lastForEl[name]=intended;
+   }
+   // UI-only input button text. Never translate typed values or source evidence.
+   if(el.tagName==='INPUT'&&['button','submit','reset'].includes(el.type)){
+    const current=el.value;
+    if(!('buttonValue' in originalsForEl)||current!==lastForEl.buttonValue)originalsForEl.buttonValue=current;
+    const next=translate(originalsForEl.buttonValue);
+    if(current!==next)el.value=next;
+    lastForEl.buttonValue=next;
    }
   }
   function scan(root){

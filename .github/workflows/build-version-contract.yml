@@ -18,3 +18,9 @@ jobs:
           python-version: '3.12'
       - name: Require new synchronized build version on every commit
         run: python backend/tests/check_build_version.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check bilingual UI glossary and source-text safety
+        run: node frontend/scripts/check-language-coverage-v1198.mjs

@@ -101,19 +101,10 @@ def distribution(background_tasks:BackgroundTasks,user:User=Depends(current_user
     signature=_signature(posts)
     operations=_saved_matching_posts(db,"operations",posts,signature)
     reputation=_saved_matching_posts(db,"reputation",posts,signature)
-    # Missing per-finding AI briefings must be queued independently of topic
-    # classification, otherwise cached topic sets permanently suppress them.
-    from .smart_radar import access_findings, _live_summary_signature
-    findings=[f for f in access_findings(db,user)
-              if f.get("kind") in ("discussion","narrative_candidate") and f.get("posts")]
-    saved={r["finding_id"]:r for r in db.execute(text(
-        "SELECT finding_id,source_signature,prompt_version FROM pilot_smart_radar.topic_summaries"
-    )).mappings()}
-    missing_summaries=sum(
-        saved.get(f["id"],{}).get("source_signature")!=_live_summary_signature(f)
-        or saved.get(f["id"],{}).get("prompt_version")!="live-evidence-v3"
-        for f in findings)
-    if posts and (operations is None or reputation is None or operations.get("refresh_pending") or reputation.get("refresh_pending") or missing_summaries):
+    # Avoid a second full Inbox aggregation on every Issue Distribution read.
+    # The background refresh also updates evidence-grounded narrative summaries.
+    if posts and (operations is None or reputation is None or
+                  operations.get("refresh_pending") or reputation.get("refresh_pending")):
         _schedule_topics(background_tasks,user.id,signature)
     db.commit()
     return {"source_total":len(posts),"operations":operations,

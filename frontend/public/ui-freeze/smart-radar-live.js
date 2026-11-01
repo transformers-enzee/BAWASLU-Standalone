@@ -223,20 +223,24 @@
     const aiTopics=issueDistribution?.[perspective];
     const analysis=$('#geo')?.value==='all'?(aiTopics?.topics||[]):[];
     const pendingLabel=aiTopics?.refresh_pending?'Saved matching topics · updating new evidence':'Current saved AI topics';
+    const topicsLoading=!aiTopics&&($('#geo')?.value==='all');
     const highest=Math.max(1,...analysis.map(x=>x.count));
     const colors={POSITIVE:'#18886a',NEGATIVE:'#bd544a',NEUTRAL:'#67849a',MIXED:'#b18638'};
     $('#issues').innerHTML='<div class="small muted" style="margin-bottom:8px">'+
       (perspective==='operations'?'Electoral Operations':'Bawaslu Reputation')+
       ' · '+label(pendingLabel)+'</div>'+
-      (analysis.length===5?analysis.map(t=>'<button type="button" class="issue-theme" data-issue-id="'+Number(t.id)+'" data-issue-perspective="'+perspective+'" data-issue-title="'+encodeURIComponent(t.title)+'" aria-label="View posts for '+label(t.title)+'" style="margin-bottom:10px" title="'+label(t.description||'')+
-        '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:12px"><span style="line-height:1.4">'+
-        label(t.title)+'</span><b>'+Number(t.count||0)+'</b></div><div class="small muted">'+
-        label(t.sentiment||'NEUTRAL')+
-        '</div><div style="background:#e8eeee;border-radius:6px;height:7px;margin-top:4px"><div style="height:100%;border-radius:6px;background:'+
-        (colors[t.sentiment]||colors.NEUTRAL)+';width:'+(Number(t.count||0)/highest*100)+'%"></div></div></div>').join('')+
-        '<p class="small muted">Others: '+Number(aiTopics.others||0)+' · '+Number(aiTopics.total||0)+' distinct posts · one primary topic per post</p>':
-        (($('#geo')?.value||'all')!=='all'?'<p class="small muted">Province-scoped saved topics:</p>'+miniBars(topics,Math.max(1,...topics.map(x=>x[1]))):'<p class="small muted">AI is preparing the five evidence-grounded topics. The previous cached analysis is reused when sources are unchanged.</p>'))+
-      '<p class="small muted" style="margin-top:6px">AI topics update automatically when new source evidence arrives; existing results are reused.</p>';
+      (analysis.length?analysis.map(t=>{
+        const pct=Math.max(0,Math.min(100,Number(t.count||0)/highest*100));
+        return '<button type="button" class="issue-theme" data-issue-id="'+Number(t.id)+'" data-issue-perspective="'+perspective+'" data-issue-title="'+encodeURIComponent(t.title)+
+          '" aria-label="View supporting posts for '+label(t.title)+'" style="display:block;width:100%;text-align:left;padding:12px 14px;margin:9px 0;background:#fff;border:1px solid #dce7e8;border-radius:10px;cursor:pointer;color:#17334a" title="'+label(t.description||'')+'">'+
+          '<div style="display:flex;justify-content:space-between;gap:12px;align-items:start"><strong style="font-size:12px;line-height:1.5">'+label(t.title)+'</strong><strong>'+Number(t.count||0)+'</strong></div>'+
+          '<div class="small muted" style="margin:5px 0">'+label(t.sentiment||'NEUTRAL')+'</div>'+
+          '<div style="background:#e9eef0;border-radius:8px;height:7px"><div style="height:7px;border-radius:8px;background:'+(colors[t.sentiment]||colors.NEUTRAL)+';width:'+pct+'%"></div></div></button>';
+      }).join('')+
+        '<p class="small muted">Others: '+Number(aiTopics?.others||0)+' · '+Number(aiTopics?.total||0)+' classified saved sources</p>':
+        (topicsLoading?'<p class="small muted">Loading saved AI topic classifications…</p>':
+          '<p class="small muted">No saved topic classifications for this selection.</p>'))+
+      '<p class="small muted" style="margin-top:8px">Select an issue to inspect matching saved posts.</p>';
     const keywords=($('#geo')?.value||'all')==='all'?(dashboard?.main_keyword_cloud||[]):[];
     const maxKeyword=Math.max(1,...keywords.map(x=>Number(x.count||0)));
     $('#cloud').innerHTML=keywords.length?keywords.map(x=>{
@@ -304,21 +308,40 @@
       decorate();
     }).catch(error=>console.warn('AI issue topics unavailable',error.message));
   }
+  function closeIssueModal(){
+    const modal=document.getElementById('issueSourceModal');
+    if(modal)modal.remove();
+  }
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeIssueModal();});
   document.addEventListener('click',async event=>{
     const hit=event.target.closest?.('[data-issue-id]');
     if(!hit)return;
     event.preventDefault();
+    closeIssueModal();
     const name=decodeURIComponent(hit.dataset.issueTitle||'');
-    const host=$('#issues');if(!host)return;
-    let panel=$('#issuePostDrilldown');if(!panel){panel=document.createElement('section');panel.id='issuePostDrilldown';host.appendChild(panel);}
-    panel.innerHTML='<div class="soft" role="status">Loading saved posts for '+label(name)+'…</div>';
+    const modal=document.createElement('div');
+    modal.id='issueSourceModal';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-label','Supporting posts: '+name);
+    modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(8,27,40,.65);display:flex;align-items:center;justify-content:center;padding:18px';
+    modal.innerHTML='<div style="background:white;color:#17334a;width:min(760px,100%);max-height:86vh;border-radius:15px;box-shadow:0 15px 50px #0003;display:flex;flex-direction:column;overflow:hidden">'+
+      '<div style="padding:18px 20px;border-bottom:1px solid #e3e9ee;display:flex;justify-content:space-between;gap:12px;align-items:start">'+
+      '<div><strong style="font-size:17px">'+label(name)+'</strong><p class="small muted">Original saved posts assigned to this issue</p></div>'+
+      '<button type="button" data-close-issue aria-label="Close supporting posts" style="border:1px solid #dce7e8;background:white;border-radius:8px;padding:8px 12px">✕ Close</button></div>'+
+      '<div data-issue-content role="status" style="overflow:auto;padding:18px 20px">Loading source posts…</div></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('[data-close-issue]'))closeIssueModal();});
+    modal.querySelector('[data-close-issue]')?.focus();
+    const content=modal.querySelector('[data-issue-content]');
     try{
       const result=await request('/api/smart-radar/issue-distribution/posts?perspective='+encodeURIComponent(hit.dataset.issuePerspective)+'&topic_id='+encodeURIComponent(hit.dataset.issueId));
+      if(!modal.isConnected)return;
       const posts=result.posts||[];
-      panel.innerHTML='<div class="soft"><strong>'+label(name)+'</strong><p class="small muted">'+Number(result.total||0)+' matching saved source post(s). Displaying up to 150.</p>'+
-        posts.map(p=>'<div class="source"><b>'+label(p.id)+'</b><p>'+label(p.text)+'</p></div>').join('')+
-        (posts.length?'':'<p class="small muted">No saved source posts available for this category.</p>')+'</div>';
-    }catch(error){panel.innerHTML='<div class="soft" role="alert">Unable to load category posts: '+label(error.message)+'</div>';}
+      content.innerHTML='<p class="small muted">'+Number(result.total||0)+' matching saved posts; showing up to 150.</p>'+
+        (posts.length?posts.map((p,i)=>'<article style="padding:14px 0;border-bottom:1px solid #e3e9ee"><b>Post '+(i+1)+' · '+label(p.id)+'</b><p style="white-space:pre-wrap;line-height:1.5">'+label(p.text)+'</p></article>').join(''):
+        '<p>No saved posts currently assigned to this issue.</p>');
+    }catch(error){if(modal.isConnected)content.innerHTML='<p role="alert">Could not load posts: '+label(error.message)+'</p>';}
   });
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-refresh-player]');

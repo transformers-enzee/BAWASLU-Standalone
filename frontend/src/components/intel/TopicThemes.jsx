@@ -1,9 +1,33 @@
 import {useState} from 'react';
-import {ExternalLink,X} from 'lucide-react';
+import {ExternalLink,X,RefreshCw} from 'lucide-react';
+import {base44} from '@/api/base44Client';
 const COLORS=['#137e70','#4d9caf','#e2ad56','#8d7cba','#db7d77','#7f9f62','#b07d9d','#7b939c'];
 const SENTIMENT={Negative:'#d95a60',Neutral:'#e4ad41',Positive:'#20a074',Unclassified:'#dbe3e9'};
 const safeUrl=s=>/^https:\/\//i.test(s||'')?s:null;
-export default function TopicThemes({data}){
+export default function TopicThemes({data,campaignId,onUpdated}){
+ const [running,setRunning]=useState(false);
+ const [progress,setProgress]=useState('');
+ async function refreshTopics(){
+  if(running||!campaignId)return;
+  const remaining=Number(data?.uncategorized_mentions||0);
+  if(!remaining)return;
+  if(!window.confirm('Analyze up to '+remaining+' uncategorized posts using paid OpenAI requests? Each eligible post may incur an AI charge. Existing assessments are preserved. Continue?'))return;
+  setRunning(true);setProgress('Starting topic assessment…');
+  let cursor=0,reviewed=0,classified=0;
+  try{
+   for(let i=0;i<Math.ceil(remaining/5)+5;i++){
+    const response=await base44.functions.invoke('socialListening',{action:'campaignTopicRefresh',id:campaignId,data:{confirm_ai_cost:true,after_result_id:cursor,batch_limit:5}});
+    const value=response.data||{};
+    cursor=Number(value.next_cursor||cursor);
+    reviewed+=Number(value.processed||0);classified+=Number(value.categorized||0);
+    setProgress(reviewed+' posts assessed · '+classified+' categorized');
+    if(!value.has_more||!Number(value.scanned||0))break;
+   }
+   await onUpdated?.();
+   setProgress('Completed: '+reviewed+' assessed; '+classified+' categorized. Some posts may remain uncategorized where source evidence is insufficient.');
+  }catch(e){setProgress('Assessment stopped: '+(e.response?.data?.detail||e.message||'Request failed')+'. '+reviewed+' posts assessed so far.');}
+  finally{setRunning(false)}
+ }
  const [selected,setSelected]=useState(null);
  const rows=(data?.categories||[]).filter(r=>Number(r.count)>0);
  const total=Number(data?.total_mentions||0),categorized=Number(data?.categorized_mentions||0);
@@ -14,7 +38,8 @@ export default function TopicThemes({data}){
  }).join(',');
  const active=rows.find(r=>r.name===selected);
  return <section aria-label="Topics and Themes" className="lg:col-span-2 rounded-[13px] border border-[#dce5ed] bg-white p-5">
-  <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-lg font-semibold text-[#19324a]">Topics &amp; Themes</h4><p className="text-xs text-[#60768c]">How saved posts are categorized by their assessed subject, not by monitoring keywords.</p></div><span className="rounded-lg bg-[#edf2f4] px-3 py-2 text-xs font-semibold text-[#36536a]">{total.toLocaleString()} mentions</span></div>
+  <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-lg font-semibold text-[#19324a]">Topics &amp; Themes</h4><p className="text-xs text-[#60768c]">How saved posts are categorized by their assessed subject, not by monitoring keywords.</p></div><div className="flex items-center gap-2"><button type="button" onClick={refreshTopics} disabled={running||!campaignId||!Number(data?.uncategorized_mentions||0)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#126f61] disabled:opacity-50" aria-label="AI analyze uncategorized posts" title="Paid OpenAI topic analysis; confirmation required"><RefreshCw size={15} className={running?"animate-spin":""}/> {running?"Analyzing…":"AI refresh topics"}</button><span className="rounded-lg bg-[#edf2f4] px-3 py-2 text-xs font-semibold text-[#36536a]">{total.toLocaleString()} mentions</span></div></div>
+  {progress&&<p role="status" className="mt-2 text-xs text-[#36536a]">{progress}</p>}
   {rows.length?<div className="mt-5 grid grid-cols-1 items-center gap-5 md:grid-cols-[minmax(170px,240px)_1fr]">
    <div className="mx-auto grid h-[215px] w-[215px] place-items-center rounded-full border border-[#dce7e8]" style={{background:'conic-gradient('+gradient+')'}} role="img" aria-label={rows.map(r=>r.name+': '+r.count+' posts').join(', ')}>
     <div className="h-[94px] w-[94px] rounded-full bg-white"/>

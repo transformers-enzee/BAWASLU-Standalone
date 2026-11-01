@@ -1,4 +1,4 @@
-"""SocialCrawl Prism Discover: separate, manually confirmed 50-post workflow."""
+"""SocialCrawl Prism Discover: separate, manually confirmed 100-post workflow."""
 import os,json,hashlib,re
 from collections import Counter
 from datetime import datetime,timezone
@@ -33,7 +33,7 @@ def body_for(db,c):
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
     params={'groups':[{'id':'campaign-'+str(c.id),'keywords':words,'context':context}],
             'platforms':platforms,'country':['ID'],'period':'7d','label':['stance'],
-            'limit':50,'retention_days':7,'max_credits':CAP}
+            'limit':100,'retention_days':7,'max_credits':CAP}
     signature=hashlib.sha256(json.dumps(params,sort_keys=True).encode()).hexdigest()
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -115,7 +115,7 @@ def action(db,p,verb,data,cid):
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
-            'post_limit':50,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
+            'post_limit':100,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
             'keywords_total':len(json.loads(c.primary_keywords_json or '[]')),
             'platforms':params['platforms'],'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
@@ -133,7 +133,7 @@ def action(db,p,verb,data,cid):
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_DISCOVER'))
     db.commit()
-    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':50,'credit_cap':CAP}
+    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':100,'credit_cap':CAP}
 
 def ai_text(payload):
     if isinstance(payload.get('output_text'),str):return payload['output_text']
@@ -205,7 +205,7 @@ def enrich(db,c,entries):
         db.commit()
 
 def store(db,run,c,items):
-    kept=[x for x in items[:50] if isinstance(x,dict) and x.get('id') and x.get('platform')]
+    kept=[x for x in items[:100] if isinstance(x,dict) and x.get('id') and x.get('platform')]
     ids=[str(x['id']) for x in kept]
     urls=[str(x.get('url') or '') for x in kept if x.get('url')]
     existing=(db.query(SocialListeningResult).filter(or_(
@@ -302,7 +302,7 @@ def execute(run_id):
         if status.get('status') not in ('completed','partial','paused'):
             raise ValueError('Provider status: '+str(status.get('status')))
         items=list(data.get('items') or [])
-        if nxt.get('results_url') and len(items)<50:
+        if nxt.get('results_url') and len(items)<100:
             url=str(nxt['results_url']).rstrip('/')+'/results.jsonl'
             cursor=None
             for _ in range(5):
@@ -317,8 +317,8 @@ def execute(run_id):
                     obj=json.loads(line)
                     if 'next_cursor' in obj:cursor=str(obj['next_cursor'])
                     elif 'complete' not in obj:items.append(obj)
-                    if len(items)>=50:break
-                if not cursor or len(items)>=50:break
+                    if len(items)>=100:break
+                if not cursor or len(items)>=100:break
         run.result_count=store(db,run,c,items)
         run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
         run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'

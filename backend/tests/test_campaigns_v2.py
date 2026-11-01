@@ -217,3 +217,29 @@ def test_search_everywhere_does_not_send_internal_platform_as_provider_source():
     assert params['query']=='iphone'
     assert 'sources' not in params
     assert 'search_everywhere' not in str(params)
+
+def test_default_campaign_uses_seven_sources_all_languages_and_open_ended_dates():
+    from app.socialcrawl import DEFAULT_CAMPAIGN_PLATFORMS
+    db=SessionLocal();p=actor(db,'sevenSources','National Administrator')
+    campaign=action(db,p,'createCampaign',{'name':'BAWASLU seven sources',
+        'primary_keywords':['Gibran'],'date_from':'2026-10-01'})['campaign']
+    assert campaign['platforms']==DEFAULT_CAMPAIGN_PLATFORMS
+    assert len(campaign['platforms'])==7
+    assert campaign['language']=='' and campaign['date_to']==''
+    assert campaign['province']=='' and campaign['regency_city']==''
+    assert db.query(SocialListeningRun).count()==0
+    db.close()
+
+def test_edit_switches_to_defaults_without_erasing_regional_security_scope():
+    from app.socialcrawl import DEFAULT_CAMPAIGN_PLATFORMS
+    db=SessionLocal();p=actor(db,'regionalSevenSources','Provincial Analyst','Province','Bali')
+    prior=action(db,p,'createCampaign',payload())['campaign']
+    assert prior['province']=='Bali'
+    changed=action(db,p,'updateCampaign',{'platforms':DEFAULT_CAMPAIGN_PLATFORMS,
+        'language':'','date_to':''},prior['id'])['campaign']
+    assert changed['platforms']==DEFAULT_CAMPAIGN_PLATFORMS
+    assert changed['province']=='Bali'
+    assert changed['language']=='' and changed['date_to']==''
+    assert changed['date_from']==prior['date_from']
+    assert db.query(SocialListeningRun).count()==0
+    db.close()

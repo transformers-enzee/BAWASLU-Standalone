@@ -46,6 +46,17 @@ test('V3 separate Discover is explicit and cannot silently execute on navigation
  const paid=[];page.on('request',r=>{if(/socialcrawl\.dev|api\.openai\.com/.test(r.url()))paid.push(r.url())});
  await login(page);
  await page.goto('/social-listening');
- await expect(page.getByRole('button',{name:/discover · 50 posts/i}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/^activate$/i}).first()).toBeVisible();
  expect(paid).toEqual([]);
+});
+
+test('campaign editor uses seven fixed sources without legacy filters',async({page})=>{
+ await login(page);
+ await page.goto('/social-listening');
+ await page.getByRole('button',{name:/create campaign/i}).click();
+ const editor=page.getByRole('form',{name:'Campaign editor'});
+ await expect(editor.getByRole('note',{name:'Default collection coverage'})).toBeVisible();
+ await expect(editor.getByText('TikTok · Instagram · YouTube · Facebook · X · Threads · Online News')).toBeVisible();
+ await expect(editor.getByText(/Language|End date|Province \(optional|Regency \/ City/)).toHaveCount(0);
+ await expect(editor.getByRole('group',{name:/platforms/i})).toHaveCount(0);
 });

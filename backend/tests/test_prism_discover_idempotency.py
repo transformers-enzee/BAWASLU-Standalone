@@ -168,3 +168,28 @@ def test_execute_full_mock_provider_flow_completes_without_spending(monkeypatch)
     assert db.query(CampaignEvidence).count() == 1
     assert db.query(EvidenceAssessment).count() == 1
     db.close()
+
+def test_activate_defaults_seven_platforms_100_posts_without_provider_calls(monkeypatch):
+    from app.socialcrawl import DEFAULT_CAMPAIGN_PLATFORMS
+    db=SessionLocal()
+    campaign=MonitoringCampaign(name='Default seven sources',description='Election topic',
+        primary_keywords_json='["gibran"]',platforms_json=json.dumps(DEFAULT_CAMPAIGN_PLATFORMS),
+        created_by='qa-admin',status='DRAFT')
+    db.add(campaign);db.commit()
+    params,signature=prism_discover.body_for(db,campaign)
+    assert params['limit']==100
+    assert params['max_credits']==100
+    assert params['platforms']==['tiktok','instagram','youtube','facebook','twitter','threads','news']
+    assert len(signature)==64
+    assert db.query(SocialListeningRun).count()==0
+    db.close()
+
+def test_store_up_to_100_unique_results_without_ai_or_paid_provider(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();campaign,run=seed(db)
+    items=[post('qa-'+str(i),'https://instagram.com/p/qa-'+str(i)) for i in range(104)]
+    assert prism_discover.store(db,run,campaign,items)==100
+    assert db.query(CampaignEvidence).count()==100
+    assert db.query(SocialListeningResult).count()==100
+    assert db.query(EvidenceAssessment).count()==100
+    db.close()

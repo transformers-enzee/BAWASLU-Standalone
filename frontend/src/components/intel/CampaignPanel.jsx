@@ -9,8 +9,8 @@ import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
 
-const options=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin','online_news'];
-const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:['tiktok'],language:'',date_from:'',date_to:'',interval_minutes:120,province:'',regency_city:''};
+const campaignPlatforms=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news'];
+const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:[...campaignPlatforms],language:'',date_from:'',date_to:'',interval_minutes:120};
 const split=v=>String(v||'').split(',').map(s=>s.trim()).filter(Boolean);
 const presentDate=v=>v?new Date(v).toLocaleString('en-GB'):'Not scheduled';
 const displayStatus=s=>s==='PAUSED'?'Paused':'Draft';
@@ -63,7 +63,7 @@ export default function CampaignPanel({campaignId=null}){
  }
  async function launchDiscover(){
    if(!discoverCampaign||!discoverPreview||discoverBusy)return;
-   if(!window.confirm('Run a separate paid SocialCrawl Discover search? Up to '+discoverPreview.credit_cap+' credits, at most 50 kept posts, plus OpenAI enrichment charges. No scheduled crawl is enabled.'))return;
+   if(!window.confirm('Run a separate paid SocialCrawl Discover search? Up to '+discoverPreview.credit_cap+' credits, at most 100 kept posts, plus OpenAI enrichment charges. No scheduled crawl is enabled.'))return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
       data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun(r.data)}
@@ -364,7 +364,6 @@ export default function CampaignPanel({campaignId=null}){
   finally{if(requestId===previewRequestId.current)setEstimating(false)}
  }
 
- const invalidCampaignDates=Boolean(form.date_from&&form.date_to&&form.date_from>form.date_to);
  const set=(key,value)=>{clearEstimate();setForm(x=>({...x,[key]:value}))};
  async function refresh(){
   try{
@@ -375,21 +374,22 @@ export default function CampaignPanel({campaignId=null}){
  }
  useEffect(()=>{if(campaignId)return;let active=true;base44.functions.invoke('registry',{action:'list',data:{}}).then(r=>{if(active)setTrackedCount((r.data.items||[]).filter(x=>String(x.type||'').toLowerCase()==='candidate'&&x.status==='Active').length)}).catch(()=>{if(active)setTrackedCount(null)});return ()=>{active=false}},[campaignId]);
  useEffect(()=>{if(!campaignId){refresh();return}let active=true;setLoading(true);base44.functions.invoke('socialListening',{action:'getCampaign',id:campaignId,data:{}}).then(r=>{if(active)viewEvidence(r.data.campaign)}).catch(e=>{if(active)setError(e.response?.data?.detail||e.response?.data?.error||e.message)}).finally(()=>{if(active)setLoading(false)});return ()=>{active=false}},[campaignId]);
- function newCampaign(){resetKeywordPreview();clearEstimate();setForm({...initial,platforms:['tiktok']});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
+ function newCampaign(){resetKeywordPreview();clearEstimate();setForm({...initial,platforms:[...campaignPlatforms]});setEditing(null);setCreating(true);setSelected(null);setError('');setNotice('')}
  function editCampaign(c){
   resetKeywordPreview();clearEstimate();setForm({name:c.name,description:c.description||'',
    primary_keywords:[...(c.primary_keywords||[])],
    secondary_keywords:[...(c.secondary_keywords||[])],
    excluded_keywords:[...(c.excluded_keywords||[])],
-   platforms:[...(c.platforms||[])],language:c.language||'',date_from:c.date_from||'',date_to:c.date_to||'',
-   interval_minutes:120,province:c.province||'',regency_city:c.regency_city||''});
+   platforms:[...campaignPlatforms],language:'',date_from:c.date_from||'',date_to:'',
+   interval_minutes:120});
   setEditing(c);setCreating(true);setSelected(null);setError('');setNotice('');
  }
  async function save(e){
   e.preventDefault();
-  if(invalidCampaignDates){setError('Start date cannot be after end date. Please correct the campaign dates.');return}
   setSaving(true);setError('');setNotice('');
-  const fields=['name','description','primary_keywords','secondary_keywords','excluded_keywords','platforms','language','date_from','date_to','province','regency_city'];
+  // Platform, language and open-ended date coverage are system defaults.
+  // Save only these hidden defaults, never overwrite existing jurisdiction.
+  const fields=['name','description','primary_keywords','secondary_keywords','excluded_keywords','platforms','language','date_from','date_to'];
   const data=editing
    ? Object.fromEntries(fields.filter(key=>JSON.stringify(form[key])!==JSON.stringify(editing[key]??(Array.isArray(form[key])?[]:''))).map(key=>[key,form[key]]))
    : {...form};
@@ -441,27 +441,20 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    <div className="grid gap-3 md:grid-cols-2">
     <label className="text-sm">Campaign name *<input className="intel-input mt-1" value={form.name} maxLength={255} required onChange={e=>set('name',e.target.value)}/></label>
-    <label className="text-sm">Language<select className="intel-input mt-1" value={form.language} onChange={e=>set('language',e.target.value)}>
-       <option value="">All languages</option><option value="id">Bahasa Indonesia</option><option value="en">English</option><option value="ms">Bahasa Melayu</option>
-    </select></label>
     <KeywordTags label="Main keywords" required items={form.primary_keywords} onChange={tags=>set('primary_keywords',tags)} />
     <KeywordTags label="Secondary keywords" items={form.secondary_keywords} onChange={tags=>set('secondary_keywords',tags)} />
     <KeywordTags label="Excluded keywords" items={form.excluded_keywords} onChange={tags=>set('excluded_keywords',tags)}/>
     <label className="text-sm">Start date<input className="intel-input mt-1" type="date" value={form.date_from} onChange={e=>set('date_from',e.target.value)}/></label>
-    <label className="text-sm">End date<input className="intel-input mt-1" type="date" aria-invalid={invalidCampaignDates} value={form.date_to} onChange={e=>set('date_to',e.target.value)}/></label>
-    {invalidCampaignDates&&<p role="alert" className="md:col-span-2 text-sm text-red-700">Start date cannot be after end date. Please correct the campaign dates.</p>}
-    <label className="text-sm">Province (optional; regional access still applies)<input className="intel-input mt-1" value={form.province} onChange={e=>set('province',e.target.value)}/></label>
-    <label className="text-sm">Regency / City<input className="intel-input mt-1" value={form.regency_city} onChange={e=>set('regency_city',e.target.value)}/></label>
    </div>
    <label className="block text-sm">Description<textarea rows={2} className="intel-input mt-1 w-full" value={form.description} onChange={e=>set('description',e.target.value)}/></label>
-   <fieldset className="space-y-2"><legend className="text-sm font-semibold">Platforms *</legend>
-    <label className="flex gap-2 items-center rounded-lg border p-3 text-sm font-medium"><input type="checkbox" aria-label="All platforms - Search Everywhere" checked={form.platforms.includes("search_everywhere")} onChange={e=>set("platforms",e.target.checked?["search_everywhere"]:["tiktok"])}/> All platforms · Search Everywhere <span className="text-xs font-normal text-slate-600">20 credits per query · preview only for now</span></label>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{options.map(p=><label key={p} className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={form.platforms.includes("search_everywhere")} checked={form.platforms.includes(p)} onChange={e=>set('platforms',e.target.checked?[...form.platforms,p]:form.platforms.filter(x=>x!==p))}/>{p}</label>)}</div>
-   </fieldset>
+   <div className="rounded-lg border border-[#d7e8e2] bg-[#f4fbf8] px-4 py-3 text-sm" role="note" aria-label="Default collection coverage">
+     <strong>Default sources · all seven</strong>
+     <p className="mt-1 text-xs text-[#466d64]">TikTok · Instagram · YouTube · Facebook · X · Threads · Online News. All languages, no end date. Regional access restrictions still apply.</p>
+   </div>
    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2" aria-label="Campaign credit preflight">
     <p className="text-sm font-semibold text-amber-950">SocialCrawl credit estimate — before running</p>
     <p className="text-xs text-amber-900">A cost preview does not call SocialCrawl or use credits. Always review the latest estimate before authorizing a paid run.</p>
-    <button type="button" className="intel-ghost" disabled={estimating||saving||!form.name.trim()||!form.primary_keywords.length||!form.platforms.length} onClick={checkCredits}>{estimating?'Calculating…':'Check estimated credits'}</button>
+    <button type="button" className="intel-ghost" disabled={estimating||saving||!form.name.trim()||!form.primary_keywords.length} onClick={checkCredits}>{estimating?'Calculating…':'Check estimated credits'}</button>
     {estimateError&&<p role="alert" className="text-xs text-red-700">{estimateError}</p>}
     {creditEstimate&&<div role="status" className="text-sm text-amber-950">
       Estimated cost: <strong>{creditEstimate.estimated_credits} credits per run</strong>
@@ -472,7 +465,7 @@ export default function CampaignPanel({campaignId=null}){
    </div>
    {editing&&(form.primary_keywords.length>30||form.secondary_keywords.length>30||form.excluded_keywords.length>30)&&<p className="text-xs text-amber-800">Legacy imported keywords are preserved when unchanged. You can save the campaign description without deleting them; newly modified keyword lists must meet the 30-keyword limit.</p>}
    {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
-   <div className="flex gap-2"><button className="intel-button" disabled={saving||invalidCampaignDates||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
+   <div className="flex gap-2"><button className="intel-button" disabled={saving||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
     <button type="button" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>Cancel</button></div>
     </form>
    </div>
@@ -487,15 +480,15 @@ export default function CampaignPanel({campaignId=null}){
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
       <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Discover · 50 posts</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>checkDiscover(c)}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
      </article>)}{discoverCampaign&&<div className="rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm space-y-2" role="region" aria-label="Separate SocialCrawl Discover run">
-  <div className="flex justify-between gap-3"><strong>Prism Discover · {discoverCampaign.name} · 50 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
-  <p className="text-xs">Independent of Manual SocialCrawl. First 5 main keywords only, 7-day search window and hard cap of {discoverPreview?.credit_cap||100} provider credits. OpenAI enrichment is separately billed. No automatic schedule.</p>
+  <div className="flex justify-between gap-3"><strong>Activate · {discoverCampaign.name} · 100 posts maximum</strong><button className="intel-ghost text-xs" onClick={()=>{setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null)}}>Close</button></div>
+  <p className="text-xs">Activation starts one explicitly confirmed SocialCrawl collection of up to 100 posts across the seven default sources. First 5 main keywords, last 7 days. Provider budget capped at {discoverPreview?.credit_cap||100} credits; OpenAI enrichment is separately billed. This is not a recurring schedule.</p>
   {discoverBusy&&<p role="status">Checking provider…</p>}
   {discoverError&&<p role="alert" className="text-red-700">{discoverError}</p>}
   {discoverPreview&&!discoverRun&&<div className="space-y-2"><p className="text-xs">Provider preview: {JSON.stringify(discoverPreview.estimate).slice(0,950)}</p>
     <p className="text-xs">Keywords: {(discoverPreview.keywords_used||[]).join(', ')} ({(discoverPreview.keywords_total||0)} configured) · Platforms: {(discoverPreview.platforms||[]).join(', ')} · {discoverPreview.incremental?'Incremental since last run':'Initial collection'}</p>
-    <button type="button" className="intel-button text-xs" disabled={discoverBusy} onClick={launchDiscover}>Confirm paid Discover run</button>
+    <button type="button" className="intel-button text-xs" disabled={discoverBusy} onClick={launchDiscover}>Confirm paid activation</button>
   </div>}
   {discoverRun&&<div className="space-y-2" role="status"><p>Run #{discoverRun.run_id} · {discoverRun.status} · {discoverRun.posts_saved||0} saved posts · {discoverRun.credits_used||0} SocialCrawl credits · {discoverRun.ai_analyzed_posts||0} AI-analyzed · {discoverRun.ai_pending_posts||0} AI-pending</p><button type="button" className="intel-ghost text-xs" onClick={refreshDiscover} disabled={discoverBusy}>Refresh run status</button></div>}
  </div>}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}

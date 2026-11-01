@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
 from .access import has, allowed, audit
-from .socialcrawl import _scope_filters, AVAILABLE_PLATFORMS
+from .socialcrawl import _scope_filters, AVAILABLE_PLATFORMS, DEFAULT_CAMPAIGN_PLATFORMS
 from threading import Lock
 from time import monotonic
 
@@ -144,7 +144,7 @@ def _normalize(db,p,data,existing=None):
     excluded=_campaign_edit_keywords(data.get('excluded_keywords',[]),'Excluded keywords',False,existing.excluded_keywords_json if existing else None)
     overlap={x.casefold() for x in primary}&{x.casefold() for x in excluded}
     if overlap: raise ValueError('Main keywords cannot also be excluded')
-    platforms=data.get('platforms',[])
+    platforms=data.get('platforms',list(DEFAULT_CAMPAIGN_PLATFORMS))
     if not isinstance(platforms,list) or not platforms: raise ValueError('Select at least one platform')
     if len(platforms)>len(AVAILABLE_PLATFORMS): raise ValueError('Too many platforms')
     platforms=list(dict.fromkeys(platforms))

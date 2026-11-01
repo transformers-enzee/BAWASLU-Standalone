@@ -189,11 +189,6 @@
     const pending = filtered.filter(f => f.status === 'pending').length;
     const reviewed = filtered.filter(f => f.human_reviewed).length;
     const nPosts = countPosts(filtered);
-    $('#executive').textContent = dashboard ?
-      'Intelligence Inbox provides '+nPosts+' relevant saved source posts across '+filtered.length+
-      ' evidence-linked groups. '+pending+' group(s) await officer review and '+reviewed+
-      ' have recorded triage decisions. Relevant is not equivalent to a verified legal violation.' :
-      'Loading authorized Inbox evidence...';
     $('#kpis').innerHTML = [[filtered.length,'Issues Identified'],[pending,'Pending Reviews'],[reviewed,'Reviewed Issues'],[nPosts,'Supporting Posts']]
       .map(([value, name]) => '<div><strong>' + value + '</strong><span>' + name + '</span></div>').join('');
     const mentions = asRows(addCounts(filtered,'actor_mentions')).slice(0,10);

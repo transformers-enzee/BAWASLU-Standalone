@@ -14,13 +14,16 @@ def utc_now_naive():
 
 SOCIALCRAWL_BASE_URL=os.getenv('SOCIALCRAWL_BASE_URL','https://www.socialcrawl.dev').rstrip('/')
 SOCIALCRAWL_API_KEY=os.getenv('SOCIALCRAWL_API_KEY','')
-SOCIAL_PLATFORMS=['tiktok','instagram','youtube','twitter-ai-search','threads','reddit','linkedin']
+SOCIAL_PLATFORMS=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','reddit','linkedin']
 AVAILABLE_PLATFORMS=SOCIAL_PLATFORMS+['online_news']
-DEFAULT_PLATFORMS=list(SOCIAL_PLATFORMS)
+# Seven always-on campaign discovery sources; direct Social Listening searches
+# use the same default, while still permitting explicit legacy search filters.
+DEFAULT_CAMPAIGN_PLATFORMS=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news']
+DEFAULT_PLATFORMS=list(DEFAULT_CAMPAIGN_PLATFORMS)
 SUPPORTED_EVERYWHERE_SOURCES=set([x for x in SOCIAL_PLATFORMS if x!='facebook'] + ['hackernews','polymarket','github','pinterest','perplexity','tavily','rumble','tiktok-hashtag','instagram-hashtag','youtube-hashtag'])
 SEARCH_EVERYWHERE_ESTIMATED_CREDITS=20
 GOOGLE_NEWS_ESTIMATED_CREDITS=1
-NATIVE_PLATFORM_CREDIT_CAP={'tiktok':1,'instagram':1,'youtube':1,'reddit':1,'threads':1,'linkedin':5,'twitter-ai-search':1}
+NATIVE_PLATFORM_CREDIT_CAP={'tiktok':1,'instagram':1,'youtube':1,'facebook':1,'reddit':1,'threads':1,'linkedin':5,'twitter-ai-search':1}
 
 ALLOWED_FILTERS={
  'query','exact_phrase','include_terms','exclude_terms','hashtags','accounts','watchlist_ids','issue_category','topics','locations',

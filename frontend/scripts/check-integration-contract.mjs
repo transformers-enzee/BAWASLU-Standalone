@@ -52,7 +52,7 @@ assert.doesNotMatch(captured,/Demo citizen|Demo institutional|Export|Find post b
 assert.match(campaignsApi,/if action=='campaignCapturedPosts':/);
 assert.match(socialcrawl,/campaignCapturedPosts/,'The authenticated dispatcher must allow captured feed reads');
 const trendPosition=campaign.indexOf('aria-label="Campaign trend by platform"');
-const topicsPosition=campaign.indexOf('<TopicThemes data={dashboard.topics_and_themes}/>');
+const topicsPosition=campaign.indexOf('<TopicThemes data={dashboard.topics_and_themes} campaignId={selected.id}');
 const capturedPosition=campaign.indexOf('aria-label="Captured posts"',trendPosition);
 assert.ok(trendPosition>=0 && trendPosition<topicsPosition && topicsPosition<capturedPosition,
   'Topics & Themes must appear immediately below the platform chart, before captured evidence');

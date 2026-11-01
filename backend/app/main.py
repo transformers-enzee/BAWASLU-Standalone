@@ -126,7 +126,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'118.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'118.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -545,50 +545,153 @@ def assist_intelligence(body:dict,user:User=Depends(current_user),db:Session=Dep
 
 @app.post('/api/functions/intelligenceAssistant')
 def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Authorized intelligence + social evidence + clearly marked GPT-only fallback."""
+    from .access import has
     from .domain import list_intelligence
     from .intelligence_assistant import (
-      select_assistant_records,assistant_evidence_record,assistant_record_view,assistant_query_semantics,
-      generate_openai_assistant_answer,format_assistant_answer,deterministic_assistant_answer,
-      AssistantProviderError,is_general_knowledge_question,generate_general_openai_answer
+        select_assistant_records, assistant_evidence_record, assistant_record_view,
+        generate_general_openai_answer, AssistantProviderError
     )
-    p=profile(db,user)
-    q=str(body.get('question','')).strip()
-    if not q: raise HTTPException(400,'Question is required')
-    if len(q)>500: raise HTTPException(400,'Question is too long')
-    previous=str(body.get('previousQuestion','')).strip()[:500]
-    if is_general_knowledge_question(q):
+    from .assistant_orchestration import (
+        _social_select, social_evidence, social_record_view,
+        is_conceptual, generate, evidence_fallback
+    )
+    # Preserve the existing endpoint contract for older clients. The upgraded
+    # Intelligence Assistant UI explicitly supplies analysisMode to select v2.
+    if 'analysisMode' not in body:
+        from .intelligence_assistant import (
+            select_assistant_records, assistant_evidence_record, assistant_record_view,
+            assistant_query_semantics, generate_openai_assistant_answer,
+            format_assistant_answer, deterministic_assistant_answer,
+            is_general_knowledge_question, generate_general_openai_answer
+        )
+        q=str(body.get('question','')).strip()
+        if not q or len(q)>500:
+            raise HTTPException(400,'Question must be between 1 and 500 characters')
+        previous=str(body.get('previousQuestion','')).strip()[:500]
+        if is_general_knowledge_question(q):
+            try:
+                text,provider=generate_general_openai_answer(q,previous)
+            except AssistantProviderError as exc:
+                raise HTTPException(503,'GPT unavailable: '+exc.code)
+            return {'answer':text,'records':[],'provider':provider,
+                    'grounding':{'accessible_count':0,'selected_count':0,
+                    'supporting_count':0,'scope':'OPENAI_GENERAL_NO_SYSTEM_DATA',
+                    'date_basis':'not_applicable','date_basis_label':'General knowledge',
+                    'date_basis_note':'No BAWASLU system records were accessed.','window':None}}
+        accessible=list_intelligence(db,profile(db,user))
+        selected=select_assistant_records(q,accessible,limit=12)
+        evidence=[assistant_evidence_record(x) for x in selected]
+        cited_ids=[]
         try:
-            answer,provider=generate_general_openai_answer(q,previous)
+            if not os.getenv('OPENAI_API_KEY','').strip():
+                raise AssistantProviderError('not_configured')
+            result,provider=generate_openai_assistant_answer(q,previous,evidence)
+            allowed_ids={x['record_id'] for x in evidence}
+            cited_ids=[x for x in (result.get('cited_record_ids') or []) if x in allowed_ids]
+            answer=format_assistant_answer(result)
         except AssistantProviderError as exc:
-            raise HTTPException(503,'General knowledge AI unavailable: '+exc.code)
-        return {'answer':answer,'records':[],'provider':provider,
-                'grounding':{'accessible_count':0,'selected_count':0,
-                  'supporting_count':0,'scope':'OPENAI_GENERAL_NO_SYSTEM_DATA',
-                  'date_basis':'not_applicable','date_basis_label':'General knowledge',
-                  'date_basis_note':'No BAWASLU system records were accessed.',
-                  'window':None}}
-    accessible=list_intelligence(db,p)
-    selected=select_assistant_records(q,accessible,limit=12)
-    evidence=[assistant_evidence_record(x) for x in selected]
-    provider={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':''}
-    cited_ids=[]
+            fallback=deterministic_assistant_answer(q,evidence,exc.code)
+            answer=fallback['answer'];cited_ids=fallback['cited_record_ids']
+            provider={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}
+        by_id={x.intelligence_id:x for x in selected}
+        support=[assistant_record_view(by_id[x]) for x in cited_ids if x in by_id]
+        if not support:support=[assistant_record_view(x) for x in selected[:6]]
+        semantics=assistant_query_semantics(q)
+        return {'answer':answer,'records':support,'provider':provider,
+                'grounding':{'accessible_count':len(accessible),
+                    'selected_count':len(selected),'supporting_count':len(support),
+                    'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY',
+                    'date_basis':semantics['date_basis'],
+                    'date_basis_label':semantics['date_basis_label'],
+                    'date_basis_note':semantics['date_basis_note'],
+                    'window':semantics['window']}}
+    p=profile(db,user)
+    if not has(p,'view_intelligence'):
+        raise HTTPException(403,'Intelligence Assistant permission required')
+    q=str(body.get('question') or '').strip()
+    if not q or len(q)>500:
+        raise HTTPException(400,'Question must be between 1 and 500 characters')
+    previous=str(body.get('previousQuestion') or '').strip()[:500]
+    requested=str(body.get('analysisMode') or 'AUTO').upper()
+    if requested not in ('AUTO','DATA','GENERAL'):
+        raise HTTPException(400,'Invalid analysis mode')
+    general=requested=='GENERAL' or (requested=='AUTO' and is_conceptual(q))
+    source_warning=''
+    social_rows=[]
+    selected_formal=[]
+    chosen_social=[]
+    accessible=[]
+    matched_social=0
+    if not general:
+        accessible=list_intelligence(db,p)
+        selected_formal=select_assistant_records(q,accessible,limit=10)
+        try:
+            from .campaigns import campaign_action
+            result=campaign_action(db,p,'campaignIntelligenceInbox',{})
+            social_rows=result.get('findings') or []
+            chosen_social,matched_social=_social_select(social_rows,q,limit=20)
+        except PermissionError:
+            raise HTTPException(403,'Social source access denied')
+        except Exception:
+            db.rollback()
+            logging.getLogger(__name__).exception('ASSISTANT_SOCIAL_READ_FAILED')
+            source_warning='Social Listening retrieval temporarily unavailable; answer may be incomplete.'
+    evidence=[assistant_evidence_record(row) for row in selected_formal]
+    evidence += [social_evidence(row) for row in chosen_social]
+    if general or (not evidence and requested=='AUTO'):
+        try:
+            text,provider=generate_general_openai_answer(q,previous)
+        except AssistantProviderError as exc:
+            raise HTTPException(503,'GPT unavailable: '+exc.code)
+        preface=('No matching saved records were found in the authorized search. '
+                 'The following is GPT general knowledge, not verified current evidence.\n\n'
+                 if not general else 'GPT general knowledge (not a live web search):\n\n')
+        if source_warning:preface=source_warning+'\n\n'+preface
+        return {'answer':preface+text,'records':[],'provider':provider,
+                'grounding':{'accessible_count':len(accessible),
+                    'selected_count':0,'supporting_count':0,'scope':'GPT_GENERAL_NO_PRIVATE_RECORDS',
+                    'source_types':[],'matched_social':0,'limited':True}}
+    if requested=='DATA' and not evidence:
+        return {'answer':'No matching saved records were found within your authorized BAWASLU evidence. I will not infer an answer from general knowledge in Saved evidence only mode.',
+                'records':[],'provider':{'mode':'DETERMINISTIC_FALLBACK','model':'',
+                'fallback_code':'no_matching_evidence'},
+                'grounding':{'accessible_count':len(accessible),'selected_count':0,
+                'supporting_count':0,'matched_social':0,'source_types':[],
+                'scope':'AUTHORIZED_EVIDENCE_NO_MATCH','limited':True}}
+    meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':''}
+    cited=[]
     try:
-        if not os.getenv('OPENAI_API_KEY','').strip():
-            raise AssistantProviderError('not_configured','OpenAI is not configured')
-        result,provider=generate_openai_assistant_answer(q,previous,evidence)
-        allowed_ids={r['record_id'] for r in evidence}
-        cited_ids=[x for x in (result.get('cited_record_ids') or []) if x in allowed_ids]
-        answer=format_assistant_answer(result)
+        history=body.get('conversationContext') or []
+        history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
+                 for x in history[-6:] if isinstance(x,dict) and
+                 x.get('role') in ('user','assistant')] if isinstance(history,list) else []
+        text,cited,meta=generate(q,previous,evidence,
+            'GROUNDED' if requested=='DATA' else 'HYBRID',history=history)
     except AssistantProviderError as exc:
-        fallback=deterministic_assistant_answer(q,evidence,exc.code)
-        answer=fallback['answer']; cited_ids=fallback['cited_record_ids']
-        provider={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}
-    selected_by_id={x.intelligence_id:x for x in selected}
-    support=[assistant_record_view(selected_by_id[x]) for x in cited_ids if x in selected_by_id]
+        text,cited=evidence_fallback(evidence,exc.code)
+        meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}
+    formal_by_id={record.intelligence_id:record for record in selected_formal}
+    social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
+    support=[]
+    used=set()
+    for cid in cited:
+        if cid in used:continue
+        if cid in formal_by_id:support.append(assistant_record_view(formal_by_id[cid]))
+        elif cid in social_by_id:support.append(social_record_view(social_by_id[cid]))
+        used.add(cid)
+    # Return representative source cards even if provider omitted citations.
     if not support:
-        support=[assistant_record_view(x) for x in selected[:6]]
-    semantics=assistant_query_semantics(q)
-    return {'answer':answer,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY','date_basis':semantics['date_basis'],'date_basis_label':semantics['date_basis_label'],'date_basis_note':semantics['date_basis_note'],'window':semantics['window']}}
+        support=[social_record_view(x) for x in chosen_social[:4]]
+        support += [assistant_record_view(x) for x in selected_formal[:3]]
+    if source_warning:text=source_warning+'\n\n'+text
+    source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
+    return {'answer':text,'records':support[:12],'provider':meta,
+        'grounding':{'accessible_count':len(accessible),
+            'selected_count':len(evidence),'supporting_count':len(support),
+            'matched_social':matched_social,
+            'scope':'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',
+            'source_types':source_types,'limited':True}}
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():

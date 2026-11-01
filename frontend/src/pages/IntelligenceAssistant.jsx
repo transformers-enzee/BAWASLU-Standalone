@@ -26,6 +26,7 @@ export default function IntelligenceAssistant(){
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
+ const [analysisMode,setAnalysisMode]=useState('AUTO');
  const [showHistory,setShowHistory]=useState(true);
  const activeIdRef=useRef(null);
  function setActive(id){activeIdRef.current=id;setActiveId(id)}
@@ -66,7 +67,7 @@ export default function IntelligenceAssistant(){
   const outgoing=[...messages,{role:'user',text:q}];
   setMessages(outgoing);
   try{
-   const response=await base44.functions.invoke('intelligenceAssistant',{question:q,previousQuestion:previous});
+   const response=await base44.functions.invoke('intelligenceAssistant',{question:q,previousQuestion:previous,analysisMode,conversationContext:messages.slice(-6).map(m=>({role:m.role,text:String(m.text||'').slice(0,750)}))});
    const answer={
     role:'assistant',text:response.data.answer||'',
     records:response.data.records||[],provider:response.data.provider,
@@ -121,13 +122,21 @@ export default function IntelligenceAssistant(){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#153b57] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<AssistantAnswer text={m.text}/>:<p className="whitespace-pre-line leading-6">{m.text}</p>}
-       {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(m.provider.mode==='OPENAI_GROUNDED'?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_GROUNDED'?t('grounded_ai_answer'):t('safe_fallback')}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}<AssistantRecords records={m.records}/></>}
+       {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}<AssistantRecords records={m.records}/></>}
       </div>
      </div>)}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}
      {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
      {historyError&&<p role="alert" className="text-sm text-amber-800">{historyError}</p>}
     </section>
+    <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
+      <span>Answer source: {analysisMode==='AUTO'?'Automatic — hybrid when evidence is available':analysisMode==='DATA'?'Saved BAWASLU evidence only':'GPT general knowledge only'}</span>
+      <select aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={analysisMode} onChange={e=>setAnalysisMode(e.target.value)} disabled={busy}>
+       <option value="AUTO">Auto · Hybrid</option>
+       <option value="DATA">Saved evidence only</option>
+       <option value="GENERAL">GPT general knowledge</option>
+      </select>
+     </div>
     <form onSubmit={e=>{e.preventDefault();ask(question)}} className="intel-card p-3 flex gap-2">
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={400} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
      <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>

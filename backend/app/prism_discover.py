@@ -157,8 +157,8 @@ def enrich(db,c,entries):
                 '"provinces":[{"name":"province name","province":"province name"}]}]}. '
                 'Electoral Operations means election procedures, administration and voting issues. '
                 'BAWASLU Reputation means criticism of public trust, neutrality and institution performance. '
-                'Select exactly one primary topic: Electoral Operations for election administration and voting, '
-                'Public Concern for a concrete complaint or problem raised by the public, '
+                'Select exactly one supported primary topic based on substance, including ordinary civic dialogue: Electoral Operations for election administration and voting, '
+                'Public Concern for a clearly described public complaint, oversight concern, or service problem, '
                 'BAWASLU Reputation for institutional trust or neutrality; otherwise Not categorized. '
                 'A Public Concern must include an exact source quote in concerns. '
                 'Include candidate names only when '
@@ -169,7 +169,7 @@ def enrich(db,c,entries):
         req={'model':openai_triage_model(),'input':[{'role':'user','content':prompt}],
              'max_output_tokens':3200}
         try:
-            with httpx.Client(timeout=45) as client:
+            with httpx.Client(timeout=75) as client:
                 resp=client.post(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL).rstrip('/')+'/responses',
                     headers={'Authorization':'Bearer '+key},json=req)
             resp.raise_for_status()

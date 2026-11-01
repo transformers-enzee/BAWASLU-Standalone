@@ -159,7 +159,10 @@ def enrich(db,c,entries):
                 'BAWASLU Reputation means criticism of public trust, neutrality and institution performance. '
                 'Select exactly one supported primary topic based on substance, including ordinary civic dialogue: Electoral Operations for election administration and voting, '
                 'Public Concern for a clearly described public complaint, oversight concern, or service problem, '
-                'BAWASLU Reputation for institutional trust or neutrality; otherwise Not categorized. '
+                'BAWASLU Reputation for BAWASLU trust, neutrality, institutional actions, or performance. ' 
+                'Ordinary election news, civic discussion, election results, campaign activity, candidate statements and voter reactions are meaningful Electoral Operations topics even without a violation. ' 
+                'Public Concern includes explicit citizen complaints, concerns about fairness, access or public oversight, without assuming wrongdoing. ' 
+                'Only choose Not categorized when no topic is supported by the actual post. Do not invent evidence. '
                 'A Public Concern must include an exact source quote in concerns. '
                 'Include candidate names only when '
                 'explicitly supported by the post text. Include province only when text explicitly names it. '
@@ -188,7 +191,7 @@ def enrich(db,c,entries):
                 and str(x.get('evidence_quote') or '').strip()
                 and str(x.get('evidence_quote') or '') in row.text_content]
             topic=str(item.get('primary_topic') or '').strip()
-            if topic=='Public Concern' and not concerns:topic='Not categorized'
+            # A supported Public Concern topic does not require a verbatim quote; only detailed concern signals do.
             if topic not in ('Electoral Operations','Public Concern','BAWASLU Reputation'):
                 topic='Not categorized'
             record.topic_labels_json=json.dumps([] if topic=='Not categorized' else [topic])

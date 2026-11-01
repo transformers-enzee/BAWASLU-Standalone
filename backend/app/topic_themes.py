@@ -8,7 +8,7 @@ def _list(value):
     except (ValueError,TypeError): return []
     return parsed if isinstance(parsed,list) else []
 def category_for_assessment(relevance,topics,concerns):
-    if str(relevance or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):return UNCATEGORIZED
+    if str(relevance or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT','UNCERTAIN'):return UNCATEGORIZED
     # Explicit, source-quoted public concerns take priority in the primary
     # Social Listening theme; underlying operations/reputation labels remain saved.
     if any(isinstance(c,dict) and c.get('evidence_quote') for c in _list(concerns)):

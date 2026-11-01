@@ -49,6 +49,7 @@ function playerOverview(fs,key){
  if(key==='violations'){
   const ai=fs.filter(f=>f.kind==='source_review'&&f.ai_summary&&f.summary).map(f=>f.summary);
   if(ai.length)return ai.slice(0,3).join(' ');
+  const evidence=fs.map(f=>String(f.summary||'').trim()).filter(Boolean);if(evidence.length)return [...new Set(evidence)].slice(0,3).join(' ');
   const unique=[...new Set(fs.map(f=>String(f.summary||'').replace(/^Reports raise /,'')
     .replace(/\. These allegations require verification\.?$/,'').replace(/[.]$/,'').trim()).filter(Boolean))];
   const count=fs.reduce((sum,f)=>sum+(f.source_count||f.posts?.length||0),0);
@@ -59,6 +60,7 @@ function playerOverview(fs,key){
  if(key==='concerns'){
   const ai=fs.filter(f=>f.kind==='discussion'&&f.ai_summary&&f.summary).map(f=>f.summary);
   if(ai.length)return ai.slice(0,2).join(' ');
+  const evidence=fs.map(f=>String(f.summary||'').trim()).filter(Boolean);if(evidence.length)return [...new Set(evidence)].slice(0,3).join(' ');
   const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Public Concern: /,'').trim()).filter(Boolean))];
   const count=fs.reduce((n,f)=>n+(f.source_count||0),0);
   return count+' saved source post(s) discuss '+(subjects.slice(0,2).join('; ')||'public concerns')+
@@ -67,6 +69,7 @@ function playerOverview(fs,key){
  if(key==='narratives'){
   const ai=fs.filter(f=>f.kind==='narrative_candidate'&&f.ai_summary&&f.summary).map(f=>f.summary);
   if(ai.length)return ai.slice(0,2).join(' ');
+  const evidence=fs.map(f=>String(f.summary||'').trim()).filter(Boolean);if(evidence.length)return [...new Set(evidence)].slice(0,3).join(' ');
   const subjects=[...new Set(fs.map(f=>String(f.title||'').replace(/^Emerging Narrative: /,'').trim()).filter(Boolean))];
   const count=fs.reduce((n,f)=>n+(f.source_count||0),0);
   const actors=[...new Set(fs.flatMap(f=>Object.keys(f.actor_mentions||{})))].slice(0,2);
@@ -89,4 +92,4 @@ pendingDecision=action;q('#confirmText').textContent='Are you sure you want to '
 function cancelConfirm(){pendingDecision=null;q('#confirmOverlay').style.display='none'}
 function submit(action){return window.__bawaslu?.onAction?.(action)}
 document.addEventListener('click',e=>{const b=e.target.closest('button,[data-insight]');if(!b)return;if(b.id==='deskOpen'){deskTab='review';open('desk');return}if(b.id==='closeDrawer'){close();return}if(b.id==='operations'||b.id==='reputation'){perspective=b.id;topic='all';render();return}if(b.id==='awayDismiss'){q('#awayCard').classList.add('hidden');notify('What You Missed dismissed. Your pending tasks are still available in Action Desk.');return}if(b.id==='awayToggle'){q('#awayDetails').classList.toggle('hidden');b.textContent=q('#awayDetails').classList.contains('hidden')?'View Details ▾':'Show Less ▴';b.setAttribute('aria-expanded',String(!q('#awayDetails').classList.contains('hidden')));return}if(b.dataset.insight){window.__bawaslu?.openInsight?.(b.dataset.insight);return}if(b.dataset.player){open('player',b.dataset.player);return}if(b.dataset.finding){window.__bawaslu?.openFinding?.(b.dataset.finding,panel?{...panel}:null);return}if(b.dataset.tab){deskTab=b.dataset.tab;draw();return}if(b.id==='back'){const previous=panel.origin;if(previous)open(previous.type,previous.id,previous.origin);else close();return}if(b.id==='history'){history=!history;draw();if(history)window.__bawaslu?.loadHistory?.(panel?.id);return}if(b.dataset.action){askConfirm(b.dataset.action);return}if(b.id==='confirmCancel'){cancelConfirm();return}if(b.id==='confirmYes'){if(pendingDecision){const action=pendingDecision;cancelConfirm();submit(action)}return}});q('#geo').addEventListener('change',e=>{geo=e.target.value;render()});q('#period').addEventListener('change',e=>{period=e.target.value;render()});q('#topic').addEventListener('change',e=>{topic=e.target.value;render()});q('#overlay').addEventListener('click',e=>{if(e.target===q('#overlay'))close()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&pendingDecision)cancelConfirm();else if(e.key==='Escape'&&panel)close()});window.__bawaslu={db:()=>db,view,render,openFindingOriginal:(id,origin)=>open('finding',id,origin),openPanel:open,closePanel:close,notify,setData:(rows)=>{db=rows;render()},decorate:null,canReview:false,onAction:null,openFinding:null,openInsight:null,insightView:null,loadHistory:null,refreshDrawer:draw};q('#period').value='historical';render();})();
-</script><script src="/ui-freeze/smart-radar-live.js"></script></body></html>
+</script><script src="/ui-freeze/smart-radar-live.js?build=117.7"></script></body></html>

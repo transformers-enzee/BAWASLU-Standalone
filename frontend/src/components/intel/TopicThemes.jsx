@@ -17,10 +17,10 @@ export default function TopicThemes({data,campaignId,onUpdated}){
   if(!remaining)return;
   if(!window.confirm('Analyze up to '+remaining+' uncategorized posts using paid OpenAI requests? Each eligible post may incur an AI charge. Existing assessments are preserved. Continue?'))return;
   setRunning(true);setStatus('running');setTarget(remaining);setProcessed(0);setClassified(0);setProgress('Connecting to AI classification service…');
-  let cursor=0,reviewed=0,classified=0;
+  let cursor=0,reviewed=0,classified=0,failures=0;
   try{
    for(let i=0;i<Math.ceil(remaining/5)+5;i++){
-    const response=await base44.functions.invoke('socialListening',{action:'campaignTopicRefresh',id:campaignId,data:{confirm_ai_cost:true,after_result_id:cursor,batch_limit:5}});
+    let response;try{response=await base44.functions.invoke('socialListening',{action:'campaignTopicRefresh',id:campaignId,data:{confirm_ai_cost:true,after_result_id:cursor,batch_limit:3}});failures=0;}catch(err){failures++;setProgress('Temporary API failure; retry '+failures+'/3. '+reviewed+' posts completed and retained.');if(failures<3){i--;continue;}throw err;}
     const value=response.data||{};
     cursor=Number(value.next_cursor||cursor);
     reviewed+=Number(value.processed||0);classified+=Number(value.categorized||0);setProcessed(reviewed);setClassified(classified);

@@ -242,6 +242,13 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     findings,inbox=live_inbox_findings(db,principal,states)
     inbox_ms=(time.perf_counter()-inbox_started)*1000
     attach_live_ai_summaries(db,findings)
+    # Surface a genuine empty authorization-scoped Inbox rather than silently
+    # attributing zero findings to missing AI topic generation.
+    if not findings:
+        import logging
+        logging.getLogger(__name__).warning(
+            "RADAR_EMPTY_AUTHORIZED_FEED user_id=%s inbox_records=%s campaign_count=%s",
+            user.id,len(inbox.get('findings') or []),len(inbox.get('campaigns') or []))
     posts=[post for finding in findings for post in finding["posts"]]
     platforms=Counter(post["platform"] for post in posts)
     candidates=Counter()

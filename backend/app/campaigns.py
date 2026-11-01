@@ -548,7 +548,14 @@ def campaign_action(db:Session,p,action,data,id=None):
             entries.append((source,record))
         if entries:
             db.flush()
+            # Topic-only refresh must never remove pre-existing relevant evidence
+            # from Intelligence Inbox or Command Centre.
+            preserved={source.id:(latest.relevance_label,latest.relevance_confidence)
+                       for source,latest in selected if latest is not None}
             enrich(db,campaign,entries)
+            for source,record in entries:
+                if source.id in preserved:
+                    record.relevance_label,record.relevance_confidence=preserved[source.id]
         db.commit()
         categorized=sum(category_for_assessment(record.relevance_label,
             record.topic_labels_json,record.public_concern_signals_json)!=UNCATEGORIZED

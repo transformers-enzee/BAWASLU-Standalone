@@ -172,11 +172,12 @@ def test_cost_preflight_estimates_social_and_news_and_warns_on_repeat():
     assert pf['duplicate_recent']['credits_used']==20
     db.close()
 
-def test_default_social_listening_platforms_exclude_online_news():
-    from app.socialcrawl import _normalize_filters
+def test_default_social_listening_platforms_cover_seven_sources():
+    from app.socialcrawl import _normalize_filters, DEFAULT_CAMPAIGN_PLATFORMS
     f=_normalize_filters({'query':'BAWASLU'})
-    assert 'online_news' not in f['platforms']
-    assert 'tiktok' in f['platforms']
+    assert f['platforms']==DEFAULT_CAMPAIGN_PLATFORMS
+    assert len(f['platforms'])==7
+    assert {'facebook','online_news','twitter-ai-search'} <= set(f['platforms'])
 
 def test_usage_action_returns_summary_without_result_id():
     db=SessionLocal(); p=admin(db)
@@ -347,7 +348,7 @@ def test_filter_validation_blocks_unsafe_or_ambiguous_searches():
     from app.socialcrawl import _normalize_filters
     cases=[
       ({'query':'BAWASLU','platforms':[]},'Select at least one platform'),
-      ({'query':'BAWASLU','platforms':['facebook']},'Unsupported Social Listening platform'),
+      ({'query':'BAWASLU','platforms':['unsupported-network']},'Unsupported Social Listening platform'),
       ({'query':'BAWASLU','platforms':['online_news'],'lookback_days':7,'date_from':'2026-10-01'},'either lookback days or an explicit date range'),
       ({'query':'BAWASLU','platforms':['online_news'],'date_from':'2026-10-09','date_to':'2026-10-01'},'Date from cannot be after date to'),
       ({'query':'BAWASLU','platforms':['online_news'],'minimum_relevance':1.2},'between 0 and 1'),

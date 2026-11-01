@@ -449,9 +449,26 @@ def _map_result(db,item,default_platform=''):
       'estimated_reach':_value(item,'computed.estimated_reach','post.computed.estimated_reach','source_items.0.engagement.estimated_reach','estimated_reach',default=None),
     }
     fp=hashlib.sha256((platform+'|'+rid+'|'+url+'|'+text[:2000]).encode()).hexdigest()
-    return {'provider_result_id':rid,'platform':platform,'content_type':str(_value(item,'post.content.type','content_type','type',default='')),
-      'canonical_url':url,'author_name':author,'observed_handle':observed or handle,'published_at':str(published or ''),
-      'text_content':text,'language':language,'relevance_score':str(relevance) if relevance not in (None,'') else '','engagement':engagement,'geography':{},'source_identity':identity,
+    from .author_recovery import clean_name, source_candidate
+    kind=str(_value(item,'post.content.type','content_type','type','record_type',default=''))
+    explicit, handle_from_source, provenance=source_candidate(
+        platform,kind,item,identity,observed or handle,url)
+    # Parent post/page names are never assigned to a comment. Existing provider
+    # names from ambiguous metadata must pass through source-role extraction.
+    if explicit:
+        author=explicit
+    elif 'comment' in kind.lower() or 'reply' in kind.lower() or not clean_name(author):
+        author=''
+    if explicit:
+        identity={**identity,'author_attribution':{'method':provenance,
+            'status':'SOURCE_OBSERVED_NOT_IDENTITY_VERIFIED',
+            'subject':'comment' if 'comment' in kind.lower() else 'post',
+            'paid_provider_called':False}}
+    return {'provider_result_id':rid,'platform':platform,'content_type':kind,
+      'canonical_url':url,'author_name':author,'observed_handle':handle_from_source or observed or handle,
+      'published_at':str(published or ''),'text_content':text,'language':language,
+      'relevance_score':str(relevance) if relevance not in (None,'') else '',
+      'engagement':engagement,'geography':{},'source_identity':identity,
       'watchlist_matches':[],'content_fingerprint':fp,'raw':item}
 
 def filter_options(db:Session,p):
@@ -712,7 +729,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverStatus','campaignCandidateSuggestions'}:
         from .prism_discover import action as prism_action
         return prism_action(db,p,action,data,id)
-    if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:
+    if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:
         from .campaigns import campaign_action
         return campaign_action(db,p,action,data,id)
     if action=='capabilities': return capabilities()

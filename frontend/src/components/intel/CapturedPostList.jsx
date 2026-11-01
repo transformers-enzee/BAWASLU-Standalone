@@ -10,7 +10,7 @@ function Post({post}){
  return <article aria-label={'Source post '+post.id} className="flex items-start gap-3 border-b border-[#e5ebef] py-4 last:border-0">
   {post.thumbnail_url&&!imageError&&<div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100"><img src={post.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setImageError(true)}/></div>}
   <div className="min-w-0 flex-1">
-   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{(post.author_name&&!['UNKNOWN','N/A','NULL'].includes(String(post.author_name).trim().toUpperCase())?post.author_name:(post.observed_handle&&String(post.observed_handle).trim()?post.observed_handle:(String(post.platform||'').toLowerCase().startsWith('facebook')?'Facebook commenter':'Source author unavailable')))}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
+   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{post.author_display||'Source author unavailable'}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||'No source text available'}</p>
    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#117c6c] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
   </div>
@@ -18,7 +18,7 @@ function Post({post}){
  </article>;
 }
 /** Full post list for the selected campaign, never the dashboard's 200-post sample. */
-export default function CapturedPostList({campaignId}){
+export default function CapturedPostList({campaignId,refreshKey=0}){
  const [posts,setPosts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
  useEffect(()=>{
   let active=true;setPosts([]);setLoading(true);setError('');
@@ -40,7 +40,7 @@ export default function CapturedPostList({campaignId}){
   }
   if(campaignId)load();
   return()=>{active=false};
- },[campaignId]);
+ },[campaignId,refreshKey]);
  return <section aria-label="Captured posts list" className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-2">
   {loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:error?<p role="alert" className="py-6 text-sm text-red-700">Unable to load the complete post list: {error}</p>:posts.length?posts.map(post=><Post key={post.id} post={post}/>):<p className="py-6 text-sm text-[#60768c]">No captured posts for this campaign.</p>}
  </section>;

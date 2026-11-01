@@ -222,19 +222,25 @@ def store(db,run,c,items,full_assessment=False):
         url=str(raw.get('url') or '')[:2000]
         row=by_id.get((platform.casefold(),source_id)) or (by_url.get(url) if url else None)
         if row is None:
-            author=raw.get('author') or {}
+            author=raw.get('author') if isinstance(raw.get('author'),dict) else {}
+            from .author_recovery import source_candidate
+            source_name,source_handle,source_method=source_candidate(
+                platform,raw.get('media_type') or raw.get('record_type') or 'post',
+                raw,{'author':author},'',url)
             txt=str(raw.get('text') or '')[:8000]
             row=SocialListeningResult(run_id=run.id,provider='SOCIALCRAWL_PRISM',
                 provider_result_id=source_id,platform=platform,canonical_url=url,
                 content_type=str(raw.get('media_type') or raw.get('record_type') or 'post')[:100],
-                author_name=str(author.get('display_name') or author.get('username') or '')[:255],
-                observed_handle=str(author.get('username') or '')[:255],
+                author_name=source_name[:255],observed_handle=source_handle[:255],
                 text_content=txt,published_at=str(raw.get('published_at') or '')[:64],
                 language=str(raw.get('language') or '')[:32],
                 relevance_score=str(((raw.get('judgments') or {}).get('relevance') or {}).get('p') or ''),
                 engagement_json=json.dumps(raw.get('engagement') or {})[:3000],
                 geography_json=json.dumps(raw.get('geo') or {})[:3000],
-                source_identity_json=json.dumps({'author':author})[:2000],
+                source_identity_json=json.dumps({'author':author,
+                    'author_attribution':{'method':source_method,
+                    'status':'SOURCE_OBSERVED_NOT_IDENTITY_VERIFIED' if source_name else 'NOT_PROVIDED',
+                    'paid_provider_called':False}},ensure_ascii=False)[:2000],
                 raw_payload_json=json.dumps({'id':source_id,'judgments':raw.get('judgments'),
                        'matched_keywords':raw.get('matched_keywords')})[:3000],
                 content_fingerprint=hashlib.sha256((platform+'|'+url+'|'+txt).encode()).hexdigest())

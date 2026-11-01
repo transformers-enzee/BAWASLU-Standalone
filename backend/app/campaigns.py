@@ -1040,7 +1040,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 processing=source_hints(item.text_content)
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
-                    'author_name':item.author_name,'published_at':item.published_at,
+                    'author_name':item.author_name,'author_display':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[0],
+                    'published_at':item.published_at,
                     'engagement_total':captured_engagement,'views':captured_views,
                     'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
                     'sentiment_confidence':assessment.sentiment_confidence or '',
@@ -1101,6 +1102,56 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'post_detail_calls_enabled':False,'potential_calls':counts['post_url_available'],
                 'potential_credit_estimate':counts['post_url_available'],
                 'paid_provider_called':False}
+    if action in ('campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply'):
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        from .author_recovery import clean_name, source_candidate, recover_saved_author
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c):
+            raise ValueError('Campaign unavailable')
+        if action=='campaignAuthorRecoveryApply':
+            if not _editable(p,c):
+                raise PermissionError('Only a campaign owner or administrator can recover attribution')
+            if (data or {}).get('confirm_saved_metadata_only') is not True:
+                raise ValueError('Confirm the free saved-metadata recovery before applying')
+        # Bounded campaign-linked results, never unrelated tenants or watchlist sources.
+        links=db.query(CampaignEvidence.result_id).filter(
+            CampaignEvidence.campaign_id==c.id,
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'
+        ).order_by(CampaignEvidence.id.desc()).limit(500).all()
+        ids=list(dict.fromkeys(int(x[0]) for x in links))
+        records=db.query(SocialListeningResult).filter(
+            SocialListeningResult.id.in_(ids)).all() if ids else []
+        report={'scanned':0,'already_named':0,'recoverable':0,'recovered':0,
+                'unresolved':0,'reason_counts':{},'platforms':{},
+                'paid_provider_called':False,'socialcrawl_credits':0,
+                'ai_requests':0,'scope':'CAMPAIGN_AUTHORIZED_SAVED_METADATA',
+                'comment_identity_policy':'Exact source author only; parent account is never the commenter'}
+        for item in records:
+            if not _result_in_scope(db,p,item):continue
+            report['scanned']+=1
+            platform=(item.platform or 'unknown').lower()
+            platform_report=report['platforms'].setdefault(platform,
+                {'scanned':0,'already_named':0,'recoverable':0,'recovered':0,'unresolved':0})
+            platform_report['scanned']+=1
+            if clean_name(item.author_name):
+                report['already_named']+=1;platform_report['already_named']+=1
+                continue
+            person,handle,reason=source_candidate(item.platform,item.content_type,
+                item.raw_payload_json,item.source_identity_json,
+                item.observed_handle,item.canonical_url)
+            if person:
+                report['recoverable']+=1;platform_report['recoverable']+=1
+                if action=='campaignAuthorRecoveryApply':
+                    saved,reason=recover_saved_author(item)
+                    if saved:
+                        report['recovered']+=1;platform_report['recovered']+=1
+            else:
+                report['unresolved']+=1;platform_report['unresolved']+=1
+                report['reason_counts'][reason]=report['reason_counts'].get(reason,0)+1
+        if action=='campaignAuthorRecoveryApply' and report['recovered']:
+            db.commit()
+        return report
     if action=='campaignThumbnailRecovery':
         from .models import SocialListeningResult, SocialMediaThumbnail
         from .socialcrawl import _result_in_scope
@@ -1479,6 +1530,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             rows.append({'id':str(item.id),'platform':item.platform,
                          'content_type':item.content_type,'published_at':item.published_at,
                          'author_name':item.author_name,'observed_handle':item.observed_handle,
+                         'author_display':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[0],
+                         'author_attribution':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[1],
                          'text_content':item.text_content,'canonical_url':item.canonical_url,
                          'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
                          'sentiment':_latest_sentiment(db,c.id,item.id),

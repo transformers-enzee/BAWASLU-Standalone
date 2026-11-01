@@ -157,6 +157,8 @@ export default function CampaignPanel({campaignId=null}){
  const [capturedSentimentFilter,setCapturedSentimentFilter]=useState('ALL'),[capturedSentimentSort,setCapturedSentimentSort]=useState('HOTTEST');
  const [capturedSourceFilter,setCapturedSourceFilter]=useState('ALL'),[capturedTextFilter,setCapturedTextFilter]=useState('');
  const [thumbnailRecoveryBusy,setThumbnailRecoveryBusy]=useState(false),[thumbnailRecoveryMessage,setThumbnailRecoveryMessage]=useState('');
+ const [authorRecoveryBusy,setAuthorRecoveryBusy]=useState(false),[authorRecoveryPreview,setAuthorRecoveryPreview]=useState(null),[authorRecoveryNotice,setAuthorRecoveryNotice]=useState('');
+ const [authorRefreshKey,setAuthorRefreshKey]=useState(0);
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
@@ -301,6 +303,28 @@ export default function CampaignPanel({campaignId=null}){
    setMediaPreview(response.data);
   }catch(e){setMediaPreviewError(e.response?.data?.detail||e.message||'Preview unavailable')}
   finally{setMediaPreviewBusy(false)}
+ }
+ async function recoverAuthors(apply=false){
+  if(!selected||authorRecoveryBusy)return;
+  if(apply&&!authorRecoveryPreview)return;
+  setAuthorRecoveryBusy(true);setAuthorRecoveryNotice('');
+  try{
+   const r=await base44.functions.invoke('socialListening',{
+    action:apply?'campaignAuthorRecoveryApply':'campaignAuthorRecoveryPreview',
+    id:selected.id,data:apply?{confirm_saved_metadata_only:true}:{}
+   });
+   const report=r.data||{};
+   setAuthorRecoveryPreview(report);
+   setAuthorRecoveryNotice(apply
+    ?'Recovered '+report.recovered+' saved author labels; '+report.unresolved+' remain unavailable. No provider credits used.'
+    :'From '+report.scanned+' stored posts: '+report.already_named+' already named, '+report.recoverable+' safely recoverable, '+report.unresolved+' unavailable in saved metadata.');
+   if(apply){
+    const latest=await base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{}});
+    setEvidence(latest.data.evidence||[]);
+    setAuthorRefreshKey(k=>k+1);
+   }
+  }catch(e){setAuthorRecoveryNotice(e.response?.data?.detail||e.message||'Could not check saved authors')}
+  finally{setAuthorRecoveryBusy(false)}
  }
  async function recoverThumbnails(){
   if(!selected||thumbnailRecoveryBusy)return;
@@ -586,7 +610,7 @@ export default function CampaignPanel({campaignId=null}){
     {humanVerifiedError&&<p role="alert" className="mt-2 text-red-700">{humanVerifiedError}</p>}
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
-    {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id}/>}
+    {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id} refreshKey={authorRefreshKey}/>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)+"&v=116.3"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 
@@ -648,7 +672,13 @@ export default function CampaignPanel({campaignId=null}){
   <p>{mediaPreview.counts?.post_url_available||0} eligible Instagram post URLs. Estimated post-detail requests: {mediaPreview.potential_calls||0}; estimated maximum at 1 credit each: {mediaPreview.potential_credit_estimate||0} credits.</p>
   <p className="text-amber-800">Image-field availability has not been validated. Paid enrichment is disabled. No SocialCrawl credits are used by this preview.</p>
  </div>}
- <button type="button" className="intel-ghost text-xs" disabled={thumbnailRecoveryBusy} onClick={recoverThumbnails}>{thumbnailRecoveryBusy?'Checking images…':'Recover stored thumbnails (free)'}</button>
+ <div className="flex flex-wrap items-center gap-2">
+  <button type="button" className="intel-ghost text-xs" disabled={authorRecoveryBusy} onClick={()=>recoverAuthors(false)}>{authorRecoveryBusy?'Checking authors…':'Preview author recovery (free)'}</button>
+  {authorRecoveryPreview?.recoverable>0&&<button type="button" className="intel-button text-xs" disabled={authorRecoveryBusy} onClick={()=>recoverAuthors(true)}>Recover {authorRecoveryPreview.recoverable} saved author labels</button>}
+  <button type="button" className="intel-ghost text-xs" disabled={thumbnailRecoveryBusy} onClick={recoverThumbnails}>{thumbnailRecoveryBusy?'Checking images…':'Recover stored thumbnails (free)'}</button>
+ </div>
+ {authorRecoveryNotice&&<p role="status" className="text-xs text-slate-600">{authorRecoveryNotice}</p>}
+ <p className="text-xs text-slate-500">Author recovery checks the captured post or comment's own metadata and supported post permalinks. It never guesses an identity or looks up a parent post's commenter. Paid SocialCrawl lookups remain disabled.</p>
  {thumbnailRecoveryMessage&&<p className="text-xs text-slate-600" role="status">{thumbnailRecoveryMessage}</p>}
  <div className="flex flex-wrap items-end gap-2"><label className="text-xs">Sentiment batch size<select aria-label="Sentiment batch size" className="intel-input mt-1" value={sentimentBatchSize} disabled={aiBusy} onChange={e=>{setSentimentBatchSize(Number(e.target.value));setBatchPreview(null)}}>{[1,5,10,20].map(n=><option key={n} value={n}>{n} posts</option>)}</select></label><button type="button" className="intel-ghost text-xs" disabled={aiBusy} onClick={checkBatch}>Preview sentiment AI (free)</button></div>
  {batchPreview&&<div className="rounded-md bg-slate-50 p-3 text-xs space-y-2"><p>{batchPreview.estimated_ai_calls} potentially billable OpenAI requests for existing posts (up to {batchPreview.sample_limit}; no new crawl). Token costs are unknown. No processing starts until you confirm.</p><button type="button" disabled={aiBusy||!batchPreview.estimated_ai_calls} className="intel-button" onClick={runBatch}>Confirm sentiment analysis</button></div>}

@@ -896,11 +896,12 @@ const fullInterfaceId={
   'use strict';
   const labels={...radarId,...customId,...fullInterfaceId,...expandedDrawerId};
   let locale='en';
-  const originals=new WeakMap(),rendered=new WeakMap();
+  const originals=new WeakMap(),rendered=new WeakMap(),requested=new WeakMap();
+  const fallback=window.BAWASLUUiTranslator;
   const attrOriginals=new WeakMap(),attrRendered=new WeakMap();
   const attributes=['placeholder','title','aria-label','aria-description','aria-placeholder','data-placeholder','alt'];
   const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','SVG','PATH']);
-  const excluded='[data-i18n-exempt],[data-original-content],.issue-source-description,.whitespace-pre-wrap,[data-post],[data-source-body],pre,code,textarea,[contenteditable]';
+  const excluded='[data-i18n-exempt],[data-original-content],.issue-source-description,.whitespace-pre-wrap,.source p,[data-post-text],[data-source-body],pre,code,textarea,[contenteditable]';
   function translate(value){
     if(locale!=='id'||typeof value!=='string')return value;
     const trimmed=value.trim();
@@ -953,6 +954,14 @@ const fullInterfaceId={
         const next=translate(english);
         if(current!==next)node.nodeValue=next;
         rendered.set(node,next);
+        if(locale!=='id'){requested.delete(node);continue;}
+        if(next!==english||!fallback?.suitable(english))continue;
+        if(requested.get(node)===english)continue;
+        requested.set(node,english);
+        fallback.request(english,value=>{
+          if(locale!=='id'||!node.isConnected||originals.get(node)!==english||!value)return;
+          node.nodeValue=value;rendered.set(node,value);
+        });
       }else if(node.nodeType===1&&!skip(node)){
         let saved=attrOriginals.get(node),last=attrRendered.get(node);
         if(!saved){saved={};attrOriginals.set(node,saved);}
@@ -964,6 +973,15 @@ const fullInterfaceId={
           const next=translate(saved[name]);
           if(next!==current)node.setAttribute(name,next);
           last[name]=next;
+          const requestKey=name+':requested';
+          if(locale!=='id'){delete last[requestKey];continue;}
+          if(next!==saved[name]||!fallback?.suitable(saved[name])||last[requestKey]===saved[name])continue;
+          last[requestKey]=saved[name];
+          const source=saved[name];
+          fallback.request(source,value=>{
+            if(locale!=='id'||!node.isConnected||saved[name]!==source||!value)return;
+            node.setAttribute(name,value);last[name]=value;
+          });
         }
         // Button labels are UI; never change free-form or source input values.
         if(node.tagName==='INPUT'&&['button','submit','reset'].includes(node.type)){
@@ -979,7 +997,7 @@ const fullInterfaceId={
   // Translate saved Command Centre intelligence summaries, never source posts.
   const summaryOriginal=new WeakMap(),summaryLast=new WeakMap(),summaryCache=new Map();
   function translateSummaries(){
-    document.querySelectorAll('[data-ai-summary],[data-ai-title],#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive,#strategy').forEach(el=>{
+    document.querySelectorAll('[data-ai-summary],[data-ai-title],[data-ai-theme],#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive,#strategy').forEach(el=>{
       if(!el.hasAttribute('data-i18n-exempt'))el.setAttribute('data-i18n-exempt','');
       const current=el.textContent||'';
       if(!summaryOriginal.has(el)||current!==summaryLast.get(el))summaryOriginal.set(el,current);
@@ -1049,6 +1067,7 @@ const fullInterfaceId={
       for(const [key,value] of summaryCache)if(value==='failed')summaryCache.delete(key);
     }
     locale=next;
+    if(locale==='id')fallback?.resetFailures();
     if(locale==='en')document.querySelectorAll('[data-translation-status]').forEach(el=>el.remove());
     document.documentElement.lang=locale;
     schedule();

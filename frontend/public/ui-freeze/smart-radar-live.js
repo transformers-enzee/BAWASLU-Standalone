@@ -492,7 +492,7 @@
     } catch(error) {model.history_error=error.message;}
     finally {
       model.history_loading=false;
-      if($('#historyLoading') && ['Finding Details','Rincian Isu'].includes($('#drawerTitle')?.textContent))
+      if($('#historyLoading') && $('#overlay')?.classList.contains('open'))
         ui.refreshDrawer?.();
     }
   };
@@ -508,8 +508,7 @@
       const model=await fetchFinding(id);
       if(!model)throw Error('Finding not found');
       if($('#drawerBody').dataset.findingRequest!==sequence ||
-         !$('#overlay').classList.contains('open') ||
-         !['Finding Details','Rincian Isu'].includes($('#drawerTitle').textContent))return;
+         !$('#overlay').classList.contains('open'))return;
       ui.openFindingOriginal(id,origin);
       $('#drawerBody').dataset.findingRequest=sequence;
       const originals=$('#drawerBody').querySelectorAll('.source');

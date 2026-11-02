@@ -338,7 +338,13 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
  const locationsFor=x=>signalNames(x.location_signals).map(normalizedLocation);
  const structuredPlaces=x=>(x.location_signals||[]).filter(s=>s&&typeof s==='object'&&s.province&&s.regency_city).map(s=>({province:normalizedLocation(s.province),regency:String(s.regency_city).trim()}));
- const canonicalCandidate=name=>{const raw=String(name||'').trim(),key=raw.toLocaleLowerCase('id-ID').replace(/^@/,'').replace(/[_\-.\s]+/g,'');return {prabowo:'Prabowo Subianto',prabowosubianto:'Prabowo Subianto',gibran:'Gibran Rakabuming Raka',gibranrakabuming:'Gibran Rakabuming Raka',gibranrakabumingraka:'Gibran Rakabuming Raka',anies:'Anies Baswedan',anis:'Anies Baswedan',aniesbaswedan:'Anies Baswedan',anisbaswedan:'Anies Baswedan',ganjar:'Ganjar Pranowo',ganjarpranowo:'Ganjar Pranowo',jokowi:'Joko Widodo',jokowidodo:'Joko Widodo',cakimin:'Muhaimin Iskandar',muhaiminiskandar:'Muhaimin Iskandar',cindymonicaid:'Cindy Monica',cindymonica:'Cindy Monica'}[key]||raw};
+ const canonicalCandidate=name=>{
+  const raw=String(name||'').trim().replace(/\\s+/g,' ');
+  const key=raw.toLocaleLowerCase('id-ID').replace(/^@/,'').replace(/[_\\-.\\s]+/g,'');
+  const known={ahok:'Ahok',basukitjahajapurnama:'Ahok',basukitpurnama:'Ahok',prabowo:'Prabowo Subianto',prabowosubianto:'Prabowo Subianto',gibran:'Gibran Rakabuming Raka',gibranrakabuming:'Gibran Rakabuming Raka',gibranrakabumingraka:'Gibran Rakabuming Raka',anies:'Anies Baswedan',anis:'Anies Baswedan',aniesbaswedan:'Anies Baswedan',anisbaswedan:'Anies Baswedan',ganjar:'Ganjar Pranowo',ganjarpranowo:'Ganjar Pranowo',jokowi:'Joko Widodo',jokowidodo:'Joko Widodo',cakimin:'Muhaimin Iskandar',muhaiminiskandar:'Muhaimin Iskandar',cindymonicaid:'Cindy Monica',cindymonica:'Cindy Monica',dedimulyadi:'Dedi Mulyadi',purbayayudhisadewa:'Purbaya Yudhi Sadewa'};
+  if(known[key])return known[key];
+  return raw.toLocaleLowerCase('id-ID').replace(/(^|[\\s-])([a-z\\p{L}])/gu,(_,space,letter)=>space+letter.toLocaleUpperCase('id-ID'));
+ };
  const candidatesFor=x=>[...new Set(signalNames(x.candidate_signals).map(canonicalCandidate).filter(name=>name&&!name.startsWith('@')&&(!/^[a-z0-9_-]+[.][a-z0-9._-]+$/i.test(name)||name==='Cindy Monica')))];
  const unlocatedCount=useMemo(()=>findings.filter(x=>locationsFor(x).length===0).length,[findings]);
  const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);

@@ -41,10 +41,8 @@ Use short bullet points only when multiple findings or action items genuinely be
 Use **bold** sparingly for important source-grounded phrases, figures, and conclusions.
 For simple questions, prefer ordinary paragraphs; never force a list or decorative emphasis. Match the question's language
 (usually natural Indonesian; use English when asked in English). Give a crisp answer first,
-then provide detail only when it improves the answer. Do not force a fixed number of findings,
-interpretations, next steps or limitations. Use **bold** for meaningful emphasis, and Markdown tables
-only for genuine side-by-side comparisons or structured numerical evidence. Prefer natural prose
-for ordinary questions. Avoid repetitive headings,
+then 2-5 specific findings, an interpretation of patterns/drivers where supported, and
+practical monitoring/verification next steps when appropriate. Avoid repetitive headings,
 generic boilerplate, and superficial restatement of source headlines.
 
 EVIDENCE POLICY:
@@ -178,33 +176,17 @@ def _safe_output(result, allowed):
     return result
 
 def answer_text(result, has_evidence):
-    """Natural-length response; never impose a five-section template."""
-    answer=str(result.get("direct_answer") or "").strip()
-    observations=result.get("observations") or []
-    interpretation=str(result.get("interpretation") or "").strip()
-    checks=result.get("next_checks") or []
-    limitations=result.get("limitations") or []
-    parts=[answer] if answer else []
-    # Additional findings are useful as bullets only for a genuine set of
-    # independent observations; one observation belongs in flowing prose.
-    if len(observations)>1:
-        parts.append("\n".join("- "+str(x) for x in observations))
-    elif observations:
-        parts.append(str(observations[0]))
-    if interpretation and interpretation.casefold() not in answer.casefold():
-        parts.append(interpretation)
-    if checks:
-        parts.append(("Suggested next steps:\n" if len(checks)>1 else "")+
-                     "\n".join("- "+str(x) for x in checks) if len(checks)>1 else str(checks[0]))
-    # Surface a limitation when it changes the interpretation. Avoid repeating
-    # generic evidence disclaimers after every answer.
-    if limitations:
-        useful=[str(x) for x in limitations if str(x).strip() and
-                str(x).casefold() not in answer.casefold()]
-        if useful and has_evidence:
-            parts.append(" ".join(useful[:2]))
-    return "\n\n".join(x for x in parts if x)
-
+    chunks = [str(result.get("direct_answer") or "").strip()]
+    def section(name, values):
+        if values:
+            chunks.append(name + "\n" + "\n".join("- " + x for x in values))
+    section("TEMUAN UTAMA" if has_evidence else "POIN PENTING", result.get("observations") or [])
+    if result.get("interpretation"):
+        chunks.append(("INTERPRETASI / KONTEKS" if has_evidence else "KONTEKS") +
+                      "\n" + result["interpretation"])
+    section("LANGKAH TINDAK LANJUT", result.get("next_checks") or [])
+    section("BATASAN DATA", result.get("limitations") or [])
+    return "\n\n".join(x for x in chunks if x)
 
 def generate(question, previous, evidence, mode, history=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()

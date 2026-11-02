@@ -9,8 +9,6 @@ export default function AssistantAnswer({text}){
  const sections=String(text||'').split(/\n\n+/);
  return <div className="space-y-4" data-i18n-exempt>{sections.map((section,i)=>{
   const lines=section.split('\n'),titled=headings.includes(lines[0]);
-  const table=lines.length>=2&&lines[0].trim().startsWith('|')&&/^\\s*\\|?[\\s:|-]+\\|?\\s*$/.test(lines[1]);
-  if(table){const parse=x=>x.trim().replace(/^\\||\\|$/g,'').split('|').map(v=>v.trim());const head=parse(lines[0]);const body=lines.slice(2).filter(x=>x.includes('|')).map(parse);return <div key={i} className="overflow-x-auto rounded-lg border border-[#ecdedd]"><table className="w-full min-w-[360px] text-left text-sm"><thead className="bg-[#fbf3f1]"><tr>{head.map((x,k)=><th key={k} scope="col" className="px-3 py-2 font-semibold text-[#801b24]">{inline(x)}</th>)}</tr></thead><tbody>{body.map((row,j)=><tr key={j} className="border-t border-[#ecdedd]">{head.map((_,k)=><td key={k} className="px-3 py-2">{inline(row[k]||'')}</td>)}</tr>)}</tbody></table></div>}
   const content=titled?lines.slice(1):lines;
   const isBullet=line=>/^\s*[-*] \S/.test(line),isNumber=line=>/^\s*\d+[.)] \S/.test(line);
   return <section key={i} className={i?'border-t border-[#e4e9ef] pt-3':''}>

@@ -154,4 +154,15 @@ window.fetch=async (input,init={})=>{
  if(u.origin===location.origin&&!/\/api\//.test(u.pathname))return original(input,init);
  return response({detail:'Blocked: read-only demo network isolation'},403);
 };
+// Defense in depth: catch any future library that tries to bypass the demo fetch adapter.
+const demoXhrOpen=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(method,url,...rest){
+ const target=new URL(String(url||''),location.href);
+ if(target.pathname.startsWith('/api/')||target.origin!==location.origin)
+  throw new Error('Demo mode blocks direct API and external network requests');
+ return demoXhrOpen.call(this,method,url,...rest);
+};
+try{
+ if(navigator.sendBeacon)navigator.sendBeacon=()=>false;
+}catch(_){}
 window.__BAWASLU_DEMO_RESET__=()=>{additionalCampaigns.length=0;reviewState={};};

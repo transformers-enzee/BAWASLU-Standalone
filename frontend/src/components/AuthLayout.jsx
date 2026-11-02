@@ -14,14 +14,12 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
           <div className="overflow-hidden rounded-[22px] border border-[#dce5eb] bg-white shadow-[0_24px_70px_-42px_rgba(18,47,70,0.5)]">
             <div className="border-b border-[#e3ebef] bg-[#f7fafb] px-5 py-5 sm:px-9">
               <div className="flex items-center justify-center gap-3 sm:gap-5" aria-label="BAWASLU and NADICOM">
-                <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-                  <img src="/bawaslu-emblem.svg" alt="BAWASLU emblem" className="h-[68px] w-[68px] shrink-0 object-contain sm:h-[76px] sm:w-[76px]" />
-                  <span className="text-[11px] font-extrabold tracking-[0.12em] text-[#122f46] sm:text-sm">BAWASLU</span>
+                <div className="flex min-w-0 flex-[1.4] items-center justify-center">
+                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="w-full max-w-[230px] object-contain" />
                 </div>
                 <div aria-hidden="true" className="h-14 w-px shrink-0 bg-[#c9d8df]" />
-                <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 sm:gap-2">
-                  <img src="/nadicom-symbol.webp" alt="" aria-hidden="true" className="h-[51px] w-[51px] shrink-0 object-contain sm:h-[60px] sm:w-[60px]" />
-                  <img src="/nadicom-wordmark.webp" alt="NADICOM" className="w-[104px] min-w-0 max-w-full object-contain sm:w-[135px]" />
+                <div className="flex min-w-0 flex-1 items-center justify-center">
+                  <img src="/nadicom-wordmark.webp" alt="NADICOM" className="w-full max-w-[152px] object-contain" />
                 </div>
               </div>
             </div>

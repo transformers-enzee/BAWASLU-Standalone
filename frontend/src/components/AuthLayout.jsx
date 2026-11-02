@@ -15,11 +15,11 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
             <div className="border-b border-[#e3ebef] bg-white px-5 py-4 sm:px-9" data-testid="login-brand-lockup">
               <div className="mx-auto grid h-[68px] w-full max-w-[420px] grid-cols-[minmax(0,1.35fr)_1px_minmax(0,1fr)] items-center gap-3 sm:gap-5" aria-label="BAWASLU and NADICOM">
                 <div className="flex h-[60px] min-w-0 items-center justify-center overflow-hidden">
-                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="h-[135.4px] w-[233px] max-w-none shrink-0 object-contain mix-blend-multiply" />
+                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="h-[127.3px] w-[219px] max-w-none shrink-0 object-contain mix-blend-multiply" />
                 </div>
                 <div aria-hidden="true" className="h-10 w-px self-center bg-[#a9b9c4]" />
                 <div className="flex min-w-0 items-center justify-center">
-                  <img src="/nadicom-wordmark.webp" alt="NADICOM" className="h-10 w-full max-w-[156px] object-contain mix-blend-multiply" />
+                  <img src="/nadicom-wordmark.webp" alt="NADICOM" className="h-10 w-full max-w-[164px] object-contain mix-blend-multiply" />
                 </div>
               </div>
             </div>

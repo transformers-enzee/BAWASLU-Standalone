@@ -110,7 +110,10 @@ def test_account_collection_does_not_inflate_dashboard_queues_or_command_centre(
             sentiment='NEGATIVE',candidate_signals_json='["Gibran"]'))
     db.commit()
     assert action(db,p,'campaignDashboard',{},cid)['evidence_count']==3
-    assert action(db,p,'campaignDashboard',{},cid)['sentiment']['Unclassified']==3
+    dashboard=action(db,p,'campaignDashboard',{},cid)
+    assert dashboard['sentiment']['Unclassified']==0
+    assert dashboard['sentiment_pending_count']==3
+    assert dashboard['topics_and_themes']['pending_assessment_mentions']==3
     assert action(db,p,'campaignSentimentBatchPreview',{},cid)['eligible_total']==3
     assert action(db,p,'campaignAssessmentBacklogPreview',
         {'sample_limit':20},cid)['unassessed']==3

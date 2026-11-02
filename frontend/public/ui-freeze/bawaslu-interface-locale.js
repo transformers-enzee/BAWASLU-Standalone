@@ -674,6 +674,36 @@ const customId={
 };
 
 
+const expandedDrawerId={
+  "Intelligence summary": "Ringkasan intelijen",
+  "Intelligence summary ·": "Ringkasan intelijen ·",
+  "Supporting Posts · Open →": "Unggahan Pendukung · Buka →",
+  "Open →": "Buka →",
+  "items": "item",
+  "item": "item",
+  "Saved Intelligence Inbox evidence · source drill-down": "Bukti Kotak Masuk Intelijen tersimpan · penelusuran sumber",
+  "Public Concerns": "Kekhawatiran Publik",
+  "Public Concern": "Kekhawatiran Publik",
+  "Electoral Operations": "Penyelenggaraan Pemilu",
+  "Needs Attention": "Perlu Perhatian",
+  "Pending Reviews": "Peninjauan Tertunda",
+  "Validation pending": "Menunggu validasi",
+  "Original Posts": "Unggahan Asli",
+  "Supporting Posts": "Unggahan Pendukung",
+  "Intelligence Insights — Supporting Posts": "Wawasan Intelijen — Unggahan Pendukung",
+  "View Details": "Lihat Rincian",
+  "Evidence": "Bukti",
+  "Follow-up:": "Tindak lanjut:",
+  "No original posts loaded": "Belum ada unggahan asli yang dimuat",
+  "No previous reviews yet.": "Belum ada peninjauan sebelumnya.",
+  "No matching intelligence available.": "Tidak ada intelijen yang sesuai.",
+  "Finding Details": "Rincian Isu",
+  "Source: saved Inbox assessment (not a legal determination)": "Sumber: penilaian Kotak Masuk tersimpan (bukan keputusan hukum)",
+  "Source:": "Sumber:",
+  "Sentiment:": "Sentimen:",
+  "Category:": "Kategori:",
+  "Open original source →": "Buka sumber asli →"
+};
 const fullInterfaceId={
   "BAWASLU · INTELLIGENCE COMMAND CENTER": "BAWASLU · PUSAT KOMANDO INTELIJEN",
   "◉ Command Centre": "◉ Pusat Komando",
@@ -752,7 +782,7 @@ const fullInterfaceId={
 
 (function(){
   'use strict';
-  const labels={...radarId,...customId,...fullInterfaceId};
+  const labels={...radarId,...customId,...fullInterfaceId,...expandedDrawerId};
   let locale='en';
   const originals=new WeakMap(),rendered=new WeakMap();
   const attrOriginals=new WeakMap(),attrRendered=new WeakMap();
@@ -764,6 +794,22 @@ const fullInterfaceId={
     const trimmed=value.trim();
     const direct=labels[trimmed];
     if(direct)return value.replace(trimmed,direct);
+    const summaryCount=trimmed.match(/^Intelligence summary\s*·\s*(\d+)\s+items?$/i);
+    if(summaryCount)return value.replace(trimmed,'Ringkasan intelijen · '+summaryCount[1]+' item');
+    const linkedCount=trimmed.match(/^(\d[\d.,]*)\s+Supporting Posts\s*·\s*Open\s*→$/i);
+    if(linkedCount)return value.replace(trimmed,linkedCount[1]+' Unggahan Pendukung · Buka →');
+    const cardCount=trimmed.match(/^(\d[\d.,]*)\s+(Issues Identified|Narratives)\s*·\s*(\d[\d.,]*)\s+Supporting Posts$/i);
+    if(cardCount)return value.replace(trimmed,cardCount[1]+' '+(cardCount[2]==='Narratives'?'Narasi':'Isu Teridentifikasi')+' · '+cardCount[3]+' Unggahan Pendukung');
+    const metaCount=trimmed.match(/^(\d[\d.,]*)\s+Supporting Posts\s*·\s*Open\s*→$/i);
+    if(metaCount)return value.replace(trimmed,metaCount[1]+' Unggahan Pendukung · Buka →');
+    if(/^INBOX-[^\s]+/.test(trimmed)){
+      return value.replace(/\bElectoral Operations\b/g,'Penyelenggaraan Pemilu')
+        .replace(/\bPublic Concerns\b/g,'Kekhawatiran Publik')
+        .replace(/\bPublic Concern\b/g,'Kekhawatiran Publik')
+        .replace(/\bBAWASLU Reputation\b/g,'Reputasi BAWASLU')
+        .replace(/ · all · /g,' · semua · ');
+    }
+
     // Labels with live counts are UI only. Never modify source evidence or status IDs.
     const countLabel=trimmed.match(/^(\d[\d.,]*)\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
     if(countLabel){
@@ -821,8 +867,8 @@ const fullInterfaceId={
   // Translate saved Command Centre intelligence summaries, never source posts.
   const summaryOriginal=new WeakMap(),summaryLast=new WeakMap(),summaryCache=new Map();
   function translateSummaries(){
-    document.querySelectorAll('[data-ai-summary],#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive,#strategy').forEach(el=>{
-      el.setAttribute('data-i18n-exempt','');
+    document.querySelectorAll('[data-ai-summary],[data-ai-title],#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive,#strategy').forEach(el=>{
+      if(!el.hasAttribute('data-i18n-exempt'))el.setAttribute('data-i18n-exempt','');
       const current=el.textContent||'';
       if(!summaryOriginal.has(el)||current!==summaryLast.get(el))summaryOriginal.set(el,current);
       const original=summaryOriginal.get(el)||'';
@@ -842,7 +888,8 @@ const fullInterfaceId={
           warning.style.cssText='display:block;margin-top:5px;font-size:11px;color:#9b443d';
           el.insertAdjacentElement('afterend',warning);
         }
-        warning.textContent='Terjemahan sementara tidak tersedia. Teks asli ditampilkan; pilih EN lalu ID untuk mencoba lagi.';
+        const errorText='Terjemahan sementara tidak tersedia. Teks asli ditampilkan; pilih EN lalu ID untuk mencoba lagi.';
+        if(warning.textContent!==errorText)warning.textContent=errorText;
       }
       const cached=summaryCache.get(original);
       if(cached==='pending')return;

@@ -58,7 +58,7 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=126.7' in html
+    assert 'bawaslu-interface-locale.js?build=126.9' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale
 
@@ -87,3 +87,19 @@ def test_display_translation_reuses_responses_api_without_reassessment(monkeypat
     assert calls[0][1]['model']=='gpt-6-luna'
     assert calls[0][1]['input'][1]['content']==source
     assert 'temperature' not in calls[0][1]
+
+def test_command_centre_saved_issue_title_localization_not_source_rewrite():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
+    locale=(root/'frontend/public/ui-freeze/bawaslu-interface-locale.js').read_text(encoding='utf-8')
+    # Three item cards, one finding title, and the source drill-down heading.
+    assert html.count('data-ai-title data-i18n-exempt')==5
+    assert html.count('data-ai-summary data-i18n-exempt')>=3
+    assert "'[data-ai-summary],[data-ai-title]" in locale
+    assert 'Ringkasan intelijen · ' in locale
+    assert 'Unggahan Pendukung · Buka →' in locale
+    assert 'Terjemahan sementara tidak tersedia.' in locale
+    # Original post descriptions remain untouched and linked to their source.
+    assert '<p>${E(p[2])}</p>' in html
+    assert 'class="issue-source-description"' in html

@@ -9,7 +9,7 @@ import InterfaceLanguageBridge from '@/components/intel/InterfaceLanguageBridge'
 export default function Shell(){
  const [open,setOpen]=useState(false),[deniedView,setDeniedView]=useState(false),[user,setUser]=useState(null),[access,setAccess]=useState(null),[error,setError]=useState('');
  const location=useLocation(),{language,setLanguage,t}=useLanguage();
- const logout=()=>base44.auth.logout(true);
+ const logout=()=>window.__BAWASLU_DEMO_REPLICA__?window.location.assign('/demo'):base44.auth.logout(true);
  useEffect(()=>{base44.auth.me().then(setUser).catch(()=>{});base44.functions.invoke('getMyEffectiveAccess',{}).then(r=>setAccess(r.data.access)).catch(e=>setError(e.response?.data?.error||'Unable to load BAWASLU access. Please reload.'))},[]);
  useEffect(()=>{setOpen(false);setDeniedView(false)},[location.pathname]);
  if(error)return <div role="alert" className="p-6">{error}</div>;

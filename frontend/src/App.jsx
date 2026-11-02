@@ -110,7 +110,7 @@ function App() {
       <UiLanguageLayer />
       <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
+        <Router basename={/^\/demo(?:\/|$)/.test(window.location.pathname)?'/demo':undefined}>
           <ScrollToTop />
           <AuthenticatedApp />
         </Router>

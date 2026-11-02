@@ -2,35 +2,22 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const base=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const read=p=>fs.readFileSync(resolve(base,p),'utf8');
-const main=read('src/main.jsx'),app=read('src/demo/DemoApp.jsx'),fixtures=read('src/demo/data.js');
-const css=read('src/demo/demo.css');
-assert.match(main,/^const isDemo\s*=\s*\/\^\\\/demo/m);
-assert.ok(main.includes("import('@/demo/DemoApp.jsx')"));
-assert.ok(main.includes("import('@/App.jsx')"));
-assert.ok(main.indexOf("import('@/demo/DemoApp.jsx')")<main.indexOf("import('@/App.jsx')"));
-assert.ok(!main.includes("import App from"));
-assert.ok(main.includes("connect-src 'none'"));
-assert.ok(main.includes("frame-src 'none'"));
-assert.ok(fixtures.includes('DEMO-001')&&fixtures.includes('sampleCampaigns'));
-assert.ok(app.includes("useState('id')")&&app.includes("setLanguage('en')"));
-assert.ok(app.includes("setLanguage('id')")&&app.includes('walkthrough'));
-assert.ok(app.includes("Reset Demo")&&app.includes('guideStep'));
-assert.ok(app.includes('saveReview')&&app.includes('setReviews'));
-assert.ok(app.includes('W(m.reply)')&&app.includes('text=bi('),'Assistant replies must switch EN/ID without new analysis');
-assert.ok(app.includes('openPost')&&app.includes('setTracked'));
-assert.ok(css.includes('.d-sidebar')&&css.includes('.d-overlay'));
-for(const [name,s] of [['main',main],['demo',app],['fixtures',fixtures],['css',css]]){
- for(const forbidden of [
-  /\bfetch\s*\(/,/XMLHttpRequest/,/\bWebSocket\b/,/navigator\.sendBeacon/,
-  /\blocalStorage\b/,/\bsessionStorage\b/,/supabase/i,
-  /@\/api\//,/\bbase44\b/,/https?:\/\//
- ]){
-  // Comments about safety aren't an executable operation; still reject explicit
-  // network primitives in source to guard future development of this demo.
-  if(name!=='main'||forbidden.source!=='@\\/api\\/')assert.ok(!forbidden.test(s),name+' contains prohibited network/storage primitive '+forbidden);
- }
-}
-assert.equal((fixtures.match(/id:'DEMO-/g)||[]).length,12);
-console.log('PASS demo isolation: separate /demo entry, bilingual, local data, simulated state, 8-step guide, zero network/storage primitives');
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const read=path=>fs.readFileSync(resolve(root,path),'utf8');
+const main=read('src/main.jsx'),bridge=read('src/demo/realBridge.js'),snapshot=read('src/demo/currentSnapshot.js');
+const app=read('src/App.jsx'),radar=read('src/pages/SmartRadar.jsx'),campaign=read('src/components/intel/CampaignPanel.jsx');
+assert.ok(main.includes("import('@/demo/realBridge.js')"));
+assert.ok(main.includes("return import('@/App.jsx')"));
+assert.ok(app.includes("window.location.pathname)?'/demo'"),'Real production Router must use demo basename');
+assert.ok(radar.includes('/demo/smart-radar.html'),'Exact real Smart Radar HTML required');
+assert.ok(campaign.includes('/demo/watchlist.html'),'Exact real Watchlist HTML required');
+assert.ok(bridge.includes("window.fetch=async"),'Intercept browser API calls');
+assert.ok(bridge.includes("if(u.pathname.startsWith('/api/'))return response(localApi(url,init))"));
+assert.ok(bridge.includes("Blocked: read-only demo network isolation"));
+assert.ok(!bridge.includes('supabase-js')&&!bridge.includes('service_role'));
+assert.ok(snapshot.includes('DEMO-001')&&snapshot.includes('DEMO-300'));
+assert.ok(read('public/demo/smart-radar.html').includes('id="bawaslu-demo-snapshot"'));
+assert.ok(read('public/demo/smart-radar.html').includes('smart-radar-live.js'));
+assert.ok(read('public/demo/watchlist.html').includes('watchlist-live.js'));
+assert.ok(read('src/pages/IntelligenceAssistant.jsx').includes("'DEMO-SNAPSHOT'"));
+console.log('PASS real UI replica: production App/Shell/Smart Radar/Watchlist; 300 read-only snapshot records; API write isolation');

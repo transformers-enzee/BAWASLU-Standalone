@@ -2,20 +2,16 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import '@/index.css'
 
-// The public demo is a separate entry branch: it never imports AuthProvider,
-// account clients, production services, live routes, or AI integrations.
-const isDemo = /^\/demo(?:\/|$)/.test(window.location.pathname)
-if (isDemo) {
-  // Browser-enforced isolation: block all application network connections and embeds.
-  const demoCsp=document.createElement('meta')
-  demoCsp.httpEquiv='Content-Security-Policy'
-  demoCsp.content="default-src 'self'; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'"
-  document.head.appendChild(demoCsp)
-  import('@/demo/DemoApp.jsx').then(({default:DemoApp})=>{
-    ReactDOM.createRoot(document.getElementById('root')).render(<DemoApp />)
-  })
-} else {
-  import('@/App.jsx').then(({default:App})=>{
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />)
-  })
+const demo=/^\/demo(?:\/|$)/.test(window.location.pathname);
+if(demo){
+  // Import the API isolation adapter before importing the real application.
+  import('@/demo/realBridge.js').then(()=>{
+    const csp=document.createElement('meta');
+    csp.httpEquiv='Content-Security-Policy';
+    csp.content="default-src 'self'; connect-src 'self'; form-action 'none'; object-src 'none'; frame-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'";
+    document.head.appendChild(csp);
+    return import('@/App.jsx');
+  }).then(({default:App})=>ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
+}else{
+  import('@/App.jsx').then(({default:App})=>ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
 }

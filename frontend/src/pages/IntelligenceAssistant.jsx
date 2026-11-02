@@ -7,7 +7,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
 async function historyRequest(path='',method='GET',body=null){
- const token=window.localStorage.getItem('bawaslu_access_token')||'';
+ const token=window.__BAWASLU_DEMO_REPLICA__?'DEMO-SNAPSHOT':(window.localStorage.getItem('bawaslu_access_token')||'');
  if(!token)throw Error('Your login session has expired. Sign in to access conversation history.');
  const response=await fetch('/api/assistant-history'+path,{
   method,cache:'no-store',

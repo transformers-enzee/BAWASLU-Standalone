@@ -674,9 +674,85 @@ const customId={
 };
 
 
+const fullInterfaceId={
+  "BAWASLU · INTELLIGENCE COMMAND CENTER": "BAWASLU · PUSAT KOMANDO INTELIJEN",
+  "◉ Command Centre": "◉ Pusat Komando",
+  "Know what is happening. Know what needs your attention.": "Ketahui apa yang sedang terjadi. Ketahui hal yang perlu Anda tindak lanjuti.",
+  "↗ Open Candidate Watchlist V2.2": "↗ Buka Daftar Pantauan Kandidat V2.2",
+  "☷ Action Desk": "☷ Meja Tindak Lanjut",
+  "Action Desk": "Meja Tindak Lanjut",
+  "Five Intelligence Players": "Lima Komponen Intelijen",
+  "Four Intelligence Players": "Empat Komponen Intelijen",
+  "Command Centre Intelligence Players": "Komponen Intelijen Pusat Komando",
+  "Information collections show detected issues; Needs Attention highlights pending decisions; Validated Intelligence records officer decisions.": "Kumpulan informasi menampilkan isu yang terdeteksi; Perlu Perhatian menyoroti keputusan tertunda; Intelijen Tervalidasi mencatat keputusan petugas.",
+  "Select a box for details": "Pilih kotak untuk melihat rincian",
+  "INFORMATION: Potential Violations · Public Concerns · Emerging Narratives   |   ACTION: Needs Attention   |   REVIEWED HISTORY: Validated Intelligence": "INFORMASI: Potensi Pelanggaran · Kekhawatiran Publik · Narasi Berkembang   |   TINDAKAN: Perlu Perhatian   |   RIWAYAT PENINJAUAN: Intelijen Tervalidasi",
+  "INFORMATION: Public Concerns · Emerging Narratives   |   ACTION: Needs Attention   |   REVIEWED HISTORY: Validated Intelligence": "INFORMASI: Kekhawatiran Publik · Narasi Berkembang   |   TINDAKAN: Perlu Perhatian   |   RIWAYAT PENINJAUAN: Intelijen Tervalidasi",
+  "Review Needed": "Perlu Peninjauan",
+  "No Findings": "Tidak Ada Temuan",
+  "For Awareness": "Untuk Informasi",
+  "Reviewed": "Sudah Ditinjau",
+  "Issues Identified": "Isu Teridentifikasi",
+  "Narratives": "Narasi",
+  "Supporting Posts": "Unggahan Pendukung",
+  "View intelligence & original posts →": "Lihat intelijen & unggahan asli →",
+  "Regenerate": "Buat Ulang",
+  "Intelligence Insights — Supporting Posts": "Wawasan Intelijen — Unggahan Pendukung",
+  "Intelligence overview · Saved evidence": "Ringkasan intelijen · Bukti tersimpan",
+  "Intelligence summary": "Ringkasan intelijen",
+  "Finding Details": "Rincian Isu",
+  "Source evidence could not be loaded.": "Bukti sumber tidak dapat dimuat.",
+  "Opening saved evidence…": "Membuka bukti tersimpan…",
+  "Loading original Inbox posts and supporting source links.": "Memuat unggahan asli dari Kotak Masuk dan tautan sumber pendukung.",
+  "Retry opening this record →": "Coba buka catatan ini lagi →",
+  "No review action has been submitted.": "Belum ada tindakan peninjauan yang dikirim.",
+  "Original Posts": "Unggahan Asli",
+  "Previous Reviews & Updates": "Peninjauan & Pembaruan Sebelumnya",
+  "Loading saved review history…": "Memuat riwayat peninjauan tersimpan…",
+  "No previous reviews yet.": "Belum ada peninjauan sebelumnya.",
+  "Your Decision": "Keputusan Anda",
+  "Review note (optional)": "Catatan peninjauan (opsional)",
+  "Update Investigation": "Perbarui Penyelidikan",
+  "Progress note": "Catatan perkembangan",
+  "Next follow-up (optional)": "Tindak lanjut berikutnya (opsional)",
+  "Reason for reopening": "Alasan membuka kembali",
+  "Are you sure you want to submit this decision?": "Yakin ingin mengirim keputusan ini?",
+  "Yes, Confirm": "Ya, Konfirmasi",
+  "Yes, Save Update": "Ya, Simpan Pembaruan",
+  "Close": "Tutup",
+  "Cancel": "Batal",
+  "Open →": "Buka →",
+  "Inspect original posts →": "Lihat unggahan asli →",
+  "Nothing pending in this section.": "Tidak ada item tertunda di bagian ini.",
+  "Your assigned reviews, investigations and monitored issues. This is separate from the quality-control team.": "Daftar peninjauan, penyelidikan, dan isu pantauan yang ditugaskan kepada Anda. Terpisah dari tim pengendalian mutu.",
+  "Your previous decisions and notes are saved.": "Keputusan dan catatan sebelumnya tersimpan.",
+  "Human review is required before any legal conclusion.": "Peninjauan petugas diperlukan sebelum menarik kesimpulan hukum.",
+  "Open original source →": "Buka sumber asli →",
+  "Source evidence": "Bukti sumber",
+  "Nothing to display yet.": "Belum ada yang dapat ditampilkan.",
+  "No officer-reviewed intelligence yet. This section fills after reviews are submitted.": "Belum ada intelijen yang ditinjau petugas. Bagian ini akan terisi setelah peninjauan dikirim.",
+  "No matching intelligence in the current selection.": "Tidak ada intelijen yang cocok dengan pilihan saat ini.",
+  "No high-priority findings awaiting a decision. Other assigned reviews can still be found in Action Desk.": "Tidak ada temuan prioritas tinggi yang menunggu keputusan. Peninjauan lain tersedia di Meja Tindak Lanjut.",
+  "Monitoring": "Pemantauan",
+  "Investigating": "Dalam Penyelidikan",
+  "To Review": "Perlu Ditinjau",
+  "Needs Action": "Perlu Tindakan",
+  "Open matching sample original posts": "Buka contoh unggahan asli yang cocok",
+  "Open example posts for conversation activity": "Buka contoh unggahan aktivitas percakapan",
+  "View Details ▾": "Lihat Rincian ▾",
+  "Show Less ▴": "Tampilkan Lebih Sedikit ▴",
+  "Officer decision saved": "Keputusan petugas tersimpan",
+  "Please add a short reason or reference first.": "Tambahkan alasan singkat atau referensi terlebih dahulu.",
+  "Command Centre data temporarily unavailable": "Data Pusat Komando sementara tidak tersedia",
+  "Retry loading": "Coba Muat Lagi",
+  "Review history unavailable:": "Riwayat peninjauan tidak tersedia:",
+  "All Topics": "Semua Topik",
+  "No source-linked references in this view; absence does not mean no election activity.": "Tidak ada referensi sumber tertaut pada tampilan ini; bukan berarti tidak ada kegiatan pemilu."
+};
+
 (function(){
   'use strict';
-  const labels={...radarId,...customId};
+  const labels={...radarId,...customId,...fullInterfaceId};
   let locale='en';
   const originals=new WeakMap(),rendered=new WeakMap();
   const attrOriginals=new WeakMap(),attrRendered=new WeakMap();
@@ -688,6 +764,15 @@ const customId={
     const trimmed=value.trim();
     const direct=labels[trimmed];
     if(direct)return value.replace(trimmed,direct);
+    // Labels with live counts are UI only. Never modify source evidence or status IDs.
+    const countLabel=trimmed.match(/^(\\d[\\d.,]*)\\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
+    if(countLabel){
+      const suffix=labels[countLabel[2]]||labels[countLabel[2].toLowerCase()]||countLabel[2];
+      return value.replace(trimmed,countLabel[1]+' '+suffix);
+    }
+    if(/^\\d[\\d.,]* Issues Identified\\s*·\\s*\\d[\\d.,]* Supporting Posts$/i.test(trimmed)){
+      return value.replace(trimmed,trimmed.replace(/Issues Identified/g,'Isu Teridentifikasi').replace(/Supporting Posts/g,'Unggahan Pendukung'));
+    }
     const count=trimmed.match(/^([0-9][0-9.,]*) (posts|mentions|records|supporting posts)$/i);
     if(count){
       const words={posts:'unggahan',mentions:'penyebutan',records:'catatan','supporting posts':'unggahan pendukung'};
@@ -736,7 +821,7 @@ const customId={
   // Translate saved Command Centre intelligence summaries, never source posts.
   const summaryOriginal=new WeakMap(),summaryLast=new WeakMap(),summaryCache=new Map();
   function translateSummaries(){
-    document.querySelectorAll('#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive').forEach(el=>{
+    document.querySelectorAll('[data-ai-summary],#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive,#strategy').forEach(el=>{
       el.setAttribute('data-i18n-exempt','');
       const current=el.textContent||'';
       if(!summaryOriginal.has(el)||current!==summaryLast.get(el))summaryOriginal.set(el,current);
@@ -747,11 +832,11 @@ const customId={
         summaryLast.set(el,original);return;
       }
       const cached=summaryCache.get(original);
+      if(cached==='pending'||cached==='failed')return;
       if(typeof cached==='string'){
         if(current!==cached)el.textContent=cached;
         summaryLast.set(el,cached);return;
       }
-      if(cached==='pending'||cached==='failed')return;
       summaryCache.set(original,'pending');
       const token=window.localStorage.getItem('bawaslu_access_token')||'';
       fetch('/api/presentation/translate',{method:'POST',cache:'no-store',

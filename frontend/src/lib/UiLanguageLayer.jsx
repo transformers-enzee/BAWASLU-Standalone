@@ -43,7 +43,7 @@ export default function UiLanguageLayer(){
     originalText.set(node,current);
    }
    const english=originalText.get(node)||'';
-   // Assistant summaries are presentation text, never source evidence. Allow longer\n   // generated summaries through the existing dictionary without re-running AI.\n   const summary=Boolean(element.closest?.('[data-assistant-message]'));\n   if(!english.trim()||english.length>(summary?4000:350))return;
+   // Assistant summaries are presentation text, never source evidence. Allow longer\n   // generated summaries through the existing dictionary without re-running AI.\n   const summary=Boolean(element.closest?.('[data-assistant-message]'));\n   if(!english.trim()||english.length>(summary?4000:1800))return;
    const intended=translate(english);
    if(current!==intended)node.nodeValue=intended;
    lastRenderedText.set(node,intended);

@@ -44,3 +44,17 @@ def test_saved_sentiment_and_geography_still_attached_to_same_source():
     assert f['geo_signal_counts']=={'Nusa Tenggara Timur':1}
     assert f['verified_incident_counts']=={}
     assert f['posts'][0]['canonical_source_id']=='social:1'
+
+def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    locale=(root/'frontend/public/ui-freeze/bawaslu-interface-locale.js').read_text(encoding='utf-8')
+    html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
+    assert locale.index("if(cached==='pending'||cached==='failed')return;") < locale.index("if(typeof cached==='string')")
+    assert "Know what is happening. Know what needs your attention." in locale
+    assert "#strategy" in locale
+    assert '[data-ai-summary]' in locale
+    assert 'data-ai-summary' in html
+    assert 'bawaslu-interface-locale.js?build=126.4' in html
+    assert "summaryCache.set(original,'pending')" in locale
+    assert "if(locale!=='id')" in locale

@@ -350,12 +350,19 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 db.rollback()
                 if job:
                     job=db.get(AIAssessmentJob,job.id)
-                    job.state='FAILED' if target_result_id is not None or job.attempts>=3 else 'PENDING'
+                    # The provider may already have charged for this attempt.
+                    # Quarantine it rather than returning it to PENDING and
+                    # accidentally charging a second time on resume.
+                    job.state='FAILED'
                     job.last_error=type(exc).__name__
                     job.updated_at=datetime.utcnow()
                     db.commit()
-                log.exception('AI screening stopped; assessment job retained for review: %s',type(exc).__name__)
-                break
+                log.exception('AI screening request failed; uncertain request quarantined: %s',type(exc).__name__)
+                # Keep going on an isolated malformed result. Stop on quota,
+                # network or provider outage to avoid flooding paid requests.
+                if isinstance(exc,(httpx.TimeoutException,httpx.TransportError,httpx.HTTPStatusError)):
+                    break
+                continue
     finally:
         db.close()
 

@@ -11,7 +11,7 @@ const sourceSelectors=[
  '[data-i18n-exempt]','[data-original-content]','pre','code','textarea',
  '[contenteditable]','[data-issue-content]','.issue-source-description',
  '.whitespace-pre-wrap','.source-post-text','[data-source-body]',
- '[data-assistant-message]','[data-user-message]'
+ '[data-user-message]'
 ].join(',');
 const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','SVG','PATH']);
 const attributes=['placeholder','title','aria-label','aria-description','aria-placeholder','data-placeholder','alt'];
@@ -43,7 +43,7 @@ export default function UiLanguageLayer(){
     originalText.set(node,current);
    }
    const english=originalText.get(node)||'';
-   if(!english.trim()||english.length>350)return;
+   // Assistant summaries are presentation text, never source evidence. Allow longer\n   // generated summaries through the existing dictionary without re-running AI.\n   const summary=Boolean(element.closest?.('[data-assistant-message]'));\n   if(!english.trim()||english.length>(summary?4000:350))return;
    const intended=translate(english);
    if(current!==intended)node.nodeValue=intended;
    lastRenderedText.set(node,intended);

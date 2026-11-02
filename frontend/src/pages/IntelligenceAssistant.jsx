@@ -91,8 +91,8 @@ export default function IntelligenceAssistant(){
   }finally{setBusy(false)}
  }
  return <div className="max-w-[1300px] mx-auto space-y-5">
-  <header className="rounded-2xl bg-gradient-to-r from-[#132d45] to-[#a52a2f] px-6 py-7 text-white">
-   <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#b3e1d8]">{t('assistant_read_only')}</div>
+  <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] px-6 py-7 text-white">
+   <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">{t('assistant_read_only')}</div>
    <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_assistant')}</h1>
    <p className="text-sm text-[#d3e9e4] mt-2">{t('assistant_tagline')}</p>
    <p className="text-xs text-[#c6ded9] mt-2">Answers are limited to authorised intelligence. Review supporting records before any officer decision.</p>

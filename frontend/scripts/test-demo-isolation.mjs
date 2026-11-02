@@ -18,6 +18,7 @@ assert.ok(app.includes("useState('id')")&&app.includes("setLanguage('en')"));
 assert.ok(app.includes("setLanguage('id')")&&app.includes('walkthrough'));
 assert.ok(app.includes("Reset Demo")&&app.includes('guideStep'));
 assert.ok(app.includes('saveReview')&&app.includes('setReviews'));
+assert.ok(app.includes('W(m.reply)')&&app.includes('text=bi('),'Assistant replies must switch EN/ID without new analysis');
 assert.ok(app.includes('openPost')&&app.includes('setTracked'));
 assert.ok(css.includes('.d-sidebar')&&css.includes('.d-overlay'));
 for(const [name,s] of [['main',main],['demo',app],['fixtures',fixtures],['css',css]]){

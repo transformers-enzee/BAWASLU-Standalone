@@ -12,7 +12,7 @@ function Post({post}){
   <div className="min-w-0 flex-1">
    <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{post.author_display||'Source author unavailable'}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
    <p data-i18n-exempt className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||'No source text available'}</p>
-   <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#117c6c] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
+   <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#9f3033] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
   </div>
   <span title={'Saved sentiment: '+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
  </article>;

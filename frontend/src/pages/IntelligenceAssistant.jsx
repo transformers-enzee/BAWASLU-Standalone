@@ -91,7 +91,7 @@ export default function IntelligenceAssistant(){
   }finally{setBusy(false)}
  }
  return <div className="max-w-[1300px] mx-auto space-y-5">
-  <header className="rounded-2xl bg-gradient-to-r from-[#132d45] to-[#116b58] px-6 py-7 text-white">
+  <header className="rounded-2xl bg-gradient-to-r from-[#132d45] to-[#a52a2f] px-6 py-7 text-white">
    <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#b3e1d8]">{t('assistant_read_only')}</div>
    <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_assistant')}</h1>
    <p className="text-sm text-[#d3e9e4] mt-2">{t('assistant_tagline')}</p>
@@ -116,11 +116,11 @@ export default function IntelligenceAssistant(){
    <div className="min-w-0 space-y-4">
     <section className="intel-card p-4 md:p-6 space-y-5 min-h-[300px]" aria-live="polite">
      {!messages.length&&<div className="space-y-3">
-       <div className="flex gap-2 items-center"><MessageSquareText size={18} className="text-[#147b67]"/><p className="text-sm font-semibold">{t('try_asking')}</p></div>
+       <div className="flex gap-2 items-center"><MessageSquareText size={18} className="text-[#a52a2f]"/><p className="text-sm font-semibold">{t('try_asking')}</p></div>
        <div className="flex flex-wrap gap-2">{starters.map(starter=><button key={starter} type="button" disabled={busy||historyBusy} onClick={()=>ask(starter)} className="intel-ghost text-xs text-left">{starter}</button>)}</div>
      </div>}
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
-      <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#153b57] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
+      <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<AssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}<AssistantRecords records={m.records}/></>}
       </div>

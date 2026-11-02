@@ -244,7 +244,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 response=httpx.post(url,headers={'Authorization':'Bearer '+os.environ['OPENAI_API_KEY']},
                     json={'model':model,'temperature':0,'max_tokens':1500,'response_format':{'type':'json_object'},
                     'messages':[{'role':'system','content':RELEVANCE_SCREENING_INSTRUCTIONS},
-                    {'role':'user','content':json.dumps(payload,ensure_ascii=False)}]},timeout=30)
+                    {'role':'user','content':json.dumps(payload,ensure_ascii=False)} ]},timeout=httpx.Timeout(65.0,connect=8.0))
                 response.raise_for_status()
                 raw_provider_response=response.json()
                 out=json.loads(raw_provider_response['choices'][0]['message']['content'])

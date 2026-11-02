@@ -175,6 +175,25 @@
       ui.notify('Account registered. Own posts appear only when its published posts have been collected and the author matches its handle.');
     }catch(error){ui.notify('Account not registered: '+error.message);}
   };
+  ui.onAddAccounts=async (candidateId,lines)=>{
+    if(!permitted){ui.notify('Watchlist management permission required.');return;}
+    const entries=String(lines||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(line=>{
+      const fields=line.split('|').map(x=>x.trim());
+      return {platform:fields[0]?.toLowerCase(),url:fields[1],handle:fields[2]};
+    });
+    const allowed=new Set(['instagram','tiktok','x','youtube','threads','facebook','reddit']);
+    if(!entries.length||entries.length>15||entries.some(x=>!allowed.has(x.platform)||!/^https:\/\//i.test(x.url||'')||!x.handle)){
+      ui.notify('Enter 1–15 lines in platform | HTTPS profile URL | handle format.');return;
+    }
+    const keys=new Set(entries.map(x=>x.platform+'|'+x.url.toLowerCase()));
+    if(keys.size!==entries.length){ui.notify('Remove duplicate platform URLs in this batch.');return;}
+    let saved=0;
+    try{
+      for(const entry of entries){await registry('addAccount',entry,candidateId);saved++;}
+      await reload();ui.closeModal();ui.renderProfile(candidateId);ui.showAccountTab();
+      ui.notify(saved+' verified account(s) linked to this candidate.');
+    }catch(error){await reload();ui.renderProfile(candidateId);ui.showAccountTab();ui.notify(saved+' saved; next account failed: '+error.message);}
+  };
   ui.onRefreshProfile=id=>{
     if(loading.has(id))return;
     loaded.delete(id);

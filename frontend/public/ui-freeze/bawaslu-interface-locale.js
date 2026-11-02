@@ -923,6 +923,14 @@ const fullInterfaceId={
         .replace(/ · all · /g,' · semua · ');
     }
 
+    const range=trimmed.match(/^(\d+)[–-](\d+)\s+of\s+(\d+)$/i);
+    if(range)return value.replace(trimmed,range[1]+'–'+range[2]+' dari '+range[3]);
+    const candidateMeta=trimmed.match(/^(\d[\d.,]*)\s+mentions\s*·\s*(Active|Under Review|Inactive)(?:\s*·\s*Priority:\s*(Low|Medium|High|Critical))?$/i);
+    if(candidateMeta){
+      const states={Active:'Aktif','Under Review':'Dalam Peninjauan',Inactive:'Tidak Aktif'};
+      const priorities={Low:'Rendah',Medium:'Sedang',High:'Tinggi',Critical:'Kritis'};
+      return value.replace(trimmed,candidateMeta[1]+' penyebutan · '+states[candidateMeta[2]]+(candidateMeta[3]?' · Prioritas: '+priorities[candidateMeta[3]]:''));
+    }
     // Labels with live counts are UI only. Never modify source evidence or status IDs.
     const countLabel=trimmed.match(/^(\d[\d.,]*)\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
     if(countLabel){

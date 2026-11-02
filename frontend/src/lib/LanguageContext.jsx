@@ -313,6 +313,15 @@ export function translateInterfaceLiteral(text,language='en'){
   const ending=text.match(/\s*$/)?.[0]||'';
   return initial+translated+ending;
  }
+ const trimmed=text.trim();
+ const pagination=trimmed.match(/^(\d+)[–-](\d+)\s+of\s+(\d+)$/i);
+ if(pagination)return text.replace(trimmed,pagination[1]+'–'+pagination[2]+' dari '+pagination[3]);
+ const candidate=trimmed.match(/^(\d[\d.,]*)\s+mentions\s*·\s*(Active|Under Review|Inactive)(?:\s*·\s*Priority:\s*(Low|Medium|High|Critical))?$/i);
+ if(candidate){
+  const states={Active:'Aktif','Under Review':'Dalam Peninjauan',Inactive:'Tidak Aktif'};
+  const priorities={Low:'Rendah',Medium:'Sedang',High:'Tinggi',Critical:'Kritis'};
+  return text.replace(trimmed,candidate[1]+' penyebutan · '+states[candidate[2]]+(candidate[3]?' · Prioritas: '+priorities[candidate[3]]:''));
+ }
  // Bounded count labels emitted by charts; never translate a full source post.
  const dynamic=text.trim().match(/^([0-9][0-9.,]*) (posts|mentions|records|supporting posts|issues identified)$/i);
  if(dynamic){

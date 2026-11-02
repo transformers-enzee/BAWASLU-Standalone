@@ -273,7 +273,9 @@ def _existing_thumbnail(item, include_expired=False):
 def _current_assessment(db,campaign_id,result_id):
     from .models import EvidenceAssessment
     return (db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
-            .order_by(EvidenceAssessment.assessment_version.desc(),
+            .order_by(__import__('sqlalchemy').case(
+                (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+                else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
                       EvidenceAssessment.id.desc()).first())
 
 def _latest_sentiment(db,campaign_id,result_id):

@@ -26,7 +26,9 @@ def needs_full_assessment(record):
 def _latest(db, campaign_id, result_id):
     return (db.query(EvidenceAssessment)
             .filter_by(campaign_id=int(campaign_id), result_id=int(result_id))
-            .order_by(EvidenceAssessment.assessment_version.desc(),
+            .order_by(__import__('sqlalchemy').case(
+                (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+                else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
                       EvidenceAssessment.id.desc()).first())
 
 

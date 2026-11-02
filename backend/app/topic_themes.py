@@ -23,7 +23,9 @@ def latest_saved_categories(db,campaign_id):
     rows=(db.query(EvidenceAssessment.result_id,EvidenceAssessment.relevance_label,EvidenceAssessment.model_version,
                    EvidenceAssessment.topic_labels_json,EvidenceAssessment.public_concern_signals_json)
           .filter(EvidenceAssessment.campaign_id==int(campaign_id))
-          .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).yield_per(1000))
+          .order_by(__import__('sqlalchemy').case(
+              (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+              else_=0).asc(),EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).yield_per(1000))
     result={}
     for source_id,relevance,model,topics,concerns in rows:
         if source_id in result:continue

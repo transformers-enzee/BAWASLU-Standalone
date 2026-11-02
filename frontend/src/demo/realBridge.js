@@ -58,7 +58,11 @@ function chartData(rows){
  return {statistics:{messages:rows.length,engagement:rows.reduce((n,p)=>n+Number(p.engagement?.engagement_total||p.engagement?.likes||0),0),
   accounts:new Set(rows.map(p=>p.author)).size,platforms:Object.keys(platforms).length},
  platforms, sentiment:sentiments,sentiments, daily_platform_trend:daily,activity:daily,
- topics_and_themes:{topics,subject_categories:topics,classified_count:rows.length,total:rows.length},
+ topics_and_themes:{
+  categories:topics.map(t=>({name:t.topic,count:t.count,sentiment:{Negative:Math.round(t.count*.45),Neutral:Math.round(t.count*.42),Positive:Math.max(0,t.count-Math.round(t.count*.45)-Math.round(t.count*.42))},
+    sample_posts:rows.filter(p=>p.text.toLowerCase().includes(t.topic==='Ijazah Gibran'?'gibran':t.topic==='Kampanye'?'kampanye':'bawaslu')).slice(0,8).map(p=>({id:p.id,author:p.author,date:p.date,text:p.text,platform:p.platform}))})),
+  subject_categories:topics,classified_count:rows.length,total:rows.length,
+  total_mentions:rows.length,categorized_mentions:rows.length,pending_assessment_mentions:0,uncategorized_mentions:0},
  top_accounts_engagement:[...new Map(rows.map(p=>[p.author,p])).values()].slice(0,12).map((p,i)=>({name:p.author,platform:p.platform,engagement:1000-i*45,followers:0})),
  top_accounts_followers:[],geographies:{},source_languages:{id:rows.length},demographics_coverage:{records:rows.length,country_available:0,language_available:rows.length},
  province_connected_distribution:[],word_cloud:keywordCloud.filter(w=>w.count>0),candidate_mentions:count(rows,p=>p.candidates?.[0]||'')};
@@ -130,8 +134,11 @@ function localApi(url,init){
  if(path==='/api/functions/registry')return mockRegistry(payload);
  if(path==='/api/functions/socialListening')return mockSocial(payload);
  if(path==='/api/functions/intelligence')return {items:[],accounts:[],relationships:[],sources:[],categories:[],demo:true};
+ if(path==='/api/functions/integrationStatus')return {status:'OFFLINE_DEMO',providers:[]};
  if(path==='/api/functions/intelligenceAssistant'){
-  return {answer:'Demo / Simulasi: '+snapshot.length+' saved evidence records are available for exploration. This is a preset answer; no new model assessment was performed.',
+  const id=window.localStorage.getItem('bawaslu-language')==='id';
+  return {answer:id?('Demo: '+snapshot.length+' catatan bukti tersimpan tersedia untuk ditinjau. Ini jawaban simulasi, bukan penilaian AI baru.'):
+    ('Demo: '+snapshot.length+' saved evidence records are available for exploration. This is a preset answer, not a new AI assessment.'),
     records:snapshot.slice(0,3).map(inboxFinding),provider:'READ_ONLY_DEMO',grounding:{accessible_count:snapshot.length,source_types:['SOCIAL_LISTENING']},demo:true};
  }
  if(path.startsWith('/api/assistant-history'))return {threads:[],messages:[],items:[],thread:null,demo:true};

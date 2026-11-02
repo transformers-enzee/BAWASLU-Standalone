@@ -2,105 +2,105 @@ import {useEffect} from 'react';
 import {useLanguage,translateInterfaceLiteral} from '@/lib/LanguageContext';
 import {radarText} from '@/lib/smartRadarI18n';
 
-/**
- * UI-label coverage for older modules still containing literal English copy.
- * Strict dictionary-only translation: no AI calls and no rewriting evidence.
- * Text created by React after a fetch is localized as well.
- */
-const sourceSelectors=[
- '[data-i18n-exempt]','[data-original-content]','pre','code','textarea',
- '[contenteditable]','[data-issue-content]','.issue-source-description',
- '.whitespace-pre-wrap','.source-post-text','[data-source-body]',
- '[data-user-message]'
+// Translate presentation labels; never mutate source posts, evidence or editable notes.
+const excluded=[
+ '[data-i18n-exempt]','[data-original-content]','pre','code','textarea','[contenteditable]',
+ '[data-issue-content]','.issue-source-description','.whitespace-pre-wrap',
+ '.source-post-text','[data-source-body]','[data-user-message]',
+ '[data-post-text]','[data-evidence-text]','.original-post-body'
 ].join(',');
-const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','SVG','PATH']);
+const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','PATH','DEFS','CLIPPATH']);
 const attributes=['placeholder','title','aria-label','aria-description','aria-placeholder','data-placeholder','alt'];
-// Preserve the English originals across locale toggles and React rerenders.
-const originalText=new WeakMap(),lastRenderedText=new WeakMap();
-const originalAttributes=new WeakMap(),lastRenderedAttributes=new WeakMap();
-
+const originals=new WeakMap(),lastRendered=new WeakMap(),savedAttributes=new WeakMap(),lastAttributes=new WeakMap();
+const requested=new WeakMap();
 export default function UiLanguageLayer(){
  const {language}=useLanguage();
  useEffect(()=>{
-  let frame=0;
-  const isExempt=element=>!element || element.closest?.(sourceSelectors);
-  const translate=value=>{
-   const a=translateInterfaceLiteral(value,language);
-   if(a!==value)return a;
-   if(language!=='id')return value;
-   const trimmed=value.trim();
-   const b=radarText(language,trimmed);
-   if(b!==trimmed){
-    return value.slice(0,value.indexOf(trimmed))+b+value.slice(value.indexOf(trimmed)+trimmed.length);
-   }
-   return value;
-  };
-  function textNode(node){
-   const element=node.parentElement;
-   if(!element||ignoredTags.has(element.tagName)||isExempt(element))return;
-   const current=node.nodeValue||'';
-   if(!originalText.has(node)||current!==lastRenderedText.get(node)){
-    originalText.set(node,current);
-   }
-   const english=originalText.get(node)||'';
-   // Assistant summaries are presentation text, never source evidence. Allow longer\n   // generated summaries through the existing dictionary without re-running AI.\n   const summary=Boolean(element.closest?.('[data-assistant-message]'));\n   if(!english.trim()||english.length>(summary?4000:1800))return;
-   const intended=translate(english);
-   if(current!==intended)node.nodeValue=intended;
-   lastRenderedText.set(node,intended);
+  let frame=0,active=true;
+  const fallback=window.BAWASLUUiTranslator;
+  if(language==='id')fallback?.resetFailures();
+  const skip=el=>!el||el.closest?.(excluded);
+  function literal(value){
+   const translated=translateInterfaceLiteral(value,language);
+   if(translated!==value||language!=='id')return translated;
+   const trimmed=value.trim(),fromRadar=radarText('id',trimmed);
+   return fromRadar===trimmed?value:value.replace(trimmed,fromRadar);
   }
-  function elementAttributes(el){
-   if(ignoredTags.has(el.tagName)||isExempt(el))return;
-   let originalsForEl=originalAttributes.get(el);
-   let lastForEl=lastRenderedAttributes.get(el);
-   if(!originalsForEl){originalsForEl={};originalAttributes.set(el,originalsForEl);}
-   if(!lastForEl){lastForEl={};lastRenderedAttributes.set(el,lastForEl);}
+  function textNode(node){
+   const parent=node.parentElement;
+   if(!parent||ignoredTags.has(parent.tagName)||skip(parent))return;
+   const now=node.nodeValue||'';
+   if(!originals.has(node)||now!==lastRendered.get(node))originals.set(node,now);
+   const source=originals.get(node)||'';
+   if(!source.trim()||source.length>1800)return;
+   const next=literal(source);
+   if(now!==next)node.nodeValue=next;
+   lastRendered.set(node,next);
+   if(language!=='id'){requested.delete(node);return;}
+   if(next!==source||!fallback?.suitable(source))return;
+   if(requested.get(node)===source)return;
+   requested.set(node,source);
+   fallback.request(source,value=>{
+    if(!active||!node.isConnected||originals.get(node)!==source||!value)return;
+    node.nodeValue=value;lastRendered.set(node,value);
+   });
+  }
+  function element(el){
+   if(ignoredTags.has(el.tagName)||skip(el))return;
+   let saved=savedAttributes.get(el),last=lastAttributes.get(el);
+   if(!saved){saved={};savedAttributes.set(el,saved);}
+   if(!last){last={};lastAttributes.set(el,last);}
    for(const name of attributes){
     if(!el.hasAttribute(name))continue;
-    const current=el.getAttribute(name)||'';
-    if(!(name in originalsForEl)||current!==lastForEl[name])originalsForEl[name]=current;
-    const intended=translate(originalsForEl[name]);
-    if(current!==intended)el.setAttribute(name,intended);
-    lastForEl[name]=intended;
+    const now=el.getAttribute(name)||'';
+    if(!(name in saved)||now!==last[name])saved[name]=now;
+    const source=saved[name],next=literal(source);
+    if(now!==next)el.setAttribute(name,next);
+    last[name]=next;
+    if(language!=='id'||next!==source||!fallback?.suitable(source))continue;
+    const key=name+':requested';
+    if(last[key]===source)continue;
+    last[key]=source;
+    fallback.request(source,value=>{
+     if(!active||!el.isConnected||saved[name]!==source||!value)return;
+     el.setAttribute(name,value);last[name]=value;
+    });
    }
-   // UI-only input button text. Never translate typed values or source evidence.
    if(el.tagName==='INPUT'&&['button','submit','reset'].includes(el.type)){
-    const current=el.value;
-    if(!('buttonValue' in originalsForEl)||current!==lastForEl.buttonValue)originalsForEl.buttonValue=current;
-    const next=translate(originalsForEl.buttonValue);
-    if(current!==next)el.value=next;
-    lastForEl.buttonValue=next;
+    const now=el.value;
+    if(!('buttonValue' in saved)||now!==last.buttonValue)saved.buttonValue=now;
+    const next=literal(saved.buttonValue);
+    if(now!==next)el.value=next;
+    last.buttonValue=next;
    }
   }
-  function scan(root){
-   if(root.nodeType===3){textNode(root);return;}
-   if(root.nodeType!==1)return;
-   if(ignoredTags.has(root.tagName)||isExempt(root))return;
-   elementAttributes(root);
-   const walker=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT);
+  function sendLocale(iframe){
+   try{iframe.contentWindow?.postMessage({type:'BAWASLU_UI_LANGUAGE',language},location.origin)}catch(_){}
+  }
+  function scan(){
+   frame=0;if(!document.body)return;
+   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT);
    let node;
    while((node=walker.nextNode())){
     if(node.nodeType===3)textNode(node);
-    else if(node.nodeType===1)elementAttributes(node);
+    else if(node.nodeType===1)element(node);
    }
+   document.querySelectorAll('iframe[src*="/ui-freeze/"]').forEach(sendLocale);
   }
-  function refresh(){
-   frame=0;
-   scan(document.body);
-  }
-  function schedule(){
-   if(!frame)frame=requestAnimationFrame(refresh);
-  }
-  // Browser dialogs are not DOM nodes: localize them with the same UI dictionary.
+  function schedule(){if(active&&!frame)frame=requestAnimationFrame(scan);}
   const oldAlert=window.alert,oldConfirm=window.confirm;
-  window.alert=function(message){return oldAlert.call(window,translate(String(message??'')));};
-  window.confirm=function(message){return oldConfirm.call(window,translate(String(message??'')));};
+  window.alert=message=>oldAlert.call(window,literal(String(message??'')));
+  window.confirm=message=>oldConfirm.call(window,literal(String(message??'')));
+  const iframeLoad=event=>{if(event.target?.tagName==='IFRAME')sendLocale(event.target)};
+  document.addEventListener('load',iframeLoad,true);
+  const observer=new MutationObserver(schedule);
+  observer.observe(document.body,{subtree:true,characterData:true,childList:true,attributes:true,attributeFilter:attributes});
   schedule();
-  const observer=new MutationObserver(mutations=>{
-   if(mutations.some(m=>m.type==='characterData'||m.type==='childList'||m.type==='attributes'))schedule();
-  });
-  observer.observe(document.body,{subtree:true,childList:true,characterData:true,
-   attributes:true,attributeFilter:attributes});
-  return()=>{observer.disconnect();window.alert=oldAlert;window.confirm=oldConfirm;if(frame)cancelAnimationFrame(frame);};
+  return()=>{
+   active=false;observer.disconnect();document.removeEventListener('load',iframeLoad,true);
+   window.alert=oldAlert;window.confirm=oldConfirm;
+   if(frame)cancelAnimationFrame(frame);
+  };
  },[language]);
  return null;
 }

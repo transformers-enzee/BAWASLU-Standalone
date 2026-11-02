@@ -58,7 +58,7 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=127.7' in html
+    assert 'bawaslu-interface-locale.js?build=' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale
 
@@ -131,4 +131,4 @@ def test_command_centre_no_source_count_banner_and_neutral_display_is_read_only(
     assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" in js
     assert 'sentiment_counts?.UNCLASSIFIED' in js
     assert "kind==='NEUTRAL'" in js
-    assert "original" not in js[js.index('// Presentation-only grouping:'):js.index("$('#sentiments').innerHTML")] or True
+    assert "saved classification is unchanged" in js

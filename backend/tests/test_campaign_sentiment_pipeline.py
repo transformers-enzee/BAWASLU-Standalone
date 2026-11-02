@@ -61,14 +61,16 @@ def test_dashboard_counts_saved_labels_and_recomputes_on_new_assessment():
     db,_=db_with_posts(2)
     try:
         before=campaign_action(db,principal(),'campaignDashboard',{},'91')
-        assert before['sentiment']['Unclassified']==2
+        assert before['sentiment']['Unclassified']==0
+        assert before['sentiment_pending_count']==2
         db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
             sentiment='NEGATIVE',sentiment_model='test',
             relevance_label='RELEVANT'))
         db.commit()
         after=campaign_action(db,principal(),'campaignDashboard',{},'91')
         assert after['sentiment']['Negative']==1
-        assert after['sentiment']['Unclassified']==1
+        assert after['sentiment']['Unclassified']==0
+        assert after['sentiment_pending_count']==1
         assert after['sentiment_classified_count']==1
         db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=2,
             sentiment='POSITIVE',sentiment_model='test',relevance_label='RELEVANT'))
@@ -152,6 +154,10 @@ def test_uncertain_result_counts_as_assessed_to_prevent_rebilling():
             sentiment_model='model-that-assessed')
         db.add(assessment);db.commit()
         assert sentiment_is_assessed(assessment)
+        # A completed but source-uncertain assessment remains genuinely Unclassified.
+        dashboard=campaign_action(db,principal(),'campaignDashboard',{},'91')
+        assert dashboard['sentiment']['Unclassified']==1
+        assert dashboard['sentiment_pending_count']==0
         assert campaign_action(db,principal(),'campaignSentimentBatchPreview',{},'91')['estimated_ai_calls']==0
     finally:db.close()
 

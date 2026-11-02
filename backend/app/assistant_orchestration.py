@@ -70,7 +70,7 @@ EVIDENCE POLICY:
 - Distinguish direct evidence-based observations from analytical interpretation.
 - GPT GENERAL CONTEXT is permitted for domain expertise, plausible hypotheses, PR and social-listening methods, crisis communications frameworks, creative public information, and historical background.
   Treat this as analysis, not up-to-date external reporting.
-- No live web browsing has been performed. For changing facts, say independent
+- When external_public_research is supplied, use its cited public sources for current facts, and preserve URLs. If no web research was supplied, do not claim to have browsed. For changing facts, say independent
   verification would be necessary. Never cite GPT's prior knowledge as a source record.
 - Suggest neutral electoral oversight, evidence review, escalation, or monitoring actions;
   never political persuasion, electoral targeting, or campaign strategy.
@@ -208,6 +208,41 @@ def answer_text(result, has_evidence):
     return "\n\n".join(x for x in chunks if x)
 
 
+
+def research_public_web(question, key, model, base):
+    """Optional fresh public-source research; never sends private campaign records."""
+    if os.getenv("BAWASLU_ASSISTANT_WEB_SEARCH", "true").lower() not in ("true","1","yes"):
+        return None
+    question=str(question or "").strip()[:350]
+    if not question:return None
+    req={"model":model,"store":False,"tools":[{"type":"web_search"}],
+         "tool_choice":"auto","max_output_tokens":850,
+         "input":[{"role":"system","content":
+             "Find credible, current public sources relevant to this question. Prefer official publications, reputable news and studies. "
+             "Summarize factual findings concisely with source attribution. Do not infer precise audience demographics or claim that estimated segments are measured."},
+           {"role":"user","content":question}]}
+    try:
+        with httpx.Client(timeout=httpx.Timeout(50.0,connect=8.0,read=50.0,write=10.0,pool=8.0)) as client:
+            response=client.post(base+"/responses",headers={
+                "Authorization":"Bearer "+key,"Content-Type":"application/json"},json=req)
+        if response.status_code >= 400:
+            return None  # Research is optional; retain normal internal synthesis.
+        payload=response.json()
+        if payload.get("status")=="incomplete":return None
+        sources=[]
+        for item in payload.get("output",[]):
+            for part in item.get("content",[]):
+                for annotation in part.get("annotations",[]):
+                    url=str(annotation.get("url") or "")
+                    if annotation.get("type")=="url_citation" and url.startswith("https://") and url not in sources:
+                        sources.append(url)
+        summary=_response_output_text(payload).strip()
+        if not summary or not sources:return None
+        return {"summary":summary[:3500],"urls":sources[:6]}
+    except (httpx.HTTPError,ValueError,TypeError,KeyError):
+        return None
+
+
 def generate(question, previous, evidence, mode, history=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
@@ -215,7 +250,9 @@ def generate(question, previous, evidence, mode, history=None):
     model = openai_triage_model()
     base = (os.getenv("OPENAI_BASE_URL", OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip("/")
     allowed = {r["record_id"] for r in evidence}
+    web_research = research_public_web(question, key, model, base) if mode != "GROUNDED" else None
     user_data = {
+        "external_public_research": web_research,
         "question": question[:500], "previous_question": previous[:500],
         "mode": mode, "available_records": evidence,
         "recent_conversation": (history or [])[-20:],
@@ -252,13 +289,21 @@ def generate(question, previous, evidence, mode, history=None):
         raise
     except (ValueError, KeyError, TypeError) as exc:
         raise AssistantProviderError("provider_invalid_output") from exc
+    if web_research:
+        # Only URLs returned by a verified OpenAI web-search response are displayed.
+        # Public URLs are distinct from permission-scoped internal record IDs.
+        result["observations"] = result.get("observations") or []
     meta = {
+        "external_research_urls": web_research["urls"] if web_research else [],
         "mode": "OPENAI_HYBRID" if mode == "HYBRID" else "OPENAI_GROUNDED",
         "model": payload.get("model") or model,
         "response_id": payload.get("id") or "",
         "usage": payload.get("usage") or {}
     }
-    return answer_text(result, bool(evidence)), result["cited_ids"], meta
+    answer = answer_text(result, bool(evidence))
+    if web_research:
+        answer += "\n\nPublic sources: " + " · ".join(web_research["urls"])
+    return answer, result["cited_ids"], meta
 
 def evidence_fallback(evidence, reason):
     if not evidence:

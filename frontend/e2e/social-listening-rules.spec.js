@@ -60,3 +60,9 @@ test('campaign editor uses seven fixed sources without legacy filters',async({pa
  await expect(editor.getByText(/Language|End date|Province \(optional|Regency \/ City/)).toHaveCount(0);
  await expect(editor.getByRole('group',{name:/platforms/i})).toHaveCount(0);
 });
+
+
+test('Social Listening onboarding has no redundant live monitoring notice', async ({page})=>{
+ await page.goto('/social-listening');
+ await expect(page.getByText('Live BAWASLU monitoring.',{exact:false})).toHaveCount(0);
+});

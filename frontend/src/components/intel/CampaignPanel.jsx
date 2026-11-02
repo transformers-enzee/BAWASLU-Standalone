@@ -525,7 +525,6 @@ export default function CampaignPanel({campaignId=null}){
     <p className="mt-1 text-sm text-[#60768c]">Discover broad conversations. Track selected candidates.</p></div>
     {!campaignId&&<button type="button" className="rounded-xl border border-[#11816d] bg-[#11816d] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={newCampaign}>＋ Create campaign</button>}
   </header>
-  <div className="rounded-xl border border-[#d7e8e2] bg-[#f4fbf8] px-4 py-3 text-xs leading-6 text-[#295e57]"><b>Live BAWASLU monitoring.</b> Campaigns, captured posts, classifications and candidate tracking show saved authorized records. No sample or demonstration posts have been added.</div>
   <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1" aria-label="Monitoring workflow steps">
    {['Set up monitoring','Monitoring Home','Campaign Dashboard'].map((label,i)=><span key={label} className={'inline-flex items-center gap-2 text-xs '+((creating?i===0:campaignId?i===2:i===1)?'font-bold text-[#117c6c]':'text-[#708394]')}>
     <span className={'grid h-6 w-6 place-items-center rounded-full '+((creating?i===0:campaignId?i===2:i===1)?'bg-[#117c6c] text-white':'bg-[#e3eaee] text-[#708394]')}>{i+1}</span>{label}{i<2&&<span className="ml-2 text-[#a0b1bb]">→</span>}

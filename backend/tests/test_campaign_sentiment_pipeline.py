@@ -169,6 +169,7 @@ def test_campaign_ui_refresh_and_cost_confirmation_are_explicit():
     # The old Overview controls were intentionally removed in v125.5.
     # Preserve checks for the underlying paid-AI confirmation and data refresh.
     assert 'Refresh saved sentiment (free)' not in source
-    assert 'Sentiment batch size' not in source
+    # The hidden legacy Captured Posts section retains its batch controls for future use.
+    assert 'Sentiment batch size' in source
     assert 'confirm_ai_cost:true' in source
     assert 'setDashboard(d.data);setEvidence(e.data.evidence||[]);' in source

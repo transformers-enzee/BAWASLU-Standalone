@@ -17,7 +17,7 @@
  const rowGroups=categories.map((c,i)=>cleaned.filter(p=>p.group===i));
  function countsBy(rows,fn){const out={};for(const x of rows){const k=String(fn(x)||'');if(k)out[k]=(out[k]||0)+1}return out}
  function candidates(rows){const c={};for(const x of rows)for(const name of (Array.isArray(x.candidates)?x.candidates:[])){const n=String(name||'').trim();if(n)c[n]=(c[n]||0)+1}return c}
- const watchlist=['Gibran Rakabuming Raka','Prabowo Subianto','Anies Baswedan','Ganjar Pranowo','Purbaya Yudhi Sadewa','Dedi Mulyadi'].map(name=>({id:'DEMO-'+name.toLowerCase().replace(/\s+/g,'-'),name,status:'Active',priority:'Medium',geographic_scope:'Nationwide'}));
+ const watchlist=['Gibran Rakabuming Raka','Prabowo Subianto','Anies Baswedan','Ganjar Pranowo','Purbaya Yudhi Sadewa','Dedi Mulyadi'].map(name=>({id:'DEMO-'+name.toLowerCase().replace(/\s+/g,'-'),name,status:'Active',priority:'Medium',geographic_scope:'Nationwide',type:'Candidate',province:'Indonesia',candidate_aliases:[]}));
  let demoReviews={};
  const makeFinding=(group,i)=>{
   const topic=categories[i],day=countsBy(group,p=>String(p.date||'').slice(0,10)),scope={};
@@ -66,9 +66,37 @@
    try{const b=JSON.parse(options?.body||'{}');const id=String(b.finding_id||'').replace('INBOX-DEMO-','');demoReviews[Number(id)]='reviewed'}catch(_){}
    return {ok:true,demo:true};
   }
-  if(p==='/api/functions/registry')return {access:{permissions:{view_intelligence:true,manage_watchlist:true,human_validation:true},geographic_scope:'Nationwide'},items:watchlist};
+  if(p==='/api/functions/registry'){
+   let body={};try{body=JSON.parse(options?.body||'{}')}catch(_){}
+   const action=body.action||'',id=String(body.id||'');
+   if(action==='list')return {items:watchlist,accounts:[],sources:[],categories:[],relationships:[]};
+   if(action==='myAccess')return {access:{status:'Active',permissions:{view_intelligence:true,manage_watchlist:true,human_validation:true},geographic_scope:'Nationwide'}};
+   if(action==='watchlistCapturedFeed'){
+     const active=watchlist.find(x=>String(x.id)===id);
+     const rows=active?cleaned.filter(p=>p.candidates?.some(name=>String(active.name).toLowerCase().includes(String(name).toLowerCase())||String(name).toLowerCase().includes(active.name.split(' ')[0].toLowerCase()))):[];
+     const page=Math.max(1,Number(body.data?.page||1)),size=50;
+     return {posts:rows.slice((page-1)*size,page*size).map(p=>({id:p.id,relation:'MENTION',platform:p.platform,author_name:p.author,published_at:p.date,text:p.text,url:'',saved_assessments:[{sentiment:p.sentiment,is_flagged:false,assessment_version:1}]})),total:rows.length};
+   }
+   if(action==='watchlistSyncStatus')return {enabled:false,manual_fetch_available:false,accounts:[]};
+   if(action==='createWatchlist'){const item={id:'DEMO-WATCH-'+watchlist.length,name:body.data?.name||'Demo Candidate',type:'Candidate',status:'Active',priority:'Medium',candidate_aliases:body.data?.candidate_aliases||[]};watchlist.push(item);return {item,demo:true};}
+   if(action==='updateWatchlist'){const row=watchlist.find(x=>String(x.id)===id);if(row)Object.assign(row,body.data||{});return {item:row||null,demo:true};}
+   if(action==='addAccount')return {account:{id:'DEMO-ACCOUNT',...body.data},demo:true};
+   return {access:{permissions:{view_intelligence:true,manage_watchlist:true,human_validation:true},geographic_scope:'Nationwide'},items:watchlist,accounts:[]};
+  }
+  if(p==='/api/functions/socialListening'){
+    let body={};try{body=JSON.parse(options?.body||'{}')}catch(_){}
+    if(body.action==='campaignCandidateSuggestions'){
+      const tally={};for(const p of cleaned)for(const name of (Array.isArray(p.candidates)?p.candidates:[])){const key=String(name||'').trim();if(key){tally[key]??={name:key,matching_posts:0,source_ids:[],tracked:false};tally[key].matching_posts++;if(tally[key].source_ids.length<5)tally[key].source_ids.push(p.id)}}
+      return {candidates:Object.values(tally).sort((a,b)=>b.matching_posts-a.matching_posts).slice(0,10)};
+    }
+    return {ok:true,demo:true,posts:[],items:[]};
+  }
   if(p==='/api/smart-radar/summarize-live')return {generated:[],remaining:0,demo:true};
-  if(p==='/api/presentation/translate')return {text:JSON.parse(options?.body||'{}').text||'',language:'id',translation_only:true,demo:true};
+  const translatedId={"Gibran Qualification Dispute Exposes Restricted Election Oversight Access":"Sengketa Kualifikasi Gibran Mengungkap Keterbatasan Akses Pengawasan Pemilu","Election Results Face Persistent Distrust, Protest, and Institutional Legitimacy Concerns":"Hasil Pemilu Menghadapi Ketidakpercayaan, Protes, dan Kekhawatiran Legitimasi Lembaga","Bawaslu Capacity Building and Public Participation Strengthen Preventive Oversight":"Peningkatan Kapasitas Bawaslu dan Partisipasi Publik Memperkuat Pengawasan Pencegahan","Polling Irregularities Trigger Recounts, Technology Failures, and Operational Corrections":"Ketidakteraturan Pemungutan Suara Memicu Penghitungan Ulang, Kendala Teknologi, dan Perbaikan Operasional","Reported Campaign and Voting Violations Drive Formal Enforcement Attention":"Laporan Dugaan Pelanggaran Kampanye dan Pemungutan Suara Memerlukan Perhatian Penegakan Hukum","Other Election Conversations":"Percakapan Pemilu Lainnya","Public discussions about legal decisions and public access to election oversight require independent verification.":"Diskusi publik mengenai putusan hukum dan akses pengawasan pemilu memerlukan verifikasi independen.","Public expressions of dissatisfaction with election outcomes and institutions require a careful factual review.":"Ungkapan ketidakpuasan publik terhadap hasil pemilu dan lembaga memerlukan pemeriksaan fakta secara saksama.","Discussions about BAWASLU outreach and public participation can indicate opportunities for preventative engagement.":"Diskusi mengenai sosialisasi BAWASLU dan partisipasi publik dapat menunjukkan peluang penguatan pencegahan.","Operational claims about ballot processes and counting require verification of primary evidence.":"Klaim operasional mengenai proses pemungutan dan penghitungan suara memerlukan verifikasi bukti primer.","Claims about campaign conduct may merit officer review but do not establish any legal violation.":"Klaim mengenai kegiatan kampanye dapat memerlukan peninjauan petugas, tetapi tidak membuktikan pelanggaran hukum."};
+  if(p==='/api/presentation/translate'){
+    const body=JSON.parse(options?.body||'{}'),text=body.text||'';
+    return {text:body.language==='id'?(translatedId[text]||text):text,language:body.language||'id',translation_only:true,demo:true};
+  }
   if(p==='/api/health')return {ok:true,build_version:'DEMO'};
   return {ok:true,demo:true,items:[],posts:[],findings:[],source:'DEMO_SNAPSHOT'};
  }

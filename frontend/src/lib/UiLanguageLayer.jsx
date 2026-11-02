@@ -90,13 +90,17 @@ export default function UiLanguageLayer(){
   function schedule(){
    if(!frame)frame=requestAnimationFrame(refresh);
   }
+  // Browser dialogs are not DOM nodes: localize them with the same UI dictionary.
+  const oldAlert=window.alert,oldConfirm=window.confirm;
+  window.alert=function(message){return oldAlert.call(window,translate(String(message??'')));};
+  window.confirm=function(message){return oldConfirm.call(window,translate(String(message??'')));};
   schedule();
   const observer=new MutationObserver(mutations=>{
    if(mutations.some(m=>m.type==='characterData'||m.type==='childList'||m.type==='attributes'))schedule();
   });
   observer.observe(document.body,{subtree:true,childList:true,characterData:true,
    attributes:true,attributeFilter:attributes});
-  return()=>{observer.disconnect();if(frame)cancelAnimationFrame(frame);};
+  return()=>{observer.disconnect();window.alert=oldAlert;window.confirm=oldConfirm;if(frame)cancelAnimationFrame(frame);};
  },[language]);
  return null;
 }

@@ -765,12 +765,12 @@ const fullInterfaceId={
     const direct=labels[trimmed];
     if(direct)return value.replace(trimmed,direct);
     // Labels with live counts are UI only. Never modify source evidence or status IDs.
-    const countLabel=trimmed.match(/^(\\d[\\d.,]*)\\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
+    const countLabel=trimmed.match(/^(\d[\d.,]*)\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
     if(countLabel){
       const suffix=labels[countLabel[2]]||labels[countLabel[2].toLowerCase()]||countLabel[2];
       return value.replace(trimmed,countLabel[1]+' '+suffix);
     }
-    if(/^\\d[\\d.,]* Issues Identified\\s*·\\s*\\d[\\d.,]* Supporting Posts$/i.test(trimmed)){
+    if(/^\d[\d.,]* Issues Identified\s*·\s*\d[\d.,]* Supporting Posts$/i.test(trimmed)){
       return value.replace(trimmed,trimmed.replace(/Issues Identified/g,'Isu Teridentifikasi').replace(/Supporting Posts/g,'Unggahan Pendukung'));
     }
     const count=trimmed.match(/^([0-9][0-9.,]*) (posts|mentions|records|supporting posts)$/i);
@@ -848,6 +848,10 @@ const fullInterfaceId={
        }).catch(()=>{summaryCache.set(original,'failed');/* Leave original text visible if translation fails. */});
     });
   }
+  // Localize only our own browser alerts and confirmations; do not alter evidence.
+  const rawAlert=window.alert.bind(window),rawConfirm=window.confirm.bind(window);
+  window.alert=message=>rawAlert(translate(String(message??'')));
+  window.confirm=message=>rawConfirm(translate(String(message??'')));
   let scheduled=0;
   function schedule(){if(!scheduled)scheduled=requestAnimationFrame(()=>{scheduled=0;scan();translateSummaries();});}
   function setLanguage(lang){

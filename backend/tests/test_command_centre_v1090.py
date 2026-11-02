@@ -55,6 +55,6 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=126.4' in html
+    assert 'bawaslu-interface-locale.js?build=126.5' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale

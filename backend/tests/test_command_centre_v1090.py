@@ -58,7 +58,7 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=126.9' in html
+    assert 'bawaslu-interface-locale.js?build=127.0' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale
 
@@ -102,4 +102,4 @@ def test_command_centre_saved_issue_title_localization_not_source_rewrite():
     assert 'Terjemahan sementara tidak tersedia.' in locale
     # Original post descriptions remain untouched and linked to their source.
     assert '<p>${E(p[2])}</p>' in html
-    assert 'class="issue-source-description"' in html
+    assert '<p data-ai-title>${E(p[2])}</p>' not in html

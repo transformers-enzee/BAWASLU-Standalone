@@ -58,9 +58,9 @@ export default function CampaignPanel({campaignId=null}){
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
- const [activationSaved,setActivationSaved]=useState(()=>{
-  try{return JSON.parse(window.localStorage.getItem('bawaslu-active-discover-run')||'null')}catch{return null}
- });
+ // Persisted run IDs are accessible via explicit campaign activation, but a
+ // page visit must NEVER reopen the progress modal automatically.
+ const [activationSaved,setActivationSaved]=useState(null);
  const [allRun,setAllRun]=useState(null),[allOpen,setAllOpen]=useState(false),[allBusy,setAllBusy]=useState(false),[allError,setAllError]=useState('');
  const [allCampaign,setAllCampaign]=useState(null);
  async function launchAssessAll(){
@@ -108,7 +108,8 @@ export default function CampaignPanel({campaignId=null}){
   activationRestoreOnce.current=true;
   if(!activationSaved?.run_id)return;
   const match=campaigns.find(c=>String(c.id)===String(activationSaved.campaign_id));
-  if(match){setDiscoverCampaign(match);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});}
+  // Intentionally do not reopen a modal after refresh or navigation.
+  // Running jobs remain in Supabase and are not cancelled.
  },[campaignId,campaigns,activationSaved?.run_id]);
  useEffect(()=>{
   if(!discoverRun?.run_id||!discoverCampaign?.id||
@@ -628,8 +629,7 @@ export default function CampaignPanel({campaignId=null}){
 
    {campaignSection==='overview'&&dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
     <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
-    <div className="flex flex-wrap gap-3 items-end" aria-label="Campaign analytics date filters"><label className="text-xs">From date<input type="date" className="intel-input mt-1" value={analyticsFrom} onChange={e=>setAnalyticsFrom(e.target.value)}/></label><label className="text-xs">To date<input type="date" className="intel-input mt-1" value={analyticsTo} onChange={e=>setAnalyticsTo(e.target.value)}/></label><label className="text-xs min-w-[180px] flex-1">Keyword<select className="intel-input mt-1 w-full" value={analyticsKeyword} onChange={e=>setAnalyticsKeyword(e.target.value)}><option value="">All keywords</option>{[...new Set([...(selected.primary_keywords||[]),...(selected.secondary_keywords||[])].map(x=>String(x||'').trim()).filter(Boolean))].map(term=><option value={term} key={term}>{term}</option>)}</select></label><button type="button" className="intel-ghost" disabled={analyticsBusy} onClick={applyAnalyticsDates}>{analyticsBusy?'Filtering…':'Apply filters'}</button></div>
-    <p className="text-xs text-slate-500">Keyword dropdown filters by campaign keywords in post text (case-insensitive). Date filters use publication dates. Dashboard analytics cover up to the latest 5,000 matching evidence records. No crawl credits used.</p>{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
+{appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/><div className="flex flex-wrap justify-between gap-2"><p className="text-xs text-slate-500">Saved full AI assessments only. Pending posts are not classified; Unclassified can be a completed result when the source does not establish tone.</p><button type="button" className="intel-ghost text-xs" disabled={analyticsBusy||aiBusy} onClick={async()=>{setAnalyticsBusy(true);try{await refreshSentimentViews()}catch(e){setDashboardError(e.response?.data?.detail||e.message)}finally{setAnalyticsBusy(false)}}}>Refresh saved sentiment (free)</button></div><p className="text-xs text-slate-500">Views and engagements may be incomplete when platforms do not supply them.</p></section>
 

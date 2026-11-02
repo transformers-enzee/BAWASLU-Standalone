@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
@@ -17,9 +17,10 @@ function Post({post}){
   <span title={'Saved sentiment: '+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
  </article>;
 }
-/** Full post list for the selected campaign, never the dashboard's 200-post sample. */
 export default function CapturedPostList({campaignId,refreshKey=0}){
  const [posts,setPosts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
+ const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');
  useEffect(()=>{
   let active=true;setPosts([]);setLoading(true);setError('');
   async function load(){
@@ -41,7 +42,29 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
   if(campaignId)load();
   return()=>{active=false};
  },[campaignId,refreshKey]);
- return <section aria-label="Captured posts list" className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-2">
-  {loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:error?<p role="alert" className="py-6 text-sm text-red-700">Unable to load the complete post list: {error}</p>:posts.length?posts.map(post=><Post key={post.id} post={post}/>):<p className="py-6 text-sm text-[#60768c]">No captured posts for this campaign.</p>}
+ const platforms=useMemo(()=>[...new Set(posts.map(p=>p.platform).filter(Boolean))].sort(),[posts]);
+ const visible=useMemo(()=>{
+  const q=keyword.toLocaleLowerCase('id-ID').trim();
+  const items=posts.filter(p=>{
+   const day=String(p.published_at||'').slice(0,10);
+   return (!from||(day&&day>=from))&&(!to||(day&&day<=to))&&
+    (!platform||p.platform===platform)&&(!sentiment||String(p.sentiment||'').toLowerCase()===sentiment)&&
+    (!q||String(p.text_content||'').toLocaleLowerCase('id-ID').includes(q));
+  });
+  const score=p=>{try{const e=typeof p.engagement==='object'?p.engagement:JSON.parse(p.engagement_json||'{}');return Number(e.engagement_total||e.likes||0)}catch{return 0}};
+  return items.sort((a,b)=>sort==='oldest'?String(a.published_at||'').localeCompare(String(b.published_at||'')):
+   sort==='engagement'?score(b)-score(a):String(b.published_at||'').localeCompare(String(a.published_at||'')));
+ },[posts,from,to,keyword,platform,sentiment,sort]);
+ return <section aria-label="Captured posts list" className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
+  <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Captured posts filters and sorting">
+   <label className="text-xs">From date<input className="intel-input mt-1" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label className="text-xs">To date<input className="intel-input mt-1" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <label className="text-xs">Keyword<input className="intel-input mt-1" placeholder="Search post text" value={keyword} onChange={e=>setKeyword(e.target.value)}/></label>
+   <label className="text-xs">Platform<select className="intel-input mt-1" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="">All platforms</option>{platforms.map(x=><option value={x} key={x}>{platformName(x)}</option>)}</select></label>
+   <label className="text-xs">Sentiment<select className="intel-input mt-1" value={sentiment} onChange={e=>setSentiment(e.target.value)}><option value="">All sentiments</option>{['positive','neutral','negative','unclassified'].map(x=><option key={x} value={x}>{x[0].toUpperCase()+x.slice(1)}</option>)}</select></label>
+   <label className="text-xs">Sort by<select className="intel-input mt-1" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="engagement">Engagement</option></select></label>
+  </div>
+  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span>{visible.length.toLocaleString()} of {posts.length.toLocaleString()} captured posts</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>Clear filters</button></div>
+  {loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:error?<p role="alert" className="py-6 text-sm text-red-700">Unable to load the complete post list: {error}</p>:visible.length?visible.map(post=><Post key={post.id} post={post}/>):<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
  </section>;
 }

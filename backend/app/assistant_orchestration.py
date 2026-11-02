@@ -41,8 +41,11 @@ Use short bullet points only when multiple findings or action items genuinely be
 Use **bold** sparingly for important source-grounded phrases, figures, and conclusions.
 For simple questions, prefer ordinary paragraphs; never force a list or decorative emphasis. Match the question's language
 (usually natural Indonesian; use English when asked in English). Give a crisp answer first,
-then 2-5 specific findings, an interpretation of patterns/drivers where supported, and
-practical monitoring/verification next steps when appropriate. Avoid repetitive headings,
+then add only the details needed. Use Markdown tables for real comparisons and simple charts
+only when values are explicitly present in authorized evidence. A chart may use a fenced
+chart block with JSON {"title":"...","data":[{"label":"...","value":12}]}.
+Do not invent chart values or conflate sample counts with population totals.
+Never force recurring sections or a certain number of bullets. Avoid repetitive headings,
 generic boilerplate, and superficial restatement of source headlines.
 
 EVIDENCE POLICY:
@@ -176,17 +179,24 @@ def _safe_output(result, allowed):
     return result
 
 def answer_text(result, has_evidence):
-    chunks = [str(result.get("direct_answer") or "").strip()]
-    def section(name, values):
-        if values:
-            chunks.append(name + "\n" + "\n".join("- " + x for x in values))
-    section("TEMUAN UTAMA" if has_evidence else "POIN PENTING", result.get("observations") or [])
-    if result.get("interpretation"):
-        chunks.append(("INTERPRETASI / KONTEKS" if has_evidence else "KONTEKS") +
-                      "\n" + result["interpretation"])
-    section("LANGKAH TINDAK LANJUT", result.get("next_checks") or [])
-    section("BATASAN DATA", result.get("limitations") or [])
+    """Return natural prose with optional detail, never a fixed reporting template."""
+    answer = str(result.get("direct_answer") or "").strip()
+    observations = [str(x).strip() for x in result.get("observations") or [] if str(x).strip()]
+    interpretation = str(result.get("interpretation") or "").strip()
+    checks = [str(x).strip() for x in result.get("next_checks") or [] if str(x).strip()]
+    limits = [str(x).strip() for x in result.get("limitations") or [] if str(x).strip()]
+    chunks = [answer] if answer else []
+    if observations:
+        chunks.append(("\n".join("- "+x for x in observations) if len(observations)>1
+                       else observations[0]))
+    if interpretation and interpretation.casefold() not in answer.casefold():
+        chunks.append(interpretation)
+    if checks and (has_evidence or not answer):
+        chunks.append(("\n".join("- "+x for x in checks) if len(checks)>1 else checks[0]))
+    if limits and has_evidence:
+        chunks.append(" ".join(limits[:2]))
     return "\n\n".join(x for x in chunks if x)
+
 
 def generate(question, previous, evidence, mode, history=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()

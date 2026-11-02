@@ -53,7 +53,7 @@ def test_structured_answer_is_readable():
     text=answer_text({"direct_answer":"Ringkasan","observations":["Bukti [SOCIAL-1]"],
         "interpretation":"Pola belum terverifikasi","next_checks":["Periksa sumber"],
         "limitations":["Sampel terbatas"]},True)
-    assert "TEMUAN UTAMA" in text and "[SOCIAL-1]" in text
+    assert "[SOCIAL-1]" in text and "TEMUAN UTAMA" not in text
 
 
 def test_broad_narrative_question_retrieves_recent_sample_when_no_literal_keywords():

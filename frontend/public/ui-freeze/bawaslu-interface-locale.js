@@ -1179,6 +1179,17 @@ const fullInterfaceId={
         summaryLast.set(el,dictionary);return;
       }
       summaryCache.set(original,'pending');
+      if(el.id==='candidateSummary'){
+        if(!warning){
+          warning=document.createElement('span');
+          warning.setAttribute('data-i18n-exempt','');
+          warning.setAttribute('data-translation-status','');
+          warning.setAttribute('role','status');
+          warning.style.cssText='display:block;margin-top:5px;font-size:11px;color:#507185';
+          el.insertAdjacentElement('afterend',warning);
+        }
+        warning.textContent='Menerjemahkan ringkasan kandidat tersimpan…';
+      }
       const token=window.localStorage.getItem('bawaslu_access_token')||'';
       fetch('/api/presentation/translate',{method:'POST',cache:'no-store',
         headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},

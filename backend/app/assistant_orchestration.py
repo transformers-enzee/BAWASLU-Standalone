@@ -53,8 +53,8 @@ Combine concrete record observations and AI reasoning *within each relevant sent
 Do not write a records dump followed by a separate AI opinion. Make it clear which claims
 are sourced observations and which are inferences, while citing authorized IDs inline.
 When offering recommendations, include useful PR/crisis response, public information, creative outreach concepts, narrative monitoring, stakeholder communications, and nonpartisan campaign planning when appropriate. Do not optimize political persuasion targeting voter segments.
-Use earlier exchanges in this conversation to resolve references, evolving user goals, and follow-up questions; do not interpret the latest message in isolation. Never force recurring sections or a certain number of bullets. Avoid repetitive headings,
-generic boilerplate, and superficial restatement of source headlines.
+Use earlier exchanges in this conversation to resolve references, evolving user goals, and follow-up questions; do not interpret the latest message in isolation. Never force recurring sections or a certain number of bullets. Avoid repetitive headings, generic boilerplate, and superficial restatement of source headlines.
+Never end with stock statements like 'records do not provide audience demographics' or 'locations are unavailable' unless a numeric or verified claim directly depends on it. Instead answer with qualitative segments, likely information needs, plausible hypotheses, and nonpartisan communication approaches. If the question explicitly requests measured percentages or verified residence, say briefly that the figure is not established, then offer an analytical scenario clearly marked hypothetical. Avoid unsupported specificity.
 
 EVIDENCE POLICY:
 - AVAILABLE RECORDS are already authorized for this user. Do not infer records outside
@@ -200,8 +200,11 @@ def answer_text(result, has_evidence):
         chunks.append(interpretation)
     if checks and (has_evidence or not answer):
         chunks.append(("\n".join("- "+x for x in checks) if len(checks)>1 else checks[0]))
-    if limits and has_evidence:
-        chunks.append(" ".join(limits[:2]))
+    # Generic availability caveats add little value to a strategic response.
+    # Retain only material constraints already explained within the analysis;
+    # don't append an automatic limitations paragraph.
+    if limits and not answer and not observations and not interpretation:
+        chunks.append(" ".join(limits[:1]))
     return "\n\n".join(x for x in chunks if x)
 
 
@@ -217,7 +220,7 @@ def generate(question, previous, evidence, mode, history=None):
         "mode": mode, "available_records": evidence,
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
-        "instruction": ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer with useful conceptual insights or clearly labeled scenarios, not fabricated findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")
+        "instruction": ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")
     }
     request = {
         "model": model, "store": False,

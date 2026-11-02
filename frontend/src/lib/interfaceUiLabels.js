@@ -1,5 +1,17 @@
 /* UI strings only: never translate user-generated evidence or stored source text. */
 export const UI_LABEL_ID={
+  "Collection runs:": "Pengumpulan:",
+  "Evidence records:": "Catatan bukti:",
+  "Collection runs: ": "Pengumpulan: ",
+  "Evidence records: ": "Catatan bukti: ",
+  "National ·": "Nasional ·",
+  "Tracked account post": "Unggahan akun terpantau",
+  "Affiliation unverified": "Afiliasi belum diverifikasi",
+  "Saved source record": "Catatan sumber tersimpan",
+  "View evidence": "Lihat Bukti",
+  "Campaign Overview": "Ringkasan Kampanye",
+  "Add a candidate": "Tambah kandidat",
+
   "Add Candidate": "Tambah Kandidat",
   "＋ Add Candidate": "＋ Tambah Kandidat",
   "+ Add Candidate": "+ Tambah Kandidat",

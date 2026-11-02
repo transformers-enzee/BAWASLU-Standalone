@@ -20,7 +20,7 @@ const labels=[
  'Sentiment Distribution','No classified posts in this selection',
  'All Collected Posts','Activity Timeline','Tracked Accounts'
 ];
-labels.push('Add Candidate','AI-suggested candidates','Search existing candidates','Register an approved candidate','Approved candidate full name','＋ Create & Track Candidate','Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.');
+labels.push('Collection runs:','Evidence records:','Tracked account post','Affiliation unverified','Add Candidate','AI-suggested candidates','Search existing candidates','Register an approved candidate','Approved candidate full name','＋ Create & Track Candidate','Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.');
 for(const label of labels){
  assert.equal(typeof UI_LABEL_ID[label],'string','Missing ID translation: '+label);
  assert.notEqual(UI_LABEL_ID[label],label,'English label: '+label);

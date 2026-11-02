@@ -97,7 +97,9 @@ def status(db, principal, campaign_id, run_id):
     for row in (db.query(EvidenceAssessment).filter(
             EvidenceAssessment.campaign_id == c.id,
             EvidenceAssessment.result_id.in_(ids))
-            .order_by(EvidenceAssessment.assessment_version.desc(),
+            .order_by(__import__('sqlalchemy').case(
+                (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+                else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
                       EvidenceAssessment.id.desc()).all()):
         assessments.setdefault(row.result_id, row)
     jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
@@ -149,7 +151,17 @@ def status(db, principal, campaign_id, run_id):
               else "The current AI request allowance is exhausted."
                    if stage == "NEEDS_ATTENTION" and not budget["available"]
               else "")
+    finished_at = [j.updated_at for j in jobs.values()
+                   if j.state == "COMPLETED" and j.updated_at]
+    last_activity = max(finished_at) if finished_at else None
+    recent_cutoff = datetime.utcnow()-timedelta(minutes=10)
+    recent_completed = sum(1 for j in jobs.values()
+                           if j.state == "COMPLETED" and j.updated_at and j.updated_at>=recent_cutoff)
+    throughput = round(recent_completed/10.0,2)
+    eta_seconds = int((len(ids)-totals["completed"])/throughput*60) if throughput>0 and stage=="ASSESSING" and totals["processing"] else None
     return {"run_id":run.id, "status":run.status,"stage":stage,
+            "last_activity_at":last_activity.isoformat()+"Z" if last_activity else None,
+            "completed_per_minute":throughput,"eta_seconds":eta_seconds,
             "status_reason":reason,
             "posts_saved":int(run.result_count or 0), "total":len(ids),
             **totals,"progress_percent":round(100*totals["completed"]/len(ids)),

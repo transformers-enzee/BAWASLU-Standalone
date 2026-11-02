@@ -40,6 +40,7 @@ export default function Login() {
 
   return (
     <AuthLayout
+      nadicomBranding
       icon={LogIn}
       title={t('welcome_back')}
       subtitle={t('login_subtitle')}

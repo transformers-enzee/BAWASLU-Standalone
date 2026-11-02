@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {existsSync,readFileSync} from 'node:fs';
+const root=new URL('../',import.meta.url);
+const html=readFileSync(new URL('index.html',root),'utf8');
+const layout=readFileSync(new URL('src/components/AuthLayout.jsx',root),'utf8');
+const login=readFileSync(new URL('src/pages/Login.jsx',root),'utf8');
+assert.match(html,/<title>BAWASLU Smart Radar<\/title>/);
+assert.match(html,/nadicom-symbol\.webp/);
+assert.match(login,/nadicomBranding/);
+assert.match(layout,/nadicom-symbol\.webp/);
+assert.match(layout,/nadicom-wordmark\.webp/);
+assert.ok(existsSync(new URL('public/nadicom-symbol.webp',root)));
+assert.ok(existsSync(new URL('public/nadicom-wordmark.webp',root)));
+console.log('Build 120.0 NADICOM login branding and tab-title contract passed.');

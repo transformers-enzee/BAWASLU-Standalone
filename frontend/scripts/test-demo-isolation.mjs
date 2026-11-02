@@ -11,6 +11,8 @@ assert.ok(main.includes("import('@/demo/DemoApp.jsx')"));
 assert.ok(main.includes("import('@/App.jsx')"));
 assert.ok(main.indexOf("import('@/demo/DemoApp.jsx')")<main.indexOf("import('@/App.jsx')"));
 assert.ok(!main.includes("import App from"));
+assert.ok(main.includes("connect-src 'none'"));
+assert.ok(main.includes("frame-src 'none'"));
 assert.ok(fixtures.includes('DEMO-001')&&fixtures.includes('sampleCampaigns'));
 assert.ok(app.includes("useState('id')")&&app.includes("setLanguage('en')"));
 assert.ok(app.includes("setLanguage('id')")&&app.includes('walkthrough'));

@@ -35,4 +35,38 @@ assert.equal(noExternal.status,403);
 assert.throws(()=>new XMLHttpRequest().open('POST','/api/functions/socialListening'));
 assert.equal(navigator.sendBeacon('/api/write','data'),false);
 assert.equal(realNetworkCalls,0,'Demo must never send real API traffic');
+
+import {runInNewContext} from 'node:vm';
+import fs from 'node:fs';
+import {resolve} from 'node:path';
+const html=fs.readFileSync(resolve('public/demo/smart-radar.html'),'utf8');
+const watchHtml=fs.readFileSync(resolve('public/demo/watchlist.html'),'utf8');
+const source=fs.readFileSync(resolve('public/demo/snapshot-bridge.js'),'utf8');
+const recordMarkup=html.match(/<script id="bawaslu-demo-snapshot" type="application\/json">([\s\S]*?)<\/script>/);
+assert.ok(recordMarkup,'Approved Command Centre HTML must embed the real snapshot');
+assert.ok(watchHtml.includes('id="bawaslu-demo-snapshot"'));
+const iframeRecords=JSON.parse(recordMarkup[1]);
+assert.equal(iframeRecords.length,300);
+let iframeNetworkCalls=0;
+const iframeWindow={fetch:async()=>{iframeNetworkCalls++;throw Error('Unexpected remote iframe request')}};
+const browserContext={
+ window:iframeWindow,document:{getElementById:()=>({textContent:recordMarkup[1]})},
+ location:{href:'https://demo.invalid/demo/smart-radar.html',origin:'https://demo.invalid'},
+ Response,URL,JSON,Math,Date,Number,Array,Map,Set,String,Object,RegExp,
+};
+runInNewContext(source,browserContext);
+const radarResponse=await iframeWindow.fetch('/api/smart-radar/dashboard');
+const radar=await radarResponse.json();
+assert.equal(radar.mode,'SAVED_INBOX_SOURCE_OF_TRUTH');
+assert.equal(radar.source_total,300);
+assert.ok(radar.findings.length>=3);
+const findingResponse=await iframeWindow.fetch('/api/smart-radar/finding/'+radar.findings[0].id);
+const finding=await findingResponse.json();
+assert.equal(finding.posts.length,finding.supporting_posts);
+const topicsResponse=await iframeWindow.fetch('/api/smart-radar/issue-distribution');
+const topics=await topicsResponse.json();
+assert.ok(topics.operations.topics.length>0);
+await iframeWindow.fetch('/api/smart-radar/decision',{method:'POST',body:JSON.stringify({finding_id:radar.findings[0].id,action:'REVIEWED'})});
+assert.equal(iframeNetworkCalls,0,'Embedded real Command Centre must have zero outbound API calls');
+
 console.log('PASS real demo API contract: 300 snapshot records, campaigns, inbox, in-browser reviews, watchlist, zero outbound requests');

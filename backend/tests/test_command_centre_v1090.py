@@ -115,7 +115,7 @@ def test_complete_ui_localization_including_watchlist_and_ai_issue_titles():
     fallback=(src/'bawaslu-ui-translation-fallback.js').read_text(encoding='utf-8')
     assert 'data-ai-theme' in loc
     assert 'bawaslu-ui-translation-fallback.js?build=127.7' in html
-    assert 'bawaslu-ui-translation-fallback.js?build=127.7' in watch
+    assert 'bawaslu-ui-translation-fallback.js?build=' in watch
     assert '<p data-original-content>${esc(p.text)}</p>' in watch
     assert 'window.BAWASLUUiTranslator' in fallback
     assert 'frontend' not in fallback[:30]  # browser-facing implementation

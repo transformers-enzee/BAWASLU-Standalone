@@ -265,7 +265,7 @@ def generate(question, previous, evidence, mode, history=None):
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v2",
                           "strict":True,"schema":SCHEMA}},
-        "max_output_tokens": 2300
+        "max_output_tokens": 6000
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
@@ -280,7 +280,7 @@ def generate(question, previous, evidence, mode, history=None):
     try:
         payload = response.json()
         if payload.get("status") == "incomplete":
-            raise AssistantProviderError("provider_incomplete")
+            raise AssistantProviderError("provider_incomplete_" + str((payload.get("incomplete_details") or {}).get("reason") or "unknown"))
         parsed = json.loads(_response_output_text(payload))
         if not isinstance(parsed, dict):
             raise ValueError("Object required")
@@ -306,14 +306,9 @@ def generate(question, previous, evidence, mode, history=None):
     return answer, result["cited_ids"], meta
 
 def evidence_fallback(evidence, reason):
-    if not evidence:
-        return ("No matching saved intelligence was found in your authorized records. "
-                "GPT is unavailable (" + reason + "), so I cannot reliably provide a wider analysis."), []
-    top = evidence[:6]
-    lines = ["AI synthesis is temporarily unavailable (" + reason +
-             "). Here are directly retrieved sources rather than a generated conclusion:"]
-    for item in top:
-        lines.append("- [" + item["record_id"] + "] " +
-                     (item.get("title") or item.get("source_excerpt") or "Saved source")[:165])
-    lines.append("These are source claims, not verified findings. Review the linked evidence.")
-    return "\n".join(lines), [r["record_id"] for r in top]
+    """Never present unrelated retrieved headlines as if they answer a question."""
+    if evidence:
+        return ("I couldn't finish the requested analysis this time. "
+                "Your saved records are intact. Please retry the question; "
+                "the response needs another complete synthesis rather than a list of source headlines."), []
+    return ("I couldn't complete the analysis this time. Please retry the question."), []

@@ -671,7 +671,7 @@ export default function CampaignPanel({campaignId=null}){
  </div>
 </div>}
 
-      <section className="rounded-lg border p-4 space-y-3" aria-label="Captured posts">
+      <section hidden className="hidden" aria-label="Captured posts">
  <div className="flex items-center justify-between gap-2"><h5 className="font-semibold">Captured posts & sources</h5><button type="button" onClick={classifyNextPost} disabled={aiBusy||!evidence.some(x=>x.sentiment==="Unclassified"&&!x.sentiment_details?.status)} className="intel-ghost text-xs">{aiBusy?"Analyzing…":"AI classify 1 post"}</button></div><button type="button" className="intel-ghost text-xs" disabled={mediaPreviewBusy} onClick={previewMediaCapability}>{mediaPreviewBusy?'Checking media options…':'Check Instagram media options (free)'}</button>
  {mediaPreviewError&&<p className="text-xs text-red-600" role="alert">{mediaPreviewError}</p>}
  {mediaPreview&&<div className="rounded-md border bg-slate-50 p-3 text-xs space-y-1" aria-label="Instagram media capability preview">
@@ -767,7 +767,7 @@ export default function CampaignPanel({campaignId=null}){
  {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
  <p className="text-xs text-slate-500">Up to 40 matching posts displayed from the loaded 200 hottest stored posts (up to 5,000 scanned). Filters do not search outside the loaded set.</p>
  </section>
- <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign demographics">
+ <section hidden className="hidden" aria-label="Campaign demographics">
  <h5 className="font-semibold">Demographics & data coverage</h5>
  <p className="text-xs text-slate-600">Availability of supported metadata in selected campaign evidence, not a demographic profile of viewers or voters.</p>
  <div className="grid grid-cols-2 gap-2 text-sm">

@@ -12,15 +12,11 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
         <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-36 h-96 w-96 rounded-full border-[65px] border-[#dfe9ed]/70" />
         <div className="relative w-full max-w-[520px]">
           <div className="overflow-hidden rounded-[22px] border border-[#dce5eb] bg-white shadow-[0_24px_70px_-42px_rgba(18,47,70,0.5)]">
-            <div className="border-b border-[#e3ebef] bg-[#f7fafb] px-5 py-5 sm:px-9">
-              <div className="flex items-center justify-center gap-3 sm:gap-5" aria-label="BAWASLU and NADICOM">
-                <div className="flex min-w-0 flex-[1.4] items-center justify-center">
-                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="w-full max-w-[230px] object-contain" />
-                </div>
-                <div aria-hidden="true" className="h-14 w-px shrink-0 bg-[#c9d8df]" />
-                <div className="flex min-w-0 flex-1 items-center justify-center">
-                  <img src="/nadicom-wordmark.webp" alt="NADICOM" className="w-full max-w-[152px] object-contain" />
-                </div>
+            <div className="border-b border-[#e3ebef] bg-white px-5 py-4 sm:px-9" data-testid="login-brand-lockup">
+              <div className="mx-auto flex h-11 max-w-[390px] items-center justify-center gap-3 sm:gap-4" aria-label="BAWASLU and NADICOM">
+                <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="h-11 w-[210px] min-w-0 object-contain mix-blend-multiply sm:w-[235px]" />
+                <div aria-hidden="true" className="h-8 w-px shrink-0 bg-[#a9b9c4]" />
+                <img src="/nadicom-wordmark.webp" alt="NADICOM" className="h-8 w-[115px] min-w-0 object-contain mix-blend-multiply sm:w-[130px]" />
               </div>
             </div>
             <div className="px-6 pb-8 pt-8 sm:px-10">

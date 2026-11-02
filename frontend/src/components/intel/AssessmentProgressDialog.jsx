@@ -21,7 +21,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
     {!run&&<div className="space-y-3">
      <p className="text-sm text-slate-700">Start collecting up to 75 posts for this campaign? Saved posts will then enter AI assessment, and relevant findings will appear in Intelligence Inbox.</p>
      {preview&&<p className="text-xs text-slate-600">Keywords: {(preview.keywords_used||[]).join(', ')} · Platforms: {(preview.platforms||[]).join(', ')}</p>}
-     {onConfirm&&<button type="button" className="rounded-lg bg-[#127b69] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||!preview} onClick={onConfirm}>{loading?'Activating…':'Confirm activation'}</button>}
+     {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||!preview} onClick={onConfirm}>{loading?'Activating…':'Confirm activation'}</button>}
     </div>}
     {run&&<>
      <div className="grid grid-cols-3 gap-2">
@@ -60,7 +60,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      {stage==='NEEDS_ATTENTION'&&<p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Assessment is paused or requires review, not actively advancing. Failed and ambiguous paid requests are never retried automatically. Only never-sent queued work can resume, with your confirmation.</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" disabled={loading} onClick={onRefresh}>Refresh status</button>
-      {!!run.queued&&!run.processing&&onResume&&<button type="button" className="rounded-lg bg-[#127b69] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={loading} onClick={onResume}>Resume queued assessments</button>}
+      {!!run.queued&&!run.processing&&onResume&&<button type="button" className="rounded-lg bg-[#a52a2f] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={loading} onClick={onResume}>Resume queued assessments</button>}
      </div>
      {stage==='COMPLETED'&&<p className="text-xs text-emerald-800">All eligible sources in this run have been fully assessed. Review relevant findings in Intelligence Inbox; not all captured posts become Inbox cases.</p>}
     </>}

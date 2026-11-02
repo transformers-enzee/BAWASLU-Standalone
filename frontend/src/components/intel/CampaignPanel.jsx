@@ -27,7 +27,7 @@ function SentimentBar({values}){
 function ChannelDonut({values}){
  const entries=Object.entries(values||{}).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
  const total=entries.reduce((n,[,v])=>n+v,0);
- const palette=['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'];
+ const palette=['#285f82','#bc9b62','#ba6565','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'];
  let offset=0;
  const segments=entries.map(([name,count],i)=>{const start=offset;offset+=count/total*100;return {name,count,percent:count/total*100,color:palette[i%palette.length],start,end:offset}});
  const gradient=total?'conic-gradient('+segments.map(s=>s.color+' '+s.start+'% '+s.end+'%').join(', ')+')':'conic-gradient(#e2e8f0 0% 100%)';
@@ -530,11 +530,11 @@ export default function CampaignPanel({campaignId=null}){
     <div><p className="text-[11px] font-extrabold uppercase tracking-[.13em] text-[#6d8994]">Monitoring &amp; Collection</p>
     <h1 className="mt-1 text-[27px] font-bold tracking-tight text-[#152c47]">Social Listening</h1>
     <p className="mt-1 text-sm text-[#60768c]">Discover broad conversations. Track selected candidates.</p></div>
-    {!campaignId&&<button type="button" className="rounded-xl border border-[#11816d] bg-[#11816d] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={newCampaign}>＋ Create campaign</button>}
+    {!campaignId&&<button type="button" className="rounded-xl border border-[#a52a2f] bg-[#a52a2f] px-5 py-3 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={newCampaign}>＋ Create campaign</button>}
   </header>
   <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1" aria-label="Monitoring workflow steps">
-   {['Set up monitoring','Monitoring Home','Campaign Dashboard'].map((label,i)=><span key={label} className={'inline-flex items-center gap-2 text-xs '+((creating?i===0:campaignId?i===2:i===1)?'font-bold text-[#117c6c]':'text-[#708394]')}>
-    <span className={'grid h-6 w-6 place-items-center rounded-full '+((creating?i===0:campaignId?i===2:i===1)?'bg-[#117c6c] text-white':'bg-[#e3eaee] text-[#708394]')}>{i+1}</span>{label}{i<2&&<span className="ml-2 text-[#a0b1bb]">→</span>}
+   {['Set up monitoring','Monitoring Home','Campaign Dashboard'].map((label,i)=><span key={label} className={'inline-flex items-center gap-2 text-xs '+((creating?i===0:campaignId?i===2:i===1)?'font-bold text-[#9f3033]':'text-[#708394]')}>
+    <span className={'grid h-6 w-6 place-items-center rounded-full '+((creating?i===0:campaignId?i===2:i===1)?'bg-[#9f3033] text-white':'bg-[#e3eaee] text-[#708394]')}>{i+1}</span>{label}{i<2&&<span className="ml-2 text-[#a0b1bb]">→</span>}
    </span>)}
   </nav>
   {!creating&&error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
@@ -563,22 +563,22 @@ export default function CampaignPanel({campaignId=null}){
   </section>}
   {!campaignId&&!creating&&<section className="space-y-4">
    <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see the dashboard, captured posts and candidate tracking.</p></div>
-   {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#11816d] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
+   {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#a52a2f] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
     {[[total,'Monitoring campaigns'],[campaigns.reduce((n,c)=>n+Number(c.evidence_count||0),0),'Campaign-linked source posts'],[new Set(campaigns.flatMap(c=>c.platforms||[])).size,'Configured source platforms'],[trackedCount===null?'—':trackedCount,'Actively tracked candidates']].map(([value,label])=><div key={label} className="rounded-xl border border-[#dce5ed] bg-white px-4 py-5"><strong className="block text-[26px] font-bold tabular-nums text-[#152c47]">{typeof value==='number'?value.toLocaleString():value}</strong><span className="text-[11px] text-[#60768c]">{label}</span></div>)}
    </div>
    <section className="rounded-[13px] border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
-      <div className="min-w-0 flex-1"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4>
+      <div className="min-w-0 flex-1"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#faebea] px-2 py-1 text-[10px] font-bold text-[#9f3033]">{displayStatus(c.status)}</span></h4>
       <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-[#60768c]">
        <span className={expandedCampaignKeywords[c.id]?'min-w-0 break-words':'min-w-0 flex-1 truncate'} title={expandedCampaignKeywords[c.id]?undefined:(c.primary_keywords||[]).join(', ')}>
         Keywords: {(c.primary_keywords||[]).join(', ')||'None'}
        </span>
-       {(c.primary_keywords||[]).join(', ').length>95&&<button type="button" className="shrink-0 rounded px-1 font-semibold text-[#117c6c] hover:underline" aria-expanded={Boolean(expandedCampaignKeywords[c.id])} onClick={()=>setExpandedCampaignKeywords(prev=>({...prev,[c.id]:!prev[c.id]}))}>{expandedCampaignKeywords[c.id]?'Show less':'Show more'}</button>}
+       {(c.primary_keywords||[]).join(', ').length>95&&<button type="button" className="shrink-0 rounded px-1 font-semibold text-[#9f3033] hover:underline" aria-expanded={Boolean(expandedCampaignKeywords[c.id])} onClick={()=>setExpandedCampaignKeywords(prev=>({...prev,[c.id]:!prev[c.id]}))}>{expandedCampaignKeywords[c.id]?'Show less':'Show more'}</button>}
       </div>
       <p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>{
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#a52a2f] bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>{
         if(activationSaved&&String(activationSaved.campaign_id)===String(c.id)){
          setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});setDiscoverError('');
         }else checkDiscover(c)
@@ -596,7 +596,7 @@ export default function CampaignPanel({campaignId=null}){
   }}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
    </section>
-   <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
+   <section className="rounded-xl border border-[#c7e5dc] bg-[#fcf5f4] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
   </section>}
   {campaignId&&selected&&!creating&&<div className="v10-detail space-y-4">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
@@ -640,7 +640,7 @@ export default function CampaignPanel({campaignId=null}){
 {dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
 <LineChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
-{Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platformLabel(platform)} stroke={['#285f82','#bc9b62','#339b92','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={{r:3}} activeDot={{r:6}} connectNulls/>)}
+{Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platformLabel(platform)} stroke={['#285f82','#bc9b62','#ba6565','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={{r:3}} activeDot={{r:6}} connectNulls/>)}
 </LineChart>
 </ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
 <p className="text-xs text-slate-500">Click a date on the chart to see its hottest posts. Only stored provider metrics are counted; missing data is not estimated.</p>

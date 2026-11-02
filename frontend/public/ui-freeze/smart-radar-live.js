@@ -47,8 +47,10 @@
       clearReadCache();
     }
     const pending = (async () => {
+      // Bound read requests: surface a retryable error rather than leaving the drawer loading forever.
+      const signal = options.signal || (path.startsWith('/api/smart-radar/finding/') ? AbortSignal.timeout(20000) : undefined);
       const response = await fetch(path, {
-        ...options, cache: 'no-store', headers: {
+        ...options, signal, cache: 'no-store', headers: {
           'Authorization': 'Bearer ' + token,
           ...(options.body ? {'Content-Type': 'application/json'} : {})
         }
@@ -490,7 +492,7 @@
     } catch(error) {model.history_error=error.message;}
     finally {
       model.history_loading=false;
-      if($('#historyLoading') && $('#drawerTitle')?.textContent==='Finding Details')
+      if($('#historyLoading') && ['Finding Details','Rincian Isu'].includes($('#drawerTitle')?.textContent))
         ui.refreshDrawer?.();
     }
   };
@@ -507,7 +509,7 @@
       if(!model)throw Error('Finding not found');
       if($('#drawerBody').dataset.findingRequest!==sequence ||
          !$('#overlay').classList.contains('open') ||
-         $('#drawerTitle').textContent!=='Finding Details')return;
+         !['Finding Details','Rincian Isu'].includes($('#drawerTitle').textContent))return;
       ui.openFindingOriginal(id,origin);
       $('#drawerBody').dataset.findingRequest=sequence;
       const originals=$('#drawerBody').querySelectorAll('.source');

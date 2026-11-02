@@ -166,7 +166,9 @@ def test_campaign_ui_refresh_and_cost_confirmation_are_explicit():
     from pathlib import Path
     file=Path(__file__).resolve().parents[2]/'frontend/src/components/intel/CampaignPanel.jsx'
     source=file.read_text(encoding='utf-8')
-    assert 'Refresh saved sentiment (free)' in source
-    assert 'Sentiment batch size' in source
+    # The old Overview controls were intentionally removed in v125.5.
+    # Preserve checks for the underlying paid-AI confirmation and data refresh.
+    assert 'Refresh saved sentiment (free)' not in source
+    assert 'Sentiment batch size' not in source
     assert 'confirm_ai_cost:true' in source
     assert 'setDashboard(d.data);setEvidence(e.data.evidence||[]);' in source

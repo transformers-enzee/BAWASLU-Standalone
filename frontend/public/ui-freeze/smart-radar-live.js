@@ -10,20 +10,6 @@
   let issueDistribution = null;
   let canManageWatchlist=false, monitoringProvince='', provinceGeo=null, provinceGeoFailed=false;
   let watchOffset=0;
-  function renderInboxLineage(){
-    const anchor=$('#kpis');if(!anchor)return;
-    let panel=$('#sharedCampaignViolationAssessments');
-    if(!panel){panel=document.createElement('section');
-      panel.id='sharedCampaignViolationAssessments';
-      panel.setAttribute('aria-label','Current Intelligence Inbox evidence source');
-      panel.style.cssText='margin:12px 0;padding:12px 16px;border:1px solid #bdded6;border-radius:10px;background:#f3fbf8';
-      anchor.insertAdjacentElement('afterend',panel);}
-    const scope=($('#geo')?.value||'all');
-    const total=scope==='all'?Number(dashboard?.source_total||0):countPosts(ui.view());
-    panel.innerHTML='<b>Live Intelligence Inbox · '+total+' relevant saved source'+(total===1?'':'s')+'</b>'+
-      '<p class="small muted">All operational findings below reuse the authorized Intelligence Inbox classifications and original source IDs. Legacy pilot posts are not included. Review decisions do not establish legal guilt.</p>'+
-      (dashboard?.truncated_to_inbox_window?'<p class="small" role="status">The Inbox response currently caps findings at 300; this view may be incomplete.</p>':'');
-  }
   let busy = false;
   const accessToken = () => localStorage.getItem('bawaslu_access_token') || '';
   // Short-lived in-memory cache: no browser persistence, no shared officer data.
@@ -285,12 +271,17 @@
     $('#regions').innerHTML=geoHeatmap(unverifiedLocations,verifiedLocations);
     $('#regions').removeAttribute('data-insight');
     const sentimentCounts=addCounts(filtered,'sentiment_counts');
-    // Any unclassified source counts remain explicit until persisted classification finishes.
-    const sentimentRows=['POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED']
-      .map(name=>[name,Number(sentimentCounts[name]||0)]);
-    const classified=sentimentRows.slice(0,3).reduce((n,r)=>n+r[1],0);
-    const total=classified+sentimentRows[3][1];
-    $('#sentimentExplain').textContent=classified+' of '+total+' relevant posts have saved sentiment labels. Unclassified is NOT Neutral; no AI calls are made on this page.';
+    // Presentation-only grouping: never persist or misrepresent missing AI classifications.
+    const unlabeled=Number(sentimentCounts.UNCLASSIFIED||0);
+    const classified=['POSITIVE','NEUTRAL','NEGATIVE'].reduce((sum,name)=>sum+Number(sentimentCounts[name]||0),0);
+    const total=classified+unlabeled;
+    const sentimentRows=[
+      ['POSITIVE',Number(sentimentCounts.POSITIVE||0)],
+      ['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled],
+      ['NEGATIVE',Number(sentimentCounts.NEGATIVE||0)]
+    ];
+    $('#sentimentExplain').innerHTML='<span>'+classified+'</span> <span>of</span> <span>'+total+'</span> <span>relevant posts have saved AI sentiment labels.</span>'+
+      (unlabeled?'<br><span>'+unlabeled+'</span> <span>post(s) without an AI sentiment label are included in the Neutral display segment only; their saved classification is unchanged.</span>':'');
     $('#sentiments').innerHTML=donut(sentimentRows,'sentiment:',sentimentPalette);
     const platforms=asRows(addCounts(filtered,'platform_counts'));
     $('#platforms').innerHTML=donut(platforms,'platform:',platformPalette);
@@ -328,7 +319,6 @@
       geoSelect.value=provinces.includes(current)?current:'all';
     }
     ui.setData((dashboard.findings||[]).map(mapFinding));
-    renderInboxLineage();
     document.body.classList.add('bawaslu-ready');
     // Refresh auxiliary topics after main paint. Failures must not clear existing topics.
     request('/api/smart-radar/issue-distribution').then(topics=>{
@@ -546,7 +536,7 @@
   ui.insightView = id => id.startsWith('platform:') ?
     ui.view().filter(f=>Number(f.platform_counts?.[decodeURIComponent(id.slice(9))]||0)>0) :
     id.startsWith('sentiment:') ?
-    ui.view().filter(f=>Number(f.sentiment_counts?.[decodeURIComponent(id.slice(10)).toUpperCase()]||0)>0) :
+    ui.view().filter(f=>{const kind=decodeURIComponent(id.slice(10)).toUpperCase();return Number(f.sentiment_counts?.[kind]||0)+(kind==='NEUTRAL'?Number(f.sentiment_counts?.UNCLASSIFIED||0):0)>0;}) :
     id.startsWith('geo:') ?
     ui.view().filter(f=>Object.entries(f.geo_signal_counts||{}).some(([k,n])=>regionKey(k)===regionKey(decodeURIComponent(id.slice(4)))&&n>0)) :
     id.startsWith('geo-verified:') ?
@@ -555,7 +545,7 @@
   ui.insightMatchesPost=(id,p)=>id.startsWith('platform:') ?
     String(p[5]||'').toLowerCase()===decodeURIComponent(id.slice(9)).toLowerCase() :
     id.startsWith('sentiment:') ?
-    String(p[6]||'UNCLASSIFIED').toUpperCase()===decodeURIComponent(id.slice(10)).toUpperCase() :
+    (decodeURIComponent(id.slice(10)).toUpperCase()==='NEUTRAL'? !['POSITIVE','NEGATIVE'].includes(String(p[6]||'UNCLASSIFIED').toUpperCase()) : String(p[6]||'UNCLASSIFIED').toUpperCase()===decodeURIComponent(id.slice(10)).toUpperCase()) :
     id.startsWith('geo:') ? (p[7]||[]).some(n=>regionKey(n)===regionKey(decodeURIComponent(id.slice(4)))) :
     id.startsWith('geo-verified:') ? p[8]===decodeURIComponent(id.slice(13)) : true;
   ui.openInsight = async id => {

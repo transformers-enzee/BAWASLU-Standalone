@@ -21,6 +21,7 @@ const labels=[
  'All Collected Posts','Activity Timeline','Tracked Accounts'
 ];
 labels.push('Collection runs:','Evidence records:','Tracked account post','Affiliation unverified','Add Candidate','AI-suggested candidates','Search existing candidates','Register an approved candidate','Approved candidate full name','＋ Create & Track Candidate','Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.');
+labels.push('Post preview · AI assessment','Canonical Watchlist candidate IDs:','Human flag review','Communication context (review hint):','Source-linked findings','No implied legal verdict','Activity by Platform','relevant posts have saved AI sentiment labels.');
 for(const label of labels){
  assert.equal(typeof UI_LABEL_ID[label],'string','Missing ID translation: '+label);
  assert.notEqual(UI_LABEL_ID[label],label,'English label: '+label);
@@ -40,6 +41,9 @@ assert.ok(watch.includes('bawaslu-ui-translation-fallback.js'));
 assert.ok(watch.includes('data-original-content'));
 assert.ok(read('src/lib/LanguageContext.jsx').includes("pagination[2]+' dari '+pagination[3]"));
 assert.ok(read('index.html').includes('bawaslu-ui-translation-fallback.js'));
+assert.ok(!read('public/ui-freeze/smart-radar-live.js').includes('renderInboxLineage()'), 'Remove Live Inbox source-count banner');
+assert.ok(read('public/ui-freeze/smart-radar-live.js').includes('presentation-only grouping') || read('public/ui-freeze/smart-radar-live.js').includes('Presentation-only grouping'), 'Sentiment grouping must be display only');
+assert.ok(read('src/pages/Inbox.jsx').includes('<TranslatedIntelligenceText text={signal.explanation'), 'AI flag explanations use translation-only display');
 assert.ok(read('public/ui-freeze/watchlist-live.js').includes("!$('#panel')?.classList.contains('open')"));
 assert.ok(read('src/pages/Inbox.jsx').includes('hidden className="hidden" aria-label="AI operations and diagnostics"'));
 assert.ok(read('src/pages/Inbox.jsx').includes('aria-label="Legacy intelligence records and administrative review"'));

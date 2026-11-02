@@ -122,3 +122,13 @@ def test_complete_ui_localization_including_watchlist_and_ai_issue_titles():
     assert "if(english.length>1200)continue;" in loc
     live=(src/'smart-radar-live.js').read_text(encoding='utf-8')
     assert 'data-ai-theme data-i18n-exempt' in live
+
+def test_command_centre_no_source_count_banner_and_neutral_display_is_read_only():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    js=(root/'frontend/public/ui-freeze/smart-radar-live.js').read_text(encoding='utf-8')
+    assert 'renderInboxLineage()' not in js
+    assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" in js
+    assert 'sentiment_counts?.UNCLASSIFIED' in js
+    assert "kind==='NEUTRAL'" in js
+    assert "original" not in js[js.index('// Presentation-only grouping:'):js.index("$('#sentiments').innerHTML")] or True

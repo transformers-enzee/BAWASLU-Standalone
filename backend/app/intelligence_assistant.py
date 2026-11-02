@@ -422,7 +422,7 @@ def generate_general_openai_answer(question, previous_question=''):
       {'role':'user','content':str(question or '')[:500]}
     ],'max_output_tokens':650}
     try:
-        with httpx.Client(timeout=25.0) as client:
+        with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
             response=client.post(base+'/responses',headers={
               'Authorization':'Bearer '+key,'Content-Type':'application/json'},json=request)
     except httpx.TimeoutException as exc:

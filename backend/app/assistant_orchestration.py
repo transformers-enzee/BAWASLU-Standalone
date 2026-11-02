@@ -228,7 +228,7 @@ def generate(question, previous, evidence, mode, history=None):
         "max_output_tokens": 2300
     }
     try:
-        with httpx.Client(timeout=httpx.Timeout(26, connect=5)) as client:
+        with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
             response = client.post(base + "/responses",
                 headers={"Authorization":"Bearer " + key,"Content-Type":"application/json"},json=request)
     except httpx.TimeoutException as exc:

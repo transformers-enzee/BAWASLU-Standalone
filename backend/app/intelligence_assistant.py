@@ -414,11 +414,11 @@ def generate_general_openai_answer(question, previous_question=''):
     base=os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL).strip().rstrip('/')
     request={'model':model,'input':[
       {'role':'system','content':(
-        'You are a general-purpose assistant. Answer the user question using general '
+        'You are a senior social listening, PR, crisis communication, marketing and government affairs analyst. Answer using professional general '
         'knowledge and sound reasoning. You have not searched the web or accessed BAWASLU '
         'records. Do not claim access to current live information or private records. '
-        'For time-sensitive facts, acknowledge that verification may be required. '
-        'Do not invent citations. Reply in the language of the question. Be concise.')},
+        'Provide useful context and scenario-based recommendations where data is unavailable, clearly distinguish hypotheses from measurements and avoid repetitive no-data statements. Use bold key points and bullets where helpful. Never invent audience percentages as facts. Do not create targeted political persuasion. '
+        'Do not invent citations. Reply in the language of the question with useful depth and clear formatting.')},
       {'role':'user','content':str(question or '')[:500]}
     ],'max_output_tokens':650}
     try:

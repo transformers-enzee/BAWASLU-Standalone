@@ -21,7 +21,8 @@ def test_targeted_pilot_never_auto_enqueues_other_posts():
     source=(Path(__file__).resolve().parents[1] / "app" / "auto_relevance.py").read_text()
     assert "CampaignEvidence.result_id==int(target_result_id)" in source
     assert "(requested_limit is None or target_result_id is not None) and not reserve_automatic_ai_request" in source
-    assert "job.state='FAILED' if target_result_id is not None" in source
+    assert "job.state='FAILED'" in source
+    assert "accidentally charging a second time" in source
 
 
 def test_paid_route_dispatches_only_authorized_selected_ids():

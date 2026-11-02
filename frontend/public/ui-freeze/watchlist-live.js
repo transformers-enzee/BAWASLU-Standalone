@@ -42,7 +42,7 @@
   }
   function renderSuggestions(){
     const target=$('#aiCandidateSuggestions');
-    if(!target||$('#modalTitle')?.textContent!=='Add Candidate')return;
+    if(!target||!$('#panel')?.classList.contains('open'))return;
     if(!campaignId){
       target.innerHTML='<h3>AI-suggested candidates</h3><p class="hint">Open Candidate Watchlist from a selected Social Listening campaign to view its AI recommendations.</p>';
       return;

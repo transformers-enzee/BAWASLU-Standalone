@@ -20,6 +20,7 @@ const labels=[
  'Sentiment Distribution','No classified posts in this selection',
  'All Collected Posts','Activity Timeline','Tracked Accounts'
 ];
+labels.push('Add Candidate','AI-suggested candidates','Search existing candidates','Register an approved candidate','Approved candidate full name','＋ Create & Track Candidate','Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.');
 for(const label of labels){
  assert.equal(typeof UI_LABEL_ID[label],'string','Missing ID translation: '+label);
  assert.notEqual(UI_LABEL_ID[label],label,'English label: '+label);
@@ -39,4 +40,7 @@ assert.ok(watch.includes('bawaslu-ui-translation-fallback.js'));
 assert.ok(watch.includes('data-original-content'));
 assert.ok(read('src/lib/LanguageContext.jsx').includes("pagination[2]+' dari '+pagination[3]"));
 assert.ok(read('index.html').includes('bawaslu-ui-translation-fallback.js'));
+assert.ok(read('public/ui-freeze/watchlist-live.js').includes("!$('#panel')?.classList.contains('open')"));
+assert.ok(read('src/pages/Inbox.jsx').includes('hidden className="hidden" aria-label="AI operations and diagnostics"'));
+assert.ok(read('src/pages/Inbox.jsx').includes('aria-label="Legacy intelligence records and administrative review"'));
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

@@ -600,11 +600,11 @@ export default function CampaignPanel({campaignId=null}){
   </section>}
   {campaignId&&selected&&!creating&&<div className="v10-detail space-y-4">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>
-   <h3 className="text-2xl font-bold text-[#152c47]">{selected.name} — Campaign Overview</h3>
+   <h3 className="text-2xl font-bold text-[#152c47]">{selected.name} — <span>Campaign Overview</span></h3>
    <div className="flex flex-wrap gap-2" aria-label="Campaign keyword summaries">
     {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
    </div>
-   <p className="text-sm">Collection runs: {selected.run_count} · Evidence records: {selected.evidence_count}</p>
+   <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
 
    <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">
     <summary className="cursor-pointer font-semibold text-teal-900">Admin · Import human-reviewed source posts (Social Listening → Inbox)</summary>
@@ -620,7 +620,7 @@ export default function CampaignPanel({campaignId=null}){
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id} refreshKey={authorRefreshKey}/>}
-   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)+"&v=127.7"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={"/ui-freeze/watchlist-v2_2.html?campaign_id="+encodeURIComponent(selected.id)+"&v=128.0"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}

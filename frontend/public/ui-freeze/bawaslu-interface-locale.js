@@ -1,4 +1,106 @@
 const radarId = {
+  "Add Candidate": "Tambah Kandidat",
+  "＋ Add Candidate": "＋ Tambah Kandidat",
+  "+ Add Candidate": "+ Tambah Kandidat",
+  "Choose a detected candidate identity from Social Listening.": "Pilih identitas kandidat yang terdeteksi dari Pemantauan Media Sosial.",
+  "Select an existing candidate profile or register an approved candidate identity. Search aliases without duplicating profiles.": "Pilih profil kandidat yang sudah ada atau daftarkan identitas kandidat yang telah disetujui. Cari nama alternatif tanpa membuat profil duplikat.",
+  "AI-suggested candidates": "Kandidat yang Disarankan AI",
+  "AI suggested candidates": "Kandidat yang Disarankan AI",
+  "Loading suggestions from saved campaign posts...": "Memuat saran dari unggahan kampanye tersimpan...",
+  "Search existing candidates": "Cari Kandidat Terdaftar",
+  "Search name, alias or jurisdiction": "Cari nama, nama alternatif, atau wilayah kewenangan",
+  "Already tracking": "Sudah Dipantau",
+  "＋ Track": "＋ Pantau",
+  "+ Track": "+ Pantau",
+  "No registered candidates match. To track a new approved candidate, use the registration form below.": "Tidak ada kandidat terdaftar yang cocok. Gunakan formulir pendaftaran di bawah untuk memantau kandidat baru yang telah disetujui.",
+  "Activation uses the existing BAWASLU registry. Coverage is limited to already collected data and configured collection; it does not guarantee platform-wide monitoring.": "Aktivasi menggunakan registri BAWASLU yang ada. Cakupan terbatas pada data yang telah dikumpulkan dan pengumpulan yang dikonfigurasi; tidak menjamin pemantauan seluruh platform.",
+  "Register an approved candidate": "Daftarkan Kandidat yang Telah Disetujui",
+  "Only authorised officers may add a new identity; the name must be checked to avoid duplicates.": "Hanya petugas berwenang yang boleh menambahkan identitas baru; nama harus diperiksa untuk mencegah duplikasi.",
+  "Approved candidate full name": "Nama lengkap kandidat yang disetujui",
+  "Approved aliases (optional, comma separated)": "Nama alternatif yang disetujui (opsional, pisahkan dengan koma)",
+  "Approved candidate aliases": "Nama alternatif kandidat yang disetujui",
+  "＋ Create & Track Candidate": "＋ Buat dan Pantau Kandidat",
+  "＋ Add & Track": "＋ Tambah dan Pantau",
+  "＋ Track existing": "＋ Pantau Kandidat Terdaftar",
+  "Review identity": "Tinjau Identitas",
+  "Close": "Tutup",
+  "✕ Close": "✕ Tutup",
+  "Open Candidate Watchlist from a selected Social Listening campaign to view its AI recommendations.": "Buka Daftar Pantauan Kandidat dari kampanye Pemantauan Media Sosial yang dipilih untuk melihat rekomendasi AI.",
+  "Based on saved posts in this campaign. Candidate identity requires officer verification; source IDs support evidence review.": "Berdasarkan unggahan tersimpan dalam kampanye ini. Identitas kandidat memerlukan verifikasi petugas; ID sumber mendukung pemeriksaan bukti.",
+  "Loading campaign recommendations...": "Memuat rekomendasi kampanye...",
+  "No AI-detected candidates have been recorded for this campaign yet.": "Belum ada kandidat hasil deteksi AI yang tercatat untuk kampanye ini.",
+  "No AI suggestions match this search.": "Tidak ada saran AI yang cocok dengan pencarian ini.",
+  "AI-detected mentions do not confirm official accounts, endorsements or violations.": "Penyebutan yang dideteksi AI tidak membuktikan akun resmi, dukungan, atau pelanggaran.",
+  "Review before creating another identity": "Tinjau sebelum membuat identitas lain",
+  "saved mention(s)": "penyebutan tersimpan",
+  "Evidence": "Bukti",
+  "Possible variant of": "Kemungkinan varian nama dari",
+  "Tracked Candidates": "Kandidat Terpantau",
+  "Select a candidate to view their activity and original evidence.": "Pilih kandidat untuk melihat aktivitas dan bukti asli.",
+  "Search active candidate tracking": "Cari kandidat yang sedang dipantau",
+  "Active Candidate Tracking": "Pemantauan Kandidat Aktif",
+  "Possible Violations · Not Yet Assessed": "Potensi Pelanggaran · Belum Dinilai",
+  "Active tracking": "Sedang Dipantau",
+  "National": "Nasional",
+  "own posts": "unggahan sendiri",
+  "mentions by others": "penyebutan pihak lain",
+  "saved potential-violation indicator(s)": "indikator potensi pelanggaran tersimpan",
+  "Unverified": "Belum Diverifikasi",
+  "Tracked account post · affiliation unverified": "Unggahan akun terpantau · afiliasi belum diverifikasi",
+  "Related public mention": "Penyebutan publik terkait",
+  "Saved source record": "Catatan sumber tersimpan",
+  "Sentiment: Unknown": "Sentimen: Tidak Diketahui",
+  "Sentiment: Positive": "Sentimen: Positif",
+  "Sentiment: Negative": "Sentimen: Negatif",
+  "Sentiment: Neutral": "Sentimen: Netral",
+  "Category: Candidate Activity": "Kategori: Aktivitas Kandidat",
+  "Category: Related Public Mention": "Kategori: Penyebutan Publik Terkait",
+  "Category: Possible Election Issue": "Kategori: Potensi Isu Pemilu",
+  "Potential violation: Not flagged": "Potensi pelanggaran: Tidak Ditandai",
+  "Potential violation: Flagged · Unverified": "Potensi pelanggaran: Ditandai · Belum Diverifikasi",
+  "Unknown": "Tidak Diketahui",
+  "Candidate Activity": "Aktivitas Kandidat",
+  "Not flagged": "Tidak Ditandai",
+  "Flagged · Unverified": "Ditandai · Belum Diverifikasi",
+  "Possible Election Issue": "Potensi Isu Pemilu",
+  "View evidence": "Lihat Bukti",
+  "Showing 0 original collected posts · Own and mentions by others are separated by source authorship.": "Menampilkan 0 unggahan asli yang terkumpul · Unggahan sendiri dan penyebutan pihak lain dipisahkan berdasarkan pemilik akun sumber.",
+  "Own and mentions by others are separated by source authorship.": "Unggahan sendiri dan penyebutan pihak lain dipisahkan berdasarkan pemilik akun sumber.",
+  "Add a candidate once, then follow their own account posts and mentions from other accounts—all gathered through Social Listening.": "Tambahkan kandidat sekali, lalu pantau unggahan dari akun miliknya dan penyebutan dari akun lain—semuanya dikumpulkan melalui Pemantauan Media Sosial.",
+  "No candidates tracked yet": "Belum Ada Kandidat yang Dipantau",
+  "Choose a candidate from the directory to activate tracking. Their own public posts, mentions by others, and any unverified potential-violation indicators will appear here.": "Pilih kandidat dari direktori untuk mengaktifkan pemantauan. Unggahan publik miliknya, penyebutan pihak lain, serta indikator potensi pelanggaran yang belum diverifikasi akan muncul di sini.",
+  "＋ Add your first candidate": "＋ Tambahkan Kandidat Pertama",
+  "No tracked candidates match this search.": "Tidak ada kandidat terpantau yang cocok dengan pencarian ini.",
+  "How is Watchlist different from Smart Radar?": "Apa perbedaan Daftar Pantauan dan Smart Radar?",
+  "Edit aliases": "Ubah Nama Alternatif",
+  "Stop tracking": "Hentikan Pemantauan",
+  "Candidate Activity Summary": "Ringkasan Aktivitas Kandidat",
+  "✦ Candidate Activity Summary": "✦ Ringkasan Aktivitas Kandidat",
+  "Officer-approved aliases": "Nama Alternatif yang Disetujui Petugas",
+  "Aliases link alternate full names to the existing candidate ID; they do not prove identity.": "Nama alternatif menghubungkan nama lengkap lainnya ke ID kandidat yang sudah ada; ini bukan bukti identitas.",
+  "Aliases, comma-separated": "Nama alternatif, dipisahkan dengan koma",
+  "Save aliases": "Simpan Nama Alternatif",
+  "Register candidate public account": "Daftarkan Akun Publik Kandidat",
+  "Verify the candidate's real public profile yourself before associating it. Registration does not independently prove identity or guarantee collection.": "Verifikasi sendiri profil publik kandidat sebelum mengaitkannya. Pendaftaran tidak membuktikan identitas ataupun menjamin pengumpulan data.",
+  "Social platform": "Platform Media Sosial",
+  "Public profile URL": "URL Profil Publik",
+  "Exact account handle": "Nama Akun yang Tepat",
+  "You can add several verified accounts to this candidate in one operation. One account per line: platform | public HTTPS profile URL | handle. Leave blank to register the single account above.": "Anda dapat menambahkan beberapa akun terverifikasi untuk kandidat ini sekaligus. Satu akun per baris: platform | URL profil HTTPS publik | nama akun. Kosongkan untuk mendaftarkan satu akun di atas.",
+  "If budget-capped automatic collection is enabled, registration may trigger a paid account fetch; otherwise collection remains disabled.": "Jika pengumpulan otomatis dengan batas anggaran diaktifkan, pendaftaran dapat memicu pengambilan data berbayar; jika tidak, pengumpulan tetap dinonaktifkan.",
+  "Register verified account(s)": "Daftarkan Akun Terverifikasi",
+  "Account registered. Own posts appear only when its published posts have been collected and the author matches its handle.": "Akun terdaftar. Unggahan sendiri hanya muncul jika unggahan publiknya sudah terkumpul dan penulis cocok dengan nama akun.",
+  "Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.": "Peringkat interaksi akun dihitung dari total interaksi yang dilaporkan pada unggahan tersimpan, bukan popularitas akun. Jumlah pengikut menggunakan data tingkat akun yang tersedia.",
+  "Collection runs": "Pengumpulan Berjalan",
+  "Evidence records": "Catatan Bukti",
+  "Monitoring Home": "Beranda Pemantauan",
+  "Set up monitoring": "Atur Pemantauan",
+  "Dasbor kampanye": "Dasbor Kampanye",
+  "Campaign Overview": "Ringkasan Kampanye",
+  "Main keywords": "Kata Kunci Utama",
+  "Subkeywords": "Kata Kunci Tambahan",
+  "Excluded": "Dikecualikan",
+  "All Collected Posts": "Semua Unggahan Terkumpul",
+
   "Explore actors, themes, trends, geography, topics and sentiment. Select an insight to inspect its matching example posts.": "Jelajahi aktor, tema, tren, wilayah, topik, dan sentimen. Pilih wawasan untuk melihat contoh unggahan yang sesuai.",
   "Candidate & Political Actor Intelligence": "Intelijen Kandidat dan Aktor Politik",
   "Top 10 Candidate Mentions": "10 Kandidat Paling Banyak Disebut",
@@ -931,6 +1033,26 @@ const fullInterfaceId={
       const priorities={Low:'Rendah',Medium:'Sedang',High:'Tinggi',Critical:'Kritis'};
       return value.replace(trimmed,candidateMeta[1]+' penyebutan · '+states[candidateMeta[2]]+(candidateMeta[3]?' · Prioritas: '+priorities[candidateMeta[3]]:''));
     }
+    // Watchlist counts and captions are UI metadata, never original post evidence.
+    const showing=trimmed.match(/^Showing\s+(\d[\d.,]*)\s+original collected posts\s*·\s*(.+)$/i);
+    if(showing)return value.replace(trimmed,'Menampilkan '+showing[1]+' unggahan asli terkumpul · '+(labels[showing[2]]||showing[2]));
+    const countTags=trimmed.match(/^(\d[\d.,]*)\s+(saved mention\(s\)|saved potential-violation indicator\(s\)|own posts|mentions by others)$/i);
+    if(countTags)return value.replace(trimmed,countTags[1]+' '+({
+      'saved mention(s)':'penyebutan tersimpan','saved potential-violation indicator(s)':'indikator potensi pelanggaran tersimpan',
+      'own posts':'unggahan sendiri','mentions by others':'penyebutan pihak lain'
+    }[countTags[2].toLowerCase()]));
+    const postMeta=trimmed.match(/^(Sentiment|Category|Potential violation):\s*(.+)$/i);
+    if(postMeta){
+      const prefix={'sentiment':'Sentimen','category':'Kategori','potential violation':'Potensi pelanggaran'}[postMeta[1].toLowerCase()];
+      const detail=labels[postMeta[2]]||postMeta[2];
+      return value.replace(trimmed,prefix+': '+detail);
+    }
+    if(trimmed.endsWith(' · Saved source record'))
+      return value.replace(' · Saved source record',' · Catatan sumber tersimpan');
+    if(/^\d[\d.,]*\s+own posts\s*·\s*\d[\d.,]*\s+mentions by others/i.test(trimmed))
+      return value.replace(/\bown posts\b/gi,'unggahan sendiri').replace(/\bmentions by others\b/gi,'penyebutan pihak lain');
+    if(/^\d[\d.,]*\s+saved potential-violation indicator\(s\)\s*·\s*Unverified$/i.test(trimmed))
+      return value.replace('saved potential-violation indicator(s)','indikator potensi pelanggaran tersimpan').replace('Unverified','Belum Diverifikasi');
     // Labels with live counts are UI only. Never modify source evidence or status IDs.
     const countLabel=trimmed.match(/^(\d[\d.,]*)\s+(Review Needed|Reviewed|Issues Identified|Supporting Posts|Narratives|Pending Reviews|Posts)$/i);
     if(countLabel){

@@ -751,7 +751,7 @@ const customId={
         if(current!==cached)el.textContent=cached;
         summaryLast.set(el,cached);return;
       }
-      if(cached==='pending')return;
+      if(cached==='pending'||cached==='failed')return;
       summaryCache.set(original,'pending');
       const token=window.localStorage.getItem('bawaslu_access_token')||'';
       fetch('/api/presentation/translate',{method:'POST',cache:'no-store',
@@ -760,7 +760,7 @@ const customId={
        .then(async r=>{const v=await r.json();if(!r.ok)throw Error('Translation unavailable');return v.text;})
        .then(value=>{if(!value)return;summaryCache.set(original,value);
          if(locale==='id'&&summaryOriginal.get(el)===original){el.textContent=value;summaryLast.set(el,value);}
-       }).catch(()=>{summaryCache.delete(original);/* Leave original text visible if translation fails. */});
+       }).catch(()=>{summaryCache.set(original,'failed');/* Leave original text visible if translation fails. */});
     });
   }
   let scheduled=0;

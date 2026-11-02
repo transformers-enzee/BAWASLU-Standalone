@@ -155,19 +155,25 @@ function localApi(url,init){
 window.fetch=async (input,init={})=>{
  const url=typeof input==='string'?input:input?.url||'',u=new URL(url,window.location.href);
  if(u.pathname.startsWith('/api/'))return response(localApi(url,init));
- // Read-only static resources from this application host; never access other origins.
- if(u.origin===location.origin&&!/\/api\//.test(u.pathname))return original(input,init);
+ // Only static asset reads are permitted. No network mutations of any kind.
+ const method=String(init.method||input?.method||'GET').toUpperCase();
+ if(u.origin===location.origin&&['GET','HEAD'].includes(method)&&!/\/api\//.test(u.pathname))return original(input,init);
  return response({detail:'Blocked: read-only demo network isolation'},403);
 };
 // Defense in depth: catch any future library that tries to bypass the demo fetch adapter.
 const demoXhrOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(method,url,...rest){
  const target=new URL(String(url||''),location.href);
- if(target.pathname.startsWith('/api/')||target.origin!==location.origin)
-  throw new Error('Demo mode blocks direct API and external network requests');
+ if(target.pathname.startsWith('/api/')||target.origin!==location.origin||!['GET','HEAD'].includes(String(method).toUpperCase()))
+  throw new Error('Demo mode blocks API writes and external network requests');
  return demoXhrOpen.call(this,method,url,...rest);
 };
 try{
  if(navigator.sendBeacon)navigator.sendBeacon=()=>false;
 }catch(_){}
+
+window.__BAWASLU_DEMO_META__=Object.freeze({
+ branch:'demo-isolated-20261103',dataset:'sanitized-production-snapshot',records:snapshot.length,
+ snapshotDate:'2026-11-03',connectedToProduction:false,participantStorage:'memory-only'
+});
 window.__BAWASLU_DEMO_RESET__=()=>{additionalCampaigns.length=0;reviewState={};};

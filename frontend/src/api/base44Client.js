@@ -20,7 +20,7 @@ function cachedInboxRead(payload){
   return pending;
 }
 
-function token(){ return window.localStorage.getItem(TOKEN_KEY) || ''; }
+function token(){ return window.__BAWASLU_DEMO_REPLICA__ ? '' : (window.localStorage.getItem(TOKEN_KEY) || ''); }
 function apiError(status, data){
   const e = new Error(data?.detail || data?.error || `Request failed (${status})`);
   e.status = status; e.data = data; e.response = { status, data: { error: data?.detail || data?.error || e.message } };

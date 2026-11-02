@@ -44,12 +44,14 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
        ['Queued',run.queued||0],
        ['Processing',run.processing||0],
        ['Needs review',run.failed||0],
-       ['Unable to queue',run.blocked||0]
+       ['Unable to queue',run.blocked||0],
+       ...(run.stalled?[['Stalled worker',run.stalled]]:[])
       ].map(([key,value])=><div key={key} className="rounded-lg border border-slate-200 p-3"><strong className="block text-lg text-[#19324a]">{value}</strong>{key}</div>)}
      </div>
      {run.budget&&<p className="text-xs text-slate-600">Remaining controlled AI request allowance: {run.budget.available||0}. The actual charge depends on provider token usage.</p>}
      {run.error&&<p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">{run.error}</p>}
-     {stage==='NEEDS_ATTENTION'&&<p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Some requests could not complete. Failed or ambiguous paid requests are not retried automatically. Only saved, never-sent queued work can be resumed.</p>}
+     {run.status_reason&&<p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{run.status_reason}</p>}
+     {stage==='NEEDS_ATTENTION'&&<p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Assessment is paused or requires review, not actively advancing. Failed and ambiguous paid requests are never retried automatically. Only never-sent queued work can resume, with your confirmation.</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" disabled={loading} onClick={onRefresh}>Refresh status</button>
       {!!run.queued&&!run.processing&&onResume&&<button type="button" className="rounded-lg bg-[#127b69] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={loading} onClick={onResume}>Resume queued assessments</button>}

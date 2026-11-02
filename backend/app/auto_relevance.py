@@ -303,7 +303,9 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 # A standalone sentiment analysis can precede relevance assessment.
                 # Preserve that confirmed, paid annotation and append a new version
                 # without re-billing or erasing the independent classification.
-                if previous and sentiment_is_assessed(previous) and not reanalysis:
+                if (previous and sentiment_is_assessed(previous) and not reanalysis
+                        and str(previous.sentiment_model or '').lower() != 'socialcrawl-prism-stance'
+                        and str(previous.sentiment or '').upper() in ('POSITIVE','NEUTRAL','NEGATIVE')):
                     saved_sentiment=str(previous.sentiment or 'UNCLASSIFIED').upper()
                     sentiment_data={
                         'sentiment':saved_sentiment if saved_sentiment in

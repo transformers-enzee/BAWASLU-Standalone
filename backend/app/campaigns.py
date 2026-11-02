@@ -1292,7 +1292,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         # Invalidate cached analytics immediately when campaign evidence changes.
         from .models import EvidenceAssessment
         from .sentiment_processing import latest_saved_sentiments
-        from .topic_themes import latest_saved_categories,UNCATEGORIZED
+        from .topic_themes import latest_saved_categories,UNCATEGORIZED,PENDING
         from sqlalchemy import func
         evidence_revision=db.query(func.count(CampaignEvidence.id),
             func.max(CampaignEvidence.id)).filter(CampaignEvidence.campaign_id==c.id,
@@ -1339,8 +1339,16 @@ def campaign_action(db:Session,p,action,data,id=None):
         secondary_pattern=keyword_pattern(secondary_terms)
         # Match province mentions in campaign posts, never treat mentions as proven origin.
         province_names=('Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya')
-        province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(name) for name in sorted(province_names,key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
+        # Explicit Indonesian province aliases are unverified *mentions*, not
+        # proof of a source's origin or incident location.
+        province_aliases={'Jakarta':'DKI Jakarta','Yogyakarta':'DI Yogyakarta',
+                          'Jogja':'DI Yogyakarta','Jabar':'Jawa Barat',
+                          'Jateng':'Jawa Tengah','Jatim':'Jawa Timur',
+                          'Sumut':'Sumatera Utara','Sumbar':'Sumatera Barat',
+                          'Sulsel':'Sulawesi Selatan','Sulut':'Sulawesi Utara'}
+        province_pattern=re.compile(r'(?<![A-Za-z0-9_])(?:'+'|'.join(re.escape(name) for name in sorted((*province_names,*province_aliases),key=len,reverse=True))+r')(?![A-Za-z0-9_])',re.IGNORECASE)
         province_lookup={name.casefold():name for name in province_names}
+        province_lookup.update({key.casefold():value for key,value in province_aliases.items()})
         province_counts=Counter(); province_mentions=Counter(); province_connected=Counter(); top_accounts={}; visible=0; primary_message_count=0; secondary_message_count=0; secondary_absent_count=0; followers_total=0; followers_count=0
         from types import SimpleNamespace
         for record in links:
@@ -1414,9 +1422,12 @@ def campaign_action(db:Session,p,action,data,id=None):
             content_kind='comments' if 'comment' in str(item.content_type or '').casefold() else 'posts'
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
-            tone=saved_sentiments.get(result_id,'Unclassified')
+            category=saved_topics.get(result_id,PENDING)
+            # PRISM's provisional stance is not a completed full sentiment
+            # assessment; keep pending distinct from a genuine UNCLASSIFIED.
+            tone=('Pending assessment' if category==PENDING
+                  else saved_sentiments.get(result_id,'Unclassified'))
             sentiment[tone]+=1
-            category=saved_topics.get(result_id,UNCATEGORIZED)
             theme_counts[category]+=1
             theme_sentiments.setdefault(category,Counter())[tone]+=1
             sample=theme_samples.setdefault(category,[])
@@ -1441,10 +1452,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
                 for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
-        topic_names=sorted(theme_counts,key=lambda key:(key==UNCATEGORIZED,-theme_counts[key],key))
+        topic_names=sorted(theme_counts,key=lambda key:(key in (UNCATEGORIZED,PENDING),key==PENDING,-theme_counts[key],key))
         topic_rows=[{'name':key,'count':theme_counts[key],
                      'sentiment':{tone:int(theme_sentiments[key].get(tone,0))
-                                  for tone in ('Negative','Neutral','Positive','Unclassified')},
+                                  for tone in ('Negative','Neutral','Positive','Unclassified','Pending assessment')},
                      'sample_posts':theme_samples.get(key,[])}
                     for key in topic_names]
         result={'campaign_id':str(c.id),'evidence_count':visible,'run_count':runs,
@@ -1454,13 +1465,15 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'metrics_available':dict(metrics_available)},
                 'daily_platform_trend':[{'date':day,**{platform+'__'+metric:daily_platform[day].get(platform+'__'+metric,0) for platform in platforms for metric in ('posts','engagement','views')}} for day in sorted(daily_platform)],
                 'daily_trend':[{ 'date':day,'count':daily[day],**daily_types.get(day,{'posts':0,'comments':0})} for day in sorted(daily)],
-                'sentiment':{key:int(sentiment.get(key,0)) for key in ('Positive','Neutral','Negative','Unclassified')},
+                'sentiment':{key:int(sentiment.get(key,0)) for key in ('Positive','Neutral','Negative','Unclassified','Pending assessment')},
                 'sentiment_classified_count':sum(sentiment.get(key,0) for key in ('Positive','Neutral','Negative')),
                 'sentiment_unclassified_count':int(sentiment.get('Unclassified',0)),
+                'sentiment_pending_count':int(sentiment.get('Pending assessment',0)),
                 'sentiment_method':'SAVED_CAMPAIGN_AI_ASSESSMENTS',
                 'topics_and_themes':{'categories':topic_rows,'total_mentions':visible,
-                                     'categorized_mentions':visible-theme_counts.get(UNCATEGORIZED,0),
+                                     'categorized_mentions':visible-theme_counts.get(UNCATEGORIZED,0)-theme_counts.get(PENDING,0),
                                      'uncategorized_mentions':theme_counts.get(UNCATEGORIZED,0),
+                                     'pending_assessment_mentions':theme_counts.get(PENDING,0),
                                      'method':'SAVED_AI_TOPIC_ASSESSMENTS'},
                 'geographies':dict(geographies),
                 'province_distribution': [{'province':name,'count':count,'percentage':round(count*100/sum(province_counts.values()),1)} for name,count in province_counts.most_common()],

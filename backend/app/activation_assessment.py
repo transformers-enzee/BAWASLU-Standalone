@@ -6,7 +6,7 @@ OpenAI itself or treat preliminary PRISM labels as completed full assessments.
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from .access import allowed, has
 from .models import (MonitoringCampaign, CampaignRun, CampaignEvidence,
@@ -67,6 +67,13 @@ def _run(db, principal, campaign_id, run_id):
     return c, run
 
 
+def stale_processing_claim(job, at=None):
+    """Detect an interrupted worker without retrying or modifying a paid request."""
+    if not job or job.state != "PROCESSING" or not job.updated_at:
+        return False
+    return job.updated_at < ((at or datetime.utcnow()) - timedelta(minutes=10))
+
+
 def status(db, principal, campaign_id, run_id):
     c, run = _run(db, principal, campaign_id, run_id)
     try:
@@ -93,7 +100,10 @@ def status(db, principal, campaign_id, run_id):
         assessments.setdefault(row.result_id, row)
     jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
         AIAssessmentJob.campaign_id == c.id, AIAssessmentJob.result_id.in_(ids)).all()}
-    totals = {"completed":0,"queued":0,"processing":0,"failed":0,"blocked":0}
+    totals = {"completed":0,"queued":0,"processing":0,"failed":0,"blocked":0,"stalled":0}
+    # Jobs older than the automatic quarantine window are not proof of a live
+    # provider request. Keep them untouched until an explicitly authorized resume.
+
     for rid in ids:
         previous = assessments.get(rid)
         if not needs_full_assessment(previous):
@@ -101,7 +111,10 @@ def status(db, principal, campaign_id, run_id):
         else:
             job = jobs.get(rid)
             if job and job.state == "PROCESSING":
-                totals["processing"] += 1
+                if stale_processing_claim(job):
+                    totals["stalled"] += 1
+                else:
+                    totals["processing"] += 1
             elif job and job.state == "PENDING":
                 totals["queued"] += 1
             elif job and job.state in ("FAILED","COMPLETED"):
@@ -114,6 +127,8 @@ def status(db, principal, campaign_id, run_id):
         stage = "COLLECTING"
     elif totals["completed"] == len(ids):
         stage = "COMPLETED"
+    elif totals["stalled"]:
+        stage = "NEEDS_ATTENTION"
     elif totals["queued"] or totals["processing"]:
         budget = remaining_budget(db, c.id)
         stage = ("NEEDS_ATTENTION" if totals["queued"] and not totals["processing"]
@@ -123,11 +138,21 @@ def status(db, principal, campaign_id, run_id):
         stage = "NEEDS_ATTENTION"
     else:
         stage = "ASSESSING"
+    budget = remaining_budget(db,c.id)
+    reason = ("A worker has not updated a processing request in over 10 minutes. "
+              "The uncertain request will not be charged again automatically." if totals["stalled"]
+              else "The previous processing worker has finished or stopped. "
+                   "Queued, never-sent posts can be resumed with explicit approval."
+                   if stage == "NEEDS_ATTENTION" and totals["queued"] and budget["available"]
+              else "The current AI request allowance is exhausted."
+                   if stage == "NEEDS_ATTENTION" and not budget["available"]
+              else "")
     return {"run_id":run.id, "status":run.status,"stage":stage,
+            "status_reason":reason,
             "posts_saved":int(run.result_count or 0), "total":len(ids),
             **totals,"progress_percent":round(100*totals["completed"]/len(ids)),
             "credits_used":int(run.credits_used or 0),
-            "error":run.error_text or "", "budget":remaining_budget(db,c.id)}
+            "error":run.error_text or "", "budget":budget}
 
 
 def _scope_ids(db, principal, campaign_id, limit=500):

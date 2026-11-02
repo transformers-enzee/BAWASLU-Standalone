@@ -7,7 +7,7 @@ from app.models import User,AccessGrant,SocialListeningRun,SocialListeningResult
 from app.auth import hash_password
 from app.access import default_permissions,profile
 from app.socialcrawl import social_listening_action
-from app.topic_themes import category_for_assessment,latest_saved_categories,UNCATEGORIZED
+from app.topic_themes import category_for_assessment,latest_saved_categories,UNCATEGORIZED,PENDING
 from app.classification_enrichment import normalize_topics
 
 def setup_function():
@@ -36,7 +36,7 @@ def test_dashboard_topic_chart_uses_latest_assessments_and_preserves_unclassifie
     db.add(run);db.flush()
     ids=[]
     for i in range(3):
-        row=SocialListeningResult(run_id=run.id,platform='tiktok',text_content='bawaslu test sample '+str(i),
+        row=SocialListeningResult(run_id=run.id,platform='tiktok',text_content='bawaslu test sample Jakarta '+str(i),
                                   author_name='QA',published_at='2026-10-28')
         db.add(row);db.flush();ids.append(row.id)
         db.add(CampaignEvidence(campaign_id=int(campaign['id']),result_id=row.id,matched_fields_json='{"main_keywords":["bawaslu"]}'))
@@ -52,11 +52,24 @@ def test_dashboard_topic_chart_uses_latest_assessments_and_preserves_unclassifie
     themes=dashboard['topics_and_themes']
     assert themes['total_mentions']==3
     assert themes['categorized_mentions']==2
-    assert themes['uncategorized_mentions']==1
+    assert themes['uncategorized_mentions']==0
+    assert themes['pending_assessment_mentions']==1
     counts={row['name']:row['count'] for row in themes['categories']}
-    assert counts=={'Electoral Operations':1,'Public Information':1,'Not categorized':1}
+    assert counts=={'Electoral Operations':1,'Public Information':1,PENDING:1}
     assert 'bawaslu' not in counts
     chart={row['name']:row for row in themes['categories']}
     assert chart['Electoral Operations']['sentiment']['Negative']==1
     assert chart['Public Information']['sentiment']['Positive']==1
+    assert dashboard['sentiment_pending_count']==1
+    assert dashboard['province_mentions_distribution'][0]['province']=='DKI Jakarta'
+    assert dashboard['province_mentions_distribution'][0]['count']==3
+    db.close()
+
+def test_prism_preliminary_topic_must_not_count_as_full_classification():
+    db=SessionLocal()
+    row=EvidenceAssessment(campaign_id=987,result_id=987,
+        assessment_version=1,model_version='PRISM_PENDING_OPENAI',
+        relevance_label='RELEVANT',topic_labels_json='["Electoral Operations"]')
+    db.add(row);db.commit()
+    assert latest_saved_categories(db,987)[987]==PENDING
     db.close()

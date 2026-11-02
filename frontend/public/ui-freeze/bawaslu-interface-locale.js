@@ -733,8 +733,38 @@ const customId={
       }
     }
   }
+  // Translate saved Command Centre intelligence summaries, never source posts.
+  const summaryOriginal=new WeakMap(),summaryLast=new WeakMap(),summaryCache=new Map();
+  function translateSummaries(){
+    document.querySelectorAll('#informationPlayers .player p,#actionPlayers .player p,#reviewedPlayers .player p,#trendsAiSummary,#executive').forEach(el=>{
+      el.setAttribute('data-i18n-exempt','');
+      const current=el.textContent||'';
+      if(!summaryOriginal.has(el)||current!==summaryLast.get(el))summaryOriginal.set(el,current);
+      const original=summaryOriginal.get(el)||'';
+      if(!original.trim()||original.length>8000)return;
+      if(locale!=='id'){
+        if(current!==original)el.textContent=original;
+        summaryLast.set(el,original);return;
+      }
+      const cached=summaryCache.get(original);
+      if(typeof cached==='string'){
+        if(current!==cached)el.textContent=cached;
+        summaryLast.set(el,cached);return;
+      }
+      if(cached==='pending')return;
+      summaryCache.set(original,'pending');
+      const token=window.localStorage.getItem('bawaslu_access_token')||'';
+      fetch('/api/presentation/translate',{method:'POST',cache:'no-store',
+        headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({text:original,language:'id'})})
+       .then(async r=>{const v=await r.json();if(!r.ok)throw Error('Translation unavailable');return v.text;})
+       .then(value=>{if(!value)return;summaryCache.set(original,value);
+         if(locale==='id'&&summaryOriginal.get(el)===original){el.textContent=value;summaryLast.set(el,value);}
+       }).catch(()=>{summaryCache.delete(original);/* Leave original text visible if translation fails. */});
+    });
+  }
   let scheduled=0;
-  function schedule(){if(!scheduled)scheduled=requestAnimationFrame(()=>{scheduled=0;scan();});}
+  function schedule(){if(!scheduled)scheduled=requestAnimationFrame(()=>{scheduled=0;scan();translateSummaries();});}
   function setLanguage(lang){
     locale=lang==='id'?'id':'en';
     document.documentElement.lang=locale;

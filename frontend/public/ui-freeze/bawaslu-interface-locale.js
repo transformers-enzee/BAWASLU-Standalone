@@ -950,7 +950,7 @@ const fullInterfaceId={
         const current=node.nodeValue||'';
         if(!originals.has(node)||rendered.get(node)!==current)originals.set(node,current);
         const english=originals.get(node)||'';
-        if(english.length>350)continue;
+        if(english.length>1200)continue;
         const next=translate(english);
         if(current!==next)node.nodeValue=next;
         rendered.set(node,next);

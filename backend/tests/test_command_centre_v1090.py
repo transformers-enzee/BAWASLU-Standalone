@@ -58,7 +58,7 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=127.0' in html
+    assert 'bawaslu-interface-locale.js?build=127.7' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale
 
@@ -103,3 +103,22 @@ def test_command_centre_saved_issue_title_localization_not_source_rewrite():
     # Original post descriptions remain untouched and linked to their source.
     assert '<p>${E(p[2])}</p>' in html
     assert '<p data-ai-title>${E(p[2])}</p>' not in html
+
+
+def test_complete_ui_localization_including_watchlist_and_ai_issue_titles():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    src=root/'frontend/public/ui-freeze'
+    html=(src/'smart-radar-v6_2.html').read_text(encoding='utf-8')
+    watch=(src/'watchlist-v2_2.html').read_text(encoding='utf-8')
+    loc=(src/'bawaslu-interface-locale.js').read_text(encoding='utf-8')
+    fallback=(src/'bawaslu-ui-translation-fallback.js').read_text(encoding='utf-8')
+    assert 'data-ai-theme' in loc
+    assert 'bawaslu-ui-translation-fallback.js?build=127.7' in html
+    assert 'bawaslu-ui-translation-fallback.js?build=127.7' in watch
+    assert '<p data-original-content>${esc(p.text)}</p>' in watch
+    assert 'window.BAWASLUUiTranslator' in fallback
+    assert 'frontend' not in fallback[:30]  # browser-facing implementation
+    assert "if(english.length>1200)continue;" in loc
+    live=(src/'smart-radar-live.js').read_text(encoding='utf-8')
+    assert 'data-ai-theme data-i18n-exempt' in live

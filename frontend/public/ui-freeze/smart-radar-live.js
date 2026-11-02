@@ -261,7 +261,7 @@
         const pct=Math.max(0,Math.min(100,Number(t.count||0)/highest*100));
         return '<button type="button" class="issue-theme" data-issue-id="'+Number(t.id)+'" data-issue-perspective="'+perspective+'" data-issue-title="'+encodeURIComponent(t.title)+
           '" aria-label="View supporting posts for '+label(t.title)+'" style="display:block;width:100%;text-align:left;padding:12px 14px;margin:9px 0;background:#fff;border:1px solid #dce7e8;border-radius:10px;cursor:pointer;color:#17334a" title="'+label(t.description||'')+'">'+
-          '<div style="display:flex;justify-content:space-between;gap:12px;align-items:start"><strong style="font-size:12px;line-height:1.5">'+label(t.title)+'</strong><strong>'+Number(t.count||0)+'</strong></div>'+
+          '<div style="display:flex;justify-content:space-between;gap:12px;align-items:start"><strong data-ai-theme data-i18n-exempt style="font-size:12px;line-height:1.5">'+label(t.title)+'</strong><strong>'+Number(t.count||0)+'</strong></div>'+
           '<div class="small muted" style="margin:5px 0">'+label(t.sentiment||'NEUTRAL')+'</div>'+
           '<div style="background:#e9eef0;border-radius:8px;height:7px"><div style="height:7px;border-radius:8px;background:'+(colors[t.sentiment]||colors.NEUTRAL)+';width:'+pct+'%"></div></div></button>';
       }).join('')+

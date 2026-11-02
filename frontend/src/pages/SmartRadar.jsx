@@ -11,9 +11,9 @@ export default function SmartRadar(){
  const sendLocale=()=>frameRef.current?.contentWindow?.postMessage(
     {type:'BAWASLU_UI_LANGUAGE',language},window.location.origin);
  useEffect(()=>{sendLocale();},[language]);
- return <section aria-label="Command Centre" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#faf6f7]">
-  <iframe ref={frameRef} onLoad={sendLocale} title="BAWASLU Command Centre" src="/ui-freeze/smart-radar-v6_2.html?build=122.3"
-   className="block w-full border-0 bg-[#faf6f7]"
+ return <section aria-label="Command Centre" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#faf9f9]">
+  <iframe ref={frameRef} onLoad={sendLocale} title="BAWASLU Command Centre" src="/ui-freeze/smart-radar-v6_2.html?build=122.4"
+   className="block w-full border-0 bg-[#faf9f9]"
    style={{height:'calc(100vh - 76px)',minHeight:640}}/>
  </section>;
 }

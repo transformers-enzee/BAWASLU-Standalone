@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import AccessNavigation from '@/components/intel/AccessNavigation';
 import { useLanguage } from '@/lib/LanguageContext';
 import InterfaceLanguageBridge from '@/components/intel/InterfaceLanguageBridge';
+import DemoGuide from '@/demo/DemoGuide.jsx';
 
 export default function Shell(){
  const [open,setOpen]=useState(false),[deniedView,setDeniedView]=useState(false),[user,setUser]=useState(null),[access,setAccess]=useState(null),[error,setError]=useState('');
@@ -25,5 +26,5 @@ export default function Shell(){
    <main className={deniedView?'min-h-screen flex items-center justify-center p-5 md:p-9':'max-w-[1530px] mx-auto p-5 md:p-9'}><Outlet context={{access,setDeniedView}}/></main>
    <footer className="px-5 pb-2 text-[10px] text-slate-400 text-right" aria-label="Build version">v127.7</footer>
   </div>
- </div></>;
+ </div>{window.__BAWASLU_DEMO_REPLICA__&&<DemoGuide/>}</>;
 }

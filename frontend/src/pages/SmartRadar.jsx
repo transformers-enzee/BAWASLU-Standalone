@@ -12,7 +12,7 @@ export default function SmartRadar(){
     {type:'BAWASLU_UI_LANGUAGE',language},window.location.origin);
  useEffect(()=>{sendLocale();},[language]);
  return <section aria-label="Command Centre" className="-mx-5 -my-5 md:-mx-9 md:-my-9 bg-[#f1f5f7]">
-  <iframe ref={frameRef} onLoad={sendLocale} title="BAWASLU Command Centre" src="/ui-freeze/smart-radar-v6_2.html?build=120.0"
+  <iframe ref={frameRef} onLoad={sendLocale} title="BAWASLU Command Centre" src="/ui-freeze/smart-radar-v6_2.html?build=120.1"
    className="block w-full border-0 bg-[#f1f5f7]"
    style={{height:'calc(100vh - 76px)',minHeight:640}}/>
  </section>;

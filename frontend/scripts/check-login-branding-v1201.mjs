@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const layout=readFileSync(new URL('../src/components/AuthLayout.jsx',import.meta.url),'utf8');
+const login=readFileSync(new URL('../src/pages/Login.jsx',import.meta.url),'utf8');
+assert.match(login,/nadicomBranding/);
+assert.match(layout,/flex items-center justify-center gap-3 sm:gap-5/);
+assert.match(layout,/bawaslu-emblem\.svg/);
+assert.match(layout,/nadicom-symbol\.webp/);
+assert.match(layout,/nadicom-wordmark\.webp/);
+assert.match(layout,/bg-\[#f1f5f7\]/);
+assert.match(layout,/BAWASLU Smart Radar/);
+assert.match(layout,/\{children\}/);
+console.log('Build 120.1 login side-by-side branding and layout checks passed.');

@@ -13,9 +13,9 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
         <div className="relative w-full max-w-[520px]">
           <div className="overflow-hidden rounded-[22px] border border-[#dce5eb] bg-white shadow-[0_24px_70px_-42px_rgba(18,47,70,0.5)]">
             <div className="border-b border-[#e3ebef] bg-white px-5 py-4 sm:px-9" data-testid="login-brand-lockup">
-              <div className="mx-auto grid h-[68px] w-full max-w-[420px] grid-cols-[minmax(0,1.35fr)_1px_minmax(0,1fr)] items-center gap-3 sm:gap-5" aria-label="BAWASLU and NADICOM">
+              <div className="mx-auto grid h-[68px] w-full max-w-[420px] grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-center gap-3 sm:gap-5" aria-label="BAWASLU and NADICOM">
                 <div className="flex h-[60px] min-w-0 items-center justify-center overflow-hidden">
-                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="h-[127.3px] w-[219px] max-w-none shrink-0 object-contain mix-blend-multiply" />
+                  <img src="/bawaslu-full-logo.webp" alt="BAWASLU — Badan Pengawas Pemilihan Umum" className="h-[127.3px] w-[219px] max-w-none shrink-0 -translate-x-1.5 object-contain mix-blend-multiply" />
                 </div>
                 <div aria-hidden="true" className="h-10 w-px self-center bg-[#a9b9c4]" />
                 <div className="flex min-w-0 items-center justify-center">

@@ -215,7 +215,7 @@ function DemoApp(){
  </>;
  const content={command,social,inbox,watchlist:watch,assistant,validation,sources,admin}[page];
  useEffect(()=>{document.title='BAWASLU Smart Radar · Demo';},[]);
- return <div className="d-app">
+ return <div className={"d-app "+(demoSettings.compact?"compact":"")}>
   <aside className={'d-sidebar '+(mobile?'show':'')} aria-label={L('Demo navigation','Navigasi demo')}>
    <div className="d-brand"><div className="d-mark" aria-hidden="true">✦</div><div><strong>BAWASLU</strong><small>SMART RADAR</small></div></div>
    <div className="d-sidegroup"><div className="d-sidehead">{L('WORKSPACE','RUANG KERJA')}</div>{sections.slice(0,5).map(s=><button key={s.key} className={'d-navitem '+(page===s.key?'active':'')} onClick={()=>setNav(s.key)}><s.icon size={18}/>{W(s.name)}</button>)}</div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Plus, History, Trash2, MessageSquareText } from 'lucide-react';
+import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantAnswer from '@/components/intel/AssistantAnswer';
@@ -29,6 +29,12 @@ export default function IntelligenceAssistant(){
  const [analysisMode,setAnalysisMode]=useState('AUTO');
  const [showHistory,setShowHistory]=useState(true);
  const activeIdRef=useRef(null);
+ const latestRef=useRef(null);
+ const [showJump,setShowJump]=useState(false);
+ useEffect(()=>{
+  const onScroll=()=>{const documentHeight=document.documentElement.scrollHeight;setShowJump(documentHeight-window.innerHeight-window.scrollY>360&&messages.length>2)};
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();return()=>window.removeEventListener('scroll',onScroll);
+ },[messages.length]);
  function setActive(id){activeIdRef.current=id;setActiveId(id)}
  useEffect(()=>{
   let live=true;
@@ -128,7 +134,9 @@ export default function IntelligenceAssistant(){
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}
      {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
      {historyError&&<p role="alert" className="text-sm text-amber-800">{historyError}</p>}
+     <div ref={latestRef} aria-hidden="true"/>
     </section>
+    {showJump&&<button type="button" onClick={()=>latestRef.current?.scrollIntoView({behavior:'smooth',block:'end'})} className="fixed bottom-24 right-7 z-40 flex items-center gap-2 rounded-full bg-[#801b24] px-4 py-2 text-sm font-semibold text-white shadow-lg" aria-label="Jump to latest chat message"><ArrowDown size={16}/> Jump to latest</button>}
     <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
       <span>Answer source: {analysisMode==='AUTO'?'Automatic — hybrid when evidence is available':analysisMode==='DATA'?'Saved BAWASLU evidence only':'GPT general knowledge only'}</span>
       <select aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={analysisMode} onChange={e=>setAnalysisMode(e.target.value)} disabled={busy}>

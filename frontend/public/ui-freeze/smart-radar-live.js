@@ -174,15 +174,32 @@
     const days=Number(activityWindow);
     const cutoff=new Date(latest.getTime()-(days-1)*86400000).toISOString().slice(0,10);
     const dates=(activityWindow==='all'?sorted:sorted.filter(([d])=>d>=cutoff)).slice(-90);
-    const max=Math.max(1,...dates.map(x=>Number(x[1])));
-    const pts=dates.map(([day,count],i)=>({day,count:Number(count),x:23+i*(dates.length>1?275/(dates.length-1):0),y:125-Number(count)/max*95}));
-    return '<div style="position:relative"><svg viewBox="0 0 320 155" width="100%" aria-label="Daily post activity: hover or focus a point for the exact count" role="img">'+
-      '<line x1="18" y1="125" x2="305" y2="125" stroke="#9ca8b2"/>'+
-      '<polyline fill="none" stroke="#278d7a" stroke-width="3" points="'+pts.map(p=>p.x+','+p.y).join(' ')+'"/>'+
-      pts.map(p=>'<circle tabindex="0" data-activity-day="'+label(p.day)+'" data-activity-count="'+p.count+'" role="button" aria-label="'+label(p.day)+': '+p.count+' posts" cx="'+p.x+'" cy="'+p.y+'" r="7" fill="#278d7a" stroke="white" stroke-width="2"><title>'+label(p.day)+': '+p.count+' posts</title></circle>').join('')+
-      '<text x="18" y="149" font-size="10">'+label(dates[0][0])+'</text><text x="239" y="149" font-size="10">'+label(dates[dates.length-1][0])+'</text></svg>'+
+    if(!dates.length)return '<p class="small muted">No publication dates in this period.</p>';
+    const W=480,H=220,left=48,right=15,top=15,bottom=45,plotW=W-left-right,plotH=H-top-bottom;
+    const peak=Math.max(1,...dates.map(x=>Number(x[1])||0));
+    const step=Math.max(1,Math.ceil(peak/4));
+    const ceiling=step*4;
+    const pts=dates.map(([day,count],i)=>({
+      day,count:Number(count)||0,
+      x:left+(dates.length>1?i*plotW/(dates.length-1):plotW/2),
+      y:top+plotH-(Number(count)||0)/ceiling*plotH
+    }));
+    const path=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ');
+    const area=path+' L'+pts[pts.length-1].x.toFixed(2)+' '+(top+plotH)+' L'+pts[0].x.toFixed(2)+' '+(top+plotH)+' Z';
+    const ticks=Array.from({length:5},(_,i)=>i*step);
+    const marks=[0,Math.floor((dates.length-1)/2),dates.length-1].filter((n,i,a)=>a.indexOf(n)===i);
+    return '<div style="position:relative"><svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Conversation activity by publication date; horizontal axis shows date and vertical axis shows recorded post count">'+
+      ticks.map(v=>{const y=(top+plotH-v/ceiling*plotH).toFixed(2);return '<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e5ebec" stroke-width="1"/><text x="'+(left-9)+'" y="'+(Number(y)+4)+'" text-anchor="end" font-size="11" fill="#667b85">'+v+'</text>';}).join('')+
+      '<path d="'+area+'" fill="#278d7a" fill-opacity=".10"/>'+
+      '<path d="'+path+'" fill="none" stroke="#278d7a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<line x1="'+left+'" y1="'+top+'" x2="'+left+'" y2="'+(top+plotH)+'" stroke="#a9b8bf"/>'+
+      '<line x1="'+left+'" y1="'+(top+plotH)+'" x2="'+(W-right)+'" y2="'+(top+plotH)+'" stroke="#a9b8bf"/>'+
+      pts.map(p=>'<circle tabindex="0" data-activity-day="'+label(p.day)+'" data-activity-count="'+p.count+'" role="button" aria-label="'+label(p.day)+': '+p.count+' posts" cx="'+p.x.toFixed(2)+'" cy="'+p.y.toFixed(2)+'" r="4" fill="#278d7a" fill-opacity=".01" stroke="transparent" stroke-width="5"><title>'+label(p.day)+': '+p.count+' posts</title></circle>').join('')+
+      marks.map(n=>'<text x="'+pts[n].x.toFixed(2)+'" y="'+(H-22)+'" text-anchor="'+(n===0?'start':n===dates.length-1?'end':'middle')+'" font-size="10" fill="#667b85">'+label(pts[n].day)+'</text>').join('')+
+      '<text x="'+(left+plotW/2)+'" y="'+(H-5)+'" text-anchor="middle" font-size="11" fill="#516875">Date</text>'+
+      '<text transform="translate(12 '+(top+plotH/2)+') rotate(-90)" text-anchor="middle" font-size="11" fill="#516875">Posts</text></svg>'+
       '<div id="activityTooltip" role="status" style="display:none;position:absolute;top:0;right:0;background:#14354c;color:white;padding:8px 12px;border-radius:8px;pointer-events:none"></div></div>'+
-      '<p class="small muted">Hover or focus a point for the exact date and recorded post count.</p>';
+      '<p class="small muted">Hover or focus the line for the exact date and recorded post count.</p>';
   }
   function activityHover(event,visible){
     const point=event.target.closest?.('[data-activity-day]'),tip=$('#activityTooltip');

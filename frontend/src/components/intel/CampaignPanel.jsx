@@ -631,7 +631,7 @@ export default function CampaignPanel({campaignId=null}){
     <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
 {appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/><div className="flex flex-wrap justify-between gap-2"><p className="text-xs text-slate-500">Saved full AI assessments only. Pending posts are not classified; Unclassified can be a completed result when the source does not establish tone.</p><button type="button" className="intel-ghost text-xs" disabled={analyticsBusy||aiBusy} onClick={async()=>{setAnalyticsBusy(true);try{await refreshSentimentViews()}catch(e){setDashboardError(e.response?.data?.detail||e.message)}finally{setAnalyticsBusy(false)}}}>Refresh saved sentiment (free)</button></div><p className="text-xs text-slate-500">Views and engagements may be incomplete when platforms do not supply them.</p></section>
+      <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/></section>
 
       <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
       <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Campaign trend by platform">
@@ -790,39 +790,6 @@ export default function CampaignPanel({campaignId=null}){
   <p className="text-xs text-slate-500">Engagement ranks accounts by summed reported engagement on captured posts, not by account popularity. Followers reflect reported account-level counts when supplied.</p>
  </section>
    </section>}
-   <details className="rounded-lg border border-slate-200 p-4 space-y-3">
-    <summary className="cursor-pointer font-semibold text-sm">Keyword screening preview (free)</summary>
-    <div className="mt-3 space-y-3 text-sm" aria-label="Campaign keyword screening preview">
-      <p className="text-xs text-slate-600">Test saved campaign keywords against example text. Local keyword matching only; no paid crawl or AI assessment.</p>
-      <label className="block text-xs font-medium">Sample social post
-        <textarea className="intel-input w-full mt-1" aria-label="Sample social post" rows={3} value={sampleText} onChange={e=>{setSampleText(e.target.value);setKeywordPreview(null);setPreviewError('')}}/>
-      </label>
-      <button type="button" className="intel-ghost text-xs" disabled={previewBusy||!sampleText.trim()} onClick={checkKeywordPreview}>{previewBusy?'Checking…':'Preview keyword match'}</button>
-      {keywordPreview&&<p role="status" className="text-xs text-slate-700">{keywordPreview.matched?'Matches campaign keywords':'Does not match campaign keywords'} · Secondary context: {(keywordPreview.secondary_keywords||[]).join(', ')||'None'} · Excluded terms: {(keywordPreview.excluded_keywords||[]).join(', ')||'None'}</p>}
-      {previewError&&<p role="alert" className="text-xs text-red-700">{previewError}</p>}
-    </div>
-   </details>
-   <section className="rounded-lg border border-slate-200 p-4 space-y-3" aria-label="Manual campaign crawl">
-    <h4 className="font-semibold">Manual SocialCrawl collection</h4>
-    <p className="text-xs text-slate-600">Manual runs only. Native search limit: 5 estimated credits per run. Search Everywhere: 20 credits per confirmed query. Scheduled crawling remains disabled.</p>
-    {selected.platforms?.includes('search_everywhere')&&<label className="block text-sm">Search Everywhere query (one request, 20 credits)<input className="intel-input mt-1 w-full" value={everywhereQuery} maxLength={512} placeholder={selected.primary_keywords?.length===1?selected.primary_keywords[0]:'Enter the exact topic query for all keywords'} onChange={e=>{setEverywhereQuery(e.target.value);setManualPreview(null)}}/><span className="text-xs text-slate-500">A single query does not guarantee every keyword is covered. Review this text before authorizing payment.</span></label>}
-    <button type="button" className="intel-ghost" disabled={manualBusy||selected.status!=='DRAFT'} onClick={previewManualCrawl}>Check manual crawl cost (free)</button>
-    {manualPreview&&<div className="space-y-2 text-sm" role="status"><p>Estimated cost: <strong>{manualPreview.estimated_credits} credits</strong> (limit {manualPreview.credit_limit})</p><p className="text-xs text-slate-600">{manualPreview.retrieval_mode==='SEARCH_EVERYWHERE_PREVIEW'?'One Search Everywhere request for: '+manualPreview.query+'. Multi-keyword coverage is not guaranteed.':`Each main keyword is searched separately (OR retrieval); overlapping posts are deduplicated. ${manualPreview.keyword_searches?.length||0} searches planned.`}</p>
-      {(manualPreview.components||[]).map((x,i)=><p key={i} className="text-xs">{x.label}: {x.credits} credits</p>)}
-      {manualPreview.duplicate_recent&&<label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={manualDuplicate} onChange={e=>setManualDuplicate(e.target.checked)}/> I understand this repeats a recent search</label>}
-      <button type="button" className="intel-button" disabled={manualBusy||!manualPreview.can_run||(manualPreview.duplicate_recent&&!manualDuplicate)} onClick={executeManualCrawl}>Confirm and run paid crawl ({manualPreview.estimated_credits} estimated credits)</button>
-      {!manualPreview.can_run&&<p role="alert" className="text-red-700">{manualPreview.blocked_reason||"Credit limit exceeded; reduce selected platforms."}</p>}
-    </div>}
-    {manualNotice&&<p role="status" className="text-sm">{manualNotice}</p>}
-   </section>
-   {campaignSection==='overview'&&<div className="rounded-xl border border-[#b9e2d5] bg-[#f5fbf9] p-4 space-y-3">
-     <div className="flex flex-wrap items-center justify-between gap-3"><div>
-      <strong className="text-sm text-[#19324a]">Intelligence assessment</strong>
-      <p className="mt-1 text-xs text-slate-600">Assess all remaining posts, not a 10/40/50 sample. Completed assessments are reused; only qualifying signals flow into Intelligence Inbox.</p>
-     </div><button type="button" className="rounded-lg bg-[#137d69] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50" onClick={launchAssessAll} disabled={allBusy}>{allBusy?'Checking…':'Assess all unassessed posts'}</button></div>
-     {allError&&<p role="alert" className="text-xs text-red-700">{allError}</p>}
-     <details className="rounded-lg border border-slate-200 bg-white p-3"><summary className="cursor-pointer text-xs font-semibold">Advanced QA · Legacy sample assessment tools</summary><div className="mt-3"><AssessmentPilotPreview campaign={selected}/></div></details>
-    </div>}
    {allOpen&&allCampaign&&<AssessmentProgressDialog
      title={'Assess all · '+allCampaign.name} run={allRun} loading={allBusy} error={allError}
      onRefresh={()=>refreshAll()} onResume={()=>resumeAssessment(allRun,allCampaign)}

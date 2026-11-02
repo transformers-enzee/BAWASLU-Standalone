@@ -67,7 +67,7 @@ export default function IntelligenceAssistant(){
   const outgoing=[...messages,{role:'user',text:q}];
   setMessages(outgoing);
   try{
-   const response=await base44.functions.invoke('intelligenceAssistant',{question:q,previousQuestion:previous,analysisMode,conversationContext:messages.slice(-6).map(m=>({role:m.role,text:String(m.text||'').slice(0,750)}))});
+   const response=await base44.functions.invoke('intelligenceAssistant',{question:q,previousQuestion:previous,analysisMode,conversationContext:messages.slice(-20).map(m=>({role:m.role,text:String(m.text||'').slice(0,1300)}))});
    const answer={
     role:'assistant',text:response.data.answer||'',
     records:response.data.records||[],provider:response.data.provider,
@@ -94,8 +94,8 @@ export default function IntelligenceAssistant(){
   <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] px-6 py-7 text-white">
    <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">{t('assistant_read_only')}</div>
    <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_assistant')}</h1>
-   <p className="text-sm text-[#d3e9e4] mt-2">{t('assistant_tagline')}</p>
-   <p className="text-xs text-[#c6ded9] mt-2">Answers are limited to authorised intelligence. Review supporting records before any officer decision.</p>
+   <p className="text-sm text-[#f5dfdb] mt-2">{t('assistant_tagline')}</p>
+   <p className="text-xs text-[#f0d0cc] mt-2">Answers are limited to authorised intelligence. Review supporting records before any officer decision.</p>
   </header>
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
@@ -104,7 +104,7 @@ export default function IntelligenceAssistant(){
   <div className={showHistory?'grid gap-4 lg:grid-cols-[270px_minmax(0,1fr)]':'block'}>
    {showHistory&&<aside className="intel-card p-3 space-y-2 max-h-[70vh] overflow-y-auto" aria-label="Saved conversations">
     <h2 className="text-xs uppercase tracking-wider font-bold text-[#546b76] px-2 py-2">Saved conversations</h2>
-    {threads.map(thread=><div key={thread.id} className={'flex items-start gap-1 rounded-lg p-1 '+(activeId===thread.id?'bg-[#e7f4f0]':'hover:bg-slate-50')}>
+    {threads.map(thread=><div key={thread.id} className={'flex items-start gap-1 rounded-lg p-1 '+(activeId===thread.id?'bg-[#faebea]':'hover:bg-slate-50')}>
       <button type="button" disabled={busy||historyBusy} onClick={()=>openThread(thread.id)} className="flex-1 min-w-0 text-left rounded-md p-2" aria-current={activeId===thread.id?'page':undefined}>
        <span className="block text-sm font-semibold truncate">{thread.title||'Conversation'}</span>
        <span className="block text-[11px] text-slate-500 mt-1">{thread.updated_at?new Date(thread.updated_at).toLocaleString('en-GB'):''}</span>

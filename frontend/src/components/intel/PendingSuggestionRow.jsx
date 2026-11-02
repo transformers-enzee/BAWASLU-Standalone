@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '@/lib/LanguageContext';
+import TranslatedIntelligenceText from './TranslatedIntelligenceText';
 
 const noIssue='NO APPARENT ELECTION-SUPERVISION ISSUE';
 const nameKey={
@@ -74,7 +75,7 @@ export default function PendingSuggestionRow({name,value,decision,confidence,onD
 
  return <div className="rounded-lg border border-[#e3eaf0] p-4 space-y-3">
   <div className="flex flex-wrap justify-between gap-2"><h4 className="text-xs font-bold uppercase tracking-wide text-[#53657b]">{displayName}</h4><span className="text-xs text-[#607b8a]">{statusText}</span></div>
-  <div className="max-h-72 overflow-auto"><StructuredValue value={showValue} t={t}/></div>
+  <div className="max-h-72 overflow-auto">{['summary','analysis','reasoning','signal_reason','narrative'].includes(name)&&typeof showValue==='string'&&!/^[\\[{]/.test(showValue.trim())?<TranslatedIntelligenceText text={showValue}/>:<StructuredValue value={showValue} t={t}/>}</div>
   {noIssueFound&&<p className="text-xs leading-5 text-[#617789]">{t('no_issue_triage_note')}</p>}
   {confidence&&<p className="text-xs text-[#667b8e]">{t('ai_confidence')}: {confidence}</p>}
   {decision?.status&&<p className="text-xs text-[#42657a] max-h-48 overflow-auto whitespace-pre-wrap break-words">{t('human_decision_label')}: {label(decision.status)}{decision.status!=='Human Rejected'&&decision.value?' · '+t('final_value')+': '+(decision.value===noIssue?'NO APPARENT ELECTION-SUPERVISION ISSUE IDENTIFIED':decision.value):''}{decision.status==='Human Rejected'&&decision.reason?' · '+t('reason')+': '+decision.reason:''}</p>}

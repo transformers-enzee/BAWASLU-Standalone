@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { suggestionNames as labels } from './triageSections';
 import { useLanguage } from '@/lib/LanguageContext';
+import TranslatedIntelligenceText from './TranslatedIntelligenceText';
 
 const labelKeys={
  source_facts:'triage_source_facts',
@@ -70,7 +71,7 @@ export default function SuggestionRow({name,value,decision,onDecision,confidence
  ];
  return <div className="border-t pt-3 space-y-2">
   <div className="text-xs font-semibold text-[#53657b]">{displayName}{confidence&&<span className="font-normal"> · {t('ai_confidence')}: {label(confidence)}</span>}</div>
-  <StructuredValue value={value} t={t}/>
+  {['summary','analysis','reasoning','signal_reason','narrative'].includes(name)&&typeof value==='string'&&!/^[\\[{]/.test(value.trim())?<TranslatedIntelligenceText text={value}/>:<StructuredValue value={value} t={t}/>}
   <div className="flex flex-wrap gap-2">{statuses.map(([status,text])=><button key={status} type="button" className={decision?.status===status?'intel-button':'intel-ghost'} onClick={()=>onDecision({status,value:status==='Human Modified'?edited:status==='Human Accepted'?value:'',reason:status==='Human Rejected'?reason.trim():''})}>{text}</button>)}</div>
   {decision?.status==='Human Rejected'&&<label className="block text-xs text-[#53657b]">{t('reason_rejection')}<textarea className="intel-input mt-1" maxLength={500} value={reason} onChange={e=>{setReason(e.target.value);onDecision({status:'Human Rejected',value:'',reason:e.target.value})}} rows={2}/></label>}
   {decision?.status==='Human Modified'&&<textarea className="intel-input" aria-label={displayName} value={edited} onChange={e=>{setEdited(e.target.value);onDecision({status:'Human Modified',value:e.target.value})}}/>}

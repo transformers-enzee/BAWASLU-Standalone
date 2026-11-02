@@ -1,5 +1,6 @@
 import Status from './Status';
 import { useLanguage } from '@/lib/LanguageContext';
+import TranslatedIntelligenceText from './TranslatedIntelligenceText';
 
 const listText=value=>Array.isArray(value)?value.filter(Boolean).join(' · '):value||'';
 const actorText=value=>Array.isArray(value)?value.map(a=>typeof a==='string'?a:[a?.entity_name,a?.relationship_to_content].filter(Boolean).join(' · ')).filter(Boolean).join(', '):value||'';
@@ -21,7 +22,7 @@ function FieldState({state,t}){
 }
 function ApprovedField({label,field,value,states,t}){
   const state=states[field];
-  return <div><span className="intel-label">{label}</span>{state?.state==='APPROVED'?<><p className="whitespace-pre-wrap">{value||t('human_approved_unavailable')}</p><Provenance state={state} t={t}/></>:<FieldState state={state} t={t}/>}</div>;
+  return <div><span className="intel-label">{label}</span>{state?.state==='APPROVED'?<>{['summary','narrative','signal_reason'].includes(field)&&typeof value==='string'?<p className="whitespace-pre-wrap"><TranslatedIntelligenceText text={value}/></p>:<p className="whitespace-pre-wrap">{value||t('human_approved_unavailable')}</p>}<Provenance state={state} t={t}/></>:<FieldState state={state} t={t}/>}</div>;
 }
 
 export default function IntelligenceSummary({item}){

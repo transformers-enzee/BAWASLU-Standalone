@@ -31,6 +31,7 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
      const result=response.data||{};
      if(!Array.isArray(result.evidence)||typeof result.has_more!=='boolean')throw Error('Invalid campaign feed');
      for(const post of result.evidence){if(!seen.has(String(post.id))){seen.add(String(post.id));all.push(post)}}
+     if(active)setPosts([...all]); // Show progressively retrieved records and counts.
      if(!result.has_more)break;
      if(!result.evidence.length||page>=100000)throw Error('Incomplete campaign feed');
      page++;
@@ -64,7 +65,8 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
    <label className="text-xs">Sentiment<select className="intel-input mt-1" value={sentiment} onChange={e=>setSentiment(e.target.value)}><option value="">All sentiments</option>{['positive','neutral','negative','unclassified'].map(x=><option key={x} value={x}>{x[0].toUpperCase()+x.slice(1)}</option>)}</select></label>
    <label className="text-xs">Sort by<select className="intel-input mt-1" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="engagement">Engagement</option></select></label>
   </div>
-  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{loading ? "Loading captured post count…" : error ? "Captured post count unavailable" : `${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>Clear filters</button></div>
-  {loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:error?<p role="alert" className="py-6 text-sm text-red-700">Unable to load the complete post list: {error}</p>:visible.length?visible.map(post=><Post key={post.id} post={post}/>):<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
+  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{`${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`}{loading ? " · Loading more…" : error ? " · Partial results (loading failed)" : ""}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>Clear filters</button></div>
+  {error&&<p role="alert" className="py-3 text-sm text-red-700">Unable to load the complete post list: {error}. Showing any records retrieved before the failure.</p>}
+  {visible.length?visible.map(post=><Post key={post.id} post={post}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
  </section>;
 }

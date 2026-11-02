@@ -1,4 +1,4 @@
-"""SocialCrawl Prism Discover: separate, manually confirmed 100-post workflow."""
+"""SocialCrawl Prism Discover: separate, manually confirmed 75-post workflow."""
 import os,json,hashlib,re
 from collections import Counter
 from datetime import datetime,timezone
@@ -10,7 +10,7 @@ from .access import has,allowed
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
 BASE='https://www.socialcrawl.dev/v1'
-CAP=100
+CAP=75
 MAPPING={'twitter-ai-search':'twitter','online_news':'news','instagram':'instagram',
          'twitter':'twitter','facebook':'facebook','youtube':'youtube','tiktok':'tiktok',
          'threads':'threads','reddit':'reddit'}
@@ -33,7 +33,7 @@ def body_for(db,c):
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
     params={'groups':[{'id':'campaign-'+str(c.id),'keywords':words,'context':context}],
             'platforms':platforms,'country':['ID'],'period':'7d','label':['stance'],
-            'limit':100,'retention_days':7,'max_credits':CAP}
+            'limit':CAP,'retention_days':7,'max_credits':CAP}
     signature=hashlib.sha256(json.dumps(params,sort_keys=True).encode()).hexdigest()
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -107,7 +107,7 @@ def action(db,p,verb,data,cid):
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
-            'post_limit':100,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
+            'post_limit':CAP,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
             'keywords_total':len(json.loads(c.primary_keywords_json or '[]')),
             'platforms':params['platforms'],'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
@@ -125,7 +125,7 @@ def action(db,p,verb,data,cid):
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_DISCOVER'))
     db.commit()
-    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':100,'credit_cap':CAP}
+    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'credit_cap':CAP}
 
 def ai_text(payload):
     if isinstance(payload.get('output_text'),str):return payload['output_text']

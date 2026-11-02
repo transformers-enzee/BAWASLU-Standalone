@@ -53,6 +53,7 @@ export default function CampaignPanel({campaignId=null}){
  const [creating,setCreating]=useState(false),[editing,setEditing]=useState(null);
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
@@ -540,17 +541,13 @@ export default function CampaignPanel({campaignId=null}){
     <button type="button" aria-label="Close campaign popup" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>✕</button>
    </div>
    <div className="grid gap-3 md:grid-cols-2">
-    <label className="text-sm">Campaign name *<input className="intel-input mt-1" value={form.name} maxLength={255} required onChange={e=>set('name',e.target.value)}/></label>
+    <label className="text-sm md:col-span-2">Campaign name *<input className="intel-input mt-1" value={form.name} maxLength={255} required onChange={e=>set('name',e.target.value)}/></label>
     <KeywordTags label="Main keywords" required items={form.primary_keywords} onChange={tags=>set('primary_keywords',tags)} />
     <KeywordTags label="Secondary keywords" items={form.secondary_keywords} onChange={tags=>set('secondary_keywords',tags)} />
     <KeywordTags label="Excluded keywords" items={form.excluded_keywords} onChange={tags=>set('excluded_keywords',tags)}/>
     <label className="text-sm">Start date<input className="intel-input mt-1" type="date" value={form.date_from} onChange={e=>set('date_from',e.target.value)}/></label>
    </div>
    <label className="block text-sm">Description<textarea rows={2} className="intel-input mt-1 w-full" value={form.description} onChange={e=>set('description',e.target.value)}/></label>
-   <div className="rounded-lg border border-[#d7e8e2] bg-[#f4fbf8] px-4 py-3 text-sm" role="note" aria-label="Default collection coverage">
-     <strong>Default sources · all seven</strong>
-     <p className="mt-1 text-xs text-[#466d64]">TikTok · Instagram · YouTube · Facebook · X · Threads · Online News. All languages, no end date. Regional access restrictions still apply.</p>
-   </div>
    {editing&&(form.primary_keywords.length>30||form.secondary_keywords.length>30||form.excluded_keywords.length>30)&&<p className="text-xs text-amber-800">Legacy imported keywords are preserved when unchanged. You can save the campaign description without deleting them; newly modified keyword lists must meet the 30-keyword limit.</p>}
    {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
    <div className="flex gap-2"><button className="intel-button" disabled={saving||!form.primary_keywords.length}>{saving?'Saving…':'Save Draft'}</button>
@@ -567,7 +564,14 @@ export default function CampaignPanel({campaignId=null}){
    <section className="rounded-[13px] border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">
-      <div className="min-w-0"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4><p className="mt-1 text-xs text-[#60768c]">Keywords: {(c.primary_keywords||[]).join(', ')||'None'} · {(c.platforms||[]).map(platformLabel).join(', ')||'No platforms configured'}</p><p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
+      <div className="min-w-0 flex-1"><h4 className="text-base font-semibold text-[#19324a]">{c.name} <span className="ml-1 rounded-full bg-[#e8f4ef] px-2 py-1 text-[10px] font-bold text-[#207558]">{displayStatus(c.status)}</span></h4>
+      <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-[#60768c]">
+       <span className={expandedCampaignKeywords[c.id]?'min-w-0 break-words':'min-w-0 flex-1 truncate'} title={expandedCampaignKeywords[c.id]?undefined:(c.primary_keywords||[]).join(', ')}>
+        Keywords: {(c.primary_keywords||[]).join(', ')||'None'}
+       </span>
+       {(c.primary_keywords||[]).join(', ').length>95&&<button type="button" className="shrink-0 rounded px-1 font-semibold text-[#117c6c] hover:underline" aria-expanded={Boolean(expandedCampaignKeywords[c.id])} onClick={()=>setExpandedCampaignKeywords(prev=>({...prev,[c.id]:!prev[c.id]}))}>{expandedCampaignKeywords[c.id]?'Show less':'Show more'}</button>}
+      </div>
+      <p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
       <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#11816d] bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d685a]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>{
         if(activationSaved&&String(activationSaved.campaign_id)===String(c.id)){
          setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});setDiscoverError('');
@@ -586,7 +590,7 @@ export default function CampaignPanel({campaignId=null}){
   }}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No campaigns match your search.</p>}</div>}
    </section>
-   <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords and platforms, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
+   <section className="rounded-xl border border-[#c7e5dc] bg-[#f4fbf8] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a campaign.</h3><p className="mt-2 text-xs text-[#60768c]">Create a campaign to choose keywords, then open its dashboard to explore saved records and use Candidate Watchlist.</p></div><button type="button" className="rounded-lg bg-[#11816d] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
   </section>}
   {campaignId&&selected&&!creating&&<div className="v10-detail space-y-4">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to campaigns</button>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
-import AssistantAnswer from '@/components/intel/AssistantAnswer';
+import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
 import { useLanguage } from '@/lib/LanguageContext';
 
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
@@ -127,7 +127,7 @@ export default function IntelligenceAssistant(){
      </div>}
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
-       {m.role==='assistant'?<AssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
+       {m.role==='assistant'?<TranslatedAssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}<AssistantRecords records={m.records}/></>}
       </div>
      </div>)}

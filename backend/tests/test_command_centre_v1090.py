@@ -50,7 +50,10 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     root=Path(__file__).resolve().parents[2]
     locale=(root/'frontend/public/ui-freeze/bawaslu-interface-locale.js').read_text(encoding='utf-8')
     html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
-    assert locale.index("if(cached==='pending'||cached==='failed')return;") < locale.index("if(typeof cached==='string')")
+    assert locale.index("if(cached==='pending')return;") < locale.index("if(typeof cached==='string')")
+    assert "if(cached==='failed'){warn();return;}" in locale
+    assert "summaryCache.delete(key)" in locale
+    assert "data-translation-status" in locale
     assert "Know what is happening. Know what needs your attention." in locale
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale

@@ -55,6 +55,32 @@ def test_command_centre_language_toggle_does_not_replace_summary_with_pending():
     assert "#strategy" in locale
     assert '[data-ai-summary]' in locale
     assert 'data-ai-summary' in html
-    assert 'bawaslu-interface-locale.js?build=126.5' in html
+    assert 'bawaslu-interface-locale.js?build=126.7' in html
     assert "summaryCache.set(original,'pending')" in locale
     assert "if(locale!=='id')" in locale
+
+def test_display_translation_reuses_responses_api_without_reassessment(monkeypatch):
+    from app.main import translate_saved_presentation
+    calls=[]
+    class FakeResponse:
+        status_code=200
+        def raise_for_status(self):pass
+        def json(self):return {'status':'completed','output':[{
+            'type':'message','content':[{'type':'output_text','text':'Dugaan ini masih memerlukan verifikasi.'}]}]}
+    class FakeClient:
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def post(self,url,headers,json):
+            calls.append((url,json))
+            return FakeResponse()
+    monkeypatch.setenv('OPENAI_API_KEY','test-key')
+    monkeypatch.setenv('OPENAI_MODEL','gpt-6-luna')
+    monkeypatch.setattr('httpx.Client',lambda **kwargs:FakeClient())
+    source='This allegation still requires verification.'
+    result=translate_saved_presentation({'text':source,'language':'id'},user=object())
+    assert result['text']=='Dugaan ini masih memerlukan verifikasi.'
+    assert result['translation_only'] is True
+    assert calls[0][0].endswith('/responses')
+    assert calls[0][1]['model']=='gpt-6-luna'
+    assert calls[0][1]['input'][1]['content']==source
+    assert 'temperature' not in calls[0][1]

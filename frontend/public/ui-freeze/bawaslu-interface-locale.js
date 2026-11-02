@@ -831,11 +831,33 @@ const fullInterfaceId={
         if(current!==original)el.textContent=original;
         summaryLast.set(el,original);return;
       }
+      let warning=el.parentElement?.querySelector(':scope > [data-translation-status]');
+      function clearWarning(){if(warning){warning.remove();warning=null;}}
+      function warn(){
+        if(!warning){
+          warning=document.createElement('span');
+          warning.setAttribute('data-i18n-exempt','');
+          warning.setAttribute('data-translation-status','');
+          warning.setAttribute('role','status');
+          warning.style.cssText='display:block;margin-top:5px;font-size:11px;color:#9b443d';
+          el.insertAdjacentElement('afterend',warning);
+        }
+        warning.textContent='Terjemahan sementara tidak tersedia. Teks asli ditampilkan; pilih EN lalu ID untuk mencoba lagi.';
+      }
       const cached=summaryCache.get(original);
-      if(cached==='pending'||cached==='failed')return;
+      if(cached==='pending')return;
+      if(cached==='failed'){warn();return;}
       if(typeof cached==='string'){
+        clearWarning();
         if(current!==cached)el.textContent=cached;
         summaryLast.set(el,cached);return;
+      }
+      const dictionary=translate(original);
+      if(dictionary!==original){
+        summaryCache.set(original,dictionary);
+        clearWarning();
+        el.textContent=dictionary;
+        summaryLast.set(el,dictionary);return;
       }
       summaryCache.set(original,'pending');
       const token=window.localStorage.getItem('bawaslu_access_token')||'';
@@ -843,9 +865,17 @@ const fullInterfaceId={
         headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
         body:JSON.stringify({text:original,language:'id'})})
        .then(async r=>{const v=await r.json();if(!r.ok)throw Error('Translation unavailable');return v.text;})
-       .then(value=>{if(!value)return;summaryCache.set(original,value);
-         if(locale==='id'&&summaryOriginal.get(el)===original){el.textContent=value;summaryLast.set(el,value);}
-       }).catch(()=>{summaryCache.set(original,'failed');/* Leave original text visible if translation fails. */});
+       .then(value=>{if(!value||typeof value!=='string')throw Error('Empty translation');
+         summaryCache.set(original,value);
+         if(locale==='id'&&summaryOriginal.get(el)===original){
+           el.textContent=value;summaryLast.set(el,value);
+           el.parentElement?.querySelector(':scope > [data-translation-status]')?.remove();
+         }
+       }).catch(()=>{
+         summaryCache.set(original,'failed');
+         // Source text is not replaced with an error or a loading placeholder.
+         if(locale==='id'&&summaryOriginal.get(el)===original)schedule();
+       });
     });
   }
   // Localize only our own browser alerts and confirmations; do not alter evidence.
@@ -855,7 +885,12 @@ const fullInterfaceId={
   let scheduled=0;
   function schedule(){if(!scheduled)scheduled=requestAnimationFrame(()=>{scheduled=0;scan();translateSummaries();});}
   function setLanguage(lang){
-    locale=lang==='id'?'id':'en';
+    const next=lang==='id'?'id':'en';
+    if(next==='id'&&locale!==next){
+      for(const [key,value] of summaryCache)if(value==='failed')summaryCache.delete(key);
+    }
+    locale=next;
+    if(locale==='en')document.querySelectorAll('[data-translation-status]').forEach(el=>el.remove());
     document.documentElement.lang=locale;
     schedule();
   }

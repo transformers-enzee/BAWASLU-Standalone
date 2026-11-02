@@ -513,7 +513,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>
     </div>
-    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#0d9488'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
+    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#a52a2f'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
     <p className="text-[11px] text-slate-500">Metrics are summed only where providers reported them. Missing values are not treated as zero. Sentiment is based on stored assessments.</p>
    </aside>
    <section className="intel-card p-3 h-full min-h-0" aria-label="Channel distribution"><h4 className="text-sm font-semibold text-[#365269]">Channel distribution</h4><div className="mt-3">
@@ -533,11 +533,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     <div className="p-4 overflow-y-auto space-y-3 text-sm">
       {String(selected.model_version||'').toLowerCase()==='mock-fixture'&&<div role="note" className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><strong>Synthetic QA example.</strong> This is not a real social-media post. Officer review is required; do not treat this fixture as election evidence.</div>}
      <section className="rounded-xl border border-[#dce6e8] bg-[#f5f9f9] p-4 space-y-2">
-      <h4 className="font-bold text-sm text-[#184e48]">Original source provenance</h4>
+      <h4 className="font-bold text-sm text-[#7f3038]">Original source provenance</h4>
       <p className="text-xs text-slate-600">Source post ID: <code className="break-all">{selected.id||'Not supplied'}</code></p>
       <p className="text-xs text-slate-600">Platform: {platformLabel(selected.platform)} · Publisher: {selected.observed_handle||selected.author_name||'Not recorded'}</p>
       <p className="text-xs text-slate-600">Published: {selected.published_at||'Publication time not recorded'}</p>
-      {safeOriginalUrl(selected.canonical_url)?<a href={safeOriginalUrl(selected.canonical_url)} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[#147b67] hover:underline">Open original source ↗</a>:<p className="text-xs text-amber-700">Source URL not available; do not treat this record as independently verifiable.</p>}
+      {safeOriginalUrl(selected.canonical_url)?<a href={safeOriginalUrl(selected.canonical_url)} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[#a52a2f] hover:underline">Open original source ↗</a>:<p className="text-xs text-amber-700">Source URL not available; do not treat this record as independently verifiable.</p>}
      </section>
      <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> {selected.explanation||'No explanation stored'}</p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation?' · '+selected.sentiment_explanation:''} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
@@ -647,10 +647,10 @@ export default function Inbox(){
  const activeFilters=Object.entries(f).filter(([k,v])=>k!=='view'&&v),clearOne=key=>setF(v=>({...v,[key]:''})),currentView=quickViews.find(([value])=>value===(f.view||''))?.[1]||t('all_intelligence');
  const recordScope=items.length===1?t('record_authorized_scope'):t('records_authorized_scope');
  return <div className="space-y-6 max-w-[1350px] mx-auto">
- <header className="rounded-2xl bg-gradient-to-r from-[#132d45] to-[#116b58] text-white p-6 md:p-8">
-  <p className="text-[11px] uppercase tracking-[.18em] text-[#aadbd1] font-extrabold">BAWASLU · Collection &amp; Triage</p>
+ <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] text-white p-6 md:p-8">
+  <p className="text-[11px] uppercase tracking-[.18em] text-[#f1d9d6] font-extrabold">BAWASLU · Collection &amp; Triage</p>
   <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_inbox')}</h1>
-  <p className="text-sm text-[#d0e8e2] mt-2">Review stored Social Listening evidence, distinguish AI suggestions from officer decisions, and preserve original sources.</p>
+  <p className="text-sm text-[#f9e9e6] mt-2">Review stored Social Listening evidence, distinguish AI suggestions from officer decisions, and preserve original sources.</p>
   <div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">Source-linked findings</span><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">Human review audit trail</span><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">No implied legal verdict</span></div>
  </header>
  <Notice error={error}/>

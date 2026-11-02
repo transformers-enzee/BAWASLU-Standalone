@@ -169,7 +169,7 @@ def test_execute_full_mock_provider_flow_completes_without_spending(monkeypatch)
     assert db.query(EvidenceAssessment).count() == 1
     db.close()
 
-def test_activate_defaults_seven_platforms_100_posts_without_provider_calls(monkeypatch):
+def test_activate_defaults_seven_platforms_75_posts_without_provider_calls(monkeypatch):
     from app.socialcrawl import DEFAULT_CAMPAIGN_PLATFORMS
     db=SessionLocal()
     campaign=MonitoringCampaign(name='Default seven sources',description='Election topic',
@@ -177,8 +177,8 @@ def test_activate_defaults_seven_platforms_100_posts_without_provider_calls(monk
         created_by='qa-admin',status='DRAFT')
     db.add(campaign);db.commit()
     params,signature=prism_discover.body_for(db,campaign)
-    assert params['limit']==100
-    assert params['max_credits']==100
+    assert params['limit']==75
+    assert params['max_credits']==75
     assert params['platforms']==['tiktok','instagram','youtube','facebook','twitter','threads','news']
     assert len(signature)==64
     assert db.query(SocialListeningRun).count()==0

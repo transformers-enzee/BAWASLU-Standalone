@@ -933,6 +933,74 @@ def campaign_action(db:Session,p,action,data,id=None):
                         func.upper(EvidenceAssessment.relevance_label).in_(['RELEVANT','HIGHLY_RELEVANT']),
                         or_(EvidenceAssessment.model_version.is_(None),
                             EvidenceAssessment.model_version!='PRISM_PENDING_OPENAI')))
+            totals_summary=None
+            if data.get('include_totals') is True:
+                # Aggregate across ALL authorized eligible rows before page slicing.
+                # No provider requests, no source mutation, no arbitrary 300-row cap.
+                from .issue_signals import validated_issue_signals, shared_violation_decision
+                from .models import EvidenceReview
+                categories={r.id:r.name for r in db.query(IssueCategory).filter(IssueCategory.active==True).all()}
+                totals_summary={'posts':0,'potential_violations':0,'views':0,'views_reported':0,
+                    'engagement':0,'engagement_reported':0,
+                    'sentiments':{'POSITIVE':0,'NEUTRAL':0,'NEGATIVE':0,'UNCLASSIFIED':0},
+                    'platforms':{}}
+                def number(metrics,*names):
+                    for name in names:
+                        value=metrics.get(name)
+                        if isinstance(value,(int,float)) and not isinstance(value,bool) and value>=0:
+                            return int(value)
+                    return None
+                # Iterate in bounded batches; only the final aggregated counts
+                # are returned to the browser.
+                offset=0
+                while True:
+                    batch=(eligible.with_entities(CampaignEvidence,SocialListeningResult,EvidenceAssessment)
+                        .order_by(CampaignEvidence.id.desc()).limit(250).offset(offset).all())
+                    if not batch:break
+                    offset+=len(batch)
+                    review_ids=[assessment.id for _,post,assessment in batch
+                                if _result_in_scope(db,p,post)]
+                    reviews={}
+                    if review_ids:
+                        for review in (db.query(EvidenceReview)
+                            .filter(EvidenceReview.assessment_id.in_(review_ids),
+                                    EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+                            .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).all()):
+                            reviews.setdefault(review.assessment_id,review.decision)
+                    for link,post,assessment in batch:
+                        if not _result_in_scope(db,p,post):continue
+                        totals_summary['posts']+=1
+                        sentiment=str(assessment.sentiment or '').upper()
+                        if sentiment not in ('POSITIVE','NEUTRAL','NEGATIVE'):sentiment='UNCLASSIFIED'
+                        totals_summary['sentiments'][sentiment]+=1
+                        platform=str(post.platform or 'Unknown').strip().lower()
+                        platform={'twitter':'X','x':'X','twitter-ai-search':'X',
+                                  'youtube':'YouTube','facebook':'Facebook','instagram':'Instagram',
+                                  'tiktok':'TikTok','threads':'Threads','online_news':'News',
+                                  'news':'News'}.get(platform,platform.title())
+                        totals_summary['platforms'][platform]=totals_summary['platforms'].get(platform,0)+1
+                        try:metrics=json.loads(post.engagement_json or '{}')
+                        except (TypeError,ValueError):metrics={}
+                        if not isinstance(metrics,dict):metrics={}
+                        views=number(metrics,'views','view_count','plays','play_count')
+                        if views is not None:
+                            totals_summary['views']+=views
+                            totals_summary['views_reported']+=1
+                        engagement=number(metrics,'engagement_total')
+                        if engagement is None:
+                            parts=[number(metrics,'likes','like_count'),
+                                   number(metrics,'comments','comment_count'),
+                                   number(metrics,'shares','share_count')]
+                            engagement=sum(v for v in parts if v is not None) if any(v is not None for v in parts) else None
+                        if engagement is not None:
+                            totals_summary['engagement']+=engagement
+                            totals_summary['engagement_reported']+=1
+                        try:signals=json.loads(assessment.potential_issue_signals_json or '[]')
+                        except (TypeError,ValueError):signals=[]
+                        if not isinstance(signals,list):signals=[]
+                        accepted=validated_issue_signals(signals,categories,post.text_content)
+                        if shared_violation_decision(accepted,reviews.get(assessment.id))['is_flagged']:
+                            totals_summary['potential_violations']+=1
             # An exact global total is valid for national officers. For regional
             # officers, row-level source scope must be checked per provider run.
             total_eligible=eligible.count() if p.get('geographic_scope')=='Nationwide' else None
@@ -956,7 +1024,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 page_selection.setdefault(link.campaign_id,[]).append(link)
             pagination={'page_size':page_limit,'has_more':has_more,
                         'next_cursor':str(selected_links[-1].id) if has_more and selected_links else None,
-                        'total_eligible':total_eligible}
+                        'total_eligible':totals_summary['posts'] if totals_summary is not None else total_eligible}
         active_category_rows=db.query(IssueCategory).filter(IssueCategory.active==True).all()
         active_categories={x.id:x.name for x in active_category_rows}
         from .models import IssueCategoryPhrase
@@ -1132,6 +1200,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
                 'findings':records[:page_limit+1] if paged else records[:300],
+                'full_statistics':totals_summary if paged else None,
                 'pagination':pagination,
                 'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',

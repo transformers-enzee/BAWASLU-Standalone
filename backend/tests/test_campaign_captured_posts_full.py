@@ -176,3 +176,35 @@ def test_inbox_pagination_hides_unassessed_and_rejects_invalid_cursor():
     with pytest.raises(ValueError,match='page size'):
         action(db,p,'campaignIntelligenceInbox',{'campaign_id':cid,'paged':True,'page_size':101})
     db.close()
+
+def test_inbox_full_statistics_cover_all_pages_without_changing_saved_evidence():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'allPageStats')
+    cid=campaign(db,p,'Statistics across all pages')
+    add(db,cid,125)
+    rows=db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==int(cid)).all()
+    for i,(rid,) in enumerate(rows):
+        post=db.get(SocialListeningResult,rid)
+        post.platform='twitter' if i%2 else 'x'
+        post.engagement_json=json.dumps({'views':10,'likes':2,'comments':1})
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=rid,
+            assessment_version=1,relevance_label='RELEVANT',
+            sentiment='NEGATIVE' if i<75 else 'POSITIVE'))
+    db.commit()
+    first=action(db,p,'campaignIntelligenceInbox',{
+        'campaign_id':cid,'paged':True,'page_size':100,'include_totals':True})
+    assert len(first['findings'])==100
+    stats=first['full_statistics']
+    assert stats['posts']==first['pagination']['total_eligible']==125
+    assert stats['sentiments']['NEGATIVE']==75
+    assert stats['sentiments']['POSITIVE']==50
+    assert stats['views']==1250 and stats['views_reported']==125
+    assert stats['engagement']==375 and stats['engagement_reported']==125
+    assert stats['platforms']=={'X':125}
+    older=action(db,p,'campaignIntelligenceInbox',{
+        'campaign_id':cid,'paged':True,'page_size':100,
+        'cursor':first['pagination']['next_cursor']})
+    assert len(older['findings'])==25
+    assert older['full_statistics'] is None
+    db.close()

@@ -26,14 +26,15 @@ function SocialEvidenceInbox(){
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
  const [inboxPagination,setInboxPagination]=useState({has_more:false,next_cursor:null,total_eligible:null});
  const [loadingMore,setLoadingMore]=useState(false),[loadMoreError,setLoadMoreError]=useState('');
+ const [fullStatistics,setFullStatistics]=useState(null);
  const INBOX_PAGE_SIZE=100;
  const watchBaseline=useRef(null);
  const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState(''),[manualCue,setManualCue]=useState(null);
  const [correctionType,setCorrectionType]=useState('TOPICS'),[correctionTopics,setCorrectionTopics]=useState([]),[correctionQuote,setCorrectionQuote]=useState(''),[correctionConcern,setCorrectionConcern]=useState(''),[correctionRationale,setCorrectionRationale]=useState(''),[correctionBusy,setCorrectionBusy]=useState(false),[correctionMessage,setCorrectionMessage]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
- useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
- base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE}})
- .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});
+ useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setFullStatistics(null);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
+ base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE,include_totals:true}})
+ .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});setFullStatistics(r.data.full_statistics||null);
  if(requestedPost&&campaign===requestedCampaign){
   const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
   if(found)setSelected(found);
@@ -405,7 +406,12 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   }
   return [...counts.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,22);
  },[filtered]);
- const platformCounts=useMemo(()=>{const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered]);
+ const platformCounts=useMemo(()=>{if(fullStatistics?.platforms)return Object.entries(fullStatistics.platforms).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));const grouped=new Map();for(const item of filtered){const raw=String(item.platform||'Unknown').trim();const name=platformLabel(raw);grouped.set(name,(grouped.get(name)||0)+1)}return [...grouped.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));},[filtered,fullStatistics]);
+ const fullPostCount=fullStatistics?.posts??filtered.length;
+ const fullSentiment=fullStatistics?.sentiments??summary.counts;
+ const fullViews=fullStatistics?{value:fullStatistics.views,reported:fullStatistics.views_reported}:{value:summary.views,reported:summary.viewsAvailable};
+ const fullEngagement=fullStatistics?{value:fullStatistics.engagement,reported:fullStatistics.engagement_reported}:{value:summary.engagement,reported:summary.engagementAvailable};
+ const fullFlagged=fullStatistics?.potential_violations??filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length;
  const platformColors=['#147b9c','#d19550','#658e7e','#887cb2','#9b7184','#8296a5'];
  const buttons=[['all','All Relevant'],['violation','Potential Violation']];
  const [showAdvancedFilters,setShowAdvancedFilters]=useState(false);
@@ -528,27 +534,27 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">{inboxPagination.has_more?'No matching posts in the loaded set. Load older posts to continue searching.':'No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection and assessment.'}</p>}
      {inboxPagination.has_more&&<button type="button" className="intel-ghost w-full py-3 font-semibold" disabled={loadingMore} onClick={loadOlderInboxPosts}>{loadingMore?'Loading older posts…':'Load 100 older posts'}</button>}
      {loadMoreError&&<p role="alert" className="text-sm text-red-700">{loadMoreError}</p>}
-     {findings.length>0&&<p className="text-[11px] text-slate-500 px-1">Filters and statistics describe loaded posts. Load older pages to include more evidence.</p>}
+     {findings.length>0&&<p className="text-[11px] text-slate-500 px-1">List filters apply to loaded posts. Statistics represent all eligible evidence in the selected campaign scope.</p>}
     </div>
    </section>
    <div className="grid grid-rows-2 gap-3 xl:sticky xl:top-4 min-w-0">
    <aside className="intel-card p-4 space-y-4 h-full min-h-0" aria-label="Inbox statistics">
-    <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered posts currently loaded</p></div>
+    <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">{fullStatistics?'All eligible posts · selected campaign scope':'Loading full statistics…'}</p></div>
     <div className="grid grid-cols-2 gap-2">
-      <div className="rounded-lg bg-teal-50 p-3"><p className="text-xs text-teal-900">Posts shown</p><strong className="text-lg tabular-nums">{filtered.length}</strong><p className="text-[10px] text-slate-500">Relevant, filtered · loaded</p></div>
-      <div className="rounded-lg bg-amber-50 p-3"><p className="text-xs text-amber-900">Potential violations</p><strong className="text-lg tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</strong><p className="text-[10px] text-slate-500">Preliminary signals</p></div>
-      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
-      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>
+      <div className="rounded-lg bg-teal-50 p-3"><p className="text-xs text-teal-900">Total eligible posts</p><strong className="text-lg tabular-nums">{fullStatistics?fullPostCount.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">Across all pages</p></div>
+      <div className="rounded-lg bg-amber-50 p-3"><p className="text-xs text-amber-900">Potential violations</p><strong className="text-lg tabular-nums">{fullStatistics?fullFlagged.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">Preliminary signals</p></div>
+      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{fullStatistics&&fullViews.reported?fullViews.value.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{fullStatistics?fullViews.reported.toLocaleString()+' / '+fullPostCount.toLocaleString():'—'} reported</p></div>
+      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{fullStatistics&&fullEngagement.reported?fullEngagement.value.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{fullStatistics?fullEngagement.reported.toLocaleString()+' / '+fullPostCount.toLocaleString():'—'} reported</p></div>
     </div>
-    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#a52a2f'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{summary.counts[key]}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?(summary.counts[key]/filtered.length*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
+    <div className="space-y-2"><h5 className="text-xs font-semibold">Sentiment</h5>{[['POSITIVE','Positive','#a52a2f'],['NEUTRAL','Neutral','#8195a5'],['NEGATIVE','Negative','#d97706']].map(([key,label,color])=><div key={key} className="space-y-1"><div className="flex justify-between text-xs"><span>{label}</span><strong className="tabular-nums">{fullStatistics?fullSentiment[key]:'—'}</strong></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:fullStatistics&&fullPostCount?(fullSentiment[key]/fullPostCount*100)+'%':'0%',backgroundColor:color}}/></div></div>)}</div>
     <p className="text-[11px] text-slate-500">Metrics are summed only where providers reported them. Missing values are not treated as zero. Sentiment is based on stored assessments.</p>
    </aside>
    <section className="intel-card p-3 h-full min-h-0" aria-label="Channel distribution"><h4 className="text-sm font-semibold text-[#365269]">Channel distribution</h4><div className="mt-3">
     
-    <p className="text-[11px] text-slate-500 mt-1">Among current filtered posts</p>
-    <div className="flex justify-center py-3"><div className="w-28 h-28 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:filtered.length?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/filtered.length*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/filtered.length*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-20 h-20 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{filtered.length}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
-    <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:filtered.length?item.count/filtered.length*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
-    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution updates when you change filters. It counts posts, not confirmed violations.</p></div>
+    <p className="text-[11px] text-slate-500 mt-1">Across all eligible posts</p>
+    <div className="flex justify-center py-3"><div className="w-28 h-28 rounded-full grid place-items-center" role="img" aria-label={platformCounts.map(x=>x.name+': '+x.count).join(', ')||'No platform data'} style={{background:fullStatistics&&fullPostCount?`conic-gradient(${platformCounts.map((x,i)=>{const start=platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)/fullPostCount*100;const end=(platformCounts.slice(0,i).reduce((n,v)=>n+v.count,0)+x.count)/fullPostCount*100;return platformColors[i%platformColors.length]+' '+start+'% '+end+'%'}).join(', ')})`:'#dce7ec'}}><div className="w-20 h-20 rounded-full bg-white flex flex-col items-center justify-center"><strong className="text-2xl text-[#365269]">{fullStatistics?fullPostCount.toLocaleString():'—'}</strong><span className="text-[10px] text-slate-500">posts</span></div></div></div>
+    <div className="space-y-3 flex-1">{platformCounts.map((item,i)=><div key={item.name} className="space-y-1"><div className="flex justify-between gap-1 text-xs"><span className="truncate text-[#536d80]">{item.name}</span><span className="font-semibold tabular-nums">{item.count}</span></div><div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full" style={{width:fullStatistics&&fullPostCount?item.count/fullPostCount*100+'%':'0%',backgroundColor:platformColors[i%platformColors.length]}}/></div></div>)}{!platformCounts.length&&<p className="text-xs text-slate-500">No platforms in this view.</p>}</div>
+    <p className="border-t pt-3 mt-4 text-[11px] text-slate-500">Distribution covers all eligible posts in the selected campaign scope, not just the current page. Flags are preliminary, not confirmed violations.</p></div>
    </section>
    </div>
    </div>

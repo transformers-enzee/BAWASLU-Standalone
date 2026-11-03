@@ -97,4 +97,9 @@ assert.ok(progressDialog.includes('onClick={onConfirm}>Activate</button>'),'Acti
 assert.ok(!progressDialog.includes("loading?'Activating…'"),'Preview/activation must not use a misleading activating label');
 assert.ok(progressDialog.includes('Activate this campaign to collect posts and assess the saved results?'),'Activation confirmation should be concise');
 assert.ok(!progressDialog.includes('collect up to 100 posts'),'Activation confirmation must not mention the collection cap');
+
+// Collection shows one indeterminate bar, not empty metrics or AI diagnostics.
+assert.ok(progressDialog.includes('{collecting&&<div role="status"'),'Collection needs a minimal waiting state');
+assert.ok(progressDialog.includes('Collecting SocialCrawl posts; exact progress unavailable'),'Collection bar must not imply a percentage');
+assert.ok(progressDialog.includes('{!collecting&&<>'),'Detailed cards are only displayed after collection');
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

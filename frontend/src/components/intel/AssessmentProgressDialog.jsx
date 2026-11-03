@@ -32,6 +32,11 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      {loading&&<p role="status" className="text-xs text-slate-500">Submitting activation request…</p>}
     </div>}
     {run&&<>
+     {collecting&&<div role="status" aria-live="polite" className="space-y-3">
+       <p className="text-sm font-semibold text-[#19324a]">Collecting SocialCrawl posts</p>
+       <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Collecting SocialCrawl posts; exact progress unavailable" aria-valuetext="Collecting; percentage unavailable"><div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500"/></div>
+     </div>}
+     {!collecting&&<>
      <div className="grid grid-cols-3 gap-2">
       {[
        ['1 · Collect',run.status==='FAILED'?'Failed':run.total?'Complete':'In progress'],
@@ -44,7 +49,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
       {!collecting&&verifiedPercent!==null&&!statusUnavailable?<div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Full AI assessments completed" aria-valuemin={0} aria-valuemax={count} aria-valuenow={done}><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{width:verifiedPercent+'%'}}/></div>:
         <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={statusUnavailable?'Latest progress unavailable':collecting?'Collection progress unknown':'Assessment totals pending'} aria-valuetext={statusUnavailable?'Status unavailable':collecting?'Waiting for SocialCrawl':'Waiting for saved totals'}><div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500"/></div>}
        {collecting&&<p className="text-xs text-slate-500">SocialCrawl does not supply an exact collection percentage. This animation means waiting, not 15% completion. Counts update after provider results are saved.</p>}
-       {statusUnavailable&&<p role="alert" className="text-xs text-amber-800">Current progress cannot be verified. Counters show the last known values, not confirmation that the run stopped.</p>}
+       {statusUnavailable&&<p role="alert" className="text-xs text-amber-800">Current progress cannot be verified. Collection may still be running.</p>}
      </div>
      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
       {[
@@ -64,6 +69,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
        <p className="mt-1"><strong>Worker status:</strong> {run.stalled?'Stalled — review required':run.processing?'Processing':run.queued?'Queued / awaiting worker':'Idle'}</p>
      </div>
      {run.budget&&<p className="text-xs text-slate-600">Remaining controlled AI request allowance: {run.budget.available||0}. The actual charge depends on provider token usage.</p>}
+     </>}
      {run.error&&<p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">{run.error}</p>}
      {run.status_reason&&<p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{run.status_reason}</p>}
      {stage==='NEEDS_ATTENTION'&&<p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Assessment is paused or requires review, not actively advancing. Failed and ambiguous paid requests are never retried automatically. Only never-sent queued work can resume, with your confirmation.</p>}

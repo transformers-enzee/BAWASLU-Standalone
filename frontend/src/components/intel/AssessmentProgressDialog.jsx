@@ -6,7 +6,7 @@ const since=value=>{if(!value)return 'No successful AI activity recorded';const 
 const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment in progress',
  COMPLETED:'Assessment complete',NEEDS_ATTENTION:'Paused — action required',
  FAILED:'Run failed',NO_NEW_POSTS:'No new posts captured'};
-export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,error='',showCost=false,onConfirm=null,preview=null}){
+export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
  // Collection percentage is unknown until results are saved.
@@ -22,9 +22,14 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
    </header>
    <div className="space-y-5 overflow-y-auto p-5">
     {!run&&<div className="space-y-3">
-     <p className="text-sm text-slate-700">Start collecting up to 75 posts for this campaign? Saved posts will then enter AI assessment, and relevant findings will appear in Intelligence Inbox.</p>
+     <p className="text-sm text-slate-700">Activate this campaign to collect up to 100 posts and assess the saved results?</p>
      {preview&&<p className="text-xs text-slate-600">Keywords: {(preview.keywords_used||[]).join(', ')} · Platforms: {(preview.platforms||[]).join(', ')}</p>}
-     {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||!preview} onClick={onConfirm}>{loading?'Activating…':'Confirm activation'}</button>}
+     {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking campaign readiness…</p>}
+     <div className="flex flex-wrap gap-2">
+      <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>
+      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview} onClick={onConfirm}>Activate</button>}
+     </div>
+     {loading&&<p role="status" className="text-xs text-slate-500">Submitting activation request…</p>}
     </div>}
     {run&&<>
      <div className="grid grid-cols-3 gap-2">

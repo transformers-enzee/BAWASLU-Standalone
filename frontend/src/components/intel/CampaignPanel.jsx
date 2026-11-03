@@ -57,7 +57,7 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
- const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
+ const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
  // Persisted run IDs are accessible via explicit campaign activation, but a
  // page visit must NEVER reopen the progress modal automatically.
@@ -124,15 +124,14 @@ export default function CampaignPanel({campaignId=null}){
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
  async function checkDiscover(c){
-   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverBusy(true);
+   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
      setDiscoverPreview(r.data)}
-   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Discover credit preview failed')}
-   finally{setDiscoverBusy(false)}
+   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Campaign readiness check failed')}
+   finally{setDiscoverPreviewBusy(false)}
  }
  async function launchDiscover(){
-   if(!discoverCampaign||!discoverPreview||discoverBusy)return;
-   if(!window.confirm('Run a separate paid SocialCrawl Discover search? Up to '+discoverPreview.credit_cap+' credits, at most 100 kept posts, plus OpenAI enrichment charges. No scheduled crawl is enabled.'))return;
+   if(!discoverCampaign||!discoverPreview||discoverBusy||discoverPreviewBusy)return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
       data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun({...r.data,stage:'COLLECTING'});
@@ -579,14 +578,14 @@ export default function CampaignPanel({campaignId=null}){
        {(c.primary_keywords||[]).join(', ').length>95&&<button type="button" className="shrink-0 rounded px-1 font-semibold text-[#9f3033] hover:underline" aria-expanded={Boolean(expandedCampaignKeywords[c.id])} onClick={()=>setExpandedCampaignKeywords(prev=>({...prev,[c.id]:!prev[c.id]}))}>{expandedCampaignKeywords[c.id]?'Show less':'Show more'}</button>}
       </div>
       <p className="mt-1 text-xs text-[#60768c]">{Number(c.evidence_count||0).toLocaleString()} captured posts</p></div>
-      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#a52a2f] bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||c.status!=='DRAFT'} onClick={()=>{
+      <div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg border border-[#a52a2f] bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={()=>navigate('/social-listening/campaigns/'+c.id)}>Open Dashboard →</button><button type="button" className="intel-ghost" disabled={discoverBusy||discoverPreviewBusy||c.status!=='DRAFT'} onClick={()=>{
         if(activationSaved&&String(activationSaved.campaign_id)===String(c.id)){
          setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});setDiscoverError('');
         }else checkDiscover(c)
        }}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove campaign "+c.name} title={"Remove campaign "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
      </article>)}{discoverCampaign&&<AssessmentProgressDialog
   title={'Activate · '+discoverCampaign.name}
-  preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy}
+  preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy} previewLoading={discoverPreviewBusy}
   onConfirm={launchDiscover} onRefresh={()=>refreshDiscover()}
   onResume={()=>resumeAssessment(discoverRun,discoverCampaign)}
   onClose={()=>{

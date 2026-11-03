@@ -10,7 +10,7 @@ assert.equal(demoAllEvidence.length,557);
 assert.equal(demoCampaigns.length,5);
 assert.equal(demoWatchlist.length,7);
 assert.equal(new Set(snapshot.map(x=>x.id)).size,300);
-assert.equal(new Set(snapshot.map(x=>x.sourceId)).size,300);
+assert.equal(new Set(snapshot.map(x=>x.sourceId)).size,295,'300 saved assessments link to 295 distinct sources');
 assert.ok(snapshot.every(x=>String(x.id).startsWith('DEMO-')&&String(x.sourceId).startsWith('DEMO-SOURCE-')&&String(x.campaignId).startsWith('DEMO-CAMPAIGN-')));
 assert.ok(snapshot.every(x=>/^Akun publik contoh |^Sumber berita contoh /.test(x.author)));
 for(const p of snapshot){

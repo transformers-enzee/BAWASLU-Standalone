@@ -107,4 +107,9 @@ assert.ok(progressDialog.includes('{!collecting&&<>'),'Detailed cards are only d
 assert.ok(campaignProgress.includes("['COMPLETED','PARTIAL'].includes(run?.status)"),'Only a provider-complete run closes the popup');
 assert.ok(campaignProgress.includes('handleDiscoverStatus(r.data)'), 'Manual refresh uses identical terminal-status handling');
 assert.ok(campaignProgress.includes('setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);'), 'Completion dismisses popup without cancelling assessment');
+
+// Channel donut combines Twitter/X aliases while preserving the captured total.
+const campaignPanel=read('src/components/intel/CampaignPanel.jsx');
+assert.ok(campaignPanel.includes('grouped.set(name,(grouped.get(name)||0)+count)'), 'Channel donut must aggregate platform aliases');
+assert.ok(campaignPanel.includes("twitter:'X'")&&campaignPanel.includes("x:'X'"), 'Both provider platform aliases must map to X');
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

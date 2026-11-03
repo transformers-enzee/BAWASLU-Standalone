@@ -9,7 +9,10 @@ const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment
 export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,error='',showCost=false,onConfirm=null,preview=null}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
- const percent=Number(run?.progress_percent||0);
+ // Collection percentage is unknown until results are saved.
+ const collecting=stage==='COLLECTING';
+ const verifiedPercent=count>0?Math.max(0,Math.min(100,Math.round(done/count*100))):null;
+ const statusUnavailable=Boolean(error&&run);
  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)onClose?.()}}>
   <section className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Activation and AI assessment progress">
    <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
@@ -32,10 +35,11 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
       ].map(([name,value])=><div key={name} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-semibold text-slate-500">{name}</p><p className="mt-1 text-sm font-bold text-[#19324a]">{value}</p></div>)}
      </div>
      <div role="status" aria-live="polite" className="space-y-2">
-      <p className="flex items-center justify-between gap-3 text-sm font-semibold"><span>{labels[stage]||stage}</span>{count>0&&<strong>{percent}%</strong>}</p>
-      {count>0?<div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Full AI assessments completed" aria-valuemin={0} aria-valuemax={count} aria-valuenow={done}><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{width:percent+'%'}}/></div>:
-       <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200"><div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500"/></div>}
-      {stage==='COLLECTING'&&<p className="text-xs text-slate-500">SocialCrawl has not supplied an exact collection percentage. This indicator will update when the posts are saved.</p>}
+      <p className="flex items-center justify-between gap-3 text-sm font-semibold"><span>{labels[stage]||stage}</span>{!collecting&&verifiedPercent!==null&&!statusUnavailable&&<strong>{verifiedPercent}%</strong>}</p>
+      {!collecting&&verifiedPercent!==null&&!statusUnavailable?<div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Full AI assessments completed" aria-valuemin={0} aria-valuemax={count} aria-valuenow={done}><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{width:verifiedPercent+'%'}}/></div>:
+        <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={statusUnavailable?'Latest progress unavailable':collecting?'Collection progress unknown':'Assessment totals pending'} aria-valuetext={statusUnavailable?'Status unavailable':collecting?'Waiting for SocialCrawl':'Waiting for saved totals'}><div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500"/></div>}
+       {collecting&&<p className="text-xs text-slate-500">SocialCrawl does not supply an exact collection percentage. This animation means waiting, not 15% completion. Counts update after provider results are saved.</p>}
+       {statusUnavailable&&<p role="alert" className="text-xs text-amber-800">Current progress cannot be verified. Counters show the last known values, not confirmation that the run stopped.</p>}
      </div>
      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
       {[
@@ -64,7 +68,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      </div>
      {stage==='COMPLETED'&&<p className="text-xs text-emerald-800">All eligible sources in this run have been fully assessed. Review relevant findings in Intelligence Inbox; not all captured posts become Inbox cases.</p>}
     </>}
-    {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error&&<p role="alert" className="text-sm text-red-700">Status request failed: {error}. Collection may still be running; use Refresh status to retry.</p>}
     {loading&&<p role="status" className="text-xs text-slate-600">Checking saved progress…</p>}
    </div>
   </section>

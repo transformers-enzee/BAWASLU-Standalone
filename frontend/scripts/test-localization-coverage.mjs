@@ -83,4 +83,10 @@ for(const html of [
  'public/demo/smart-radar.html'
 ])assert.ok(read(html).includes('bawaslu-interface-locale.js?build=133.6'),'Translation asset revision missing: '+html);
 
+const progressDialog=read('src/components/intel/AssessmentProgressDialog.jsx');
+const campaignProgress=read('src/components/intel/CampaignPanel.jsx');
+assert.ok(progressDialog.includes("verifiedPercent=count>0?"),'Progress requires saved assessment counts');
+assert.ok(progressDialog.includes("!collecting&&verifiedPercent!==null"),'Collection must not use a fabricated percent');
+assert.ok(progressDialog.includes("Status request failed:"),'Failed status polls must be explained');
+assert.ok(campaignProgress.includes("setDiscoverRun(r.data);setDiscoverError('')"),'A successful poll clears stale errors');
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

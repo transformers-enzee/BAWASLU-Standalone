@@ -117,7 +117,7 @@ export default function CampaignPanel({campaignId=null}){
    !['COLLECTING','ASSESSING','NEEDS_ATTENTION'].includes(discoverRun.stage||'COLLECTING'))return;
   const timer=setInterval(()=>{
    base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',id:discoverCampaign.id,data:{run_id:discoverRun.run_id}})
-    .then(r=>{setDiscoverRun(r.data);if(r.data.stage==='COMPLETED')refresh()})
+    .then(r=>{setDiscoverRun(r.data);setDiscoverError('');if(r.data.stage==='COMPLETED')refresh()})
     .catch(e=>setDiscoverError(e.response?.data?.detail||e.message||'Progress refresh unavailable'));
   },4000);
   return ()=>clearInterval(timer);
@@ -146,7 +146,7 @@ export default function CampaignPanel({campaignId=null}){
    if(!discoverCampaign||!discoverRun)return;
    setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',
-     id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});setDiscoverRun(r.data);
+     id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});setDiscoverRun(r.data);setDiscoverError('');
      if(r.data.stage==='COMPLETED')await refresh()}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Status unavailable')}
    finally{setDiscoverBusy(false)}

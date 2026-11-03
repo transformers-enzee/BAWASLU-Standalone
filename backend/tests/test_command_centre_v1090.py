@@ -131,4 +131,6 @@ def test_command_centre_no_source_count_banner_and_neutral_display_is_read_only(
     assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" in js
     assert 'sentiment_counts?.UNCLASSIFIED' in js
     assert "kind==='NEUTRAL'" in js
-    assert "saved classification is unchanged" in js
+    # The sentiment explanation was intentionally removed in v133.7; the display-only grouping remains.
+    assert "$('#sentimentExplain').textContent=''" in js
+    assert 'saved classification is unchanged' not in js

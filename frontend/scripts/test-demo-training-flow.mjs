@@ -10,7 +10,7 @@ const app=read('src/App.jsx');
 const training=read('src/demo/DemoTrainingPage.jsx');
 const guide=read('src/demo/DemoGuide.jsx');
 const bridge=read('public/demo/snapshot-bridge.js');
-assert.match(app,/demoLocation\?<DemoTrainingPage mode="home"\/>:<SmartRadar\/>/);
+assert.match(app,/demoLocation\?<DemoTrainingPage mode="home"\/>:<SmartRadar\s*\/>/);
 assert.match(app,/demoLocation&&<Route path="\/guide"/);
 assert.match(shell,/window\.__BAWASLU_DEMO_REPLICA__\?<DemoAccessNavigation/);
 const paths=[...nav.matchAll(/\['(\/[^']*)','[^']+',(?:Radio|Inbox|LayoutDashboard|Sparkles)\]/g)].map(x=>x[1]);

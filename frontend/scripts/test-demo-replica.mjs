@@ -65,12 +65,14 @@ const browserContext={
 runInNewContext(source,browserContext);
 const radarResponse=await iframeWindow.fetch('/api/smart-radar/dashboard');
 const radar=await radarResponse.json();
+const seenSources=new Set();
+const uniqueSourceSnapshot=snapshot.filter(x=>{if(seenSources.has(x.sourceId))return false;seenSources.add(x.sourceId);return true;});
 assert.equal(radar.mode,'SAVED_INBOX_SOURCE_OF_TRUTH');
 assert.equal(radar.source_total,new Set(snapshot.map(x=>x.sourceId)).size);
-assert.equal(radar.sentiment_counts.NEGATIVE,[...new Map(snapshot.map(x=>[x.sourceId,x])).values()].filter(x=>x.sentiment==='NEGATIVE').length);
-assert.equal(radar.sentiment_counts.POSITIVE,[...new Map(snapshot.map(x=>[x.sourceId,x])).values()].filter(x=>x.sentiment==='POSITIVE').length);
-assert.equal(radar.sentiment_counts.NEUTRAL,[...new Map(snapshot.map(x=>[x.sourceId,x])).values()].filter(x=>x.sentiment==='NEUTRAL').length);
-assert.equal(radar.sentiment_counts.UNCLASSIFIED,[...new Map(snapshot.map(x=>[x.sourceId,x])).values()].filter(x=>x.sentiment==='UNCLASSIFIED').length);
+assert.equal(radar.sentiment_counts.NEGATIVE,uniqueSourceSnapshot.filter(x=>x.sentiment==='NEGATIVE').length);
+assert.equal(radar.sentiment_counts.POSITIVE,uniqueSourceSnapshot.filter(x=>x.sentiment==='POSITIVE').length);
+assert.equal(radar.sentiment_counts.NEUTRAL,uniqueSourceSnapshot.filter(x=>x.sentiment==='NEUTRAL').length);
+assert.equal(radar.sentiment_counts.UNCLASSIFIED,uniqueSourceSnapshot.filter(x=>x.sentiment==='UNCLASSIFIED').length);
 assert.equal(radar.findings.reduce((n,f)=>n+f.supporting_posts,0),new Set(snapshot.map(x=>x.sourceId)).size,'No duplicated findings');
 assert.ok(radar.findings.some(f=>f.players?.includes('concerns')));
 assert.ok(radar.findings.length>=3);

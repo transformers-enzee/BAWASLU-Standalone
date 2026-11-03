@@ -31,4 +31,10 @@ assert.equal(owned('DEMO-WATCH-005'),4);
 assert.equal(owned('DEMO-WATCH-006'),10);
 assert.equal(new Set(records.map(x=>x.id)).size,36);
 assert.ok(records.every(x=>x.relation==='OWN_POST'&&!/https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}/i.test(x.text)));
+
+// Embedded campaign Watchlist must grow with candidate content instead of trapping page scrolling.
+const campaignPanel=read('src/components/intel/CampaignPanel.jsx');
+assert.ok(campaignPanel.includes('scrolling="no"'),'Embedded Watchlist must delegate scrolling to main page');
+assert.ok(campaignPanel.includes('ResizeObserver(resize)'),'Embedded Watchlist must auto-size after candidate changes');
+assert.ok(!campaignPanel.includes("height:'calc(100vh - 280px)'"),'Fixed-height nested Watchlist scrolling must be removed');
 console.log('PASS demo watchlist ownership: 12 accounts, 36 verified-match saved posts; Anies 10, Dedi 0; bilingual fallback, no production file changed');

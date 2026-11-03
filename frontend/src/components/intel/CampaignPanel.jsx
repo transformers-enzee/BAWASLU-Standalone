@@ -621,7 +621,22 @@ export default function CampaignPanel({campaignId=null}){
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id} refreshKey={authorRefreshKey}/>}
-   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" src={(window.__BAWASLU_DEMO_REPLICA__?"/demo/watchlist.html?campaign_id=":"/ui-freeze/watchlist-v2_2.html?campaign_id=")+encodeURIComponent(selected.id)+"&v=130.0"} className="block w-full border-0 bg-[#edf2f4]" style={{height:'calc(100vh - 280px)',minHeight:700}}/>}
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" scrolling="no" onLoad={event=>{
+    const frame=event.currentTarget;
+    frame.__watchlistResizeObserver?.disconnect();
+    const doc=frame.contentDocument;
+    const shell=doc?.querySelector('.shell');
+    if(!shell)return;
+    const resize=()=>{
+      if(!frame.isConnected)return;
+      const height=Math.max(700,Math.ceil(shell.getBoundingClientRect().bottom+(doc.defaultView?.scrollY||0)+24));
+      if(frame.style.height!==height+'px')frame.style.height=height+'px';
+    };
+    const observer=new ResizeObserver(resize);
+    observer.observe(shell);
+    frame.__watchlistResizeObserver=observer;
+    resize();
+   }} src={(window.__BAWASLU_DEMO_REPLICA__?"/demo/watchlist.html?campaign_id=":"/ui-freeze/watchlist-v2_2.html?campaign_id=")+encodeURIComponent(selected.id)+"&v=134.1"} className="block w-full border-0 bg-[#edf2f4]" style={{height:700,minHeight:700}}/>}
    <div className={campaignSection==='overview'?'contents':'hidden'} data-campaign-body={campaignSection}>
 
    {dashboardError&&<p role="alert" className="text-sm text-red-700">{dashboardError}</p>}

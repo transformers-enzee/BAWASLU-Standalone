@@ -280,8 +280,7 @@
       ['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled],
       ['NEGATIVE',Number(sentimentCounts.NEGATIVE||0)]
     ];
-    $('#sentimentExplain').innerHTML='<span>'+classified+'</span> <span>of</span> <span>'+total+'</span> <span>relevant posts have saved AI sentiment labels.</span>'+
-      (unlabeled?'<br><span>'+unlabeled+'</span> <span>post(s) without an AI sentiment label are included in the Neutral display segment only; their saved classification is unchanged.</span>':'');
+    $('#sentimentExplain').textContent='';
     $('#sentiments').innerHTML=donut(sentimentRows,'sentiment:',sentimentPalette);
     const platforms=asRows(addCounts(filtered,'platform_counts'));
     $('#platforms').innerHTML=donut(platforms,'platform:',platformPalette);

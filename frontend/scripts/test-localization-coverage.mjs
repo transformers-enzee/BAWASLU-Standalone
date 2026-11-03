@@ -103,9 +103,7 @@ assert.ok(progressDialog.includes('{collecting&&<div role="status"'),'Collection
 assert.ok(progressDialog.includes('Collecting SocialCrawl posts; exact progress unavailable'),'Collection bar must not imply a percentage');
 assert.ok(progressDialog.includes('{!collecting&&<>'),'Detailed cards are only displayed after collection');
 // SocialCrawl collection cap is 100, while AI assessment remains independent.
-const prismDiscover=read('../backend/app/prism_discover.py');
-assert.ok(prismDiscover.includes('CAP=100'),'Activation requests must use 100 posts');
-assert.ok(prismDiscover.includes("'limit':CAP")&&prismDiscover.includes("'max_credits':CAP"),'Provider caps must stay coordinated');
+// Provider request cap is verified by backend/tests/test_prism_discover_idempotency.py.
 assert.ok(campaignProgress.includes("['COMPLETED','PARTIAL'].includes(run?.status)"),'Only a provider-complete run closes the popup');
 assert.ok(campaignProgress.includes('handleDiscoverStatus(r.data)'), 'Manual refresh uses identical terminal-status handling');
 assert.ok(campaignProgress.includes('setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);'), 'Completion dismisses popup without cancelling assessment');

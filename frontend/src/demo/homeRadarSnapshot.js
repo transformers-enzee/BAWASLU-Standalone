@@ -17,6 +17,11 @@ const narrative=text=>{
  return Object.entries(anchors).find(([,terms])=>terms.some(term=>body.includes(term)))?.[0]||'';
 };
 const countBy=(rows,key)=>rows.reduce((all,row)=>(all[key(row)]=(all[key(row)]||0)+1,all),{});
+// Demo-only frozen geographic references copied from the live Inbox-source
+// selection on 2026-11-03: latest relevant assessments, latest 300 entries,
+// deduplicated by result_id. No province is inferred from a profile,
+// candidate jurisdiction or campaign. These are NOT verified incident sites.
+export const DEMO_HOME_GEOGRAPHIC_SIGNALS=Object.freeze({"DKI Jakarta":7,"Jawa Barat":1,"Jawa Tengah":1,"Jawa Timur":1,"Riau":1});
 const unique=()=>{const seen=new Set();return snapshot.filter(row=>{if(seen.has(row.sourceId))return false;seen.add(row.sourceId);return true})};
 const classify=p=>{
  if((p.signals||[]).length)return {key:'violation:'+p.sourceId,player:'violations',status:'pending'};
@@ -49,9 +54,9 @@ export function demoHomeRadar(){
  const topics=Object.entries(countBy(records,p=>p.topics?.[0]||((p.concerns||[]).length?'Public Concern':'Other')))
    .sort((a,b)=>b[1]-a[1]).map(([title,count],index)=>({id:index+1,title,count}));
  return {dashboard:{
-   source_total:records.length,findings,geo_signal_counts:{},verified_incident_counts:{},
+   source_total:records.length,findings,geo_signal_counts:{...DEMO_HOME_GEOGRAPHIC_SIGNALS},verified_incident_counts:{},
    mode:'SAVED_INBOX_SOURCE_OF_TRUTH',snapshot_as_of:'2026-11-03',truncated_to_inbox_window:snapshot.length>=300,
-   geographic_scope_note:'No incident location is inferred from country, campaign, or author addresses.'
+   geographic_scope_note:'Frozen unverified source-level province references from the 2026-11-03 authorized Inbox selection; NOT confirmed incident locations.'
   },distribution:{operations:{topics:topics.slice(0,5),total:records.length,others:topics.slice(5).reduce((n,x)=>n+x.count,0)},
    reputation:{topics:topics.slice(0,5),total:records.length,others:topics.slice(5).reduce((n,x)=>n+x.count,0)}}};
 }

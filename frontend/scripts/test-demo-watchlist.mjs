@@ -37,4 +37,13 @@ const campaignPanel=read('src/components/intel/CampaignPanel.jsx');
 assert.ok(campaignPanel.includes('scrolling="no"'),'Embedded Watchlist must delegate scrolling to main page');
 assert.ok(campaignPanel.includes('ResizeObserver(resize)'),'Embedded Watchlist must auto-size after candidate changes');
 assert.ok(!campaignPanel.includes("height:'calc(100vh - 280px)'"),'Fixed-height nested Watchlist scrolling must be removed');
+
+// Training mode must not fabricate potential-violation findings from AI flags.
+assert.ok(js.includes('candidate.findings=[]'),'Demo must not create unreviewed AI indicator cards');
+assert.ok(!js.includes("title:'Potential violation indicator · unverified'"));
+assert.ok(!html.includes("['flags','Potential Violations']"),'Remove irrelevant demo indicator tab');
+assert.ok(!html.includes('id="pFlags"'),'Remove demo-only potential violation metric');
+assert.ok(html.includes('demoUi(n)'),'Demo tabs must respect language toggle');
+assert.ok(html.includes('Menampilkan'),'Demo post-count line must support Indonesian');
+assert.ok(html.includes('Semua sentimen'),'Demo sentiment filter must support Indonesian');
 console.log('PASS demo watchlist ownership: 12 accounts, 36 verified-match saved posts; Anies 10, Dedi 0; bilingual fallback, no production file changed');

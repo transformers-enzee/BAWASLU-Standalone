@@ -326,13 +326,8 @@
       // request may add records under Mentions by Others.
       candidate.posts=(await collectedPosts(id)).map(mapCaptured)
         .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-      candidate.findings=candidate.posts.filter(post=>post.flag===true).map(post=>({
-        id:'FLAG-'+post.id,title:'Potential violation indicator · unverified',
-        summary:'Saved assessment v'+(post.assessment?.assessment_version??'unknown')+
-          ' · '+(post.assessment?.violation_uncertainty||'UNVERIFIED_AI_INDICATOR')+
-          '. Inspect original evidence before any officer decision.',
-        status:post.assessment?.violation_uncertainty||'Unverified',postIds:[post.id]
-      }));
+      // Training Watchlist tracks activity only; do not synthesize officer violation findings from saved AI flags.
+      candidate.findings=[];
       candidate.summary=candidateActivitySummary(candidate);
       candidate.feedLoadState='ready';
       loaded.add(id);

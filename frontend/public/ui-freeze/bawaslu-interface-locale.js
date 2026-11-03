@@ -1135,7 +1135,47 @@ const fullInterfaceId={
 
 (function(){
   'use strict';
-  const labels={...radarId,...customId,...fullInterfaceId,...expandedDrawerId};
+  // Presentation-only terminology. Original post/evidence bodies are excluded from translation.
+  const supplementaryUiLabels={
+  "Since your last visit": "Sejak kunjungan terakhir Anda",
+  "Last-visit baseline unavailable · historical pilot": "Data pembanding kunjungan terakhir tidak tersedia · uji coba historis",
+  "Last-visit changes cannot be calculated without a verified account-specific visit history. Review current items via Action Desk.": "Perubahan sejak kunjungan terakhir tidak dapat dihitung tanpa riwayat kunjungan akun yang terverifikasi. Tinjau tugas saat ini melalui Meja Tindak Lanjut.",
+  "Last-visit differences require verified account visit history. Current findings and pending officer work can be inspected in the intelligence players and Action Desk.": "Perbandingan sejak kunjungan terakhir memerlukan riwayat kunjungan akun yang terverifikasi. Temuan saat ini dan tugas petugas yang tertunda dapat diperiksa pada komponen intelijen dan Meja Tindak Lanjut.",
+  "What You Missed — Details": "Rincian Informasi yang Terlewat",
+  "Assigned homework stays accessible even when dashboard filters change.": "Tugas yang telah diberikan tetap dapat diakses meskipun filter dasbor berubah.",
+  "Your assigned reviews, investigations and monitored issues. This is separate from the quality-control team.": "Daftar tinjauan, penyelidikan, dan isu pantauan yang ditugaskan kepada Anda. Bagian ini terpisah dari tim pengendalian mutu.",
+  "BAWASLU officer homework": "Tugas petugas BAWASLU",
+  "To Review": "Perlu Ditinjau",
+  "Investigating": "Dalam Penyelidikan",
+  "Monitoring": "Pemantauan",
+  "Original Posts": "Unggahan Asli",
+  "Sentiment: Not classified": "Sentimen: Belum diklasifikasikan",
+  "Potential violation: Preliminary topic signal; unverified": "Potensi pelanggaran: Sinyal topik awal; belum terverifikasi",
+  "Preliminary topic signal; unverified": "Sinyal topik awal; belum terverifikasi",
+  "Category:": "Kategori:",
+  "Sentiment:": "Sentimen:",
+  "View original source →": "Lihat sumber asli →",
+  "Nothing pending in this section.": "Tidak ada tugas tertunda pada bagian ini.",
+  "Action Desk": "Meja Tindak Lanjut",
+  "Daftar Pantauan focuses on one selected candidate at a time and draws both own posts and mentions by others directly from Social Listening. Smart Radar shows the broader relevant intelligence picture from Intelligence Inbox, prioritizes findings, and manages official review decisions in Action Desk. Candidate tracking is not an investigation.": "Daftar Pantauan berfokus pada satu kandidat yang dipilih, mencakup unggahan akun kandidat dan penyebutan oleh pihak lain dari Pemantauan Media Sosial. Smart Radar menampilkan gambaran intelijen lebih luas dari Kotak Masuk Intelijen, memprioritaskan temuan, dan mengelola keputusan peninjauan resmi melalui Meja Tindak Lanjut. Pemantauan kandidat bukan penyelidikan.",
+  "Candidate tracking is not an investigation.": "Pemantauan kandidat bukan penyelidikan.",
+  "Own posts": "Unggahan akun kandidat",
+  "mentions by others": "penyebutan pihak lain",
+  "National": "Nasional",
+  "View original source": "Lihat sumber asli",
+  "Saved source record": "Catatan sumber tersimpan"
+};
+  const htmlFragmentLabels={
+  "focuses on one selected candidate at a time and draws both own posts and mentions by others directly from Social Listening.": "berfokus pada satu kandidat yang dipilih, menggunakan unggahan akun kandidat maupun penyebutan oleh pihak lain dari Pemantauan Media Sosial.",
+  "shows the broader relevant intelligence picture from Intelligence Inbox, prioritizes findings, and manages official review decisions in Action Desk. Candidate tracking is not an investigation.": "menampilkan gambaran intelijen relevan yang lebih luas dari Kotak Masuk Intelijen, memprioritaskan temuan, dan mengelola keputusan peninjauan resmi melalui Meja Tindak Lanjut. Pemantauan kandidat bukan penyelidikan.",
+  "How is Watchlist different from Smart Radar?": "Apa perbedaan Daftar Pantauan dan Smart Radar?",
+  "Assigned homework stays accessible even when dashboard filters change.": "Tugas yang ditugaskan tetap dapat diakses meskipun filter dasbor berubah.",
+  "Since your last visit": "Sejak kunjungan terakhir",
+  "View Details ▾": "Lihat Rincian ▾",
+  "Show Less ▴": "Tampilkan Lebih Sedikit ▴",
+  "National · 0 own posts · 0 mentions by others": "Nasional · 0 unggahan sendiri · 0 penyebutan pihak lain"
+};
+  const labels={...radarId,...customId,...fullInterfaceId,...expandedDrawerId,...supplementaryUiLabels,...htmlFragmentLabels};
   let locale='en';
   const originals=new WeakMap(),rendered=new WeakMap(),requested=new WeakMap();
   const fallback=window.BAWASLUUiTranslator;
@@ -1143,11 +1183,36 @@ const fullInterfaceId={
   const attributes=['placeholder','title','aria-label','aria-description','aria-placeholder','data-placeholder','alt'];
   const ignoredTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','TEXTAREA','SVG','PATH']);
   const excluded='[data-i18n-exempt],[data-original-content],.issue-source-description,.whitespace-pre-wrap,.source p,[data-post-text],[data-source-body],pre,code,textarea,[contenteditable]';
+  const ISO_INSTANT=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+  function readableTimestamp(value){
+    const input=String(value||'').trim();
+    if(!ISO_INSTANT.test(input))return null;
+    const date=new Date(input);if(!Number.isFinite(date.getTime()))return null;
+    return new Intl.DateTimeFormat(locale==='id'?'id-ID':'en-GB',{
+      timeZone:'Asia/Jakarta',day:'numeric',month:'long',year:'numeric',
+      hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+    }).format(date)+' WIB';
+  }
   function translate(value){
-    if(locale!=='id'||typeof value!=='string')return value;
+    if(typeof value!=='string')return value;
+    const displayDate=readableTimestamp(value);
+    if(displayDate)return value.replace(value.trim(),displayDate);
+    if(locale!=='id')return value;
     const trimmed=value.trim();
     const direct=labels[trimmed];
     if(direct)return value.replace(trimmed,direct);
+    const officer=trimmed.match(/^BAWASLU officer homework\s*[·:]\s*(\d+)\s+need attention$/i);
+    if(officer)return value.replace(trimmed,'Tugas petugas BAWASLU · '+officer[1]+' memerlukan perhatian');
+    const originals=trimmed.match(/^Original Posts\s*\((\d+)\s+loaded of\s+(\d+)\s+referenced\)$/i);
+    if(originals)return value.replace(trimmed,'Unggahan Asli ('+originals[1]+' dimuat dari '+originals[2]+' rujukan)');
+    if(trimmed.startsWith('Category: ')&&trimmed.includes('Potential violation:')){
+      return value.replace(/Category:/g,'Kategori:')
+        .replace('Sentiment: Not classified','Sentimen: Belum diklasifikasikan')
+        .replace('Potential violation: Preliminary topic signal; unverified','Potensi pelanggaran: Sinyal topik awal; belum terverifikasi')
+        .replace(/Electoral Operations/g,'Penyelenggaraan Pemilu')
+        .replace(/Public Concerns?/g,'Kekhawatiran Publik')
+        .replace(/BAWASLU Reputation/g,'Reputasi BAWASLU');
+    }
     const summaryCount=trimmed.match(/^Intelligence summary\s*·\s*(\d+)\s+items?$/i);
     if(summaryCount)return value.replace(trimmed,'Ringkasan intelijen · '+summaryCount[1]+' item');
     const linkedCount=trimmed.match(/^(\d[\d.,]*)\s+Supporting Posts\s*·\s*Open\s*→$/i);

@@ -51,5 +51,31 @@ assert.ok(watch.includes('id="candidateSummary" data-ai-summary data-i18n-exempt
 assert.ok(read('public/ui-freeze/bawaslu-interface-locale.js').includes("[data-ai-summary]"), 'Translation selector must include saved summaries');
 assert.ok(watch.includes("$('#candidateSummary').textContent=c.summary"), 'Watchlist summary must still come from saved profile data');
 assert.ok(watch.includes('data-original-content'), 'Original source posts must stay untouched');
-assert.ok(watch.includes('bawaslu-interface-locale.js?build=128.2'), 'Invalidate stale translation asset');
+assert.ok(watch.includes('bawaslu-interface-locale.js?build=133.6'), 'Invalidate stale translation asset');
+
+// v133.6: all four iframe clients must receive the updated interface translations.
+const locale1336=read('public/ui-freeze/bawaslu-interface-locale.js');
+const layer1336=read('src/lib/UiLanguageLayer.jsx');
+const shell1336=read('src/components/intel/Shell.jsx');
+for(const phrase of [
+ 'Assigned homework stays accessible even when dashboard filters change.',
+ 'Last-visit baseline unavailable · historical pilot',
+ 'Last-visit differences require verified account visit history.',
+ 'What You Missed — Details',
+ 'Original Posts',
+ 'BAWASLU officer homework',
+ 'focuses on one selected candidate at a time and draws both own posts',
+ 'shows the broader relevant intelligence picture from Intelligence Inbox'
+])assert.ok(locale1336.includes(phrase),'Missing localized interface fragment: '+phrase);
+assert.ok(locale1336.includes('Asia/Jakarta')&&layer1336.includes('Asia/Jakarta'),'Both UI translation layers must format WIB');
+assert.ok(locale1336.includes('ISO_INSTANT')&&layer1336.includes('formatUiDate(source)'),'Raw ISO dates must be formatted for display');
+assert.ok(locale1336.includes(".source p"),'Original post text must stay excluded');
+assert.ok(shell1336.includes('intel-sidebar-scroll::-webkit-scrollbar')&&shell1336.includes('scrollbar-width:none'),'Sidebar scrollbars hidden without disabling scrolling');
+for(const html of [
+ 'public/ui-freeze/watchlist-v2_2.html',
+ 'public/ui-freeze/smart-radar-v6_2.html',
+ 'public/demo/watchlist.html',
+ 'public/demo/smart-radar.html'
+])assert.ok(read(html).includes('bawaslu-interface-locale.js?build=133.6'),'Translation asset revision missing: '+html);
+
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

@@ -20,6 +20,15 @@ export default function UiLanguageLayer(){
   const fallback=window.BAWASLUUiTranslator;
   if(language==='id')fallback?.resetFailures();
   const skip=el=>!el||el.closest?.(excluded)||(window.__BAWASLU_DEMO_REPLICA__&&Boolean(el.closest?.('[data-demo-locale-owned]')));
+  function formatUiDate(value){
+    const raw=String(value||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(raw))return null;
+    const date=new Date(raw);if(!Number.isFinite(date.getTime()))return null;
+    return new Intl.DateTimeFormat(language==='id'?'id-ID':'en-GB',{
+      timeZone:'Asia/Jakarta',day:'numeric',month:'long',year:'numeric',
+      hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+    }).format(date)+' WIB';
+  }
   function literal(value){
    const translated=translateInterfaceLiteral(value,language);
    if(translated!==value||language!=='id')return translated;
@@ -33,7 +42,7 @@ export default function UiLanguageLayer(){
    if(!originals.has(node)||now!==lastRendered.get(node))originals.set(node,now);
    const source=originals.get(node)||'';
    if(!source.trim()||source.length>1800)return;
-   const next=literal(source);
+   const next=formatUiDate(source)||literal(source);
    if(now!==next)node.nodeValue=next;
    lastRendered.set(node,next);
    if(language!=='id'){requested.delete(node);return;}

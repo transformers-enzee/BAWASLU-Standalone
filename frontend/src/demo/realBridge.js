@@ -10,7 +10,8 @@ const user={id:'DEMO-OFFICER',full_name:'BAWASLU Demo Officer',email:'demo.inval
 const permissions={view_intelligence:true,add_intelligence:true,human_validation:true,administration:true,
   manage_watchlist:true,review_intelligence:true,manage_campaigns:true,view_raw_evidence:true};
 const access={status:'Active',geographic_scope:'Nationwide',province:'',permissions,role:'Administrator'};
-const campaigns=demoCampaigns.map(c=>({
+const DEMO_VISIBLE_CAMPAIGN_IDS=new Set(['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04']);
+const campaigns=demoCampaigns.filter(c=>DEMO_VISIBLE_CAMPAIGN_IDS.has(c.id)).map(c=>({
  id:c.id,name:c.name,description:'Approved, sanitized BAWASLU campaign snapshot',
  primary_keywords:c.primary_keywords||[],secondary_keywords:c.secondary_keywords||[],
  excluded_keywords:c.excluded_keywords||[],platforms:c.platforms||[],

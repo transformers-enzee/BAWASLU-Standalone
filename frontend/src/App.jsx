@@ -28,7 +28,7 @@ import DataSources from '@/pages/DataSources';
 import SocialListening from '@/pages/SocialListening';
 import CampaignPanel from '@/components/intel/CampaignPanel';
 import { useParams } from 'react-router-dom';
-const CampaignDashboardPage=()=>{const {id}=useParams();return <CampaignPanel campaignId={id}/>};
+const CampaignDashboardPage=()=>{const {id}=useParams();if(/^\/demo(?:\/|$)/.test(window.location.pathname)&&!['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'].includes(id))return <Navigate to="/social-listening" replace/>;return <CampaignPanel campaignId={id}/>};
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
 import IntegrationReadiness from '@/pages/IntegrationReadiness';

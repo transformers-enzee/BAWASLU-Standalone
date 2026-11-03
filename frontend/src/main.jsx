@@ -4,14 +4,24 @@ import '@/index.css'
 
 const demo=/^\/demo(?:\/|$)/.test(window.location.pathname);
 if(demo){
-  // Import the API isolation adapter before importing the real application.
-  import('@/demo/realBridge.js').then(()=>{
-    const csp=document.createElement('meta');
-    csp.httpEquiv='Content-Security-Policy';
-    csp.content="default-src 'self'; connect-src 'self'; form-action 'none'; object-src 'none'; frame-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'";
-    document.head.appendChild(csp);
-    return import('@/App.jsx');
-  }).then(({default:App})=>ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
+  // A simple training-only gate. The demo bundle contains anonymized, fixed
+  // evidence, so this is NOT server authentication or access control for secrets.
+  const root=ReactDOM.createRoot(document.getElementById('root'));
+  const openDemo=()=>{
+    import('@/demo/realBridge.js').then(()=>{
+      const csp=document.createElement('meta');
+      csp.httpEquiv='Content-Security-Policy';
+      csp.content="default-src 'self'; connect-src 'self'; form-action 'none'; object-src 'none'; frame-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'";
+      document.head.appendChild(csp);
+      return import('@/App.jsx');
+    }).then(({default:App})=>root.render(<App/>));
+  };
+  if(sessionStorage.getItem('bawaslu_demo_training_session')==='v133.2'){
+    openDemo();
+  }else{
+    import('@/demo/DemoTrainingLogin.jsx').then(({default:DemoTrainingLogin})=>
+      root.render(<DemoTrainingLogin onSuccess={openDemo}/>));
+  }
 }else{
   import('@/App.jsx').then(({default:App})=>ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
 }

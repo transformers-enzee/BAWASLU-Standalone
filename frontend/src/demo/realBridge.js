@@ -20,9 +20,9 @@ const campaigns=demoCampaigns.map(c=>({
 let additionalCampaigns=[],reviewState={};
 const selectedWatch=demoWatchlist.map(x=>x.name);
 const accountNames=demoWatchlist.map(x=>({...x,related_topics:[],candidate_aliases:x.candidate_aliases||[]}));
-const assessmentBySource=new Map(snapshot.map(x=>[x.sourceId,x]));
+const assessmentBySource=new Map(snapshot.map(x=>[x.campaignId+'|'+x.sourceId,x]));
 const rowsFor=id=>demoAllEvidence.filter(x=>!id||String(x.campaignId)===String(id)).map(x=>{
- const assessment=assessmentBySource.get(x.sourceId);
+ const assessment=assessmentBySource.get(x.campaignId+'|'+x.sourceId);
  return assessment?{...x,topics:assessment.topics,candidates:assessment.candidates,signals:assessment.signals,
  concerns:assessment.concerns,sentiment:assessment.sentiment,explanation:assessment.explanation,
  assessmentVersion:assessment.assessmentVersion,relevance_label:'RELEVANT'}:{...x,relevance_label:'NOT_ASSESSED',sentiment:'UNCLASSIFIED'};

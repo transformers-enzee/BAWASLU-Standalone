@@ -4,7 +4,10 @@
 (function(){
  'use strict';
  const snapshotElement=document.getElementById('bawaslu-demo-snapshot');
- const rows=JSON.parse(snapshotElement.textContent);
+ const originalRows=JSON.parse(snapshotElement.textContent);
+ // Match the live Inbox radar: one social source cannot inflate findings across campaigns.
+ const seenSources=new Set();
+ const rows=originalRows.filter(p=>{if(seenSources.has(p.sourceId))return false;seenSources.add(p.sourceId);return true;});
  const metaElement=document.getElementById('bawaslu-demo-metadata');
  const meta=metaElement?JSON.parse(metaElement.textContent):{campaigns:[],watchlist:[]};
  const originalFetch=window.fetch.bind(window);
@@ -127,7 +130,7 @@
     reviewed_total:findings.filter(x=>x.human_reviewed).length,
     mode:'SAVED_INBOX_SOURCE_OF_TRUTH',scoring_ready:false,
     feed_source:'FIXED_SAVED_ASSESSMENTS',inbox_source_scope:'APPROVED_RELEVANT_SNAPSHOT',snapshot_as_of:'2026-11-03',
-    inbox_window_limit:300,truncated_to_inbox_window:rows.length>=300,
+    inbox_window_limit:300,truncated_to_inbox_window:originalRows.length>=300,
     sentiment_coverage:{classified:rows.filter(x=>['POSITIVE','NEGATIVE','NEUTRAL'].includes(x.sentiment)).length,
       unclassified:rows.filter(x=>!['POSITIVE','NEGATIVE','NEUTRAL'].includes(x.sentiment)).length},
     geographic_scope_note:'No verified incident provinces inferred from source profiles.',

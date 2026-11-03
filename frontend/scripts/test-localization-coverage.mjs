@@ -95,5 +95,6 @@ assert.ok(!campaignProgress.includes("window.confirm('Run a separate paid Social
 assert.ok(campaignProgress.includes('discoverPreviewBusy'),'Preview must have separate loading state');
 assert.ok(progressDialog.includes('onClick={onConfirm}>Activate</button>'),'Activation CTA must stay accurately named');
 assert.ok(!progressDialog.includes("loading?'Activating…'"),'Preview/activation must not use a misleading activating label');
-assert.ok(progressDialog.includes('collect up to 100 posts'),'Activation count must match configured cap');
+assert.ok(progressDialog.includes('Activate this campaign to collect posts and assess the saved results?'),'Activation confirmation should be concise');
+assert.ok(!progressDialog.includes('collect up to 100 posts'),'Activation confirmation must not mention the collection cap');
 console.log('PASS '+labels.length+' UI labels, 4 valid scripts, dynamic themes and safe Watchlist language sync');

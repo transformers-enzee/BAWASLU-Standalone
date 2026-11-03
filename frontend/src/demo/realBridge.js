@@ -1,6 +1,7 @@
 /* BAWASLU real-UI demo adapter, with snapshot-backed responses only.
    Every /api/ request resolves locally. External network I/O is denied by CSP. */
 import {snapshot,demoAllEvidence,demoCampaigns,demoWatchlist} from './currentSnapshot.js';
+import {demoProvinceMentions} from './inboxProvinceReferences.js';
 const DEMO_KEY='__BAWASLU_DEMO_REPLICA__';
 window[DEMO_KEY]=true;
 const clone=v=>JSON.parse(JSON.stringify(v));
@@ -47,6 +48,8 @@ function inboxFinding(p){
   can_review_flag:true,human_review_status:reviewState[p.id]||'AWAITING_REVIEW',possible_issues:flags,
   topic_labels:topics,topic_suggestions:topics,category:topics[0]||'Not classified',public_concern_signals:p.concerns||[],
   candidate_signals:Array.isArray(p.candidates)?p.candidates:[],geographic_signals:[],
+  // Demo-only mentions from source text; not verified incident geography.
+  location_signals:demoProvinceMentions(p.text),
   potential_issue_signals:flags,incident_jurisdiction_review:{decision:'UNREVIEWED',incident_jurisdiction_verified:false},
   actionability:'REQUIRES_REVIEW',attention_assessment:{level:'REVIEW',reason:'Saved AI signal. Verify against original evidence.'}};
 }

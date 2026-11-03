@@ -40,7 +40,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
       ].map(([name,value])=><div key={name} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-semibold text-slate-500">{name}</p><p className="mt-1 text-sm font-bold text-[#19324a]">{value}</p></div>)}
      </div>
      <div role="status" aria-live="polite" className="space-y-2">
-      <p className="flex items-center justify-between gap-3 text-sm font-semibold"><span>{labels[stage]||stage}</span>{!collecting&&verifiedPercent!==null&&!statusUnavailable&&<strong>{verifiedPercent}%</strong>}</p>
+      <p className="flex items-center justify-between gap-3 text-sm font-semibold"><span>{labels[stage]||stage}</span></p>
       {!collecting&&verifiedPercent!==null&&!statusUnavailable?<div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Full AI assessments completed" aria-valuemin={0} aria-valuemax={count} aria-valuenow={done}><div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{width:verifiedPercent+'%'}}/></div>:
         <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={statusUnavailable?'Latest progress unavailable':collecting?'Collection progress unknown':'Assessment totals pending'} aria-valuetext={statusUnavailable?'Status unavailable':collecting?'Waiting for SocialCrawl':'Waiting for saved totals'}><div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500"/></div>}
        {collecting&&<p className="text-xs text-slate-500">SocialCrawl does not supply an exact collection percentage. This animation means waiting, not 15% completion. Counts update after provider results are saved.</p>}

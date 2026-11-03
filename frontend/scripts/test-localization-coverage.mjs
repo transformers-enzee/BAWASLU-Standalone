@@ -88,7 +88,7 @@ const campaignProgress=read('src/components/intel/CampaignPanel.jsx');
 assert.ok(progressDialog.includes("verifiedPercent=count>0?"),'Progress requires saved assessment counts');
 assert.ok(progressDialog.includes("!collecting&&verifiedPercent!==null"),'Collection must not use a fabricated percent');
 assert.ok(progressDialog.includes("Status request failed:"),'Failed status polls must be explained');
-assert.ok(campaignProgress.includes("setDiscoverRun(r.data);setDiscoverError('')"),'A successful poll clears stale errors');
+assert.ok(campaignProgress.includes("setDiscoverRun(result);setDiscoverError('')"),'Successful status handling clears stale errors');
 
 // A single in-dialog confirmation; no extra browser alert or credit text.
 assert.ok(!campaignProgress.includes("window.confirm('Run a separate paid SocialCrawl Discover"),'Activation must not open a second browser confirmation');

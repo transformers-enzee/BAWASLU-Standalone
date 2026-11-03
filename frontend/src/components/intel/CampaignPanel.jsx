@@ -9,6 +9,7 @@ import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
 import AssessmentProgressDialog from '@/components/intel/AssessmentProgressDialog';
+import DemoSocialListeningStats from '@/demo/DemoSocialListeningStats.jsx';
 
 const campaignPlatforms=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news'];
 const initial={name:'',description:'',primary_keywords:[],secondary_keywords:[],excluded_keywords:[],platforms:[...campaignPlatforms],language:'',date_from:'',date_to:'',interval_minutes:120};
@@ -564,9 +565,9 @@ export default function CampaignPanel({campaignId=null}){
   {!campaignId&&!creating&&<section className="space-y-4">
    <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see the dashboard, captured posts and candidate tracking.</p></div>
    {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#a52a2f] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
-   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   {window.__BAWASLU_DEMO_REPLICA__?<DemoSocialListeningStats/>:<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
     {[[total,'Monitoring campaigns'],[campaigns.reduce((n,c)=>n+Number(c.evidence_count||0),0),'Campaign-linked source posts'],[new Set(campaigns.flatMap(c=>c.platforms||[])).size,'Configured source platforms'],[trackedCount===null?'—':trackedCount,'Actively tracked candidates']].map(([value,label])=><div key={label} className="rounded-xl border border-[#dce5ed] bg-white px-4 py-5"><strong className="block text-[26px] font-bold tabular-nums text-[#152c47]">{typeof value==='number'?value.toLocaleString():value}</strong><span className="text-[11px] text-[#60768c]">{label}</span></div>)}
-   </div>
+   </div>}
    <section className="rounded-[13px] border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     {loading?<p className="text-sm text-[#60768c]">Loading campaigns…</p>:<div className="space-y-3">{visible.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dce5ed] bg-white px-4 py-5 hover:border-[#90c7bd]">

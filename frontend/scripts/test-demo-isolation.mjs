@@ -18,6 +18,7 @@ assert.ok(!bridge.includes('supabase-js')&&!bridge.includes('service_role'));
 assert.ok(snapshot.includes('DEMO-0001')&&snapshot.includes('DEMO-0300'));
 assert.ok(read('public/demo/smart-radar.html').includes('id="bawaslu-demo-snapshot"'));
 assert.ok(read('public/demo/smart-radar.html').includes('smart-radar-live.js'));
-assert.ok(read('public/demo/watchlist.html').includes('watchlist-live.js'));
+assert.ok(read('public/demo/watchlist.html').includes('watchlist-training.js'),'Demo must load its isolated bilingual Watchlist implementation');
+assert.ok(read('public/ui-freeze/watchlist-live.js').includes('candidateActivitySummary'),'Production Watchlist implementation remains untouched');
 assert.ok(read('src/pages/IntelligenceAssistant.jsx').includes("'DEMO-SNAPSHOT'"));
 console.log('PASS real UI replica: production App/Shell/Smart Radar/Watchlist; 300 read-only snapshot records; API write isolation');

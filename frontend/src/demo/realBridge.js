@@ -1,6 +1,6 @@
 /* BAWASLU real-UI demo adapter, with snapshot-backed responses only.
    Every /api/ request resolves locally. External network I/O is denied by CSP. */
-import {snapshot} from './currentSnapshot.js';
+import {snapshot,demoAllEvidence,demoCampaigns,demoWatchlist} from './currentSnapshot.js';
 const DEMO_KEY='__BAWASLU_DEMO_REPLICA__';
 window[DEMO_KEY]=true;
 const clone=v=>JSON.parse(JSON.stringify(v));
@@ -10,22 +10,28 @@ const user={id:'DEMO-OFFICER',full_name:'BAWASLU Demo Officer',email:'demo.inval
 const permissions={view_intelligence:true,add_intelligence:true,human_validation:true,administration:true,
   manage_watchlist:true,review_intelligence:true,manage_campaigns:true,view_raw_evidence:true};
 const access={status:'Active',geographic_scope:'Nationwide',province:'',permissions,role:'Administrator'};
-const campaigns=Array.from(new Map(snapshot.map(p=>[String(p.campaignId),{
- id:p.campaignId,name:p.campaign||'Pemantauan Pemilu',description:'Read-only demonstration snapshot',
- primary_keywords:['bawaslu','pemilu'],secondary_keywords:['gibran','ijazah'],excluded_keywords:[],
- platforms:['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news'],
- language:'',status:'Active',run_count:1,evidence_count:snapshot.filter(x=>x.campaignId===p.campaignId).length,
- created_at:'2026-10-15T00:00:00Z',date_from:null,date_to:null}])).values());
-let additionalCampaigns=[],reviewState={},selectedWatch=['Gibran Rakabuming Raka','Prabowo Subianto','Anies Baswedan','Dedi Mulyadi','Purbaya Yudhi Sadewa'];
-const names=['Gibran Rakabuming Raka','Prabowo Subianto','Anies Baswedan','Dedi Mulyadi','Purbaya Yudhi Sadewa','Ganjar Pranowo'];
-const accountNames=names.map((name,i)=>({id:'WATCH-DEMO-'+i,name,type:'Candidate',priority:'Medium',status:'Active',
- province:'Indonesia',related_topics:[],candidate_aliases:[]}));
-const rowsFor=(id)=>snapshot.filter(p=>!id||String(p.campaignId)===String(id));
+const campaigns=demoCampaigns.map(c=>({
+ id:c.id,name:c.name,description:'Approved, sanitized BAWASLU campaign snapshot',
+ primary_keywords:c.primary_keywords||[],secondary_keywords:c.secondary_keywords||[],
+ excluded_keywords:c.excluded_keywords||[],platforms:c.platforms||[],
+ status:c.status||'DRAFT',run_count:c.captured_count?1:0,
+ evidence_count:c.captured_count||0,assessed_relevant_count:c.assessed_relevant_count||0,
+ created_at:'2026-11-03T00:00:00Z',date_from:null,date_to:null}));
+let additionalCampaigns=[],reviewState={};
+const selectedWatch=demoWatchlist.map(x=>x.name);
+const accountNames=demoWatchlist.map(x=>({...x,related_topics:[],candidate_aliases:x.candidate_aliases||[]}));
+const assessmentBySource=new Map(snapshot.map(x=>[x.sourceId,x]));
+const rowsFor=id=>demoAllEvidence.filter(x=>!id||String(x.campaignId)===String(id)).map(x=>{
+ const assessment=assessmentBySource.get(x.sourceId);
+ return assessment?{...x,topics:assessment.topics,candidates:assessment.candidates,signals:assessment.signals,
+ concerns:assessment.concerns,sentiment:assessment.sentiment,explanation:assessment.explanation,
+ assessmentVersion:assessment.assessmentVersion,relevance_label:'RELEVANT'}:{...x,relevance_label:'NOT_ASSESSED',sentiment:'UNCLASSIFIED'};
+});
 const count=(arr,key)=>arr.reduce((out,x)=>{const k=String(typeof key==='function'?key(x):x[key]||'');if(k)out[k]=(out[k]||0)+1;return out},{});
 const evidence=p=>({id:p.id,result_id:p.id,campaign_id:p.campaignId,platform:p.platform,content_type:'Post',
  published_at:p.date,author_name:p.author,author_display:p.author,observed_handle:p.author,
- text_content:p.text,canonical_url:'',thumbnail_url:null,relevance_label:'RELEVANT',
- sentiment:['POSITIVE','NEUTRAL','NEGATIVE'].includes(p.sentiment)?p.sentiment:'NEUTRAL',
+ text_content:p.text,canonical_url:'',thumbnail_url:null,relevance_label:p.relevance_label||'RELEVANT',
+ sentiment:['POSITIVE','NEUTRAL','NEGATIVE'].includes(p.sentiment)?p.sentiment:'UNCLASSIFIED',
  original_sentiment:p.sentiment,review_state:reviewState[p.id]||'UNREVIEWED',
  engagement_total:Number(p.engagement?.engagement_total||p.engagement?.likes||0),
  likes:Number(p.engagement?.likes||0),comments:Number(p.engagement?.comments||0),views:Number(p.engagement?.views||0),
@@ -33,12 +39,12 @@ const evidence=p=>({id:p.id,result_id:p.id,campaign_id:p.campaignId,platform:p.p
 function inboxFinding(p){
  const topics=Array.isArray(p.topics)?p.topics:[];
  const flags=Array.isArray(p.signals)?p.signals:[];
- return {...evidence(p),campaign_name:p.campaign,assessment_version:1,
+ return {...evidence(p),campaign_name:p.campaign,assessment_version:p.assessmentVersion||1,
   model_version:'Saved AI assessment snapshot',relevance_confidence:.85,explanation:p.explanation,
   sentiment_explanation:p.explanation,is_relevant:true,
-  has_saved_assessment:true,ai_assessed:true,is_flagged:flags.length>0,
+  has_saved_assessment:true,ai_assessed:true,is_flagged:!!p.flagged||flags.length>0,
   can_review_flag:true,human_review_status:reviewState[p.id]||'AWAITING_REVIEW',possible_issues:flags,
-  topic_labels:topics,topic_suggestions:topics,category:'Electoral Operations',
+  topic_labels:topics,topic_suggestions:topics,category:topics[0]||'Not classified',public_concern_signals:p.concerns||[],
   candidate_signals:Array.isArray(p.candidates)?p.candidates:[],geographic_signals:[],
   potential_issue_signals:flags,incident_jurisdiction_review:{decision:'UNREVIEWED',incident_jurisdiction_verified:false},
   actionability:'REQUIRES_REVIEW',attention_assessment:{level:'REVIEW',reason:'Saved AI signal. Verify against original evidence.'}};
@@ -48,22 +54,28 @@ function chartData(rows){
  const dates=count(rows,p=>String(p.date||'').slice(0,10));
  const platforms=count(rows,p=>p.platform);
  const daily=Object.entries(dates).sort(([a],[b])=>a.localeCompare(b)).map(([date,n])=>({...Object.fromEntries(Object.keys(platforms).flatMap(key=>[[key+'__posts',rows.filter(p=>String(p.date||'').startsWith(date)&&p.platform===key).length],[key+'__engagement',0]])),date,posts:n}));
- const sentiments=count(rows,p=>['POSITIVE','NEGATIVE','NEUTRAL'].includes(p.sentiment)?p.sentiment:'NEUTRAL');
- const topics=[
-  {topic:'Pengawasan Pemilu',count:rows.filter(x=>/bawaslu|pengawas/i.test(x.text)).length},
-  {topic:'Ijazah Gibran',count:rows.filter(x=>/ijazah|gibran/i.test(x.text)).length},
-  {topic:'Kampanye',count:rows.filter(x=>/kampanye/i.test(x.text)).length}
- ];
- const keywordCloud=['bawaslu','pemilu','gibran','ijazah','mahkamah','kpu','kampanye'].map(word=>({word,count:rows.filter(p=>p.text.toLowerCase().includes(word)).length}));
+ const sentiments=count(rows,p=>['POSITIVE','NEGATIVE','NEUTRAL'].includes(p.sentiment)?p.sentiment:'UNCLASSIFIED');
+ const categories=count(rows.filter(p=>Array.isArray(p.topics)&&p.topics.length),p=>p.topics[0]);
+ const topics=Object.entries(categories).map(([topic,n])=>({topic,count:n})).sort((a,b)=>b.count-a.count);
+ const keywordCloud=[...new Set(campaigns.flatMap(c=>c.primary_keywords||[]))].slice(0,80)
+  .map(word=>({word,count:rows.filter(p=>String(p.text||'').toLowerCase().includes(String(word).toLowerCase())).length}));
+ const categoryRows=topics.map(t=>{
+  const matching=rows.filter(p=>(p.topics||[]).includes(t.topic));
+  const sc=count(matching,p=>p.sentiment);
+  return {name:t.topic,count:t.count,sentiment:{Positive:sc.POSITIVE||0,Neutral:sc.NEUTRAL||0,Negative:sc.NEGATIVE||0},
+   sample_posts:matching.slice(0,8).map(p=>({id:p.id,author:p.author,date:p.date,text:p.text,platform:p.platform}))};
+ });
+ const authorTotals={};for(const p of rows){const a=p.author||'Sumber contoh';authorTotals[a]??={name:a,platform:p.platform,engagement:0,followers:0};
+  authorTotals[a].engagement+=Number(p.engagement?.engagement_total||p.engagement?.likes||0)+Number(p.engagement?.comments||0)+Number(p.engagement?.shares||0);}
  return {statistics:{messages:rows.length,engagement:rows.reduce((n,p)=>n+Number(p.engagement?.engagement_total||p.engagement?.likes||0),0),
   accounts:new Set(rows.map(p=>p.author)).size,platforms:Object.keys(platforms).length},
  platforms, sentiment:sentiments,sentiments, daily_platform_trend:daily,activity:daily,
  topics_and_themes:{
-  categories:topics.map(t=>({name:t.topic,count:t.count,sentiment:{Negative:Math.round(t.count*.45),Neutral:Math.round(t.count*.42),Positive:Math.max(0,t.count-Math.round(t.count*.45)-Math.round(t.count*.42))},
-    sample_posts:rows.filter(p=>p.text.toLowerCase().includes(t.topic==='Ijazah Gibran'?'gibran':t.topic==='Kampanye'?'kampanye':'bawaslu')).slice(0,8).map(p=>({id:p.id,author:p.author,date:p.date,text:p.text,platform:p.platform}))})),
-  subject_categories:topics,classified_count:rows.length,total:rows.length,
-  total_mentions:rows.length,categorized_mentions:rows.length,pending_assessment_mentions:0,uncategorized_mentions:0},
- top_accounts_engagement:[...new Map(rows.map(p=>[p.author,p])).values()].slice(0,12).map((p,i)=>({name:p.author,platform:p.platform,engagement:1000-i*45,followers:0})),
+  categories:categoryRows,subject_categories:topics,classified_count:rows.filter(p=>(p.topics||[]).length>0).length,total:rows.length,
+  total_mentions:rows.length,categorized_mentions:rows.filter(p=>(p.topics||[]).length>0).length,
+  pending_assessment_mentions:rows.filter(p=>p.relevance_label==='NOT_ASSESSED').length,
+  uncategorized_mentions:rows.filter(p=>!(p.topics||[]).length).length},
+ top_accounts_engagement:Object.values(authorTotals).sort((a,b)=>b.engagement-a.engagement).slice(0,12),
  top_accounts_followers:[],geographies:{},source_languages:{id:rows.length},demographics_coverage:{records:rows.length,country_available:0,language_available:rows.length},
  province_connected_distribution:[],word_cloud:keywordCloud.filter(w=>w.count>0),candidate_mentions:count(rows,p=>p.candidates?.[0]||'')};
 }
@@ -142,10 +154,11 @@ function localApi(url,init){
     records:snapshot.slice(0,3).map(inboxFinding),provider:'READ_ONLY_DEMO',grounding:{accessible_count:snapshot.length,source_types:['SOCIAL_LISTENING']},demo:true};
  }
  if(path.startsWith('/api/assistant-history'))return {threads:[],messages:[],items:[],thread:null,demo:true};
+ const expandedOfflineTranslations={"The mention of Gibran's ijazah (diploma) in the context of a political challenge indicates a relevant electoral discussion.":"Penyebutan ijazah Gibran dalam konteks gugatan politik menunjukkan adanya diskusi yang relevan dengan pemilu.","The text discusses Gibran's political situation in relation to a court decision, which is relevant to electoral matters.":"Teks membahas situasi politik Gibran terkait putusan pengadilan yang relevan dengan urusan pemilu.","The post discusses Gibran's political conduct during the election process, which is relevant to electoral discussions.":"Unggahan membahas tindakan politik Gibran selama proses pemilu yang relevan dengan diskusi kepemiluan.","The post discusses the educational qualifications of presidential candidates, which is relevant to the electoral context.":"Unggahan membahas kualifikasi pendidikan calon presiden yang relevan dengan konteks pemilu.","The text discusses political controversies surrounding Gibran, which is relevant to electoral oversight and public concern.":"Teks membahas kontroversi politik seputar Gibran yang relevan dengan pengawasan pemilu dan kekhawatiran publik.","The text discusses a legal ruling regarding Gibran's educational certificate, which is relevant to the electoral context.":"Teks membahas putusan hukum mengenai surat keterangan pendidikan Gibran yang relevan dengan konteks pemilu.","The text discusses a legal ruling regarding Gibran's diploma, which is relevant to the electoral context.":"Teks membahas putusan hukum mengenai ijazah Gibran yang relevan dengan konteks pemilu.","The text discusses the political implications of a court ruling regarding Gibran's educational credentials, which is relevant to the electoral context.":"Teks membahas implikasi politik putusan pengadilan mengenai dokumen pendidikan Gibran dalam konteks pemilu.","The content discusses a legal matter involving Gibran Rakabuming Raka, which is relevant to the electoral context due to the mention of a lawsuit related to his educational credentials.":"Konten membahas perkara hukum yang melibatkan Gibran Rakabuming Raka, relevan dengan konteks pemilu karena menyebut gugatan terkait dokumen pendidikannya.","The text discusses a legal action related to Gibran's ijazah, which is relevant to the electoral context.":"Teks membahas tindakan hukum terkait ijazah Gibran yang relevan dengan konteks pemilu.","The text discusses political lobbying related to Gibran's educational credentials, which is relevant to the electoral context.":"Teks membahas lobi politik terkait dokumen pendidikan Gibran yang relevan dengan konteks pemilu.","The text discusses a political demand related to Gibran's educational qualifications, which is relevant to the electoral context.":"Teks membahas tuntutan politik terkait kualifikasi pendidikan Gibran yang relevan dengan konteks pemilu.","The text discusses an event related to Gibran's supporters showcasing a certificate, which is relevant to the electoral context.":"Teks membahas peristiwa terkait pendukung Gibran yang menunjukkan surat keterangan dalam konteks pemilu.","Not AI-scored":"Belum dinilai oleh AI","Not classified":"Belum diklasifikasikan"};
  const offlineTranslations={"AI suggestion only; original source remains unverified.":"Hanya saran AI; sumber asli tetap belum terverifikasi.","Human verified relevancy from uploaded BAWASLU 200 Dataset Human Verified.xlsx; no AI classification.":"Relevansi diverifikasi manusia berdasarkan dataset BAWASLU yang diunggah; belum dilakukan klasifikasi AI.","Provider Discover collected; awaiting OpenAI topic analysis":"Data dikumpulkan melalui Discover; sedang menunggu analisis topik oleh OpenAI.","Human verified relevancy from uploaded BAWASLU 200 Dataset Human Verified.xlsx; no AI classification. | Source-grounded public concern review; no legal finding.":"Relevansi diverifikasi manusia berdasarkan dataset BAWASLU yang diunggah; belum dilakukan klasifikasi AI. | Tinjauan kekhawatiran publik berdasarkan sumber, bukan temuan hukum.","The text discusses a political issue related to Gibran's educational credentials, which is relevant to the electoral context.":"Teks membahas persoalan politik terkait dokumen pendidikan Gibran, yang relevan dengan konteks pemilu.","The text discusses a legal decision related to Gibran's diploma, which is relevant to the electoral context.":"Teks membahas putusan hukum terkait ijazah Gibran, yang relevan dengan konteks pemilu.","The text discusses a legal proceeding related to Gibran's diploma, which is relevant to the electoral context.":"Teks membahas proses hukum terkait ijazah Gibran, yang relevan dengan konteks pemilu.","The text discusses Gibran's educational qualifications in the context of a legal proceeding, which is relevant to his candidacy.":"Teks membahas kualifikasi pendidikan Gibran dalam konteks proses hukum, yang relevan dengan pencalonannya.","The text discusses election supervision and mentions Bawaslu, aligning with the campaign's objective.":"Teks membahas pengawasan pemilu dan menyebut Bawaslu, sesuai dengan tujuan kampanye pemantauan.","The text discusses reporting potential electoral violations to Bawaslu, which is directly related to election oversight.":"Teks membahas pelaporan potensi pelanggaran pemilu kepada Bawaslu, yang berkaitan langsung dengan pengawasan pemilu.","The hashtags include terms related to the election and electoral oversight, indicating topical relevance.":"Tagar memuat istilah terkait pemilu dan pengawasannya, sehingga relevan secara topik.","The text explicitly mentions BAWASLU and discusses a public discussion, which is relevant to electoral oversight.":"Teks secara eksplisit menyebut BAWASLU dan membahas diskusi publik yang relevan dengan pengawasan pemilu.","The text discusses Bawaslu's public information services, which is directly related to electoral operations.":"Teks membahas layanan informasi publik Bawaslu yang berkaitan langsung dengan penyelenggaraan pemilu.","The text discusses Bawaslu's oversight role in the election process, specifically regarding access to candidate data, which is directly related to electoral administration.":"Teks membahas peran pengawasan Bawaslu dalam proses pemilu, khususnya akses data kandidat yang berkaitan langsung dengan administrasi pemilu.","The text discusses Bawaslu's role in educating election monitors, which is directly related to election administration.":"Teks membahas peran Bawaslu dalam memberikan edukasi kepada pengawas pemilu, yang berkaitan langsung dengan administrasi pemilu.","The text discusses the ethical responsibilities and professionalism required of election organizers, which is directly related to the election process.":"Teks membahas tanggung jawab etis dan profesionalisme penyelenggara pemilu, yang berkaitan langsung dengan proses pemilu.","The text discusses a finding related to electoral violations, specifically multiple voting, which is relevant to the election process.":"Teks membahas temuan terkait dugaan pelanggaran pemilu, khususnya pemungutan suara berulang, yang relevan dengan proses pemilu.","The text discusses electoral outcomes and mentions BAWASLU in the context of alleged electoral fraud and dissatisfaction with the election process.":"Teks membahas hasil pemilu dan menyebut BAWASLU dalam konteks dugaan kecurangan serta ketidakpuasan terhadap proses pemilu.","The post discusses electoral issues and mentions BAWASLU and the upcoming election, making it relevant to the election process.":"Unggahan membahas isu pemilu serta menyebut BAWASLU dan pemilu mendatang, sehingga relevan dengan proses pemilu.","The text discusses Bawaslu's reminder to political parties about campaign regulations, which is directly related to electoral oversight.":"Teks membahas imbauan Bawaslu kepada partai politik mengenai peraturan kampanye, yang berkaitan langsung dengan pengawasan pemilu."};
  if(path==='/api/presentation/translate'){
    const original=String(payload.text||'');
-   const translated=payload.language==='id'?(offlineTranslations[original]||original):original;
+   const translated=payload.language==='id'?(offlineTranslations[original]||expandedOfflineTranslations[original]||original):original;
    return {text:translated,language:payload.language||'id',translation_only:true,demo:true};
  }
  if(path==='/api/relevance-gates')return {items:[],gates:[]};

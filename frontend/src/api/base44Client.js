@@ -37,6 +37,10 @@ async function request(path, options={}){
 }
 
 export const base44 = {
+  radar:{
+    dashboard:()=>request('/api/smart-radar/dashboard'),
+    issueDistribution:()=>request('/api/smart-radar/issue-distribution')
+  },
   app:{ getPublicSettings:()=>request('/api/public-settings') },
   auth:{
     me:()=>request('/api/auth/me'),

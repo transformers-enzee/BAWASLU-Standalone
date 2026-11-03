@@ -1,4 +1,4 @@
-"""SocialCrawl Prism Discover: separate, manually confirmed 75-post workflow."""
+"""SocialCrawl Prism Discover: separate, manually confirmed 100-post workflow."""
 import os,json,hashlib,re
 from collections import Counter
 from datetime import datetime,timezone
@@ -10,7 +10,7 @@ from .access import has,allowed
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
 BASE='https://www.socialcrawl.dev/v1'
-CAP=75
+CAP=100
 MAPPING={'twitter-ai-search':'twitter','online_news':'news','instagram':'instagram',
          'twitter':'twitter','facebook':'facebook','youtube':'youtube','tiktok':'tiktok',
          'threads':'threads','reddit':'reddit'}

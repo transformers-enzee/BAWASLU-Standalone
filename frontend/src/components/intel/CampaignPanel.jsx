@@ -112,15 +112,32 @@ export default function CampaignPanel({campaignId=null}){
   // Intentionally do not reopen a modal after refresh or navigation.
   // Running jobs remain in Supabase and are not cancelled.
  },[campaignId,campaigns,activationSaved?.run_id]);
+ // A finished SocialCrawl run has saved its results. OpenAI assessment may still
+ // run in the background; do not keep the collection popup open for that phase.
+ const collectionFinished=run=>['COMPLETED','PARTIAL'].includes(run?.status)&&run?.stage!=='COLLECTING';
+ function closeCompletedCollection(run){
+  window.localStorage.removeItem('bawaslu-active-discover-run');
+  setActivationSaved(null);
+  setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');
+  setNotice(run.posts_saved>0
+   ?'SocialCrawl collection finished. AI assessment continues independently.'
+   :'SocialCrawl collection finished; no new posts were saved.');
+  refresh();
+ }
+ function handleDiscoverStatus(result){
+  if(collectionFinished(result)){closeCompletedCollection(result);return}
+  setDiscoverRun(result);setDiscoverError('');
+ }
  useEffect(()=>{
   if(!discoverRun?.run_id||!discoverCampaign?.id||
-   !['COLLECTING','ASSESSING','NEEDS_ATTENTION'].includes(discoverRun.stage||'COLLECTING'))return;
-  const timer=setInterval(()=>{
-   base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',id:discoverCampaign.id,data:{run_id:discoverRun.run_id}})
-    .then(r=>{setDiscoverRun(r.data);setDiscoverError('');if(r.data.stage==='COMPLETED')refresh()})
-    .catch(e=>setDiscoverError(e.response?.data?.detail||e.message||'Progress refresh unavailable'));
-  },4000);
-  return ()=>clearInterval(timer);
+   !['COLLECTING','ASSESSING','NEEDS_ATTENTION','NO_NEW_POSTS'].includes(discoverRun.stage||'COLLECTING'))return;
+  let active=true;
+  const poll=()=>base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',id:discoverCampaign.id,data:{run_id:discoverRun.run_id}})
+   .then(r=>{if(active)handleDiscoverStatus(r.data)})
+   .catch(e=>{if(active)setDiscoverError(e.response?.data?.detail||e.message||'Progress refresh unavailable')});
+  poll();
+  const timer=setInterval(poll,4000);
+  return ()=>{active=false;clearInterval(timer)};
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
  async function checkDiscover(c){
@@ -145,8 +162,7 @@ export default function CampaignPanel({campaignId=null}){
    if(!discoverCampaign||!discoverRun)return;
    setDiscoverBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStatus',
-     id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});setDiscoverRun(r.data);setDiscoverError('');
-     if(r.data.stage==='COMPLETED')await refresh()}
+     id:discoverCampaign.id,data:{run_id:discoverRun.run_id}});handleDiscoverStatus(r.data);}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Status unavailable')}
    finally{setDiscoverBusy(false)}
  }

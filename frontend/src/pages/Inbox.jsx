@@ -24,13 +24,16 @@ function SocialEvidenceInbox(){
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
+ const [inboxPagination,setInboxPagination]=useState({has_more:false,next_cursor:null,total_eligible:null});
+ const [loadingMore,setLoadingMore]=useState(false),[loadMoreError,setLoadMoreError]=useState('');
+ const INBOX_PAGE_SIZE=100;
  const watchBaseline=useRef(null);
  const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState(''),[manualCue,setManualCue]=useState(null);
  const [correctionType,setCorrectionType]=useState('TOPICS'),[correctionTopics,setCorrectionTopics]=useState([]),[correctionQuote,setCorrectionQuote]=useState(''),[correctionConcern,setCorrectionConcern]=useState(''),[correctionRationale,setCorrectionRationale]=useState(''),[correctionBusy,setCorrectionBusy]=useState(false),[correctionMessage,setCorrectionMessage]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
- useEffect(()=>{let active=true;setLoading(true);setError('');
- base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost}})
- .then(r=>{if(!active)return;setFindings(r.data.findings||[]);
+ useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
+ base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE}})
+ .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});
  if(requestedPost&&campaign===requestedCampaign){
   const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
   if(found)setSelected(found);
@@ -40,6 +43,22 @@ function SocialEvidenceInbox(){
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
  },[campaign]);
+ async function loadOlderInboxPosts(){
+  if(loadingMore||!inboxPagination.has_more||!inboxPagination.next_cursor)return;
+  setLoadingMore(true);setLoadMoreError('');
+  try{
+   const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{
+    campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE,cursor:inboxPagination.next_cursor
+   }});
+   const incoming=response.data.findings||[];
+   setFindings(previous=>{
+    const known=new Set(previous.map(item=>String(item.campaign_id)+':'+String(item.id)));
+    return previous.concat(incoming.filter(item=>!known.has(String(item.campaign_id)+':'+String(item.id))));
+   });
+   setInboxPagination(response.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});
+  }catch(e){setLoadMoreError(e.response?.data?.detail||e.message||'Unable to load older evidence')}
+  finally{setLoadingMore(false)}
+ }
  useEffect(()=>{
   // Read-only overview: source evidence is immediately visible on campaign
   // selection, but saving a proposal still needs an explicit officer click.
@@ -73,10 +92,13 @@ function SocialEvidenceInbox(){
   let cancelled=false,attempts=0;
   const refresh=async()=>{
    try{
-    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign}});
+    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE}});
     if(cancelled)return;
     const payload=response.data||{};
-    setFindings(payload.findings||[]);setAssessmentCounts(payload.assessment_counts||null);setViolationDiagnostics(payload.violation_diagnostics||null);
+    setFindings(previous=>{
+     const incoming=payload.findings||[],keys=new Set(incoming.map(item=>String(item.campaign_id)+':'+String(item.id)));
+     return incoming.concat(previous.filter(item=>!keys.has(String(item.campaign_id)+':'+String(item.id))));
+    });setAssessmentCounts(payload.assessment_counts||null);setViolationDiagnostics(payload.violation_diagnostics||null);
     setJobCounts(payload.job_counts||null);setUnassessed(payload.unassessed_count||0);
     setReconciliation(payload.reconciliation||null);setProcessingStatus(payload.processing_status||'');setProcessingSummary(payload.classification_processing||null);
     setWatchSnapshot(payload.job_counts||{});
@@ -486,7 +508,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-stretch">
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2 xl:relative xl:min-h-[680px]">
-    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} results</span></div>
+    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} matching loaded · {findings.length} loaded{inboxPagination.total_eligible!=null?' of '+inboxPagination.total_eligible+' eligible':''}</span></div>
     <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" tabIndex={0} aria-label="Post list, scroll to see more">
      {ordered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
       <div className="flex items-start justify-between gap-3">
@@ -503,14 +525,17 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
         </div>
        </div>
      </button>)}
-     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection, assessment and relevance checks. The separate historical Intelligence and Smart Radar pilot records are not counted as campaign findings.</p>}
+     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">{inboxPagination.has_more?'No matching posts in the loaded set. Load older posts to continue searching.':'No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection and assessment.'}</p>}
+     {inboxPagination.has_more&&<button type="button" className="intel-ghost w-full py-3 font-semibold" disabled={loadingMore} onClick={loadOlderInboxPosts}>{loadingMore?'Loading older posts…':'Load 100 older posts'}</button>}
+     {loadMoreError&&<p role="alert" className="text-sm text-red-700">{loadMoreError}</p>}
+     {findings.length>0&&<p className="text-[11px] text-slate-500 px-1">Filters and statistics describe loaded posts. Load older pages to include more evidence.</p>}
     </div>
    </section>
    <div className="grid grid-rows-2 gap-3 xl:sticky xl:top-4 min-w-0">
    <aside className="intel-card p-4 space-y-4 h-full min-h-0" aria-label="Inbox statistics">
-    <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered assessed posts</p></div>
+    <div><h4 className="font-semibold text-sm">Statistics</h4><p className="text-xs text-slate-500 mt-1">Filtered posts currently loaded</p></div>
     <div className="grid grid-cols-2 gap-2">
-      <div className="rounded-lg bg-teal-50 p-3"><p className="text-xs text-teal-900">Posts shown</p><strong className="text-lg tabular-nums">{filtered.length}</strong><p className="text-[10px] text-slate-500">Relevant, filtered</p></div>
+      <div className="rounded-lg bg-teal-50 p-3"><p className="text-xs text-teal-900">Posts shown</p><strong className="text-lg tabular-nums">{filtered.length}</strong><p className="text-[10px] text-slate-500">Relevant, filtered · loaded</p></div>
       <div className="rounded-lg bg-amber-50 p-3"><p className="text-xs text-amber-900">Potential violations</p><strong className="text-lg tabular-nums">{filtered.filter(x=>x.is_flagged??((x.potential_issues||[]).length>0)).length}</strong><p className="text-[10px] text-slate-500">Preliminary signals</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Views</p><strong className="text-lg tabular-nums">{summary.viewsAvailable?summary.views.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.viewsAvailable} / {filtered.length} reported</p></div>
       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Engagement</p><strong className="text-lg tabular-nums">{summary.engagementAvailable?summary.engagement.toLocaleString():'—'}</strong><p className="text-[10px] text-slate-500">{summary.engagementAvailable} / {filtered.length} reported</p></div>

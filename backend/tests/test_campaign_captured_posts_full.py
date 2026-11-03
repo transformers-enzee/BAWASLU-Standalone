@@ -124,3 +124,55 @@ def test_account_collection_does_not_inflate_dashboard_queues_or_command_centre(
     assert cc['indicators']['relevant_mentions']==0
     assert cc['paid_provider_called'] is False
     db.close()
+
+
+def test_inbox_keyset_pagination_returns_all_325_eligible_without_duplicates():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'inboxPageAdmin')
+    cid=campaign(db,p,'Inbox pagination')
+    add(db,cid,325)
+    ids=[row[0] for row in db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==int(cid)).all()]
+    for rid in ids:
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=rid,
+            assessment_version=1,model_version='GPT-4',
+            relevance_label='RELEVANT',sentiment='NEUTRAL'))
+    db.commit()
+    cursor=None;seen=[];counts=[]
+    for _ in range(5):
+        params={'campaign_id':cid,'paged':True,'page_size':100}
+        if cursor:params['cursor']=cursor
+        page=action(db,p,'campaignIntelligenceInbox',params)
+        assert page['pagination']['total_eligible']==325
+        assert page['paid_provider_called'] is False
+        rows=page['findings'];counts.append(len(rows))
+        seen.extend((x['campaign_id'],x['id']) for x in rows)
+        cursor=page['pagination']['next_cursor']
+        if not page['pagination']['has_more']:break
+    assert counts==[100,100,100,25]
+    assert len(seen)==len(set(seen))==325
+    db.close()
+
+
+def test_inbox_pagination_hides_unassessed_and_rejects_invalid_cursor():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'inboxPageSafety')
+    cid=campaign(db,p,'Inbox safety')
+    add(db,cid,8)
+    ids=[row[0] for row in db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==int(cid)).all()]
+    for rid in ids[:3]:
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=rid,
+            assessment_version=1,relevance_label='RELEVANT',sentiment='NEUTRAL'))
+    for rid in ids[3:5]:
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=rid,
+            assessment_version=1,relevance_label='IRRELEVANT',sentiment='NEUTRAL'))
+    db.commit()
+    page=action(db,p,'campaignIntelligenceInbox',{'campaign_id':cid,'paged':True,'page_size':2})
+    assert page['pagination']['total_eligible']==3
+    assert len(page['findings'])==2 and page['pagination']['has_more']
+    with pytest.raises(ValueError,match='cursor'):
+        action(db,p,'campaignIntelligenceInbox',{'campaign_id':cid,'paged':True,'cursor':'not-a-number'})
+    with pytest.raises(ValueError,match='page size'):
+        action(db,p,'campaignIntelligenceInbox',{'campaign_id':cid,'paged':True,'page_size':101})
+    db.close()

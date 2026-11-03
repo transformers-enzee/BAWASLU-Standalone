@@ -903,17 +903,72 @@ def campaign_action(db:Session,p,action,data,id=None):
             if not campaign_id.isdigit():raise ValueError('Invalid campaign ID')
             requested=db.get(MonitoringCampaign,int(campaign_id))
             visible=[requested] if requested and allowed(p,requested) else []
+        # Opt-in keyset pagination. Legacy callers keep the original response contract.
+        # The cursor is the saved campaign-evidence ID, not a mutable page offset.
+        paged=data.get('paged') is True
+        page_limit=100
+        page_selection={}
+        pagination=None
+        if paged:
+            from sqlalchemy import func, or_
+            try:
+                page_limit=int(data.get('page_size') or 100)
+                cursor=int(data['cursor']) if data.get('cursor') not in (None,'') else None
+            except (TypeError,ValueError):
+                raise ValueError('Invalid Inbox pagination cursor or page size')
+            if page_limit<1 or page_limit>100 or cursor is not None and cursor<=0:
+                raise ValueError('Inbox page size must be 1–100 and cursor must be positive')
+            # The newest saved assessment (version then ID) decides eligibility.
+            latest_id=(db.query(EvidenceAssessment.id)
+                .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+                        EvidenceAssessment.result_id==CampaignEvidence.result_id)
+                .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc())
+                .limit(1).correlate(CampaignEvidence).scalar_subquery())
+            authorized_ids=[c.id for c in visible]
+            eligible=(db.query(CampaignEvidence,SocialListeningResult)
+                .join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+                .join(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+                .filter(CampaignEvidence.campaign_id.in_(authorized_ids),
+                        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                        func.upper(EvidenceAssessment.relevance_label).in_(['RELEVANT','HIGHLY_RELEVANT']),
+                        or_(EvidenceAssessment.model_version.is_(None),
+                            EvidenceAssessment.model_version!='PRISM_PENDING_OPENAI')))
+            # An exact global total is valid for national officers. For regional
+            # officers, row-level source scope must be checked per provider run.
+            total_eligible=eligible.count() if p.get('geographic_scope')=='Nationwide' else None
+            selected_links=[]
+            before=cursor
+            while len(selected_links)<=page_limit:
+                batch=eligible
+                if before is not None:
+                    batch=batch.filter(CampaignEvidence.id<before)
+                rows=batch.order_by(CampaignEvidence.id.desc()).limit(250).all()
+                if not rows:break
+                for link,post in rows:
+                    before=link.id
+                    if _result_in_scope(db,p,post):
+                        selected_links.append(link)
+                        if len(selected_links)>page_limit:break
+                if len(rows)<250:break
+            has_more=len(selected_links)>page_limit
+            selected_links=selected_links[:page_limit]
+            for link in selected_links:
+                page_selection.setdefault(link.campaign_id,[]).append(link)
+            pagination={'page_size':page_limit,'has_more':has_more,
+                        'next_cursor':str(selected_links[-1].id) if has_more and selected_links else None,
+                        'total_eligible':total_eligible}
         active_category_rows=db.query(IssueCategory).filter(IssueCategory.active==True).all()
         active_categories={x.id:x.name for x in active_category_rows}
         from .models import IssueCategoryPhrase
         active_phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True).all()
-        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'keyword_review_lead_posts':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
+        violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'keyword_review_lead_posts':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (paged for Inbox UI; only relevant assessments can enter Inbox)' if paged else 'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
         reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
             # Count only scoped, linked evidence; never trigger processing here.
-            campaign_links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
-                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
+            campaign_links=(page_selection.get(campaign.id,[]) if paged else
+                db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all())
             from sqlalchemy.orm import defer
             ids={link.result_id for link in campaign_links}
             post_by_id={row.id:row for row in db.query(SocialListeningResult)
@@ -1076,9 +1131,11 @@ def campaign_action(db:Session,p,action,data,id=None):
             row['incident_jurisdiction_review']=review
             row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
-                'findings':records[:300],'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
+                'findings':records[:page_limit+1] if paged else records[:300],
+                'pagination':pagination,
+                'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',
-                'classification_processing':__import__('app.processing_hints',fromlist=['summarize_scoped_findings']).summarize_scoped_findings(records[:300]),
+                'classification_processing':__import__('app.processing_hints',fromlist=['summarize_scoped_findings']).summarize_scoped_findings(records[:page_limit+1] if paged else records[:300]),
                 'paid_provider_called':False}
     if action=='campaignMediaCapabilityPreview':
         from .models import SocialListeningResult, SocialMediaThumbnail

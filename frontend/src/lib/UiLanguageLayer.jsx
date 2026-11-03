@@ -85,7 +85,7 @@ export default function UiLanguageLayer(){
     if(node.nodeType===3)textNode(node);
     else if(node.nodeType===1)element(node);
    }
-   document.querySelectorAll('iframe[src*="/ui-freeze/"]').forEach(sendLocale);
+   document.querySelectorAll('iframe[src*="/ui-freeze/"],iframe[src*="/demo/"]').forEach(sendLocale);
   }
   function schedule(){if(active&&!frame)frame=requestAnimationFrame(scan);}
   const oldAlert=window.alert,oldConfirm=window.confirm;

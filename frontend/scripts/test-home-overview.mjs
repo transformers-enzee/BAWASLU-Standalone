@@ -27,6 +27,8 @@ assert.ok(page.includes('home-glance-fit')&&page.includes('home-glance-grid'));
 assert.ok(page.includes('home-glance-issues')&&page.includes('home-glance-trend'));
 assert.ok(page.includes('home-map-svg')&&page.includes('home-trend-svg'));
 assert.ok(read('src/components/intel/Shell.jsx').includes("location.pathname==='/'?'max-w-[1600px]"));
+assert.ok(read('src/components/intel/InterfaceLanguageBridge.jsx').includes("el.closest('[data-demo-locale-owned]')"),'Secondary translator must respect demo-owned React text');
+assert.ok(read('src/lib/UiLanguageLayer.jsx').includes('iframe[src*="/demo/"]'),'Demo iframe needs language toggle messages');
 const style=read('src/pages/intelligence-overview-fit.css');
 assert.ok(style.includes('min-height: 840px')&&style.includes('height: calc(100dvh - 132px)'));
 assert.ok(style.includes('.home-glance-grid')&&style.includes('.home-glance-side'));

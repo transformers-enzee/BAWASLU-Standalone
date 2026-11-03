@@ -69,7 +69,7 @@ const extra=new Map(Object.entries({
 }));
 const translate=(text,language)=>language==='id'?(extra.get(text.trim())||translateInterfaceLiteral(text,'id')):text;
 function eligible(el){
- if(!el||el.closest(EXCLUDE))return false;
+ if(!el||el.closest(EXCLUDE)||(window.__BAWASLU_DEMO_REPLICA__&&el.closest('[data-demo-locale-owned]')))return false;
  return !!el.closest(SELECTORS);
 }
 export default function InterfaceLanguageBridge({language}){
@@ -90,7 +90,7 @@ export default function InterfaceLanguageBridge({language}){
     if(result!==n.nodeValue){n.nodeValue=result;changed.add(n)}
    }
    root.querySelectorAll('[placeholder],[aria-label],[title]').forEach(el=>{
-    if(el.closest(EXCLUDE))return;
+    if(el.closest(EXCLUDE)||(window.__BAWASLU_DEMO_REPLICA__&&el.closest('[data-demo-locale-owned]')))return;
     const originals=attrCache.get(el)||{};
     for(const key of ['placeholder','aria-label','title']){
      if(!el.hasAttribute(key))continue;

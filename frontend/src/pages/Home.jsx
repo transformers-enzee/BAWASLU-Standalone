@@ -4,6 +4,8 @@ import { ArrowRight, ArrowUpRight, Clock3, Globe2, RefreshCw, ShieldCheck, Spark
 import { base44 } from '@/api/base44Client';
 import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 
+const homeSnapshotCache=new Map();
+const HOME_CACHE_TTL_MS=45000;
 const fmtTime=value=>{if(!value)return 'Not available';const d=new Date(value);return Number.isNaN(d.getTime())?'Not available':d.toLocaleString('en-GB')};
 const fmtNumber=value=>typeof value==='number'?value.toLocaleString():'Not available';
 const evidenceLink=row=>row.record_type==='INTELLIGENCE_ITEM'
@@ -56,17 +58,22 @@ export default function Home(){
  const [version,setVersion]=useState(0),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [question,setQuestion]=useState('');
  const [mapSource,setMapSource]=useState('social');
- const effectiveProvince=data?.scope?.can_select_national?province:'';
+ const effectiveProvince=access?.geographic_scope==='Nationwide'?province:'';
  const params=useMemo(()=>({period,province:effectiveProvince,...(period==='custom'?{date_from:dateFrom,date_to:dateTo}:{})}),[period,effectiveProvince,dateFrom,dateTo]);
  useEffect(()=>{
   let live=true;
-  setLoading(true);setError('');
+  const key=JSON.stringify([access?.id,access?.geographic_scope,access?.province,params]);
+  const cached=homeSnapshotCache.get(key);
+  if(cached){setData(cached.value);setLoading(false)}
+  else{setData(null);setLoading(true)}
+  setError('');
+  if(cached&&version===0&&Date.now()-cached.at<HOME_CACHE_TTL_MS)return()=>{live=false};
   base44.functions.invoke('commandCenter',params)
-   .then(res=>{if(live)setData(res.data)})
-   .catch(err=>{if(live){setError(err.response?.data?.error||err.message||'Command Center unavailable');setData(null)}})
+   .then(res=>{if(live){homeSnapshotCache.set(key,{value:res.data,at:Date.now()});setData(res.data)}})
+   .catch(err=>{if(live){setError(err.response?.data?.error||err.message||'Command Center unavailable');if(!cached)setData(null)}})
    .finally(()=>{if(live)setLoading(false)});
   return()=>{live=false};
- },[params,version]);
+ },[params,version,access?.id,access?.geographic_scope,access?.province]);
  const metrics=data?.indicators||{};
  const activity=data?.activity||{};
  const trend=(activity.daily||[]).slice(-14);

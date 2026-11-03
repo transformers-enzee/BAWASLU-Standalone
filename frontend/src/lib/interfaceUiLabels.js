@@ -1,5 +1,7 @@
 /* UI strings only: never translate user-generated evidence or stored source text. */
 export const UI_LABEL_ID={
+  "Top 10 candidate mentions in relevant Inbox evidence. Displaying up to two at a time; a mention is not evidence of wrongdoing.": "10 kandidat dengan penyebutan terbanyak dalam bukti Kotak Masuk relevan. Maksimal dua kandidat ditampilkan sekaligus; penyebutan bukan bukti pelanggaran.",
+  "posts have human-verified incident geography. Map colours represent saved unverified location references, not incident locations.": "unggahan memiliki lokasi kejadian yang diverifikasi petugas. Warna peta menunjukkan referensi lokasi tersimpan yang belum terverifikasi, bukan lokasi kejadian.",
   "Post Details": "Detail Unggahan",
   "Recorded source evidence": "Bukti sumber yang tercatat",
   "Mention by another account": "Penyebutan oleh akun lain",

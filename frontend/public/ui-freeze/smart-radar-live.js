@@ -137,7 +137,7 @@
   const mapPath=g=>(g.type==='Polygon'?[g.coordinates]:(g.coordinates||[])).map(poly=>poly.map(mapRing).join(' ')).join(' ');
   function geoHeatmap(mentions,verified) {
     const confirmed=verified.reduce((n,[,v])=>n+v,0);
-    const head='<p class="small muted"><b>'+confirmed+'</b> posts have human-verified incident geography. Map colours represent saved <b>unverified location references</b>, not incident locations.</p>';
+    const head='<p class="small muted"><b>'+confirmed+'</b> <span>posts have human-verified incident geography. Map colours represent saved unverified location references, not incident locations.</span></p>';
     if(provinceGeoFailed)return head+'<p class="small muted">Map unavailable. Saved labels:</p>'+miniBars(mentions,Math.max(1,...mentions.map(x=>x[1])));
     if(!provinceGeo)return head+'<p class="small muted">Loading Indonesia province map…</p>';
     const scores=new Map(mentions.map(([k,v])=>[regionKey(k),Number(v)]));

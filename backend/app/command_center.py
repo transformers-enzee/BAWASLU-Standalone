@@ -138,6 +138,16 @@ def build_command_center(db,p,data=None):
             .filter(func.substr(SocialListeningResult.published_at,1,10)>=start,
                     func.substr(SocialListeningResult.published_at,1,10)<=end)
             .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc()).all())
+    # Fetch saved officer decisions once instead of an N+1 query for every evidence row.
+    review_by_source={}
+    if campaigns_ids:
+        review_rows=(db.query(EvidenceReview,EvidenceAssessment.campaign_id,EvidenceAssessment.result_id)
+          .join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
+          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids),
+                  EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
+          .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).all())
+        for review,cid,rid in review_rows:
+            review_by_source.setdefault((cid,rid),review)
     categories=db.query(IssueCategory).filter(IssueCategory.active.is_(True)).all()
     category_names={row.id:row.name for row in categories}
     phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active.is_(True)).all()
@@ -177,11 +187,7 @@ def build_command_center(db,p,data=None):
                                          category_names,post.text_content)
         # Keyword-only leads are not saved source-validated potential violations.
         # Same review states and validated issue candidates used by Intelligence Inbox.
-        review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
-                .filter(EvidenceAssessment.campaign_id==campaign.id,
-                        EvidenceAssessment.result_id==post.id,
-                        EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
-                .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+        review=review_by_source.get((campaign.id,post.id))
         decision=review.decision if review else 'AWAITING_REVIEW'
         decision_view=shared_violation_decision(explicit,decision)
         if not decision_view['is_flagged']:continue
@@ -235,10 +241,7 @@ def build_command_center(db,p,data=None):
             if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):continue
             signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
             # Only saved, quoted issue evidence and officer decisions are actionable.
-            review=(db.query(EvidenceReview).join(EvidenceAssessment,EvidenceReview.assessment_id==EvidenceAssessment.id)
-               .filter(EvidenceAssessment.campaign_id==campaign.id,EvidenceAssessment.result_id==post.id,
-                       EvidenceReview.decision.in_(['FLAG_CONFIRMED','FLAG_DISMISSED','FURTHER_INVESTIGATION']))
-               .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
+            review=review_by_source.get((campaign.id,post.id))
             decision=review.decision if review else 'AWAITING_REVIEW'
             decision_view=shared_violation_decision(signals,decision)
             if not decision_view['is_flagged']:continue

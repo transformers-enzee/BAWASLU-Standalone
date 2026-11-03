@@ -22,7 +22,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
    </header>
    <div className="space-y-5 overflow-y-auto p-5">
     {!run&&<div className="space-y-3">
-     <p className="text-sm text-slate-700">Activate this campaign to collect up to 100 posts and assess the saved results?</p>
+     <p className="text-sm text-slate-700">Activate this campaign to collect posts and assess the saved results?</p>
      {preview&&<p className="text-xs text-slate-600">Keywords: {(preview.keywords_used||[]).join(', ')} · Platforms: {(preview.platforms||[]).join(', ')}</p>}
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking campaign readiness…</p>}
      <div className="flex flex-wrap gap-2">

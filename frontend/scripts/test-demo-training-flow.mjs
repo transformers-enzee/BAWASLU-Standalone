@@ -56,4 +56,8 @@ assert.equal(example.posts,359);
 assert.equal(example.platforms,7);
 assert.equal(example.candidates,null);
 assert.equal(monitoringCampaignSummary([]).campaigns,0);
+
+assert.ok(campaignPanel.includes('data-campaign-summary={label}'),'Campaign totals must have stable DOM markers');
+assert.ok(campaignPanel.includes('data-i18n-exempt="true" aria-live="polite"'),'Dynamic counts must not be altered by the DOM translation layer');
+assert.ok(campaignPanel.includes("loading?'—':typeof value==='number'"),'Do not render zero before campaign data loads');
 console.log('PASS demo-only numbered module order, Home/guide routing, bilingual training and perspective isolation');

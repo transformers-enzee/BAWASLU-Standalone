@@ -34,6 +34,8 @@ import Administration from '@/pages/Administration';
 import IntegrationReadiness from '@/pages/IntegrationReadiness';
 import { LanguageProvider } from '@/lib/LanguageContext';
 import UiLanguageLayer from '@/lib/UiLanguageLayer';
+import DemoTrainingPage from '@/demo/DemoTrainingPage.jsx';
+const demoLocation = /^\/demo(?:\/|$)/.test(window.location.pathname);
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
@@ -63,7 +65,8 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to={`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`} replace />} />}>
         <Route element={<Shell />}>
-          <Route element={<AccessGate permission="view_intelligence" />}><Route path="/" element={<SmartRadar />} /></Route>
+          <Route element={<AccessGate permission="view_intelligence" />}><Route path="/" element={demoLocation?<DemoTrainingPage mode="home"/>:<SmartRadar />} />
+            {demoLocation&&<Route path="/guide" element={<DemoTrainingPage mode="guide"/>} />}</Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/command-center" element={<Home />} />
             <Route path="/smart-radar" element={<SmartRadar />} />

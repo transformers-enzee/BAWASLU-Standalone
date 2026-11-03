@@ -27,15 +27,34 @@
   if(/ahok/i.test(s))return 'Ahok';
   return s;
  };
- const classify=p=>{
-   if((p.signals||[]).length)return {kind:'source_review',player:'violations',name:'Reported election issue',id:'Isu pemilu yang dilaporkan',key:'violation:'+p.id};
-   if((p.concerns||[]).length)return {kind:'discussion',player:'concerns',name:'Public concern',id:'Kekhawatiran publik',key:'concern:'+String(p.topics?.[0]||'Public Concern')};
-   if((p.topics||[]).length){
-    const topic=String(p.topics[0]);
-    return {kind:'narrative_candidate',player:'narratives',name:'Emerging narrative',id:'Narasi berkembang',key:'narrative:'+topic};
-   }
-   return {kind:'source_awareness',player:null,name:'Source for officer review',id:'Sumber untuk peninjauan petugas',key:'awareness:'+p.id};
+ // Replicate the live Inbox's source-first interpretation: an unanchored
+ // topical mention is source awareness, NOT an invented recurring incident.
+ const anchors={
+  'Voter register accuracy':['daftar pemilih','pdpb','daftar pemilih tetap'],
+  'Election money politics':['politik uang','serangan fajar'],
+  'BAWASLU institutional trust':['reputasi bawaslu','kepercayaan publik terhadap bawaslu','kritik terhadap bawaslu','citra bawaslu','bawaslu tidak netral','bawaslu berpihak'],
+  'Election dispute proceedings':['sengketa pemilu','sengketa pilkada','putusan dkpp'],
+  'Candidate nomination process':['proses pencalonan','pendaftaran calon','verifikasi calon'],
+  'Participatory election oversight':['pengawasan partisipatif','pengawas partisipatif']
  };
+ const anchorFor=value=>{
+  const text=String(value||'').toLocaleLowerCase('id-ID');
+  if(['selamat hari','sumpah pemuda','dirgahayu','selamat ulang tahun','ucapan selamat','memperingati hari'].some(t=>text.includes(t))&&!['pelanggaran','dugaan','laporan','pengawasan pemilu','sengketa','kecurangan'].some(t=>text.includes(t)))return '';
+  return Object.entries(anchors).find(([,terms])=>terms.some(term=>text.includes(term)))?.[0]||'';
+ };
+ const classify=p=>{
+   // These are recorded assessment signals, NOT legal or officer findings.
+   if((p.signals||[]).length)return {kind:'source_review',player:'violations',name:'Saved potential issue',id:'Potensi isu tersimpan',key:'violation:'+p.sourceId};
+   if((p.concerns||[]).length){
+    const topic=String(p.topics?.[0]||'');
+    return {kind:'discussion',player:'concerns',name:'Monitored public discussion',id:'Percakapan publik terpantau',key:'concern:'+(topic||p.sourceId)};
+   }
+   const anchor=anchorFor(p.text);
+   if(anchor)return {kind:'narrative_candidate',player:'narratives',name:'Topic-based discussion · '+anchor,id:'Percakapan berdasarkan topik · '+anchor,key:'narrative:'+anchor};
+   return {kind:'source_awareness',player:null,name:'Relevant source for officer review',id:'Sumber relevan untuk ditinjau petugas',key:'awareness:'+p.sourceId};
+ };
+ const inOperations=p=>(p.signals||[]).length>0||(p.topics||[]).includes('Electoral Operations')||(!(p.topics||[]).includes('BAWASLU Reputation')&&!(p.concerns||[]).length);
+ const inReputation=p=>(p.topics||[]).includes('BAWASLU Reputation')||((p.concerns||[]).length>0&&!(p.signals||[]).length);
  let reviews={};
  function assemble(){
   const groups=new Map();
@@ -61,7 +80,7 @@
    const actors={};for(const p of records)for(const raw of p.candidates||[]){const name=normalizeCandidate(raw);if(name)actors[name]=(actors[name]||0)+1;}
    const key='INBOX-DEMO-'+i;
    const result={id:key,kind:cat.kind,title,summary,ai_summary:false,ai_model:'',
-    perspectives:cat.player==='concerns'?['reputation','operations']:['operations'],
+    perspectives:[...(records.some(inOperations)?['operations']:[]),...(records.some(inReputation)?['reputation']:[])],
     players:cat.player?[cat.player]:[],topics:[...new Set(records.flatMap(p=>p.topics||[]))],
     status:reviews[key]||((cat.player==='violations'||cat.player==='concerns')?'pending':'awareness'),
     published_at:records.map(p=>p.date||'').sort().slice(-1)[0]||'',
@@ -107,7 +126,7 @@
     watchlist_profiles:watchlist,watchlist_source:'SAVED_PRODUCTION_DERIVED_SNAPSHOT',
     reviewed_total:findings.filter(x=>x.human_reviewed).length,
     mode:'SAVED_INBOX_SOURCE_OF_TRUTH',scoring_ready:false,
-    feed_source:'FIXED_SAVED_ASSESSMENTS',inbox_source_scope:'APPROVED_RELEVANT_SNAPSHOT',
+    feed_source:'FIXED_SAVED_ASSESSMENTS',inbox_source_scope:'APPROVED_RELEVANT_SNAPSHOT',snapshot_as_of:'2026-11-03',
     inbox_window_limit:300,truncated_to_inbox_window:rows.length>=300,
     sentiment_coverage:{classified:rows.filter(x=>['POSITIVE','NEGATIVE','NEUTRAL'].includes(x.sentiment)).length,
       unclassified:rows.filter(x=>!['POSITIVE','NEGATIVE','NEUTRAL'].includes(x.sentiment)).length},

@@ -4,7 +4,7 @@ import {useLanguage} from '@/lib/LanguageContext';
 
 // No plaintext training password stored in the source or in browser storage.
 // This local demonstration gate is NOT server-side authentication.
-const CHECKSUM='3314c45a1165ae5883fe02107d278ed19c423e7a6a78c28487c3b0082c43744e';
+const CHECKSUM='2f1532b4a2485c17b65447a6be8ed60aa158c418dd681e71a4cb1b650377b4c4';
 const STORE='bawaslu_demo_training_session';
 async function digest(value){
  const bytes=new TextEncoder().encode(value);

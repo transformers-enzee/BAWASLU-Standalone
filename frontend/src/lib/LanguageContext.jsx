@@ -334,12 +334,12 @@ export function translateInterfaceLiteral(text,language='en'){
 
 export function LanguageProvider({children}){
   const isDemo=Boolean(window.__BAWASLU_DEMO_REPLICA__);
-  const [language,setLanguageState]=useState(()=>isDemo?'id':(localStorage.getItem('bawaslu-language')||'en'));
+  const [language,setLanguageState]=useState(()=>{const saved=localStorage.getItem('bawaslu-language');return saved==='en'||saved==='id'?saved:(isDemo?'id':'en');});
   const setLanguage=next=>setLanguageState(next==='id'?'id':'en');
   // Synchronize a choice made in another tab; leave evidence and database untouched.
   useEffect(()=>{if(isDemo)return;const onStorage=event=>{if(event.key==='bawaslu-language')setLanguageState(event.newValue==='id'?'id':'en');};window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage);},[isDemo]);
   useEffect(()=>{
-    if(!isDemo)localStorage.setItem('bawaslu-language',language);
+    localStorage.setItem('bawaslu-language',language);
     document.documentElement.lang=language==='id'?'id':'en';
   },[language,isDemo]);
   const api=useMemo(()=>({

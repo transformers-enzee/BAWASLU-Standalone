@@ -53,4 +53,12 @@ const byGroup=dashboard.findings.reduce((n,x)=>n+x.supporting_posts,0);
 assert.equal(byGroup,dashboard.source_total,'No duplicate source groups');
 assert.ok(snapshotSrc.includes("const inOperations")&&snapshotSrc.includes("const inReputation"));
 assert.ok(!snapshotSrc.includes('supabase.co'));
+
+assert.ok(read('src/lib/LanguageContext.jsx').includes("localStorage.setItem('bawaslu-language',language)"),'Demo EN/ID changes must persist for embedded views');
+assert.ok(read('src/lib/LanguageContext.jsx').includes("saved==='en'||saved==='id'?saved:(isDemo?'id':'en')"),'Demo must honor selected EN or ID after navigation');
+assert.ok(read('src/lib/UiLanguageLayer.jsx').includes("el.closest?.('[data-demo-locale-owned]')"),'Fallback translator must not overwrite bilingual React text');
+assert.ok(read('src/demo/DemoAccessNavigation.jsx').includes('data-demo-locale-owned="true"'),'Sidebar is rendered by React translations');
+assert.ok(read('src/pages/IntelligenceOverview.jsx').includes('data-demo-locale-owned={demo?"true":undefined}'),'Home is rendered by React translations');
+assert.ok(read('src/components/intel/Shell.jsx').includes('data-demo-locale-owned={window.__BAWASLU_DEMO_REPLICA__?"true":undefined}'),'Header toggles are demo-owned');
+assert.ok(read('src/demo/DemoTrainingLogin.jsx').includes("CHECKSUM='2f1532b4a2485c17b65447a6be8ed60aa158c418dd681e71a4cb1b650377b4c4'"),'Corrected training password hash expected');
 console.log('PASS shared live/demonstration Home overview: authorized Command Centre endpoints, frozen source parity, map, bilingual metrics, top-three issues, 7-day trend, routing');

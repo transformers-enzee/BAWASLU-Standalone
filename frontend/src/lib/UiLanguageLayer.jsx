@@ -19,7 +19,7 @@ export default function UiLanguageLayer(){
   let frame=0,active=true;
   const fallback=window.BAWASLUUiTranslator;
   if(language==='id')fallback?.resetFailures();
-  const skip=el=>!el||el.closest?.(excluded);
+  const skip=el=>!el||el.closest?.(excluded)||(window.__BAWASLU_DEMO_REPLICA__&&Boolean(el.closest?.('[data-demo-locale-owned]')));
   function literal(value){
    const translated=translateInterfaceLiteral(value,language);
    if(translated!==value||language!=='id')return translated;

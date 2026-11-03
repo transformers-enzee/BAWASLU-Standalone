@@ -18,7 +18,7 @@ export default function DemoAccessNavigation({access,user}){
    <Icon size={17} aria-hidden="true"/><span>{label}</span>
   </NavLink>
  );
- return <div className="flex min-h-full flex-col">
+ return <div data-demo-locale-owned="true" className="flex min-h-full flex-col">
   <div className="flex items-center gap-3 px-5 h-[76px] shrink-0 border-b border-white/10"><img src="/bawaslu-emblem.svg" alt="BAWASLU emblem" className="w-10 h-10 shrink-0 object-contain"/><div><div className="font-bold text-[15px] leading-tight tracking-wide">BAWASLU</div><div className="text-[10px] uppercase tracking-[.19em] text-[#f1d9d6]">SMART RADAR</div></div></div>
   <div className="px-4 pt-6 pb-2 text-[10px] font-bold text-[#dfaaa9] tracking-[.18em] uppercase">{T('Training orientation','Orientasi Pelatihan')}</div>
   <nav className="px-3 space-y-1" aria-label={T('Training orientation','Orientasi Pelatihan')}>

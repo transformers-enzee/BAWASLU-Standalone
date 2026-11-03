@@ -142,7 +142,7 @@ export default function IntelligenceOverview(){
  const topics=(distribution?.operations?.topics||[]).slice().sort((a,b)=>safeCount(b.count)-safeCount(a.count)).slice(0,3);
  const mapped=dashboard?.geo_signal_counts||{};
  const regional=access?.geographic_scope&&access.geographic_scope!=='Nationwide';
- return <div className={"home-glance space-y-3 "+(error?"":"home-glance-fit")} data-home-overview="command-centre-source">
+ return <div data-demo-locale-owned={demo?"true":undefined} className={"home-glance space-y-3 "+(error?"":"home-glance-fit")} data-home-overview="command-centre-source">
    <div className="home-glance-heading flex flex-wrap items-start justify-between gap-3">
     <div><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#a04d52]">{T('Intelligence overview','Ringkasan Intelijen')}</p>
       <h1 className="mt-1 text-2xl md:text-3xl font-bold tracking-tight text-[#2d2628]">{regional?T('Regional intelligence overview','Ringkasan Intelijen Regional'):T('National intelligence overview','Ringkasan Intelijen Nasional')}</h1>

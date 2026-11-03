@@ -387,5 +387,17 @@
       ui.setData([],[]);
     }
   }
+  // Recompute the fixed bilingual summary whenever the parent toggles EN/ID.
+  // No paid translator or live API is required.
+  window.addEventListener('message',event=>{
+    if(event.origin!==window.location.origin||event.data?.type!=='BAWASLU_UI_LANGUAGE')return;
+    try{window.localStorage.setItem('bawaslu-language',event.data.language==='id'?'id':'en')}catch(_){}
+    const selected=ui.selected();
+    const candidate=selected&&ui.getCandidate(selected);
+    if(candidate){
+      candidate.summary=candidateActivitySummary(candidate);
+      ui.renderProfile(selected);
+    }
+  });
   boot();
 })();

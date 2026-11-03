@@ -333,14 +333,15 @@ export function translateInterfaceLiteral(text,language='en'){
 }
 
 export function LanguageProvider({children}){
-  const [language,setLanguageState]=useState(()=>localStorage.getItem('bawaslu-language')||'en');
+  const isDemo=Boolean(window.__BAWASLU_DEMO_REPLICA__);
+  const [language,setLanguageState]=useState(()=>isDemo?'id':(localStorage.getItem('bawaslu-language')||'en'));
   const setLanguage=next=>setLanguageState(next==='id'?'id':'en');
   // Synchronize a choice made in another tab; leave evidence and database untouched.
-  useEffect(()=>{const onStorage=event=>{if(event.key==='bawaslu-language')setLanguageState(event.newValue==='id'?'id':'en');};window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage);},[]);
+  useEffect(()=>{if(isDemo)return;const onStorage=event=>{if(event.key==='bawaslu-language')setLanguageState(event.newValue==='id'?'id':'en');};window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage);},[isDemo]);
   useEffect(()=>{
-    localStorage.setItem('bawaslu-language',language);
+    if(!isDemo)localStorage.setItem('bawaslu-language',language);
     document.documentElement.lang=language==='id'?'id':'en';
-  },[language]);
+  },[language,isDemo]);
   const api=useMemo(()=>({
     language,
     setLanguage,

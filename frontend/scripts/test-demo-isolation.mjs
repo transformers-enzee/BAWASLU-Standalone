@@ -15,7 +15,7 @@ assert.ok(bridge.includes("window.fetch=async"),'Intercept browser API calls');
 assert.ok(bridge.includes("if(u.pathname.startsWith('/api/'))return response(localApi(url,init))"));
 assert.ok(bridge.includes("Blocked: read-only demo network isolation"));
 assert.ok(!bridge.includes('supabase-js')&&!bridge.includes('service_role'));
-assert.ok(snapshot.includes('DEMO-001')&&snapshot.includes('DEMO-300'));
+assert.ok(snapshot.includes('DEMO-0001')&&snapshot.includes('DEMO-0300'));
 assert.ok(read('public/demo/smart-radar.html').includes('id="bawaslu-demo-snapshot"'));
 assert.ok(read('public/demo/smart-radar.html').includes('smart-radar-live.js'));
 assert.ok(read('public/demo/watchlist.html').includes('watchlist-live.js'));

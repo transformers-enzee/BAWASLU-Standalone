@@ -44,4 +44,16 @@ assert.match(bridge,/snapshot_as_of:'2026-11-03'/);
 assert.ok(!bridge.includes("perspectives:cat.player==='concerns'?['reputation','operations']:['operations']"));
 const operational=snapshot.filter(p=>p.signals.length||p.topics.includes('Electoral Operations')||(!p.topics.includes('BAWASLU Reputation')&&!p.concerns.length));
 assert.ok(operational.length<snapshot.length,'Operational perspective must no longer count every Inbox post');
+
+// Summary values must reflect the exact campaigns shown, not a stale API total.
+const {monitoringCampaignSummary}=await import('../src/lib/monitoringCampaignSummary.js');
+const example=monitoringCampaignSummary([
+ {id:'1',evidence_count:61,platforms:['tiktok','instagram','twitter']},
+ {id:'2',evidence_count:298,platforms:['twitter-ai-search','youtube','facebook','threads','online_news']}
+],null);
+assert.equal(example.campaigns,2);
+assert.equal(example.posts,359);
+assert.equal(example.platforms,7);
+assert.equal(example.candidates,null);
+assert.equal(monitoringCampaignSummary([]).campaigns,0);
 console.log('PASS demo-only numbered module order, Home/guide routing, bilingual training and perspective isolation');

@@ -1,3 +1,4 @@
+import {monitoringCampaignSummary} from '@/lib/monitoringCampaignSummary';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {Trash2,  ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'lucide-react';
@@ -176,7 +177,7 @@ export default function CampaignPanel({campaignId=null}){
    finally{setDiscoverBusy(false)}
  }
 
- const [total,setTotal]=useState(0);
+ const summaryStats=monitoringCampaignSummary(campaigns,trackedCount);
  const [sampleText,setSampleText]=useState(''),[keywordPreview,setKeywordPreview]=useState(null),[previewBusy,setPreviewBusy]=useState(false),[previewError,setPreviewError]=useState('');
  const keywordPreviewRequest=useRef(0);
  function resetKeywordPreview(){keywordPreviewRequest.current+=1;setSampleText('');setKeywordPreview(null);setPreviewError('');setPreviewBusy(false)}
@@ -488,7 +489,7 @@ export default function CampaignPanel({campaignId=null}){
  async function refresh(){
   try{
    const r=await base44.functions.invoke('socialListening',{action:'listCampaigns',data:{}});
-   setCampaigns(r.data.campaigns||[]);setTotal(r.data.total||0);setError('');
+   setCampaigns(r.data.campaigns||[]);setError('');
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setLoading(false)}
  }
@@ -590,7 +591,7 @@ export default function CampaignPanel({campaignId=null}){
    <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see the dashboard, captured posts and candidate tracking.</p></div>
    {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#a52a2f] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
    {window.__BAWASLU_DEMO_REPLICA__?<DemoSocialListeningStats/>:<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-    {[[total,'Monitoring campaigns'],[campaigns.reduce((n,c)=>n+Number(c.evidence_count||0),0),'Campaign-linked source posts'],[new Set(campaigns.flatMap(c=>c.platforms||[])).size,'Configured source platforms'],[trackedCount===null?'—':trackedCount,'Actively tracked candidates']].map(([value,label])=><div key={label} className="rounded-xl border border-[#dce5ed] bg-white px-4 py-5"><strong className="block text-[26px] font-bold tabular-nums text-[#152c47]">{typeof value==='number'?value.toLocaleString():value}</strong><span className="text-[11px] text-[#60768c]">{label}</span></div>)}
+    {[[summaryStats.campaigns,'Monitoring campaigns'],[summaryStats.posts,'Campaign-linked source posts'],[summaryStats.platforms??'—','Configured source platforms'],[summaryStats.candidates??'—','Actively tracked candidates']].map(([value,label])=><div key={label} className="rounded-xl border border-[#dce5ed] bg-white px-4 py-5"><strong className="block text-[26px] font-bold tabular-nums text-[#152c47]">{typeof value==='number'?value.toLocaleString():value}</strong><span className="text-[11px] text-[#60768c]">{label}</span></div>)}
    </div>}
    <section className="rounded-[13px] border border-[#dce5ed] bg-white p-5" aria-label="Campaign list">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-[#19324a]">Monitoring campaigns</h3><input type="search" className="w-full max-w-[320px] rounded-lg border border-[#ccdae3] bg-white px-3 py-3 text-sm text-[#1a2d46]" placeholder="Search campaigns" aria-label="Search campaigns" value={query} onChange={e=>setQuery(e.target.value)}/></div>

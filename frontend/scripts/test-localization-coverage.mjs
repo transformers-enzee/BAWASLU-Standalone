@@ -30,6 +30,11 @@ const scripts=['public/ui-freeze/bawaslu-interface-locale.js','public/ui-freeze/
 for(const path of scripts)new Script(read(path),{filename:path});
 const react=read('src/lib/UiLanguageLayer.jsx'),locale=read(scripts[0]);
 const dashboard=read('public/ui-freeze/smart-radar-v6_2.html'),watch=read('public/ui-freeze/watchlist-v2_2.html');
+assert.ok(dashboard.includes('Section 01 · Operational Intelligence Overview'),'Missing Section 01 heading');
+assert.ok(dashboard.includes('Section 02 · Intelligence Insights'),'Missing Section 02 heading');
+assert.ok(dashboard.indexOf('Section 01 · Operational Intelligence Overview')<dashboard.indexOf('Section 02 · Intelligence Insights'),'Section order incorrect');
+assert.ok(locale.includes('Bagian 01 · Ringkasan Intelijen Operasional'),'Missing Indonesian Section 01 label');
+assert.ok(locale.includes('Bagian 02 · Wawasan Intelijen'),'Missing Indonesian Section 02 label');
 assert.ok(react.includes('const requested=new WeakMap'));
 assert.ok(react.includes('BAWASLU_UI_LANGUAGE'));
 assert.ok(react.includes('BAWASLUUiTranslator'));

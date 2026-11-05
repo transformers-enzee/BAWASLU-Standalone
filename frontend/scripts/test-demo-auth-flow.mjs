@@ -28,7 +28,7 @@ assert.ok(feedbackAdminComponent.includes('role="alertdialog"'),'Destructive del
 assert.ok(feedbackAdminComponent.includes('await load();setDeleteMessage('),'Aggregates are refreshed after successful deletion');
 assert.ok(feedbackApiClient.includes("method:'DELETE'"),'Feedback DELETE request must be authenticated');
 assert.ok(administration.includes('data-i18n-exempt="true"'),'Admin page uses React bilingual labels rather than DOM translation');
-assert.ok(administration.includes('T("AI Relevance Gates"'),'Relevance administration must toggle languages');
+assert.ok(administration.includes("T('AI Relevance Gates'"),'Relevance administration must toggle languages');
 assert.ok(administration.includes('T("Data Integration & Readiness"'),'Data Integration section must toggle languages');
 assert.ok(categoryManager.includes('displayCategory(c.name)'),'Saved category names receive display-only translations');
 console.log('PASS public no-login demo, bilingual feedback form, national-admin dashboard, preserved snapshot isolation');

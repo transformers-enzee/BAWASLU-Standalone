@@ -35,6 +35,13 @@ const administration=read('src/pages/Administration.jsx');
 const categoryManager=read('src/components/intel/CategoryManager.jsx');
 assert.ok(feedbackAdminComponent.includes('base44.demoFeedback.remove(pendingDelete.id)'),'Delete uses protected backend API');
 assert.ok(feedbackAdminComponent.includes('role="alertdialog"'),'Destructive delete requires an explicit confirmation');
+assert.ok(feedbackAdminComponent.includes('<RatingStars rating={r.rating}/>'),'Individual feedback must display visible rating stars');
+assert.ok(feedbackAdminComponent.includes("r.department||T('Not specified'"),'Each card must prominently show bureau');
+assert.ok(!feedbackAdminComponent.includes("By feedback type")&&!feedbackAdminComponent.includes("By demo page"),'Remove obsolete category and demo page breakdowns');
+assert.ok(!feedbackAdminComponent.includes("All categories")&&!feedbackAdminComponent.includes("All pages"),'Remove obsolete category and page filters');
+assert.ok(!feedbackAdminComponent.includes("r.page_path} ·"),'No raw demo path in feedback card');
+assert.ok(feedbackAdminComponent.includes("{r.message&&<div"),'No placeholder text for rating-only feedback');
+
 assert.ok(feedbackAdminComponent.includes('await load();setDeleteMessage('),'Aggregates are refreshed after successful deletion');
 assert.ok(feedbackApiClient.includes("method:'DELETE'"),'Feedback DELETE request must be authenticated');
 assert.ok(administration.includes('data-i18n-exempt="true"'),'Admin page uses React bilingual labels rather than DOM translation');

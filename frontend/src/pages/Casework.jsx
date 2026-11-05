@@ -42,15 +42,20 @@ export default function Casework(){
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [showNew,setShowNew]=useState(Boolean(params.get('source_id')));
  async function reload(){const [a,b]=await Promise.all([request('/options'),request('/cases')]);setOptions(a);setCases(b.cases||[]);}
- useEffect(()=>{let active=true;Promise.all([request('/options'),request('/cases')]).then(([a,b])=>{if(active){setOptions(a);setCases(b.cases||[]);setScope(a.user_scope||'NATIONAL');setProvince(a.user_province||'')}}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[]);
+ useEffect(()=>{let active=true;Promise.all([request('/options'),request('/cases')]).then(([a,b])=>{if(active){setOptions(a);setCases(b.cases||[]);if(!params.get('case_id')){setScope(a.user_scope||'NATIONAL');setProvince(a.user_province||'')}}}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[]);
  useEffect(()=>{
   const id=Number(params.get('case_id')||0);
   if(Number.isInteger(id)&&id>0)selectCase(id);
  },[]);
- async function selectCase(id){setSelected(id);setError('');try{const d=await request('/cases/'+id);setDetail(d);setScope(d.case.target_scope);setProvince(d.case.target_province);setDepartment(d.case.target_department);setAssignee(d.case.assignee_id?String(d.case.assignee_id):'');setNewStatus(d.case.status==='CLOSED'?'CLOSED':'IN_REVIEW');setEditReport(null);setForm(initialReport)}catch(e){setError(e.message)}}
+ async function selectCase(id){setSelected(id);setError('');try{const d=await request('/cases/'+id);setDetail(d);setScope(d.case.target_scope);setProvince(d.case.target_province);setDepartment(d.case.target_department);setAssignee(d.case.assignee_id?String(d.case.assignee_id):'');setNewStatus(d.case.status==='CLOSED'?'CLOSED':'IN_REVIEW');
+   const opening=(params.get('tab')==='reports'&&d.reports?.length)?d.reports[0]:null;
+   setEditReport(opening?.id||null);
+   setForm(opening?{title:opening.title,executive_summary:opening.executive_summary,
+      findings:opening.findings,verification_notes:opening.verification_notes,
+      recommendations:opening.recommendations}:initialReport)}catch(e){setError(e.message)}}
  const eligible=useMemo(()=>options?.officers?.filter(x=>x.scope===scope&&(scope==='NATIONAL'||x.province===province))||[],[options,scope,province]);
  async function act(fn,message){setBusy(true);setError('');setNotice('');try{await fn();setNotice(message);await reload();if(selected){const d=await request('/cases/'+selected);setDetail(d)}}catch(e){setError(e.message)}finally{setBusy(false)}}
- async function previewSource(){setBusy(true);setError('');try{const q=new URLSearchParams({source_type:sourceType,source_id:sourceId,...(sourceType==='SOCIAL'?{campaign_id:campaignId}:{})});const p=await request('/preview?'+q.toString());setPreview(p);setNewTitle(p.title);if(p.verified_province&&options?.user_scope==='PROVINCE'){setScope('PROVINCE');setProvince(p.verified_province)}else{setScope('NATIONAL');setProvince('')}}catch(e){setError(e.message)}finally{setBusy(false)}}
+ async function previewSource(){setBusy(true);setError('');try{const q=new URLSearchParams({source_type:sourceType,source_id:sourceId,...(sourceType==='SOCIAL'?{campaign_id:campaignId}:{})});const p=await request('/preview?'+q.toString());setPreview(p);setNewTitle(p.title);if(p.recommended_department&&options?.departments?.includes(p.recommended_department))setDepartment(p.recommended_department);if(p.verified_province&&options?.user_scope==='PROVINCE'){setScope('PROVINCE');setProvince(p.verified_province)}else{setScope('NATIONAL');setProvince('')}}catch(e){setError(e.message)}finally{setBusy(false)}}
  async function createCase(){await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab('assignments')},'Penugasan dibuat. Tag AI tersedia untuk diperiksa.')}
  async function route(){if(!detail)return;await act(async()=>{await request('/cases/'+selected+'/route','POST',{department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,note:routeNote});setRouteNote('')},'Penugasan dialihkan dan riwayat dicatat.')}
  async function status(){await act(async()=>{await request('/cases/'+selected+'/status','POST',{status:newStatus,note:stateNote});setStateNote('')},'Status penugasan diperbarui.')}

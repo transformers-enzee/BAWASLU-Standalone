@@ -35,5 +35,7 @@ assert.ok(!desk.includes('base44.functions.invoke'),
     'handoff reuses existing analysis without extra paid model request');
 assert.ok(casework.includes("params.get('case_id')")&&casework.includes("params.get('tab')"),
     'casework opens the assigned case and ready report immediately');
+assert.ok(casework.includes('const opening=')&&casework.includes('p.recommended_department'),
+    'casework opens the prepared draft and preselects the saved source department');
 
 console.log('Casework and reporting frontend checks passed');

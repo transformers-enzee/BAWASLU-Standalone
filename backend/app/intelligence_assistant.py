@@ -408,6 +408,8 @@ def is_general_knowledge_question(question):
 
 def generate_general_openai_answer(question, previous_question=''):
     """General questions use OpenAI without exporting private system records."""
+    from .assistant_language import language_directive
+    language=language_directive(question)
     key=os.getenv('OPENAI_API_KEY','').strip()
     if not key:raise AssistantProviderError('not_configured','OpenAI is not configured')
     model=openai_triage_model()
@@ -418,7 +420,8 @@ def generate_general_openai_answer(question, previous_question=''):
         'knowledge and sound reasoning. You have not searched the web or accessed BAWASLU '
         'records. Do not claim access to current live information or private records. '
         'Provide useful context and scenario-based recommendations where data is unavailable, clearly distinguish hypotheses from measurements and avoid repetitive no-data statements. Use bold key points and bullets where helpful. Never invent audience percentages as facts. Do not create targeted political persuasion. '
-        'Do not invent citations. Reply in the language of the question with useful depth and clear formatting.')},
+        'Do not invent citations. Reply in the language of the question with useful depth and clear formatting. '
+        + language['rule'])},
       {'role':'user','content':str(question or '')[:500]}
     ],'max_output_tokens':650}
     try:

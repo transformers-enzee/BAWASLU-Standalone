@@ -17,7 +17,7 @@ assert.ok(casework.includes('/cases/')&&casework.includes('/reports/'),'case/rep
 assert.ok(casework.includes('verified_province'),'no automatic location authority');
 assert.ok(casework.includes('Buat draf analisis dengan AI'),'explicit AI draft only');
 assert.ok(casework.includes('Matriks')===false,'workflow UI does not impersonate a legal finding');
-assert.ok(source.includes('Buat penugasan dari sumber ini'),'assistant-to-casework deep link');
+assert.ok(source.includes("t('prepare_from_source')"),'assistant-to-casework deep link');
 assert.ok(inbox.includes('Buat penugasan & laporan')&&inbox.includes('selected.campaign_id'),'Inbox-to-casework evidence link');
 assert.ok(!assistant.includes('Hybrid · Saved evidence + GPT context'),'no technical model banner');
 assert.ok(display.includes('UNVERIFIED_SOCIAL_SOURCE')&&display.includes('AI_RELEVANCE_NOT_LEGAL_VERIFICATION'),'technical statuses translated for users');

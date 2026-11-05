@@ -3,6 +3,8 @@ import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown } from 'lucid
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
+import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
+import {textFor} from '@/lib/assistantResponseLocale';
 import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
 import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/AssistantActionDesk';
 import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
@@ -82,7 +84,8 @@ export default function IntelligenceAssistant(){
     role:'assistant',text:response.data.answer||'',
     records:response.data.records||[],provider:response.data.provider,
     grounding:response.data.grounding,evidence_snapshot:response.data.evidence_snapshot,
-    analytical_findings:response.data.analytical_findings,featured_sources:response.data.featured_sources
+    analytical_findings:response.data.analytical_findings,featured_sources:response.data.featured_sources,
+    answer_language:response.data.answer_language,detected_tags:response.data.detected_tags||[],presentation_labels:response.data.presentation_labels||{}
    };
    const full=[...outgoing,answer];
    setMessages(full);
@@ -145,10 +148,14 @@ export default function IntelligenceAssistant(){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<>
-        {i===messages.length-1&&<AssistantActionDesk message={m} question={messages[i-1]?.text||''}/>}
-        <TranslatedAssistantAnswer text={m.text}/>
+        {i===messages.length-1&&<AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
+        <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
        </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
-       {m.role==='assistant'&&<>{m.grounding?.supporting_count>0&&<p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} sumber rujukan · Analisis memerlukan verifikasi petugas</p>}<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding}/><AssistantIntelligenceReport findings={m.analytical_findings} records={m.records}/><AssistantRecords records={m.records} featured={m.featured_sources}/></>}
+       {m.role==='assistant'&&<>{m.grounding?.supporting_count>0&&<p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
+        <AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>
+        <AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>
+        <AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels}/>
+        <AssistantRecords records={m.records} featured={m.featured_sources} language={m.answer_language||'id'} labels={m.presentation_labels}/></>}
       </div>
      </div>)}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}

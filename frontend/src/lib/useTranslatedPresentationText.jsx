@@ -30,10 +30,10 @@ function requestTranslation(original,language){
  pending.set(key,job);
  return job;
 }
-export default function useTranslatedPresentationText(text){
+export default function useTranslatedPresentationText(text,answerLanguage=''){
  const {language}=useLanguage();
  const original=String(text||'');
- const needs=Boolean(original.trim())&&original.length<=18000&&
+ const needs=!answerLanguage&&Boolean(original.trim())&&original.length<=18000&&
    (language==='id'?!probablyIndonesian(original):probablyIndonesian(original));
  const key=language+'\u0000'+original;
  const [result,setResult]=useState({key:'',value:'',status:''});

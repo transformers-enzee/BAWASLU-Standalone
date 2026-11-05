@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {useNavigate} from 'react-router-dom';
+import {textFor,assistantLocale,localeTagKey} from '@/lib/assistantResponseLocale';
 import {ArrowUpRight,ClipboardList,FileCheck2,Layers3,CheckCircle2,ShieldCheck,ChevronDown,Loader2} from 'lucide-react';
 
 const ENDPOINT='/api/casework';
@@ -63,7 +64,8 @@ function UserWorkspacePulse(){
 }
 export {UserWorkspacePulse};
 
-export default function AssistantActionDesk({message,question}){
+export default function AssistantActionDesk({message,question,language='id',labels={}}){
+ const t=key=>textFor(language,labels,key);
  const navigate=useNavigate();
  const [chosen,setChosen]=useState(null);
  const [preview,setPreview]=useState(null);
@@ -95,7 +97,7 @@ export default function AssistantActionDesk({message,question}){
    const [p,o]=await Promise.all([api('/preview?'+query.toString()),api('/options')]);
    setPreview(p);setOptions(o);setDepartment(o.departments.includes(p.recommended_department)?p.recommended_department:'Data & Analisis');
    setScope('NATIONAL');
-   setTitle('Telaah: '+compactQuestion(question));
+   setTitle((language==='id'?'Telaah: ':language==='en'?'Review: ':'')+compactQuestion(question));
    setEditedSummary(short((message.text||'').split('\n\n')[0],2800));
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
@@ -119,40 +121,40 @@ export default function AssistantActionDesk({message,question}){
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
- return <section className="mb-5 overflow-hidden rounded-xl border border-[#d9b9bd] bg-white" aria-label="Asisten tindakan lanjutan" data-i18n-exempt>
+ return <section className="mb-5 overflow-hidden rounded-xl border border-[#d9b9bd] bg-white" aria-label={t('action_title')} data-i18n-exempt lang={assistantLocale(language)}>
   <div className="bg-[#fcf1f2] p-4">
    <div className="flex items-start gap-3"><span className="rounded-lg bg-[#f1dfe1] p-2"><ShieldCheck className="text-[#801b24]" size={20}/></span><div className="min-w-0 flex-1">
-    <h3 className="font-bold text-[#801b24] text-base">Saya bisa menyiapkan tindak lanjutnya</h3>
-    <p className="text-sm text-[#4d6071] mt-1">Pilih sumber penting di bawah. Saya isi penugasan, sarankan unit penerima, dan susun draf laporan dari analisis ini. Anda cukup periksa dan konfirmasi.</p>
+    <h3 className="font-bold text-[#801b24] text-base">{t('action_title')}</h3>
+    <p className="text-sm text-[#4d6071] mt-1">{t('action_intro')}</p>
    </div></div>
   </div>
-  {!!checks.length&&<div className="px-4 pt-4"><div className="text-xs font-bold uppercase tracking-wide text-[#64748b] mb-2">Langkah kerja yang sudah disiapkan</div><div className="grid gap-2 md:grid-cols-3">{checks.map((item,i)=><div key={i} className="border border-[#e4e9ef] rounded-lg p-3 text-xs leading-relaxed"><span className="font-bold text-[#801b24]">Langkah {i+1} · </span>{short(item.replace(/\[(?:SOCIAL|INT)-[A-Za-z0-9:_-]+\]/g,''),210)}{item.length>210?'…':''}</div>)}</div></div>}
+  {!!checks.length&&<div className="px-4 pt-4"><div className="text-xs font-bold uppercase tracking-wide text-[#64748b] mb-2">{t('steps_title')}</div><div className="grid gap-2 md:grid-cols-3">{checks.map((item,i)=><div key={i} className="border border-[#e4e9ef] rounded-lg p-3 text-xs leading-relaxed"><span className="font-bold text-[#801b24]">{t('step')} {i+1} · </span>{short(item.replace(/\[(?:SOCIAL|INT)-[A-Za-z0-9:_-]+\]/g,''),210)}{item.length>210?'…':''}</div>)}</div></div>}
   <div className="px-4 py-4 space-y-2">
-   <div className="text-xs font-bold uppercase tracking-wide text-[#64748b]">Bukti yang bisa langsung dijadikan penugasan</div>
+   <div className="text-xs font-bold uppercase tracking-wide text-[#64748b]">{t('sources_action_heading')}</div>
    {sources.length?<div className="grid gap-2 md:grid-cols-2">{sources.slice(0,4).map(s=><div key={s.key} className={'flex flex-col justify-between gap-2 rounded-lg border p-3 '+(chosen?.key===s.key?'border-[#a52a2f] bg-[#fff9f9]':'border-[#e4e9ef]')}>
     <div><p className="text-[11px] font-semibold text-[#801b24]">{s.key} · {s.platform}</p><p className="text-sm mt-1 line-clamp-2">{s.title}</p>{s.published&&<p className="text-[11px] text-[#6b7e90] mt-1">{s.published.slice(0,10)}</p>}</div>
-    <div className="flex flex-wrap items-center gap-3"><button className="text-xs font-bold text-[#801b24] hover:underline" onClick={()=>openSource(s)} type="button" disabled={busy}>Siapkan tugas & laporan</button>{safeUrl(s.url)&&<a className="inline-flex items-center gap-1 text-xs text-[#167087] hover:underline" href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer">Periksa sumber <ArrowUpRight size={12}/></a>}</div>
-   </div>)}</div>:<p className="text-sm text-[#64748b]">Sumber yang bisa langsung ditugaskan belum tersedia. Buka sumber asli atau penelusuran Inbox untuk mengidentifikasi rekaman yang relevan.</p>}
+    <div className="flex flex-wrap items-center gap-3"><button className="text-xs font-bold text-[#801b24] hover:underline" onClick={()=>openSource(s)} type="button" disabled={busy}>{t('prepare_task')}</button>{safeUrl(s.url)&&<a className="inline-flex items-center gap-1 text-xs text-[#167087] hover:underline" href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer">{t('open_source')} <ArrowUpRight size={12}/></a>}</div>
+   </div>)}</div>:<p className="text-sm text-[#64748b]">{t('no_sources')}</p>}
   </div>
   {error&&<p role="alert" className="mx-4 mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
   {chosen&&<div className="border-t border-[#e5eaef] bg-[#f9fafc] p-4 space-y-4">
-   <div className="flex justify-between gap-3 items-start"><div><h4 className="font-bold text-[#243447]">Penugasan siap ditinjau</h4><p className="text-xs text-[#64748b]">Tidak ada tindakan yang disimpan sebelum Anda mengonfirmasi.</p></div><button type="button" onClick={()=>{setChosen(null);setPreview(null);setError('')}} className="text-xs text-[#64748b] hover:underline">Tutup</button></div>
-   {busy&&!preview&&<p className="text-sm text-[#64748b] flex items-center gap-2"><Loader2 size={15} className="animate-spin"/> Memeriksa akses dan sumber…</p>}
-   {preview&&<><div className="flex flex-wrap gap-2 text-xs">{(preview.tags||[]).slice(0,6).map((tag,i)=><span key={i} className="rounded-full border border-[#e7d7d9] bg-white px-2.5 py-1">{tag.label}{tag.verified?' ✓':''}</span>)}</div>
-    <p className="text-xs text-[#64748b]">Saran departemen berdasarkan tag: <strong>{preview.recommended_department}</strong>. Lokasi yang hanya disebut dalam unggahan bukan yurisdiksi terverifikasi.</p>
+   <div className="flex justify-between gap-3 items-start"><div><h4 className="font-bold text-[#243447]">{t('prepare_review_title')}</h4><p className="text-xs text-[#64748b]">{t('not_saved_notice')}</p></div><button type="button" onClick={()=>{setChosen(null);setPreview(null);setError('')}} className="text-xs text-[#64748b] hover:underline">{t("close")}</button></div>
+   {busy&&!preview&&<p className="text-sm text-[#64748b] flex items-center gap-2"><Loader2 size={15} className="animate-spin"/> {t('loading')}</p>}
+   {preview&&<><div className="flex flex-wrap gap-2 text-xs">{(preview.tags||[]).slice(0,6).map((tag,i)=><span key={i} className="rounded-full border border-[#e7d7d9] bg-white px-2.5 py-1">{(["SUSPECTED_VIOLATION","BAWASLU_ISSUE","ELECTORAL_ISSUE"].includes(tag.type)?t(localeTagKey[tag.type]):tag.label)}{tag.verified?' ✓':''}</span>)}</div>
+    <p className="text-xs text-[#64748b]">{t('department_suggestion')}: <strong>{preview.recommended_department}</strong>. {t('province_safety')}</p>
     <div className="grid md:grid-cols-2 gap-3">
-     <label className="space-y-1 block md:col-span-2"><span className="text-xs font-semibold">Judul kasus</span><input className={CONTROL} maxLength={240} value={title} onChange={e=>setTitle(e.target.value)}/></label>
-     <label className="space-y-1 block"><span className="text-xs font-semibold">Departemen</span><select className={CONTROL} value={department} onChange={e=>setDepartment(e.target.value)}>{options?.departments?.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
-     <label className="space-y-1 block"><span className="text-xs font-semibold">Tim tujuan</span><select className={CONTROL} value={scope} onChange={e=>{setScope(e.target.value);setAssignee('')}}><option value="NATIONAL">Nasional</option>{preview.verified_province&&<option value="PROVINCE">Provinsi · {preview.verified_province}</option>}</select></label>
-     <label className="space-y-1 block"><span className="text-xs font-semibold">Petugas penerima (opsional)</span><select className={CONTROL} value={assignee} onChange={e=>setAssignee(e.target.value)}><option value="">Antrean departemen</option>{officers.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-     <label className="space-y-1 block"><span className="text-xs font-semibold">Sumber utama</span><div className={CONTROL+' bg-[#f2f4f7]'}>{chosen.key}{chosen.campaign_id?' · Kampanye '+chosen.campaign_id:''}</div></label>
+     <label className="space-y-1 block md:col-span-2"><span className="text-xs font-semibold">{t('case_title_label')}</span><input className={CONTROL} maxLength={240} value={title} onChange={e=>setTitle(e.target.value)}/></label>
+     <label className="space-y-1 block"><span className="text-xs font-semibold">{t('department_label')}</span><select className={CONTROL} value={department} onChange={e=>setDepartment(e.target.value)}>{options?.departments?.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+     <label className="space-y-1 block"><span className="text-xs font-semibold">{t('team_label')}</span><select className={CONTROL} value={scope} onChange={e=>{setScope(e.target.value);setAssignee('')}}><option value="NATIONAL" >{t('team_national')}</option>{preview.verified_province&&<option value="PROVINCE" >{t('team_provincial')} · {preview.verified_province}</option>}</select></label>
+     <label className="space-y-1 block"><span className="text-xs font-semibold">{t('officer_label')}</span><select className={CONTROL} value={assignee} onChange={e=>setAssignee(e.target.value)}><option value="" >{t('officer_queue')}</option>{officers.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+     <label className="space-y-1 block"><span className="text-xs font-semibold">{t('primary_source_label')}</span><div className={CONTROL+' bg-[#f2f4f7]'}>{chosen.key}{chosen.campaign_id?' · '+t('campaign_label')+' '+chosen.campaign_id:''}</div></label>
     </div>
-    <button className="inline-flex gap-2 items-center text-xs font-semibold text-[#801b24]" type="button" onClick={()=>setShowDetails(x=>!x)}><ChevronDown size={13}/> {showDetails?'Tutup pratinjau draf':'Tinjau ringkasan laporan yang akan dibuat'}</button>
-    {showDetails&&<label className="block space-y-1"><span className="text-xs font-semibold">Ringkasan eksekutif (dapat disunting)</span><textarea className={CONTROL} rows={4} value={editedSummary} onChange={e=>setEditedSummary(e.target.value)} maxLength={3500}/><p className="text-xs text-[#64748b]">Temuan dan daftar verifikasi dari jawaban juga akan disalin sebagai draf, bukan hasil validasi hukum.</p></label>}
-    <label className="flex gap-2 items-start text-xs text-[#46586a]"><input type="checkbox" className="mt-1" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>Saya memahami sumber dan analisis masih perlu diperiksa. Simpan sebagai <strong>penugasan dan draf laporan</strong>, bukan kesimpulan pelanggaran.</span></label>
-    <button type="button" className={PRIMARY} disabled={busy||!confirmed||!options?.can_create||!title.trim()} onClick={confirmHandoff}><CheckCircle2 size={16} className="inline mr-2"/>{busy?'Memproses…':'Buat penugasan + draf laporan'}</button>
-    {!options?.can_create&&<p className="text-xs text-amber-800">Peran Anda hanya dapat meninjau hasil. Penugasan baru memerlukan izin petugas.</p>}
-    <p className="text-[11px] text-[#64748b]">Pengisian ulang menggunakan jawaban yang sudah tersedia, tanpa panggilan AI tambahan. Persetujuan dan perubahan status dilakukan oleh petugas berwenang.</p>
+    <button className="inline-flex gap-2 items-center text-xs font-semibold text-[#801b24]" type="button" onClick={()=>setShowDetails(x=>!x)}><ChevronDown size={13}/> {showDetails?t('hide_draft'):t('preview_draft')}</button>
+    {showDetails&&<label className="block space-y-1"><span className="text-xs font-semibold">{t('summary_label')}</span><textarea className={CONTROL} rows={4} value={editedSummary} onChange={e=>setEditedSummary(e.target.value)} maxLength={3500}/><p className="text-xs text-[#64748b]">{t('draft_details_note')}</p></label>}
+    <label className="flex gap-2 items-start text-xs text-[#46586a]"><input type="checkbox" className="mt-1" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{t('confirm_notice')}</span></label>
+    <button type="button" className={PRIMARY} disabled={busy||!confirmed||!options?.can_create||!title.trim()} onClick={confirmHandoff}><CheckCircle2 size={16} className="inline mr-2"/>{busy?t('preparing'):t('submit_action')}</button>
+    {!options?.can_create&&<p className="text-xs text-amber-800">{t('officer_only')}</p>}
+    <p className="text-[11px] text-[#64748b]">{t('no_extra_ai')}</p>
    </>}
   </div>}
  </section>;

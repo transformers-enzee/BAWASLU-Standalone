@@ -10,6 +10,8 @@ import re
 from datetime import date
 from collections import Counter
 import httpx
+from .assistant_language import language_directive, effective_language
+from .assistant_tags import TAG_SCHEMA, UI_SCHEMA, UI_KEYS, combined_tags, validate_ui_labels
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .intelligence_assistant import (
     AssistantProviderError, _response_output_text, _tokens,
@@ -29,10 +31,13 @@ SCHEMA = {
         "interpretation": {"type": "string"},
         "next_checks": {"type": "array", "items": {"type": "string"}},
         "limitations": {"type": "array", "items": {"type": "string"}},
-        "cited_ids": {"type": "array", "items": {"type": "string"}}
+        "cited_ids": {"type": "array", "items": {"type": "string"}},
+        "language_code": {"type": "string"},
+        "detected_tags": TAG_SCHEMA,
+        "presentation_labels": UI_SCHEMA
     },
     "required": ["direct_answer", "observations", "interpretation",
-                 "next_checks", "limitations", "cited_ids"],
+                 "next_checks", "limitations", "cited_ids", "language_code", "detected_tags", "presentation_labels"],
     "additionalProperties": False
 }
 SYSTEM = """You are BAWASLU's expert, politically neutral social intelligence, public relations, crisis communication, marketing research, and government affairs analyst. Provide context-aware strategic analysis for lawful public information, accountability, and nonpartisan outreach. Do not craft personalized political persuasion aimed at voter segments.
@@ -40,8 +45,7 @@ Behave like a skilled senior analyst, not a rigid compliance template or a searc
 Respond conversationally, directly and with analytic depth.
 For questions about narratives, audiences, PR, or campaign performance, proactively provide sentiment analysis: distinguish observed positive, negative, neutral and mixed positions; explain their drivers, emerging concerns, narrative implications and change over time if supported. Never assign quantitative sentiment shares without counts. Prefer a compact table for comparing three or more segments, themes, or platforms; generate chart data without being asked when trustworthy numeric comparisons support it. Use narrative analysis, public web sources when returned, and professional OpenAI reasoning together, with citations tied to factual claims. Prefer scannable bullet points for multi-part analytical answers. Start each bullet with a short **bold key finding**, then its record evidence, interpretation, and relevant implication. Use a concise bold lead for major conclusions; avoid walls of text.
 Use **bold** meaningfully in the answer and every substantive bullet, so readers can scan the key ideas. Do not bold whole paragraphs.
-For simple questions, prefer ordinary paragraphs; never force a list or decorative emphasis. Match the question's language
-(usually natural Indonesian; use English when asked in English). Give a crisp answer first,
+For simple questions, prefer ordinary paragraphs; never force a list or decorative emphasis. Match the language of the most recent question exactly, not the interface language or source language. Give a crisp answer first,
 then proactively explore closely related factors that strengthen the requested analysis (e.g. audience behavior, platforms, amplification, changes over time, influential accounts, uncertainties) when supported by records. Clearly separate observation from inference in the same explanation. Choose the best presentation YOURSELF, even if the user has not explicitly requested one: combine bullets with a compact Markdown table when comparing 3+ groups, or a chart for meaningful quantitative patterns. Use Markdown tables for real comparisons and simple charts
 only when values are explicitly present in authorized evidence. A chart may use a fenced
 chart block with JSON {"title":"...","data":[{"label":"...","value":12}]}.
@@ -104,6 +108,13 @@ For questions about 'audience', identify discourse groups or viewpoints evident 
 Place the decision-ready takeaway in direct_answer; observations must be distinct source-backed signals; interpretation must state implications for neutral oversight and alternative explanations; next_checks must be concrete prioritized validation actions; limitations must contain material uncertainties. Limit observations to four and next_checks to three unless deep/investigation mode explicitly needs more. Avoid repeating the same sentence in multiple fields.
 
 
+LANGUAGE AND INTELLIGENCE-TAG CONTRACT (MANDATORY):
+- The latest user question determines the reply language. The supplied response_language_rule is higher priority than the language of retrieved evidence, prior questions, saved sources or UI. Every natural-language field (direct_answer, interpretation, observations, next_checks, limitations, tag explanations and presentation translations) must be in that language. Keep source citations, actual proper names, code IDs and exact quotations unchanged where essential.
+- language_code must be the ISO 639-1 code for the language actually used. For Indonesian respond in fluent Bahasa Indonesia; for English respond wholly in English; do not mix fixed English headings into Indonesian text or fixed Indonesian headings into English text. Use the same behavior for Spanish, French, Japanese, Arabic and other languages.
+- In detected_tags, automatically identify candidates, explicitly mentioned provinces, suspected electoral violations, BAWASLU institutional issues and electoral-process issues. Each tag must identify a concrete label, cite 1-3 authorized source record IDs, and quote 4-260 exact characters from one corresponding source_excerpt. Do not add a tag for a category absent from the evidence. Tag details are AI suggestions and never proof.
+- Provinces can be 'mentioned' without being the location of the incident. Do not assert jurisdiction or infer a destination for provincial routing without a human-verified incident location.
+- 'SUSPECTED_VIOLATION' means the source contains a claim/signal requiring officer screening, not proof of illegality. Do not label routine criticism or ordinary campaign expression as a violation.
+- In presentation_labels: for Indonesian and English output [] because the application supplies verified translations. For any other language, translate ALL keys supplied in ui_label_keys_for_non_id_en, using keys: findings_heading, verification_heading, tags_heading, tags_notice, candidate, province, suspected_violation, bawaslu_issue, electoral_issue, stats_heading, stats_intro, sample_note, posts, engagement, platforms, date_range, sentiment_heading, platform_volume, daily_activity, platform_engagement, topics_heading, coverage_notice, sources_heading, sources_intro, original_source, prepare_from_source, action_title, action_intro, steps_title, sources_action_heading, prepare_task, open_source, prepare_review_title, not_saved_notice, department_label, team_label, officer_label, case_title_label, primary_source_label, close, preview_draft, summary_label, confirm_notice, submit_action, officer_only, no_sources, no_extra_ai. The label key remains unchanged but value is translated.
 REPORT REQUIREMENTS:
 - This assistant produces operational election-supervision intelligence, not promotional messaging.
 - Executive finding: explain the most consequential evidenced issue, its uncertainty, and why oversight teams may need to examine it.
@@ -186,6 +197,9 @@ def social_evidence(row):
         "relevance_label": row.get("relevance_label") or "",
         "sentiment": row.get("sentiment") or "UNKNOWN",
         "topic_labels": (row.get("topic_labels") or [])[:5],
+        "candidate_signals": (row.get("candidate_signals") or [])[:8],
+        "province_hints": (row.get("location_signals") or [])[:8],
+        "incident_jurisdiction_verified": row.get("incident_jurisdiction_verified") is True,
         "potential_issues": (row.get("potential_issues") or [])[:3],
         "verification_status": "UNVERIFIED_SOCIAL_SOURCE",
         "validation_status": "AI_RELEVANCE_NOT_LEGAL_VERIFICATION"
@@ -241,25 +255,35 @@ def _safe_output(result, allowed):
     result["cited_ids"] = cited
     return result
 
-def answer_text(result, has_evidence):
+def answer_text(result, has_evidence, language='id'):
     """Return natural prose with optional detail, never a fixed reporting template."""
     answer = str(result.get("direct_answer") or "").strip()
     observations = [str(x).strip() for x in result.get("observations") or [] if str(x).strip()]
     interpretation = str(result.get("interpretation") or "").strip()
     checks = [str(x).strip() for x in result.get("next_checks") or [] if str(x).strip()]
     limits = [str(x).strip() for x in result.get("limitations") or [] if str(x).strip()]
+    headings={
+        'id':('Temuan yang didukung sumber','Implikasi pengawasan','Prioritas tindak lanjut BAWASLU','Batas bukti'),
+        'en':('Source-backed findings','Oversight implications','Recommended verification steps','Evidence limitations')
+    }
+    localized=headings.get(language)
+    if not localized:
+        titles={row.get("key"):row.get("value") for row in (result.get("presentation_labels") or [])
+                if isinstance(row,dict)}
+        localized=(titles.get('findings_heading','Findings'),titles.get('implications_heading','Oversight implications'),
+                   titles.get('verification_heading','Next checks'),titles.get('limitations_heading','Evidence limitations'))
     chunks = [answer] if answer else []
     if observations and not result.get('visual_report'):
-        chunks.append("**Temuan yang didukung sumber**\n" + "\n".join("- " + x for x in observations[:6]))
+        chunks.append("**"+localized[0]+"**\n" + "\n".join("- " + x for x in observations[:6]))
     if interpretation and interpretation.casefold() not in answer.casefold():
-        chunks.append("**Implikasi pengawasan**\n" + interpretation)
+        chunks.append("**"+localized[1]+"**\n" + interpretation)
     if checks and not result.get('visual_report') and (has_evidence or not answer):
-        chunks.append("**Prioritas tindak lanjut BAWASLU**\n" + "\n".join(f"{i}. {x}" for i, x in enumerate(checks[:4],1)))
+        chunks.append("**"+localized[2]+"**\n" + "\n".join(f"{i}. {x}" for i, x in enumerate(checks[:4],1)))
     # Generic availability caveats add little value to a strategic response.
     # Retain only material constraints already explained within the analysis;
     # don't append an automatic limitations paragraph.
     if limits:
-        chunks.append("**Batas bukti**\n" + " ".join(limits[:2]))
+        chunks.append("**"+localized[3]+"**\n" + " ".join(limits[:2]))
     return "\n\n".join(x for x in chunks if x)
 
 
@@ -305,21 +329,25 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     model = openai_triage_model()
     base = (os.getenv("OPENAI_BASE_URL", OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip("/")
     allowed = {r["record_id"] for r in evidence}
+    language = language_directive(question)
     web_research = research_public_web(question, key, model, base) if mode != "GROUNDED" else None
     user_data = {
+        "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
         "question": question[:500], "previous_question": previous[:500],
         "mode": mode, "available_records": evidence,
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
         "response_depth": response_depth,
+        "response_language_rule": language["rule"],
+        "response_language_hint": language["hint"],
         "instruction": ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")
     }
     request = {
         "model": model, "store": False,
         "input": [{"role":"system","content":SYSTEM},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
-        "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v2",
+        "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},
         "max_output_tokens": 6000
     }
@@ -341,6 +369,10 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         if not isinstance(parsed, dict):
             raise ValueError("Object required")
         result = _safe_output(parsed, allowed)
+        answer_language = effective_language(question, result.get("language_code"))
+        result["language_code"] = answer_language
+        result["validated_tags"] = combined_tags(result.get("detected_tags") or [],evidence)
+        result["validated_ui_labels"] = validate_ui_labels(result.get("presentation_labels") or [])
     except AssistantProviderError:
         raise
     except (ValueError, KeyError, TypeError) as exc:
@@ -366,16 +398,24 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "model": payload.get("model") or model,
         "response_id": payload.get("id") or "",
         "usage": payload.get("usage") or {},
-        "quality": quality
+        "quality": quality,
+        "answer_language": result["language_code"],
+        "detected_tags": result["validated_tags"],
+        "presentation_labels": result["validated_ui_labels"]
     }
     result["visual_report"] = bool(evidence)
     meta["analytical_findings"] = {
         "observations": result.get("observations") or [],
         "review_steps": result.get("next_checks") or []
     }
-    answer = answer_text(result, bool(evidence))
+    answer = answer_text(result, bool(evidence),result["language_code"])
     if web_research:
-        answer += "\n\nPublic sources: " + " · ".join(web_research["urls"])
+        public_heading={"id":"Sumber publik","en":"Public sources","es":"Fuentes públicas",
+                        "fr":"Sources publiques","de":"Öffentliche Quellen","pt":"Fontes públicas",
+                        "zh":"公开来源","ja":"公開情報源","ar":"مصادر عامة"}.get(
+                            result["language_code"],"")
+        if public_heading:
+            answer += "\n\n"+public_heading+": " + " · ".join(web_research["urls"])
     return answer, result["cited_ids"], meta
 
 def evidence_snapshot(evidence):
@@ -429,10 +469,22 @@ def evidence_snapshot(evidence):
     }
 
 
-def evidence_fallback(evidence, reason):
+def evidence_fallback(evidence, reason, language='en'):
     """Never present unrelated retrieved headlines as if they answer a question."""
-    if evidence:
-        return ("I couldn't finish the requested analysis this time. "
-                "Your saved records are intact. Please retry the question; "
-                "the response needs another complete synthesis rather than a list of source headlines."), []
-    return ("I couldn't complete the analysis this time. Please retry the question."), []
+    variants={
+        'id':("Analisis belum selesai kali ini. Rekaman yang disimpan tetap aman. Silakan coba ulang pertanyaan; jawaban perlu disusun kembali dari bukti yang tersedia.",
+              "Analisis belum dapat diselesaikan. Silakan coba lagi."),
+        'en':("The analysis could not be completed. Your saved records are unchanged. Please retry so the findings can be synthesized from the evidence.",
+              "The analysis could not be completed. Please try again."),
+        'es':("No se pudo completar el análisis. Sus registros permanecen intactos. Inténtelo de nuevo.",
+              "No se pudo completar el análisis. Inténtelo de nuevo."),
+        'fr':("L’analyse n’a pas pu être terminée. Vos données enregistrées sont intactes. Veuillez réessayer.",
+              "L’analyse n’a pas pu être terminée. Veuillez réessayer."),
+        'ja':("分析を完了できませんでした。保存された記録は変更されていません。もう一度お試しください。",
+              "分析を完了できませんでした。もう一度お試しください。"),
+        'zh':("分析未能完成。已保存的记录未被更改。请重试。","分析未能完成，请重试。"),
+        'ar':("تعذّر إكمال التحليل. لم تتغير السجلات المحفوظة. يُرجى المحاولة مرة أخرى.",
+              "تعذّر إكمال التحليل. يُرجى المحاولة مرة أخرى."),
+    }
+    with_evidence,without_evidence=variants.get(language,variants['en'])
+    return (with_evidence if evidence else without_evidence), []

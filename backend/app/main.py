@@ -130,7 +130,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'139.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'139.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -684,6 +684,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     response_depth=str(body.get('responseDepth') or 'DEEP').upper()
     if response_depth not in ('EXECUTIVE','DEEP','INVESTIGATION'):
         raise HTTPException(400,'Invalid response depth')
+    from .assistant_language import effective_language, language_directive
+    from .assistant_tags import fallback_tags
+    language = effective_language(q, None)
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
@@ -715,16 +718,37 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             text,provider=generate_general_openai_answer(q,previous)
         except AssistantProviderError as exc:
             raise HTTPException(503,'GPT unavailable: '+exc.code)
-        preface=('Tidak ditemukan catatan sumber yang cocok dalam akses Anda. '
-                 'Jawaban berikut berupa penjelasan umum dan bukan hasil pemeriksaan bukti terkini.\n\n'
-                 if not general else 'Penjelasan umum; bukan verifikasi atas peristiwa terbaru.\n\n')
-        if source_warning:preface=source_warning+'\n\n'+preface
+        notices={
+            'id':('Tidak ditemukan bukti tersimpan yang cocok dalam akses Anda. '
+                  'Penjelasan berikut bukan verifikasi terkini.\n\n',
+                  'Penjelasan umum; bukan verifikasi atas peristiwa terbaru.\n\n'),
+            'en':('No matching records were found within your access. '
+                  'The following is general context, not independently verified current evidence.\n\n',
+                  'General context; not a verification of recent events.\n\n')
+        }
+        if language in notices:
+            no_match,general_note=notices[language]
+            preface=no_match if not general else general_note
+        else:
+            preface=''  # Do not prepend Indonesian/English prose to another language.
+        if source_warning and language=='id':
+            preface='Sumber Social Listening sementara tidak dapat diambil.\n\n'+preface
+        elif source_warning and language=='en':
+            preface=source_warning+'\n\n'+preface
         return {'answer':preface+text,'records':[],'provider':provider,
+                'answer_language':language,'detected_tags':[],'presentation_labels':{},
                 'grounding':{'accessible_count':len(accessible),
                     'selected_count':0,'supporting_count':0,'scope':'GPT_GENERAL_NO_PRIVATE_RECORDS',
                     'source_types':[],'matched_social':0,'limited':True}}
     if requested=='DATA' and not evidence:
-        return {'answer':'No matching saved records were found within your authorized BAWASLU evidence. I will not infer an answer from general knowledge in Saved evidence only mode.',
+        no_match={
+            'id':'Tidak ditemukan catatan BAWASLU yang sesuai dalam cakupan akses Anda. Saya tidak akan menebak dari pengetahuan umum pada mode bukti tersimpan.',
+            'en':'No matching BAWASLU records were found in your authorized scope. I will not substitute unsupported general knowledge for saved evidence.',
+            'es':'No se encontraron registros pertinentes de BAWASLU dentro de su acceso autorizado.',
+            'fr':'Aucune donnée BAWASLU correspondante n’a été trouvée dans votre périmètre autorisé.',
+        }
+        return {'answer':no_match.get(language,no_match['en']),
+                'answer_language':language,'detected_tags':[],'presentation_labels':{},
                 'records':[],'provider':{'mode':'DETERMINISTIC_FALLBACK','model':'',
                 'fallback_code':'no_matching_evidence'},
                 'grounding':{'accessible_count':len(accessible),'selected_count':0,
@@ -740,8 +764,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         text,cited,meta=generate(q,previous,evidence,
             'GROUNDED' if requested=='DATA' else 'HYBRID',history=history,response_depth=response_depth)
     except AssistantProviderError as exc:
-        text,cited=evidence_fallback(evidence,exc.code)
-        meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}
+        text,cited=evidence_fallback(evidence,exc.code,language=language)
+        meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code,
+              'answer_language':language,'detected_tags':fallback_tags(evidence),
+              'presentation_labels':{}}
     formal_by_id={record.intelligence_id:record for record in selected_formal}
     social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
     support=[]
@@ -755,7 +781,13 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not support:
         support=[social_record_view(x) for x in chosen_social[:4]]
         support += [assistant_record_view(x) for x in selected_formal[:3]]
-    if source_warning:text=source_warning+'\n\n'+text
+    if source_warning:
+        if (meta.get('answer_language') or language)=='id':
+            source_warning='Sumber Social Listening sementara tidak dapat diambil; analisis mungkin belum lengkap.'
+        elif (meta.get('answer_language') or language)!='en':
+            source_warning=''  # Avoid mixing language in the generated answer.
+        if source_warning:
+            text=source_warning+'\n\n'+text
     from .assistant_orchestration import evidence_snapshot
     # Compute broader descriptive statistics from the permitted results without
     # sending additional posts to the paid model. The narrative itself remains
@@ -775,6 +807,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         'evidence_snapshot':snapshot,
         'analytical_findings':meta.get('analytical_findings'),
         'featured_sources':featured,
+        'answer_language':meta.get('answer_language') or language,
+        'detected_tags':meta.get('detected_tags') or fallback_tags(evidence),
+        'presentation_labels':meta.get('presentation_labels') or {},
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),
             'matched_social':matched_social,

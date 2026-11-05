@@ -21,7 +21,7 @@ export default function DemoFeedbackWidget(){
  const current=hover||rating;
  const submit=async event=>{
   event.preventDefault();
-  if(busy||rating===0)return;
+  if(busy||rating===0||!department.trim())return;
   setBusy(true);setError('');
   try{
    const result=await fetch('/api/demo-feedback',{method:'POST',
@@ -56,10 +56,10 @@ export default function DemoFeedbackWidget(){
       <button type="button" onClick={()=>setOpen(false)} className="mt-6 w-full rounded-xl bg-[#8a202b] py-3 text-sm font-bold text-white">{T('Done','Selesai')}</button>
     </div>:<form onSubmit={submit} className="space-y-5 px-6 pb-6 pt-6">
       <label className="block text-sm font-semibold text-slate-800">
-       {T('Team or department','Tim atau departemen')} <span className="ml-1 text-xs font-normal text-slate-400">({T('Optional','Opsional')})</span>
-       <input type="text" maxLength={100} autoComplete="off" value={department} onChange={e=>setDepartment(e.target.value)}
+       {T('Team or bureau','Tim atau biro')} <span className="text-[#a32d39]">*</span>
+       <input type="text" required minLength={1} maxLength={100} autoComplete="off" value={department} onChange={e=>setDepartment(e.target.value)}
         className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-800 outline-none transition focus:border-[#a43d48] focus:bg-white focus:ring-2 focus:ring-rose-100"
-        placeholder={T('e.g. Election Supervision Team','Contoh: Tim Pengawasan Pemilu')}/>
+        placeholder={T('e.g. Election Supervision Team or Public Relations Bureau','Contoh: Tim Pengawasan Pemilu atau Biro Humas')}/>
       </label>
       <fieldset className="text-center">
        <legend className="w-full text-center text-sm font-bold text-slate-800">{T('How useful is this demo?','Seberapa bermanfaat demo ini?')} <span className="text-[#a32d39]">*</span></legend>
@@ -79,12 +79,12 @@ export default function DemoFeedbackWidget(){
       </label>
       <input aria-hidden="true" tabIndex={-1} autoComplete="off" className="hidden" value={website} onChange={e=>setWebsite(e.target.value)} name="website"/>
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <button type="submit" disabled={busy||rating===0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#8a202b] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#a32d39] disabled:cursor-not-allowed disabled:bg-slate-300">
+      <button type="submit" disabled={busy||rating===0||!department.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#8a202b] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#a32d39] disabled:cursor-not-allowed disabled:bg-slate-300">
        <Send size={16}/>{busy?T('Sending…','Mengirim…'):T('Send my rating','Kirim Penilaian')}
       </button>
       <div className="rounded-xl bg-rose-50/80 px-4 py-3 text-center">
        <p className="text-xs font-semibold text-[#80212c]">{T('Your feedback will remain anonymous.','Masukan Anda akan tetap anonim.')}</p>
-       <p className="mt-1 text-[11px] leading-5 text-slate-600">{T('We do not ask for your name or email. Your team or department, if provided, will be visible to administrators.','Kami tidak meminta nama atau email Anda. Tim atau departemen yang diisi akan terlihat oleh administrator.')}</p>
+       <p className="mt-1 text-[11px] leading-5 text-slate-600">{T('We do not ask for your name or email. Your team or bureau will be visible to administrators.','Kami tidak meminta nama atau email Anda. Tim atau biro Anda akan terlihat oleh administrator.')}</p>
        <p className="mt-2 text-[11px] leading-5 text-slate-600">{T('Your input helps us improve the BAWASLU system and make it more useful for officers.','Masukan Anda membantu kami menyempurnakan sistem BAWASLU agar semakin bermanfaat bagi petugas.')}</p>
       </div>
     </form>}

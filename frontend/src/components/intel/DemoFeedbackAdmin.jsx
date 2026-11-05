@@ -48,7 +48,7 @@ export default function DemoFeedbackAdmin(){
      <div key={name} className="flex justify-between gap-2 py-1 text-sm"><span className="truncate">{name}</span><strong>{value}</strong></div>)}
    </div>
   </div>
-  <div className="rounded-xl border p-3"><h3 className="text-sm font-semibold">{T('By team or department','Berdasarkan tim atau departemen')}</h3>
+  <div className="rounded-xl border p-3"><h3 className="text-sm font-semibold">{T('By team or bureau','Berdasarkan tim atau biro')}</h3>
    {Object.entries(data?.by_department||{}).sort((a,b)=>b[1]-a[1]).map(([name,count])=><div key={name} className="flex justify-between gap-2 py-1 text-sm"><span className="break-words">{name==='Not specified'?T('Not specified','Tidak disebutkan'):name}</span><strong>{count}</strong></div>)}
   </div>
   <div className="flex flex-wrap gap-3">
@@ -57,9 +57,9 @@ export default function DemoFeedbackAdmin(){
      <option value="ALL">{T('All categories','Semua kategori')}</option>
      {Object.keys(data?.by_category||{}).sort().map(key=><option key={key} value={key}>{categoryLabel(key,id)}</option>)}
     </select></label>
-   <label className="text-xs">{T('Team or department','Tim atau departemen')}
+   <label className="text-xs">{T('Team or bureau','Tim atau biro')}
     <select className="intel-input mt-1 block" value={department} onChange={e=>setDepartment(e.target.value)}>
-     <option value="ALL">{T('All departments','Semua departemen')}</option>
+     <option value="ALL">{T('All teams and bureaus','Semua tim dan biro')}</option>
      {Object.keys(data?.by_department||{}).sort().map(key=><option key={key} value={key}>{key==='Not specified'?T('Not specified','Tidak disebutkan'):key}</option>)}
     </select></label>
    <label className="text-xs">{T('Page','Halaman')}
@@ -71,7 +71,7 @@ export default function DemoFeedbackAdmin(){
   <h3 className="text-sm font-semibold">{T('Recent submissions','Masukan terbaru')} ({rows.length})</h3>
   <div className="max-h-[520px] overflow-auto space-y-2">
    {rows.map(r=><article key={r.id} className="rounded-xl border p-3 space-y-2">
-    <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{categoryLabel(r.category,id)} · {r.rating??'—'} / 5 · {r.page_path} · {r.department||T('Department not provided','Departemen tidak disebutkan')}</span>
+    <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{categoryLabel(r.category,id)} · {r.rating??'—'} / 5 · {r.page_path} · {r.department||T('Team or bureau not provided','Tim atau biro tidak disebutkan')}</span>
      <div className="flex items-center gap-3"><time>{new Date(r.created_at).toLocaleString(id?'id-ID':'en-GB',{timeZone:'Asia/Jakarta'})}</time><button type="button" className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50" onClick={()=>{setPendingDelete(r);setDeleteMessage('')}}>{T('Delete','Hapus')}</button></div></div>
     {r.message?<p className="whitespace-pre-wrap break-words text-sm text-slate-800">{r.message}</p>:<p className="text-xs italic text-slate-400">{T('Rating only · no comment','Hanya penilaian · tanpa komentar')}</p>}</article>)}
    {!rows.length&&<p className="text-sm text-slate-500">{T('No submissions for these filters','Tidak ada masukan untuk filter ini')}</p>}

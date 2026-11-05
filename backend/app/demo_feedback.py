@@ -21,7 +21,7 @@ HASH_SECRET=os.getenv('DEMO_FEEDBACK_HASH_SECRET') or secrets.token_hex(32)
 
 class FeedbackIn(BaseModel):
     category:str='general'
-    department:str=Field(default='',max_length=100)
+    department:str=Field(min_length=1,max_length=100)
     rating:int|None=Field(default=None,ge=1,le=5)
     message:str=Field(default='',max_length=1500)
     page_path:str=Field(default='/demo',max_length=255)
@@ -47,6 +47,7 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     if body.website:raise HTTPException(400,'Invalid submission')
     if body.category not in VALID_CATEGORIES:raise HTTPException(422,'Invalid feedback category')
     department=body.department.strip()
+    if not department:raise HTTPException(422,'Team or bureau is required')
     message=body.message.strip()
     if len(message)>1500:raise HTTPException(422,'Feedback must be at most 1500 characters')
     if body.rating is None and not message:raise HTTPException(422,'Choose a star rating or write a comment')

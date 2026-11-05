@@ -25,7 +25,7 @@ def headers(role='National Administrator'):
 
 def payload(message='The demo navigation is easy to follow.'):
     return {'category':'usability','rating':4,'message':message,
-            'page_path':'/demo/inbox','language':'id','visitor_key':'a'*32}
+            'page_path':'/demo/inbox','language':'id','department':'Tim Pengawasan','visitor_key':'a'*32}
 
 def test_anonymous_submit_and_admin_only_aggregate():
     client=TestClient(app)
@@ -40,7 +40,7 @@ def test_anonymous_submit_and_admin_only_aggregate():
     assert report['total']==1 and report['average_rating']==4
     assert report['by_category']=={'usability':1}
     assert report['by_page']=={'/demo/inbox':1}
-    assert report['by_department']=={'Not specified':1}
+    assert report['by_department']=={'Tim Pengawasan':1}
     assert len(report['recent'])==1
     assert report['recent'][0]['message']==payload()['message']
     assert 'visitor_hash' not in report['recent'][0]
@@ -66,7 +66,7 @@ def test_public_submission_validation_and_spam_protection():
 
 def test_rating_only_feedback_visible_in_admin_aggregates():
     client=TestClient(app)
-    body={'rating':5,'message':'','page_path':'/demo/smart-radar','visitor_key':'c'*32}
+    body={'rating':5,'message':'','department':'Biro Humas','page_path':'/demo/smart-radar','visitor_key':'c'*32}
     assert client.post('/api/demo-feedback',json=body).status_code==201
     report=client.get('/api/demo-feedback/admin',headers=headers()).json()
     assert report['total']==1
@@ -104,8 +104,11 @@ def test_feedback_delete_requires_national_administrator_and_updates_aggregates(
     assert client.delete('/api/demo-feedback/admin/0',headers=national).status_code==404
     db=SessionLocal();assert db.query(DemoFeedback).count()==1;db.close()
 
-def test_optional_department_saved_and_visible_only_to_national_admin():
+def test_required_team_or_bureau_saved_and_visible_only_to_national_admin():
     client=TestClient(app)
+    assert client.post('/api/demo-feedback',json={k:v for k,v in payload().items() if k!='department'}).status_code==422
+    assert client.post('/api/demo-feedback',json={**payload(),'department':''}).status_code==422
+    assert client.post('/api/demo-feedback',json={**payload(),'department':'   '}).status_code==422
     body={**payload(),'department':'Tim Pengawasan Pemilu','rating':5}
     result=client.post('/api/demo-feedback',json=body)
     assert result.status_code==201,result.text

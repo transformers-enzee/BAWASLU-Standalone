@@ -20,9 +20,9 @@ VALID_CATEGORIES={'general','usability','data','bug','suggestion'}
 HASH_SECRET=os.getenv('DEMO_FEEDBACK_HASH_SECRET') or secrets.token_hex(32)
 
 class FeedbackIn(BaseModel):
-    category:str
+    category:str='general'
     rating:int|None=Field(default=None,ge=1,le=5)
-    message:str=Field(min_length=10,max_length=1500)
+    message:str=Field(default='',max_length=1500)
     page_path:str=Field(default='/demo',max_length=255)
     language:str=Field(default='id',pattern='^(id|en)$')
     website:str=Field(default='',max_length=200)  # hidden anti-bot honeypot
@@ -46,7 +46,8 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     if body.website:raise HTTPException(400,'Invalid submission')
     if body.category not in VALID_CATEGORIES:raise HTTPException(422,'Invalid feedback category')
     message=body.message.strip()
-    if len(message)<10 or len(message)>1500:raise HTTPException(422,'Feedback must be 10-1500 characters')
+    if len(message)>1500:raise HTTPException(422,'Feedback must be at most 1500 characters')
+    if body.rating is None and not message:raise HTTPException(422,'Choose a star rating or write a comment')
     if not re.fullmatch(r'/demo(?:/[a-zA-Z0-9/_-]*)?',body.page_path):
         raise HTTPException(422,'Invalid demo page')
     now=datetime.utcnow()
@@ -68,6 +69,8 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     # Reject same payload repeatedly in a single day.
     duplicate=db.query(DemoFeedback.id).filter(
         DemoFeedback.visitor_hash==visitor_hash,DemoFeedback.message==message,
+        DemoFeedback.category==body.category,DemoFeedback.rating==body.rating,
+        DemoFeedback.page_path==body.page_path,
         DemoFeedback.created_at>=now-timedelta(hours=24)).first()
     if duplicate:raise HTTPException(409,'Feedback already submitted')
     db.add(DemoFeedback(category=body.category,rating=body.rating,

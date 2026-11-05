@@ -50,18 +50,29 @@ def test_anonymous_submit_and_admin_only_aggregate():
 
 def test_public_submission_validation_and_spam_protection():
     client=TestClient(app)
-    assert client.post('/api/demo-feedback',json=payload('short')).status_code==422
+    assert client.post('/api/demo-feedback',json={**payload(),'message':'','rating':None}).status_code==422
     assert client.post('/api/demo-feedback',json={**payload(),'page_path':'/administration'}).status_code==422
     assert client.post('/api/demo-feedback',json={**payload(),'category':'secret'}).status_code==422
     assert client.post('/api/demo-feedback',json={**payload(),'website':'hidden-bot-field'}).status_code==400
-    assert client.post('/api/demo-feedback',json=payload()).status_code==201
-    assert client.post('/api/demo-feedback',json=payload()).status_code==409
-    assert client.post('/api/demo-feedback',json=payload('Second useful piece of training feedback.')).status_code==201
-    assert client.post('/api/demo-feedback',json=payload('Third useful piece of training feedback.')).status_code==201
+    assert client.post('/api/demo-feedback',json={**payload(),'message':'','rating':5}).status_code==201
+    assert client.post('/api/demo-feedback',json={**payload(),'message':'','rating':5}).status_code==409
+    assert client.post('/api/demo-feedback',json={**payload(),'message':'','rating':4}).status_code==201
+    assert client.post('/api/demo-feedback',json=payload('Short')).status_code==201
     assert client.post('/api/demo-feedback',json=payload('Fourth useful piece of training feedback.')).status_code==429
-    # A second visitor behind the same NAT/Wi-Fi must still be able to submit.
+    # Another visitor behind the same Wi-Fi should not inherit this limit.
     second={**payload('Another visitor sharing the same training Wi-Fi.'),'visitor_key':'b'*32}
     assert client.post('/api/demo-feedback',json=second).status_code==201
+
+def test_rating_only_feedback_visible_in_admin_aggregates():
+    client=TestClient(app)
+    body={'rating':5,'message':'','page_path':'/demo/smart-radar','visitor_key':'c'*32}
+    assert client.post('/api/demo-feedback',json=body).status_code==201
+    report=client.get('/api/demo-feedback/admin',headers=headers()).json()
+    assert report['total']==1
+    assert report['average_rating']==5
+    assert report['recent'][0]['message']==''
+    assert report['by_category']=={'general':1}
+
 
 def test_private_feedback_cannot_be_read_by_unauthenticated_demo():
     client=TestClient(app)

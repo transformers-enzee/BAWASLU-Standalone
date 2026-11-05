@@ -14,6 +14,9 @@ assert.ok(!shell.includes("sessionStorage.removeItem('bawaslu_demo_training_sess
 assert.ok(bridge.includes("DEMO_VISIBLE_CAMPAIGN_IDS=new Set(['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'])"));
 assert.ok(app.includes("!['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'].includes(id)"));
 assert.ok(widget.includes("'/api/demo-feedback'"));
-assert.ok(widget.includes('Berikan Masukan')&&widget.includes('Kirim Masukan'));
+assert.ok(widget.includes('Beri Masukan')&&widget.includes('Kirim Penilaian')); 
+assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'),'Interactive Shopee-style rating stars required');
+assert.ok(widget.includes("category:'general',rating"),'Feedback category is implicit and hidden');
+assert.ok(!widget.includes('Jenis masukan')&&!widget.includes('required minLength'),'Optional comment must not be required');
 assert.ok(admin.includes('<DemoFeedbackAdmin/>'),'Actual admin sees aggregated feedback');
 console.log('PASS public no-login demo, bilingual feedback form, national-admin dashboard, preserved snapshot isolation');

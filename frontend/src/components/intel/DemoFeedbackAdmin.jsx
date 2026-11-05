@@ -53,7 +53,7 @@ export default function DemoFeedbackAdmin(){
    {rows.map(r=><article key={r.id} className="rounded-xl border p-3 space-y-2">
     <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{categoryLabel(r.category,id)} · {r.rating??'—'} / 5 · {r.page_path}</span>
      <time>{new Date(r.created_at).toLocaleString(id?'id-ID':'en-GB',{timeZone:'Asia/Jakarta'})}</time></div>
-    <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{r.message}</p></article>)}
+    {r.message?<p className="whitespace-pre-wrap break-words text-sm text-slate-800">{r.message}</p>:<p className="text-xs italic text-slate-400">{T('Rating only · no comment','Hanya penilaian · tanpa komentar')}</p>}</article>)}
    {!rows.length&&<p className="text-sm text-slate-500">{T('No submissions for these filters','Tidak ada masukan untuk filter ini')}</p>}
   </div>
   {data?.total>200&&<p className="text-xs text-slate-500">{T('Showing latest 200 submissions; aggregates include all submissions.','Menampilkan 200 masukan terbaru; agregasi mencakup semua masukan.')}</p>}

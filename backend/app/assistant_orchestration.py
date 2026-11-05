@@ -305,14 +305,6 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         # Only URLs returned by a verified OpenAI web-search response are displayed.
         # Public URLs are distinct from permission-scoped internal record IDs.
         result["observations"] = result.get("observations") or []
-    meta = {
-        "external_research_urls": web_research["urls"] if web_research else [],
-        "mode": "OPENAI_HYBRID" if mode == "HYBRID" else "OPENAI_GROUNDED",
-        "model": payload.get("model") or model,
-        "response_id": payload.get("id") or "",
-        "usage": payload.get("usage") or {},
-        "quality": quality
-    }
     # Deterministic citation checks, not an expert quality score.
     quality = {
         "framework": "SMART_RADAR_IQF_V1",
@@ -323,6 +315,14 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "review_required": bool(evidence) and not bool(result["cited_ids"]),
         "limitations_declared": bool(result.get("limitations")),
         "evaluation_type": "DETERMINISTIC_CHECKS_NOT_EXPERT_SCORE",
+    }
+    meta = {
+        "external_research_urls": web_research["urls"] if web_research else [],
+        "mode": "OPENAI_HYBRID" if mode == "HYBRID" else "OPENAI_GROUNDED",
+        "model": payload.get("model") or model,
+        "response_id": payload.get("id") or "",
+        "usage": payload.get("usage") or {},
+        "quality": quality
     }
     answer = answer_text(result, bool(evidence))
     if web_research:

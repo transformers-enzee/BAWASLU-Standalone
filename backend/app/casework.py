@@ -1,0 +1,528 @@
+"""Audited BAWASLU casework: human-routed assignments and evidence-led report drafts.
+
+The AI/rule classification is advisory. A suggested province is NOT a
+verified incident jurisdiction and cannot extend provincial data access.
+"""
+import json
+import re
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, Session
+from .db import Base, get_db
+from .models import (User, AccessGrant, IntelligenceItem, EvidenceAssessment)
+from .auth import current_user
+from .access import profile, has, allowed, audit
+
+router = APIRouter(prefix="/api/casework", tags=["casework"])
+DEPARTMENTS = (
+    "Pengawasan", "Penanganan Pelanggaran", "Hukum & Sengketa",
+    "Humas & Hubungan Masyarakat", "Data & Analisis", "Sekretariat"
+)
+SCOPES = ("NATIONAL", "PROVINCE")
+CASE_STATES = ("OPEN", "ASSIGNED", "IN_REVIEW", "NEEDS_INFORMATION", "CLOSED")
+REPORT_STATES = ("DRAFT", "SUBMITTED", "RETURNED", "APPROVED")
+
+class CaseAssignment(Base):
+    __tablename__ = "case_assignments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(72), nullable=False)
+    campaign_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_url: Mapped[str] = mapped_column(Text, default="")
+    source_excerpt: Mapped[str] = mapped_column(Text, default="")
+    tags_json: Mapped[str] = mapped_column(Text, default="[]")
+    suggested_provinces_json: Mapped[str] = mapped_column(Text, default="[]")
+    verified_province: Mapped[str] = mapped_column(String(128), default="")
+    originating_scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    originating_province: Mapped[str] = mapped_column(String(128), default="")
+    target_scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_province: Mapped[str] = mapped_column(String(128), default="")
+    target_department: Mapped[str] = mapped_column(String(120), nullable=False)
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="OPEN")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class CaseTransition(Base):
+    __tablename__ = "case_transitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("case_assignments.id"), nullable=False, index=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(48), nullable=False)
+    details_json: Mapped[str] = mapped_column(Text, default="{}")
+    happened_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class CaseReport(Base):
+    __tablename__ = "case_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("case_assignments.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    executive_summary: Mapped[str] = mapped_column(Text, default="")
+    findings: Mapped[str] = mapped_column(Text, default="")
+    verification_notes: Mapped[str] = mapped_column(Text, default="")
+    recommendations: Mapped[str] = mapped_column(Text, default="")
+    source_snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="DRAFT")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    review_comment: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+def _json(value, fallback):
+    try:
+        result = json.loads(value or "")
+        return result if isinstance(result, type(fallback)) else fallback
+    except (ValueError, TypeError):
+        return fallback
+
+def _require(p, permission="view_intelligence"):
+    if not has(p, permission):
+        raise HTTPException(403, "You do not have permission for this casework action")
+
+def _clean(value, maxlen=1500):
+    return " ".join(str(value or "").split())[:maxlen]
+
+def _team(p):
+    return ("NATIONAL", "") if p.get("geographic_scope") == "Nationwide" else ("PROVINCE", p.get("province") or "")
+
+def _visible(case, p, user_id):
+    if not has(p, "view_intelligence"):
+        return False
+    if p.get("geographic_scope") == "Nationwide":
+        return True
+    province = p.get("province") or ""
+    if p.get("geographic_scope") not in ("Nationwide", "Province"):
+        return case.created_by == user_id or (
+            case.assignee_id == user_id and case.verified_province == province)
+    if not province:
+        return False
+    # No cross-province access. A province retains its outgoing escalations.
+    return (case.originating_scope == "PROVINCE" and case.originating_province == province) or (
+        case.target_scope == "PROVINCE" and case.target_province == province and
+        case.verified_province == province
+    )
+
+def _editable(case, p, user_id):
+    return _visible(case, p, user_id) and has(p, "add_intelligence") and (
+        p.get("geographic_scope") == "Nationwide" or case.created_by == user_id or
+        case.assignee_id == user_id or (
+            case.target_scope == "PROVINCE" and case.target_province == p.get("province")
+        )
+    )
+
+def _assignee(db, target_scope, province, user_id):
+    if user_id is None:
+        return None
+    user = db.get(User, user_id)
+    grant = db.query(AccessGrant).filter_by(user_id=user_id).one_or_none()
+    if not user or not grant or grant.status != "Active":
+        raise HTTPException(422, "Selected officer is not active")
+    perms = _json(grant.permissions_json, {})
+    if not (perms.get("view_intelligence") is True and (
+        perms.get("add_intelligence") is True or perms.get("human_validation") is True)):
+        raise HTTPException(422, "Selected officer cannot manage intelligence")
+    if target_scope == "NATIONAL" and grant.geographic_scope != "Nationwide":
+        raise HTTPException(422, "Select an officer from the national team")
+    if target_scope == "PROVINCE" and (
+        grant.geographic_scope != "Province" or grant.province != province
+    ):
+        raise HTTPException(422, "Select an officer from the requested province")
+    return user.id
+
+def _validate_route(case_or_source, p, scope, province):
+    if scope not in SCOPES:
+        raise HTTPException(422, "Invalid receiving team")
+    if scope == "NATIONAL":
+        return ""
+    verified = case_or_source.get("verified_province", "") if isinstance(case_or_source, dict) else case_or_source.verified_province
+    if not verified or province != verified:
+        raise HTTPException(422, "A human-confirmed incident province is required for provincial assignment")
+    if p.get("geographic_scope") != "Nationwide" and province != p.get("province"):
+        raise HTTPException(403, "Cannot transfer a case to another province")
+    return province
+
+def _source(db, p, source_type, source_id, campaign_id):
+    from .processing_hints import source_hints, normalize_candidate_signals
+    from .candidate_registry import candidate_index, resolve_post_candidate_mentions
+    text = ""
+    tags = []
+    provinces = []
+    verified = ""
+    url = ""
+    title = ""
+    if source_type == "SOCIAL":
+        from .jurisdiction_review import scoped_post, jurisdiction_status
+        if not campaign_id or not str(campaign_id).isdigit():
+            raise HTTPException(422, "Choose the campaign for this social post")
+        try:
+            campaign, post, relevant = scoped_post(db, p, campaign_id, source_id)
+        except (PermissionError, ValueError) as e:
+            raise HTTPException(403, "Source post is unavailable in your authorized scope") from e
+        if not relevant:
+            raise HTTPException(422, "A relevant saved assessment is needed to start casework")
+        assessment = db.query(EvidenceAssessment).filter_by(
+            campaign_id=campaign.id, result_id=post.id
+        ).order_by(EvidenceAssessment.assessment_version.desc(), EvidenceAssessment.id.desc()).first()
+        text = post.text_content or ""
+        url = post.canonical_url or ""
+        title = _clean(text, 170)
+        values = _json(assessment.candidate_signals_json, []) if assessment else []
+        matches = resolve_post_candidate_mentions(values, text, candidate_index(db, p))
+        candidates = [x.get("canonical_name") or x.get("source_name") for x in matches if x.get("canonical_name") or x.get("source_name")]
+        candidates = normalize_candidate_signals(candidates)
+        for name in candidates[:8]:
+            tags.append({"type":"CANDIDATE","label":name,"basis":"SAVED_AI_OR_EXPLICIT_MENTION","verified":False})
+        issues = _json(assessment.potential_issue_signals_json, []) if assessment else []
+        topic_labels = _json(assessment.topic_labels_json, []) if assessment else []
+        location = jurisdiction_status(db, campaign.id, post.id, post)
+        verified = location.get("incident_province") if location.get("incident_jurisdiction_verified") else ""
+    elif source_type == "INTELLIGENCE":
+        item = db.query(IntelligenceItem).filter_by(intelligence_id=source_id).first()
+        if not item or not allowed(p,item):
+            raise HTTPException(403, "Intelligence record unavailable")
+        text = item.original_content or item.ai_summary or item.title or ""
+        title = _clean(item.title or text,170)
+        url = item.source_url or ""
+        values = _json(item.related_entities_json, [])
+        candidates = normalize_candidate_signals(values)
+        for name in candidates[:8]:
+            tags.append({"type":"CANDIDATE","label":name,"basis":"SAVED_ENTITY_SIGNAL","verified":False})
+        issues = [item.potential_issue_category] if item.potential_issue_category else []
+        topic_labels = _json(item.related_topics_json, [])
+        verified = item.province if item.jurisdiction_confirmed else ""
+    else:
+        raise HTTPException(422, "Source must be SOCIAL or INTELLIGENCE")
+    hints = source_hints(text)
+    provinces = hints.get("incident_location_cues_unverified") or []
+    for name in provinces[:8]:
+        tags.append({"type":"PROVINCE","label":name,"basis":"INCIDENT_TEXT_HINT","verified":name == verified})
+    if verified and verified not in provinces:
+        tags.append({"type":"PROVINCE","label":verified,"basis":"OFFICER_CONFIRMED","verified":True})
+    if issues or hints.get("issue_screening",{}).get("needs_human_validation"):
+        tags.append({"type":"SUSPECTED_VIOLATION","label":"Requires screening","basis":"SAVED_AI_OR_RULE_HINT","verified":False})
+    merged = " ".join([text, json.dumps(topic_labels,ensure_ascii=False)]).casefold()
+    if "bawaslu" in merged or any("bawaslu" in str(x).casefold() for x in topic_labels):
+        tags.append({"type":"BAWASLU_ISSUE","label":"Institutional oversight","basis":"TEXT_OR_TOPIC_SIGNAL","verified":False})
+    if any(x in merged for x in ("pemilu","pilkada","kpu","pencalonan","daftar pemilih","pemilihan","electoral")) or any("electoral" in str(x).casefold() for x in topic_labels):
+        tags.append({"type":"ELECTORAL_ISSUE","label":"Electoral process","basis":"TEXT_OR_TOPIC_SIGNAL","verified":False})
+    # Prevent duplicate labels across noisy assessment versions.
+    unique = []
+    seen = set()
+    for tag in tags:
+        key = (tag["type"],tag["label"].casefold())
+        if key not in seen:
+            seen.add(key)
+            unique.append(tag)
+    return {
+        "source_type":source_type,"source_id":str(source_id),
+        "campaign_id":int(campaign_id) if source_type=="SOCIAL" else None,
+        "title":title,"excerpt":text[:950],"source_url":url,
+        "tags":unique[:20],"suggested_provinces":provinces[:8],
+        "verified_province":verified,"status_explanation":"Tags are suggestions; officer review is required."
+    }
+
+def _case_view(case):
+    return {
+        "id":case.id,"title":case.title,"source_type":case.source_type,
+        "source_id":case.source_id,"campaign_id":case.campaign_id,
+        "source_url":case.source_url,"source_excerpt":case.source_excerpt,
+        "tags":_json(case.tags_json,[]),"suggested_provinces":_json(case.suggested_provinces_json,[]),
+        "verified_province":case.verified_province,
+        "originating_scope":case.originating_scope,"originating_province":case.originating_province,
+        "target_scope":case.target_scope,"target_province":case.target_province,
+        "target_department":case.target_department,"assignee_id":case.assignee_id,
+        "created_by":case.created_by,"status":case.status,"notes":case.notes,
+        "created_at":case.created_at.isoformat(),"updated_at":case.updated_at.isoformat()
+    }
+
+def _report_view(report):
+    return {
+        "id":report.id,"case_id":report.case_id,"title":report.title,
+        "executive_summary":report.executive_summary,"findings":report.findings,
+        "verification_notes":report.verification_notes,"recommendations":report.recommendations,
+        "source_snapshot":_json(report.source_snapshot_json,{}),
+        "status":report.status,"created_by":report.created_by,
+        "reviewed_by":report.reviewed_by,"review_comment":report.review_comment,
+        "created_at":report.created_at.isoformat(),"updated_at":report.updated_at.isoformat()
+    }
+
+def _record_event(db, case, user_id, action, details):
+    db.add(CaseTransition(case_id=case.id,actor_id=user_id,action=action,
+                          details_json=json.dumps(details,ensure_ascii=False)))
+    db.commit()
+
+class NewCase(BaseModel):
+    source_type: str
+    source_id: str
+    campaign_id: int | None = None
+    title: str = Field(default="", max_length=240)
+    department: str
+    target_scope: str = "NATIONAL"
+    target_province: str = ""
+    assignee_id: int | None = None
+    notes: str = Field(default="",max_length=2400)
+
+class RouteCase(BaseModel):
+    department: str
+    target_scope: str
+    target_province: str = ""
+    assignee_id: int | None = None
+    note: str = Field(min_length=8,max_length=1500)
+
+class CaseState(BaseModel):
+    status: str
+    note: str = Field(min_length=8,max_length=1500)
+
+class ReportDraft(BaseModel):
+    title: str = Field(min_length=5,max_length=240)
+    executive_summary: str = Field(default="",max_length=5000)
+    findings: str = Field(default="",max_length=10000)
+    verification_notes: str = Field(default="",max_length=8000)
+    recommendations: str = Field(default="",max_length=8000)
+
+class ReportAction(BaseModel):
+    status: str
+    review_comment: str = Field(default="",max_length=2000)
+
+@router.get("/options")
+def options(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = profile(db,user)
+    _require(p)
+    scope, province = _team(p)
+    officers = []
+    for grant, candidate in db.query(AccessGrant,User).join(User,User.id == AccessGrant.user_id).filter(AccessGrant.status=="Active").limit(500).all():
+        if grant.geographic_scope not in ("Nationwide","Province"):
+            continue
+        perms = _json(grant.permissions_json,{})
+        if perms.get("view_intelligence") is not True or not (perms.get("add_intelligence") is True or perms.get("human_validation") is True):
+            continue
+        if scope == "PROVINCE" and grant.geographic_scope != "Nationwide" and grant.province != province:
+            continue
+        officers.append({"id":candidate.id,"name":candidate.full_name or candidate.email,
+                         "scope":"NATIONAL" if grant.geographic_scope=="Nationwide" else "PROVINCE",
+                         "province":grant.province})
+    return {"departments":list(DEPARTMENTS),"officers":officers,"user_scope":scope,"user_province":province,
+            "can_create":has(p,"add_intelligence"),"can_approve":has(p,"human_validation"),
+            "current_user_id":user.id}
+
+@router.get("/preview")
+def preview(source_type: str, source_id: str, campaign_id: int | None = None,
+            user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = profile(db,user)
+    _require(p)
+    return _source(db,p,source_type.upper(),source_id,campaign_id)
+
+@router.get("/cases")
+def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = profile(db,user)
+    _require(p)
+    cases = db.query(CaseAssignment).order_by(CaseAssignment.updated_at.desc()).limit(300).all()
+    return {"cases":[_case_view(c) for c in cases if _visible(c,p,user.id)]}
+
+@router.post("/cases")
+def create_case(body: NewCase, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = profile(db,user)
+    _require(p,"add_intelligence")
+    if body.department not in DEPARTMENTS:
+        raise HTTPException(422,"Choose a valid department")
+    source = _source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)
+    dest_province = _validate_route(source,p,body.target_scope,body.target_province)
+    assignee = _assignee(db,body.target_scope,dest_province,body.assignee_id)
+    origin_scope,origin_province = _team(p)
+    item = CaseAssignment(
+        title=_clean(body.title,240) or source["title"] or "Casework item",
+        source_type=source["source_type"], source_id=source["source_id"],
+        campaign_id=source["campaign_id"],source_url=source["source_url"],
+        source_excerpt=source["excerpt"],tags_json=json.dumps(source["tags"],ensure_ascii=False),
+        suggested_provinces_json=json.dumps(source["suggested_provinces"],ensure_ascii=False),
+        verified_province=source["verified_province"] or "",
+        originating_scope=origin_scope,originating_province=origin_province,
+        target_scope=body.target_scope,target_province=dest_province,
+        target_department=body.department,assignee_id=assignee,
+        created_by=user.id,status="ASSIGNED" if assignee else "OPEN",notes=body.notes
+    )
+    db.add(item)
+    db.flush()
+    _record_event(db,item,user.id,"CREATED",{"scope":body.target_scope,"department":body.department,"assignee_id":assignee})
+    audit(db,p,"CaseAssignment",item.id,"CASE_CREATED",{"target_scope":body.target_scope,"department":body.department})
+    return _case_view(item)
+
+@router.get("/cases/{case_id}")
+def case_detail(case_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = profile(db,user)
+    _require(p)
+    case = db.get(CaseAssignment,case_id)
+    if not case or not _visible(case,p,user.id):
+        raise HTTPException(404,"Case not found")
+    transitions = db.query(CaseTransition).filter_by(case_id=case_id).order_by(CaseTransition.id.asc()).limit(200).all()
+    reports = db.query(CaseReport).filter_by(case_id=case_id).order_by(CaseReport.id.desc()).limit(50).all()
+    return {"case":_case_view(case),"events":[{"id":x.id,"action":x.action,"actor_id":x.actor_id,
+            "details":_json(x.details_json,{}),"at":x.happened_at.isoformat()} for x in transitions],
+            "reports":[_report_view(x) for x in reports],"can_edit":_editable(case,p,user.id),
+            "can_approve":has(p,"human_validation")}
+
+@router.post("/cases/{case_id}/route")
+def route_case(case_id: int,body: RouteCase,user: User=Depends(current_user),db: Session=Depends(get_db)):
+    p=profile(db,user)
+    case=db.get(CaseAssignment,case_id)
+    if not case or not _editable(case,p,user.id):
+        raise HTTPException(403,"Not authorized to route this case")
+    if case.status == "CLOSED":
+        raise HTTPException(409,"Closed cases cannot be reassigned")
+    if body.department not in DEPARTMENTS:
+        raise HTTPException(422,"Choose a valid department")
+    province=_validate_route(case,p,body.target_scope,body.target_province)
+    assignee=_assignee(db,body.target_scope,province,body.assignee_id)
+    before={"scope":case.target_scope,"province":case.target_province,"department":case.target_department,
+            "assignee_id":case.assignee_id}
+    case.target_scope=body.target_scope
+    case.target_province=province
+    case.target_department=body.department
+    case.assignee_id=assignee
+    case.status="ASSIGNED" if assignee else "OPEN"
+    case.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"ROUTED",{"before":before,"after":{"scope":case.target_scope,
+        "province":province,"department":body.department,"assignee_id":assignee},"note":body.note})
+    audit(db,p,"CaseAssignment",case.id,"CASE_ROUTED",{"before":before,"target_scope":case.target_scope})
+    return _case_view(case)
+
+@router.post("/cases/{case_id}/status")
+def change_status(case_id: int,body: CaseState,user: User=Depends(current_user),db: Session=Depends(get_db)):
+    p=profile(db,user)
+    case=db.get(CaseAssignment,case_id)
+    if not case or not _editable(case,p,user.id):
+        raise HTTPException(403,"Not authorized to change this case")
+    if body.status not in CASE_STATES:
+        raise HTTPException(422,"Invalid case status")
+    if case.status=="CLOSED":
+        raise HTTPException(409,"Closed cases are read-only")
+    if body.status=="CLOSED" and not has(p,"human_validation"):
+        raise HTTPException(403,"Human validation permission is required to close a case")
+    previous=case.status
+    case.status=body.status
+    case.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"STATUS_CHANGED",{"from":previous,"to":body.status,"note":body.note})
+    audit(db,p,"CaseAssignment",case.id,"CASE_STATUS_CHANGED",{"from":previous,"to":body.status})
+    return _case_view(case)
+
+@router.post("/cases/{case_id}/reports")
+def create_report(case_id: int,body: ReportDraft,user: User=Depends(current_user),db:Session=Depends(get_db)):
+    p=profile(db,user)
+    case=db.get(CaseAssignment,case_id)
+    if not case or not _editable(case,p,user.id):
+        raise HTTPException(403,"Not authorized to create a report for this case")
+    snapshot={"case_id":case.id,"source_type":case.source_type,"source_id":case.source_id,
+        "campaign_id":case.campaign_id,"source_url":case.source_url,
+        "tags":_json(case.tags_json,[]),"verified_province":case.verified_province,
+        "captured_at":datetime.now(timezone.utc).isoformat()}
+    report=CaseReport(case_id=case.id,title=body.title,executive_summary=body.executive_summary,
+        findings=body.findings,verification_notes=body.verification_notes,
+        recommendations=body.recommendations,source_snapshot_json=json.dumps(snapshot,ensure_ascii=False),
+        status="DRAFT",created_by=user.id)
+    db.add(report);db.flush()
+    _record_event(db,case,user.id,"REPORT_DRAFTED",{"report_id":report.id})
+    audit(db,p,"CaseReport",report.id,"REPORT_CREATED",{"case_id":case.id})
+    return _report_view(report)
+
+@router.post("/cases/{case_id}/reports/ai-draft")
+def ai_report_draft(case_id: int,user: User=Depends(current_user),db: Session=Depends(get_db)):
+    """Explicit, one-request AI assistance; never automatically bill on case creation."""
+    p=profile(db,user)
+    case=db.get(CaseAssignment,case_id)
+    if not case or not _editable(case,p,user.id):
+        raise HTTPException(403,"Not authorized to draft a report")
+    from .assistant_orchestration import generate
+    from .intelligence_assistant import AssistantProviderError
+    evidence=[{
+        "record_id":("SOCIAL-" if case.source_type=="SOCIAL" else "")+case.source_id,
+        "record_type":"SOCIAL_LISTENING" if case.source_type=="SOCIAL" else "FORMAL_INTELLIGENCE",
+        "title":case.title,"source_excerpt":case.source_excerpt[:950],
+        "source_url":case.source_url,"verification_status":"REVIEW_REQUIRED",
+        "topic_labels":[tag.get("label") for tag in _json(case.tags_json,[]) if isinstance(tag,dict)],
+    }]
+    instruction=(
+        "Susun draf laporan analisis intelijen untuk penelaahan BAWASLU atas sumber berikut. "
+        "Uraikan temuan faktual, dugaan yang belum diverifikasi, implikasi pengawasan yang netral, "
+        "bukti primer yang harus dibandingkan, dan rekomendasi penugasan yang bersyarat. "
+        "Jangan menyimpulkan pelanggaran atau mengklaim kepastian hukum tanpa sumber resmi. "
+        "Keluarkan ringkasan eksekutif, temuan, batas bukti dan langkah verifikasi yang konkret."
+    )
+    try:
+        answer, cited, meta = generate(instruction, "", evidence, "GROUNDED",
+                                       response_depth="DEEP")
+    except AssistantProviderError as exc:
+        raise HTTPException(503,"AI drafting unavailable. Your case remains saved.") from exc
+    if not answer.strip():
+        raise HTTPException(503,"AI drafting returned no usable text")
+    checks=(meta.get("analytical_findings") or {}).get("review_steps") or []
+    snapshot={
+        "case_id":case.id,"source_type":case.source_type,"source_id":case.source_id,
+        "source_url":case.source_url,"draft_origin":"AI_ASSISTED_REQUIRES_HUMAN_REVIEW",
+        "cited_ids":cited,"created_at":datetime.now(timezone.utc).isoformat()
+    }
+    report=CaseReport(case_id=case.id,title=("Draf analisis: "+case.title)[:240],
+        executive_summary=answer.split("\n")[0][:3000],findings=answer[:9500],
+        verification_notes="Satu sumber yang ditautkan belum merupakan verifikasi independen. "
+          "Bandingkan dokumen sumber primer, konteks tanggal, atribusi dan yurisdiksi sebelum diserahkan.",
+        recommendations="\n".join(str(x) for x in checks[:5])[:7000],
+        source_snapshot_json=json.dumps(snapshot,ensure_ascii=False),
+        status="DRAFT",created_by=user.id)
+    db.add(report)
+    db.flush()
+    _record_event(db,case,user.id,"AI_REPORT_DRAFTED",{"report_id":report.id,"source_id":case.source_id,
+        "requires_human_review":True})
+    audit(db,p,"CaseReport",report.id,"AI_DRAFT_CREATED",{"case_id":case.id})
+    return _report_view(report)
+
+@router.put("/reports/{report_id}")
+def update_report(report_id: int,body: ReportDraft,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    p=profile(db,user)
+    report=db.get(CaseReport,report_id)
+    case=db.get(CaseAssignment,report.case_id) if report else None
+    if not case or not _editable(case,p,user.id) or report.status not in ("DRAFT","RETURNED"):
+        raise HTTPException(403,"Report is not editable")
+    report.title=body.title
+    report.executive_summary=body.executive_summary
+    report.findings=body.findings
+    report.verification_notes=body.verification_notes
+    report.recommendations=body.recommendations
+    report.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"REPORT_EDITED",{"report_id":report.id})
+    return _report_view(report)
+
+@router.post("/reports/{report_id}/transition")
+def transition_report(report_id:int,body:ReportAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    p=profile(db,user)
+    report=db.get(CaseReport,report_id)
+    case=db.get(CaseAssignment,report.case_id) if report else None
+    if not case or not _visible(case,p,user.id):
+        raise HTTPException(404,"Report not found")
+    action=body.status
+    if action=="SUBMITTED":
+        if not _editable(case,p,user.id) or report.status not in ("DRAFT","RETURNED"):
+            raise HTTPException(403,"Only an authorized officer can submit a draft")
+        if not report.findings.strip() or not report.verification_notes.strip():
+            raise HTTPException(422,"Findings and verification notes are required before submission")
+    elif action in ("RETURNED","APPROVED"):
+        if not has(p,"human_validation") or report.status!="SUBMITTED":
+            raise HTTPException(403,"Officer review permission and a submitted report are required")
+        if report.created_by==user.id:
+            raise HTTPException(403,"A report cannot be approved by its own author")
+        if action=="RETURNED" and len(body.review_comment.strip())<8:
+            raise HTTPException(422,"Provide a reason for returning this report")
+        report.reviewed_by=user.id
+    else:
+        raise HTTPException(422,"Unsupported report transition")
+    previous=report.status
+    report.status=action
+    report.review_comment=body.review_comment
+    report.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"REPORT_"+action,{"report_id":report.id,"previous":previous,"note":body.review_comment})
+    audit(db,p,"CaseReport",report.id,"REPORT_"+action,{"case_id":case.id})
+    return _report_view(report)

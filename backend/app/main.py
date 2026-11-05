@@ -28,10 +28,12 @@ from .smart_radar_qa_v2 import router as smart_radar_qa_v2_router
 from .smart_radar_qa_tuning import router as smart_radar_qa_tuning_router
 from .smart_radar_qa_alignment import router as smart_radar_qa_alignment_router
 from .demo_feedback import router as demo_feedback_router
+from .casework import router as casework_router
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
 app.include_router(demo_feedback_router)
+app.include_router(casework_router)
 app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
@@ -128,7 +130,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -713,9 +715,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             text,provider=generate_general_openai_answer(q,previous)
         except AssistantProviderError as exc:
             raise HTTPException(503,'GPT unavailable: '+exc.code)
-        preface=('No matching saved records were found in the authorized search. '
-                 'The following is GPT general knowledge, not verified current evidence.\n\n'
-                 if not general else 'GPT general knowledge (not a live web search):\n\n')
+        preface=('Tidak ditemukan catatan sumber yang cocok dalam akses Anda. '
+                 'Jawaban berikut berupa penjelasan umum dan bukan hasil pemeriksaan bukti terkini.\n\n'
+                 if not general else 'Penjelasan umum; bukan verifikasi atas peristiwa terbaru.\n\n')
         if source_warning:preface=source_warning+'\n\n'+preface
         return {'answer':preface+text,'records':[],'provider':provider,
                 'grounding':{'accessible_count':len(accessible),

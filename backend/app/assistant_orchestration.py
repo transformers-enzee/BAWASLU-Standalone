@@ -184,7 +184,7 @@ def social_record_view(row):
         "record_type": "SOCIAL_LISTENING",
         "title": source["title"], "source_url": source["source_url"],
         "source_name": source["source_publisher"],
-        "source_post_id": str(row["id"]), "platform": source["platform"],
+        "source_post_id": str(row["id"]), "campaign_id": row.get("campaign_id"), "platform": source["platform"],
         "thumbnail_url": row.get("thumbnail_url") or "",
         "source_excerpt": source["source_excerpt"][:400],
         "engagement_total": source["engagement_total"], "views": source["views"],

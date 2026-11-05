@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.db import Base, DATABASE_URL
 from app import models  # noqa: F401
+from app import casework  # noqa: F401 - register casework models for migrations
 config = context.config
 if config.config_file_name is not None: fileConfig(config.config_file_name)
 database_url = DATABASE_URL

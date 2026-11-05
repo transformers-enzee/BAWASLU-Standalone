@@ -132,7 +132,7 @@ export default function IntelligenceAssistant(){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<TranslatedAssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
-       {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}{m.provider?.quality&&<p className="mt-2 text-xs text-[#53657b]" role="status">Evidence checks · {m.provider.quality.cited_evidence_count} cited records · {m.provider.quality.review_required?'Citation review needed':'Citation IDs validated'} · Expert verification still required</p>}<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding}/><AssistantIntelligenceReport findings={m.analytical_findings} records={m.records}/><AssistantRecords records={m.records} featured={m.featured_sources}/></>}
+       {m.role==='assistant'&&<>{m.grounding?.supporting_count>0&&<p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} sumber rujukan · Analisis memerlukan verifikasi petugas</p>}<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding}/><AssistantIntelligenceReport findings={m.analytical_findings} records={m.records}/><AssistantRecords records={m.records} featured={m.featured_sources}/></>}
       </div>
      </div>)}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}
@@ -142,7 +142,7 @@ export default function IntelligenceAssistant(){
     </section>
     {showJump&&<button type="button" onClick={()=>latestRef.current?.scrollIntoView({behavior:'smooth',block:'end'})} className="fixed bottom-24 right-7 z-40 flex items-center gap-2 rounded-full bg-[#801b24] px-4 py-2 text-sm font-semibold text-white shadow-lg" aria-label="Jump to latest chat message"><ArrowDown size={16}/> Jump to latest</button>}
     <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
-      <span>Answer source: {analysisMode==='AUTO'?'Automatic — hybrid when evidence is available':analysisMode==='DATA'?'Saved BAWASLU evidence only':'GPT general knowledge only'}</span>
+      <span>Ruang lingkup jawaban: {analysisMode==='AUTO'?'Analisis sumber yang tersedia':analysisMode==='DATA'?'Hanya sumber BAWASLU tersimpan':'Penjelasan umum'}</span>
       <label className="flex items-center gap-2">Intelligence depth
        <select aria-label="Intelligence response depth" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={responseDepth} onChange={e=>setResponseDepth(e.target.value)} disabled={busy}>
         <option value="EXECUTIVE">Executive brief</option>
@@ -151,9 +151,9 @@ export default function IntelligenceAssistant(){
        </select>
       </label>
       <select aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={analysisMode} onChange={e=>setAnalysisMode(e.target.value)} disabled={busy}>
-       <option value="AUTO">Auto · Hybrid</option>
-       <option value="DATA">Saved evidence only</option>
-       <option value="GENERAL">GPT general knowledge</option>
+       <option value="AUTO">Otomatis</option>
+       <option value="DATA">Bukti tersimpan</option>
+       <option value="GENERAL">Pengetahuan umum</option>
       </select>
      </div>
     <form onSubmit={e=>{e.preventDefault();ask(question)}} className="intel-card p-3 flex gap-2">

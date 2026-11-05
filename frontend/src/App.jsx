@@ -22,6 +22,7 @@ import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
+import Casework from '@/pages/Casework';
 import AddIntelligence from '@/pages/AddIntelligence';
 import IntelligenceDetail from '@/pages/IntelligenceDetail';
 import DataSources from '@/pages/DataSources';
@@ -81,6 +82,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />
+            <Route path="/casework" element={<Casework />} />
           </Route>
           <Route element={<AccessGate permission="add_intelligence" />}><Route path="/add" element={<AddIntelligence />} /></Route>
           <Route element={<AccessGate permission="administration" />}>

@@ -74,7 +74,7 @@ export default function DemoFeedbackWidget(){
        {T('Team or Bureau Name','Nama Tim atau Biro')} <span className="text-[#a32d39]">*</span>
        <input type="text" required minLength={1} maxLength={100} autoComplete="off" value={department} onChange={e=>setDepartment(e.target.value)}
         className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-800 outline-none transition focus:border-[#a43d48] focus:bg-white focus:ring-2 focus:ring-rose-100"
-        placeholder={T('e.g. Biro Hukum dan Humas','Biro Hukum dan Humas')}/>
+        placeholder={T('e.g. Biro Hukum dan Humas','Contoh: Biro Hukum dan Humas')}/>
       </label>
       <fieldset className="text-center">
        <legend className="w-full text-center text-sm font-bold text-slate-800">{T('How useful is the BAWASLU system?','Seberapa bermanfaat sistem BAWASLU?')} <span className="text-[#a32d39]">*</span></legend>

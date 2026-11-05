@@ -1,18 +1,24 @@
 import {useEffect,useMemo,useState} from 'react';
+import {Star,MessageSquareText,Users,RefreshCw,Trash2} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 import {useLanguage} from '@/lib/LanguageContext';
-const labels={general:['General','Umum'],usability:['Usability','Kemudahan penggunaan'],
- data:['Data','Data'],bug:['Issue','Masalah'],suggestion:['Suggestion','Saran']};
-const categoryLabel=(key,id)=>(labels[key]||[key,key])[id?1:0];
+
+function RatingStars({rating}){
+ const score=Number(rating)||0;
+ return <span className="inline-flex items-center gap-1" aria-label={score+' / 5'}>
+  {[1,2,3,4,5].map(n=><Star key={n} size={20} strokeWidth={1.8}
+   className={n<=score?'text-amber-500':'text-slate-300'} fill={n<=score?'#f6b53b':'none'}/>)}
+ </span>;
+}
 export default function DemoFeedbackAdmin(){
  const {language}=useLanguage(),id=language==='id';
  const T=(en,indo)=>id?indo:en;
  const [data,setData]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState('');
- const [category,setCategory]=useState('ALL'),[page,setPage]=useState('ALL'),[department,setDepartment]=useState('ALL');
+ const [department,setDepartment]=useState('ALL');
  const [pendingDelete,setPendingDelete]=useState(null),[deleting,setDeleting]=useState(false),[deleteMessage,setDeleteMessage]=useState('');
  const load=async()=>{setBusy(true);setError('');try{
   const result=await base44.demoFeedback.admin();setData(result);
- }catch(e){setError(e.message||'Feedback unavailable')}finally{setBusy(false)}};
+ }catch(e){setError(e.message||T('Feedback unavailable','Masukan tidak tersedia'))}finally{setBusy(false)}};
  useEffect(()=>{load()},[]);
  const remove=async()=>{
   if(!pendingDelete||deleting)return;
@@ -24,57 +30,50 @@ export default function DemoFeedbackAdmin(){
   }catch(e){setError(e.message||T('Unable to delete feedback.','Gagal menghapus masukan.'))}
   finally{setDeleting(false)}
  };
- const rows=useMemo(()=>(data?.recent||[]).filter(r=>(category==='ALL'||r.category===category)&&(page==='ALL'||r.page_path===page)&&(department==='ALL'||(r.department||'Not specified')===department)),[data,category,page,department]);
+ const rows=useMemo(()=>(data?.recent||[]).filter(r=>department==='ALL'||(r.department||'Not specified')===department),[data,department]);
+ const deptCount=Object.keys(data?.by_department||{}).length;
  if(busy&&!data)return <p className="text-sm text-slate-500">{T('Loading feedback…','Memuat masukan…')}</p>;
- return <section data-demo-feedback-admin="true" className="intel-card p-5 space-y-4">
-  <div className="flex flex-wrap justify-between items-center gap-3"><div>
-   <h2 className="font-semibold text-lg text-[#801b24]">{T('Demo Visitor Feedback','Masukan Pengunjung Demo')}</h2>
-   <p className="text-xs text-slate-500">{T('Anonymous submissions from the public /demo. Not intelligence evidence.','Kiriman anonim dari /demo publik. Bukan bukti intelijen.')}</p>
-  </div><button type="button" className="intel-ghost" disabled={busy} onClick={load}>{T('Refresh','Muat Ulang')}</button></div>
-  {error&&<p role="alert" className="text-red-700 text-sm">{error}</p>}
-  {deleteMessage&&<p role="status" className="text-emerald-700 text-sm">{deleteMessage}</p>}
-  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-   {[[data?.total??0,T('Total feedback','Total masukan')],[data?.average_rating??'—',T('Average score / 5','Rata-rata nilai / 5')],[data?.rated_count??0,T('Ratings received','Penilaian diterima')],[Object.keys(data?.by_page||{}).length,T('Demo pages','Halaman demo')]].map(([value,label])=>
-    <div key={label} className="rounded-xl bg-slate-50 p-3"><strong className="text-2xl tabular-nums">{value}</strong><p className="text-xs text-slate-500">{label}</p></div>)}
+ return <section data-demo-feedback-admin="true" data-i18n-exempt="true" className="intel-card space-y-5 p-5 md:p-6">
+  <div className="flex flex-wrap items-start justify-between gap-3">
+   <div><h2 className="text-xl font-bold text-[#801b24]">{T('Demo Visitor Feedback','Masukan Pengunjung Demo')}</h2>
+    <p className="mt-1 text-sm text-slate-500">{T('Anonymous feedback from training participants.','Masukan anonim dari peserta pelatihan.')}</p></div>
+   <button type="button" className="intel-ghost inline-flex items-center gap-2" disabled={busy} onClick={load}><RefreshCw size={15}/>{T('Refresh','Muat Ulang')}</button>
   </div>
-  <div className="grid gap-3 md:grid-cols-2">
-   <div className="rounded-xl border p-3"><h3 className="text-sm font-semibold">{T('By feedback type','Berdasarkan jenis')}</h3>
-    {Object.entries(data?.by_category||{}).sort((a,b)=>b[1]-a[1]).map(([name,value])=>
-     <div key={name} className="flex justify-between gap-2 py-1 text-sm"><span>{categoryLabel(name,id)}</span><strong>{value}</strong></div>)}
-    {!Object.keys(data?.by_category||{}).length&&<p className="text-sm text-slate-500 mt-2">{T('No feedback yet','Belum ada masukan')}</p>}
-   </div>
-   <div className="rounded-xl border p-3"><h3 className="text-sm font-semibold">{T('By demo page','Berdasarkan halaman demo')}</h3>
-    {Object.entries(data?.by_page||{}).sort((a,b)=>b[1]-a[1]).map(([name,value])=>
-     <div key={name} className="flex justify-between gap-2 py-1 text-sm"><span className="truncate">{name}</span><strong>{value}</strong></div>)}
-   </div>
+  {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
+  {deleteMessage&&<p role="status" className="text-sm text-emerald-700">{deleteMessage}</p>}
+  <div className="grid gap-3 sm:grid-cols-3">
+   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-sm text-slate-500"><MessageSquareText size={17}/>{T('Total feedback','Total masukan')}</div><strong className="mt-2 block text-3xl font-bold tabular-nums text-slate-900">{data?.total??0}</strong></div>
+   <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><div className="text-sm text-slate-600">{T('Average rating','Rata-rata penilaian')}</div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="text-3xl font-bold tabular-nums text-slate-900">{data?.average_rating??'—'}</strong><span className="text-sm text-slate-500">/ 5</span><Star size={22} fill="#f6b53b" className="text-amber-500"/></div></div>
+   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-sm text-slate-500"><Users size={17}/>{T('Teams and bureaus','Tim dan biro')}</div><strong className="mt-2 block text-3xl font-bold tabular-nums text-slate-900">{deptCount}</strong></div>
   </div>
-  <div className="rounded-xl border p-3"><h3 className="text-sm font-semibold">{T('By team or bureau','Berdasarkan tim atau biro')}</h3>
-   {Object.entries(data?.by_department||{}).sort((a,b)=>b[1]-a[1]).map(([name,count])=><div key={name} className="flex justify-between gap-2 py-1 text-sm"><span className="break-words">{name==='Not specified'?T('Not specified','Tidak disebutkan'):name}</span><strong>{count}</strong></div>)}
-  </div>
-  <div className="flex flex-wrap gap-3">
-   <label className="text-xs">{T('Category','Kategori')}
-    <select className="intel-input mt-1 block" value={category} onChange={e=>setCategory(e.target.value)}>
-     <option value="ALL">{T('All categories','Semua kategori')}</option>
-     {Object.keys(data?.by_category||{}).sort().map(key=><option key={key} value={key}>{categoryLabel(key,id)}</option>)}
-    </select></label>
-   <label className="text-xs">{T('Team or bureau','Tim atau biro')}
-    <select className="intel-input mt-1 block" value={department} onChange={e=>setDepartment(e.target.value)}>
+  <div className="flex flex-wrap items-end justify-between gap-3">
+   <h3 className="text-base font-bold text-slate-800">{T('Feedback submissions','Daftar masukan')} <span className="font-normal text-slate-500">({rows.length})</span></h3>
+   <label className="text-sm font-medium text-slate-700">{T('Team or bureau','Tim atau biro')}
+    <select className="intel-input mt-1 block min-w-[225px]" value={department} onChange={e=>setDepartment(e.target.value)}>
      <option value="ALL">{T('All teams and bureaus','Semua tim dan biro')}</option>
      {Object.keys(data?.by_department||{}).sort().map(key=><option key={key} value={key}>{key==='Not specified'?T('Not specified','Tidak disebutkan'):key}</option>)}
     </select></label>
-   <label className="text-xs">{T('Page','Halaman')}
-    <select className="intel-input mt-1 block" value={page} onChange={e=>setPage(e.target.value)}>
-     <option value="ALL">{T('All pages','Semua halaman')}</option>
-     {Object.keys(data?.by_page||{}).sort().map(key=><option key={key}>{key}</option>)}
-    </select></label>
   </div>
-  <h3 className="text-sm font-semibold">{T('Recent submissions','Masukan terbaru')} ({rows.length})</h3>
-  <div className="max-h-[520px] overflow-auto space-y-2">
-   {rows.map(r=><article key={r.id} className="rounded-xl border p-3 space-y-2">
-    <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>{categoryLabel(r.category,id)} · {r.rating??'—'} / 5 · {r.page_path} · {r.department||T('Team or bureau not provided','Tim atau biro tidak disebutkan')}</span>
-     <div className="flex items-center gap-3"><time>{new Date(r.created_at).toLocaleString(id?'id-ID':'en-GB',{timeZone:'Asia/Jakarta'})}</time><button type="button" className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50" onClick={()=>{setPendingDelete(r);setDeleteMessage('')}}>{T('Delete','Hapus')}</button></div></div>
-    {r.message?<p className="whitespace-pre-wrap break-words text-sm text-slate-800">{r.message}</p>:<p className="text-xs italic text-slate-400">{T('Rating only · no comment','Hanya penilaian · tanpa komentar')}</p>}</article>)}
-   {!rows.length&&<p className="text-sm text-slate-500">{T('No submissions for these filters','Tidak ada masukan untuk filter ini')}</p>}
+  <div className="max-h-[680px] space-y-3 overflow-auto pr-1">
+   {rows.map(r=><article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+     <div className="min-w-0 flex-1">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{T('Team or bureau','Tim atau biro')}</p>
+      <h4 className="mt-1 break-words text-lg font-bold text-[#801b24]">{r.department||T('Not specified','Tidak disebutkan')}</h4>
+     </div>
+     <div className="flex flex-wrap items-center gap-3">
+      <time className="text-xs text-slate-500">{new Date(r.created_at).toLocaleString(id?'id-ID':'en-GB',{timeZone:'Asia/Jakarta'})}</time>
+      <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+       onClick={()=>{setPendingDelete(r);setDeleteMessage('')}}><Trash2 size={14}/>{T('Delete','Hapus')}</button>
+     </div>
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50/60 px-3 py-2.5">
+     <RatingStars rating={r.rating}/>
+     <strong className="text-lg tabular-nums text-slate-900">{r.rating??'—'} / 5</strong>
+    </div>
+    {r.message&&<div className="mt-3"><p className="mb-1 text-xs font-semibold text-slate-500">{T('Comment','Komentar')}</p><p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{r.message}</p></div>}
+   </article>)}
+   {!rows.length&&<p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">{T('No feedback for this selection.','Belum ada masukan untuk pilihan ini.')}</p>}
   </div>
   {pendingDelete&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4" role="presentation">
    <section role="alertdialog" aria-modal="true" aria-labelledby="delete-demo-feedback-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">

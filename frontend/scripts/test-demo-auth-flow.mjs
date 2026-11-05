@@ -19,6 +19,13 @@ assert.ok(widget.includes("new URLSearchParams(window.location.search).get('feed
 assert.ok(widget.includes("new URLSearchParams(loc.search).get('feedback')==='open'"),'Client-side navigation must reopen feedback');
 assert.ok(widget.includes("params.delete('feedback')")&&widget.includes("replace:true"),'Closing must clear feedback query without reload');
 assert.ok(widget.includes('onClick={closeFeedback}')&&widget.includes('closeFeedback()'),'Close buttons and overlay must dismiss dialog');
+
+assert.ok(widget.includes("createPortal(<div")&&widget.includes("document.body)"),'Mobile modal must portal outside clipped demo layout');
+assert.ok(widget.includes("height:'100dvh'")&&widget.includes("maxHeight:'calc(100dvh"),'Popup height must account for dynamic mobile viewport');
+assert.ok(widget.includes("WebkitOverflowScrolling:'touch'")&&widget.includes("touchAction:'pan-y'"),'Mobile modal must allow touch scrolling');
+assert.ok(widget.includes("overflow-y-auto overscroll-contain")&&widget.includes("document.body.style.overflow='hidden'"),'Modal scroll and background lock must be independent');
+assert.ok(widget.includes("onClick={closeFeedback} className=\"mt-6"),'Successful submission must use modal close handler');
+
  
 assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'),'Interactive Shopee-style rating stars required');
 assert.ok(widget.includes('department:department.trim()'),'Feedback form must submit team or bureau');

@@ -22,7 +22,7 @@ assert.ok(widget.includes('required minLength={1}')&&widget.includes('!departmen
 assert.ok(widget.includes('Your feedback will remain anonymous.')&&widget.includes('Masukan Anda akan tetap anonim.'),'Anonymity promise bilingual');
 assert.ok(widget.includes('Your input helps us improve the BAWASLU system'),'Improvement purpose must be stated');
 assert.ok(widget.includes("category:'general',rating"),'Feedback category is implicit and hidden');
-assert.ok(!widget.includes('Jenis masukan')&&!widget.includes('required minLength'),'Optional comment must not be required');
+assert.ok(!widget.includes('Jenis masukan')&&widget.includes('<textarea ')&&!widget.includes('<textarea required'),'Optional comment must not be required');
 assert.ok(admin.includes('<DemoFeedbackAdmin/>'),'Actual admin sees aggregated feedback');
 const feedbackAdminComponent=read('src/components/intel/DemoFeedbackAdmin.jsx');
 const feedbackApiClient=read('src/api/base44Client.js');

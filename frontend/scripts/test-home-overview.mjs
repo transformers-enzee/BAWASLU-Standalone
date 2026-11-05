@@ -7,12 +7,12 @@ const app=read('src/App.jsx'),nav=read('src/components/intel/AccessNavigation.js
 const demoNav=read('src/demo/DemoAccessNavigation.jsx'),page=read('src/pages/IntelligenceOverview.jsx');
 const client=read('src/api/base44Client.js'),snapshotSrc=read('src/demo/homeRadarSnapshot.js');
 assert.ok(app.includes('<Route path="/" element={<IntelligenceOverview />} />'));
-assert.ok(app.includes('demoLocation&&<Route path="/guide"'));
+assert.ok(!app.includes('path="/guide"'),'Interactive guide route must be removed');
 assert.ok(app.includes('<Route path="/smart-radar" element={<SmartRadar />} />'));
 assert.ok(nav.includes("['/','home',HomeIcon,'view_intelligence']"));
 assert.ok(nav.includes("['/smart-radar','Command Centre',LayoutDashboard,'view_intelligence']"));
 assert.ok(demoNav.includes("item('/',Home"));
-assert.ok(demoNav.includes("item('/guide',BookOpen"));
+assert.ok(!demoNav.includes("item('/guide',BookOpen"),'Interactive guide sidebar link must be removed');
 assert.ok(client.includes("dashboard:()=>request('/api/smart-radar/dashboard')"));
 assert.ok(client.includes("issueDistribution:()=>request('/api/smart-radar/issue-distribution')"));
 assert.ok(page.includes('base44.radar.dashboard()')&&page.includes('base44.radar.issueDistribution()'));

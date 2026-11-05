@@ -128,7 +128,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'124.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -679,6 +679,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not q or len(q)>500:
         raise HTTPException(400,'Question must be between 1 and 500 characters')
     previous=str(body.get('previousQuestion') or '').strip()[:500]
+    response_depth=str(body.get('responseDepth') or 'EXECUTIVE').upper()
+    if response_depth not in ('EXECUTIVE','DEEP','INVESTIGATION'):
+        raise HTTPException(400,'Invalid response depth')
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
@@ -733,7 +736,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                  for x in history[-6:] if isinstance(x,dict) and
                  x.get('role') in ('user','assistant')] if isinstance(history,list) else []
         text,cited,meta=generate(q,previous,evidence,
-            'GROUNDED' if requested=='DATA' else 'HYBRID',history=history)
+            'GROUNDED' if requested=='DATA' else 'HYBRID',history=history,response_depth=response_depth)
     except AssistantProviderError as exc:
         text,cited=evidence_fallback(evidence,exc.code)
         meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code}

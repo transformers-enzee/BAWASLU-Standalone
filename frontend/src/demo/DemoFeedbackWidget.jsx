@@ -16,7 +16,7 @@ export default function DemoFeedbackWidget(){
  const {language}=useLanguage(),loc=useLocation();
  const T=(en,id)=>language==='id'?id:en;
  const [open,setOpen]=useState(false),[rating,setRating]=useState(0),[hover,setHover]=useState(0);
- const [message,setMessage]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
+ const [department,setDepartment]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
  const [website,setWebsite]=useState('');
  const current=hover||rating;
  const submit=async event=>{
@@ -26,13 +26,13 @@ export default function DemoFeedbackWidget(){
   try{
    const result=await fetch('/api/demo-feedback',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({category:'general',rating,message:message.trim(),
+    body:JSON.stringify({category:'general',rating,department:department.trim(),message:message.trim(),
       page_path:'/demo'+(loc.pathname==='/'?'':loc.pathname),language,website,visitor_key:browserFeedbackKey})});
    const body=await result.json().catch(()=>({}));
    if(!result.ok)throw new Error(result.status===429?T('Too many submissions. Please try later.','Terlalu banyak kiriman. Coba lagi nanti.'):
     result.status===409?T('You already sent this rating.','Anda sudah mengirim penilaian ini.'):
     body.detail||T('Could not submit feedback.','Masukan tidak dapat dikirim.'));
-   setDone(true);setMessage('');setRating(0);setHover(0);
+   setDone(true);setDepartment('');setMessage('');setRating(0);setHover(0);
   }catch(e){setError(e.message)}finally{setBusy(false)}
  };
  return <div data-demo-locale-owned="true" className="fixed bottom-5 right-5 z-[81]">
@@ -55,6 +55,12 @@ export default function DemoFeedbackWidget(){
       <p className="mt-2 text-sm text-slate-600">{T('Your feedback has been saved for our team.','Masukan Anda telah disimpan untuk tim kami.')}</p>
       <button type="button" onClick={()=>setOpen(false)} className="mt-6 w-full rounded-xl bg-[#8a202b] py-3 text-sm font-bold text-white">{T('Done','Selesai')}</button>
     </div>:<form onSubmit={submit} className="space-y-5 px-6 pb-6 pt-6">
+      <label className="block text-sm font-semibold text-slate-800">
+       {T('Team or department','Tim atau departemen')} <span className="ml-1 text-xs font-normal text-slate-400">({T('Optional','Opsional')})</span>
+       <input type="text" maxLength={100} autoComplete="off" value={department} onChange={e=>setDepartment(e.target.value)}
+        className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-800 outline-none transition focus:border-[#a43d48] focus:bg-white focus:ring-2 focus:ring-rose-100"
+        placeholder={T('e.g. Election Supervision Team','Contoh: Tim Pengawasan Pemilu')}/>
+      </label>
       <fieldset className="text-center">
        <legend className="w-full text-center text-sm font-bold text-slate-800">{T('How useful is this demo?','Seberapa bermanfaat demo ini?')} <span className="text-[#a32d39]">*</span></legend>
        <div className="mt-4 flex items-center justify-center gap-2" onMouseLeave={()=>setHover(0)}>
@@ -76,7 +82,11 @@ export default function DemoFeedbackWidget(){
       <button type="submit" disabled={busy||rating===0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#8a202b] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#a32d39] disabled:cursor-not-allowed disabled:bg-slate-300">
        <Send size={16}/>{busy?T('Sending…','Mengirim…'):T('Send my rating','Kirim Penilaian')}
       </button>
-      <p className="text-center text-[11px] leading-5 text-slate-400">{T('Anonymous · No login needed · Please do not share personal information.','Anonim · Tanpa login · Jangan sertakan data pribadi.')}</p>
+      <div className="rounded-xl bg-rose-50/80 px-4 py-3 text-center">
+       <p className="text-xs font-semibold text-[#80212c]">{T('Your feedback will remain anonymous.','Masukan Anda akan tetap anonim.')}</p>
+       <p className="mt-1 text-[11px] leading-5 text-slate-600">{T('We do not ask for your name or email. Your team or department, if provided, will be visible to administrators.','Kami tidak meminta nama atau email Anda. Tim atau departemen yang diisi akan terlihat oleh administrator.')}</p>
+       <p className="mt-2 text-[11px] leading-5 text-slate-600">{T('Your input helps us improve the BAWASLU system and make it more useful for officers.','Masukan Anda membantu kami menyempurnakan sistem BAWASLU agar semakin bermanfaat bagi petugas.')}</p>
+      </div>
     </form>}
    </section>
   </div>}

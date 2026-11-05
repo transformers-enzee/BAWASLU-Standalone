@@ -21,6 +21,7 @@ HASH_SECRET=os.getenv('DEMO_FEEDBACK_HASH_SECRET') or secrets.token_hex(32)
 
 class FeedbackIn(BaseModel):
     category:str='general'
+    department:str=Field(default='',max_length=100)
     rating:int|None=Field(default=None,ge=1,le=5)
     message:str=Field(default='',max_length=1500)
     page_path:str=Field(default='/demo',max_length=255)
@@ -45,6 +46,7 @@ def hash_visitor(request,now,visitor_key=''):
 def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     if body.website:raise HTTPException(400,'Invalid submission')
     if body.category not in VALID_CATEGORIES:raise HTTPException(422,'Invalid feedback category')
+    department=body.department.strip()
     message=body.message.strip()
     if len(message)>1500:raise HTTPException(422,'Feedback must be at most 1500 characters')
     if body.rating is None and not message:raise HTTPException(422,'Choose a star rating or write a comment')
@@ -70,10 +72,10 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     duplicate=db.query(DemoFeedback.id).filter(
         DemoFeedback.visitor_hash==visitor_hash,DemoFeedback.message==message,
         DemoFeedback.category==body.category,DemoFeedback.rating==body.rating,
-        DemoFeedback.page_path==body.page_path,
+        DemoFeedback.page_path==body.page_path,DemoFeedback.department==department,
         DemoFeedback.created_at>=now-timedelta(hours=24)).first()
     if duplicate:raise HTTPException(409,'Feedback already submitted')
-    db.add(DemoFeedback(category=body.category,rating=body.rating,
+    db.add(DemoFeedback(category=body.category,rating=body.rating,department=department,
         message=message,page_path=body.page_path,language=body.language,
         visitor_hash=visitor_hash,network_hash=network_hash,created_at=now))
     db.commit()
@@ -88,8 +90,9 @@ def list_feedback(db:Session=Depends(get_db),user:User=Depends(current_user)):
         'rated_count':len(rating),
         'by_category':dict(Counter(r.category for r in rows)),
         'by_page':dict(Counter(r.page_path for r in rows)),
+        'by_department':dict(Counter(r.department or 'Not specified' for r in rows)),
         'recent':[{'id':r.id,'category':r.category,'rating':r.rating,
-                   'message':r.message,'page_path':r.page_path,
+                   'message':r.message,'department':r.department,'page_path':r.page_path,
                    'language':r.language,'created_at':r.created_at.isoformat()+'Z'}
                   for r in rows[:200]]}
 

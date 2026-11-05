@@ -16,6 +16,9 @@ assert.ok(app.includes("!['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'].includes(id)"))
 assert.ok(widget.includes("'/api/demo-feedback'"));
 assert.ok(widget.includes('Beri Masukan')&&widget.includes('Kirim Penilaian')); 
 assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'),'Interactive Shopee-style rating stars required');
+assert.ok(widget.includes('department:department.trim()'),'Feedback form must submit the optional team or department');
+assert.ok(widget.includes('Your feedback will remain anonymous.')&&widget.includes('Masukan Anda akan tetap anonim.'),'Anonymity promise bilingual');
+assert.ok(widget.includes('Your input helps us improve the BAWASLU system'),'Improvement purpose must be stated');
 assert.ok(widget.includes("category:'general',rating"),'Feedback category is implicit and hidden');
 assert.ok(!widget.includes('Jenis masukan')&&!widget.includes('required minLength'),'Optional comment must not be required');
 assert.ok(admin.includes('<DemoFeedbackAdmin/>'),'Actual admin sees aggregated feedback');

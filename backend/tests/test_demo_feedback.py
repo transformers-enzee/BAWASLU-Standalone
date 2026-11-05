@@ -40,6 +40,7 @@ def test_anonymous_submit_and_admin_only_aggregate():
     assert report['total']==1 and report['average_rating']==4
     assert report['by_category']=={'usability':1}
     assert report['by_page']=={'/demo/inbox':1}
+    assert report['by_department']=={'Not specified':1}
     assert len(report['recent'])==1
     assert report['recent'][0]['message']==payload()['message']
     assert 'visitor_hash' not in report['recent'][0]
@@ -102,3 +103,17 @@ def test_feedback_delete_requires_national_administrator_and_updates_aggregates(
     assert client.delete(url,headers=national).status_code==404
     assert client.delete('/api/demo-feedback/admin/0',headers=national).status_code==404
     db=SessionLocal();assert db.query(DemoFeedback).count()==1;db.close()
+
+def test_optional_department_saved_and_visible_only_to_national_admin():
+    client=TestClient(app)
+    body={**payload(),'department':'Tim Pengawasan Pemilu','rating':5}
+    result=client.post('/api/demo-feedback',json=body)
+    assert result.status_code==201,result.text
+    assert client.get('/api/demo-feedback/admin').status_code==401
+    national=client.get('/api/demo-feedback/admin',headers=headers())
+    assert national.status_code==200
+    report=national.json()
+    assert report['by_department']=={'Tim Pengawasan Pemilu':1}
+    assert report['recent'][0]['department']=='Tim Pengawasan Pemilu'
+    assert not any(k in report['recent'][0] for k in ('visitor_hash','network_hash','email','name'))
+    assert client.post('/api/demo-feedback',json={**body,'department':'X'*101}).status_code==422

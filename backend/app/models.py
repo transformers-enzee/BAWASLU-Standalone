@@ -528,6 +528,7 @@ class DemoFeedback(Base):
     message: Mapped[str] = mapped_column(Text,nullable=False)
     page_path: Mapped[str] = mapped_column(String(255),nullable=False,default='/demo')
     language: Mapped[str] = mapped_column(String(5),nullable=False,default='id')
+    department: Mapped[str] = mapped_column(String(100),nullable=False,default='')
     visitor_hash: Mapped[str] = mapped_column(String(64),nullable=False,index=True)
     network_hash: Mapped[str] = mapped_column(String(64),nullable=False,default='',index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow,index=True)

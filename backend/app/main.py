@@ -128,7 +128,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -755,11 +755,19 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         support += [assistant_record_view(x) for x in selected_formal[:3]]
     if source_warning:text=source_warning+'\n\n'+text
     from .assistant_orchestration import evidence_snapshot
-    snapshot=evidence_snapshot(evidence)
+    # Compute broader descriptive statistics from the permitted results without
+    # sending additional posts to the paid model. The narrative itself remains
+    # grounded in the smaller selected evidence set.
+    stats_social,_=_social_select(social_rows,q,limit=300)
+    snapshot=evidence_snapshot([social_evidence(row) for row in stats_social]+
+                               [assistant_evidence_record(row) for row in selected_formal])
+    snapshot['analysis_post_count']=len(chosen_social)
+    snapshot['statistics_post_count']=len(stats_social)
+    snapshot['statistics_scope']='BOUNDED_AUTHORIZED_MATCHES'
     def _engagement(row):
         number=row.get('engagement_total')
         return number if type(number) is int and number >= 0 else -1
-    featured=[social_record_view(row) for row in sorted(chosen_social,key=_engagement,reverse=True)[:6]]
+    featured=[social_record_view(row) for row in sorted(stats_social,key=_engagement,reverse=True)[:6]]
     source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
     return {'answer':text,'records':support[:12],'provider':meta,
         'evidence_snapshot':snapshot,

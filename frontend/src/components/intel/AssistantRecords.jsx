@@ -7,7 +7,7 @@ const fmt=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime(
 const compact=n=>new Intl.NumberFormat('id-ID',{notation:'compact',maximumFractionDigits:1}).format(Number(n)||0);
 export default function AssistantRecords({records,featured=[]}){
  const {t}=useLanguage();
- const social=(featured||[]).filter(x=>x.record_type==='SOCIAL_LISTENING');
+ const social=(featured?.length?featured:records||[]).filter(x=>x.record_type==='SOCIAL_LISTENING');
  const formal=(records||[]).filter(x=>x.record_type!=='SOCIAL_LISTENING');
  if(!social.length&&!formal.length)return null;
  return <section className="mt-5 border-t border-[#e4e9ef] pt-5 space-y-4" data-i18n-exempt>

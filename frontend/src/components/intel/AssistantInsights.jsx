@@ -16,9 +16,9 @@ export default function AssistantInsights({snapshot,grounding}){
  const topics=Object.entries(snapshot.topic_counts||{}).slice(0,6);
  const maxEng=Math.max(1,...engagement.map(([,v])=>v));
  return <section className="mt-5 space-y-4" data-i18n-exempt aria-label="Dashboard sumber intelijen">
-  <div className="flex flex-wrap justify-between items-center gap-2"><div><h2 className="text-lg font-bold text-[#801b24]">Lanskap percakapan pada bukti terpilih</h2><p className="text-xs text-[#64748b] mt-1">Statistik bersumber dari catatan Social Listening yang dapat diakses.</p></div><span className="rounded-full bg-[#f5ebec] text-[#801b24] px-3 py-1 text-xs font-semibold">Sampel · bukan survei publik</span></div>
+  <div className="flex flex-wrap justify-between items-center gap-2"><div><h2 className="text-lg font-bold text-[#801b24]">Lanskap percakapan pada bukti terpilih</h2><p className="text-xs text-[#64748b] mt-1">Statistik bersumber dari unggahan relevan yang tersedia; analisis AI menggunakan subset yang lebih kecil.</p></div><span className="rounded-full bg-[#f5ebec] text-[#801b24] px-3 py-1 text-xs font-semibold">Sampel · bukan survei publik</span></div>
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-   <Metric label="Unggahan terpilih" value={fmt(total)} note={grounding?.matched_social?fmt(grounding.matched_social)+' unggahan relevan cocok':'Sesuai cakupan akses pengguna'}/>
+   <Metric label="Unggahan dalam statistik" value={fmt(total)} note={fmt(snapshot.analysis_post_count||total)+' unggahan dianalisis AI'}/>
    <Metric label="Interaksi tercatat" value={snapshot.engagement_coverage?compact(snapshot.observed_engagement):'N/A'} note={fmt(snapshot.engagement_coverage||0)+' dari '+fmt(total)+' memiliki metrik'}/>
    <Metric label="Kanal sumber" value={fmt(platforms.length)} note="Dalam sampel yang diambil"/>
    <Metric label="Rentang tanggal" value={timeline.length?timeline[0].date.slice(5)+'–'+timeline[timeline.length-1].date.slice(5):'N/A'} note={fmt(snapshot.publication_date_coverage||0)+' tanggal valid'}/>

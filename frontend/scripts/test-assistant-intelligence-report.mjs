@@ -12,5 +12,7 @@ assert.ok(dashboard.includes('activity_by_date')&&dashboard.includes('platform_e
 assert.ok(dashboard.includes('engagement_coverage'),'metric coverage disclosed');
 assert.ok(findings.includes('Tindakan verifikasi yang disarankan'),'officer actions presented');
 assert.ok(records.includes('Unggahan sumber dan bukti visual'),'visual source gallery present');
+assert.ok(records.includes('featured?.length?featured:records||[]'),'historical social evidence remains visible');
+assert.ok(dashboard.includes('analysis_post_count'),'statistics and model source counts distinguished');
 assert.ok(records.includes('rel="noopener noreferrer"'),'external links isolated');
 console.log('Frontend intelligence report checks passed');

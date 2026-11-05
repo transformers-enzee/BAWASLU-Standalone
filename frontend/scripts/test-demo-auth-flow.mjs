@@ -22,7 +22,10 @@ assert.ok(widget.includes('onClick={closeFeedback}')&&widget.includes('closeFeed
  
 assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'),'Interactive Shopee-style rating stars required');
 assert.ok(widget.includes('department:department.trim()'),'Feedback form must submit team or bureau');
-assert.ok(widget.includes('Team or bureau')&&widget.includes('Tim atau biro'),'Bureau terminology must appear in both languages');
+assert.ok(widget.includes('Team or Bureau Name')&&widget.includes('Nama Tim atau Biro'),'Required bureau label must be explicit in both languages');
+assert.ok(widget.includes("Biro Hukum dan Humas"),'Bureau placeholder must match BAWASLU terminology');
+assert.ok(widget.includes('Seberapa bermanfaat sistem BAWASLU?')&&widget.includes('improve the BAWASLU system'),'Feedback copy must focus on BAWASLU system improvement');
+assert.ok(!widget.includes('Penilaian Anda membantu kami meningkatkan demo BAWASLU.'),'Old demo-focused copy must be removed');
 assert.ok(widget.includes('required minLength={1}')&&widget.includes('!department.trim()'),'Team or bureau must be required');
 assert.ok(widget.includes('Your feedback will remain anonymous.')&&widget.includes('Masukan Anda akan tetap anonim.'),'Anonymity promise bilingual');
 assert.ok(widget.includes('Your input helps us improve the BAWASLU system'),'Improvement purpose must be stated');

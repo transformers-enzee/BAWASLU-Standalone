@@ -128,7 +128,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'138.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -754,8 +754,11 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         support=[social_record_view(x) for x in chosen_social[:4]]
         support += [assistant_record_view(x) for x in selected_formal[:3]]
     if source_warning:text=source_warning+'\n\n'+text
+    from .assistant_orchestration import evidence_snapshot
+    snapshot=evidence_snapshot(evidence)
     source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
     return {'answer':text,'records':support[:12],'provider':meta,
+        'evidence_snapshot':snapshot,
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),
             'matched_social':matched_social,

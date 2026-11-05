@@ -14,7 +14,12 @@ assert.ok(!shell.includes("sessionStorage.removeItem('bawaslu_demo_training_sess
 assert.ok(bridge.includes("DEMO_VISIBLE_CAMPAIGN_IDS=new Set(['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'])"));
 assert.ok(app.includes("!['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'].includes(id)"));
 assert.ok(widget.includes("'/api/demo-feedback'"));
-assert.ok(widget.includes('Beri Masukan')&&widget.includes('Kirim Penilaian')); 
+assert.ok(widget.includes('Beri Masukan')&&widget.includes('Kirim Penilaian'));
+assert.ok(widget.includes("new URLSearchParams(window.location.search).get('feedback')==='open'"),'Shareable URL must open feedback on initial load');
+assert.ok(widget.includes("new URLSearchParams(loc.search).get('feedback')==='open'"),'Client-side navigation must reopen feedback');
+assert.ok(widget.includes("params.delete('feedback')")&&widget.includes("replace:true"),'Closing must clear feedback query without reload');
+assert.ok(widget.includes('onClick={closeFeedback}')&&widget.includes('closeFeedback()'),'Close buttons and overlay must dismiss dialog');
+ 
 assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'),'Interactive Shopee-style rating stars required');
 assert.ok(widget.includes('department:department.trim()'),'Feedback form must submit team or bureau');
 assert.ok(widget.includes('Team or bureau')&&widget.includes('Tim atau biro'),'Bureau terminology must appear in both languages');

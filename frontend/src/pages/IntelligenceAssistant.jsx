@@ -3,6 +3,7 @@ import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown } from 'lucid
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
+import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
 import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
 import { useLanguage } from '@/lib/LanguageContext';
 
@@ -28,8 +29,8 @@ export default function IntelligenceAssistant(){
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
  const [analysisMode,setAnalysisMode]=useState('AUTO');
- const [responseDepth,setResponseDepth]=useState('EXECUTIVE');
- const [showHistory,setShowHistory]=useState(true);
+ const [responseDepth,setResponseDepth]=useState('DEEP');
+ const [showHistory,setShowHistory]=useState(false);
  const activeIdRef=useRef(null);
  const latestRef=useRef(null);
  const [showJump,setShowJump]=useState(false);
@@ -79,7 +80,8 @@ export default function IntelligenceAssistant(){
    const answer={
     role:'assistant',text:response.data.answer||'',
     records:response.data.records||[],provider:response.data.provider,
-    grounding:response.data.grounding,evidence_snapshot:response.data.evidence_snapshot
+    grounding:response.data.grounding,evidence_snapshot:response.data.evidence_snapshot,
+    analytical_findings:response.data.analytical_findings,featured_sources:response.data.featured_sources
    };
    const full=[...outgoing,answer];
    setMessages(full);
@@ -130,7 +132,7 @@ export default function IntelligenceAssistant(){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<TranslatedAssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
-       {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}{m.provider?.quality&&<p className="mt-2 text-xs text-[#53657b]" role="status">Evidence checks · {m.provider.quality.cited_evidence_count} cited records · {m.provider.quality.review_required?'Citation review needed':'Citation IDs validated'} · Expert verification still required</p>}<AssistantInsights snapshot={m.evidence_snapshot}/><AssistantRecords records={m.records}/></>}
+       {m.role==='assistant'&&<>{m.provider&&<p className={'mt-4 rounded-lg border px-3 py-2 text-xs '+(['OPENAI_GROUNDED','OPENAI_HYBRID'].includes(m.provider.mode)?'border-sky-200 bg-sky-50 text-[#315f76]':'border-amber-200 bg-amber-50 text-[#7b622c]')}><strong>{m.provider.mode==='OPENAI_HYBRID'?'Hybrid · Saved evidence + GPT context':m.provider.mode==='OPENAI_GENERAL_KNOWLEDGE'?'GPT general knowledge · Not live-verified':m.provider.mode==='OPENAI_GROUNDED'?'Grounded BAWASLU evidence':'Retrieved records · AI unavailable'}</strong>{m.provider.model?' · '+m.provider.model:''}{m.grounding?' · '+(m.grounding.supporting_count||0)+' '+t('supporting_records_count'):''}</p>}{m.provider?.quality&&<p className="mt-2 text-xs text-[#53657b]" role="status">Evidence checks · {m.provider.quality.cited_evidence_count} cited records · {m.provider.quality.review_required?'Citation review needed':'Citation IDs validated'} · Expert verification still required</p>}<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding}/><AssistantIntelligenceReport findings={m.analytical_findings} records={m.records}/><AssistantRecords records={m.records} featured={m.featured_sources}/></>}
       </div>
      </div>)}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}

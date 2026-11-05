@@ -1165,6 +1165,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                 processing=source_hints(item.text_content)
                 records.append({'id':str(item.id),'campaign_id':str(campaign.id),'campaign_name':campaign.name,
                     'platform':item.platform,'text_content':item.text_content,'canonical_url':item.canonical_url,
+                    'thumbnail_url':_existing_thumbnail(item),
                     'author_name':item.author_name,'author_display':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[0],
                     'published_at':item.published_at,
                     'engagement_total':captured_engagement,'views':captured_views,

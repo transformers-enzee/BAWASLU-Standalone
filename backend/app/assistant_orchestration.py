@@ -7,6 +7,7 @@ claim that outside knowledge is current/live source verification.
 import json
 import os
 import re
+from datetime import date
 from collections import Counter
 import httpx
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
@@ -102,6 +103,17 @@ For questions about 'audience', identify discourse groups or viewpoints evident 
 
 Place the decision-ready takeaway in direct_answer; observations must be distinct source-backed signals; interpretation must state implications for neutral oversight and alternative explanations; next_checks must be concrete prioritized validation actions; limitations must contain material uncertainties. Limit observations to four and next_checks to three unless deep/investigation mode explicitly needs more. Avoid repeating the same sentence in multiple fields.
 
+
+REPORT REQUIREMENTS:
+- This assistant produces operational election-supervision intelligence, not promotional messaging.
+- Executive finding: explain the most consequential evidenced issue, its uncertainty, and why oversight teams may need to examine it.
+- In observations, provide 3-5 distinct, concrete, source-backed themes or contrasting accounts; cite one or two permitted IDs per claim. Separate what posts assert from what official records confirm.
+- In next_checks, supply 3-4 specific verification tasks: what document or source to compare, the evidence needed, and the condition for escalation by authorized officers.
+- Interpretation must synthesize wider civic and institutional implications, not simply restate the percentages or explain generic social media habits.
+- Avoid describing individuals' age, education, allegiance, or voting intent from social posts. Do not confuse a count of posts with a count of people.
+- Do not generate numerical diagrams or extrapolate engagement totals. Separate post volume from engagement because they have different units; the interface will visualize recorded metadata.
+- Stay politically neutral. No determination of wrongdoing from social claims or sentiments.
+
 Return JSON matching the required schema. Every cited_ids entry MUST be a supplied ID."""
 
 def _keywords(question):
@@ -153,6 +165,8 @@ def social_evidence(row):
         "platform": row.get("platform") or "",
         "source_publisher": row.get("author_name") or "",
         "source_url": row.get("canonical_url") or "",
+        "engagement_total": row.get("engagement_total") if type(row.get("engagement_total")) is int and row["engagement_total"] >= 0 else None,
+        "views": row.get("views") if type(row.get("views")) is int and row["views"] >= 0 else None,
         "publication_date": str(row.get("published_at") or ""),
         "campaign": row.get("campaign_name") or "",
         "relevance_label": row.get("relevance_label") or "",
@@ -171,6 +185,9 @@ def social_record_view(row):
         "title": source["title"], "source_url": source["source_url"],
         "source_name": source["source_publisher"],
         "source_post_id": str(row["id"]), "platform": source["platform"],
+        "thumbnail_url": row.get("thumbnail_url") or "",
+        "source_excerpt": source["source_excerpt"][:400],
+        "engagement_total": source["engagement_total"], "views": source["views"],
         "publication_date": source["publication_date"],
         "jurisdiction": "Not independently verified",
         "verification_status": "UNVERIFIED",
@@ -218,11 +235,11 @@ def answer_text(result, has_evidence):
     checks = [str(x).strip() for x in result.get("next_checks") or [] if str(x).strip()]
     limits = [str(x).strip() for x in result.get("limitations") or [] if str(x).strip()]
     chunks = [answer] if answer else []
-    if observations:
+    if observations and not result.get('visual_report'):
         chunks.append("**Temuan yang didukung sumber**\n" + "\n".join("- " + x for x in observations[:6]))
     if interpretation and interpretation.casefold() not in answer.casefold():
         chunks.append("**Implikasi pengawasan**\n" + interpretation)
-    if checks and (has_evidence or not answer):
+    if checks and not result.get('visual_report') and (has_evidence or not answer):
         chunks.append("**Prioritas tindak lanjut BAWASLU**\n" + "\n".join(f"{i}. {x}" for i, x in enumerate(checks[:4],1)))
     # Generic availability caveats add little value to a strategic response.
     # Retain only material constraints already explained within the analysis;
@@ -337,31 +354,64 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "usage": payload.get("usage") or {},
         "quality": quality
     }
+    result["visual_report"] = bool(evidence)
+    meta["analytical_findings"] = {
+        "observations": result.get("observations") or [],
+        "review_steps": result.get("next_checks") or []
+    }
     answer = answer_text(result, bool(evidence))
     if web_research:
         answer += "\n\nPublic sources: " + " · ".join(web_research["urls"])
     return answer, result["cited_ids"], meta
 
 def evidence_snapshot(evidence):
-    """Counts of the permission-scoped retrieved sample, never audience statistics."""
-    social = [x for x in evidence if x.get("record_type") == "SOCIAL_LISTENING"]
-    sentiment = {"POSITIVE": 0, "NEUTRAL": 0, "NEGATIVE": 0, "UNKNOWN": 0}
-    platforms = Counter()
+    """Descriptive counts of permitted retrieved posts, never audience estimates."""
+    social = [r for r in evidence if r.get("record_type") == "SOCIAL_LISTENING"]
+    sentiments = {"POSITIVE": 0, "NEUTRAL": 0, "NEGATIVE": 0, "UNKNOWN": 0}
+    platforms, engagement_by_platform, activity, topics = Counter(), Counter(), Counter(), Counter()
+    engagement_total, engagement_coverage, views_total, views_coverage = 0, 0, 0, 0
     for row in social:
         raw = str(row.get("sentiment") or "").strip().upper()
-        alias = {"POSITIF": "POSITIVE", "NETRAL": "NEUTRAL", "NEGATIF": "NEGATIVE"}
-        label = alias.get(raw, raw)
-        sentiment[label if label in sentiment else "UNKNOWN"] += 1
+        label = {"POSITIF":"POSITIVE","NETRAL":"NEUTRAL","NEGATIF":"NEGATIVE"}.get(raw,raw)
+        sentiments[label if label in sentiments else "UNKNOWN"] += 1
         platform = str(row.get("platform") or "Unknown").strip().title()[:30] or "Unknown"
-        if platform.casefold() in ("twitter", "x"): platform = "X"
+        if platform.casefold() in ("x","twitter"):
+            platform = "X"
         platforms[platform] += 1
+        engagement = row.get("engagement_total")
+        if type(engagement) is int and 0 <= engagement <= 10**15:
+            engagement_total += engagement
+            engagement_coverage += 1
+            engagement_by_platform[platform] += engagement
+        views = row.get("views")
+        if type(views) is int and 0 <= views <= 10**15:
+            views_total += views
+            views_coverage += 1
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})",str(row.get("publication_date") or ""))
+        if m:
+            try:
+                date.fromisoformat(m.group(1))
+                activity[m.group(1)] += 1
+            except ValueError:
+                pass
+        for topic in row.get("topic_labels") or []:
+            if isinstance(topic,str) and topic.strip():
+                topics[topic.strip()[:75]] += 1
     return {
-        "basis": "PERMISSION_SCOPED_RETRIEVED_SAMPLE_ONLY",
-        "social_posts": len(social),
-        "formal_records": len(evidence) - len(social),
-        "sentiment_counts": sentiment,
-        "platform_counts": dict(platforms.most_common(8)),
-        "notice": "Sample of retrieved source posts; not a representative estimate of audience or public opinion."
+        "basis":"PERMISSION_SCOPED_RETRIEVED_SAMPLE_ONLY",
+        "social_posts":len(social),
+        "formal_records":len(evidence)-len(social),
+        "sentiment_counts":sentiments,
+        "platform_counts":dict(platforms.most_common(8)),
+        "platform_engagement":dict(engagement_by_platform.most_common(8)),
+        "observed_engagement":engagement_total,
+        "engagement_coverage":engagement_coverage,
+        "observed_views":views_total,
+        "views_coverage":views_coverage,
+        "activity_by_date":[{"date":d,"posts":n} for d,n in sorted(activity.items())][-31:],
+        "publication_date_coverage":sum(activity.values()),
+        "topic_counts":dict(topics.most_common(6)),
+        "notice":"Only permission-scoped selected source posts; not a census of online messages or a measure of people. Engagement totals include recorded metrics only."
     }
 
 

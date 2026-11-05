@@ -66,6 +66,9 @@ def clean_messages(messages):
             "records": [r for r in records[:12] if isinstance(r, dict)],
             "provider": item.get("provider") if isinstance(item.get("provider"), dict) else None,
             "grounding": item.get("grounding") if isinstance(item.get("grounding"), dict) else None,
+            "evidence_snapshot": item.get("evidence_snapshot") if isinstance(item.get("evidence_snapshot"),dict) else None,
+            "analytical_findings": item.get("analytical_findings") if isinstance(item.get("analytical_findings"),dict) else None,
+            "featured_sources": [x for x in item.get("featured_sources",[])[:6] if isinstance(x,dict)] if isinstance(item.get("featured_sources"),list) else [],
         })
     if len(json.dumps(clean, ensure_ascii=False)) > 150000:
         raise HTTPException(422, "Conversation exceeds storage limit")

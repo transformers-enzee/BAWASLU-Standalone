@@ -1,6 +1,6 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {MessageSquareHeart,X,Send,CheckCircle2,Star,Heart} from 'lucide-react';
-import {useLocation} from 'react-router-dom';
+import {useLocation,useNavigate} from 'react-router-dom';
 import {useLanguage} from '@/lib/LanguageContext';
 
 const browserFeedbackKey=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -13,9 +13,24 @@ const moods=[
  ['Very useful!','Sangat bermanfaat!']
 ];
 export default function DemoFeedbackWidget(){
- const {language}=useLanguage(),loc=useLocation();
+ const {language}=useLanguage(),loc=useLocation(),navigate=useNavigate();
  const T=(en,id)=>language==='id'?id:en;
- const [open,setOpen]=useState(false),[rating,setRating]=useState(0),[hover,setHover]=useState(0);
+ const [open,setOpen]=useState(()=>new URLSearchParams(window.location.search).get('feedback')==='open'),[rating,setRating]=useState(0),[hover,setHover]=useState(0);
+ // A shareable /demo?feedback=open link opens the form on the initial load
+ // and whenever visitors follow the link again through client-side navigation.
+ useEffect(()=>{
+  if(new URLSearchParams(loc.search).get('feedback')==='open'){
+   setOpen(true);setDone(false);setError('');
+  }
+ },[loc.search]);
+ const closeFeedback=()=>{
+  setOpen(false);
+  const params=new URLSearchParams(loc.search);
+  if(params.get('feedback')==='open'){
+   params.delete('feedback');
+   navigate({pathname:loc.pathname,search:params.toString()?'?'+params.toString():'',hash:loc.hash},{replace:true});
+  }
+ };
  const [department,setDepartment]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
  const [website,setWebsite]=useState('');
  const current=hover||rating;
@@ -40,11 +55,11 @@ export default function DemoFeedbackWidget(){
    <MessageSquareHeart size={19} aria-hidden="true"/>{T('Give Feedback','Beri Masukan')}
   </button>
   {open&&<div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:items-center sm:p-5"
-   onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setOpen(false)}}>
+   onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)closeFeedback()}}>
    <section role="dialog" aria-modal="true" aria-label={T('Rate the BAWASLU demo','Nilai Demo BAWASLU')} className="w-full max-w-[470px] max-h-[93vh] overflow-y-auto rounded-[24px] bg-white shadow-2xl">
     <div className="relative overflow-hidden rounded-t-[24px] bg-gradient-to-br from-[#711721] via-[#932331] to-[#b84946] px-6 pb-7 pt-6 text-white">
      <div aria-hidden="true" className="absolute -right-10 -top-14 h-44 w-44 rounded-full border-[28px] border-white/10"/>
-     <button type="button" aria-label={T('Close','Tutup')} onClick={()=>setOpen(false)} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 transition hover:bg-white/25"><X size={18}/></button>
+     <button type="button" aria-label={T('Close','Tutup')} onClick={closeFeedback} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 transition hover:bg-white/25"><X size={18}/></button>
      <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wider"><Heart size={13}/>{T('YOUR OPINION MATTERS','PENDAPAT ANDA BERARTI')}</span>
      <h2 className="mt-4 max-w-[340px] text-[25px] font-extrabold leading-tight">{T('How was your experience?','Bagaimana pengalaman Anda?')}</h2>
      <p className="mt-2 max-w-[345px] text-sm leading-6 text-white/85">{T('Your rating helps us make the BAWASLU demo better.','Penilaian Anda membantu kami meningkatkan demo BAWASLU.')}</p>

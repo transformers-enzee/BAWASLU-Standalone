@@ -56,13 +56,13 @@ export default function DemoFeedbackWidget(){
   </button>
   {open&&<div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:items-center sm:p-5"
    onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)closeFeedback()}}>
-   <section role="dialog" aria-modal="true" aria-label={T('Rate the BAWASLU demo','Nilai Demo BAWASLU')} className="w-full max-w-[470px] max-h-[93vh] overflow-y-auto rounded-[24px] bg-white shadow-2xl">
+   <section role="dialog" aria-modal="true" aria-label={T('Rate the BAWASLU system','Nilai Sistem BAWASLU')} className="w-full max-w-[470px] max-h-[93vh] overflow-y-auto rounded-[24px] bg-white shadow-2xl">
     <div className="relative overflow-hidden rounded-t-[24px] bg-gradient-to-br from-[#711721] via-[#932331] to-[#b84946] px-6 pb-7 pt-6 text-white">
      <div aria-hidden="true" className="absolute -right-10 -top-14 h-44 w-44 rounded-full border-[28px] border-white/10"/>
      <button type="button" aria-label={T('Close','Tutup')} onClick={closeFeedback} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 transition hover:bg-white/25"><X size={18}/></button>
      <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wider"><Heart size={13}/>{T('YOUR OPINION MATTERS','PENDAPAT ANDA BERARTI')}</span>
      <h2 className="mt-4 max-w-[340px] text-[25px] font-extrabold leading-tight">{T('How was your experience?','Bagaimana pengalaman Anda?')}</h2>
-     <p className="mt-2 max-w-[345px] text-sm leading-6 text-white/85">{T('Your rating helps us make the BAWASLU demo better.','Penilaian Anda membantu kami meningkatkan demo BAWASLU.')}</p>
+     <p className="mt-2 max-w-[345px] text-sm leading-6 text-white/85">{T('Your feedback helps us improve the BAWASLU system to better support election supervision.','Penilaian dan masukan Anda membantu kami menyempurnakan sistem BAWASLU agar lebih mendukung tugas pengawasan pemilu.')}</p>
     </div>
     {done?<div role="status" className="px-7 py-12 text-center">
       <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50"><CheckCircle2 size={34} className="text-emerald-600"/></div>
@@ -71,13 +71,13 @@ export default function DemoFeedbackWidget(){
       <button type="button" onClick={()=>setOpen(false)} className="mt-6 w-full rounded-xl bg-[#8a202b] py-3 text-sm font-bold text-white">{T('Done','Selesai')}</button>
     </div>:<form onSubmit={submit} className="space-y-5 px-6 pb-6 pt-6">
       <label className="block text-sm font-semibold text-slate-800">
-       {T('Team or bureau','Tim atau biro')} <span className="text-[#a32d39]">*</span>
+       {T('Team or Bureau Name','Nama Tim atau Biro')} <span className="text-[#a32d39]">*</span>
        <input type="text" required minLength={1} maxLength={100} autoComplete="off" value={department} onChange={e=>setDepartment(e.target.value)}
         className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-800 outline-none transition focus:border-[#a43d48] focus:bg-white focus:ring-2 focus:ring-rose-100"
-        placeholder={T('e.g. Election Supervision Team or Public Relations Bureau','Contoh: Tim Pengawasan Pemilu atau Biro Humas')}/>
+        placeholder={T('e.g. Biro Hukum dan Humas','Biro Hukum dan Humas')}/>
       </label>
       <fieldset className="text-center">
-       <legend className="w-full text-center text-sm font-bold text-slate-800">{T('How useful is this demo?','Seberapa bermanfaat demo ini?')} <span className="text-[#a32d39]">*</span></legend>
+       <legend className="w-full text-center text-sm font-bold text-slate-800">{T('How useful is the BAWASLU system?','Seberapa bermanfaat sistem BAWASLU?')} <span className="text-[#a32d39]">*</span></legend>
        <div className="mt-4 flex items-center justify-center gap-2" onMouseLeave={()=>setHover(0)}>
         {[1,2,3,4,5].map(n=><button key={n} type="button" aria-label={T('Rate '+n+' out of 5 stars','Beri '+n+' dari 5 bintang')} aria-pressed={rating===n} onMouseEnter={()=>setHover(n)} onFocus={()=>setHover(n)} onBlur={()=>setHover(0)} onClick={()=>setRating(n)} className="rounded-xl p-1.5 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500">
           <Star size={40} strokeWidth={1.8} className={n<=current?'text-amber-400 drop-shadow-sm':'text-slate-300'} fill={n<=current?'#fbbf24':'transparent'}/>
@@ -90,7 +90,7 @@ export default function DemoFeedbackWidget(){
        {T('Anything you would like to share?','Ada masukan lain?')} <span className="ml-1 text-xs font-normal text-slate-400">({T('Optional','Opsional')})</span>
        <textarea className="mt-2 block min-h-[108px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-800 outline-none transition focus:border-[#a43d48] focus:bg-white focus:ring-2 focus:ring-rose-100" maxLength={1500}
         value={message} onChange={e=>setMessage(e.target.value)}
-        placeholder={T('What could we improve?','Apa yang bisa kami tingkatkan?')}/>
+        placeholder={T('What should we improve in the BAWASLU system?','Apa yang perlu kami tingkatkan pada sistem BAWASLU?')}/>
       </label>
       <input aria-hidden="true" tabIndex={-1} autoComplete="off" className="hidden" value={website} onChange={e=>setWebsite(e.target.value)} name="website"/>
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}

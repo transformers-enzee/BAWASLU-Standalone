@@ -222,7 +222,16 @@ def _source(db, p, source_type, source_id, campaign_id):
         if key not in seen:
             seen.add(key)
             unique.append(tag)
+    tag_types={tag["type"] for tag in unique}
+    recommended_department=(
+        "Penanganan Pelanggaran" if "SUSPECTED_VIOLATION" in tag_types
+        else "Pengawasan" if "ELECTORAL_ISSUE" in tag_types
+        else "Humas & Hubungan Masyarakat" if "BAWASLU_ISSUE" in tag_types
+        else "Data & Analisis"
+    )
     return {
+        "recommended_department": recommended_department,
+        "recommendation_basis": "Suggested from saved classification and source context; officer chooses the final destination.",
         "source_type":source_type,"source_id":str(source_id),
         "campaign_id":int(campaign_id) if source_type=="SOCIAL" else None,
         "title":title,"excerpt":text[:950],"source_url":url,
@@ -533,3 +542,135 @@ def transition_report(report_id:int,body:ReportAction,user:User=Depends(current_
     _record_event(db,case,user.id,"REPORT_"+action,{"report_id":report.id,"previous":previous,"note":body.review_comment})
     audit(db,p,"CaseReport",report.id,"REPORT_"+action,{"case_id":case.id})
     return _report_view(report)
+
+
+class AssistantHandoff(BaseModel):
+    """A human-confirmed case+draft handoff, reusing an already generated answer."""
+    source_type: str = Field(min_length=3,max_length=32)
+    source_id: str = Field(min_length=1,max_length=72)
+    campaign_id: int | None = None
+    department: str
+    target_scope: str = "NATIONAL"
+    target_province: str = ""
+    assignee_id: int | None = None
+    title: str = Field(default="",max_length=240)
+    executive_summary: str = Field(default="",max_length=3500)
+    findings: str = Field(default="",max_length=9000)
+    review_steps: list[str] = Field(default_factory=list,max_length=6)
+    question: str = Field(default="",max_length=500)
+    confirm: bool = False
+
+@router.get("/assistant-workspace")
+def assistant_workspace(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Cheap permission-filtered workload snapshot, no model requests."""
+    p=profile(db,user)
+    _require(p)
+    visible=[c for c in db.query(CaseAssignment)
+        .order_by(CaseAssignment.updated_at.desc()).limit(300).all()
+        if _visible(c,p,user.id)]
+    active=[c for c in visible if c.status!="CLOSED"]
+    mine=[c for c in active if c.assignee_id==user.id]
+    ids=[c.id for c in visible]
+    reports=(db.query(CaseReport).filter(CaseReport.case_id.in_(ids),
+        CaseReport.status=="SUBMITTED").all() if ids else [])
+    pending=[r for r in reports if r.created_by!=user.id] if has(p,"human_validation") else []
+    return {
+        "can_create":has(p,"add_intelligence"),
+        "my_assignments":len(mine),
+        "visible_open_cases":len(active),
+        "reports_for_my_review":len(pending),
+        "recent_cases":[{"id":c.id,"title":c.title[:120],"status":c.status,
+            "department":c.target_department,"province":c.target_province,
+            "assigned_to_me":c.assignee_id==user.id} for c in active[:5]],
+        "paid_provider_called":False
+    }
+
+@router.post("/assistant-handoff")
+def assistant_handoff(body: AssistantHandoff,
+                      user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    """Turn one permission-checked source and existing analysis into draft work.
+
+    Does not invoke AI or send a task automatically. Requires explicit client
+    confirmation, officer authorization, and source/jurisdiction revalidation.
+    """
+    from .models import AuditEvent
+    p=profile(db,user)
+    _require(p,"add_intelligence")
+    if body.confirm is not True:
+        raise HTTPException(422,"Officer confirmation is required")
+    if body.department not in DEPARTMENTS:
+        raise HTTPException(422,"Choose an authorized department")
+    source=_source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)
+    destination=_validate_route(source,p,body.target_scope,body.target_province)
+    assignee=_assignee(db,body.target_scope,destination,body.assignee_id)
+    existing=(db.query(CaseAssignment)
+        .filter(CaseAssignment.created_by==user.id,
+                CaseAssignment.source_type==source["source_type"],
+                CaseAssignment.source_id==source["source_id"],
+                CaseAssignment.campaign_id==source["campaign_id"],
+                CaseAssignment.status!="CLOSED")
+        .order_by(CaseAssignment.id.desc()).first())
+    if existing:
+        return {"case":_case_view(existing),"existing":True,
+                "report_id":None,"paid_provider_called":False}
+    origin_scope,origin_province=_team(p)
+    title=_clean(body.title,240) or source["title"] or "Intelligence review"
+    validated_steps=[step.strip()[:1200] for step in body.review_steps
+                     if isinstance(step,str) and step.strip()][:5]
+    # The agent's text is an officer-editable suggestion, never an established
+    # fact. The originating source is independently rechecked above.
+    summary=(body.executive_summary.strip() or
+        "Tinjau rekaman sumber terkait untuk memutuskan apakah pemeriksaan diperlukan.")[:3500]
+    findings=(body.findings.strip() or source["excerpt"])[:9000]
+    limits=("Draf disiapkan dari analisis asisten dan sumber yang terlampir. "
+            "Kesimpulan, kutipan terhadap sumber lain, lokasi, pelanggaran dan "
+            "status hukum belum dinyatakan terverifikasi. Petugas harus "
+            "memeriksa dokumen primer, tanggal, dan kecocokan konteks.")
+    item=CaseAssignment(
+        title=title,source_type=source["source_type"],source_id=source["source_id"],
+        campaign_id=source["campaign_id"],source_url=source["source_url"],
+        source_excerpt=source["excerpt"],
+        tags_json=json.dumps(source["tags"],ensure_ascii=False),
+        suggested_provinces_json=json.dumps(source["suggested_provinces"],ensure_ascii=False),
+        verified_province=source["verified_province"] or "",
+        originating_scope=origin_scope,originating_province=origin_province,
+        target_scope=body.target_scope,target_province=destination,
+        target_department=body.department,assignee_id=assignee,
+        created_by=user.id,status="ASSIGNED" if assignee else "OPEN",
+        notes=("Handoff dari AI Assistant. Petugas meninjau sumber sebelum tindak lanjut."))
+    db.add(item)
+    db.flush()
+    snapshot={"case_id":item.id,"source_type":source["source_type"],
+              "source_id":source["source_id"],"campaign_id":source["campaign_id"],
+              "source_url":source["source_url"],"source_excerpt":source["excerpt"],
+              "source_tags":source["tags"],"verified_province":source["verified_province"],
+              "original_question":body.question,
+              "origin":"ASSISTANT_DRAFT_OFFICER_CONFIRMATION",
+              "other_claims_require_independent_review":True,
+              "created_at":datetime.now(timezone.utc).isoformat()}
+    report=CaseReport(
+        case_id=item.id,title=("Draf kajian: "+title)[:240],
+        executive_summary=summary,
+        findings=findings,
+        verification_notes=limits,
+        recommendations="\n\n".join(f"{i}. {step}" for i,step in enumerate(validated_steps,1)) or
+                        "Verifikasi sumber asli dan kewenangan unit penerima.",
+        source_snapshot_json=json.dumps(snapshot,ensure_ascii=False),
+        status="DRAFT",created_by=user.id)
+    db.add(report)
+    db.flush()
+    db.add(CaseTransition(case_id=item.id,actor_id=user.id,
+        action="ASSISTANT_HANDOFF",details_json=json.dumps({
+            "report_id":report.id,"department":body.department,"target_scope":body.target_scope,
+            "target_province":destination,"assignee_id":assignee,
+            "ai_text_is_unverified":True},ensure_ascii=False)))
+    db.add(AuditEvent(subject_type="CaseAssignment",subject_id=str(item.id),
+        action="ASSISTANT_HANDOFF",actor_id=str(user.id),actor_name=p.get("name",""),
+        changes_json=json.dumps({"report_id":report.id,"department":body.department,
+            "source_id":source["source_id"],"human_confirmation":True},ensure_ascii=False),
+        occurred_at=datetime.now(timezone.utc).isoformat()))
+    db.commit()
+    return {"case":_case_view(item),"report_id":report.id,
+            "existing":False,"paid_provider_called":False,
+            "review_required":True}

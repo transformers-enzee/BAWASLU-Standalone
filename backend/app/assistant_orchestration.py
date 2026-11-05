@@ -136,10 +136,24 @@ def _social_select(rows, question, limit=18):
                         str(row.get("author_name") or ""),
                         json.dumps(row.get("topic_labels") or [], ensure_ascii=False),
                         json.dumps(row.get("candidate_signals") or [], ensure_ascii=False)]).casefold()
-        match = sum(1 for t in terms if t.casefold() in hay)
-        if terms and not match:
+        # Prefer posts actually discussing the subject over generic hashtag hits;
+        # keep old records available for explicit historical questions.
+        body=content.casefold()
+        direct_hits=sum(1 for t in terms if re.search(r"(?<!\w)"+re.escape(t.casefold())+r"(?!\w)",body))
+        metadata_hits=sum(1 for t in terms if t.casefold() in hay)
+        if terms and not metadata_hits:
             continue
-        score = match * 6 + min(4, len(content) // 250)
+        score=direct_hits*10 + max(0,metadata_hits-direct_hits)*2 + min(4,len(content)//250)
+        if not re.search(r"\b(?:19|20)\d{2}\b",str(question or "")):
+            published=str(row.get("published_at") or "")[:10]
+            try:
+                age=(date.today()-date.fromisoformat(published)).days
+                if 0<=age<=45:score+=14
+                elif 0<=age<=180:score+=9
+                elif 0<=age<=365:score+=4
+                elif age>730:score-=5
+            except ValueError:
+                pass
         # Deduplicate source posts linked to multiple campaigns.
         if rid not in selected or score > selected[rid][0]:
             selected[rid] = (score, row)

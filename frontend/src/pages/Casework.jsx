@@ -32,7 +32,7 @@ export default function Casework(){
  const [sourceType,setSourceType]=useState(params.get('source_type')||'SOCIAL');
  const [sourceId,setSourceId]=useState(params.get('source_id')||'');
  const [campaignId,setCampaignId]=useState(params.get('campaign_id')||'');
- const [tab,setTab]=useState('assignments');
+ const [tab,setTab]=useState(params.get('tab')==='reports'?'reports':'assignments');
  const [options,setOptions]=useState(null),[cases,setCases]=useState([]),[detail,setDetail]=useState(null),[selected,setSelected]=useState(null);
  const [preview,setPreview]=useState(null),[newTitle,setNewTitle]=useState('');
  const [department,setDepartment]=useState('Data & Analisis'),[scope,setScope]=useState('NATIONAL'),[province,setProvince]=useState(''),[assignee,setAssignee]=useState('');
@@ -43,6 +43,10 @@ export default function Casework(){
  const [showNew,setShowNew]=useState(Boolean(params.get('source_id')));
  async function reload(){const [a,b]=await Promise.all([request('/options'),request('/cases')]);setOptions(a);setCases(b.cases||[]);}
  useEffect(()=>{let active=true;Promise.all([request('/options'),request('/cases')]).then(([a,b])=>{if(active){setOptions(a);setCases(b.cases||[]);setScope(a.user_scope||'NATIONAL');setProvince(a.user_province||'')}}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[]);
+ useEffect(()=>{
+  const id=Number(params.get('case_id')||0);
+  if(Number.isInteger(id)&&id>0)selectCase(id);
+ },[]);
  async function selectCase(id){setSelected(id);setError('');try{const d=await request('/cases/'+id);setDetail(d);setScope(d.case.target_scope);setProvince(d.case.target_province);setDepartment(d.case.target_department);setAssignee(d.case.assignee_id?String(d.case.assignee_id):'');setNewStatus(d.case.status==='CLOSED'?'CLOSED':'IN_REVIEW');setEditReport(null);setForm(initialReport)}catch(e){setError(e.message)}}
  const eligible=useMemo(()=>options?.officers?.filter(x=>x.scope===scope&&(scope==='NATIONAL'||x.province===province))||[],[options,scope,province]);
  async function act(fn,message){setBusy(true);setError('');setNotice('');try{await fn();setNotice(message);await reload();if(selected){const d=await request('/cases/'+selected);setDetail(d)}}catch(e){setError(e.message)}finally{setBusy(false)}}

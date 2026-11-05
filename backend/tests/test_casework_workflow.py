@@ -10,6 +10,7 @@ from app.models import (User,AccessGrant,MonitoringCampaign,SocialListeningResul
 from app.access import default_permissions, profile
 from app.jurisdiction_review import fingerprint
 from app.casework import (_source,_visible,_validate_route,CaseAssignment,CaseReport,
+    AssistantHandoff,assistant_handoff,assistant_workspace,CaseTransition,
     NewCase,ReportDraft,ReportAction,create_case,create_report,transition_report)
 
 def dataset():
@@ -145,3 +146,91 @@ def test_a_regency_role_never_reads_an_unrelated_provincial_case():
         assert _visible(case,regency,2)
     finally:
         db.close()
+
+
+def test_assistant_handoff_requires_confirmation_and_no_duplicate_case():
+    db=dataset()
+    try:
+        request=AssistantHandoff(source_type="SOCIAL",source_id="11",campaign_id=90,
+            department="Penanganan Pelanggaran",target_scope="NATIONAL",
+            title="Review atas dokumen pencalonan",executive_summary="Ada dugaan dalam unggahan.",
+            findings="Sumber mengangkat klaim terkait pencalonan; perlu dokumen primer.",
+            review_steps=["Periksa dokumen resmi sebelum menyimpulkan."],
+            question="Analisis isu pencalonan Gibran",confirm=False)
+        with pytest.raises(HTTPException) as denied:
+            assistant_handoff(request,db.get(User,1),db)
+        assert denied.value.status_code==422
+        assert db.query(CaseAssignment).count()==0
+        request.confirm=True
+        saved=assistant_handoff(request,db.get(User,1),db)
+        assert saved["existing"] is False
+        assert saved["paid_provider_called"] is False
+        assert saved["review_required"] is True
+        case=db.get(CaseAssignment,saved["case"]["id"])
+        report=db.get(CaseReport,saved["report_id"])
+        assert case.target_department=="Penanganan Pelanggaran"
+        assert case.status=="OPEN"
+        assert report.status=="DRAFT" and "dokumen primer" in report.findings
+        assert "belum dinyatakan terverifikasi" in report.verification_notes
+        assert "Periksa dokumen resmi" in report.recommendations
+        assert db.query(CaseTransition).filter_by(case_id=case.id,action="ASSISTANT_HANDOFF").count()==1
+        again=assistant_handoff(request,db.get(User,1),db)
+        assert again["existing"] is True
+        assert again["case"]["id"]==case.id
+        assert db.query(CaseReport).count()==1
+    finally:
+        db.close()
+
+
+def test_assistant_handoff_rechecks_verified_province_and_acl():
+    db=dataset()
+    try:
+        incoming=AssistantHandoff(source_type="SOCIAL",source_id="11",campaign_id=90,
+            department="Pengawasan",target_scope="PROVINCE",
+            target_province="Riau",assignee_id=2,confirm=True)
+        with pytest.raises(HTTPException) as err:
+            assistant_handoff(incoming,db.get(User,1),db)
+        assert err.value.status_code==422
+        confirmed(db)
+        created=assistant_handoff(incoming,db.get(User,1),db)
+        case=db.get(CaseAssignment,created["case"]["id"])
+        assert case.target_province=="Riau" and case.assignee_id==2
+        assert _visible(case,p(db,2),2)
+        assert not _visible(case,p(db,3),3)
+        assert assistant_workspace(db.get(User,2),db)["my_assignments"]==1
+        assert assistant_workspace(db.get(User,3),db)["visible_open_cases"]==0
+    finally:
+        db.close()
+
+
+def test_viewer_cannot_execute_assistant_handoff():
+    db=dataset()
+    try:
+        db.add(User(id=8,email="viewer@test.invalid",full_name="Viewer",password_hash="unused"))
+        db.add(AccessGrant(user_id=8,access_role="Viewer",geographic_scope="Nationwide",
+            status="Active",permissions_json=json.dumps(default_permissions("Viewer"))))
+        db.commit()
+        with pytest.raises(HTTPException) as err:
+            assistant_handoff(AssistantHandoff(source_type="SOCIAL",source_id="11",
+                campaign_id=90,department="Pengawasan",confirm=True),db.get(User,8),db)
+        assert err.value.status_code==403
+        assert db.query(CaseAssignment).count()==0
+    finally:
+        db.close()
+
+
+def test_fresh_relevant_posts_rank_above_old_hashtag_sources_without_invented_counts():
+    from app.assistant_orchestration import _social_select
+    from datetime import date,timedelta
+    now=date.today().isoformat()
+    old=(date.today()-timedelta(days=1000)).isoformat()
+    posts=[
+        {"id":"10","text_content":"Gibran laporan berita terkait pemilu dan pengawasan",
+         "relevance_label":"RELEVANT","published_at":old,"campaign_name":"Bawaslu","engagement_total":100000},
+        {"id":"20","text_content":"Gibran membahas dokumen pencalonan dan pemeriksaan",
+         "relevance_label":"RELEVANT","published_at":now,"campaign_name":"Bawaslu","engagement_total":100},
+    ]
+    selected,total=_social_select(posts,"analisis audiens tentang Gibran",limit=2)
+    assert total==2
+    assert selected[0]["id"]=="20"
+    assert selected[1]["id"]=="10"

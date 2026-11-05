@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
+import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/AssistantActionDesk';
 import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
 import { useLanguage } from '@/lib/LanguageContext';
 
@@ -102,11 +103,12 @@ export default function IntelligenceAssistant(){
  }
  return <div className="max-w-[1300px] mx-auto space-y-5">
   <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] px-6 py-7 text-white">
-   <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">{t('assistant_read_only')}</div>
+   <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">ASISTEN KERJA INTELIJEN BAWASLU</div>
    <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_assistant')}</h1>
-   <p className="text-sm text-[#f5dfdb] mt-2">{t('assistant_tagline')}</p>
-   <p className="text-xs text-[#f0d0cc] mt-2">Answers are limited to authorised intelligence. Review supporting records before any officer decision.</p>
+   <p className="text-sm text-[#f5dfdb] mt-2">Dari temuan menuju pekerjaan nyata: analisis, prioritas pemeriksaan, penugasan, dan draf laporan dalam satu tempat.</p>
+   <p className="text-xs text-[#f0d0cc] mt-2">Hanya sumber yang Anda berwenang akses. Tindak lanjut disimpan setelah konfirmasi dan tetap memerlukan pemeriksaan petugas.</p>
   </header>
+  <UserWorkspacePulse/>
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
    <button type="button" className="intel-button" disabled={busy||historyBusy} onClick={newConversation}><Plus size={15}/>{t('new_conversation')}</button>
@@ -125,13 +127,27 @@ export default function IntelligenceAssistant(){
    </aside>}
    <div className="min-w-0 space-y-4">
     <section className="intel-card p-4 md:p-6 space-y-5 min-h-[300px]" aria-live="polite">
-     {!messages.length&&<div className="space-y-3">
+     {!messages.length&&<div className="space-y-4">
+       <div><p className="text-sm font-bold text-[#801b24] mb-2">Mulai dari pekerjaan yang ingin diselesaikan</p>
+        <div className="grid md:grid-cols-3 gap-3">
+        {[
+         ['Pilih prioritas','Temukan 3 isu paling penting yang perlu ditindaklanjuti BAWASLU dari bukti tersimpan. Jelaskan mengapa, sertakan sumber dan langkah verifikasi.'],
+         ['Siapkan penugasan','Identifikasi isu elektoral atau dugaan pelanggaran yang memerlukan pemeriksaan petugas. Rekomendasikan departemen terkait dan sumber untuk tiap temuan.'],
+         ['Siapkan laporan','Susun dasar laporan intelijen dari temuan tersimpan: ringkasan eksekutif, bukti kunci, ketidakpastian dan langkah yang perlu dilakukan.']
+        ].map(([label,prompt])=><button key={label} type="button" disabled={busy||historyBusy}
+           className="rounded-xl border border-[#e3cdd0] bg-[#fff9f9] p-3 text-left text-sm font-semibold text-[#801b24] hover:bg-[#f8ebed]"
+           onClick={()=>ask(prompt)}>{label}<span className="block text-[11px] mt-1 font-normal text-[#697c8c]">Asisten mencari bukti dan menyiapkan tindak lanjut</span></button>)}
+        </div>
+       </div>
        <div className="flex gap-2 items-center"><MessageSquareText size={18} className="text-[#a52a2f]"/><p className="text-sm font-semibold">{t('try_asking')}</p></div>
        <div className="flex flex-wrap gap-2">{starters.map(starter=><button key={starter} type="button" disabled={busy||historyBusy} onClick={()=>ask(starter)} className="intel-ghost text-xs text-left">{starter}</button>)}</div>
      </div>}
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
-       {m.role==='assistant'?<TranslatedAssistantAnswer text={m.text}/>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
+       {m.role==='assistant'?<>
+        {i===messages.length-1&&<AssistantActionDesk message={m} question={messages[i-1]?.text||''}/>}
+        <TranslatedAssistantAnswer text={m.text}/>
+       </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>{m.grounding?.supporting_count>0&&<p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} sumber rujukan · Analisis memerlukan verifikasi petugas</p>}<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding}/><AssistantIntelligenceReport findings={m.analytical_findings} records={m.records}/><AssistantRecords records={m.records} featured={m.featured_sources}/></>}
       </div>
      </div>)}
@@ -160,7 +176,7 @@ export default function IntelligenceAssistant(){
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={400} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
      <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
     </form>
-    <p className="text-xs text-[#8192a3]">{t('assistant_footer')}</p>
+    <p className="text-xs text-[#8192a3]">AI menyiapkan analisis dan draf; petugas memilih, memeriksa, dan mengonfirmasi setiap tindakan resmi.</p>
    </div>
   </div>
  </div>;

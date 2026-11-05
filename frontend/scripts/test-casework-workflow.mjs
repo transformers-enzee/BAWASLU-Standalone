@@ -20,7 +20,8 @@ assert.ok(casework.includes('Matriks')===false,'workflow UI does not impersonate
 assert.ok(source.includes("t('prepare_from_source')"),'assistant-to-casework deep link');
 assert.ok(inbox.includes('Buat penugasan & laporan')&&inbox.includes('selected.campaign_id'),'Inbox-to-casework evidence link');
 assert.ok(!assistant.includes('Hybrid · Saved evidence + GPT context'),'no technical model banner');
-assert.ok(display.includes('UNVERIFIED_SOCIAL_SOURCE')&&display.includes('AI_RELEVANCE_NOT_LEGAL_VERIFICATION'),'technical statuses translated for users');
+assert.ok(display.includes('friendlySource'),'answer status labels routed to shared multilingual formatter');
+assert.ok(read('src/lib/assistantResponseLocale.js').includes('UNVERIFIED_SOCIAL_SOURCE'),'technical source states formatted for display');
 assert.ok(assistant.includes('AssistantActionDesk')&&assistant.includes('UserWorkspacePulse'),
     'assistant provides a visible operational workspace');
 assert.ok(desk.includes('/assistant-handoff')&&desk.includes('confirm:true'),

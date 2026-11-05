@@ -19,4 +19,16 @@ assert.ok(widget.includes('<Star ')&&widget.includes('aria-pressed={rating===n}'
 assert.ok(widget.includes("category:'general',rating"),'Feedback category is implicit and hidden');
 assert.ok(!widget.includes('Jenis masukan')&&!widget.includes('required minLength'),'Optional comment must not be required');
 assert.ok(admin.includes('<DemoFeedbackAdmin/>'),'Actual admin sees aggregated feedback');
+const feedbackAdminComponent=read('src/components/intel/DemoFeedbackAdmin.jsx');
+const feedbackApiClient=read('src/api/base44Client.js');
+const administration=read('src/pages/Administration.jsx');
+const categoryManager=read('src/components/intel/CategoryManager.jsx');
+assert.ok(feedbackAdminComponent.includes('base44.demoFeedback.remove(pendingDelete.id)'),'Delete uses protected backend API');
+assert.ok(feedbackAdminComponent.includes('role="alertdialog"'),'Destructive delete requires an explicit confirmation');
+assert.ok(feedbackAdminComponent.includes('await load();setDeleteMessage('),'Aggregates are refreshed after successful deletion');
+assert.ok(feedbackApiClient.includes("method:'DELETE'"),'Feedback DELETE request must be authenticated');
+assert.ok(administration.includes('data-i18n-exempt="true"'),'Admin page uses React bilingual labels rather than DOM translation');
+assert.ok(administration.includes('T("AI Relevance Gates"'),'Relevance administration must toggle languages');
+assert.ok(administration.includes('T("Data Integration & Readiness"'),'Data Integration section must toggle languages');
+assert.ok(categoryManager.includes('displayCategory(c.name)'),'Saved category names receive display-only translations');
 console.log('PASS public no-login demo, bilingual feedback form, national-admin dashboard, preserved snapshot isolation');

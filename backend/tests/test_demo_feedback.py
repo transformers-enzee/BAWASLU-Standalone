@@ -79,3 +79,26 @@ def test_private_feedback_cannot_be_read_by_unauthenticated_demo():
     assert client.get('/api/demo-feedback/admin',headers={'Authorization':'Bearer fake'}).status_code==401
     assert client.post('/api/demo-feedback',json={**payload(),'rating':6}).status_code==422
     assert client.get('/api/demo-feedback').status_code==405
+
+def test_feedback_delete_requires_national_administrator_and_updates_aggregates():
+    client=TestClient(app)
+    first=client.post('/api/demo-feedback',json={**payload(),'rating':5,'message':'First rating'});assert first.status_code==201
+    second=client.post('/api/demo-feedback',json={**payload(),'rating':2,'message':'Second rating'});assert second.status_code==201
+    national=headers()
+    initial=client.get('/api/demo-feedback/admin',headers=national).json()
+    assert initial['total']==2 and initial['average_rating']==3.5
+    target=initial['recent'][0]['id']
+    url=f'/api/demo-feedback/admin/{target}'
+    assert client.delete(url).status_code==401
+    assert client.delete(url,headers=headers('Viewer')).status_code==403
+    assert client.delete(url,headers={'Authorization':'Bearer invalid'}).status_code==401
+    assert client.get('/api/demo-feedback/admin',headers=national).json()['total']==2
+    removed=client.delete(url,headers=national)
+    assert removed.status_code==200 and removed.json()['deleted_id']==target
+    summary=client.get('/api/demo-feedback/admin',headers=national).json()
+    assert summary['total']==1 and summary['average_rating']==5
+    assert summary['rated_count']==1
+    assert len(summary['recent'])==1
+    assert client.delete(url,headers=national).status_code==404
+    assert client.delete('/api/demo-feedback/admin/0',headers=national).status_code==404
+    db=SessionLocal();assert db.query(DemoFeedback).count()==1;db.close()

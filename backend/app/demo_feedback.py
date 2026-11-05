@@ -92,3 +92,14 @@ def list_feedback(db:Session=Depends(get_db),user:User=Depends(current_user)):
                    'message':r.message,'page_path':r.page_path,
                    'language':r.language,'created_at':r.created_at.isoformat()+'Z'}
                   for r in rows[:200]]}
+
+@router.delete('/admin/{feedback_id}')
+def delete_feedback(feedback_id:int,db:Session=Depends(get_db),user:User=Depends(current_user)):
+    """Only authorized national administrators can remove a single demo response."""
+    require_admin(db,user)
+    if feedback_id<1:raise HTTPException(404,'Feedback not found')
+    feedback=db.query(DemoFeedback).filter(DemoFeedback.id==feedback_id).first()
+    if feedback is None:raise HTTPException(404,'Feedback not found')
+    db.delete(feedback)
+    db.commit()
+    return {'ok':True,'deleted_id':feedback_id}

@@ -6,8 +6,9 @@ const nav=read('src/components/intel/AccessNavigation.jsx');
 const casework=read('src/pages/Casework.jsx');
 const assistant=read('src/pages/IntelligenceAssistant.jsx');
 const source=read('src/components/intel/AssistantRecords.jsx');
+const inbox=read('src/pages/Inbox.jsx');
 const display=read('src/components/intel/TranslatedAssistantAnswer.jsx');
-assert.ok(app.includes('<Route path="/casework" element={<Casework />} />'),'casework route');
+assert.ok(app.includes('path="/casework"')&&app.includes('Casework'),'casework route');
 assert.ok(nav.includes("'/casework'")&&nav.includes('Penugasan & Laporan'),'side navigation');
 assert.ok(app.includes('demoLocation?<Navigate to="/social-listening" replace/>:<Casework />'),'isolated training demo cannot enter live casework');
 assert.ok(nav.includes("path!=='/casework'"),'training demo hides assignment navigation');
@@ -16,6 +17,7 @@ assert.ok(casework.includes('verified_province'),'no automatic location authorit
 assert.ok(casework.includes('Buat draf analisis dengan AI'),'explicit AI draft only');
 assert.ok(casework.includes('Matriks')===false,'workflow UI does not impersonate a legal finding');
 assert.ok(source.includes('Buat penugasan dari sumber ini'),'assistant-to-casework deep link');
+assert.ok(inbox.includes('Buat penugasan & laporan')&&inbox.includes('selected.campaign_id'),'Inbox-to-casework evidence link');
 assert.ok(!assistant.includes('Hybrid · Saved evidence + GPT context'),'no technical model banner');
 assert.ok(display.includes('UNVERIFIED_SOCIAL_SOURCE')&&display.includes('AI_RELEVANCE_NOT_LEGAL_VERIFICATION'),'technical statuses translated for users');
 console.log('Casework and reporting frontend checks passed');

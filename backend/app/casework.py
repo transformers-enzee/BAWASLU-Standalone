@@ -199,9 +199,12 @@ def _source(db, p, source_type, source_id, campaign_id):
     else:
         raise HTTPException(422, "Source must be SOCIAL or INTELLIGENCE")
     hints = source_hints(text)
-    provinces = hints.get("incident_location_cues_unverified") or []
+    incident_provinces = hints.get("incident_location_cues_unverified") or []
+    provinces = sorted(set(incident_provinces + (hints.get("province_mentions") or [])))
     for name in provinces[:8]:
-        tags.append({"type":"PROVINCE","label":name,"basis":"INCIDENT_TEXT_HINT","verified":name == verified})
+        tags.append({"type":"PROVINCE","label":name,
+                     "basis":"INCIDENT_TEXT_HINT" if name in incident_provinces else "PROVINCE_MENTION_ONLY",
+                     "verified":name == verified})
     if verified and verified not in provinces:
         tags.append({"type":"PROVINCE","label":verified,"basis":"OFFICER_CONFIRMED","verified":True})
     if issues or hints.get("issue_screening",{}).get("needs_human_validation"):
@@ -466,8 +469,12 @@ def ai_report_draft(case_id: int,user: User=Depends(current_user),db: Session=De
         "source_url":case.source_url,"draft_origin":"AI_ASSISTED_REQUIRES_HUMAN_REVIEW",
         "cited_ids":cited,"created_at":datetime.now(timezone.utc).isoformat()
     }
+    # Preserve the provenance distinction while keeping internal enums out of text.
+    def readable(text):
+        return str(text or "").replace("UNVERIFIED_SOCIAL_SOURCE","sumber belum diverifikasi").replace(
+            "AI_RELEVANCE_NOT_LEGAL_VERIFICATION","relevansi belum menjadi kesimpulan hukum")
     report=CaseReport(case_id=case.id,title=("Draf analisis: "+case.title)[:240],
-        executive_summary=answer.split("\n")[0][:3000],findings=answer[:9500],
+        executive_summary=readable(answer.split("\n")[0])[:3000],findings=readable(answer)[:9500],
         verification_notes="Satu sumber yang ditautkan belum merupakan verifikasi independen. "
           "Bandingkan dokumen sumber primer, konteks tanggal, atribusi dan yurisdiksi sebelum diserahkan.",
         recommendations="\n".join(str(x) for x in checks[:5])[:7000],

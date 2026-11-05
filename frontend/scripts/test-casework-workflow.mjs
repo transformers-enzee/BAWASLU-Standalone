@@ -9,6 +9,8 @@ const source=read('src/components/intel/AssistantRecords.jsx');
 const display=read('src/components/intel/TranslatedAssistantAnswer.jsx');
 assert.ok(app.includes('<Route path="/casework" element={<Casework />} />'),'casework route');
 assert.ok(nav.includes("'/casework'")&&nav.includes('Penugasan & Laporan'),'side navigation');
+assert.ok(app.includes('demoLocation?<Navigate to="/social-listening" replace/>:<Casework />'),'isolated training demo cannot enter live casework');
+assert.ok(nav.includes("path!=='/casework'"),'training demo hides assignment navigation');
 assert.ok(casework.includes('/cases/')&&casework.includes('/reports/'),'case/report server actions');
 assert.ok(casework.includes('verified_province'),'no automatic location authority');
 assert.ok(casework.includes('Buat draf analisis dengan AI'),'explicit AI draft only');

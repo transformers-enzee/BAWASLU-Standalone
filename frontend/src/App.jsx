@@ -82,7 +82,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />
-            <Route path="/casework" element={<Casework />} />
+            <Route path="/casework" element={demoLocation?<Navigate to="/social-listening" replace/>:<Casework />} />
           </Route>
           <Route element={<AccessGate permission="add_intelligence" />}><Route path="/add" element={<AddIntelligence />} /></Route>
           <Route element={<AccessGate permission="administration" />}>

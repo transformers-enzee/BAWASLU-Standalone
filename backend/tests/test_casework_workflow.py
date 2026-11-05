@@ -57,6 +57,7 @@ def test_preview_detects_saved_candidate_region_issues_and_violation_hint_withou
         types={x["type"] for x in data["tags"]}
         assert {"CANDIDATE","PROVINCE","SUSPECTED_VIOLATION","BAWASLU_ISSUE","ELECTORAL_ISSUE"}<=types
         assert "Riau" in data["suggested_provinces"]
+        assert any(tag["type"]=="PROVINCE" and tag["label"]=="Riau" for tag in data["tags"])
         assert data["verified_province"]==""
         assert all(not tag["verified"] for tag in data["tags"])
         with pytest.raises(HTTPException) as ex:
@@ -65,6 +66,22 @@ def test_preview_detects_saved_candidate_region_issues_and_violation_hint_withou
                 db.get(User,1),db)
         assert ex.value.status_code==422
         assert db.query(CaseAssignment).count()==0
+    finally:
+        db.close()
+
+def test_province_mentions_are_suggested_but_not_treated_as_incident_location():
+    db=dataset()
+    try:
+        source=db.get(SocialListeningResult,11)
+        source.text_content="BAWASLU Riau menyampaikan informasi umum tentang pengawasan pemilu."
+        db.commit()
+        data=_source(db,p(db,1),"SOCIAL","11",90)
+        assert any(x["type"]=="PROVINCE" and x["label"]=="Riau" and
+                   x["basis"]=="PROVINCE_MENTION_ONLY" and not x["verified"]
+                   for x in data["tags"])
+        assert data["verified_province"]==""
+        with pytest.raises(HTTPException):
+            _validate_route(data,p(db,1),"PROVINCE","Riau")
     finally:
         db.close()
 

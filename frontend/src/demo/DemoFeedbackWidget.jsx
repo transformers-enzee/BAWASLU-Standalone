@@ -3,6 +3,7 @@ import {MessageSquareText,X,Send,CheckCircle2} from 'lucide-react';
 import {useLocation} from 'react-router-dom';
 import {useLanguage} from '@/lib/LanguageContext';
 
+const browserFeedbackKey=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
 const categories=[
  ['general','General feedback','Masukan umum'],
  ['usability','Ease of use','Kemudahan penggunaan'],
@@ -24,7 +25,7 @@ export default function DemoFeedbackWidget(){
    const result=await fetch('/api/demo-feedback',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({category,rating:rating||null,message:message.trim(),
-      page_path:'/demo'+(loc.pathname==='/'?'':loc.pathname),language,website})});
+      page_path:'/demo'+(loc.pathname==='/'?'':loc.pathname),language,website,visitor_key:browserFeedbackKey})});
    const body=await result.json().catch(()=>({}));
    if(!result.ok)throw new Error(result.status===429?T('Too many submissions. Please try later.','Terlalu banyak kiriman. Coba lagi nanti.'):
      result.status===409?T('This feedback was already submitted.','Masukan ini sudah dikirim.'):

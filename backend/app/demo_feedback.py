@@ -26,6 +26,7 @@ class FeedbackIn(BaseModel):
     page_path:str=Field(default='/demo',max_length=255)
     language:str=Field(default='id',pattern='^(id|en)$')
     website:str=Field(default='',max_length=200)  # hidden anti-bot honeypot
+    visitor_key:str=Field(default='',max_length=64)
 
 def require_admin(db,user):
     p=profile(db,user)
@@ -33,10 +34,12 @@ def require_admin(db,user):
             and p.get('permissions',{}).get('administration') is True):
         raise HTTPException(403,'National administrator required')
 
-def hash_visitor(request,now):
+def hash_visitor(request,now,visitor_key=''):
     # Never trust unvalidated X-Forwarded-For headers supplied by visitors.
     address=request.client.host if request.client else 'unknown'
-    return hashlib.sha256((HASH_SECRET+'|'+now.strftime('%Y-%m-%d')+'|'+address).encode()).hexdigest()
+    network=hashlib.sha256((HASH_SECRET+'|network|'+now.strftime('%Y-%m-%d')+'|'+address).encode()).hexdigest()
+    visitor=hashlib.sha256((HASH_SECRET+'|visitor|'+now.strftime('%Y-%m-%d')+'|'+address+'|'+visitor_key).encode()).hexdigest()
+    return visitor,network
 
 @router.post('',status_code=201)
 def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
@@ -47,7 +50,9 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     if not re.fullmatch(r'/demo(?:/[a-zA-Z0-9/_-]*)?',body.page_path):
         raise HTTPException(422,'Invalid demo page')
     now=datetime.utcnow()
-    visitor_hash=hash_visitor(request,now)
+    if body.visitor_key and not re.fullmatch(r'[a-f0-9]{32}',body.visitor_key):
+        raise HTTPException(422,'Invalid visitor token')
+    visitor_hash,network_hash=hash_visitor(request,now,body.visitor_key)
     recent=(db.query(DemoFeedback)
         .filter(DemoFeedback.visitor_hash==visitor_hash,
                 DemoFeedback.created_at>=now-timedelta(minutes=10)).count())
@@ -55,6 +60,11 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     daily=(db.query(DemoFeedback).filter(DemoFeedback.visitor_hash==visitor_hash,
         DemoFeedback.created_at>=now-timedelta(hours=24)).count())
     if daily>=12:raise HTTPException(429,'Daily feedback limit reached')
+    # Backstop for automated floods, without blocking an instructor's class
+    # after just three submissions on the same shared connection.
+    shared_recent=db.query(DemoFeedback).filter(DemoFeedback.network_hash==network_hash,
+        DemoFeedback.created_at>=now-timedelta(minutes=10)).count()
+    if shared_recent>=120:raise HTTPException(429,'Network feedback limit reached')
     # Reject same payload repeatedly in a single day.
     duplicate=db.query(DemoFeedback.id).filter(
         DemoFeedback.visitor_hash==visitor_hash,DemoFeedback.message==message,
@@ -62,7 +72,7 @@ def submit_feedback(body:FeedbackIn,request:Request,db:Session=Depends(get_db)):
     if duplicate:raise HTTPException(409,'Feedback already submitted')
     db.add(DemoFeedback(category=body.category,rating=body.rating,
         message=message,page_path=body.page_path,language=body.language,
-        visitor_hash=visitor_hash,created_at=now))
+        visitor_hash=visitor_hash,network_hash=network_hash,created_at=now))
     db.commit()
     return {'ok':True,'message':'Feedback received'}
 

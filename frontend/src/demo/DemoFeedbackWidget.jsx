@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {MessageSquareHeart,X,Send,CheckCircle2,Star,Heart} from 'lucide-react';
 import {useLocation,useNavigate} from 'react-router-dom';
 import {useLanguage} from '@/lib/LanguageContext';
@@ -34,6 +35,20 @@ export default function DemoFeedbackWidget(){
  const [department,setDepartment]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
  const [website,setWebsite]=useState('');
  const current=hover||rating;
+ // Render the modal outside any transformed/scroll-clipped demo containers.
+ // iOS Safari needs a dedicated touch-scrollable surface instead of a
+ // viewport-fixed popup nested within the floating action button.
+ useEffect(()=>{
+  if(!open)return;
+  const previousOverflow=document.body.style.overflow;
+  const previousOverscroll=document.body.style.overscrollBehavior;
+  document.body.style.overflow='hidden';
+  document.body.style.overscrollBehavior='none';
+  return ()=>{
+   document.body.style.overflow=previousOverflow;
+   document.body.style.overscrollBehavior=previousOverscroll;
+  };
+ },[open]);
  const submit=async event=>{
   event.preventDefault();
   if(busy||rating===0||!department.trim())return;
@@ -54,9 +69,11 @@ export default function DemoFeedbackWidget(){
   <button type="button" onClick={()=>{setOpen(true);setDone(false);setError('')}} className="group inline-flex items-center gap-2.5 rounded-full bg-[#8a202b] px-5 py-3.5 text-sm font-bold text-white shadow-[0_10px_30px_rgba(109,19,32,.24)] transition hover:bg-[#a32d39] hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a202b]">
    <MessageSquareHeart size={19} aria-hidden="true"/>{T('Give Feedback','Beri Masukan')}
   </button>
-  {open&&<div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/60 p-2 backdrop-blur-[3px] sm:items-center sm:p-5"
+  {open&&createPortal(<div className="fixed inset-0 z-[9999] flex min-h-0 items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/60 p-2 backdrop-blur-[3px] sm:items-center sm:p-5"
+    style={{height:'100dvh',WebkitOverflowScrolling:'touch',touchAction:'pan-y',paddingTop:'max(8px, env(safe-area-inset-top))',paddingBottom:'max(8px, env(safe-area-inset-bottom))'}}
    onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)closeFeedback()}}>
-   <section role="dialog" aria-modal="true" aria-label={T('Rate the BAWASLU system','Nilai Sistem BAWASLU')} className="w-full max-w-[470px] max-h-[93vh] overflow-y-auto rounded-[24px] bg-white shadow-2xl">
+   <section role="dialog" aria-modal="true" aria-label={T('Rate the BAWASLU system','Nilai Sistem BAWASLU')} className="w-full max-w-[470px] min-h-0 overflow-y-auto overscroll-contain rounded-[24px] bg-white shadow-2xl"
+    style={{maxHeight:'calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom))',WebkitOverflowScrolling:'touch',touchAction:'pan-y'}}>
     <div className="relative overflow-hidden rounded-t-[24px] bg-gradient-to-br from-[#711721] via-[#932331] to-[#b84946] px-6 pb-7 pt-6 text-white">
      <div aria-hidden="true" className="absolute -right-10 -top-14 h-44 w-44 rounded-full border-[28px] border-white/10"/>
      <button type="button" aria-label={T('Close','Tutup')} onClick={closeFeedback} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 transition hover:bg-white/25"><X size={18}/></button>
@@ -68,7 +85,7 @@ export default function DemoFeedbackWidget(){
       <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50"><CheckCircle2 size={34} className="text-emerald-600"/></div>
       <h3 className="mt-4 text-xl font-bold text-slate-900">{T('Thank you for your rating!','Terima kasih atas penilaian Anda!')}</h3>
       <p className="mt-2 text-sm text-slate-600">{T('Your feedback has been saved for our team.','Masukan Anda telah disimpan untuk tim kami.')}</p>
-      <button type="button" onClick={()=>setOpen(false)} className="mt-6 w-full rounded-xl bg-[#8a202b] py-3 text-sm font-bold text-white">{T('Done','Selesai')}</button>
+      <button type="button" onClick={closeFeedback} className="mt-6 w-full rounded-xl bg-[#8a202b] py-3 text-sm font-bold text-white">{T('Done','Selesai')}</button>
     </div>:<form onSubmit={submit} className="space-y-5 px-6 pb-6 pt-6">
       <label className="block text-sm font-semibold text-slate-800">
        {T('Team or Bureau Name','Nama Tim atau Biro')} <span className="text-[#a32d39]">*</span>
@@ -104,6 +121,6 @@ export default function DemoFeedbackWidget(){
       </div>
     </form>}
    </section>
-  </div>}
+  </div>,document.body)}
  </div>;
 }

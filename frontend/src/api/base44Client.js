@@ -42,6 +42,7 @@ export const base44 = {
     issueDistribution:()=>request('/api/smart-radar/issue-distribution')
   },
   app:{ getPublicSettings:()=>request('/api/public-settings') },
+  demoFeedback:{admin:()=>request('/api/demo-feedback/admin')},
   auth:{
     me:()=>request('/api/auth/me'),
     async loginViaEmailPassword(email,password){ const r=await request('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}); window.localStorage.setItem(TOKEN_KEY,r.access_token);invalidateInboxCache();return r; },

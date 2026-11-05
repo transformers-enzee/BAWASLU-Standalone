@@ -16,12 +16,9 @@ if(demo){
       return import('@/App.jsx');
     }).then(({default:App})=>root.render(<App/>));
   };
-  if(sessionStorage.getItem('bawaslu_demo_training_session')==='v133.2'){
-    openDemo();
-  }else{
-    import('@/demo/DemoTrainingLogin.jsx').then(({default:DemoTrainingLogin})=>
-      root.render(<DemoTrainingLogin onSuccess={openDemo}/>));
-  }
+  // The demo contains only fixed, sanitized, read-only training evidence.
+  // Open immediately: real application auth and admin routes remain protected.
+  openDemo();
 }else{
   import('@/App.jsx').then(({default:App})=>ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
 }

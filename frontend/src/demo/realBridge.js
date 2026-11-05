@@ -171,9 +171,13 @@ function localApi(url,init){
 }
 window.fetch=async (input,init={})=>{
  const url=typeof input==='string'?input:input?.url||'',u=new URL(url,window.location.href);
+ const method=String(init.method||input?.method||'GET').toUpperCase();
+ // Sole permitted demo mutation: anonymous feedback sent to the isolated
+ // server endpoint. Intelligence records remain frozen in browser memory.
+ if(u.origin===location.origin&&u.pathname==='/api/demo-feedback'&&method==='POST')
+   return original(input,init);
  if(u.pathname.startsWith('/api/'))return response(localApi(url,init));
  // Only static asset reads are permitted. No network mutations of any kind.
- const method=String(init.method||input?.method||'GET').toUpperCase();
  if(u.origin===location.origin&&['GET','HEAD'].includes(method)&&!/\/api\//.test(u.pathname))return original(input,init);
  return response({detail:'Blocked: read-only demo network isolation'},403);
 };

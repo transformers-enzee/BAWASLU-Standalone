@@ -29,6 +29,6 @@ export default function DemoAccessNavigation({access,user}){
   <nav aria-label={T('Numbered demo navigation','Navigasi demo bernomor')} className="px-3 space-y-1">
    {access.permissions?.view_intelligence===true&&steps.map(([path,key,Icon],index)=>item(path,Icon,key==='command_centre'?T('Command Centre','Pusat Komando'):t(key),index+1))}
   </nav>
-  <div className="mt-auto border-t border-white/10 p-5 text-xs text-[#f4e7e5]"><div className="font-semibold text-white truncate">{user?.full_name||user?.email||t('authorized_user')}</div><div className="mt-1">{T('Fixed training data · read only','Data pelatihan tetap · hanya baca')}</div></div>
+  <div className="mt-auto border-t border-white/10 p-5 text-xs text-[#f4e7e5]"><div className="font-semibold text-white truncate">{T('Demo visitor','Pengunjung Demo')}</div><div className="mt-1">{T('Fixed training data · read only','Data pelatihan tetap · hanya baca')}</div></div>
  </div>;
 }

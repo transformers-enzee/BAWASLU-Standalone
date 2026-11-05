@@ -19,6 +19,8 @@ for(const p of snapshot){
  }
 }
 assert.ok(text.includes("['GET','HEAD'].includes(method)"),'Static non-GET requests must be blocked');
+assert.ok(text.includes("u.pathname==='/api/demo-feedback'&&method==='POST'"),'Only dedicated feedback writes may leave demo adapter');
+assert.ok(!text.includes("u.pathname==='/api/demo-feedback/admin'&&method==='GET'"),'Anonymous demo must never access admin responses');
 assert.ok(text.includes("XMLHttpRequest.prototype.open"),'XHR must be denied for APIs');
 assert.ok(text.includes("navigator.sendBeacon=()=>false"));
 assert.ok(client.includes("window.__BAWASLU_DEMO_REPLICA__ ? ''"),'Live access token must never be read in demo');
@@ -26,4 +28,4 @@ assert.ok(main.includes("connect-src 'self'"),'CSP must keep traffic on static h
 assert.ok(built.includes('bawaslu-demo-snapshot'));
 assert.ok(!/supabase\.co/i.test(built),'No production Supabase URL in public Command Centre');
 assert.ok(fs.readFileSync(new URL('../public/ui-freeze/bawaslu-interface-locale.js',import.meta.url),'utf8').includes('"LEVEL 3 · What officers have reviewed"'));
-console.log('PASS isolated demo safeguards: sanitized records, no production identifiers, no network mutations, no live auth token');
+console.log('PASS isolated demo safeguards: sanitized records, no production identifiers, feedback-only network write, no live auth token');

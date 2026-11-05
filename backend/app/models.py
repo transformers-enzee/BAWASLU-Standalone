@@ -518,3 +518,15 @@ class RelevanceGateAnswer(Base):
     answer: Mapped[str] = mapped_column(String(16), nullable=False)
     explanation: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class DemoFeedback(Base):
+    """Anonymous demo visitor feedback, isolated from intelligence evidence."""
+    __tablename__='demo_feedback'
+    id: Mapped[int] = mapped_column(Integer,primary_key=True,autoincrement=True)
+    category: Mapped[str] = mapped_column(String(32),nullable=False,index=True)
+    rating: Mapped[int|None] = mapped_column(Integer,nullable=True)
+    message: Mapped[str] = mapped_column(Text,nullable=False)
+    page_path: Mapped[str] = mapped_column(String(255),nullable=False,default='/demo')
+    language: Mapped[str] = mapped_column(String(5),nullable=False,default='id')
+    visitor_hash: Mapped[str] = mapped_column(String(64),nullable=False,index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow,index=True)

@@ -16,6 +16,13 @@ assert.ok(app.includes("!['DEMO-CAMPAIGN-01','DEMO-CAMPAIGN-04'].includes(id)"))
 assert.ok(widget.includes("'/api/demo-feedback'"));
 assert.ok(widget.includes('Beri Masukan')&&widget.includes('Kirim Penilaian'));
 assert.ok(widget.includes("new URLSearchParams(window.location.search).get('feedback')==='open'"),'Shareable URL must open feedback on initial load');
+const languageContext=read('src/lib/LanguageContext.jsx');
+assert.ok(languageContext.includes("new URLSearchParams(window.location.search).get('lang')"),'Demo language should initialize from URL');
+assert.ok(languageContext.includes("if(urlLang==='en'||urlLang==='id')return urlLang"),'Only supported URL languages can override user preference');
+assert.ok(shell.includes("params.set('lang',next)"),'Switching EN/ID updates shareable URL');
+assert.ok(shell.includes("new URLSearchParams(location.search).get('lang')"),'Client navigation follows demo language URL');
+assert.ok(shell.includes("onClick={()=>changeLanguage('en')}")&&shell.includes("onClick={()=>changeLanguage('id')}"),'Both toggle buttons use shared URL language handler');
+
 assert.ok(widget.includes("new URLSearchParams(loc.search).get('feedback')==='open'"),'Client-side navigation must reopen feedback');
 assert.ok(widget.includes("params.delete('feedback')")&&widget.includes("replace:true"),'Closing must clear feedback query without reload');
 assert.ok(widget.includes('onClick={closeFeedback}')&&widget.includes('closeFeedback()'),'Close buttons and overlay must dismiss dialog');

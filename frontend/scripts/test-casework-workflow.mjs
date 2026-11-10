@@ -64,4 +64,21 @@ assert.ok(casework.includes("language==='en'")&&casework.includes("tr('All cases
   'new operational queue labels follow app language');
 assert.ok(!desk.includes("navigate('/casework")&&!source.includes("to={'/casework?"),
   'no assistant action sends an officer to the standalone casework page');
+assert.ok(inbox.includes('data-inbox-workflow-drawer')&&
+  inbox.includes('max-w-[640px]')&&inbox.includes('min-h-0 flex-1 overflow-y-auto'),
+  'Inbox workflow stays a narrow independently scrolling side panel, not an entire page');
+assert.ok(casework.includes('data-inbox-queue-picker')&&casework.includes('data-inbox-empty-state'),
+  'embedded workload uses a compact filter and useful empty state, not six cards');
+assert.ok(casework.includes("{!embedded&&<section className=\"intel-card p-3 print:hidden\""),
+  'standalone six-card queue dashboard never renders inside Inbox');
+assert.ok(casework.includes('!emptyQueue&&<div')&&casework.includes('focused=embedded&&'),
+  'empty queues do not render the two-column blank assignment workspace');
+assert.ok(casework.includes('!embedded&&options?.can_create&&<button'),
+  'generic new-assignment button is removed from Inbox; begin from a selected source');
+assert.ok(casework.includes("tr('Assignment','Penugasan')")&&
+  casework.includes("tr('Report','Laporan')")&&casework.includes("tr('Save assignment','Simpan penugasan')"),
+  'the main assignment and report controls follow the selected interface language');
+assert.ok(inbox.includes("caseworkRequest.sourceId?")&&
+  inbox.includes("language==='en'?'Work with this post':'Tindak lanjut unggahan'"),
+  'drawer heading responds to source-specific versus workload context');
 console.log('In-Inbox assignment, report and approval integration checks passed');

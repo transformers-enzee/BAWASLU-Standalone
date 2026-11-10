@@ -754,18 +754,24 @@ export default function Inbox(){
  </div>}
  <SocialEvidenceInbox onOpenCasework={openCasework}/>
  {caseworkRequest&&!demo&&<div role="dialog" aria-modal="true" aria-label={language==='en'?'Assignments and reports':'Penugasan dan laporan'}
-    className="fixed inset-0 z-[80] flex justify-end">
-    <button type="button" onClick={closeCasework} aria-label={language==='en'?'Close assignment workspace':'Tutup panel penugasan'} className="absolute inset-0 bg-slate-900/50"/>
-    <section className="relative z-10 h-full w-full max-w-[1150px] overflow-y-auto bg-[#f7f9fb] shadow-2xl">
-     <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-3">
-      <div><h2 className="text-base font-bold text-[#801b24]">{language==='en'?'Assignment & report':'Penugasan & laporan'}</h2>
-       <p className="text-xs text-[#64748b]">{language==='en'?'Manage this work directly from Intelligence Inbox.':'Kelola penugasan langsung dari Intelligence Inbox.'}</p>
+    className="fixed inset-0 z-[80] flex justify-end" data-inbox-workflow-drawer>
+    <button type="button" onClick={closeCasework} aria-label={language==='en'?'Close assignment workspace':'Tutup panel penugasan'} className="absolute inset-0 bg-slate-900/30"/>
+    <section className="relative z-10 flex h-[100dvh] min-w-0 w-full max-w-[640px] flex-col overflow-hidden border-l border-[#dce4ec] bg-[#f7f9fb] shadow-2xl sm:rounded-l-2xl">
+     <div className="z-20 flex shrink-0 items-center justify-between border-b border-[#e7e9ef] bg-white px-5 py-4">
+      <div className="min-w-0 pr-3" data-i18n-exempt lang={language==='en'?'en':'id'}>
+       <h2 className="text-base font-bold text-[#801b24]">{caseworkRequest.sourceId?
+        (language==='en'?'Work with this post':'Tindak lanjut unggahan'):
+        caseworkRequest.caseId?(language==='en'?'Review assignment':'Tinjau penugasan'):
+        (language==='en'?'My work':'Pekerjaan saya')}</h2>
+       <p className="mt-1 truncate text-xs text-[#64748b]">{caseworkRequest.sourceId?
+        (language==='en'?'Source post #':'Unggahan #')+caseworkRequest.sourceId:
+        (language==='en'?'Within Intelligence Inbox':'Di dalam Kotak Masuk Intelijen')}</p>
       </div>
       <button type="button" className="intel-ghost inline-flex items-center gap-1" onClick={closeCasework}>
        <X size={16}/>{language==='en'?'Close':'Tutup'}
       </button>
      </div>
-     <div className="p-4">
+     <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-5">
       <Casework key={JSON.stringify(caseworkRequest)} embedded
        initialSource={caseworkRequest.sourceId?caseworkRequest:null}
        initialCaseId={caseworkRequest.caseId||null}

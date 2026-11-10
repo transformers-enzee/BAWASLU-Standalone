@@ -320,12 +320,21 @@ def test_province_to_national_handoff_accepts_only_national_receiver():
     from app.casework import acknowledge_case,RouteCase,route_case,list_cases
     db=dataset()
     try:
+        # First establish a real officer-confirmed receiving province. The
+        # provincial team then escalates this assigned case to national.
+        confirmed(db)
         case=create_case(NewCase(source_type="SOCIAL",source_id="11",campaign_id=90,
-            department="Pengawasan",target_scope="NATIONAL",
-            assignee_id=1),db.get(User,2),db)
-        assert case["originating_scope"]=="PROVINCE"
-        assert case["target_scope"]=="NATIONAL"
-        assert list_cases(db.get(User,2),db)["queue_counts"]["sent_by_me"]==1
+            department="Pengawasan",target_scope="PROVINCE",target_province="Riau",
+            assignee_id=2),db.get(User,1),db)
+        acknowledged=acknowledge_case(case["id"],db.get(User,2),db)
+        assert acknowledged["status"]=="IN_REVIEW"
+        routed=route_case(case["id"],RouteCase(
+            department="Hukum & Sengketa",target_scope="NATIONAL",
+            assignee_id=1,note="Escalate for national legal review"),
+            db.get(User,2),db)
+        assert routed["target_scope"]=="NATIONAL"
+        assert routed["assignee_id"]==1
+        assert list_cases(db.get(User,1),db)["queue_counts"]["assigned_to_me"]==1
         with pytest.raises(HTTPException):
             acknowledge_case(case["id"],db.get(User,2),db)
         accepted=acknowledge_case(case["id"],db.get(User,1),db)

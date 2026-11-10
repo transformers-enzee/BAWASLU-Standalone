@@ -234,3 +234,116 @@ def test_fresh_relevant_posts_rank_above_old_hashtag_sources_without_invented_co
     assert total==2
     assert selected[0]["id"]=="20"
     assert selected[1]["id"]=="10"
+
+
+def test_end_to_end_national_to_province_accepted_and_report_independently_approved():
+    """No external AI, email or real production data; full workflow uses fixtures."""
+    from app.casework import (acknowledge_case,list_cases,case_detail,change_status,
+        CaseState)
+    db=dataset()
+    try:
+        confirmed(db)
+        created=create_case(NewCase(source_type="SOCIAL",source_id="11",campaign_id=90,
+            department="Penanganan Pelanggaran",target_scope="PROVINCE",
+            target_province="Riau",assignee_id=2),db.get(User,1),db)
+        case_id=created["id"]
+        national=list_cases(db.get(User,1),db)
+        incoming=list_cases(db.get(User,2),db)
+        unrelated=list_cases(db.get(User,3),db)
+        assert national["queue_counts"]["sent_by_me"]==1
+        assert incoming["queue_counts"]["assigned_to_me"]==1
+        assert incoming["queue_counts"]["received_from_other_team"]==1
+        assert incoming["cases"][0]["can_acknowledge"] is True
+        assert unrelated["queue_counts"]["all"]==0
+        assert not any(x["id"]==case_id for x in unrelated["cases"])
+        assert case_detail(case_id,db.get(User,2),db)["can_acknowledge"] is True
+        for unauthorized in (1,3):
+            with pytest.raises(HTTPException):
+                acknowledge_case(case_id,db.get(User,unauthorized),db)
+        result=acknowledge_case(case_id,db.get(User,2),db)
+        assert result["status"]=="IN_REVIEW"
+        assert result["assignee_id"]==2
+        assert db.query(CaseTransition).filter_by(
+            case_id=case_id,action="ACKNOWLEDGED").count()==1
+        assert case_detail(case_id,db.get(User,2),db)["can_acknowledge"] is False
+        with pytest.raises(HTTPException):
+            acknowledge_case(case_id,db.get(User,2),db)
+        saved=create_report(case_id,ReportDraft(title="Regional evidence review",
+           executive_summary="One source requires further checks.",
+           findings="Allegation recorded; no legal determination.",
+           verification_notes="Compare original documents and source dates.",
+           recommendations="Refer for independent assessment."),db.get(User,2),db)
+        submitted=transition_report(saved["id"],ReportAction(status="SUBMITTED"),
+            db.get(User,2),db)
+        assert submitted["status"]=="SUBMITTED"
+        assert list_cases(db.get(User,1),db)["queue_counts"]["needs_my_review"]==1
+        assert list_cases(db.get(User,2),db)["queue_counts"]["needs_my_review"]==0
+        for unauthorized in (2,3):
+            with pytest.raises(HTTPException):
+                transition_report(saved["id"],ReportAction(status="APPROVED"),
+                    db.get(User,unauthorized),db)
+        result=transition_report(saved["id"],ReportAction(status="APPROVED"),
+            db.get(User,1),db)
+        assert result["status"]=="APPROVED"
+        assert result["reviewed_by"]==1
+        assert list_cases(db.get(User,1),db)["queue_counts"]["needs_my_review"]==0
+        assert list_cases(db.get(User,3),db)["queue_counts"]["all"]==0
+        assert db.query(CaseReport).count()==1
+    finally:
+        db.close()
+
+
+def test_unassigned_receiver_can_claim_but_sender_and_unrelated_team_cannot():
+    from app.casework import acknowledge_case,list_cases
+    db=dataset()
+    try:
+        confirmed(db)
+        case=create_case(NewCase(source_type="SOCIAL",source_id="11",campaign_id=90,
+            department="Pengawasan",target_scope="PROVINCE",
+            target_province="Riau"),db.get(User,1),db)
+        assert case["assignee_id"] is None
+        assert list_cases(db.get(User,2),db)["queue_counts"]["team_unassigned"]==1
+        with pytest.raises(HTTPException):
+            acknowledge_case(case["id"],db.get(User,1),db)
+        with pytest.raises(HTTPException):
+            acknowledge_case(case["id"],db.get(User,3),db)
+        accepted=acknowledge_case(case["id"],db.get(User,2),db)
+        assert accepted["assignee_id"]==2
+        assert accepted["status"]=="IN_REVIEW"
+        assert list_cases(db.get(User,2),db)["queue_counts"]["team_unassigned"]==0
+        assert list_cases(db.get(User,2),db)["queue_counts"]["assigned_to_me"]==1
+    finally:
+        db.close()
+
+
+def test_province_to_national_handoff_accepts_only_national_receiver():
+    from app.casework import acknowledge_case,RouteCase,route_case,list_cases
+    db=dataset()
+    try:
+        case=create_case(NewCase(source_type="SOCIAL",source_id="11",campaign_id=90,
+            department="Pengawasan",target_scope="NATIONAL",
+            assignee_id=1),db.get(User,2),db)
+        assert case["originating_scope"]=="PROVINCE"
+        assert case["target_scope"]=="NATIONAL"
+        assert list_cases(db.get(User,2),db)["queue_counts"]["sent_by_me"]==1
+        with pytest.raises(HTTPException):
+            acknowledge_case(case["id"],db.get(User,2),db)
+        accepted=acknowledge_case(case["id"],db.get(User,1),db)
+        assert accepted["status"]=="IN_REVIEW"
+        assert accepted["assignee_id"]==1
+        with pytest.raises(HTTPException):
+            acknowledge_case(case["id"],db.get(User,4),db)
+        assert not list_cases(db.get(User,3),db)["cases"]
+    finally:
+        db.close()
+
+
+def test_receiving_case_acceptance_is_not_available_to_a_regency_owner():
+    from app.casework import _receiving_officer
+    case=CaseAssignment(title="Regency follow-up",source_type="SOCIAL",
+      source_id="11",originating_scope="PROVINCE",originating_province="Riau",
+      target_scope="PROVINCE",target_province="Riau",verified_province="Riau",
+      target_department="Pengawasan",status="OPEN",created_by=9)
+    regency={"status":"Active","permissions":default_permissions("Regency/City Officer"),
+      "geographic_scope":"Regency/City","province":"Riau"}
+    assert not _receiving_officer(case,regency,9)

@@ -39,4 +39,15 @@ assert.ok(casework.includes("params.get('case_id')")&&casework.includes("params.
 assert.ok(casework.includes('const opening=')&&casework.includes('p.recommended_department'),
     'casework opens the prepared draft and preselects the saved source department');
 
+assert.ok(casework.includes("const filteredCases=useMemo")&&casework.includes("queueFilter==='all'"),
+  'officer queue filters use actual backend flags');
+assert.ok(casework.includes('b.queue_counts')&&casework.includes("needs_my_review"),
+  'casework counters display server-filtered pending approvals');
+assert.ok(casework.includes('/acknowledge')&&casework.includes("detail?.can_acknowledge")&&
+  casework.includes("Accept & start review"),
+  'receiving officer can accept work without additional forms');
+assert.ok(casework.includes("queueFilter==='needs_my_review')setTab('reports')"),
+  'pending review queue goes straight to reports');
+assert.ok(casework.includes("language==='en'")&&casework.includes("tr('All cases','Semua kasus')"),
+  'new operational queue labels follow app language');
 console.log('Casework and reporting frontend checks passed');

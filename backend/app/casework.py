@@ -116,6 +116,26 @@ def _editable(case, p, user_id):
         )
     )
 
+def _receiving_officer(case, p, user_id):
+    """Only the intended receiving team can take ownership of an assignment.
+
+    The originating team's retained read visibility is not permission to accept
+    work on behalf of its destination. An individually assigned case cannot
+    be claimed by a different officer.
+    """
+    if p.get("geographic_scope") not in ("Nationwide","Province"):
+        return False
+    if not has(p,"add_intelligence") or case.status not in ("OPEN","ASSIGNED"):
+        return False
+    if not _visible(case,p,user_id):
+        return False
+    scope,province=_team(p)
+    if scope != case.target_scope or (scope=="PROVINCE" and (
+        case.target_province != province or case.verified_province != province)):
+        return False
+    return case.assignee_id is None or case.assignee_id==user_id
+
+
 def _assignee(db, target_scope, province, user_id):
     if user_id is None:
         return None
@@ -330,12 +350,49 @@ def preview(source_type: str, source_id: str, campaign_id: int | None = None,
     _require(p)
     return _source(db,p,source_type.upper(),source_id,campaign_id)
 
+def _queue_flags(case,p,user_id,reviewable_ids):
+    active=case.status!="CLOSED"
+    team,province=_team(p)
+    receiving=(case.target_scope==team and (
+        team=="NATIONAL" or case.target_province==province))
+    return {
+      "assigned_to_me":active and case.assignee_id==user_id,
+      "team_unassigned":active and case.assignee_id is None and receiving,
+      "needs_my_review":case.id in reviewable_ids,
+      "sent_by_me":case.created_by==user_id,
+      "received_from_other_team":active and receiving and (
+          case.originating_scope!=case.target_scope or
+          (team=="PROVINCE" and case.originating_province!=province)),
+    }
+
 @router.get("/cases")
 def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile(db,user)
     _require(p)
     cases = db.query(CaseAssignment).order_by(CaseAssignment.updated_at.desc()).limit(300).all()
-    return {"cases":[_case_view(c) for c in cases if _visible(c,p,user.id)]}
+    visible=[c for c in cases if _visible(c,p,user.id)]
+    ids=[c.id for c in visible]
+    reviewable=set()
+    if ids and has(p,"human_validation"):
+        reviewable={r.case_id for r in db.query(CaseReport.case_id).filter(
+            CaseReport.case_id.in_(ids),CaseReport.status=="SUBMITTED",
+            CaseReport.created_by!=user.id).all()}
+    rows=[]
+    counters={"all":0,"assigned_to_me":0,"team_unassigned":0,
+              "needs_my_review":0,"sent_by_me":0,"received_from_other_team":0}
+    for case in visible:
+        flags=_queue_flags(case,p,user.id,reviewable)
+        view=_case_view(case)
+        view["queue_flags"]=flags
+        view["can_acknowledge"]=_receiving_officer(case,p,user.id)
+        rows.append(view)
+        counters["all"]+=1
+        for key,value in flags.items():
+            counters[key]+=int(value)
+    return {"cases":rows,"queue_counts":counters,
+            "current_team":{"scope":_team(p)[0],"province":_team(p)[1]},
+            "can_review_reports":has(p,"human_validation"),
+            "paid_provider_called":False}
 
 @router.post("/cases")
 def create_case(body: NewCase, user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -377,7 +434,33 @@ def case_detail(case_id: int, user: User = Depends(current_user), db: Session = 
     return {"case":_case_view(case),"events":[{"id":x.id,"action":x.action,"actor_id":x.actor_id,
             "details":_json(x.details_json,{}),"at":x.happened_at.isoformat()} for x in transitions],
             "reports":[_report_view(x) for x in reports],"can_edit":_editable(case,p,user.id),
-            "can_approve":has(p,"human_validation")}
+            "can_approve":has(p,"human_validation"),
+             "can_acknowledge":_receiving_officer(case,p,user.id)}
+
+@router.post("/cases/{case_id}/acknowledge")
+def acknowledge_case(case_id:int,user:User=Depends(current_user),
+                     db:Session=Depends(get_db)):
+    """Receiving-officer one-click acceptance; never changes legal findings."""
+    p=profile(db,user)
+    _require(p,"add_intelligence")
+    case=db.query(CaseAssignment).filter_by(id=case_id).with_for_update().one_or_none()
+    if not case or not _visible(case,p,user.id):
+        raise HTTPException(404,"Case not found")
+    if not _receiving_officer(case,p,user.id):
+        raise HTTPException(403,"Only the assigned officer or authorized receiving team can accept this case")
+    if case.assignee_id is None:
+        case.assignee_id=user.id
+    before=case.status
+    case.status="IN_REVIEW"
+    case.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"ACKNOWLEDGED",{
+        "previous_status":before,"assigned_to":user.id,
+        "scope":case.target_scope,"province":case.target_province,
+        "note":"Receiving officer accepted and started review"})
+    audit(db,p,"CaseAssignment",case.id,"CASE_ACKNOWLEDGED",{
+        "before":before,"after":"IN_REVIEW","assigned_to":user.id})
+    return _case_view(case)
+
 
 @router.post("/cases/{case_id}/route")
 def route_case(case_id: int,body: RouteCase,user: User=Depends(current_user),db: Session=Depends(get_db)):

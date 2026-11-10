@@ -115,13 +115,13 @@ def test_pdf_upload_guard_rejects_image_only_scans_and_cross_province(db):
 
 def test_legal_review_never_equates_platform_policy_with_legal_verdict(monkeypatch,db):
     import app.campaigns as campaigns
-    import app.oversight_legal as legal
+    import app.assistant_knowledge as knowledge
     monkeypatch.setattr(campaigns,"campaign_action",lambda *args,**kwargs:{
         "findings":[{"id":"200","campaign_id":"70","platform":"instagram",
             "text_content":"Dugaan pelanggaran pemilu di Riau oleh pihak terkait.",
             "is_flagged":False,"potential_issues":[{"category":"Election"}],
             "flag_review_status":"UNREVIEWED","incident_jurisdiction_verified":False}]})
-    monkeypatch.setattr(legal,"retrieve_knowledge",lambda *args,**kwargs:[])
+    monkeypatch.setattr(knowledge,"retrieve_knowledge",lambda *args,**kwargs:[])
     result=legal_snapshot(db,p(db,1))
     assert result["suspected_cases_in_sample"]==1
     assert result["legal_verdict"]=="NONE"

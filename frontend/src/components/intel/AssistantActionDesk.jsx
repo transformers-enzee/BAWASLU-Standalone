@@ -52,10 +52,10 @@ function UserWorkspacePulse(){
  if(!pulse)return null;
  return <div className="grid gap-2 sm:grid-cols-3" aria-label="Penugasan dalam kewenangan Anda" data-i18n-exempt>
   {[
-   {label:'Ditugaskan kepada saya',value:pulse.my_assignments,icon:ClipboardList},
-   {label:'Kasus yang bisa ditindaklanjuti',value:pulse.visible_open_cases,icon:Layers3},
-   {label:'Laporan perlu keputusan',value:pulse.reports_for_my_review,icon:FileCheck2}
-  ].map(({label,value,icon:Icon})=><button key={label} type="button" onClick={()=>navigate('/casework')} className="flex items-center gap-2 rounded-xl border border-[#ead4d4] bg-white px-3 py-3 text-left hover:bg-[#fbf2f3]">
+   {label:'Ditugaskan kepada saya',value:pulse.my_assignments,icon:ClipboardList,queue:'assigned_to_me'},
+   {label:'Kasus yang bisa ditindaklanjuti',value:pulse.visible_open_cases,icon:Layers3,queue:'all'},
+   {label:'Laporan perlu keputusan',value:pulse.reports_for_my_review,icon:FileCheck2,queue:'needs_my_review'}
+  ].map(({label,value,icon:Icon,queue})=><button key={label} type="button" onClick={()=>navigate('/inbox?casework=1&queue='+queue+(queue==='needs_my_review'?'&tab=reports':''))} className="flex items-center gap-2 rounded-xl border border-[#ead4d4] bg-white px-3 py-3 text-left hover:bg-[#fbf2f3]">
     <Icon size={18} className="shrink-0 text-[#982d37]"/>
     <span className="flex-1 min-w-0 text-xs text-[#586a7b]">{label}</span>
     <span className="font-bold text-[#801b24] tabular-nums">{value}</span>
@@ -117,7 +117,7 @@ export default function AssistantActionDesk({message,question,language='id',labe
     review_steps:checks,question:short(question,500),confirm:true
    };
    const result=await api('/assistant-handoff','POST',req);
-   navigate('/casework?case_id='+result.case.id+'&tab=reports');
+   navigate('/inbox?casework=1&case_id='+result.case.id+'&tab=reports');
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import TranslatedIntelligenceText from '@/components/intel/TranslatedIntelligenceText';
 import SentimentCorrection from '@/components/intel/SentimentCorrection';
+import Casework from '@/pages/Casework';
+import {ClipboardList,FileText, X, UserRoundCheck} from 'lucide-react';
 import { SlidersHorizontal } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
@@ -11,7 +13,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 const platformLabel=value=>({youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',facebook:'Facebook',threads:'Threads',x:'X',twitter:'X',reddit:'Reddit',linkedin:'LinkedIn'}[String(value||'').toLowerCase()]||String(value||'Unknown'));
 const safeOriginalUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}};
 
-function SocialEvidenceInbox(){
+function SocialEvidenceInbox({onOpenCasework}){
  const {language}=useLanguage();
  const deepLink=new URLSearchParams(window.location.search);
  const requestedCampaign=deepLink.get('campaign_id')||'';
@@ -572,7 +574,17 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <p className="text-xs text-slate-600">Platform: {platformLabel(selected.platform)} · Publisher: {selected.observed_handle||selected.author_name||'Not recorded'}</p>
       <p className="text-xs text-slate-600">Published: {selected.published_at||'Publication time not recorded'}</p>
       {safeOriginalUrl(selected.canonical_url)?<a href={safeOriginalUrl(selected.canonical_url)} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[#a52a2f] hover:underline">Open original source ↗</a>:<p className="text-xs text-amber-700">Source URL not available; do not treat this record as independently verifiable.</p>}
-      {!/^\/demo(?:\/|$)/.test(window.location.pathname)&&selected.campaign_id&&<a href={'/casework?source_type=SOCIAL&source_id='+encodeURIComponent(String(selected.id||''))+'&campaign_id='+encodeURIComponent(String(selected.campaign_id))} className="inline-block ml-3 text-xs font-semibold text-[#801b24] underline hover:text-[#a52a2f]">Buat penugasan & laporan</a>}
+      {!/^\/demo(?:\/|$)/.test(window.location.pathname)&&selected.campaign_id&&
+      <div className="mt-3 flex flex-wrap gap-2" data-i18n-exempt>
+       <button type="button" className="intel-button inline-flex items-center gap-1" onClick={()=>
+         onOpenCasework({sourceType:'SOCIAL',sourceId:String(selected.id),campaignId:String(selected.campaign_id),tab:'assignments'})}>
+         <ClipboardList size={14}/>{language==='en'?'Assign / Transfer':'Tugaskan / Alihkan'}
+       </button>
+       <button type="button" className="intel-ghost inline-flex items-center gap-1 text-xs" onClick={()=>
+         onOpenCasework({sourceType:'SOCIAL',sourceId:String(selected.id),campaignId:String(selected.campaign_id),tab:'reports'})}>
+         <FileText size={14}/>{language==='en'?'Draft report':'Buat draf laporan'}
+       </button>
+      </div>}
      </section>
      <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> <TranslatedIntelligenceText text={selected.explanation||'No explanation stored'}/></p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation&&<> · <TranslatedIntelligenceText text={selected.sentiment_explanation}/></>} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><SentimentCorrection campaignId={selected.campaign_id} resultId={selected.id}
         value={selected.sentiment} canEdit={selected.can_correct_sentiment}
@@ -691,7 +703,26 @@ const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};cons
 function initialFilters(){const q=new URLSearchParams(window.location.search),f={};for(const key of ['entity','verification_status','review_status','priority','province','regency_city','platform','evidence_type','reviewer','source_type','supervision_signal','date','search']){const value=q.get(key);if(value)f[key]=value}if(q.get('view'))f.view=q.get('view');return f}
 
 export default function Inbox(){
- const {t,label}=useLanguage();
+ const {t,label,language}=useLanguage();
+ const demo=/^\/demo(?:\/|$)/.test(window.location.pathname)||Boolean(window.__BAWASLU_DEMO_REPLICA__);
+ const [caseworkRequest,setCaseworkRequest]=useState(()=>{
+  if(demo)return null;
+  const q=new URLSearchParams(window.location.search);
+  if(q.get('casework')==='1'||q.has('case_id')||(q.has('source_id')&&q.has('source_type'))){
+   return {caseId:q.get('case_id')||'',sourceType:q.get('source_type')||'SOCIAL',
+     sourceId:q.get('source_id')||'',campaignId:q.get('campaign_id')||'',
+     tab:q.get('tab')||'assignments',queue:q.get('queue')||'all'};
+  }
+  return null;
+ });
+ const openCasework=details=>{if(!demo)setCaseworkRequest(details)};
+ const closeCasework=()=>{
+  setCaseworkRequest(null);
+  if(new URLSearchParams(window.location.search).has('casework')||
+     new URLSearchParams(window.location.search).has('case_id')){
+   window.history.replaceState(null,'','/inbox');
+  }
+ };
  const {items,loading,error}=useIntel(),{items:entities}=useRegistry();
  const [f,setF]=useState(initialFilters),[sort,setSort]=useState('updated-desc');
  const pick=(key,value)=>setF(v=>({...v,[key]:value}));
@@ -713,7 +744,36 @@ export default function Inbox(){
   <div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">Source-linked findings</span><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">Human review audit trail</span><span className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5">No implied legal verdict</span></div>
  </header>
  <Notice error={error}/>
- <SocialEvidenceInbox/>
+ {!demo&&<div className="flex flex-wrap gap-2 items-center" data-i18n-exempt lang={language==='en'?'en':'id'}>
+  <button type="button" className="intel-ghost inline-flex items-center gap-2" onClick={()=>openCasework({queue:'assigned_to_me'})}>
+   <UserRoundCheck size={16}/>{language==='en'?'Assigned to me':'Tugas saya'}
+  </button>
+  <button type="button" className="intel-ghost inline-flex items-center gap-2" onClick={()=>openCasework({queue:'needs_my_review',tab:'reports'})}>
+   <FileText size={16}/>{language==='en'?'Reports to review':'Laporan untuk ditinjau'}
+  </button>
+ </div>}
+ <SocialEvidenceInbox onOpenCasework={openCasework}/>
+ {caseworkRequest&&!demo&&<div role="dialog" aria-modal="true" aria-label={language==='en'?'Assignments and reports':'Penugasan dan laporan'}
+    className="fixed inset-0 z-[80] flex justify-end">
+    <button type="button" onClick={closeCasework} aria-label={language==='en'?'Close assignment workspace':'Tutup panel penugasan'} className="absolute inset-0 bg-slate-900/50"/>
+    <section className="relative z-10 h-full w-full max-w-[1150px] overflow-y-auto bg-[#f7f9fb] shadow-2xl">
+     <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-3">
+      <div><h2 className="text-base font-bold text-[#801b24]">{language==='en'?'Assignment & report':'Penugasan & laporan'}</h2>
+       <p className="text-xs text-[#64748b]">{language==='en'?'Manage this work directly from Intelligence Inbox.':'Kelola penugasan langsung dari Intelligence Inbox.'}</p>
+      </div>
+      <button type="button" className="intel-ghost inline-flex items-center gap-1" onClick={closeCasework}>
+       <X size={16}/>{language==='en'?'Close':'Tutup'}
+      </button>
+     </div>
+     <div className="p-4">
+      <Casework key={JSON.stringify(caseworkRequest)} embedded
+       initialSource={caseworkRequest.sourceId?caseworkRequest:null}
+       initialCaseId={caseworkRequest.caseId||null}
+       initialTab={caseworkRequest.tab||'assignments'}
+       initialQueue={caseworkRequest.queue||'all'}/>
+     </div>
+    </section>
+   </div>}
  <details hidden className="hidden" aria-label="Legacy intelligence records and administrative review"><summary className="cursor-pointer font-semibold">Legacy intelligence records and administrative review</summary><div className="mt-4 space-y-4"><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_needs_action')}</p><p className="text-2xl font-semibold mt-1">{needsAction}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_pending_review')}</p><p className="text-2xl font-semibold mt-1">{counts['pending-review']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_unresolved_jurisdiction')}</p><p className="text-2xl font-semibold mt-1">{counts['jurisdiction-unresolved']}</p></div><div className="intel-card p-4"><p className="text-xs text-[#8192a3]">{t('inbox_triage_pending')}</p><p className="text-2xl font-semibold mt-1">{counts['triage-pending']}</p></div></div><p className="text-xs text-[#8192a3]">{t('inbox_summary_note')}</p>
  <div className="intel-card p-4"><div className="flex flex-wrap gap-2">{quickViews.map(([value,text])=><button key={value||'all'} type="button" className={(f.view||'')===value?'intel-button':'intel-ghost'} onClick={()=>pick('view',value)}>{text} <span className="opacity-70">({counts[value]||0})</span></button>)}</div></div>
  <div className="intel-card p-5 space-y-4"><div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"><input className="intel-input sm:col-span-2" placeholder={t('search_placeholder')} aria-label={t('filter_search')} value={f.search||''} onChange={e=>pick('search',e.target.value)}/><input className="intel-input" type="date" aria-label={t('filter_date')} value={f.date||''} onChange={e=>pick('date',e.target.value)}/>

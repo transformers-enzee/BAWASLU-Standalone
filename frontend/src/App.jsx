@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -22,7 +22,13 @@ import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
-import Casework from '@/pages/Casework';
+// Legacy /casework links are redirected into Intelligence Inbox.
+const LegacyCaseworkRedirect=()=>{
+ const location=useLocation();
+ const qs=new URLSearchParams(location.search);
+ qs.set('casework','1');
+ return <Navigate to={'/inbox?'+qs.toString()} replace/>;
+};
 import AddIntelligence from '@/pages/AddIntelligence';
 import IntelligenceDetail from '@/pages/IntelligenceDetail';
 import DataSources from '@/pages/DataSources';
@@ -82,7 +88,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant />} />
-            <Route path="/casework" element={demoLocation?<Navigate to="/social-listening" replace/>:<Casework />} />
+            <Route path="/casework" element={demoLocation?<Navigate to="/social-listening" replace/>:<LegacyCaseworkRedirect/>} />
           </Route>
           <Route element={<AccessGate permission="add_intelligence" />}><Route path="/add" element={<AddIntelligence />} /></Route>
           <Route element={<AccessGate permission="administration" />}>

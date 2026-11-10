@@ -9,16 +9,26 @@ const source=read('src/components/intel/AssistantRecords.jsx');
 const inbox=read('src/pages/Inbox.jsx');
 const display=read('src/components/intel/TranslatedAssistantAnswer.jsx');
 const desk=read('src/components/intel/AssistantActionDesk.jsx');
-assert.ok(app.includes('path="/casework"')&&app.includes('Casework'),'casework route');
-assert.ok(nav.includes("'/casework'")&&nav.includes('Penugasan & Laporan'),'side navigation');
-assert.ok(app.includes('demoLocation?<Navigate to="/social-listening" replace/>:<Casework />'),'isolated training demo cannot enter live casework');
-assert.ok(nav.includes("path!=='/casework'"),'training demo hides assignment navigation');
+assert.ok(app.includes('path="/casework"')&&app.includes('LegacyCaseworkRedirect'),
+  'old assignment links redirect into the Intelligence Inbox, not a separate page');
+assert.ok(!nav.includes("'/casework'")&&!nav.includes('Penugasan & Laporan'),
+  'sidebar must not contain a separate Assignments & Reports module');
+assert.ok(app.includes('demoLocation?<Navigate to="/social-listening" replace/>:<LegacyCaseworkRedirect/>'),
+  'isolated training demo cannot enter live casework');
+assert.ok(!nav.includes('casework'),'training and normal navigation omit the separate module');
 assert.ok(casework.includes('/cases/')&&casework.includes('/reports/'),'case/report server actions');
 assert.ok(casework.includes('verified_province'),'no automatic location authority');
 assert.ok(casework.includes('Buat draf analisis dengan AI'),'explicit AI draft only');
 assert.ok(casework.includes('Matriks')===false,'workflow UI does not impersonate a legal finding');
-assert.ok(source.includes("t('prepare_from_source')"),'assistant-to-casework deep link');
-assert.ok(inbox.includes('Buat penugasan & laporan')&&inbox.includes('selected.campaign_id'),'Inbox-to-casework evidence link');
+assert.ok(source.includes("t('prepare_from_source')")&&source.includes('/inbox?casework=1'),
+  'assistant evidence sources open the in-Inbox assignment workflow');
+assert.ok(inbox.includes('onOpenCasework({sourceType:')&&inbox.includes('selected.campaign_id'),
+  'a selected Inbox post offers contextual assign and report actions');
+assert.ok(inbox.includes('initialSource={caseworkRequest.sourceId?caseworkRequest:null}')&&
+  inbox.includes('<Casework key={JSON.stringify(caseworkRequest)} embedded'),
+  'case and report editor is embedded inside Intelligence Inbox');
+assert.ok(inbox.includes("queue:'assigned_to_me'")&&inbox.includes("queue:'needs_my_review'"),
+  'Inbox provides assigned work and report-approval filters without a new module');
 assert.ok(!assistant.includes('Hybrid · Saved evidence + GPT context'),'no technical model banner');
 assert.ok(display.includes('friendlySource'),'answer status labels routed to shared multilingual formatter');
 assert.ok(read('src/lib/assistantResponseLocale.js').includes('UNVERIFIED_SOCIAL_SOURCE'),'technical source states formatted for display');
@@ -28,16 +38,18 @@ assert.ok(desk.includes('/assistant-handoff')&&desk.includes('confirm:true'),
     'officer confirmation is required for the one-step case and report handoff');
 assert.ok(desk.includes('/preview?')&&desk.includes('recommended_department'),
     'the assistant verifies the source and pre-selects a department');
-assert.ok(desk.includes('navigate(')&&desk.includes("tab=reports"),
-    'handoff opens the prepared report');
+assert.ok(desk.includes("navigate('/inbox?casework=1&case_id=")&&desk.includes("tab=reports"),
+    'AI handoff opens the prepared report within Intelligence Inbox');
 assert.ok(desk.includes('isDemo()')&&desk.includes('options?.can_create'),
     'demo isolation and role access are enforced in the UI');
 assert.ok(!desk.includes('base44.functions.invoke'),
     'handoff reuses existing analysis without extra paid model request');
-assert.ok(casework.includes("params.get('case_id')")&&casework.includes("params.get('tab')"),
-    'casework opens the assigned case and ready report immediately');
-assert.ok(casework.includes('const opening=')&&casework.includes('p.recommended_department'),
-    'casework opens the prepared draft and preselects the saved source department');
+assert.ok(casework.includes("params.get('case_id')")&&casework.includes("params.get('tab')")&&
+    casework.includes('initialSource')&&casework.includes('initialCaseId'),
+    'embedded workflow opens selected evidence, saved cases and report drafts immediately');
+assert.ok(casework.includes('const opening=')&&casework.includes('p.recommended_department')&&
+    casework.includes('previewAttempted.current=true'),
+    'source selection preloads AI tags and department recommendation without retyping IDs');
 
 assert.ok(casework.includes("const filteredCases=useMemo")&&casework.includes("queueFilter==='all'"),
   'officer queue filters use actual backend flags');
@@ -50,4 +62,6 @@ assert.ok(casework.includes("queueFilter==='needs_my_review')setTab('reports')")
   'pending review queue goes straight to reports');
 assert.ok(casework.includes("language==='en'")&&casework.includes("tr('All cases','Semua kasus')"),
   'new operational queue labels follow app language');
-console.log('Casework and reporting frontend checks passed');
+assert.ok(!desk.includes("navigate('/casework")&&!source.includes("to={'/casework?"),
+  'no assistant action sends an officer to the standalone casework page');
+console.log('In-Inbox assignment, report and approval integration checks passed');

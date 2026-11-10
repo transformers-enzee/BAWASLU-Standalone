@@ -11,6 +11,12 @@ assert.ok(page.includes("useState('DEEP')"),'deep intelligence default');
 assert.ok(dashboard.includes('activity_by_date')&&dashboard.includes('platform_engagement'),'source-based charts connected');
 assert.ok(dashboard.includes('engagement_coverage'),'metric coverage disclosed');
 assert.ok(findings.includes("t('verification_heading')"),'officer actions presented');
+assert.ok(findings.includes('withoutInlineSourceTokens')&&findings.includes('grid grid-cols-1 gap-3'),
+  'investigative cards show each citation as a chip once and remain readable');
+assert.ok(page.includes('maxLength={1000}')&&page.includes('slice(0,120)'),
+  'full investigation questions and bounded history titles are supported');
+assert.ok(page.includes("m.response_profile==='CASE_REVIEW'")&&page.includes('formal_selected_count'),
+  'case review transparently discloses when selected Inbox records are missing');
 assert.ok(records.includes("t('sources_heading')"),'visual source gallery present');
 assert.ok(records.includes('featured?.length?featured:records||[]'),'historical social evidence remains visible');
 assert.ok(dashboard.includes('Every chart uses the same')&&dashboard.includes('snapshot.matched_pool_count'),

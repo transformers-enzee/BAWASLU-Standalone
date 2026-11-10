@@ -455,6 +455,8 @@ def test_normal_assistant_chat_automatically_includes_pdf_and_references(monkeyp
      "Sebutkan SOP dari PDF",True,"SOCIAL_ANALYSIS"),
     ("Analisis sentimen dan engagement dari 100 unggahan",
      "",False,"SOCIAL_ANALYSIS"),
+    ("Investigasi dugaan pelanggaran Gibran berdasarkan Intelligence Inbox dan Social Listening",
+     "",True,"CASE_REVIEW"),
     ("Investigasi kasus #739 dan periksa bukti primer",
      "",True,"CASE_REVIEW"),
     ("Buatkan laporan dari temuan tersimpan",
@@ -621,3 +623,30 @@ def test_procedural_pdf_question_without_word_pdf_still_uses_reference():
     from app.assistant_response_profile import choose_response_profile
     q="Jelaskan proses tindak lanjut pengamanan bukti digital"
     assert choose_response_profile(q,pdf_evidence=[{"record_id":"DOC-1-P6"}])=="PDF_GUIDANCE"
+
+
+def test_case_investigation_with_social_listening_routes_to_review_without_charts(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import assistant_orchestration,domain,campaigns
+    monkeypatch.setattr(domain,"list_intelligence",lambda *_:[])
+    monkeypatch.setattr(campaigns,"campaign_action",lambda *_args,**_kwargs:{
+        "findings":[{"id":9901,"campaign_name":"bawaslu","platform":"instagram",
+                     "author_name":"newsroom","text_content":"Gibran Rakabuming Raka dilaporkan terkait verifikasi dokumen pendidikan",
+                     "relevance_label":"RELEVANT","sentiment":"NEUTRAL",
+                     "published_at":"2026-11-02","engagement_total":3}]})
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        assert kwargs["response_profile"]=="CASE_REVIEW"
+        return ("Klaim perlu diverifikasi [SOCIAL-9901]",["SOCIAL-9901"],{
+            "answer_language":"id","detected_tags":[],
+            "analytical_findings":{"observations":["Perlu dokumen resmi [SOCIAL-9901]"],
+                                   "review_steps":["Periksa arsip otoritatif [SOCIAL-9901]"]}})
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    result=intelligence_assistant({
+        "question":"Investigasi dugaan pelanggaran Gibran Rakabuming Raka berdasarkan Intelligence Inbox dan Social Listening",
+        "previousQuestion":"","analysisMode":"AUTO","responseDepth":"DEEP",
+        "conversationContext":[]},user(db,1),db)
+    assert result["response_profile"]=="CASE_REVIEW"
+    assert result["evidence_snapshot"] is None
+    assert result["grounding"]["formal_selected_count"]==0
+    assert result["grounding"]["social_selected_count"]==1
+    assert result["analytical_findings"]["review_steps"]

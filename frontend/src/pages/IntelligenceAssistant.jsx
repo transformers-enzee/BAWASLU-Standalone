@@ -21,7 +21,13 @@ async function historyRequest(path='',method='GET',body=null){
   ...(body?{body:JSON.stringify(body)}:{})
  });
  const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(response.status===401?'Your login session has expired. Sign in again.':data.detail||data.error||'Conversation history unavailable');
+ if(!response.ok){
+  const detail=data?.detail??data?.error;
+  const reason=typeof detail==='string'?detail:
+   Array.isArray(detail)?detail.map(item=>item?.msg||item?.message||'Invalid field').join('; '):
+   (detail&&typeof detail==='object'?(detail.message||JSON.stringify(detail)):'Conversation history unavailable');
+  throw Error(response.status===401?'Your login session has expired. Sign in again.':reason);
+ }
  return data;
 }
 export default function IntelligenceAssistant(){
@@ -92,7 +98,7 @@ export default function IntelligenceAssistant(){
    const full=[...outgoing,answer];
    setMessages(full);
    try{
-    const title=messages[0]?.text||q.slice(0,120);
+    const title=String(messages[0]?.text||q).slice(0,120);
     const saved=await historyRequest('','PUT',{
      id:activeIdRef.current,title,messages:full
     });
@@ -159,6 +165,7 @@ export default function IntelligenceAssistant(){
         {m.response_profile!=='PDF_GUIDANCE'&&m.grounding?.supporting_count>0&&
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
+        {m.response_profile==='CASE_REVIEW'&&m.grounding?.formal_selected_count===0&&<p className="my-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Tidak ada catatan Intelligence Inbox yang cocok dalam bukti terpilih. Klaim Social Listening tetap memerlukan verifikasi petugas dan dokumen resmi.</p>}
         {m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels} compact={m.response_profile==='SOCIAL_ANALYSIS'}/>}
         <AssistantRecords records={m.records} featured={m.featured_sources} language={m.answer_language||'id'} labels={m.presentation_labels} compactPdf={m.response_profile==='PDF_GUIDANCE'} allowAssignments={m.response_profile==='ACTION_REQUEST'}/></>}
@@ -186,7 +193,7 @@ export default function IntelligenceAssistant(){
       </select>
      </div>
     <form onSubmit={e=>{e.preventDefault();ask(question)}} className="intel-card p-3 flex gap-2">
-     <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={400} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
+     <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={1000} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
      <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
     </form>
     <p className="text-xs text-[#8192a3]">AI menyiapkan analisis dan draf; petugas memilih, memeriksa, dan mengonfirmasi setiap tindakan resmi.</p>

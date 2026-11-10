@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -640,9 +640,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             is_general_knowledge_question, generate_general_openai_answer
         )
         q=str(body.get('question','')).strip()
-        if not q or len(q)>500:
-            raise HTTPException(400,'Question must be between 1 and 500 characters')
-        previous=str(body.get('previousQuestion','')).strip()[:500]
+        if not q or len(q)>1000:
+            raise HTTPException(400,'Question must be between 1 and 1000 characters')
+        previous=str(body.get('previousQuestion','')).strip()[:1000]
         if is_general_knowledge_question(q):
             try:
                 text,provider=generate_general_openai_answer(q,previous)
@@ -684,9 +684,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not has(p,'view_intelligence'):
         raise HTTPException(403,'Intelligence Assistant permission required')
     q=str(body.get('question') or '').strip()
-    if not q or len(q)>500:
-        raise HTTPException(400,'Question must be between 1 and 500 characters')
-    previous=str(body.get('previousQuestion') or '').strip()[:500]
+    if not q or len(q)>1000:
+        raise HTTPException(400,'Question must be between 1 and 1000 characters')
+    previous=str(body.get('previousQuestion') or '').strip()[:1000]
     response_depth=str(body.get('responseDepth') or 'DEEP').upper()
     if response_depth not in ('EXECUTIVE','DEEP','INVESTIGATION'):
         raise HTTPException(400,'Invalid response depth')
@@ -709,7 +709,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     pdf_evidence=retrieve_chat_knowledge(
         db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
     from .assistant_response_profile import (
-        choose_response_profile,evidence_for_profile,PDF_GUIDANCE,SOCIAL_ANALYSIS)
+        choose_response_profile,evidence_for_profile,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     general=requested=='GENERAL' or (
         requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
@@ -843,7 +843,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             support=pdf_evidence[:3]
     source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
     displayed_tags=(meta.get('detected_tags') or fallback_tags(evidence))
-    if response_profile==SOCIAL_ANALYSIS:
+    if response_profile in (SOCIAL_ANALYSIS,CASE_REVIEW):
         displayed_tags=focus_social_tags(
             displayed_tags,q,[x.get('record_id') for x in evidence],limit=4)
     if response_profile==PDF_GUIDANCE:
@@ -859,6 +859,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),
             'matched_social':matched_social,
+            'formal_selected_count':len(selected_formal),
+            'social_selected_count':len(chosen_social),
             'scope':'AUTHORIZED_PDF_REFERENCES' if response_profile==PDF_GUIDANCE
                    else 'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',
             'source_types':source_types,'reference_pdf_count':len(reference_catalog),

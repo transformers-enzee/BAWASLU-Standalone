@@ -71,10 +71,10 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
                          bool(_PDF.search(prev) or (_PROCEDURE.search(prev) and not _SOCIAL.search(prev))))
     if action and not (document_question and not specific_case):
         return ACTION_REQUEST
-    if social:
-        return SOCIAL_ANALYSIS
     if specific_case:
         return CASE_REVIEW
+    if social:
+        return SOCIAL_ANALYSIS
     if cited and (document_question or procedural or continuing_document):
         return PDF_GUIDANCE
     return SOCIAL_ANALYSIS if q else GENERAL

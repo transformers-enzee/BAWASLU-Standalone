@@ -129,3 +129,119 @@ def test_legal_review_never_equates_platform_policy_with_legal_verdict(monkeypat
     assert result["review_queue"][0]["legal_status"]=="REQUIRES_OFFICER_LEGAL_REVIEW"
     assert result["review_queue"][0]["platform_policy_status"]=="NOT_ASSESSED_AGAINST_CURRENT_PLATFORM_RULES"
     assert len(result["legal_follow_up_steps"])>=4
+
+
+def test_hybrid_retrieval_finds_different_wording_and_keeps_page_citations(monkeypatch,db):
+    import app.assistant_semantic as semantic
+    doc=KnowledgePDF(title="Peraturan pengawasan",filename="rules.pdf",scope="PROVINCE",
+        province="Riau",content_sha256="b"*64,content_bytes=b"%PDF-test",
+        pages=2,extracted_chars=73,uploaded_by=1,active=True,
+        document_type="REGULATION",issuer="Bawaslu",
+        review_status="OFFICER_REVIEWED",embedding_status="READY",
+        embedding_model=semantic.EMBED_MODEL)
+    db.add(doc)
+    db.flush()
+    chunk=KnowledgeChunk(document_id=doc.id,page=2,sequence=1,
+        text_content="Mekanisme tindak lanjut memerlukan pembuktian dan rapat pleno.")
+    db.add(chunk)
+    db.commit()
+    # Query deliberately omits the wording used in the document. Fake the
+    # vector match to test retrieval fusion, not the paid embedding service.
+    monkeypatch.setattr(semantic,"semantic_search",
+        lambda session,allowed_docs,question:[chunk])
+    matches=retrieve_knowledge(db,p(db,2),"langkah tindakan untuk dugaan kesalahan",limit=4)
+    assert len(matches)==1
+    assert matches[0]["record_id"]==f"DOC-{doc.id}-P2"
+    assert matches[0]["match_method"]=="SEMANTIC"
+    assert matches[0]["review_status"]=="OFFICER_REVIEWED"
+    assert matches[0]["legal_currentness_verified"] is False
+    assert retrieve_knowledge(db,p(db,3),"langkah tindakan untuk dugaan kesalahan")==[]
+
+def test_fusion_boosts_duplicate_keyword_and_semantic_match(db):
+    from app.assistant_semantic import merge_rankings
+    doc=KnowledgePDF(id=81,title="SOP penanganan pelanggaran",filename="sop.pdf",
+        scope="NATIONAL",province="",content_sha256="c"*64,
+        content_bytes=b"%PDF-fixture",pages=4,extracted_chars=40,uploaded_by=1,
+        document_type="SOP",issuer="BAWASLU",review_status="UNREVIEWED")
+    chunk=KnowledgeChunk(id=701,document_id=81,page=3,sequence=1,
+        text_content="Penanganan pelanggaran memerlukan pemeriksaan saksi.")
+    result=merge_rankings([chunk],[chunk],[doc],limit=4)
+    assert len(result)==1
+    assert result[0]["match_method"]=="HYBRID"
+    assert result[0]["record_id"]=="DOC-81-P3"
+    assert result[0]["legal_currentness_verified"] is False
+
+def test_no_paid_semantic_call_without_indexed_documents(monkeypatch,db):
+    import app.assistant_semantic as semantic
+    def no_paid_calls(*args,**kwargs):
+        raise AssertionError("Embeddings must not be called")
+    monkeypatch.setattr(semantic,"embeddings",no_paid_calls)
+    assert semantic.semantic_search(db,[],"pelanggaran pemilu")==[]
+    matches=retrieve_knowledge(db,p(db,1),"pelanggaran pemilu",limit=6)
+    assert matches==[]
+
+def test_document_review_is_separate_from_legal_currentness(db):
+    from app.assistant_knowledge import ReviewBody,review_pdf
+    pdf=KnowledgePDF(title="Pedoman teknis",filename="pedoman.pdf",
+       scope="PROVINCE",province="Riau",content_sha256="d"*64,
+       content_bytes=b"%PDF-sample",pages=1,extracted_chars=40,uploaded_by=1,active=True)
+    db.add(pdf)
+    db.commit()
+    reviewed=review_pdf(pdf.id,ReviewBody(document_type="SOP",
+        issuer="Bawaslu Riau",notes="Checked original file and page integrity.",
+        reviewed=True),user(db,1),db)
+    assert reviewed["document"]["review_status"]=="OFFICER_REVIEWED"
+    assert reviewed["legal_currentness_verified"] is False
+    assert reviewed["document"]["issuer"]=="Bawaslu Riau"
+    with pytest.raises(HTTPException) as ex:
+        review_pdf(pdf.id,ReviewBody(document_type="SOP",notes="Checked again",
+             reviewed=True),user(db,3),db)
+    assert ex.value.status_code==404
+    with pytest.raises(HTTPException) as ex:
+        review_pdf(pdf.id,ReviewBody(document_type="SOP",notes="Checked again",
+             reviewed=True),user(db,2),db)
+    assert ex.value.status_code==403
+
+def test_semantic_index_respects_explicit_opt_in_and_sqlite_fallback(db,monkeypatch):
+    from app.assistant_semantic import index_document,embeddings,EMBED_DIMS
+    pdf=KnowledgePDF(title="Sample",filename="sample.pdf",scope="NATIONAL",
+        province="",content_sha256="e"*64,content_bytes=b"%PDF-sample",
+        pages=1,extracted_chars=35,uploaded_by=1)
+    chunk=KnowledgeChunk(document_id=1,page=1,sequence=1,
+        text_content="Election regulations apply.")
+    monkeypatch.setenv("OPENAI_API_KEY","fake-test-token")
+    indexed,paid=index_document(db,pdf,[chunk])
+    assert indexed is False and paid is False
+    assert pdf.embedding_status=="UNSUPPORTED"
+    # No external calls are made for tests; this checks the request shape and
+    # validation contract with a local fake HTTP client.
+    class Fake:
+        def __enter__(self):return self
+        def __exit__(self,*args):return False
+        def post(self,url,headers,json):
+            assert json["model"]=="text-embedding-3-small"
+            assert len(json["input"])==1
+            class Response:
+                def raise_for_status(self):pass
+                def json(self):
+                    return {"data":[{"index":0,"embedding":[0.0]*EMBED_DIMS}]}
+            return Response()
+    monkeypatch.setattr("app.assistant_semantic.httpx.Client",lambda **kwargs:Fake())
+    assert len(embeddings(["Election regulations apply."])[0])==EMBED_DIMS
+
+
+def test_search_preview_does_not_generate_model_answer_and_is_scope_filtered(db):
+    from app.assistant_knowledge import search_preview
+    pdf=KnowledgePDF(title="SOP Pemeriksaan Pemilu",filename="sop.pdf",
+        scope="PROVINCE",province="Riau",content_sha256="f"*64,
+        content_bytes=b"%PDF-sample",pages=1,extracted_chars=50,
+        uploaded_by=1,active=True)
+    db.add(pdf);db.flush()
+    db.add(KnowledgeChunk(document_id=pdf.id,page=1,sequence=1,
+        text_content="Pemeriksaan pemilu harus berbasis bukti dan laporan petugas."))
+    db.commit()
+    result=search_preview("pemeriksaan pemilu",False,user(db,2),db)
+    assert result["no_completion_call"] is True
+    assert result["matches"][0]["record_id"]==f"DOC-{pdf.id}-P1"
+    assert result["matches"][0]["match_method"]=="KEYWORD"
+    assert search_preview("pemeriksaan pemilu",False,user(db,3),db)["matches"]==[]

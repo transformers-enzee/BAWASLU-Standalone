@@ -9,6 +9,7 @@ import io
 import re
 from datetime import datetime,timezone
 from fastapi import APIRouter,Depends,File,Form,HTTPException,UploadFile
+from pydantic import BaseModel,Field
 from fastapi.responses import Response
 from sqlalchemy import DateTime,ForeignKey,Integer,LargeBinary,String,Text
 from sqlalchemy.orm import Mapped,mapped_column,Session
@@ -21,6 +22,7 @@ router=APIRouter(prefix="/api/assistant-knowledge",tags=["assistant-knowledge"])
 MAX_BYTES=5*1024*1024
 MAX_PAGES=80
 MAX_CHARS=160000
+DOCUMENT_TYPES={"REGULATION","SOP","REPORT","GUIDANCE","OTHER"}
 
 class KnowledgePDF(Base):
     __tablename__="assistant_knowledge_pdfs"
@@ -36,6 +38,14 @@ class KnowledgePDF(Base):
     uploaded_by:Mapped[int]=mapped_column(Integer,ForeignKey("users.id"),nullable=False)
     uploaded_at:Mapped[datetime]=mapped_column(DateTime,default=lambda:datetime.now(timezone.utc),nullable=False)
     active:Mapped[bool]=mapped_column(default=True,nullable=False)
+    document_type:Mapped[str]=mapped_column(String(24),default="OTHER",nullable=False)
+    issuer:Mapped[str]=mapped_column(String(220),default="",nullable=False)
+    review_status:Mapped[str]=mapped_column(String(24),default="UNREVIEWED",nullable=False)
+    review_notes:Mapped[str]=mapped_column(Text,default="",nullable=False)
+    reviewed_by:Mapped[int | None]=mapped_column(Integer,ForeignKey("users.id"),nullable=True)
+    reviewed_at:Mapped[datetime | None]=mapped_column(DateTime,nullable=True)
+    embedding_status:Mapped[str]=mapped_column(String(24),default="NOT_INDEXED",nullable=False)
+    embedding_model:Mapped[str]=mapped_column(String(64),default="",nullable=False)
 
 class KnowledgeChunk(Base):
     __tablename__="assistant_knowledge_chunks"
@@ -113,6 +123,10 @@ def _view(doc):
         "scope":doc.scope,"province":doc.province,"pages":doc.pages,
         "extracted_chars":doc.extracted_chars,"uploaded_at":doc.uploaded_at.isoformat() if doc.uploaded_at else "",
         "uploaded_by":doc.uploaded_by,"active":doc.active,
+        "document_type":doc.document_type,"issuer":doc.issuer,
+        "review_status":doc.review_status,"review_notes":doc.review_notes,
+        "reviewed_at":doc.reviewed_at.isoformat() if doc.reviewed_at else None,
+        "embedding_status":doc.embedding_status,"embedding_model":doc.embedding_model,
         "download_url":f"/api/assistant-knowledge/{doc.id}/download"}
 
 def _audit(db,p,subject,action,changes):
@@ -126,9 +140,15 @@ def _audit(db,p,subject,action,changes):
 @router.post("/upload")
 async def upload_pdf(file:UploadFile=File(...),title:str=Form(""),
                      scope:str=Form("NATIONAL"),province:str=Form(""),
+                     document_type:str=Form("OTHER"),issuer:str=Form(""),
+                     semantic_index:bool=Form(False),
                      user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user);_access(p)
     dest=_allow_upload(p,scope,province)
+    if document_type not in DOCUMENT_TYPES:
+        raise HTTPException(422,"Invalid document type")
+    if len(issuer)>220:
+        raise HTTPException(422,"Issuer field too long")
     name=(file.filename or "").replace("\\","/").split("/")[-1][:220]
     if not name.lower().endswith(".pdf"):
         raise HTTPException(422,"Only PDF files are accepted")
@@ -148,17 +168,28 @@ async def upload_pdf(file:UploadFile=File(...),title:str=Form(""),
         raise HTTPException(422,"Provide a document title")
     row=KnowledgePDF(title=heading,filename=name,scope=scope,province=dest,
         content_sha256=digest,content_bytes=data,pages=pages,extracted_chars=characters,
-        uploaded_by=user.id,active=True)
+        uploaded_by=user.id,active=True,document_type=document_type,
+        issuer=issuer.strip(),review_status="UNREVIEWED",
+        embedding_status="NOT_INDEXED")
     db.add(row);db.flush()
+    stored_chunks=[]
     for seq,(page,excerpt) in enumerate(chunks,1):
-        db.add(KnowledgeChunk(document_id=row.id,page=page,sequence=seq,
-                              text_content=excerpt))
+        chunk=KnowledgeChunk(document_id=row.id,page=page,sequence=seq,
+                             text_content=excerpt)
+        db.add(chunk)
+        stored_chunks.append(chunk)
+    indexed,provider_called=False,False
+    if semantic_index:
+        from .assistant_semantic import index_document
+        indexed,provider_called=index_document(db,row,stored_chunks)
     _audit(db,p,row.id,"KNOWLEDGE_PDF_UPLOADED",
            {"title":heading,"scope":scope,"province":dest,"sha256":digest,
-            "pages":pages,"chunks":len(chunks)})
+            "pages":pages,"chunks":len(chunks),
+            "semantic_index_requested":semantic_index,"semantic_indexed":indexed})
     db.commit()
     return {"document":_view(row),"duplicate":False,
-            "indexed_chunks":len(chunks),"paid_provider_called":False}
+            "indexed_chunks":len(chunks),"semantic_indexed":indexed,
+            "paid_provider_called":provider_called}
 
 @router.get("/documents")
 def list_knowledge(user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -167,8 +198,80 @@ def list_knowledge(user:User=Depends(current_user),db:Session=Depends(get_db)):
         KnowledgePDF.id.desc()).limit(250).all()
     return {"documents":[_view(row) for row in candidates if _visible(p,row)],
             "can_upload":has(p,"upload_evidence") and has(p,"add_intelligence"),
+            "can_review":has(p,"human_validation"),
             "default_scope":_scope(p),"default_province":p.get("province") or "",
             "paid_provider_called":False}
+
+class ReviewBody(BaseModel):
+    document_type:str
+    issuer:str=""
+    notes:str=Field(default="",max_length=1500)
+    reviewed:bool=False
+
+@router.post("/{document_id}/review")
+def review_pdf(document_id:int,body:ReviewBody,user:User=Depends(current_user),
+               db:Session=Depends(get_db)):
+    p=profile(db,user)
+    row=db.get(KnowledgePDF,document_id)
+    if not _visible(p,row):
+        raise HTTPException(404,"Document not accessible")
+    if not has(p,"human_validation"):
+        raise HTTPException(403,"Officer review permission is required")
+    if body.document_type not in DOCUMENT_TYPES or len(body.issuer)>220:
+        raise HTTPException(422,"Invalid document metadata")
+    if body.reviewed and len(body.notes.strip())<12:
+        raise HTTPException(422,"Provide review notes (at least 12 characters)")
+    row.document_type=body.document_type
+    row.issuer=body.issuer.strip()
+    row.review_status="OFFICER_REVIEWED" if body.reviewed else "UNREVIEWED"
+    row.review_notes=body.notes.strip()
+    row.reviewed_by=user.id if body.reviewed else None
+    row.reviewed_at=datetime.now(timezone.utc) if body.reviewed else None
+    _audit(db,p,row.id,"KNOWLEDGE_DOCUMENT_REVIEW",{
+        "review_status":row.review_status,"issuer":row.issuer,
+        "document_type":row.document_type,"review_notes":row.review_notes})
+    db.commit()
+    return {"document":_view(row),"legal_currentness_verified":False}
+
+@router.post("/{document_id}/semantic-index")
+def index_pdf(document_id:int,user:User=Depends(current_user),
+              db:Session=Depends(get_db)):
+    p=profile(db,user)
+    row=db.get(KnowledgePDF,document_id)
+    if not _visible(p,row):
+        raise HTTPException(404,"Document not accessible")
+    if not has(p,"upload_evidence") or not (
+        row.uploaded_by==user.id or has(p,"administration")):
+        raise HTTPException(403,"Only the uploader or administrator may index this PDF")
+    if row.embedding_status=="READY":
+        return {"document":_view(row),"indexed":True,"already_indexed":True,
+                "paid_provider_called":False}
+    from .assistant_semantic import index_document
+    chunks=db.query(KnowledgeChunk).filter_by(document_id=row.id).order_by(
+        KnowledgeChunk.id).all()
+    indexed,provider_called=index_document(db,row,chunks)
+    _audit(db,p,row.id,"KNOWLEDGE_SEMANTIC_INDEX",{
+        "indexed":indexed,"status":row.embedding_status,"model":row.embedding_model})
+    db.commit()
+    return {"document":_view(row),"indexed":indexed,
+            "paid_provider_called":provider_called}
+
+@router.get("/search-preview")
+def search_preview(question:str,semantic:bool=False,user:User=Depends(current_user),
+                   db:Session=Depends(get_db)):
+    """Officer tests PDF retrieval without an assistant completion call."""
+    p=profile(db,user)
+    _access(p)
+    if not question.strip() or len(question)>500:
+        raise HTTPException(422,"Question must be between 1 and 500 characters")
+    docs=retrieve_knowledge(db,p,question,limit=6,semantic=semantic)
+    return {"matches":[{"record_id":x["record_id"],"title":x["title"],
+        "page":x["page"],"source_excerpt":x["source_excerpt"][:520],
+        "document_id":x["document_id"],"match_method":x["match_method"],
+        "review_status":x["review_status"]} for x in docs],
+        "count":len(docs),"semantic_requested":semantic,
+        "no_completion_call":True,
+        "note":"Retrieved document passages are references, not confirmation of current law."}
 
 @router.get("/{document_id}/download")
 def download_pdf(document_id:int,user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -194,47 +297,7 @@ def deactivate_pdf(document_id:int,user:User=Depends(current_user),db:Session=De
     db.commit()
     return {"active":False,"paid_provider_called":False}
 
-def retrieve_knowledge(db,p,question,limit=6):
-    """Bounded, permission-scoped lexical retrieval; no paid AI or web calls."""
-    if not has(p,"view_intelligence"):return []
-    from .intelligence_assistant import STOPWORDS
-    words=[w for w in re.findall(r"[\w]{3,}",str(question or "").casefold())
-           if w not in STOPWORDS and not w.isnumeric()]
-    terms=list(dict.fromkeys(words))[:12]
-    if not terms:
-        return []
-    all_docs=[d for d in db.query(KnowledgePDF).filter_by(active=True).order_by(
-        KnowledgePDF.id.desc()).limit(80).all() if _visible(p,d)]
-    if not all_docs:return []
-    ids=[d.id for d in all_docs]
-    docs={d.id:d for d in all_docs}
-    from sqlalchemy import or_
-    q=db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id.in_(ids))
-    q=q.filter(or_(*[KnowledgeChunk.text_content.ilike("%"+word.replace("%","").replace("_","")+"%")
-                      for word in terms[:8]]))
-    # Enforce a processing bound before scoring so an oversized library cannot
-    # exhaust the web worker.
-    candidates=q.order_by(KnowledgeChunk.id.desc()).limit(240).all()
-    ranked=[]
-    for row in candidates:
-        d=docs[row.document_id]
-        hay=row.text_content.casefold()
-        title=d.title.casefold()
-        hits=sum(3 if term in title else 1 for term in terms if term in hay or term in title)
-        if not hits:continue
-        ranked.append((hits,row.id,row,d))
-    ranked.sort(reverse=True,key=lambda item:(item[0],item[1]))
-    unique=set();out=[]
-    for score,_,chunk,doc in ranked:
-        key=(doc.id,chunk.page)
-        if key in unique:continue
-        unique.add(key)
-        out.append({"record_id":f"DOC-{doc.id}-P{chunk.page}",
-            "record_type":"PDF_KNOWLEDGE","document_id":doc.id,"title":doc.title,
-            "filename":doc.filename,"page":chunk.page,"scope":doc.scope,
-            "province":doc.province,"source_excerpt":chunk.text_content[:1500],
-            "source_url":f"/api/assistant-knowledge/{doc.id}/download",
-            "publication_date":"","verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION",
-            "document_is_authority_unverified":True})
-        if len(out)>=limit:break
-    return out
+def retrieve_knowledge(db,p,question,limit=6,semantic=True):
+    """Private, permission-filtered hybrid search with lexical fallback."""
+    from .assistant_semantic import retrieve_hybrid
+    return retrieve_hybrid(db,p,question,limit=limit,semantic=semantic)

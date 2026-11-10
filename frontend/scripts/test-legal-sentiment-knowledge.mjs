@@ -18,6 +18,16 @@ assert.ok(form.includes('/api/officer-sentiment/correct')&&form.includes('ration
   'corrections require an authenticated, reasoned officer write');
 assert.ok(form.includes('reason.trim().length<10'),'reject short correction rationale');
 assert.ok(assistant.includes('AssistantKnowledgeLibrary'),'PDF library must be embedded in assistant');
+assert.ok(kb.includes("semantic_index")&&kb.includes("semanticIndex")&&kb.includes("form.append('document_type'"),
+ 'explicit opt-in semantic indexing and document type are required');
+assert.ok(kb.includes('/search-preview?')&&kb.includes('searchQuestion'),
+ 'search-preview tests PDF retrieval without a model completion');
+assert.ok(kb.includes("'/semantic-index'")&&kb.includes("'/review'"),
+ 'existing documents can be indexed and reviewed by authorized officers');
+assert.ok(kb.includes("OPENAI")===false,'never put an API key in the frontend');
+assert.ok(records.includes('match_method')&&records.includes('review_status'),
+ 'assistant shows semantic match and review provenance on PDF citations');
+
 assert.ok(kb.includes('/upload')&&kb.includes('new FormData')&&kb.includes('default_scope'),
   'PDF uploader must use authenticated multipart form and scoped sharing');
 assert.ok(records.includes("record_type==='PDF_KNOWLEDGE'")&&records.includes('document_id'),

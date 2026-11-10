@@ -29,11 +29,17 @@ from .smart_radar_qa_tuning import router as smart_radar_qa_tuning_router
 from .smart_radar_qa_alignment import router as smart_radar_qa_alignment_router
 from .demo_feedback import router as demo_feedback_router
 from .casework import router as casework_router
+from .officer_sentiment import router as officer_sentiment_router
+from .assistant_knowledge import router as assistant_knowledge_router
+from .oversight_legal import router as oversight_legal_router
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
 app.include_router(demo_feedback_router)
 app.include_router(casework_router)
+app.include_router(officer_sentiment_router)
+app.include_router(assistant_knowledge_router)
+app.include_router(oversight_legal_router)
 app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
@@ -130,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'139.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'139.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -690,7 +696,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
-    general=requested=='GENERAL' or (requested=='AUTO' and is_conceptual(q))
+    # PDF references are permission-scoped and retrieved from the saved library.
+    # They feed the existing answer request; they are not model fine-tuning.
+    from .assistant_knowledge import retrieve_knowledge
+    pdf_evidence=retrieve_knowledge(db,p,q,limit=6) if requested!='GENERAL' else []
+    general=requested=='GENERAL' or (
+        requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
     source_warning=''
     social_rows=[]
     selected_formal=[]
@@ -713,6 +724,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             source_warning='Social Listening retrieval temporarily unavailable; answer may be incomplete.'
     evidence=[assistant_evidence_record(row) for row in selected_formal]
     evidence += [social_evidence(row) for row in chosen_social]
+    evidence += pdf_evidence
     if general or (not evidence and requested=='AUTO'):
         try:
             text,provider=generate_general_openai_answer(q,previous)
@@ -770,17 +782,20 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
               'presentation_labels':{}}
     formal_by_id={record.intelligence_id:record for record in selected_formal}
     social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
+    pdf_by_id={row['record_id']:row for row in pdf_evidence}
     support=[]
     used=set()
     for cid in cited:
         if cid in used:continue
         if cid in formal_by_id:support.append(assistant_record_view(formal_by_id[cid]))
         elif cid in social_by_id:support.append(social_record_view(social_by_id[cid]))
+        elif cid in pdf_by_id:support.append(pdf_by_id[cid])
         used.add(cid)
     # Return representative source cards even if provider omitted citations.
     if not support:
         support=[social_record_view(x) for x in chosen_social[:4]]
         support += [assistant_record_view(x) for x in selected_formal[:3]]
+        support += pdf_evidence[:3]
     if source_warning:
         if (meta.get('answer_language') or language)=='id':
             source_warning='Sumber Social Listening sementara tidak dapat diambil; analisis mungkin belum lengkap.'

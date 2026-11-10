@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import TranslatedIntelligenceText from '@/components/intel/TranslatedIntelligenceText';
+import SentimentCorrection from '@/components/intel/SentimentCorrection';
 import { SlidersHorizontal } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useIntel, useRegistry } from '@/components/intel/useIntel';
@@ -573,7 +574,27 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       {safeOriginalUrl(selected.canonical_url)?<a href={safeOriginalUrl(selected.canonical_url)} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-[#a52a2f] hover:underline">Open original source ↗</a>:<p className="text-xs text-amber-700">Source URL not available; do not treat this record as independently verifiable.</p>}
       {!/^\/demo(?:\/|$)/.test(window.location.pathname)&&selected.campaign_id&&<a href={'/casework?source_type=SOCIAL&source_id='+encodeURIComponent(String(selected.id||''))+'&campaign_id='+encodeURIComponent(String(selected.campaign_id))} className="inline-block ml-3 text-xs font-semibold text-[#801b24] underline hover:text-[#a52a2f]">Buat penugasan & laporan</a>}
      </section>
-     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> <TranslatedIntelligenceText text={selected.explanation||'No explanation stored'}/></p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation&&<> · <TranslatedIntelligenceText text={selected.sentiment_explanation}/></>} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
+     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> <TranslatedIntelligenceText text={selected.explanation||'No explanation stored'}/></p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation&&<> · <TranslatedIntelligenceText text={selected.sentiment_explanation}/></>} · {selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><SentimentCorrection campaignId={selected.campaign_id} resultId={selected.id}
+        value={selected.sentiment} canEdit={selected.can_correct_sentiment}
+        onSaved={correction=>{
+         const previous=String(selected.sentiment||'UNCLASSIFIED').toUpperCase();
+         const patch=row=>({...row,sentiment:correction.sentiment,
+           sentiment_confidence:'HUMAN_REVIEWED',sentiment_model:'OFFICER_CORRECTION',
+           sentiment_explanation:correction.rationale,sentiment_correction:correction});
+         setSelected(patch);
+         setFindings(rows=>rows.map(row=>
+           String(row.id)===String(selected.id)&&String(row.campaign_id)===String(selected.campaign_id)
+           ?patch(row):row));
+         setFullStatistics(old=>{
+           if(!old?.sentiments||previous===correction.sentiment)return old;
+           const next={...old.sentiments};
+           if(next[previous]>0)next[previous]--;
+           next[correction.sentiment]=(next[correction.sentiment]||0)+1;
+           return {...old,sentiments:next};
+         });
+        }}/>
+     {selected.sentiment_correction&&<p className="text-xs text-green-700">Officer-corrected sentiment · {selected.sentiment_correction.corrected_at||''} · {selected.sentiment_correction.rationale}</p>}
+     <p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
       <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={previewIncidentJurisdiction}>Preview source-grounded location (free)</button>

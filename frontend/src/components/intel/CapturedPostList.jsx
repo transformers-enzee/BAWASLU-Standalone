@@ -1,8 +1,9 @@
 import {useEffect,useMemo,useState} from 'react';
 import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
+import SentimentCorrection from './SentimentCorrection';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
-function Post({post}){
+function Post({post,campaignId,onCorrected}){
  const [imageError,setImageError]=useState(false);
  const sentiment=String(post.sentiment||'').toLowerCase();
  const [Icon,color,name]=sentiment==='positive'?[Smile,'text-green-700','Positive']:sentiment==='neutral'?[Meh,'text-amber-600','Neutral']:sentiment==='negative'?[Frown,'text-red-700','Negative']:[CircleHelp,'text-slate-400','Unclassified'];
@@ -14,7 +15,12 @@ function Post({post}){
    <p data-i18n-exempt className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||'No source text available'}</p>
    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#9f3033] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
   </div>
-  <span title={'Saved sentiment: '+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
+  <div className="flex shrink-0 max-w-[180px] flex-col gap-1 items-end">
+   <span title={'Saved sentiment: '+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
+   {post.sentiment_correction&&<span className="text-[10px] text-green-700">Officer corrected</span>}
+   <SentimentCorrection campaignId={campaignId} resultId={post.id} value={post.sentiment}
+     canEdit={post.can_correct_sentiment} onSaved={onCorrected}/>
+  </div>
  </article>;
 }
 export default function CapturedPostList({campaignId,refreshKey=0}){
@@ -67,6 +73,9 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
   </div>
   <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{`${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`}{loading ? " · Loading more…" : error ? " · Partial results (loading failed)" : ""}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>Clear filters</button></div>
   {error&&<p role="alert" className="py-3 text-sm text-red-700">Unable to load the complete post list: {error}. Showing any records retrieved before the failure.</p>}
-  {visible.length?visible.map(post=><Post key={post.id} post={post}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
+  {visible.length?visible.map(post=><Post key={post.id} post={post} campaignId={campaignId} onCorrected={correction=>setPosts(rows=>rows.map(row=>
+    String(row.id)===String(post.id)?{...row,sentiment:correction.sentiment,
+      sentiment_correction:correction,sentiment_details:{status:'OFFICER_CORRECTED',
+        explanation:correction.rationale,model:'OFFICER_CORRECTION'}}:row))}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
  </section>;
 }

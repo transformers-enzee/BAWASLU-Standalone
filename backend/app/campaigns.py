@@ -279,12 +279,19 @@ def _current_assessment(db,campaign_id,result_id):
                       EvidenceAssessment.id.desc()).first())
 
 def _latest_sentiment(db,campaign_id,result_id):
+    from .officer_sentiment import effective_sentiment
     record=_current_assessment(db,campaign_id,result_id)
-    label=str(record.sentiment or '').upper() if record else ''
+    label=effective_sentiment(db,campaign_id,result_id,record.sentiment if record else 'UNCLASSIFIED')
     return label.title() if label in ('POSITIVE','NEGATIVE','NEUTRAL') else 'Unclassified'
 
 def _sentiment_details(db,campaign_id,result_id):
     from .sentiment_processing import sentiment_is_assessed
+    from .officer_sentiment import latest_corrections
+    correction=latest_corrections(db,[(campaign_id,result_id)]).get((int(campaign_id),int(result_id)))
+    if correction:
+        return {'confidence':'HUMAN_REVIEWED','explanation':correction.rationale,
+                'model':'OFFICER_CORRECTION','status':'OFFICER_CORRECTED',
+                'actor_id':correction.actor_id,'corrected_at':correction.created_at.isoformat()}
     record=_current_assessment(db,campaign_id,result_id)
     if not sentiment_is_assessed(record):return None
     return {'confidence':record.sentiment_confidence or '',
@@ -958,6 +965,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                         .order_by(CampaignEvidence.id.desc()).limit(250).offset(offset).all())
                     if not batch:break
                     offset+=len(batch)
+                    from .officer_sentiment import latest_corrections
+                    batch_overrides=latest_corrections(db,[(link.campaign_id,post.id)
+                        for link,post,assessment in batch])
                     review_ids=[assessment.id for _,post,assessment in batch
                                 if _result_in_scope(db,p,post)]
                     reviews={}
@@ -970,7 +980,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                     for link,post,assessment in batch:
                         if not _result_in_scope(db,p,post):continue
                         totals_summary['posts']+=1
-                        sentiment=str(assessment.sentiment or '').upper()
+                        corrected=batch_overrides.get((link.campaign_id,post.id))
+                        sentiment=corrected.sentiment if corrected else str(assessment.sentiment or '').upper()
                         if sentiment not in ('POSITIVE','NEUTRAL','NEGATIVE'):sentiment='UNCLASSIFIED'
                         totals_summary['sentiments'][sentiment]+=1
                         platform=str(post.platform or 'Unknown').strip().lower()
@@ -1199,6 +1210,19 @@ def campaign_action(db:Session,p,action,data,id=None):
             review=jurisdiction_status(db,row['campaign_id'],row['id'],post)
             row['incident_jurisdiction_review']=review
             row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']
+        # Corrections are an immutable officer overlay on AI assessments.
+        # Both the Inbox and Social Listening use the same effective sentiment.
+        from .officer_sentiment import latest_corrections,correction_view
+        corrections=latest_corrections(db,[(r['campaign_id'],r['id']) for r in records])
+        for row in records:
+            correction=corrections.get((int(row['campaign_id']),int(row['id'])))
+            if correction:
+                row['sentiment']=correction.sentiment
+                row['sentiment_confidence']='HUMAN_REVIEWED'
+                row['sentiment_model']='OFFICER_CORRECTION'
+                row['sentiment_explanation']=correction.rationale
+                row['sentiment_correction']=correction_view(correction)
+            row['can_correct_sentiment']=has(p,'edit_intelligence')
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
                 'findings':records[:page_limit+1] if paged else records[:300],
                 'full_statistics':totals_summary if paged else None,
@@ -1666,9 +1690,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                 if not _result_in_scope(db,p,item): continue
                 if start<=total<start+page_size: links.append((link,item))
                 total+=1
+        from .officer_sentiment import latest_corrections,correction_view
+        corrections=latest_corrections(db,[(c.id,item.id) for link,item in links])
         rows=[]
         for link,item in links:
             if not _result_in_scope(db,p,item): continue
+            correction=corrections.get((c.id,item.id))
             rows.append({'id':str(item.id),'platform':item.platform,
                          'content_type':item.content_type,'published_at':item.published_at,
                          'author_name':item.author_name,'observed_handle':item.observed_handle,
@@ -1676,8 +1703,13 @@ def campaign_action(db:Session,p,action,data,id=None):
                          'author_attribution':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[1],
                          'text_content':item.text_content,'canonical_url':item.canonical_url,
                          'thumbnail_url':stored_thumbnail_uri(db,item) or _existing_thumbnail(item),
-                         'sentiment':_latest_sentiment(db,c.id,item.id),
-                         'sentiment_details':_sentiment_details(db,c.id,item.id)})
+                         'sentiment':correction.sentiment.title() if correction else _latest_sentiment(db,c.id,item.id),
+                         'sentiment_details':({
+                            'confidence':'HUMAN_REVIEWED','explanation':correction.rationale,
+                            'model':'OFFICER_CORRECTION','status':'OFFICER_CORRECTED',
+                            'actor_id':correction.actor_id} if correction else _sentiment_details(db,c.id,item.id)),
+                         'sentiment_correction':correction_view(correction),
+                         'can_correct_sentiment':has(p,'edit_intelligence')})
         return {'evidence':rows,'total':total,'page':page,'page_size':page_size,
                 'has_more':page*page_size<total,'paid_provider_called':False}
     if action=='campaignEvidenceById':

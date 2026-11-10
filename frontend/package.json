@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/test-localization-coverage.mjs && node scripts/test-demo-isolation.mjs && node scripts/test-demo-replica.mjs && node scripts/test-demo-security.mjs && node scripts/test-demo-training-flow.mjs && node scripts/test-demo-watchlist.mjs && node scripts/test-home-overview.mjs && node scripts/test-demo-auth-flow.mjs && node scripts/test-assistant-intelligence-report.mjs && node scripts/test-casework-workflow.mjs && node scripts/test-assistant-language.mjs && vite build",
+    "build": "node scripts/test-localization-coverage.mjs && node scripts/test-demo-isolation.mjs && node scripts/test-demo-replica.mjs && node scripts/test-demo-security.mjs && node scripts/test-demo-training-flow.mjs && node scripts/test-demo-watchlist.mjs && node scripts/test-home-overview.mjs && node scripts/test-demo-auth-flow.mjs && node scripts/test-assistant-intelligence-report.mjs && node scripts/test-casework-workflow.mjs && node scripts/test-assistant-language.mjs && node scripts/test-legal-sentiment-knowledge.mjs && vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",

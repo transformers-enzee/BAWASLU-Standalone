@@ -21,7 +21,7 @@
     const token = accessToken();
     if (cacheToken !== token) { clearReadCache(); cacheToken = token; }
     const method = (options.method || 'GET').toUpperCase();
-    const eligible = method === 'GET' && (path === '/api/smart-radar/dashboard' || path.startsWith('/api/smart-radar/finding/') || path.startsWith('/api/smart-radar/history/'));
+    const eligible = method === 'GET' && (path === '/api/smart-radar/dashboard' || path === '/api/oversight/legal-summary' || path.startsWith('/api/smart-radar/finding/') || path.startsWith('/api/smart-radar/history/'));
     const ttl = path.includes('/history/') ? 10000 : path.includes('/finding/') ? 60000 : 45000;
     const now = Date.now();
     const key = path;
@@ -297,6 +297,49 @@
     // The HTML display is identical to the approved prototype; its values come from the API.
   }
   ui.decorate = decorate;
+  function renderLegalOversight(data){
+    const legal=$('#legalCaseQueue'),platform=$('#platformRulesQueue'),steps=$('#legalFollowup');
+    if(!legal||!platform||!steps)return;
+    const cases=Array.isArray(data?.review_queue)?data.review_queue:[];
+    const count=Number(data?.suspected_cases_in_sample||0);
+    const countText=count+' candidates from '+Number(data?.sampled_relevant_posts||0)+' retrieved posts (sample only)';
+    const link=post=>'/inbox?campaign_id='+encodeURIComponent(post.campaign_id||'')+
+      '&result_id='+encodeURIComponent(post.source_id||'');
+    if(!cases.length){
+      legal.innerHTML='<p class="small muted">No legal-violation signals in the retrieved review sample. This does not prove that none exist.</p>';
+      platform.innerHTML='<p class="small muted">No shortlisted posts for platform policy review in this sample.</p>';
+    }else{
+      legal.innerHTML='<p class="small muted">'+label(countText)+'</p>'+
+        cases.slice(0,5).map(post=>'<div style="padding:9px 0;border-bottom:1px solid #e5eaf0">'+
+          '<div style="font-weight:650;font-size:13px">'+label(post.excerpt.slice(0,120))+'</div>'+
+          '<div class="small muted">'+label(post.platform)+' · Source #'+label(post.source_id)+
+          ' · Human review: '+label(post.human_flag_status)+'</div>'+
+          '<a href="'+link(post)+'" target="_top" rel="noopener noreferrer" class="small">Inspect evidence & assign legal review ↗</a>'+
+          '</div>').join('');
+      platform.innerHTML='<p class="small muted">Platform-rule status: not assessed against current official community rules.</p>'+
+        cases.slice(0,5).map(post=>'<div style="padding:9px 0;border-bottom:1px solid #e5eaf0">'+
+          '<b>'+label(post.platform)+'</b><div class="small muted">Policy verification needed. Keep moderation requests separate from legal findings.</div>'+
+          '<a href="'+link(post)+'" target="_top" rel="noopener noreferrer" class="small">Compare original content with official platform rules ↗</a>'+
+          '</div>').join('');
+    }
+    const stepsList=Array.isArray(data?.legal_follow_up_steps)?data.legal_follow_up_steps:[];
+    const refs=(data?.legal_references||[]).slice(0,3);
+    steps.innerHTML='<ol style="padding-left:20px;margin:8px 0">'+stepsList.map(x=>'<li style="margin-bottom:6px">'+label(x)+'</li>').join('')+'</ol>'+
+      (refs.length?'<div class="small muted">Uploaded PDF references (authority/currentness not yet validated): '+
+        refs.map(r=>label(r.title)+' · p.'+Number(r.page)).join(' · ')+'</div>':
+        '<div class="small muted">No matched uploaded legal PDF. Check current official law and platform policies before any formal decision.</div>');
+  }
+  async function refreshLegalOversight(epoch){
+    try{
+      const data=await request('/api/oversight/legal-summary');
+      if(epoch!==dashboardEpoch)return;
+      renderLegalOversight(data);
+    }catch(e){
+      if(epoch!==dashboardEpoch)return;
+      if($('#legalCaseQueue'))$('#legalCaseQueue').textContent='Legal review data unavailable: '+String(e.message||'error');
+      if($('#platformRulesQueue'))$('#platformRulesQueue').textContent='Platform policy review data unavailable.';
+    }
+  }
   let dashboardEpoch=0;
   async function refresh() {
     const epoch=++dashboardEpoch;
@@ -306,6 +349,8 @@
     if(primary.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
     if(!Array.isArray(primary.findings))throw Error('Incomplete authorized dashboard response');
     dashboard=primary;
+    // Legal/policy review is supplementary and never delays the main dashboard.
+    refreshLegalOversight(epoch);
     // Geographic options reflect saved source mentions, not confirmed incident location.
     const geoSelect=$('#geo');
     if(geoSelect&&!geoSelect.disabled){

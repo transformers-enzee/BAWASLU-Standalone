@@ -79,7 +79,8 @@ assert.match(smartBridge,/Source-scope restricted/);
 assert.doesNotMatch(smartBridge,/Pilot records require verified jurisdiction before regional access/);
 assert.doesNotMatch(smartBridge,/commandCenter/);
 assert.match(smartBridge,/canonical_source_id/);
-assert.match(smartBridge,/renderInboxLineage/);
+assert.match(smartBridge,/model\.posts = \(finding\.posts\|\|\[\]\)\.map/,
+  'Source lineage is retained on loaded Inbox evidence rather than a retired renderer');
 assert.match(smartBridge,/sentiment_counts/);
 assert.match(smartBridge,/sentimentCounts=addCounts/,'Sentiment chart must use Inbox annotations');
 assert.match(smartBridge,/watchlist_profiles/,'Priority Watchlist must show authorized registered candidates');

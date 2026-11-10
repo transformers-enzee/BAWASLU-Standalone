@@ -47,7 +47,7 @@ def test_fallback_never_invents_findings():
     answer,ids=evidence_fallback([social_evidence(_row(9,"Candidate statement"))],"timeout")
     assert ids==[]
     assert "analysis could not be completed" in answer.lower()
-    assert "try again" in answer.lower()
+    assert "retry" in answer.lower()
     assert "SOCIAL-9" not in answer
 
 def test_structured_answer_is_readable():

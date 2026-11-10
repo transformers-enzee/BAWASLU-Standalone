@@ -29,8 +29,10 @@ assert.ok(inbox.includes("language==='en'?'Sentiment corrected by officer':'Sent
 assert.ok(assistant.includes('AssistantKnowledgeLibrary'),'PDF library must be embedded in assistant');
 assert.ok(kb.includes("semantic_index")&&kb.includes("semanticIndex")&&kb.includes("form.append('document_type'"),
  'explicit opt-in semantic indexing and document type are required');
-assert.ok(kb.includes('/search-preview?')&&kb.includes('searchQuestion'),
- 'search-preview tests PDF retrieval without a model completion');
+assert.ok(!kb.includes('Test knowledge retrieval')&&!kb.includes('/search-preview?')&&
+  kb.includes('PDFs are available to the conversation automatically')&&
+  kb.includes('automatically consults relevant PDF pages'),
+ 'PDF references automatically feed normal chat; manual retrieval is not the officer workflow');
 assert.ok(kb.includes("'/semantic-index'")&&kb.includes("'/review'"),
  'existing documents can be indexed and reviewed by authorized officers');
 assert.ok(kb.includes("OPENAI")===false,'never put an API key in the frontend');

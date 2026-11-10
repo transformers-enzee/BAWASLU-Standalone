@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -696,10 +696,18 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
-    # PDF references are permission-scoped and retrieved from the saved library.
-    # They feed the existing answer request; they are not model fine-tuning.
-    from .assistant_knowledge import retrieve_knowledge
-    pdf_evidence=retrieve_knowledge(db,p,q,limit=6) if requested!='GENERAL' else []
+    # The saved PDF library is part of normal conversation context.
+    # Retrieve automatically per turn, including references from the previous
+    # user topic for follow-up questions. All passages are scope-filtered.
+    from .assistant_knowledge import (
+        retrieve_chat_knowledge,authorized_reference_catalog)
+    history=body.get('conversationContext') or []
+    history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
+             for x in history[-6:] if isinstance(x,dict) and
+             x.get('role') in ('user','assistant')] if isinstance(history,list) else []
+    reference_catalog=authorized_reference_catalog(db,p)
+    pdf_evidence=retrieve_chat_knowledge(
+        db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
     general=requested=='GENERAL' or (
         requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
     source_warning=''
@@ -769,12 +777,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':''}
     cited=[]
     try:
-        history=body.get('conversationContext') or []
-        history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
-                 for x in history[-6:] if isinstance(x,dict) and
-                 x.get('role') in ('user','assistant')] if isinstance(history,list) else []
         text,cited,meta=generate(q,previous,evidence,
-            'GROUNDED' if requested=='DATA' else 'HYBRID',history=history,response_depth=response_depth)
+            'GROUNDED' if requested=='DATA' else 'HYBRID',
+            history=history,response_depth=response_depth,
+            reference_catalog=reference_catalog)
     except AssistantProviderError as exc:
         text,cited=evidence_fallback(evidence,exc.code,language=language)
         meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code,
@@ -829,7 +835,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'selected_count':len(evidence),'supporting_count':len(support),
             'matched_social':matched_social,
             'scope':'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',
-            'source_types':source_types,'limited':True}}
+            'source_types':source_types,'reference_pdf_count':len(reference_catalog),
+            'reference_page_count':len(pdf_evidence),
+            'automatic_pdf_context':True,'limited':True}}
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():

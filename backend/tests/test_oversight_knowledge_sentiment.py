@@ -347,3 +347,98 @@ def test_platform_screening_queue_is_independent_of_legal_queue(monkeypatch,db):
     assert snapshot["legal_verdict"]=="NONE"
     assert snapshot["platform_rule_verdict"]=="NONE"
     assert snapshot["paid_provider_called"] is False
+
+
+def _chat_pdf_fixture(db,province="Riau",scope="PROVINCE",digest="7"):
+    pdf=KnowledgePDF(title="Contoh rujukan simulasi BAWASLU",
+        filename="contoh-konteks.pdf",scope=scope,
+        province=province if scope=="PROVINCE" else "",
+        content_sha256=digest*64,content_bytes=b"%PDF-synthetic",
+        pages=8,extracted_chars=1000,uploaded_by=1,
+        document_type="GUIDANCE",review_status="UNREVIEWED",active=True)
+    db.add(pdf);db.flush()
+    chunks=[
+        (1,"Daftar isi simulasi dan informasi umum."),
+        (3,"Panduan pengamanan dan registrasi informasi awal dalam berkas."),
+        (6,"Tindak lanjut pengamanan bukti digital perlu pemeriksaan petugas."),
+        (8,"Penugasan provinsi hanya setelah lokasi kejadian diverifikasi oleh petugas."),
+    ]
+    for page,body in chunks:
+        db.add(KnowledgeChunk(document_id=pdf.id,page=page,sequence=page,
+                              text_content=body))
+    db.commit()
+    return pdf
+
+
+def test_chat_pdf_context_survives_followup_and_stays_permission_scoped(db,monkeypatch):
+    from app.assistant_knowledge import (
+        retrieve_chat_knowledge,authorized_reference_catalog)
+    from app import assistant_semantic
+    def paid_embedding_would_be_wrong(*args,**kwargs):
+        raise AssertionError("Do not call embeddings without an indexed PDF.")
+    monkeypatch.setattr(assistant_semantic,"embeddings",paid_embedding_would_be_wrong)
+    pdf=_chat_pdf_fixture(db)
+    question="Jelaskan proses tindak lanjut pengamanan bukti digital"
+    initial=retrieve_chat_knowledge(db,p(db,2),question,limit=4)
+    assert f"DOC-{pdf.id}-P6" in [x["record_id"] for x in initial]
+    assert all(x["document_id"]==pdf.id for x in initial)
+    next_turn=retrieve_chat_knowledge(db,p(db,2),"Bagaimana dengan provinsi?",
+        previous=question,history=[
+            {"role":"user","text":question},
+            {"role":"assistant","text":"Pemeriksaan bukti perlu dilakukan."}],limit=6)
+    ids=[x["record_id"] for x in next_turn]
+    assert f"DOC-{pdf.id}-P8" in ids
+    assert f"DOC-{pdf.id}-P6" in ids
+    assert len(ids)==len(set(ids))
+    assert all(x["legal_currentness_verified"] is False for x in next_turn)
+    assert retrieve_chat_knowledge(db,p(db,3),"Bagaimana dengan provinsi?",
+        previous=question)==[]
+    assert authorized_reference_catalog(db,p(db,3))==[]
+    assert authorized_reference_catalog(db,p(db,2))[0]["id"]==pdf.id
+
+
+def test_chat_pdf_broad_summary_uses_page_spread_with_no_paid_calls(db,monkeypatch):
+    from app.assistant_knowledge import retrieve_chat_knowledge
+    from app import assistant_semantic
+    monkeypatch.setattr(assistant_semantic,"embeddings",lambda *_args,**_kwargs:
+        (_ for _ in ()).throw(AssertionError("No embedding calls expected")))
+    pdf=_chat_pdf_fixture(db,scope="NATIONAL",digest="8")
+    pages=retrieve_chat_knowledge(db,p(db,1),"Please summarize the attached PDF",limit=6)
+    assert [item["page"] for item in pages]==[1,3,6,8]
+    assert all(item["document_id"]==pdf.id for item in pages)
+    assert all(item["match_method"]=="DOCUMENT_OVERVIEW" for item in pages)
+    assert retrieve_chat_knowledge(db,p(db,1),"",limit=6)==[]
+
+
+def test_normal_assistant_chat_automatically_includes_pdf_and_references(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import assistant_orchestration,domain,campaigns
+    _chat_pdf_fixture(db,scope="NATIONAL",digest="9")
+    monkeypatch.setattr(domain,"list_intelligence",lambda *_:[])
+    monkeypatch.setattr(campaigns,"campaign_action",
+        lambda *_args,**_kwargs:{"findings":[]})
+    seen={}
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        seen["evidence"]=evidence
+        seen["catalog"]=kwargs["reference_catalog"]
+        seen["history"]=kwargs["history"]
+        cited=next(x["record_id"] for x in evidence
+                   if x["record_type"]=="PDF_KNOWLEDGE" and x["page"]==6)
+        return "Rujukan halaman 6: "+cited,[cited],{
+            "answer_language":"id","detected_tags":[],
+            "presentation_labels":[]}
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    result=intelligence_assistant({
+        "question":"Jelaskan proses tindak lanjut pengamanan bukti digital",
+        "previousQuestion":"",
+        "analysisMode":"AUTO","responseDepth":"DEEP",
+        "conversationContext":[{"role":"user","text":"Saya ingin memahami SOP PDF."}]},
+        user(db,1),db)
+    assert result["records"][0]["record_type"]=="PDF_KNOWLEDGE"
+    assert result["records"][0]["page"]==6
+    assert result["records"][0]["record_id"].startswith("DOC-")
+    assert result["grounding"]["automatic_pdf_context"] is True
+    assert result["grounding"]["reference_pdf_count"]==1
+    assert result["grounding"]["reference_page_count"]>=1
+    assert seen["catalog"][0]["review_status"]=="UNREVIEWED"
+    assert seen["history"][-1]["role"]=="user"

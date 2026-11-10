@@ -327,7 +327,8 @@ def research_public_web(question, key, model, base):
         return None
 
 
-def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE'):
+def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
+             reference_catalog=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -341,6 +342,17 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "external_public_research": web_research,
         "question": question[:500], "previous_question": previous[:500],
         "mode": mode, "available_records": evidence,
+        "available_pdf_library": (reference_catalog or [])[:24],
+        "pdf_reference_guidance": (
+            "The listed PDFs are already connected to the entire assistant chat. "
+            "Use page-cited PDF_KNOWLEDGE passages in available_records automatically "
+            "whenever relevant to this question or recent follow-up context. "
+            "Do not direct the officer to a manual retrieval screen; answer the question "
+            "yourself. The library catalog only proves a document is available: "
+            "never claim a specific document passage or law unless that page was "
+            "actually retrieved. If a PDF is a simulation, label it as such and "
+            "never treat it as an official BAWASLU legal authority."
+        ),
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
         "response_depth": response_depth,

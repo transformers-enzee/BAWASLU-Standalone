@@ -137,3 +137,48 @@ def test_schema_requires_model_language_and_evidence_linked_tags(monkeypatch):
     assert prompt["response_language_hint"]=="id"
     assert "Bahasa Indonesia" in prompt["response_language_rule"]
     assert observed["input"]["text"]["format"]["name"]=="bawaslu_insight_answer_v3"
+
+
+def test_uploaded_pdf_is_automatic_model_context_not_a_manual_search(monkeypatch):
+    import app.assistant_orchestration as orch
+    captured={}
+    answer={
+      "direct_answer":"According to the reference [DOC-1-P6], evidence must be preserved.",
+      "observations":[],"interpretation":"",
+      "next_checks":[],"limitations":["This is a synthetic test PDF."],
+      "cited_ids":["DOC-1-P6"],"language_code":"en",
+      "detected_tags":[],"presentation_labels":[]
+    }
+    class Response:
+        status_code=200
+        def json(self):
+            return {"status":"completed","model":"mock-model",
+                    "output_text":json.dumps(answer)}
+    class Client:
+        def __init__(self,**kwargs):pass
+        def __enter__(self):return self
+        def __exit__(self,*args):return False
+        def post(self,url,headers,json):
+            captured["request"]=json
+            return Response()
+    monkeypatch.setenv("OPENAI_API_KEY","mock-unit-test-key")
+    monkeypatch.setattr(orch.httpx,"Client",Client)
+    monkeypatch.setattr(orch,"research_public_web",lambda *args,**kwargs:None)
+    record={"record_id":"DOC-1-P6","record_type":"PDF_KNOWLEDGE",
+       "document_id":1,"title":"BAWASLU Sample","page":6,
+       "source_excerpt":"Evidence must be preserved before legal evaluation.",
+       "review_status":"UNREVIEWED"}
+    text,cited,meta=generate(
+       "What should officers do with this evidence?",
+       "Explain the BAWASLU procedure",[record],"GROUNDED",
+       history=[{"role":"user","text":"Explain the BAWASLU procedure"}],
+       reference_catalog=[{"id":1,"title":"BAWASLU Sample",
+                           "pages":12,"review_status":"UNREVIEWED"}])
+    prompt=json.loads(captured["request"]["input"][1]["content"])
+    assert prompt["available_records"][0]["record_id"]=="DOC-1-P6"
+    assert prompt["available_pdf_library"][0]["title"]=="BAWASLU Sample"
+    assert "automatically" in prompt["pdf_reference_guidance"]
+    assert "no manual" in prompt["pdf_reference_guidance"].casefold() or "manual retrieval" in prompt["pdf_reference_guidance"]
+    assert prompt["recent_conversation"][0]["role"]=="user"
+    assert cited==["DOC-1-P6"]
+    assert meta["answer_language"]=="en"

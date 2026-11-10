@@ -29,9 +29,9 @@ export default function AssistantKnowledgeLibrary(){
  const [semanticIndex,setSemanticIndex]=useState(false);
  const [reviewing,setReviewing]=useState(null);
  const [reviewNotes,setReviewNotes]=useState('');
- const [searchQuestion,setSearchQuestion]=useState('');
- const [searchSemantic,setSearchSemantic]=useState(false);
- const [searchResults,setSearchResults]=useState(null);
+
+
+
  async function refresh(){
   const data=await request('/documents');
   setDocs(data.documents||[]);
@@ -76,15 +76,6 @@ export default function AssistantKnowledgeLibrary(){
    link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
- async function previewSearch(){
-  if(!searchQuestion.trim()||busy)return;
-  setBusy(true);setError('');
-  try{
-   const q=new URLSearchParams({question:searchQuestion.trim(),semantic:String(searchSemantic)});
-   const result=await request('/search-preview?'+q.toString());
-   setSearchResults(result.matches||[]);
-  }catch(e){setError(e.message)}finally{setBusy(false)}
- }
  async function indexDocument(doc){
   if(!window.confirm(id?
    'Indeks semantik akan mengirim teks PDF ke layanan embedding AI dan dapat menggunakan kredit. Lanjutkan?':
@@ -117,11 +108,17 @@ export default function AssistantKnowledgeLibrary(){
  }
  return <section className="rounded-xl border border-[#dce5ec] bg-white" aria-label="Assistant PDF knowledge library">
   <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f8fafc]" aria-expanded={expanded} onClick={()=>setExpanded(x=>!x)}>
-   <span className="flex items-center gap-3"><BookOpen size={19} className="text-[#801b24]"/><span><strong className="text-sm text-[#243447]">{id?'Pustaka Referensi AI (PDF)':'AI Reference Library (PDF)'}</strong><span className="block text-xs text-[#64748b]">{id?'Unggah regulasi, SOP dan laporan untuk jawaban bersumber dengan rujukan halaman':'Upload regulations, SOPs and reports for answers grounded in cited pages'}</span></span></span>
-   <span className="text-xs text-[#801b24] font-semibold">{docs.length} PDF · {expanded?'−':'+'}</span>
+   <span className="flex items-center gap-3"><BookOpen size={19} className="text-[#801b24]"/><span><strong className="text-sm text-[#243447]">{id?'Pustaka Referensi AI (PDF)':'AI Reference Library (PDF)'}</strong><span className="block text-xs text-[#64748b]">{docs.length?
+        (id?'PDF tersedia otomatis sebagai konteks percakapan; AI mengutip halaman saat relevan.':
+        'PDFs are available to the conversation automatically; the assistant cites relevant pages.'):
+        (id?'Unggah PDF sekali agar AI dapat menggunakannya saat menjawab.':
+        'Upload a PDF once; the assistant can use it in future chat replies.')}</span></span></span>
+   <span className="shrink-0 text-xs text-[#801b24] font-semibold">{docs.length} PDF{docs.length>0?' · '+(id?'Otomatis':'Auto'):''} · {expanded?'−':'+'}</span>
   </button>
   {expanded&&<div className="border-t p-4 space-y-4">
-   <p className="text-xs text-[#64748b]"><ShieldCheck size={13} className="inline mr-1"/>{id?'Dokumen hanya dapat dibaca dalam cakupan hak akses Anda. PDF menjadi bahan rujukan terindeks, bukan pelatihan ulang model. Teks pindaian perlu OCR terlebih dahulu.':'Documents remain permission-scoped. PDFs become indexed references—not model fine-tuning. Scanned images need OCR first.'}</p>
+   <p className="text-xs text-[#64748b]"><ShieldCheck size={13} className="inline mr-1"/>{id?
+   'Cukup unggah sekali. AI Assistant akan memilih bagian PDF yang relevan saat menjawab dan melanjutkan percakapan, tanpa langkah pencarian manual. Hanya untuk pengguna berwenang; bukan pelatihan ulang model.':
+   'Upload once. The AI Assistant automatically consults relevant PDF pages during your chat and follow-ups—no manual search required. References remain permission-scoped, not model training.'}</p>
    {status?.can_upload&&<div className="grid gap-3 md:grid-cols-2">
     <label className="text-xs">{id?'Pilih PDF (maks. 5 MB)':'Choose PDF (max 5 MB)'}<input type="file" accept="application/pdf,.pdf" className="mt-1 block w-full text-xs" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
     <label className="text-xs">{id?'Judul dokumen':'Document title'}<input className="intel-input mt-1 w-full" value={title} onChange={e=>setTitle(e.target.value)} placeholder={file?.name.replace(/\.pdf$/i,'')||''}/></label>
@@ -151,31 +148,6 @@ export default function AssistantKnowledgeLibrary(){
    </div>}
    {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
    {notice&&<p role="status" className="text-xs text-green-700">{notice}</p>}
-   {docs.length>0&&<div className="space-y-2 rounded-lg border border-[#e3e9ef] bg-[#f8fafc] p-3">
-      <p className="font-semibold text-sm text-[#801b24]">{id?'Uji pencarian dokumen':'Test knowledge retrieval'}</p>
-      <p className="text-xs text-[#64748b]">{id?
-       'Periksa halaman yang ditemukan sebelum bertanya kepada AI. Uji ini tidak membuat jawaban AI.':
-       'Inspect which document pages are found before asking the assistant. This test does not generate an AI answer.'}</p>
-      <div className="flex flex-wrap gap-2">
-       <input className="intel-input flex-1 min-w-[220px]" maxLength={500} value={searchQuestion}
-          onChange={e=>setSearchQuestion(e.target.value)}
-          placeholder={id?'Contoh: prosedur penanganan pelanggaran pemilu':'Example: how is an election violation investigated?'}/>
-       <button type="button" className="intel-button text-xs" disabled={busy||!searchQuestion.trim()} onClick={previewSearch}>{id?'Cari referensi':'Search references'}</button>
-      </div>
-      <label className="flex gap-2 text-xs items-start text-[#526577]">
-       <input type="checkbox" className="mt-0.5" checked={searchSemantic} onChange={e=>setSearchSemantic(e.target.checked)}/>
-       <span>{id?
-         'Gunakan pencarian semantik (memerlukan embedding query, dapat memakai kredit AI jika ada dokumen berindeks).':
-         'Include semantic search (query embeddings may incur AI usage when indexed documents exist).'}</span>
-      </label>
-      {searchResults&&<div className="space-y-2">
-       {!searchResults.length&&<p className="text-xs text-[#64748b]">{id?'Tidak ditemukan halaman yang cocok.':'No matching pages found.'}</p>}
-       {searchResults.map(result=><div key={result.record_id} className="rounded-md border border-[#e1e7ec] bg-white p-2">
-        <p className="text-xs font-semibold">{result.title} · {id?'halaman':'page'} {result.page} · {result.match_method}</p>
-        <p className="text-xs text-[#5d6c7c] mt-1">{result.source_excerpt}</p>
-       </div>)}
-      </div>}
-   </div>}
    <div className="space-y-2">{docs.map(doc=><div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e3e9ef] p-3"><div className="flex gap-2 items-start"><FileText size={16} className="text-[#801b24] mt-1"/><div><p className="text-sm font-semibold">{doc.title}</p><p className="text-xs text-[#64748b]">{doc.pages} {id?'halaman':'pages'} · {doc.scope==='NATIONAL'?(id?'Nasional':'National'):doc.province} · {doc.extracted_chars.toLocaleString()} {id?'karakter':'characters'}</p>
        <p className="text-xs mt-1 text-[#53657b]">{doc.document_type||'OTHER'} · {doc.issuer|| (id?'Penerbit belum diisi':'Issuer unspecified')} · {doc.review_status==='OFFICER_REVIEWED'?(id?'Ditelaah petugas':'Officer reviewed'):(id?'Belum ditelaah':'Not reviewed')} · {doc.embedding_status==='READY'?(id?'Semantik siap':'Semantic ready'):(id?'Kata kunci saja':'Keyword search only')}</p>
       </div></div><div className="flex gap-2 flex-wrap items-center"><button type="button" className="intel-ghost text-xs" onClick={()=>download(doc)} disabled={busy}><Download size={13} className="inline mr-1"/>{id?'Unduh':'Download'}</button>{status?.can_upload&&doc.embedding_status!=='READY'&&<button type="button" disabled={busy} className="intel-ghost text-xs" onClick={()=>indexDocument(doc)}><Brain size={13} className="inline mr-1"/>{id?'Indeks semantik':'Semantic index'}</button>}

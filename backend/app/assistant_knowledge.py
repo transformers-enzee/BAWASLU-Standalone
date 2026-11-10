@@ -301,3 +301,114 @@ def retrieve_knowledge(db,p,question,limit=6,semantic=True):
     """Private, permission-filtered hybrid search with lexical fallback."""
     from .assistant_semantic import retrieve_hybrid
     return retrieve_hybrid(db,p,question,limit=limit,semantic=semantic)
+
+
+# Uploaded PDFs are durable chat references, not per-message attachments. The
+# assistant automatically retrieves permitted passages for each new turn.
+# Follow-ups use the preceding user topic without carrying unrelated old topics.
+_FOLLOWUP_RE=re.compile(
+    r"^(?:and\b|but\b|then\b|also\b|what about\b|how about\b|what if\b|"
+    r"can you elaborate\b|could you expand\b|tell me more\b|"
+    r"lalu\b|terus\b|kemudian\b|bagaimana dengan\b|kalau\b|"
+    r"dan\b|untuk itu\b|selanjutnya\b|jelaskan lagi\b|"
+    r"tolong jelaskan\b|lebih detail\b)",re.I)
+_CONTEXT_RE=re.compile(
+    r"\b(?:it|its|that|those|these|this|them|there|above|previous|earlier|"
+    r"tadi|itu|tersebut|sama|sebelumnya|di atas|yang tadi)\b",re.I)
+_OVERVIEW_RE=re.compile(
+    r"\b(?:pdf|documents?|dokumen|berkas|lampiran|unggahan|reference|referensi|"
+    r"knowledge|sop|manual|pedoman)\b",re.I)
+_SUMMARY_RE=re.compile(
+    r"\b(?:summary|summarize|summarise|overview|whole|all|entire|"
+    r"ringkas|ringkasan|rangkum|rangkuman|seluruh|keseluruhan|isi)\b",re.I)
+
+def authorized_reference_catalog(db,p,limit=24):
+    """Only visible documents are available to the chat or its catalog."""
+    _access(p)
+    docs=db.query(KnowledgePDF).filter_by(active=True).order_by(
+        KnowledgePDF.id.desc()).limit(150).all()
+    return [{"id":doc.id,"title":doc.title,"pages":doc.pages,
+             "document_type":doc.document_type,"review_status":doc.review_status,
+             "issuer":doc.issuer}
+            for doc in docs if _visible(p,doc)][:max(1,min(int(limit),24))]
+
+def _last_substantive_user_question(previous,history):
+    candidates=[str(previous or "").strip()]
+    if isinstance(history,list):
+        candidates += [str(row.get("text") or "").strip()
+                       for row in reversed(history[-12:]) if isinstance(row,dict)
+                       and row.get("role")=="user"]
+    return next((q[:450] for q in candidates
+                 if len(q)>=10 and len(re.findall(r"[\w]{3,}",q))>=2),"")
+
+def _document_overview(db,p,limit):
+    """Bounded, page-spread excerpts for broad 'summarize my PDF' questions."""
+    docs=db.query(KnowledgePDF).filter_by(active=True).order_by(
+        KnowledgePDF.id.desc()).limit(150).all()
+    visible=[doc for doc in docs if _visible(p,doc)][:2]
+    if not visible:return []
+    candidates=[]
+    for doc in visible:
+        chunks=db.query(KnowledgeChunk).filter_by(document_id=doc.id).order_by(
+            KnowledgeChunk.page,KnowledgeChunk.sequence).all()
+        if not chunks:continue
+        first_by_page={}
+        for chunk in chunks:first_by_page.setdefault(chunk.page,chunk)
+        pages=sorted(first_by_page)
+        # Sample across the whole document, not only page one or its questions.
+        slots=min(5,len(pages))
+        chosen=[pages[round(i*(len(pages)-1)/max(1,slots-1))]
+                for i in range(slots)]
+        candidates.extend(first_by_page[page] for page in dict.fromkeys(chosen))
+    # Preserve chosen document/page order for broad summaries.
+    output=[]
+    for chunk in candidates[:max(1,min(limit,10))]:
+        doc=next((doc for doc in visible if doc.id==chunk.document_id),None)
+        if doc is None:continue
+        output.append({
+            "record_id":f"DOC-{doc.id}-P{chunk.page}",
+            "record_type":"PDF_KNOWLEDGE","document_id":doc.id,
+            "title":doc.title,"filename":doc.filename,"page":chunk.page,
+            "source_excerpt":chunk.text_content[:1500],
+            "source_url":f"/api/assistant-knowledge/{doc.id}/download",
+            "scope":doc.scope,"province":doc.province,
+            "document_type":doc.document_type,"issuer":doc.issuer,
+            "review_status":doc.review_status,
+            "legal_currentness_verified":False,
+            "verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION",
+            "document_is_authority_unverified":doc.review_status!="OFFICER_REVIEWED",
+            "match_method":"DOCUMENT_OVERVIEW"
+        })
+    return output
+
+def retrieve_chat_knowledge(db,p,question,previous="",history=None,limit=6,
+                            semantic=True):
+    """Automatic PDF grounding for chat, including document-related follow-ups.
+
+    Never passes previous conversation content to a private document search
+    outside the user's authorized scope. Keyword-only documents cost no
+    embedding credits; semantic search requires a pre-indexed document.
+    """
+    q=str(question or "").strip()
+    if not q:return []
+    if not has_view_knowledge(p):
+        return []
+    previous_topic=_last_substantive_user_question(previous,history)
+    followup=(bool(_FOLLOWUP_RE.search(q) or _CONTEXT_RE.search(q)) and
+              bool(previous_topic) and previous_topic.casefold()!=q.casefold())
+    lookup=(q+" "+previous_topic)[:950] if followup else q[:500]
+    results=retrieve_knowledge(db,p,lookup,limit=limit,semantic=semantic)
+    # Preserve both the new turn's intent and its prior PDF topic: a combined
+    # query can otherwise rank only pages about the previous question.
+    if followup:
+        current=retrieve_knowledge(db,p,q,limit=max(3,limit//2),semantic=False)
+        collected={}
+        for row in current+results:collected.setdefault(row["record_id"],row)
+        results=list(collected.values())[:limit]
+    # The user can request a document-wide explanation conversationally.
+    if not results and _OVERVIEW_RE.search(q) and _SUMMARY_RE.search(q):
+        results=_document_overview(db,p,limit)
+    return results
+
+def has_view_knowledge(p):
+    return has(p,"view_intelligence")

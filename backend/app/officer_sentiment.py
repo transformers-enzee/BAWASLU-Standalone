@@ -29,7 +29,7 @@ class CorrectionBody(BaseModel):
     campaign_id:int=Field(gt=0)
     result_id:int=Field(gt=0)
     sentiment:str
-    rationale:str=Field(min_length=10,max_length=1000)
+    rationale:str=Field(default="",max_length=1000)
 
 def _verify(db,p,campaign_id,result_id,write=False):
     from .access import allowed
@@ -74,9 +74,9 @@ def correct_sentiment(body:CorrectionBody,user:User=Depends(current_user),db:Ses
     label=body.sentiment.upper().strip()
     if label not in LABELS:
         raise HTTPException(422,"Sentiment must be POSITIVE, NEUTRAL or NEGATIVE")
-    note=body.rationale.strip()
-    if len(note)<10:
-        raise HTTPException(422,"Please supply at least 10 characters explaining the correction")
+    # Optional compatibility field: no explanation is required for a manual
+    # correction. The actor, source, previous value and timestamp are audited.
+    note=(body.rationale or "").strip()
     previous=latest_corrections(db,[(body.campaign_id,body.result_id)]).get((body.campaign_id,body.result_id))
     if previous and previous.sentiment==label:
         return {"correction":correction_view(previous),"unchanged":True,"paid_provider_called":False}

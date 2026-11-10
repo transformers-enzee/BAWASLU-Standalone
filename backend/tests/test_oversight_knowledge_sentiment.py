@@ -71,12 +71,19 @@ def test_viewer_and_wrong_region_cannot_correct(db):
         assert e.value.status_code==403
     assert db.query(OfficerSentimentCorrection).count()==0
 
-def test_sentiment_rejects_invalid_labels_and_short_reasons(db):
+def test_sentiment_rejects_invalid_labels_and_allows_no_reason(db):
     with pytest.raises(HTTPException) as exc:
         correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,sentiment="WRONG",
             rationale="Unknown label should not be accepted."),user(db,1),db)
     assert exc.value.status_code==422
     assert db.query(OfficerSentimentCorrection).count()==0
+    saved=correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,
+        sentiment="NEUTRAL"),user(db,1),db)
+    assert saved["unchanged"] is False
+    assert saved["correction"]["rationale"]==""
+    assert _latest_sentiment(db,70,200)=="Neutral"
+    assert db.query(OfficerSentimentCorrection).count()==1
+    assert db.query(EvidenceAssessment).first().sentiment=="NEGATIVE"
 
 def test_pdf_retrieval_is_document_page_cited_and_permission_scoped(db):
     # Text fixture models the result of verified PDF extraction.
@@ -245,3 +252,16 @@ def test_search_preview_does_not_generate_model_answer_and_is_scope_filtered(db)
     assert result["matches"][0]["record_id"]==f"DOC-{pdf.id}-P1"
     assert result["matches"][0]["match_method"]=="KEYWORD"
     assert search_preview("pemeriksaan pemilu",False,user(db,3),db)["matches"]==[]
+
+def test_reason_is_optional_without_erasing_legacy_audit_history(db):
+    first=correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,
+        sentiment="POSITIVE",rationale="Earlier explanation retained in history."),user(db,1),db)
+    second=correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,
+        sentiment="NEUTRAL"),user(db,1),db)
+    assert first["correction"]["rationale"]=="Earlier explanation retained in history."
+    assert second["correction"]["rationale"]==""
+    history=db.query(OfficerSentimentCorrection).order_by(OfficerSentimentCorrection.id).all()
+    assert len(history)==2
+    assert history[0].rationale=="Earlier explanation retained in history."
+    assert history[1].rationale==""
+    assert history[0].actor_id==history[1].actor_id==1

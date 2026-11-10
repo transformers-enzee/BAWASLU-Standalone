@@ -14,9 +14,18 @@ assert.ok(captured.includes('SentimentCorrection')&&captured.includes('can_corre
   'Captured Posts must allow scoped officer sentiment correction');
 assert.ok(inbox.includes('SentimentCorrection')&&inbox.includes('setFullStatistics'),
   'Inbox must allow correction and update visible counts');
-assert.ok(form.includes('/api/officer-sentiment/correct')&&form.includes('rationale:reason.trim()'),
-  'corrections require an authenticated, reasoned officer write');
-assert.ok(form.includes('reason.trim().length<10'),'reject short correction rationale');
+assert.ok(form.includes('/api/officer-sentiment/correct')&&form.includes('Authorization:')&&
+   form.includes('sentiment:label'), 'sentiment correction requires authenticated officer write');
+assert.ok(!form.includes('rationale:')&&!form.includes('reason.trim()')&&
+   !form.includes('Alasan perubahan')&&!form.includes('Reason for change'),
+  'manual correction has no mandatory reason field');
+assert.ok(form.includes("useLanguage()")&&form.includes("language==='en'"),
+  'sentiment correction follows app language and defaults to Indonesian otherwise');
+assert.ok(captured.includes("useLanguage()")&&captured.includes("isEnglish?'Negative':'Negatif'")&&
+  captured.includes("t('All sentiments','Semua sentimen')"),
+  'captured posts sentiment and filters follow current app language');
+assert.ok(inbox.includes("language==='en'?'Sentiment corrected by officer':'Sentimen dikoreksi petugas'"),
+  'Inbox correction status is translated by app language');
 assert.ok(assistant.includes('AssistantKnowledgeLibrary'),'PDF library must be embedded in assistant');
 assert.ok(kb.includes("semantic_index")&&kb.includes("semanticIndex")&&kb.includes("form.append('document_type'"),
  'explicit opt-in semantic indexing and document type are required');

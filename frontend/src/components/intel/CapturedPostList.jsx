@@ -2,28 +2,35 @@ import {useEffect,useMemo,useState} from 'react';
 import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 import SentimentCorrection from './SentimentCorrection';
+import {useLanguage} from '@/lib/LanguageContext';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
-function Post({post,campaignId,onCorrected}){
+function Post({post,campaignId,onCorrected,isEnglish}){
  const [imageError,setImageError]=useState(false);
  const sentiment=String(post.sentiment||'').toLowerCase();
- const [Icon,color,name]=sentiment==='positive'?[Smile,'text-green-700','Positive']:sentiment==='neutral'?[Meh,'text-amber-600','Neutral']:sentiment==='negative'?[Frown,'text-red-700','Negative']:[CircleHelp,'text-slate-400','Unclassified'];
+ const [Icon,color,name]=sentiment==='positive'?[Smile,'text-green-700',isEnglish?'Positive':'Positif']:
+   sentiment==='neutral'?[Meh,'text-amber-600',isEnglish?'Neutral':'Netral']:
+   sentiment==='negative'?[Frown,'text-red-700',isEnglish?'Negative':'Negatif']:
+   [CircleHelp,'text-slate-400',isEnglish?'Unclassified':'Belum diklasifikasikan'];
  const url=/^https:\/\//i.test(post.canonical_url||'')?post.canonical_url:'';
- return <article aria-label={'Source post '+post.id} className="flex items-start gap-3 border-b border-[#e5ebef] py-4 last:border-0">
+ return <article aria-label={(isEnglish?'Source post ':'Unggahan sumber ')+post.id} className="flex items-start gap-3 border-b border-[#e5ebef] py-4 last:border-0">
   {post.thumbnail_url&&!imageError&&<div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100"><img src={post.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={()=>setImageError(true)}/></div>}
   <div className="min-w-0 flex-1">
-   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{post.author_display||'Source author unavailable'}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):'Undated'}</span></div>
-   <p data-i18n-exempt className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||'No source text available'}</p>
-   <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||'Post'} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#9f3033] hover:underline">Original source <ExternalLink size={12}/></a>}</div>
+   <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><strong className="text-sm text-[#19324a]">{post.author_display||(isEnglish?'Source author unavailable':'Nama akun tidak tersedia')}</strong><span className="text-xs text-[#60768c]">{platformName(post.platform)} · {post.published_at?String(post.published_at).slice(0,10):(isEnglish?'Undated':'Tanpa tanggal')}</span></div>
+   <p data-i18n-exempt className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#33475b]">{post.text_content||(isEnglish?'No source text available':'Teks sumber tidak tersedia')}</p>
+   <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-[#60768c]"><span>{post.content_type||(isEnglish?'Post':'Unggahan')} · #{post.id}</span>{url&&<a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#9f3033] hover:underline" >{isEnglish?'Original source':'Sumber asli'} <ExternalLink size={12}/></a>}</div>
   </div>
   <div className="flex shrink-0 max-w-[180px] flex-col gap-1 items-end">
-   <span title={'Saved sentiment: '+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
-   {post.sentiment_correction&&<span className="text-[10px] text-green-700">Officer corrected</span>}
+   <span title={(isEnglish?'Saved sentiment: ':'Sentimen tersimpan: ')+name} className={'flex shrink-0 flex-col items-center gap-1 '+color}><Icon size={22}/><span className="text-[10px]">{name}</span></span>
+   {post.sentiment_correction&&<span className="text-[10px] text-green-700" >{isEnglish?'Officer corrected':'Dikoreksi petugas'}</span>}
    <SentimentCorrection campaignId={campaignId} resultId={post.id} value={post.sentiment}
      canEdit={post.can_correct_sentiment} onSaved={onCorrected}/>
   </div>
  </article>;
 }
 export default function CapturedPostList({campaignId,refreshKey=0}){
+ const {language}=useLanguage();
+ const isEnglish=language==='en';
+ const t=(en,id)=>isEnglish?en:id;
  const [posts,setPosts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
  const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');
@@ -62,20 +69,24 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
   return items.sort((a,b)=>sort==='oldest'?String(a.published_at||'').localeCompare(String(b.published_at||'')):
    sort==='engagement'?score(b)-score(a):String(b.published_at||'').localeCompare(String(a.published_at||'')));
  },[posts,from,to,keyword,platform,sentiment,sort]);
- return <section aria-label="Captured posts list" className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
-  <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Captured posts filters and sorting">
-   <label className="text-xs">From date<input className="intel-input mt-1" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
-   <label className="text-xs">To date<input className="intel-input mt-1" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
-   <label className="text-xs">Keyword<input className="intel-input mt-1" placeholder="Search post text" value={keyword} onChange={e=>setKeyword(e.target.value)}/></label>
-   <label className="text-xs">Platform<select className="intel-input mt-1" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="">All platforms</option>{platforms.map(x=><option value={x} key={x}>{platformName(x)}</option>)}</select></label>
-   <label className="text-xs">Sentiment<select className="intel-input mt-1" value={sentiment} onChange={e=>setSentiment(e.target.value)}><option value="">All sentiments</option>{['positive','neutral','negative','unclassified'].map(x=><option key={x} value={x}>{x[0].toUpperCase()+x.slice(1)}</option>)}</select></label>
-   <label className="text-xs">Sort by<select className="intel-input mt-1" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="engagement">Engagement</option></select></label>
+ return <section aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
+  <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={t('Captured posts filters and sorting','Filter dan urutan unggahan')}>
+   <label className="text-xs">{t('From date','Dari tanggal')}<input className="intel-input mt-1" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label className="text-xs">{t('To date','Sampai tanggal')}<input className="intel-input mt-1" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <label className="text-xs">{t('Keyword','Kata kunci')}<input className="intel-input mt-1" placeholder={t('Search post text','Cari teks unggahan')} value={keyword} onChange={e=>setKeyword(e.target.value)}/></label>
+   <label className="text-xs">Platform<select className="intel-input mt-1" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="">{t('All platforms','Semua platform')}</option>{platforms.map(x=><option value={x} key={x}>{platformName(x)}</option>)}</select></label>
+   <label className="text-xs">{t('Sentiment','Sentimen')}<select className="intel-input mt-1" value={sentiment} onChange={e=>setSentiment(e.target.value)}><option value="">{t('All sentiments','Semua sentimen')}</option>{['positive','neutral','negative','unclassified'].map(x=><option key={x} value={x}>{({positive:t('Positive','Positif'),neutral:t('Neutral','Netral'),negative:t('Negative','Negatif'),unclassified:t('Unclassified','Belum diklasifikasikan')})[x]}</option>)}</select></label>
+   <label className="text-xs">{t('Sort by','Urutkan berdasarkan')}<select className="intel-input mt-1" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">{t('Newest first','Terbaru dahulu')}</option><option value="oldest">{t('Oldest first','Terlama dahulu')}</option><option value="engagement">{t('Engagement','Interaksi')}</option></select></label>
   </div>
-  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{`${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`}{loading ? " · Loading more…" : error ? " · Partial results (loading failed)" : ""}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>Clear filters</button></div>
-  {error&&<p role="alert" className="py-3 text-sm text-red-700">Unable to load the complete post list: {error}. Showing any records retrieved before the failure.</p>}
-  {visible.length?visible.map(post=><Post key={post.id} post={post} campaignId={campaignId} onCorrected={correction=>setPosts(rows=>rows.map(row=>
+  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{isEnglish?
+    `${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`:
+    `${visible.length.toLocaleString()} dari ${posts.length.toLocaleString()} unggahan tersimpan`}
+    {loading ? t(' · Loading more…',' · Memuat lainnya…'):
+      error ? t(' · Partial results (loading failed)',' · Hasil tidak lengkap (gagal memuat)') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
+  {error&&<p role="alert" className="py-3 text-sm text-red-700">{t('Unable to load the complete post list:','Gagal memuat seluruh unggahan:')} {error}. {t('Showing any records retrieved before the failure.','Menampilkan unggahan yang berhasil diambil sebelumnya.')}</p>}
+  {visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>setPosts(rows=>rows.map(row=>
     String(row.id)===String(post.id)?{...row,sentiment:correction.sentiment,
       sentiment_correction:correction,sentiment_details:{status:'OFFICER_CORRECTED',
-        explanation:correction.rationale,model:'OFFICER_CORRECTION'}}:row))}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">Loading captured posts…</p>:<p className="py-6 text-sm text-[#60768c]">No captured posts match these filters.</p>}
+        explanation:correction.rationale,model:'OFFICER_CORRECTION'}}:row))}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
  </section>;
 }

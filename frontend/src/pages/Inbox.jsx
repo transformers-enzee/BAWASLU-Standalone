@@ -593,7 +593,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
            return {...old,sentiments:next};
          });
         }}/>
-     {selected.sentiment_correction&&<p className="text-xs text-green-700">Officer-corrected sentiment · {selected.sentiment_correction.corrected_at||''} · {selected.sentiment_correction.rationale}</p>}
+     {selected.sentiment_correction&&<p className="text-xs text-green-700">
+       {language==='en'?'Sentiment corrected by officer':'Sentimen dikoreksi petugas'}
+       {selected.sentiment_correction.corrected_at?' · '+selected.sentiment_correction.corrected_at:''}
+       {selected.sentiment_correction.rationale?' · '+selected.sentiment_correction.rationale:''}
+      </p>}
      <p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>

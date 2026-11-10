@@ -39,4 +39,19 @@ assert.ok(page.includes("m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetected
 assert.ok(page.includes("compactPdf={m.response_profile==='PDF_GUIDANCE'}")&&
   sources.includes('data-compact-pdf-references')&&sources.includes('pdfs.slice(0,4)'),
  'PDF answers show compact clickable page references instead of multi-card excerpts');
+assert.ok(page.includes("allowAssignments={m.response_profile==='ACTION_REQUEST'}"),
+ 'source cards cannot offer case assignment for an ordinary sentiment question');
+assert.ok(sources.includes("allowAssignments&&<Link")&&
+  sources.includes("Date.now()-Date.parse(r.publication_date)>365"),
+ 'source cards restrict assignment shortcuts and clearly label historical records');
+assert.ok(visuals.includes('data-advanced-social-metrics')&&
+  visuals.includes('Every chart uses the same')&&
+  visuals.includes('snapshot.matched_pool_count'),
+ 'social charts disclose their identical AI sample and hide extra metrics');
+assert.ok(report.includes("const StepsContainer=compact?'details':'div'")&&
+  report.includes('data-optional-social-verification')&&
+  report.includes('compact?3:6'),
+ 'additional social-analysis findings and verification steps are compact and optional');
+assert.ok(page.includes("compact={m.response_profile==='SOCIAL_ANALYSIS'}"),
+ 'the social answer uses its simplified report layout');
 console.log('Assistant multilingual/tagging integration checks passed');

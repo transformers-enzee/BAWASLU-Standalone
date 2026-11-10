@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -733,11 +733,17 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             db.rollback()
             logging.getLogger(__name__).exception('ASSISTANT_SOCIAL_READ_FAILED')
             source_warning='Social Listening retrieval temporarily unavailable; answer may be incomplete.'
+    from .assistant_social_focus import (
+        focus_social_tags,source_cards_for_question,question_mentions_pdf)
+    # Keep saved PDF context available in chat, but do not append procedural
+    # handbook pages to an ordinary candidate sentiment/social question.
+    context_pdf=(pdf_evidence if response_profile!=SOCIAL_ANALYSIS or
+                 question_mentions_pdf(q) else [])
     evidence=evidence_for_profile(
         response_profile,
         [assistant_evidence_record(row) for row in selected_formal],
         [social_evidence(row) for row in chosen_social],
-        pdf_evidence)
+        context_pdf)
     if general or (not evidence and requested=='AUTO'):
         try:
             text,provider=generate_general_openai_answer(q,previous)
@@ -822,29 +828,33 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     featured=[]
     if response_profile==SOCIAL_ANALYSIS:
         from .assistant_orchestration import evidence_snapshot
-        stats_social,_=_social_select(social_rows,q,limit=300)
-        snapshot=evidence_snapshot([social_evidence(row) for row in stats_social]+
-                                   [assistant_evidence_record(row) for row in selected_formal])
+        # The charts and the model must use exactly the same authorized,
+        # relevance-ranked and deduplicated post IDs. Previous code counted
+        # a 300-post search pool while the answer analyzed just 20.
+        snapshot=evidence_snapshot([social_evidence(row) for row in chosen_social])
         snapshot['analysis_post_count']=len(chosen_social)
-        snapshot['statistics_post_count']=len(stats_social)
-        snapshot['statistics_scope']='BOUNDED_AUTHORIZED_MATCHES'
-        def _engagement(row):
-            number=row.get('engagement_total')
-            return number if type(number) is int and number >= 0 else -1
-        featured=[social_record_view(row) for row in sorted(stats_social,key=_engagement,reverse=True)[:6]]
+        snapshot['statistics_post_count']=len(chosen_social)
+        snapshot['matched_pool_count']=matched_social
+        snapshot['statistics_scope']='SAME_SELECTED_POSTS_AS_AI_ANALYSIS'
+        featured=source_cards_for_question(chosen_social,cited,social_record_view,limit=4)
     if response_profile==PDF_GUIDANCE:
         support=[x for x in support if x.get('record_type')=='PDF_KNOWLEDGE']
         if not support:
             support=pdf_evidence[:3]
     source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
+    displayed_tags=(meta.get('detected_tags') or fallback_tags(evidence))
+    if response_profile==SOCIAL_ANALYSIS:
+        displayed_tags=focus_social_tags(
+            displayed_tags,q,[x.get('record_id') for x in evidence],limit=4)
+    if response_profile==PDF_GUIDANCE:
+        displayed_tags=[]
     return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
         'provider':meta,'response_profile':response_profile,
         'evidence_snapshot':snapshot,
         'analytical_findings':None if response_profile==PDF_GUIDANCE else meta.get('analytical_findings'),
         'featured_sources':featured,
         'answer_language':meta.get('answer_language') or language,
-        'detected_tags':[] if response_profile==PDF_GUIDANCE else
-            (meta.get('detected_tags') or fallback_tags(evidence)),
+        'detected_tags':displayed_tags,
         'presentation_labels':meta.get('presentation_labels') or {},
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),

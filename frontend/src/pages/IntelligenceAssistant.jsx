@@ -160,7 +160,7 @@ export default function IntelligenceAssistant(){
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         {m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
-        {m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
+        {m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels} compact={m.response_profile==='SOCIAL_ANALYSIS'}/>}
         <AssistantRecords records={m.records} featured={m.featured_sources} language={m.answer_language||'id'} labels={m.presentation_labels} compactPdf={m.response_profile==='PDF_GUIDANCE'}/></>}
       </div>
      </div>)}

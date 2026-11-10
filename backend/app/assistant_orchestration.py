@@ -280,14 +280,14 @@ def answer_text(result, has_evidence, language='id'):
     chunks = [answer] if answer else []
     if observations and not result.get('visual_report'):
         chunks.append("**"+localized[0]+"**\n" + "\n".join("- " + x for x in observations[:6]))
-    if interpretation and interpretation.casefold() not in answer.casefold():
+    if interpretation and not result.get('compact_social') and interpretation.casefold() not in answer.casefold():
         chunks.append("**"+localized[1]+"**\n" + interpretation)
     if checks and not result.get('visual_report') and (has_evidence or not answer):
         chunks.append("**"+localized[2]+"**\n" + "\n".join(f"{i}. {x}" for i, x in enumerate(checks[:4],1)))
     # Generic availability caveats add little value to a strategic response.
     # Retain only material constraints already explained within the analysis;
     # don't append an automatic limitations paragraph.
-    if limits:
+    if limits and not result.get('compact_social'):
         chunks.append("**"+localized[3]+"**\n" + " ".join(limits[:2]))
     return "\n\n".join(x for x in chunks if x)
 
@@ -372,7 +372,21 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             "next_checks and detected_tags empty. If the PDF is unreviewed or synthetic, "
             "mention that clearly ONCE in one short sentence. Answer in the user's language."
             if pdf_guidance else
-            ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages."))
+            ("This is social-intelligence analysis, not an operational handoff. "
+             "The source records supplied here are exactly the same posts used in the "
+             "visible charts; any numerical sentiment breakdown or percentages MUST "
+             "be computed only from their saved sentiment labels, not guessed. "
+             "Do not describe more posts as analyzed than the supplied source_count. "
+             "Start with a concise 2-3 sentence executive summary; provide at most "
+             "three nonduplicative source-backed observations and two specific checks "
+             "in the structured fields. Leave interpretation and limitations empty "
+             "when already expressed in the summary. Do not invent a population or "
+             "audience survey. Stay focused on the subject requested: do not "
+             "emphasize unrelated co-mentioned candidates or provinces. "
+             "Use citations tied to claims and distinguish allegations from verified facts. "
+             "A PDF is supplemental only when the officer explicitly asks for its procedure."
+             if response_profile == 'SOCIAL_ANALYSIS' else
+             ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")) )
     }
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
@@ -458,10 +472,14 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
     }
+    social_brief=response_profile=='SOCIAL_ANALYSIS'
     result["visual_report"] = bool(evidence) and not pdf_guidance
+    result["compact_social"]=social_brief
     meta["analytical_findings"] = (None if pdf_guidance else {
-        "observations": result.get("observations") or [],
-        "review_steps": result.get("next_checks") or []
+        "observations": (result.get("observations") or [])[:3] if social_brief
+                         else result.get("observations") or [],
+        "review_steps": (result.get("next_checks") or [])[:2] if social_brief
+                        else result.get("next_checks") or []
     })
     answer = answer_text(result, bool(evidence),result["language_code"])
     if web_research:

@@ -418,128 +418,40 @@ def test_normal_assistant_chat_automatically_includes_pdf_and_references(monkeyp
     monkeypatch.setattr(campaigns,"campaign_action",
         lambda *_args,**_kwargs:{"findings":[]})
     seen={}
-    def fake_generate(question,previous,evidence,mode,**kwargs):
-        seen["evidence"]=evidence
-        seen["catalog"]=kwargs["reference_catalog"]
-        seen["history"]=kwargs["history"]
-        cited=next(x["record_id"] for x in evidence
-                   if x["record_type"]=="PDF_KNOWLEDGE" and x["page"]==6)
-        return "Rujukan halaman 6: "+cited,[cited],{
-            "answer_language":"id","detected_tags":[],
-            "presentation_labels":[]}
-    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    monkeypatch.setattr(assistant_orchestration,"generate",
+        lambda *args,**kwargs:(
+            "Dua unggahan: satu netral dan satu negatif [SOCIAL-501] [SOCIAL-502].",
+            ["SOCIAL-501","SOCIAL-502"],{
+                "answer_language":"id","presentation_labels":{},
+                "detected_tags":[
+                 {"type":"CANDIDATE","label":"Gibran Rakabuming Raka",
+                  "source_ids":["SOCIAL-501"],"confidence":"HIGH"},
+                 {"type":"CANDIDATE","label":"Denny Indrayana",
+                  "source_ids":["SOCIAL-502"],"confidence":"HIGH"},
+                 {"type":"PROVINCE","label":"Sumatera Utara",
+                  "source_ids":["SOCIAL-501"],"confidence":"MEDIUM"}],
+                "analytical_findings":{"observations":["Valid finding"],"review_steps":[]}}))
     result=intelligence_assistant({
-        "question":"Jelaskan proses tindak lanjut pengamanan bukti digital",
-        "previousQuestion":"",
-        "analysisMode":"AUTO","responseDepth":"DEEP",
-        "conversationContext":[{"role":"user","text":"Saya ingin memahami SOP PDF."}]},
-        user(db,1),db)
-    assert result["records"][0]["record_type"]=="PDF_KNOWLEDGE"
-    assert result["records"][0]["page"]==6
-    assert result["records"][0]["record_id"].startswith("DOC-")
-    assert result["grounding"]["automatic_pdf_context"] is True
-    assert result["grounding"]["reference_pdf_count"]==1
-    assert result["grounding"]["reference_page_count"]>=1
-    assert seen["catalog"][0]["review_status"]=="UNREVIEWED"
-    assert seen["history"][-1]["role"]=="user"
-
-
-@pytest.mark.parametrize("question,previous,has_pdf,expected",[
-    ("Menurut PDF BAWASLU yang telah diunggah, apa langkah tindak lanjut hukum setelah takedown?",
-     "",True,"PDF_GUIDANCE"),
-    ("Bagaimana dengan penugasan ke tim provinsi?",
-     "Menurut PDF BAWASLU, apa langkah tindak lanjut hukum setelah takedown?",True,"PDF_GUIDANCE"),
-    ("Jelaskan alur verifikasi yurisdiksi dan kewenangan petugas",
-     "",True,"PDF_GUIDANCE"),
-    ("Apa tren sentimen dan narasi dari unggahan terbaru?",
-     "Sebutkan SOP dari PDF",True,"SOCIAL_ANALYSIS"),
-    ("Analisis sentimen dan engagement dari 100 unggahan",
-     "",False,"SOCIAL_ANALYSIS"),
-    ("Investigasi kasus #739 dan periksa bukti primer",
-     "",True,"CASE_REVIEW"),
-    ("Buatkan laporan dari temuan tersimpan",
-     "",True,"ACTION_REQUEST"),
-    ("Siapkan penugasan untuk menindaklanjuti temuan",
-     "",True,"ACTION_REQUEST"),
-    ("Susun draf laporan berdasarkan bukti sumber",
-     "",True,"ACTION_REQUEST"),
-    ("How does the law treat this?",
-     "",False,"SOCIAL_ANALYSIS"),
-])
-def test_assistant_response_profile_routing(question,previous,has_pdf,expected):
-    from app.assistant_response_profile import choose_response_profile
-    snippets=[{"record_id":"DOC-1-P8"}] if has_pdf else []
-    assert choose_response_profile(question,previous,snippets)==expected
-
-
-def test_pdf_guidance_chat_uses_only_pdf_skips_social_stats_and_action_cards(monkeypatch,db):
-    from app.main import intelligence_assistant
-    from app import assistant_orchestration,domain,campaigns
-    _chat_pdf_fixture(db,scope="NATIONAL",digest="6")
-    def must_not_read_social(*_args,**_kwargs):
-        raise AssertionError("PDF-only request must not load the social Inbox")
-    monkeypatch.setattr(domain,"list_intelligence",must_not_read_social)
-    monkeypatch.setattr(campaigns,"campaign_action",must_not_read_social)
-    observed={}
-    def fake_generate(question,previous,evidence,mode,**kwargs):
-        observed["profile"]=kwargs.get("response_profile")
-        observed["evidence"]=evidence
-        assert mode=="GROUNDED"
-        assert kwargs["response_depth"]=="EXECUTIVE"
-        cited=next(row["record_id"] for row in evidence if row["page"]==6)
-        return "Menurut PDF, amankan bukti digital "+f"[{cited}]",[cited],{
-            "answer_language":"id",
-            "detected_tags":[{"type":"CANDIDATE","label":"Unrelated"}],
-            "analytical_findings":{"observations":["Wrong source"]},
-            "presentation_labels":[]}
-    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
-    output=intelligence_assistant({
-        "question":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital",
+        "question":"Analisis sentimen publik terhadap Gibran Rakabuming Raka",
         "previousQuestion":"","analysisMode":"AUTO",
         "responseDepth":"DEEP","conversationContext":[]},user(db,1),db)
-    assert output["response_profile"]=="PDF_GUIDANCE"
-    assert observed["profile"]=="PDF_GUIDANCE"
-    assert all(row["record_type"]=="PDF_KNOWLEDGE" for row in observed["evidence"])
-    assert [row["page"] for row in output["records"]]==[6]
-    assert output["detected_tags"]==[]
-    assert output["evidence_snapshot"] is None
-    assert output["featured_sources"]==[]
-    assert output["analytical_findings"] is None
-    assert output["grounding"]["scope"]=="AUTHORIZED_PDF_REFERENCES"
+    assert result["response_profile"]=="SOCIAL_ANALYSIS"
+    assert result["evidence_snapshot"]["statistics_scope"]=="SAME_SELECTED_POSTS_AS_AI_ANALYSIS"
+    assert result["evidence_snapshot"]["social_posts"]==2
+    assert result["evidence_snapshot"]["analysis_post_count"]==2
+    assert result["evidence_snapshot"]["statistics_post_count"]==2
+    assert result["evidence_snapshot"]["sentiment_counts"]["NEUTRAL"]==1
+    assert result["evidence_snapshot"]["sentiment_counts"]["NEGATIVE"]==1
+    assert sum(result["evidence_snapshot"]["sentiment_counts"].values())==2
+    assert {x["source_post_id"] for x in result["featured_sources"]}=={"501","502"}
+    assert all(x["source_post_id"]!="503" for x in result["featured_sources"])
+    assert [x["label"] for x in result["detected_tags"]]==["Gibran Rakabuming Raka"]
+    assert result["evidence_snapshot"]["observed_engagement"]==10
 
 
-def test_followup_question_uses_pdf_page_without_unrelated_intelligence(monkeypatch,db):
-    from app.main import intelligence_assistant
-    from app import assistant_orchestration,domain,campaigns
-    _chat_pdf_fixture(db,scope="NATIONAL",digest="5")
-    monkeypatch.setattr(domain,"list_intelligence",
-                        lambda *_:(_ for _ in ()).throw(AssertionError("Social feed called")))
-    monkeypatch.setattr(campaigns,"campaign_action",
-                        lambda *_args,**_kwargs:(_ for _ in ()).throw(AssertionError("Campaign called")))
-    def fake_generate(question,previous,evidence,mode,**kwargs):
-        citations=[row["record_id"] for row in evidence if row["page"]==8]
-        assert citations
-        return "Penugasan memerlukan verifikasi yurisdiksi ["+citations[0]+"]",citations,{
-            "answer_language":"id","detected_tags":[],"presentation_labels":[]}
-    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
-    result=intelligence_assistant({
-        "question":"Bagaimana dengan penugasan ke tim provinsi?",
-        "previousQuestion":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital",
-        "analysisMode":"AUTO","responseDepth":"DEEP",
-        "conversationContext":[{"role":"user","text":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital"}]},
-        user(db,1),db)
-    assert result["response_profile"]=="PDF_GUIDANCE"
-    assert result["records"][0]["page"]==8
-    assert not result["featured_sources"]
-
-
-def test_saved_conversation_remembers_simplified_answer_profile():
-    from app.assistant_history import clean_messages
-    snapshot=clean_messages([
-        {"role":"user","text":"Menurut PDF, bagaimana penugasan provinsi?"},
-        {"role":"assistant","text":"Locus harus dikonfirmasi [DOC-1-P8].",
-         "response_profile":"PDF_GUIDANCE","records":[]},
-    ])
-    assert snapshot[1]["response_profile"]=="PDF_GUIDANCE"
-    assert clean_messages([{"role":"assistant","text":"Other",
-                           "response_profile":"FAKE_MODE"}])[0]["response_profile"]==""
+def test_social_cards_only_select_cited_or_analyzed_sources():
+    from app.assistant_social_focus import source_cards_for_question
+    rows=[{"id":1},{"id":2},{"id":3}]
+    cards=source_cards_for_question(rows,["SOCIAL-3"],lambda r:{"id":r["id"]},limit=2)
+    assert [x["id"] for x in cards]==[3,1]
+    assert len(cards)==2

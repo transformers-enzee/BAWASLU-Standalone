@@ -26,4 +26,17 @@ assert.ok(action.includes("t('submit_action')")&&action.includes("t('action_intr
 assert.ok(hook.includes('!answerLanguage&&'),'existing translations must not override answer language');
 assert.ok(text.includes('useTranslatedPresentationText(clean,language)'),
   'saved answer language bypasses app-language translation');
+assert.ok(page.includes("response_profile:response.data.response_profile"),
+ 'the assistant must retain the deterministic response profile with each answer');
+assert.ok(page.includes("m.response_profile==='ACTION_REQUEST'")&&
+  !page.includes("i===messages.length-1&&<AssistantActionDesk"),
+ 'case assignment controls are only offered for explicit action requests');
+assert.ok(page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
+ 'social statistical charts render only for social-intelligence requests');
+assert.ok(page.includes("m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags")&&
+  page.includes("m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport"),
+ 'pure PDF guidance excludes candidate/issue tags and full intelligence reports');
+assert.ok(page.includes("compactPdf={m.response_profile==='PDF_GUIDANCE'}")&&
+  sources.includes('data-compact-pdf-references')&&sources.includes('pdfs.slice(0,4)'),
+ 'PDF answers show compact clickable page references instead of multi-card excerpts');
 console.log('Assistant multilingual/tagging integration checks passed');

@@ -182,3 +182,56 @@ def test_uploaded_pdf_is_automatic_model_context_not_a_manual_search(monkeypatch
     assert prompt["recent_conversation"][0]["role"]=="user"
     assert cited==["DOC-1-P6"]
     assert meta["answer_language"]=="en"
+
+
+def test_pdf_guidance_model_response_stays_brief_and_never_spills_report_sections(monkeypatch):
+    import app.assistant_orchestration as orch
+    seen={}
+    response={
+        "direct_answer":"Dokumen meminta bukti diamankan sebelum pemeriksaan [DOC-1-P6].",
+        "observations":["Unrelated candidate analysis"],
+        "interpretation":"Irrelevant social-media statistics",
+        "next_checks":["Assign every social post to a provincial officer"],
+        "limitations":["Several generic long report caveats."],
+        "cited_ids":["DOC-1-P6"],"language_code":"id",
+        "detected_tags":[{"type":"CANDIDATE","label":"Unrelated",
+            "evidence_ids":["SOCIAL-740"],"evidence_quote":"irrelevant",
+            "explanation":"not from the PDF","confidence":"MEDIUM"}],
+        "presentation_labels":[]
+    }
+    class Response:
+        status_code=200
+        def json(self):
+            return {"status":"completed","model":"mock-test",
+                    "output_text":json.dumps(response,ensure_ascii=False)}
+    class Client:
+        def __init__(self,**kwargs):pass
+        def __enter__(self):return self
+        def __exit__(self,*args):return False
+        def post(self,url,headers,json):
+            seen["request"]=json
+            return Response()
+    monkeypatch.setenv("OPENAI_API_KEY","mock-only")
+    monkeypatch.setattr(orch.httpx,"Client",Client)
+    monkeypatch.setattr(orch,"research_public_web",
+        lambda *_args,**_kwargs: (_ for _ in ()).throw(
+            AssertionError("PDF-only requests must not use public paid web search")))
+    doc={"record_id":"DOC-1-P6","record_type":"PDF_KNOWLEDGE",
+        "source_excerpt":"BAWASLU SIMULASI, bukan SOP resmi; bukti digital harus diamankan.",
+        "page":6,"document_id":1,"title":"Simulated BAWASLU reference"}
+    text,cited,meta=generate(
+        "Menurut PDF, apa tindak lanjut setelah takedown?","",[doc],"GROUNDED",
+        response_profile="PDF_GUIDANCE",response_depth="EXECUTIVE")
+    prompt=json.loads(seen["request"]["input"][1]["content"])
+    assert prompt["response_profile"]=="PDF_GUIDANCE"
+    assert seen["request"]["max_output_tokens"]==1900
+    assert len(text.split())<85
+    assert "Unrelated" not in text
+    assert "Irrelevant" not in text
+    assert "Assign every" not in text
+    assert "[DOC-1-P6]" in text
+    assert "simulasi" in text.lower()
+    assert meta["detected_tags"]==[]
+    assert meta["analytical_findings"] is None
+    assert meta["quality"]["citation_ids_valid"] is True
+    assert cited==["DOC-1-P6"]

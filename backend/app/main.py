@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -708,6 +708,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     reference_catalog=authorized_reference_catalog(db,p)
     pdf_evidence=retrieve_chat_knowledge(
         db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
+    from .assistant_response_profile import (
+        choose_response_profile,evidence_for_profile,PDF_GUIDANCE,SOCIAL_ANALYSIS)
+    response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     general=requested=='GENERAL' or (
         requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
     source_warning=''
@@ -716,7 +719,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     chosen_social=[]
     accessible=[]
     matched_social=0
-    if not general:
+    if not general and response_profile!=PDF_GUIDANCE:
         accessible=list_intelligence(db,p)
         selected_formal=select_assistant_records(q,accessible,limit=10)
         try:
@@ -730,9 +733,11 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             db.rollback()
             logging.getLogger(__name__).exception('ASSISTANT_SOCIAL_READ_FAILED')
             source_warning='Social Listening retrieval temporarily unavailable; answer may be incomplete.'
-    evidence=[assistant_evidence_record(row) for row in selected_formal]
-    evidence += [social_evidence(row) for row in chosen_social]
-    evidence += pdf_evidence
+    evidence=evidence_for_profile(
+        response_profile,
+        [assistant_evidence_record(row) for row in selected_formal],
+        [social_evidence(row) for row in chosen_social],
+        pdf_evidence)
     if general or (not evidence and requested=='AUTO'):
         try:
             text,provider=generate_general_openai_answer(q,previous)
@@ -778,9 +783,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     cited=[]
     try:
         text,cited,meta=generate(q,previous,evidence,
-            'GROUNDED' if requested=='DATA' else 'HYBRID',
-            history=history,response_depth=response_depth,
-            reference_catalog=reference_catalog)
+            'GROUNDED' if requested=='DATA' or response_profile==PDF_GUIDANCE else 'HYBRID',
+            history=history,
+            response_depth='EXECUTIVE' if response_profile==PDF_GUIDANCE else response_depth,
+            reference_catalog=reference_catalog,response_profile=response_profile)
     except AssistantProviderError as exc:
         text,cited=evidence_fallback(evidence,exc.code,language=language)
         meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code,
@@ -809,32 +815,42 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             source_warning=''  # Avoid mixing language in the generated answer.
         if source_warning:
             text=source_warning+'\n\n'+text
-    from .assistant_orchestration import evidence_snapshot
-    # Compute broader descriptive statistics from the permitted results without
-    # sending additional posts to the paid model. The narrative itself remains
-    # grounded in the smaller selected evidence set.
-    stats_social,_=_social_select(social_rows,q,limit=300)
-    snapshot=evidence_snapshot([social_evidence(row) for row in stats_social]+
-                               [assistant_evidence_record(row) for row in selected_formal])
-    snapshot['analysis_post_count']=len(chosen_social)
-    snapshot['statistics_post_count']=len(stats_social)
-    snapshot['statistics_scope']='BOUNDED_AUTHORIZED_MATCHES'
-    def _engagement(row):
-        number=row.get('engagement_total')
-        return number if type(number) is int and number >= 0 else -1
-    featured=[social_record_view(row) for row in sorted(stats_social,key=_engagement,reverse=True)[:6]]
+    # Only social-analysis questions receive sample statistics and plots.
+    # PDF/procedure and casework answers retain source cards but don't show
+    # unrelated candidate tags, social graphs or assignment widgets.
+    snapshot=None
+    featured=[]
+    if response_profile==SOCIAL_ANALYSIS:
+        from .assistant_orchestration import evidence_snapshot
+        stats_social,_=_social_select(social_rows,q,limit=300)
+        snapshot=evidence_snapshot([social_evidence(row) for row in stats_social]+
+                                   [assistant_evidence_record(row) for row in selected_formal])
+        snapshot['analysis_post_count']=len(chosen_social)
+        snapshot['statistics_post_count']=len(stats_social)
+        snapshot['statistics_scope']='BOUNDED_AUTHORIZED_MATCHES'
+        def _engagement(row):
+            number=row.get('engagement_total')
+            return number if type(number) is int and number >= 0 else -1
+        featured=[social_record_view(row) for row in sorted(stats_social,key=_engagement,reverse=True)[:6]]
+    if response_profile==PDF_GUIDANCE:
+        support=[x for x in support if x.get('record_type')=='PDF_KNOWLEDGE']
+        if not support:
+            support=pdf_evidence[:3]
     source_types=sorted({x.get('record_type','FORMAL_INTELLIGENCE') for x in evidence})
-    return {'answer':text,'records':support[:12],'provider':meta,
+    return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
+        'provider':meta,'response_profile':response_profile,
         'evidence_snapshot':snapshot,
-        'analytical_findings':meta.get('analytical_findings'),
+        'analytical_findings':None if response_profile==PDF_GUIDANCE else meta.get('analytical_findings'),
         'featured_sources':featured,
         'answer_language':meta.get('answer_language') or language,
-        'detected_tags':meta.get('detected_tags') or fallback_tags(evidence),
+        'detected_tags':[] if response_profile==PDF_GUIDANCE else
+            (meta.get('detected_tags') or fallback_tags(evidence)),
         'presentation_labels':meta.get('presentation_labels') or {},
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),
             'matched_social':matched_social,
-            'scope':'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',
+            'scope':'AUTHORIZED_PDF_REFERENCES' if response_profile==PDF_GUIDANCE
+                   else 'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',
             'source_types':source_types,'reference_pdf_count':len(reference_catalog),
             'reference_page_count':len(pdf_evidence),
             'automatic_pdf_context':True,'limited':True}}

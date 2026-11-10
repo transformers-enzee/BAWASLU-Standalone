@@ -328,7 +328,7 @@ def research_public_web(question, key, model, base):
 
 
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
-             reference_catalog=None):
+             reference_catalog=None, response_profile='SOCIAL_ANALYSIS'):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -336,7 +336,9 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     base = (os.getenv("OPENAI_BASE_URL", OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip("/")
     allowed = {r["record_id"] for r in evidence}
     language = language_directive(question)
-    web_research = research_public_web(question, key, model, base) if mode != "GROUNDED" else None
+    pdf_guidance=response_profile=='PDF_GUIDANCE'
+    web_research = (research_public_web(question, key, model, base)
+                    if mode != "GROUNDED" and not pdf_guidance else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
@@ -356,17 +358,34 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
         "response_depth": response_depth,
+        "response_profile": response_profile,
         "response_language_rule": language["rule"],
         "response_language_hint": language["hint"],
-        "instruction": ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")
+        "instruction": (
+            "Answer the officer's procedural or PDF-reference question directly in 1-3 short "
+            "paragraphs, with page citations [DOC-id-Ppage] attached to the relevant claims. "
+            "Use ONLY supplied PDF_KNOWLEDGE page excerpts as authority; do not invent other "
+            "PDF pages, election-law articles, or incidents. Do not include social statistics, "
+            "candidate summaries, charts, cases, action suggestions, report drafts, or generic "
+            "investigation checklists unless the officer specifically asks. "
+            "Put the full answer in direct_answer; leave observations, interpretation, "
+            "next_checks and detected_tags empty. If the PDF is unreviewed or synthetic, "
+            "mention that clearly ONCE in one short sentence. Answer in the user's language."
+            if pdf_guidance else
+            ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages."))
     }
+    document_focus=(
+        "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
+        "Cite only retrieved PDF pages, stay concise, do not add themes, tags, "
+        "investigation dashboards or unrelated recommendations. Ignore earlier "
+        "social analysis formatting instructions for this turn." if pdf_guidance else "")
     request = {
         "model": model, "store": False,
-        "input": [{"role":"system","content":SYSTEM},
+        "input": [{"role":"system","content":SYSTEM+document_focus},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},
-        "max_output_tokens": 6000
+        "max_output_tokens": 1900 if pdf_guidance else 6000
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
@@ -388,8 +407,25 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         result = _safe_output(parsed, allowed)
         answer_language = effective_language(question, result.get("language_code"))
         result["language_code"] = answer_language
-        result["validated_tags"] = combined_tags(result.get("detected_tags") or [],evidence)
+        result["validated_tags"] = ([] if pdf_guidance else
+                                    combined_tags(result.get("detected_tags") or [],evidence))
         result["validated_ui_labels"] = validate_ui_labels(result.get("presentation_labels") or [])
+        if pdf_guidance:
+            # The model's long-form report fields must never leak into PDF
+            # procedural answers even if its schema happens to fill them.
+            result["observations"]=[]
+            result["interpretation"]=""
+            result["next_checks"]=[]
+            result["limitations"]=[]
+            if answer_language in ('id','en') and any(
+                   'SIMULASI' in str(row.get('source_excerpt') or '').upper()
+                   for row in evidence):
+                summary=result.get("direct_answer") or ""
+                if not re.search(r"simulasi|simulation|not official|bukan (?:peraturan|sop|resmi)",summary,re.I):
+                    note=("Catatan: PDF ini merupakan simulasi, bukan peraturan resmi BAWASLU."
+                          if answer_language=="id" else
+                          "Note: This PDF is a simulation, not an official BAWASLU regulation.")
+                    result["direct_answer"]=summary.rstrip()+"\n\n"+note
     except AssistantProviderError:
         raise
     except (ValueError, KeyError, TypeError) as exc:
@@ -402,6 +438,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     quality = {
         "framework": "SMART_RADAR_IQF_V1",
         "response_depth": response_depth,
+        "response_profile": response_profile,
         "selected_evidence_count": len(evidence),
         "cited_evidence_count": len(result["cited_ids"]),
         "citation_ids_valid": set(result["cited_ids"]).issubset(allowed),
@@ -417,14 +454,15 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "usage": payload.get("usage") or {},
         "quality": quality,
         "answer_language": result["language_code"],
+        "response_profile": response_profile,
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
     }
-    result["visual_report"] = bool(evidence)
-    meta["analytical_findings"] = {
+    result["visual_report"] = bool(evidence) and not pdf_guidance
+    meta["analytical_findings"] = (None if pdf_guidance else {
         "observations": result.get("observations") or [],
         "review_steps": result.get("next_checks") or []
-    }
+    })
     answer = answer_text(result, bool(evidence),result["language_code"])
     if web_research:
         public_heading={"id":"Sumber publik","en":"Public sources","es":"Fuentes públicas",

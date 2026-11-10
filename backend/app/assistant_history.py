@@ -67,6 +67,10 @@ def clean_messages(messages):
             "provider": item.get("provider") if isinstance(item.get("provider"), dict) else None,
             "grounding": item.get("grounding") if isinstance(item.get("grounding"), dict) else None,
             "evidence_snapshot": item.get("evidence_snapshot") if isinstance(item.get("evidence_snapshot"),dict) else None,
+            "response_profile": (str(item.get("response_profile") or "")[:24]
+              if str(item.get("response_profile") or "") in
+              ("PDF_GUIDANCE","SOCIAL_ANALYSIS","CASE_REVIEW","ACTION_REQUEST","GENERAL")
+              else ""),
             "answer_language": str(item.get("answer_language") or "")[:12],
             "detected_tags": [t for t in (item.get("detected_tags") or [])[:18] if isinstance(t,dict)] if isinstance(item.get("detected_tags"),list) else [],
             "presentation_labels": {str(k)[:50]:str(v)[:120] for k,v in list((item.get("presentation_labels") or {}).items())[:70]} if isinstance(item.get("presentation_labels"),dict) else {},

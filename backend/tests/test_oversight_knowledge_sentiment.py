@@ -442,3 +442,104 @@ def test_normal_assistant_chat_automatically_includes_pdf_and_references(monkeyp
     assert result["grounding"]["reference_page_count"]>=1
     assert seen["catalog"][0]["review_status"]=="UNREVIEWED"
     assert seen["history"][-1]["role"]=="user"
+
+
+@pytest.mark.parametrize("question,previous,has_pdf,expected",[
+    ("Menurut PDF BAWASLU yang telah diunggah, apa langkah tindak lanjut hukum setelah takedown?",
+     "",True,"PDF_GUIDANCE"),
+    ("Bagaimana dengan penugasan ke tim provinsi?",
+     "Menurut PDF BAWASLU, apa langkah tindak lanjut hukum setelah takedown?",True,"PDF_GUIDANCE"),
+    ("Jelaskan alur verifikasi yurisdiksi dan kewenangan petugas",
+     "",True,"PDF_GUIDANCE"),
+    ("Apa tren sentimen dan narasi dari unggahan terbaru?",
+     "Sebutkan SOP dari PDF",True,"SOCIAL_ANALYSIS"),
+    ("Analisis sentimen dan engagement dari 100 unggahan",
+     "",False,"SOCIAL_ANALYSIS"),
+    ("Investigasi kasus #739 dan periksa bukti primer",
+     "",True,"CASE_REVIEW"),
+    ("Buatkan laporan dari temuan tersimpan",
+     "",True,"ACTION_REQUEST"),
+    ("Siapkan penugasan untuk menindaklanjuti temuan",
+     "",True,"ACTION_REQUEST"),
+    ("Susun draf laporan berdasarkan bukti sumber",
+     "",True,"ACTION_REQUEST"),
+    ("How does the law treat this?",
+     "",False,"SOCIAL_ANALYSIS"),
+])
+def test_assistant_response_profile_routing(question,previous,has_pdf,expected):
+    from app.assistant_response_profile import choose_response_profile
+    snippets=[{"record_id":"DOC-1-P8"}] if has_pdf else []
+    assert choose_response_profile(question,previous,snippets)==expected
+
+
+def test_pdf_guidance_chat_uses_only_pdf_skips_social_stats_and_action_cards(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import assistant_orchestration,domain,campaigns
+    _chat_pdf_fixture(db,scope="NATIONAL",digest="6")
+    def must_not_read_social(*_args,**_kwargs):
+        raise AssertionError("PDF-only request must not load the social Inbox")
+    monkeypatch.setattr(domain,"list_intelligence",must_not_read_social)
+    monkeypatch.setattr(campaigns,"campaign_action",must_not_read_social)
+    observed={}
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        observed["profile"]=kwargs.get("response_profile")
+        observed["evidence"]=evidence
+        assert mode=="GROUNDED"
+        assert kwargs["response_depth"]=="EXECUTIVE"
+        cited=next(row["record_id"] for row in evidence if row["page"]==6)
+        return "Menurut PDF, amankan bukti digital "+f"[{cited}]",[cited],{
+            "answer_language":"id",
+            "detected_tags":[{"type":"CANDIDATE","label":"Unrelated"}],
+            "analytical_findings":{"observations":["Wrong source"]},
+            "presentation_labels":[]}
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    output=intelligence_assistant({
+        "question":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital",
+        "previousQuestion":"","analysisMode":"AUTO",
+        "responseDepth":"DEEP","conversationContext":[]},user(db,1),db)
+    assert output["response_profile"]=="PDF_GUIDANCE"
+    assert observed["profile"]=="PDF_GUIDANCE"
+    assert all(row["record_type"]=="PDF_KNOWLEDGE" for row in observed["evidence"])
+    assert [row["page"] for row in output["records"]]==[6]
+    assert output["detected_tags"]==[]
+    assert output["evidence_snapshot"] is None
+    assert output["featured_sources"]==[]
+    assert output["analytical_findings"] is None
+    assert output["grounding"]["scope"]=="AUTHORIZED_PDF_REFERENCES"
+
+
+def test_followup_question_uses_pdf_page_without_unrelated_intelligence(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import assistant_orchestration,domain,campaigns
+    _chat_pdf_fixture(db,scope="NATIONAL",digest="5")
+    monkeypatch.setattr(domain,"list_intelligence",
+                        lambda *_:(_ for _ in ()).throw(AssertionError("Social feed called")))
+    monkeypatch.setattr(campaigns,"campaign_action",
+                        lambda *_args,**_kwargs:(_ for _ in ()).throw(AssertionError("Campaign called")))
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        citations=[row["record_id"] for row in evidence if row["page"]==8]
+        assert citations
+        return "Penugasan memerlukan verifikasi yurisdiksi ["+citations[0]+"]",citations,{
+            "answer_language":"id","detected_tags":[],"presentation_labels":[]}
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    result=intelligence_assistant({
+        "question":"Bagaimana dengan penugasan ke tim provinsi?",
+        "previousQuestion":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital",
+        "analysisMode":"AUTO","responseDepth":"DEEP",
+        "conversationContext":[{"role":"user","text":"Menurut PDF, jelaskan tindak lanjut pengamanan bukti digital"}]},
+        user(db,1),db)
+    assert result["response_profile"]=="PDF_GUIDANCE"
+    assert result["records"][0]["page"]==8
+    assert not result["featured_sources"]
+
+
+def test_saved_conversation_remembers_simplified_answer_profile():
+    from app.assistant_history import clean_messages
+    snapshot=clean_messages([
+        {"role":"user","text":"Menurut PDF, bagaimana penugasan provinsi?"},
+        {"role":"assistant","text":"Locus harus dikonfirmasi [DOC-1-P8].",
+         "response_profile":"PDF_GUIDANCE","records":[]},
+    ])
+    assert snapshot[1]["response_profile"]=="PDF_GUIDANCE"
+    assert clean_messages([{"role":"assistant","text":"Other",
+                           "response_profile":"FAKE_MODE"}])[0]["response_profile"]==""

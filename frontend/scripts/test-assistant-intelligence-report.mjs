@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {findingSourceIds,withoutRepeatedFindingRefs} from '../src/lib/assistantFindingSources.js';
 // The isolated frontend Docker build copies only frontend/, not backend/.
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
 const page=read('../src/pages/IntelligenceAssistant.jsx');
@@ -11,8 +12,19 @@ assert.ok(page.includes("useState('DEEP')"),'deep intelligence default');
 assert.ok(dashboard.includes('activity_by_date')&&dashboard.includes('platform_engagement'),'source-based charts connected');
 assert.ok(dashboard.includes('engagement_coverage'),'metric coverage disclosed');
 assert.ok(findings.includes("t('verification_heading')"),'officer actions presented');
-assert.ok(findings.includes('withoutInlineSourceTokens')&&findings.includes('grid grid-cols-1 gap-3'),
-  'investigative cards show each citation as a chip once and remain readable');
+assert.ok(findings.includes('withoutRepeatedFindingRefs')&&findings.includes('findingSourceIds')&&findings.includes('grid grid-cols-1 gap-3'),
+  'investigation source chips survive bare citations with readable full-width cards');
+const bare='SOCIAL-179 dan SOCIAL-158 melaporkan kendala akses Silon.';
+assert.deepEqual(findingSourceIds(bare),['SOCIAL-179','SOCIAL-158']);
+assert.ok(!withoutRepeatedFindingRefs(bare).includes('SOCIAL-'));
+assert.match(withoutRepeatedFindingRefs(bare),/melaporkan kendala akses Silon/);
+const bracketed='Kendala perlu diverifikasi [SOCIAL-179] [SOCIAL-158].';
+assert.deepEqual(findingSourceIds(bracketed),['SOCIAL-179','SOCIAL-158']);
+assert.ok(!withoutRepeatedFindingRefs(bracketed).includes('SOCIAL-'));
+const many='SOCIAL-740, SOCIAL-296, SOCIAL-306, dan SOCIAL-352 mengutip sumber.';
+assert.equal(findingSourceIds(many).length,4);
+assert.match(withoutRepeatedFindingRefs(many),/mengutip sumber/);
+assert.deepEqual(findingSourceIds('Sumber [SOCIAL-205] dan SOCIAL-205'),['SOCIAL-205']);
 assert.ok(page.includes('maxLength={1000}')&&page.includes('slice(0,120)'),
   'full investigation questions and bounded history titles are supported');
 assert.ok(page.includes("m.response_profile==='CASE_REVIEW'")&&page.includes('formal_selected_count'),

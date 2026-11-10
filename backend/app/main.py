@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'140.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'141.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -837,6 +837,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         snapshot['matched_pool_count']=matched_social
         snapshot['statistics_scope']='SAME_SELECTED_POSTS_AS_AI_ANALYSIS'
         featured=source_cards_for_question(chosen_social,cited,social_record_view,limit=4)
+    if response_profile==CASE_REVIEW:
+        featured=source_cards_for_question(chosen_social,cited,social_record_view,
+                                          limit=4,distinct_content=True)
     if response_profile==PDF_GUIDANCE:
         support=[x for x in support if x.get('record_type')=='PDF_KNOWLEDGE']
         if not support:

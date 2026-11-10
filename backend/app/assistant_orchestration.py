@@ -393,9 +393,16 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "Cite only retrieved PDF pages, stay concise, do not add themes, tags, "
         "investigation dashboards or unrelated recommendations. Ignore earlier "
         "social analysis formatting instructions for this turn." if pdf_guidance else "")
+    case_focus=(
+        "\n\nFOR CASE_REVIEW: Explain unverified allegations versus verified official records. "
+        "Never infer a violation from social posts. For structured observations and "
+        "verification steps, cite supplied IDs as bracketed tokens at the end "
+        "of a sentence (e.g. [SOCIAL-205]), never as bare IDs inside prose. "
+        "Do not invent court decision contents or statutory provisions."
+        if response_profile=="CASE_REVIEW" else "")
     request = {
         "model": model, "store": False,
-        "input": [{"role":"system","content":SYSTEM+document_focus},
+        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},

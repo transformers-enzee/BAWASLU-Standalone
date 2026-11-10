@@ -650,3 +650,17 @@ def test_case_investigation_with_social_listening_routes_to_review_without_chart
     assert result["grounding"]["formal_selected_count"]==0
     assert result["grounding"]["social_selected_count"]==1
     assert result["analytical_findings"]["review_steps"]
+
+
+
+def test_case_source_cards_prioritize_distinct_evidence_over_platform_reposts():
+    from app.assistant_social_focus import source_cards_for_question
+    rows=[
+        {"id":205,"text_content":"Sindonews melaporkan pemeriksaan dokumen pendidikan dan proses pencalonan yang menjadi sorotan media sosial."},
+        {"id":155,"text_content":"Sindonews melaporkan pemeriksaan dokumen pendidikan dan proses pencalonan yang menjadi sorotan media sosial."},
+        {"id":179,"text_content":"Bawaslu menyampaikan adanya klaim mengenai keterbatasan akses Silon dalam proses pengawasan pencalonan."},
+        {"id":740,"text_content":"Media menyoroti perlunya verifikasi status putusan resmi lembaga peradilan sebelum menyimpulkan implikasi hukum."},
+    ]
+    cards=source_cards_for_question(rows,["SOCIAL-205","SOCIAL-155","SOCIAL-179"],
+                                  lambda row:{"id":row["id"]},limit=3,distinct_content=True)
+    assert [row["id"] for row in cards]==[205,179,740]

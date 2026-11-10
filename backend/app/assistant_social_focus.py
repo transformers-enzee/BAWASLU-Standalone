@@ -87,9 +87,23 @@ def focus_social_tags(tags,question,allowed_ids=(),limit=4):
     return result
 
 
-def source_cards_for_question(chosen_social,cited,view,limit=4):
+def source_cards_for_question(chosen_social,cited,view,limit=4,distinct_content=False):
     """Choose source cards among the same records the model actually read."""
     cited_set={str(x) for x in cited or []}
     matching=[row for row in chosen_social if "SOCIAL-"+str(row.get("id")) in cited_set]
     remainder=[row for row in chosen_social if "SOCIAL-"+str(row.get("id")) not in cited_set]
-    return [view(row) for row in (matching+remainder)[:max(0,limit)]]
+    if not distinct_content:
+        return [view(row) for row in (matching+remainder)[:max(0,limit)]]
+    # Case reviews prefer distinct story text over syndicated cross-platform copies.
+    cards=[]
+    seen=set()
+    for row in matching+remainder:
+        body=re.sub(r"\W+"," ",str(row.get("text_content") or "").casefold()).strip()
+        fingerprint=body[:140] if len(body)>=50 else "source:"+str(row.get("id"))
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        cards.append(view(row))
+        if len(cards)>=max(0,limit):
+            break
+    return cards

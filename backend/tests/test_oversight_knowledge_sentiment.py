@@ -664,3 +664,19 @@ def test_case_source_cards_prioritize_distinct_evidence_over_platform_reposts():
     cards=source_cards_for_question(rows,["SOCIAL-205","SOCIAL-155","SOCIAL-179"],
                                   lambda row:{"id":row["id"]},limit=3,distinct_content=True)
     assert [row["id"] for row in cards]==[205,179,740]
+
+
+def test_case_reference_filter_retains_procedure_not_unrelated_simulation_training():
+    from app.assistant_response_profile import select_case_reference_pages
+    pages=[
+        {"record_id":"DOC-1-P6","record_type":"PDF_KNOWLEDGE",
+         "source_excerpt":"Tindak lanjut dugaan pelanggaran: amankan bukti dan periksa kewenangan."},
+        {"record_id":"DOC-1-P10","record_type":"PDF_KNOWLEDGE",
+         "source_excerpt":"Kasus simulasi BWS-RAG-042: Skenario ini sepenuhnya fiktif."},
+        {"record_id":"DOC-1-P12","record_type":"PDF_KNOWLEDGE",
+         "source_excerpt":"Pertanyaan uji dan kriteria lulus untuk evaluasi AI."},
+    ]
+    question="Investigasi persyaratan pendidikan Gibran dari Social Listening"
+    assert [r["record_id"] for r in select_case_reference_pages(question,pages)]==["DOC-1-P6"]
+    explicit=select_case_reference_pages("Investigasi kasus simulasi BWS-RAG-042",pages)
+    assert {r["record_id"] for r in explicit}=={"DOC-1-P6","DOC-1-P10","DOC-1-P12"}

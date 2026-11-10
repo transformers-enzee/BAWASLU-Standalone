@@ -80,6 +80,27 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
     return SOCIAL_ANALYSIS if q else GENERAL
 
 
+_CASE_TRAINING_PAGE_HEADINGS=(
+    "kasus simulasi","skenario ini sepenuhnya fiktif",
+    "pertanyaan uji dan kriteria lulus",
+    "simulation case","test questions and acceptance criteria")
+_CASE_SAMPLE_REQUEST_PHRASES=(
+    "kasus simulasi","skenario fiktif","simulation case",
+    "bws-rag-","pertanyaan uji","kriteria lulus","acceptance test")
+
+
+def select_case_reference_pages(question,pages,limit=3):
+    """Keep procedural PDF guidance but omit unrelated demo/QA pages for a live case."""
+    visible=[row for row in pages or [] if row.get("record_type")=="PDF_KNOWLEDGE"]
+    explicit_sample=any(phrase in str(question or "").casefold()
+                        for phrase in _CASE_SAMPLE_REQUEST_PHRASES)
+    if explicit_sample:
+        return visible[:limit]
+    return [row for row in visible
+            if not any(heading in str(row.get("source_excerpt") or "").casefold()
+                       for heading in _CASE_TRAINING_PAGE_HEADINGS)][:limit]
+
+
 def evidence_for_profile(profile,formal, social, pdf):
     """Only include sources the user needs for this question."""
     if profile==PDF_GUIDANCE:

@@ -25,6 +25,12 @@ const many='SOCIAL-740, SOCIAL-296, SOCIAL-306, dan SOCIAL-352 mengutip sumber.'
 assert.equal(findingSourceIds(many).length,4);
 assert.match(withoutRepeatedFindingRefs(many),/mengutip sumber/);
 assert.deepEqual(findingSourceIds('Sumber [SOCIAL-205] dan SOCIAL-205'),['SOCIAL-205']);
+const generated='Klaim dokumen pendidikan. SOCIAL-205 dan rekaman serupa menyatakan dugaan pelapor.';
+assert.match(withoutRepeatedFindingRefs(generated),/Unggahan yang dirujuk dan rekaman serupa menyatakan/);
+assert.ok(!withoutRepeatedFindingRefs(generated).includes('sumber tersimpan'));
+assert.match(withoutRepeatedFindingRefs('SOCIAL-296 dan SOCIAL-306 memberitakan klaim.'),/Dua unggahan yang dirujuk memberitakan/);
+assert.match(withoutRepeatedFindingRefs('SOCIAL-740, SOCIAL-296, SOCIAL-306, dan SOCIAL-352 membahas kasus.'),/Beberapa unggahan yang dirujuk membahas/);
+assert.match(withoutRepeatedFindingRefs('According to DOC-1-P6, the officer checks records.','en'),/the cited document page/);
 assert.ok(page.includes('maxLength={1000}')&&page.includes('slice(0,120)'),
   'full investigation questions and bounded history titles are supported');
 assert.ok(page.includes("m.response_profile==='CASE_REVIEW'")&&page.includes('formal_selected_count'),

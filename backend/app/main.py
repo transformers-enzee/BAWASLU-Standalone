@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'141.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'141.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -709,7 +709,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     pdf_evidence=retrieve_chat_knowledge(
         db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
     from .assistant_response_profile import (
-        choose_response_profile,evidence_for_profile,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW)
+        choose_response_profile,evidence_for_profile,select_case_reference_pages,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     general=requested=='GENERAL' or (
         requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
@@ -739,6 +739,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # handbook pages to an ordinary candidate sentiment/social question.
     context_pdf=(pdf_evidence if response_profile!=SOCIAL_ANALYSIS or
                  question_mentions_pdf(q) else [])
+    if response_profile==CASE_REVIEW:
+        context_pdf=select_case_reference_pages(q,context_pdf)
     evidence=evidence_for_profile(
         response_profile,
         [assistant_evidence_record(row) for row in selected_formal],
@@ -800,7 +802,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
               'presentation_labels':{}}
     formal_by_id={record.intelligence_id:record for record in selected_formal}
     social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
-    pdf_by_id={row['record_id']:row for row in pdf_evidence}
+    pdf_by_id={row['record_id']:row for row in context_pdf}
     support=[]
     used=set()
     for cid in cited:
@@ -813,7 +815,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not support:
         support=[social_record_view(x) for x in chosen_social[:4]]
         support += [assistant_record_view(x) for x in selected_formal[:3]]
-        support += pdf_evidence[:3]
+        support += context_pdf[:3]
     if source_warning:
         if (meta.get('answer_language') or language)=='id':
             source_warning='Sumber Social Listening sementara tidak dapat diambil; analisis mungkin belum lengkap.'

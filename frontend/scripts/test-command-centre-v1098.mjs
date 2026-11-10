@@ -51,6 +51,8 @@ function response(body,ok=true){return {ok,status:ok?200:404,async json(){return
 async function mockFetch(path){
   if(path==='/api/functions/registry')return response({access:{geographic_scope:'Nationwide',permissions:{human_validation:true,manage_watchlist:true}}});
   if(path==='/api/smart-radar/dashboard')return response(data);
+  if(path==='/api/smart-radar/issue-distribution')return response({issues:[]});
+  if(path==='/api/oversight/legal-summary')return response({});
   if(path.startsWith('/api/smart-radar/finding/')){
     findingRequests++;
     return new Promise(resolve=>{findingResolver=resolve});
@@ -66,6 +68,7 @@ const window={scrollTo(){},location:{href:'/'},top:{location:{assign(){}}},confi
 const context={
   document,window,fetch:mockFetch,localStorage:{getItem(){return 'test-only'}},
   DOMParser:FakeDOMParser,structuredClone,URL,Date,Math,Number,String,Array,
+  AbortSignal:{timeout(){return {}}},
   Set,Map,Object,JSON,RegExp,clearTimeout,setTimeout,encodeURIComponent,
   decodeURIComponent,console
 };

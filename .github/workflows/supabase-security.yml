@@ -38,6 +38,12 @@ jobs:
           python-version: "3.12"
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
+      - name: Emulate Supabase Data API roles in ephemeral PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d bawaslu_security_ci -c "CREATE ROLE anon NOLOGIN"
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d bawaslu_security_ci -c "CREATE ROLE authenticated NOLOGIN"
       - name: Apply complete Alembic schema to ephemeral PostgreSQL
         working-directory: backend
         run: alembic upgrade head

@@ -45,9 +45,10 @@ def test_model_may_not_cite_unknown_record_ids():
 
 def test_fallback_never_invents_findings():
     answer,ids=evidence_fallback([social_evidence(_row(9,"Candidate statement"))],"timeout")
-    assert ids==["SOCIAL-9"]
-    assert "not verified findings" in answer.lower()
-    assert "source" in answer.lower()
+    assert ids==[]
+    assert "analysis could not be completed" in answer.lower()
+    assert "try again" in answer.lower()
+    assert "SOCIAL-9" not in answer
 
 def test_structured_answer_is_readable():
     text=answer_text({"direct_answer":"Ringkasan","observations":["Bukti [SOCIAL-1]"],

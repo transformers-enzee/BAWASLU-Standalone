@@ -593,7 +593,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
            return {...old,sentiments:next};
          });
         }}/>
-     {selected.sentiment_correction&&<p className="text-xs text-green-700">
+     {selected.sentiment_correction&&<p data-i18n-exempt lang={language==='en'?'en':'id'} className="text-xs text-green-700">
        {language==='en'?'Sentiment corrected by officer':'Sentimen dikoreksi petugas'}
        {selected.sentiment_correction.corrected_at?' · '+selected.sentiment_correction.corrected_at:''}
        {selected.sentiment_correction.rationale?' · '+selected.sentiment_correction.rationale:''}

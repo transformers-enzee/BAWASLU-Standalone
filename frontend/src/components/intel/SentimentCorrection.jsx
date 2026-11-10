@@ -33,7 +33,7 @@ export default function SentimentCorrection({campaignId,resultId,value,canEdit=t
     isEnglish?'Could not update sentiment.':'Gagal memperbarui sentimen.'))}
   finally{setBusy(false)}
  }
- return <div className="mt-2" lang={isEnglish?'en':'id'} aria-label={isEnglish?'Manual sentiment correction':'Koreksi sentimen manual'}>
+ return <div className="mt-2" data-i18n-exempt lang={isEnglish?'en':'id'} aria-label={isEnglish?'Manual sentiment correction':'Koreksi sentimen manual'}>
   {!editing&&<button type="button" onClick={()=>{
      setEditing(true);
      setLabel(['POSITIVE','NEGATIVE','NEUTRAL'].includes(String(value).toUpperCase())?

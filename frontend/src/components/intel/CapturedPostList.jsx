@@ -1,8 +1,9 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 import SentimentCorrection from './SentimentCorrection';
 import {useLanguage} from '@/lib/LanguageContext';
+import {correctedSentimentPost,overlaySentimentCorrections,sentimentCorrectionKey} from '@/lib/sentimentFeedState';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
 function Post({post,campaignId,onCorrected,isEnglish}){
  const [imageError,setImageError]=useState(false);
@@ -32,6 +33,14 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
  const isEnglish=language==='en';
  const t=(en,id)=>isEnglish?en:id;
  const [posts,setPosts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ // Feed pagination can finish after an officer saves a correction. Preserve
+ // that correction in every subsequent page merge without another refresh.
+ const savedCorrections=useRef(new Map());
+ const onCorrectionSaved=(post,correction)=>{
+  savedCorrections.current.set(sentimentCorrectionKey(campaignId,post.id),correction);
+  setPosts(rows=>rows.map(row=>String(row.id)===String(post.id)?
+    correctedSentimentPost(row,correction):row));
+ };
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
  const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');
  useEffect(()=>{
@@ -44,12 +53,12 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
      const result=response.data||{};
      if(!Array.isArray(result.evidence)||typeof result.has_more!=='boolean')throw Error('Invalid campaign feed');
      for(const post of result.evidence){if(!seen.has(String(post.id))){seen.add(String(post.id));all.push(post)}}
-     if(active)setPosts([...all]); // Show progressively retrieved records and counts.
+     if(active)setPosts(overlaySentimentCorrections(all,campaignId,savedCorrections.current)); // Pages never overwrite officer edits.
      if(!result.has_more)break;
      if(!result.evidence.length||page>=100000)throw Error('Incomplete campaign feed');
      page++;
     }
-    if(active)setPosts(all);
+    if(active)setPosts(overlaySentimentCorrections(all,campaignId,savedCorrections.current));
    }catch(e){if(active)setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Unable to load posts')}
    finally{if(active)setLoading(false)}
   }
@@ -69,7 +78,7 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
   return items.sort((a,b)=>sort==='oldest'?String(a.published_at||'').localeCompare(String(b.published_at||'')):
    sort==='engagement'?score(b)-score(a):String(b.published_at||'').localeCompare(String(a.published_at||'')));
  },[posts,from,to,keyword,platform,sentiment,sort]);
- return <section aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
+ return <section data-i18n-exempt aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
   <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={t('Captured posts filters and sorting','Filter dan urutan unggahan')}>
    <label className="text-xs">{t('From date','Dari tanggal')}<input className="intel-input mt-1" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
    <label className="text-xs">{t('To date','Sampai tanggal')}<input className="intel-input mt-1" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
@@ -84,9 +93,6 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
     {loading ? t(' · Loading more…',' · Memuat lainnya…'):
       error ? t(' · Partial results (loading failed)',' · Hasil tidak lengkap (gagal memuat)') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
   {error&&<p role="alert" className="py-3 text-sm text-red-700">{t('Unable to load the complete post list:','Gagal memuat seluruh unggahan:')} {error}. {t('Showing any records retrieved before the failure.','Menampilkan unggahan yang berhasil diambil sebelumnya.')}</p>}
-  {visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>setPosts(rows=>rows.map(row=>
-    String(row.id)===String(post.id)?{...row,sentiment:correction.sentiment,
-      sentiment_correction:correction,sentiment_details:{status:'OFFICER_CORRECTED',
-        explanation:correction.rationale,model:'OFFICER_CORRECTION'}}:row))}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
+  {visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>onCorrectionSaved(post,correction)}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
  </section>;
 }

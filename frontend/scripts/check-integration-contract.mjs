@@ -100,7 +100,7 @@ assert.match(inbox,/safeOriginalUrl/);
 assert.ok(!inbox.includes('synthetic-demo'),'Synthetic Inbox fixture must not ship');
 assert.match(assistant,/\/api\/assistant-history/);
 assert.match(assistant,/Saved conversations/);
-assert.match(refs,/View original source/);
+assert.match(refs,/t\('original_source'\)/,'Original source link uses the localized source-label key');
 assert.ok(!smart.includes("const seed=[{"),'Fictional Smart Radar seed must not ship');
 assert.ok(!watch.includes('const C=[{"id"'),'Fictional Watchlist candidate seed must not ship');
 assert.match(campaign,/AssessmentPilotPreview/);

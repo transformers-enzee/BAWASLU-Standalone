@@ -44,6 +44,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d bawaslu_security_ci -c "CREATE ROLE anon NOLOGIN"
           psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d bawaslu_security_ci -c "CREATE ROLE authenticated NOLOGIN"
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d bawaslu_security_ci -c "CREATE SCHEMA IF NOT EXISTS extensions"
       - name: Apply complete Alembic schema to ephemeral PostgreSQL
         working-directory: backend
         run: alembic upgrade head

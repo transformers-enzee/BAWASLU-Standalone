@@ -15,7 +15,7 @@ _PDF=re.compile(
     r"\b(?:pdf|dokumen|document|reference|referensi|rujukan|lampiran|"
     r"uploaded|diunggah|terunggah|manual|sop|pedoman)\b",re.I)
 _PROCEDURE=re.compile(
-    r"\b(?:prosedur|procedure|process|workflow|alur|langkah|steps?|"
+    r"\b(?:prosedur|proses|procedure|process|workflow|alur|langkah|steps?|"
     r"tindak lanjut|follow.up|takedown|take.down|penghapusan|"
     r"penugasan|assignments?|routing|locus|yurisdiksi|jurisdiction|"
     r"kewenangan|authority|kebijakan|regulations?|peraturan|"

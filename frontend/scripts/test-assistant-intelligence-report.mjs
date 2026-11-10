@@ -13,6 +13,9 @@ assert.ok(dashboard.includes('engagement_coverage'),'metric coverage disclosed')
 assert.ok(findings.includes("t('verification_heading')"),'officer actions presented');
 assert.ok(records.includes("t('sources_heading')"),'visual source gallery present');
 assert.ok(records.includes('featured?.length?featured:records||[]'),'historical social evidence remains visible');
-assert.ok(dashboard.includes('analysis_post_count'),'statistics and model source counts distinguished');
+assert.ok(dashboard.includes('Every chart uses the same')&&dashboard.includes('snapshot.matched_pool_count'),
+  'the social dashboard and AI narrative use one clearly disclosed set of posts');
+assert.ok(dashboard.includes('data-advanced-social-metrics'),
+  'additional engagement and date statistics are collapsed by default');
 assert.ok(records.includes('rel="noopener noreferrer"'),'external links isolated');
 console.log('Frontend intelligence report checks passed');

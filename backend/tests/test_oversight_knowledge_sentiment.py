@@ -455,3 +455,10 @@ def test_social_cards_only_select_cited_or_analyzed_sources():
     cards=source_cards_for_question(rows,["SOCIAL-3"],lambda r:{"id":r["id"]},limit=2)
     assert [x["id"] for x in cards]==[3,1]
     assert len(cards)==2
+
+
+def test_procedural_pdf_question_without_word_pdf_still_uses_saved_reference():
+    from app.assistant_response_profile import choose_response_profile
+    question="Jelaskan proses tindak lanjut pengamanan bukti digital"
+    assert choose_response_profile(question,pdf_evidence=[
+        {"record_id":"DOC-1-P6"}])=="PDF_GUIDANCE"

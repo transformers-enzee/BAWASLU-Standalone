@@ -34,13 +34,25 @@ def legal_snapshot(db,p):
     from .campaigns import campaign_action
     from .processing_hints import source_hints
     from .assistant_knowledge import retrieve_knowledge
+    from .platform_policy_screening import review_platform_post,PLATFORM_POLICIES,normalize_platform
     result=campaign_action(db,p,"campaignIntelligenceInbox",{
         "paged":True,"page_size":80})
     records=result.get("findings") or []
     cases=[]
     suspect_count=0
     platforms=Counter()
+    platform_reviews=[]
+    platform_context_count=0
+    platform_direct_count=0
+    platform_assessed=0
     for row in records:
+        review=review_platform_post(row)
+        if review["policy_url"]:
+            platform_assessed+=1
+        if review["status"] in ("REVIEW_INDICATED","CONTEXT_REVIEW_REQUIRED"):
+            platform_direct_count+=review["status"]=="REVIEW_INDICATED"
+            platform_context_count+=review["status"]=="CONTEXT_REVIEW_REQUIRED"
+            platform_reviews.append(review)
         source=str(row.get("text_content") or "")
         hints=source_hints(source)
         issue=bool(row.get("is_flagged") or row.get("potential_issues") or
@@ -65,8 +77,34 @@ def legal_snapshot(db,p):
             "follow_up_without_takedown":True
         })
 
+    # Platform policy triage is independent of the legal violation review queue.
+    # Rank directly suggested signals ahead of news reporting/quotation context;
+    # never label an ordinary political criticism as a platform violation.
+    platform_reviews.sort(key=lambda r:(
+        0 if r["status"]=="REVIEW_INDICATED" else 1,
+        str(r.get("source_id") or "")))
+    used_platforms=sorted({normalize_platform(r.get("platform")) for r in records})
+    platform_library=[{
+        "platform":PLATFORM_POLICIES[key][0],
+        "policy_url":PLATFORM_POLICIES[key][1],
+        "policy_url_checked_on":"2026-11-10"
+    } for key in used_platforms if key in PLATFORM_POLICIES]
     refs=retrieve_knowledge(db,p,"pelanggaran pemilu perbawaslu peraturan hukum aturan media sosial",3)
-    return {"source":"AUTHORIZED_SAVED_INBOX_REVIEW_QUEUE",
+    return {
+        "platform_policy_screening":{
+            "review_queue":platform_reviews[:12],
+            "review_signal_count_in_sample":platform_direct_count,
+            "reported_or_contextual_count_in_sample":platform_context_count,
+            "screened_posts_in_sample":platform_assessed,
+            "retrieved_posts":len(records),
+            "policy_links":platform_library,
+            "status":"SOURCE_TEXT_SIGNAL_SCREENING_ONLY",
+            "platform_violation_confirmed":False,
+            "legal_violation_confirmed":False,
+            "policy_versions_verified":False,
+            "manual_review_required":True,
+            "paid_provider_called":False,
+        },"source":"AUTHORIZED_SAVED_INBOX_REVIEW_QUEUE",
         "review_queue":cases,
         "sampled_relevant_posts":len(records),
         "suspected_cases_in_sample":suspect_count,

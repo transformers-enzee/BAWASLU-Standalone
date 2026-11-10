@@ -44,6 +44,13 @@ assert.ok(records.includes("record_type==='PDF_KNOWLEDGE'")&&records.includes('d
 assert.ok(radarHtml.includes('id="legalOversight"')&&radarHtml.includes('id="legalCaseQueue"')&&
           radarHtml.includes('id="platformRulesQueue"')&&radarHtml.includes('id="legalFollowup"'),
   'Command Centre shows separate legal and platform-rules boxes');
+assert.ok(radarJs.includes('data?.platform_policy_screening')&&
+   radarJs.includes('const platformCases=')&&radarJs.includes('review_categories')&&
+   radarJs.includes('policy_url')&&radarJs.includes('Source-text signal')&&
+   radarJs.includes('No direct threat'),
+ 'platform rule screening must use independent, source-specific evidence and official policy links');
+assert.ok(!radarJs.includes("platform.innerHTML='<p class=\"small muted\">Platform-rule status: not assessed"),
+ 'platform review must not render the original generic legal-case list');
 assert.ok(radarJs.includes('/api/oversight/legal-summary')&&radarJs.includes('renderLegalOversight'),
   'Command Centre legal review must use scoped backend evidence');
 assert.ok(radarJs.includes("epoch!==dashboardEpoch"),'late legal response must not replace a newer dashboard');

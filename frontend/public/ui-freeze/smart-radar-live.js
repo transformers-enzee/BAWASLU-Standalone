@@ -305,9 +305,10 @@
     const countText=count+' candidates from '+Number(data?.sampled_relevant_posts||0)+' retrieved posts (sample only)';
     const link=post=>'/inbox?campaign_id='+encodeURIComponent(post.campaign_id||'')+
       '&result_id='+encodeURIComponent(post.source_id||'');
+    // These are two independent decisions: an allegation under election law
+    // must NOT automatically appear as a social platform-rules breach.
     if(!cases.length){
       legal.innerHTML='<p class="small muted">No legal-violation signals in the retrieved review sample. This does not prove that none exist.</p>';
-      platform.innerHTML='<p class="small muted">No shortlisted posts for platform policy review in this sample.</p>';
     }else{
       legal.innerHTML='<p class="small muted">'+label(countText)+'</p>'+
         cases.slice(0,5).map(post=>'<div style="padding:9px 0;border-bottom:1px solid #e5eaf0">'+
@@ -316,11 +317,44 @@
           ' · Human review: '+label(post.human_flag_status)+'</div>'+
           '<a href="'+link(post)+'" target="_top" rel="noopener noreferrer" class="small">Inspect evidence & assign legal review ↗</a>'+
           '</div>').join('');
-      platform.innerHTML='<p class="small muted">Platform-rule status: not assessed against current official community rules.</p>'+
-        cases.slice(0,5).map(post=>'<div style="padding:9px 0;border-bottom:1px solid #e5eaf0">'+
-          '<b>'+label(post.platform)+'</b><div class="small muted">Policy verification needed. Keep moderation requests separate from legal findings.</div>'+
-          '<a href="'+link(post)+'" target="_top" rel="noopener noreferrer" class="small">Compare original content with official platform rules ↗</a>'+
-          '</div>').join('');
+    }
+    const screening=data?.platform_policy_screening||{};
+    const platformCases=Array.isArray(screening.review_queue)?screening.review_queue:[];
+    const direct=Number(screening.review_signal_count_in_sample||0);
+    const contextual=Number(screening.reported_or_contextual_count_in_sample||0);
+    const sample=Number(screening.screened_posts_in_sample||0);
+    const policies=Array.isArray(screening.policy_links)?screening.policy_links:[];
+    const screeningSummary='<div class="small muted" style="margin-bottom:9px">'+
+       label(direct)+' direct review signals · '+label(contextual)+
+       ' reported/quoted-context signals among '+label(sample)+' supported-platform posts (sample only)</div>';
+    const disclaimer='<p class="small muted" style="margin-bottom:8px">Text-only screening, not a confirmed policy breach. Ordinary political criticism or negative sentiment does not establish a violation. Verify the original content and current policy before reporting.</p>';
+    const policyLibrary=policies.length?
+       '<div style="padding-top:10px;border-top:1px solid #e5eaf0">'+
+         '<strong class="small">Official platform policies</strong><div class="small" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">'+
+         policies.map(policy=>'<a href="'+label(safeUrl(policy.policy_url))+
+           '" target="_blank" rel="noopener noreferrer">'+label(policy.platform)+' ↗</a>').join('')+
+         '</div><p class="small muted">Policy links were checked on 2026-11-10; confirm current versions before enforcement.</p></div>':'';
+    if(!platformCases.length){
+      platform.innerHTML=screeningSummary+disclaimer+
+        '<p class="small muted">No direct threat, privacy-exposure or coordinated-harassment call was detected by these limited text checks. This does not prove the posts comply with all community rules.</p>'+policyLibrary;
+    }else{
+      platform.innerHTML=screeningSummary+disclaimer+
+        platformCases.slice(0,6).map(post=>{
+          const contextual=post.status==='CONTEXT_REVIEW_REQUIRED';
+          const cues=Array.isArray(post.review_categories)?post.review_categories:[];
+          const categories=cues.map(key=>post.category_labels?.[key]?.en||key).join(' · ');
+          const official=safeUrl(post.policy_url);
+          return '<div style="padding:10px 0;border-bottom:1px solid #e5eaf0">'+
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+            '<strong>'+label(post.platform)+'</strong>'+
+            '<span class="small muted">'+(contextual?'News/quotation context – verify':'Source-text signal – inspect')+'</span></div>'+
+            '<div class="small" style="font-weight:600;color:#8b2733;margin:4px 0">'+label(categories)+'</div>'+
+            '<div class="small" style="color:#32465a">'+label((post.excerpt||'').slice(0,155))+'</div>'+
+            '<p class="small muted" style="margin:4px 0">Source #'+label(post.source_id)+' · No platform or legal breach determined.</p>'+
+            '<a href="'+link(post)+'" target="_top" rel="noopener noreferrer" class="small">Inspect original evidence ↗</a>'+
+            (official?' · <a href="'+label(official)+'" target="_blank" rel="noopener noreferrer" class="small">Read official platform rules ↗</a>':'')+
+            '</div>';
+        }).join('')+policyLibrary;
     }
     const stepsList=Array.isArray(data?.legal_follow_up_steps)?data.legal_follow_up_steps:[];
     const refs=(data?.legal_references||[]).slice(0,3);

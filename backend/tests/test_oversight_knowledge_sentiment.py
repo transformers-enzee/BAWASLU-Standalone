@@ -265,3 +265,85 @@ def test_reason_is_optional_without_erasing_legacy_audit_history(db):
     assert history[0].rationale=="Earlier explanation retained in history."
     assert history[1].rationale==""
     assert history[0].actor_id==history[1].actor_id==1
+
+
+def test_platform_screening_political_criticism_is_not_a_policy_violation():
+    from app.platform_policy_screening import screen_platform_text
+    for platform in ("twitter","instagram","tiktok","youtube"):
+        result=screen_platform_text(platform,
+            "Gibran dinilai tidak memenuhi persyaratan pendidikan; PKS meminta DPR memeriksa putusan pengadilan.")
+        assert result["status"]=="NO_DIRECT_SIGNAL_IDENTIFIED"
+        assert result["review_categories"]==[]
+        assert result["platform_violation_confirmed"] is False
+        assert result["legal_violation_confirmed"] is False
+        assert result["political_criticism_is_not_a_violation"] is True
+
+def test_platform_screening_direct_threat_and_organized_abuse_cues():
+    from app.platform_policy_screening import screen_platform_text
+    threat=screen_platform_text("twitter-ai-search","Aku akan bunuh pejabat itu")
+    assert threat["platform"]=="X"
+    assert threat["status"]=="REVIEW_INDICATED"
+    assert "DIRECT_THREAT" in threat["review_categories"]
+    assert threat["policy_url"].startswith("https://help.x.com/")
+    assert threat["platform_violation_confirmed"] is False
+    doxx=screen_platform_text("tiktok","Sebarkan alamat rumah orang itu")
+    assert doxx["status"]=="REVIEW_INDICATED"
+    assert "PERSONAL_INFORMATION" in doxx["review_categories"]
+    campaign=screen_platform_text("facebook","Ayo serbu akun mereka")
+    assert campaign["status"]=="REVIEW_INDICATED"
+    assert "COORDINATED_HARASSMENT" in campaign["review_categories"]
+
+def test_platform_screening_news_quote_and_warning_are_contextual():
+    from app.platform_policy_screening import screen_platform_text
+    quoted=screen_platform_text("threads",
+        "Berita: Polisi melaporkan seseorang berkata, 'Ayo serbu akun mereka'.")
+    assert quoted["status"]=="CONTEXT_REVIEW_REQUIRED"
+    assert quoted["context_required"] is True
+    warning=screen_platform_text("youtube",
+        "Jangan sebarkan alamat rumah seseorang, tindakan itu melanggar privasi.")
+    assert warning["status"]=="CONTEXT_REVIEW_REQUIRED"
+    assert warning["platform_violation_confirmed"] is False
+    mention=screen_platform_text("instagram",
+        "Berita pelanggaran pemilu dan tuduhan manipulasi persyaratan.")
+    assert mention["review_categories"]==[]
+    assert mention["status"]=="NO_DIRECT_SIGNAL_IDENTIFIED"
+
+def test_platform_screening_unsupported_platform_does_not_claim_policy_review():
+    from app.platform_policy_screening import screen_platform_text
+    unknown=screen_platform_text("reddit","Ayo serbu akun mereka")
+    assert unknown["status"]=="POLICY_NOT_CONFIGURED"
+    assert unknown["policy_url"] is None
+    assert unknown["platform_violation_confirmed"] is False
+    assert screen_platform_text("tiktok","")["status"]=="INSUFFICIENT_SOURCE"
+
+def test_platform_screening_queue_is_independent_of_legal_queue(monkeypatch,db):
+    import app.campaigns as campaigns
+    import app.assistant_knowledge as knowledge
+    monkeypatch.setattr(campaigns,"campaign_action",lambda *args,**kwargs:{
+        "findings":[
+            {"id":"201","campaign_id":"70","platform":"threads",
+             "text_content":"Ayo serbu akun mereka","is_flagged":False,
+             "potential_issues":[],"flag_review_status":"UNREVIEWED"},
+            {"id":"202","campaign_id":"70","platform":"twitter",
+             "text_content":"Berita menyebut: ayo serbu akun mereka.",
+             "is_flagged":False,"potential_issues":[]},
+            {"id":"203","campaign_id":"70","platform":"twitter",
+             "text_content":"Berita kritis tentang Gibran dan proses pemilu.",
+             "is_flagged":True,"potential_issues":[{"category":"LEGAL_REVIEW"}]},
+            {"id":"204","campaign_id":"70","platform":"reddit",
+             "text_content":"Ayo serbu akun mereka","is_flagged":False,
+             "potential_issues":[]},
+        ]})
+    monkeypatch.setattr(knowledge,"retrieve_knowledge",lambda *args,**kwargs:[])
+    snapshot=legal_snapshot(db,p(db,1))
+    legal_ids={item["source_id"] for item in snapshot["review_queue"]}
+    assert legal_ids=={"203"}
+    screened=snapshot["platform_policy_screening"]
+    assert screened["screened_posts_in_sample"]==3
+    assert screened["review_signal_count_in_sample"]==1
+    assert screened["reported_or_contextual_count_in_sample"]==1
+    assert [item["source_id"] for item in screened["review_queue"]]==["201","202"]
+    assert all(item["platform_violation_confirmed"] is False for item in screened["review_queue"])
+    assert snapshot["legal_verdict"]=="NONE"
+    assert snapshot["platform_rule_verdict"]=="NONE"
+    assert snapshot["paid_provider_called"] is False

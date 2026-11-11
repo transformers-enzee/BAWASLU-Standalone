@@ -22,7 +22,8 @@ test('current inline campaign editor preserves descriptions without paid provide
  await expect(card).toBeVisible();
  await card.getByRole('button',{name:'Edit'}).click();
  const description='Monitor Indonesian election oversight using saved original evidence.';
- await expect(editor.getByRole('note',{name:'Default collection coverage'})).toBeVisible();
+ // The V10 editor intentionally removed the old platform-coverage panel.
+ await expect(editor.getByLabel('Description')).toBeVisible();
  await expect(editor.getByRole('group',{name:/platforms/i})).toHaveCount(0);
  await editor.getByLabel('Description').fill(description);
  await editor.getByRole('button',{name:'Save Draft'}).click();

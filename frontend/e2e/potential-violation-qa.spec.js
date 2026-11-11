@@ -81,10 +81,10 @@ test('historical review decisions render in the collapsed drawer on demand',asyn
 test('flag count and category filter stay consistent with the evidence list',async({page})=>{
  const paidCalls=await setup(page);
  await expect(page.getByText('Potential violations',{exact:true})).toBeVisible();
- await expect(page.getByText('Posts shown').locator('..')).toContainText('3');
+ await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(3);
  await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(1);
  await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  expect(paidCalls()).toBe(0);
@@ -152,13 +152,16 @@ test('authorized officer can save a review and see the updated status without re
  await page.getByLabel(/^password$/i).fill(PASSWORD);
  await page.getByRole('button',{name:/log in|masuk/i}).click();
  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
- let reviewCalls=0,unexpectedCalls=0;
+ let reviewCalls=0,unexpectedCalls=0,reviewSaved=false;
  await page.route('**/api/functions/socialListening',async route=>{
   const request=route.request().postDataJSON();
   if(request.action==='campaignIntelligenceInbox'){
-   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(reviewable)});
+   const stored=reviewSaved?{...reviewable,findings:reviewable.findings.map(item=>item.id==='101'
+     ?{...item,flag_review_status:'FURTHER_INVESTIGATION',is_flagged:true}:item)}:reviewable;
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(stored)});
   }else if(request.action==='campaignFlagReview'){
    reviewCalls++;
+   reviewSaved=true;
    expect(request.id).toBe('1');
    expect(request.data.result_id).toBe('101');
    expect(request.data.assessment_version).toBe(1);
@@ -188,12 +191,12 @@ test('province and candidate filters compose with potential violation selection'
  const paidCalls=await setup(page);
  await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('DKI Jakarta');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.getByLabel('Candidate').selectOption('');
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('');
  await page.getByRole('checkbox',{name:'Potential violation only'}).uncheck();
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
@@ -202,20 +205,20 @@ test('candidate filtering narrows posts without labeling untagged posts as candi
  const selector=page.getByLabel('Candidate');
  await expect(selector.locator('option[value="Prabowo Subianto"]')).toHaveCount(1);
  await selector.selectOption('Prabowo Subianto');
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await selector.selectOption('');
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
 test('province selection excludes unlocated posts and clearing restores them',async({page})=>{
  const paidCalls=await setup(page);
  const selector=page.locator('[aria-label="Filter intelligence"] select').first();
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  await selector.selectOption('DKI Jakarta');
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await selector.selectOption('');
- await expect(page.getByText('Posts · 3 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
@@ -226,7 +229,7 @@ test('compact Inbox exposes province and candidate filters and a violation toggl
  await expect(filters.getByLabel('Candidate')).toBeVisible();
  await expect(filters.getByRole('checkbox',{name:'Potential violation only'})).toBeVisible();
  await filters.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
@@ -265,7 +268,7 @@ test('authorized officer sees manual flag form for relevant evidence without AI 
 test('potential violation filter shows source evidence quotes without paid calls',async({page})=>{
  const paidCalls=await setup(page);
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText('Posts · 1 results')).toBeVisible();
+ await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
  expect(paidCalls()).toBe(0);

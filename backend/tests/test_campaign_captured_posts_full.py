@@ -4,6 +4,8 @@ os.environ['DATABASE_URL']='sqlite:///:memory:'
 import pytest
 from app.db import Base,engine,SessionLocal
 from app.models import User,AccessGrant,SocialListeningRun,SocialListeningResult,CampaignEvidence
+# Register officer correction before SQLite's create_all fixture.
+from app.officer_sentiment import OfficerSentimentCorrection  # noqa: F401
 from app.access import default_permissions,profile
 from app.auth import hash_password
 from app.socialcrawl import social_listening_action as action

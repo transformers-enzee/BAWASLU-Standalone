@@ -128,9 +128,24 @@ def test_command_centre_no_source_count_banner_and_neutral_display_is_read_only(
     root=Path(__file__).resolve().parents[2]
     js=(root/'frontend/public/ui-freeze/smart-radar-live.js').read_text(encoding='utf-8')
     assert 'renderInboxLineage()' not in js
-    assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" in js
-    assert 'sentiment_counts?.UNCLASSIFIED' in js
-    assert "kind==='NEUTRAL'" in js
-    # The sentiment explanation was intentionally removed in v133.7; the display-only grouping remains.
-    assert "$('#sentimentExplain').textContent=''" in js
+    assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)]" in js
+    assert "['UNCLASSIFIED',unlabeled]" in js
+    assert "Number(f.sentiment_counts?.[kind]||0)>0" in js
+    assert "String(p[6]||'UNCLASSIFIED').toUpperCase()===decodeURIComponent(id.slice(10)).toUpperCase()" in js
+    assert "kind==='NEUTRAL'" not in js
+    assert "Number(sentimentCounts.NEUTRAL||0)+unlabeled" not in js
+    assert "shown separately from Neutral." in js
     assert 'saved classification is unchanged' not in js
+
+
+def test_command_centre_unclassified_has_independent_clickthrough_and_legend():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    js=(root/'frontend/public/ui-freeze/smart-radar-live.js').read_text(encoding='utf-8')
+    html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
+    # No grouping of unknown labels into neutral, in the chart or source drawer.
+    assert "['UNCLASSIFIED',unlabeled]" in js
+    assert "'sentiment:',sentimentPalette" in js
+    assert "kind==='NEUTRAL'" not in js
+    assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" not in js
+    assert 'Positive · Neutral · Negative · Unclassified' in html

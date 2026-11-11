@@ -953,6 +953,29 @@ def campaign_action(db:Session,p,action,data,id=None):
                         func.upper(EvidenceAssessment.relevance_label).in_(['RELEVANT','HIGHLY_RELEVANT']),
                         or_(EvidenceAssessment.model_version.is_(None),
                             EvidenceAssessment.model_version!='PRISM_PENDING_OPENAI')))
+            # Apply a source-linked province filter BEFORE pagination, otherwise
+            # older posts (such as 2024 source 177) cannot be found from a
+            # dropdown built only from the first 100 latest Inbox records.
+            # The match is a source mention / saved hint, NEVER human-verified
+            # incident jurisdiction or geographic access authorization.
+            requested_province=str(data.get('province_filter') or '').strip()
+            if requested_province:
+                if len(requested_province)>64 or not all(
+                    c.isalpha() or c in " -.'" for c in requested_province):
+                    raise ValueError('Invalid province filter')
+                from .processing_hints import PROVINCE_ALIASES
+                variants={requested_province.casefold()}
+                variants.update(alias for alias,canonical in PROVINCE_ALIASES.items()
+                                if canonical.casefold()==requested_province.casefold())
+                if requested_province.casefold()=='sumatera selatan':
+                    # Explicit incident regencies shown in source 177.
+                    variants.update(('musi banyuasin','musi rawas utara'))
+                source_text=func.lower(func.coalesce(SocialListeningResult.text_content,''))
+                stored_signals=func.lower(func.coalesce(EvidenceAssessment.geographic_signals_json,''))
+                eligible=eligible.filter(or_(*(
+                    [source_text.like('%'+word+'%') for word in sorted(variants)]
+                    +[stored_signals.like('%'+word+'%') for word in sorted(variants)]
+                )))
             totals_summary=None
             if data.get('include_totals') is True:
                 # Aggregate across ALL authorized eligible rows before page slicing.

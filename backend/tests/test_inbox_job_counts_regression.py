@@ -12,3 +12,16 @@ def test_assessment_audit_remains_independent():
     text=Path(__file__).resolve().parents[1].joinpath('app','campaigns.py').read_text()
     audit=text.split("if action in ('campaignAssessmentAudit','campaignAssessmentCorrection'):",1)[1].split("    if action=='campaignIntelligenceInbox':",1)[0]
     assert 'job_counts' not in audit
+
+
+
+def test_inbox_hides_review_group_ui_and_uses_nondestructive_exact_content_dedup():
+    source=Path(__file__).resolve().parents[2].joinpath('frontend','src','pages','Inbox.jsx').read_text()
+    assert 'Source-linked grouping review' not in source
+    assert 'campaignFindingGroupsPreview' not in source
+    assert 'campaignFindingGroupsSave' not in source
+    assert 'deduplicateInboxEvidence(findings)' in source
+    assert 'exact duplicate(s) collapsed' in source
+    assert 'province_filter:chosenLocation' in source
+    assert 'Province (source mention / verified)' in source
+    assert "provinces:[...provinceNames].sort" in source

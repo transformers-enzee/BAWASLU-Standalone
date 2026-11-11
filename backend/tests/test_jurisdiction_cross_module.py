@@ -244,3 +244,53 @@ def test_south_sumatra_publisher_location_alone_is_not_incident_jurisdiction():
                  'rationale':'Publisher region is not proof of the incident location.'},'91')
         assert db.query(CampaignJurisdictionReview).count()==0
     finally:db.close()
+
+
+
+def test_inbox_province_filter_reads_old_south_sumatra_source_not_only_current_page():
+    """Province is a source mention filter, not verified incident jurisdiction."""
+    db=fixture()
+    try:
+        # Place the incident story before 110 more-recent campaign links.
+        db.add(SocialListeningResult(id=2,run_id=1,platform='tiktok',
+            author_name='OfficialiNews',
+            text_content=('Bawaslu Sumatra Selatan menemukan dugaan kasus warga '
+                          'mencoblos lebih dari sekali di Kabupaten Musi Banyuasin '
+                          'dan Musi Rawas Utara.'),
+            canonical_url='https://example.test/south-sumatra',
+            published_at='2024-02-18T13:00:00Z'))
+        db.add(CampaignEvidence(campaign_id=91,result_id=2))
+        db.add(EvidenceAssessment(campaign_id=91,result_id=2,assessment_version=1,
+            relevance_label='RELEVANT',sentiment='NEUTRAL',
+            potential_issue_signals_json='[]',geographic_signals_json='[]'))
+        for n in range(3,114):
+            db.add(SocialListeningResult(id=n,run_id=1,platform='instagram',
+                author_name='Local account',text_content=f'Pemilu di Riau source {n}',
+                canonical_url=f'https://example.test/{n}',
+                published_at='2026-11-11T00:00:00Z'))
+            db.add(CampaignEvidence(campaign_id=91,result_id=n))
+            db.add(EvidenceAssessment(campaign_id=91,result_id=n,assessment_version=1,
+                relevance_label='RELEVANT',sentiment='NEUTRAL',
+                potential_issue_signals_json='[]'))
+        db.commit()
+        normal=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'page_size':100})
+        assert '2' not in {item['id'] for item in normal['findings']}
+        filtered=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'page_size':100,
+             'province_filter':'Sumatera Selatan','include_totals':True})
+        assert [item['id'] for item in filtered['findings']]==['2']
+        assert filtered['findings'][0]['processing_hints']['province_mentions']==['Sumatera Selatan']
+        assert filtered['full_statistics']['posts']==1
+        assert filtered['findings'][0]['incident_jurisdiction_verified'] is False
+        assert filtered['pagination']['has_more'] is False
+    finally:db.close()
+
+
+def test_source_province_filter_rejects_malformed_value():
+    db=fixture()
+    try:
+        with pytest.raises(ValueError,match='Invalid province filter'):
+            campaign_action(db,user(),'campaignIntelligenceInbox',
+                {'campaign_id':'91','paged':True,'province_filter':'Riau% OR 1=1'})
+    finally:db.close()

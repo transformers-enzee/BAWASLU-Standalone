@@ -9,6 +9,7 @@ import { useIntel, useRegistry } from '@/components/intel/useIntel';
 import IntelligenceTable from '@/components/intel/IntelligenceTable';
 import { PRIORITIES, Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
+import { deduplicateInboxEvidence } from '@/lib/inboxExactDedup';
 
 const platformLabel=value=>({youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',facebook:'Facebook',threads:'Threads',x:'X',twitter:'X',reddit:'Reddit',linkedin:'LinkedIn'}[String(value||'').toLowerCase()]||String(value||'Unknown'));
 const safeOriginalUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}};
@@ -22,7 +23,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [summaryReadiness,setSummaryReadiness]=useState(null),[summaryBusy,setSummaryBusy]=useState(false),[summaryError,setSummaryError]=useState('');
  const [qaHistory,setQAHistory]=useState(null),[qaBusy,setQABusy]=useState(false),[qaError,setQAError]=useState('');
  const [acceptance,setAcceptance]=useState(null),[acceptanceBusy,setAcceptanceBusy]=useState(false),[acceptanceError,setAcceptanceError]=useState('');
- const [groupPreview,setGroupPreview]=useState(null),[groupRows,setGroupRows]=useState([]),[groupBusy,setGroupBusy]=useState(false),[groupNotice,setGroupNotice]=useState(''),[groupError,setGroupError]=useState(''),[groupExpanded,setGroupExpanded]=useState(false),[groupEvidence,setGroupEvidence]=useState(null);
+ const [chosenLocation,setChosenLocation]=useState('');
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
@@ -41,7 +42,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const acknowledgedReview=useRef(new Map());
  const [,bumpReviewVersion]=useState(0);
  useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setFullStatistics(null);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
- base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE,include_totals:true}})
+ base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE,include_totals:true,province_filter:chosenLocation}})
  .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});setFullStatistics(r.data.full_statistics||null);
  if(requestedPost&&campaign===requestedCampaign){
   const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
@@ -51,13 +52,13 @@ function SocialEvidenceInbox({onOpenCasework}){
  .catch(e=>{if(active)setError(e.response?.data?.detail||e.message||'Inbox unavailable')})
  .finally(()=>{if(active)setLoading(false)});
  return()=>{active=false}
- },[campaign]);
+ },[campaign,chosenLocation]);
  async function loadOlderInboxPosts(){
   if(loadingMore||!inboxPagination.has_more||!inboxPagination.next_cursor)return;
   setLoadingMore(true);setLoadMoreError('');
   try{
    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{
-    campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE,cursor:inboxPagination.next_cursor
+    campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE,cursor:inboxPagination.next_cursor,province_filter:chosenLocation
    }});
    const incoming=response.data.findings||[];
    setFindings(previous=>{
@@ -69,39 +70,11 @@ function SocialEvidenceInbox({onOpenCasework}){
   finally{setLoadingMore(false)}
  }
  useEffect(()=>{
-  // Read-only overview: source evidence is immediately visible on campaign
-  // selection, but saving a proposal still needs an explicit officer click.
-  let cancelled=false;
-  setGroupPreview(null);setGroupRows([]);setGroupEvidence(null);
-  setGroupError('');setGroupExpanded(false);
-  if(!campaign)return()=>{cancelled=true};
-  Promise.allSettled([
-   base44.functions.invoke('socialListening',{
-     action:'campaignFindingGroupsPreview',id:campaign,data:{}}),
-   base44.functions.invoke('socialListening',{
-     action:'campaignFindingGroupsList',id:campaign,data:{}})
-  ]).then(results=>{
-    if(cancelled)return;
-    if(results[0].status==='fulfilled'){
-      const preview=results[0].value.data;
-      setGroupPreview(preview);
-      if(preview.proposal_count>0)setGroupExpanded(true);
-    }
-    if(results[1].status==='fulfilled'){
-      const groups=results[1].value.data.groups||[];
-      setGroupRows(groups);if(groups.length)setGroupExpanded(true);
-    }
-    if(results.every(x=>x.status==='rejected'))
-      setGroupError('Group evidence preview unavailable. Retry using Preview groups.');
-  });
-  return()=>{cancelled=true};
- },[campaign]);
- useEffect(()=>{
   if(!watchProgress||!campaign)return;
   let cancelled=false,attempts=0;
   const refresh=async()=>{
    try{
-    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE}});
+    const response=await base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,paged:true,page_size:INBOX_PAGE_SIZE,province_filter:chosenLocation}});
     if(cancelled)return;
     const payload=response.data||{};
     setFindings(previous=>{
@@ -122,12 +95,12 @@ function SocialEvidenceInbox({onOpenCasework}){
   refresh();
   const interval=window.setInterval(refresh,20000);
   return()=>{cancelled=true;window.clearInterval(interval)};
- },[watchProgress,campaign]);
+ },[watchProgress,campaign,chosenLocation]);
  async function refreshReviewedPost(post,expectedStatus=null){
   try{
    const response=await base44.functions.invoke('socialListening',{
     action:'campaignIntelligenceInbox',
-    data:{campaign_id:String(post.campaign_id),result_id:String(post.id)}});
+    data:{campaign_id:String(post.campaign_id),result_id:String(post.id),province_filter:chosenLocation}});
    const refreshed=(response.data.findings||[]).find(item=>
     String(item.id)===String(post.id)&&String(item.campaign_id)===String(post.campaign_id));
    if(refreshed){
@@ -301,57 +274,6 @@ function SocialEvidenceInbox({onOpenCasework}){
   if(item){setSelected(item);setError('')}
   else setError('This evidence is outside the current visible Inbox page.');
  }
- async function previewFindingGroups(){
-  if(!campaign){setGroupError('Select a campaign to preview groups.');return;}
-  setGroupBusy(true);setGroupError('');setGroupNotice('');setGroupExpanded(true);
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsPreview',id:campaign,data:{}});setGroupPreview(r.data)}
-  catch(e){setGroupError(e.response?.data?.detail||e.message)}
-  finally{setGroupBusy(false)}
- }
- async function loadFindingGroups(){
-  if(!campaign){setGroupError('Select a campaign first.');return;}
-  setGroupBusy(true);setGroupError('');setGroupExpanded(true);
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsList',id:campaign,data:{}});setGroupRows(r.data.groups||[])}
-  catch(e){setGroupError(e.response?.data?.detail||e.message)}
-  finally{setGroupBusy(false)}
- }
- async function saveFindingGroups(){
-  if(!groupPreview?.proposal_count||!campaign)return;
-  if(!window.confirm('Save provisional incident, narrative and duplicate groups for human review? This uses only existing evidence and no AI credits.'))return;
-  setGroupBusy(true);setGroupError('');
-  try{
-   const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsSave',id:campaign,data:{confirm_save:true}});
-   setGroupNotice(r.data.newly_saved+' review group(s) saved, '+r.data.already_saved+' already stored.');
-   const listing=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsList',id:campaign,data:{}});
-   setGroupRows(listing.data.groups||[]);
-  }catch(e){setGroupError(e.response?.data?.detail||e.message)}
-  finally{setGroupBusy(false)}
- }
- async function inspectGroupEvidence(group){
-  if(!campaign||!group)return;
-  setGroupBusy(true);setGroupError('');
-  try{
-   const r=await base44.functions.invoke('socialListening',{
-    action:'campaignFindingGroupSources',id:campaign,data:{group_id:group.id}});
-   setGroupEvidence(r.data);
-  }catch(e){setGroupEvidence(null);setGroupError(e.response?.data?.detail||e.message)}
-  finally{setGroupBusy(false)}
- }
- async function reviewFindingGroup(group,decision){
-  if(!campaign||!group)return;
-  const rationale=window.prompt('Explain why the source posts belong together, or why they must remain separate (at least 10 characters):');
-  if(rationale===null)return;
-  if(rationale.trim().length<10){setGroupError('Enter at least 10 characters of review rationale.');return;}
-  setGroupBusy(true);setGroupError('');
-  try{
-   await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsReview',id:campaign,
-    data:{group_id:group.id,decision,rationale:rationale.trim()}});
-   setGroupNotice('Grouping decision saved to the audit trail. This is not a legal violation determination.');
-   const r=await base44.functions.invoke('socialListening',{action:'campaignFindingGroupsList',id:campaign,data:{}});
-   setGroupRows(r.data.groups||[]);
-  }catch(e){setGroupError(e.response?.data?.detail||e.message)}
-  finally{setGroupBusy(false)}
- }
  async function previewBacklog(){
   if(!campaign){setBacklogStatus('Select a campaign first.');return}
   setBacklogBusy(true);setBacklogStatus('');setBacklog(null);
@@ -383,23 +305,30 @@ function SocialEvidenceInbox({onOpenCasework}){
   finally{setAuditBusy(false)}
  }
 const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState(''),[sentimentFilter,setSentimentFilter]=useState('ALL');
- const [jurisdiction,setJurisdiction]=useState('national'),[chosenLocation,setChosenLocation]=useState(''),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
- const locationAliases={'sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
+ const [jurisdiction,setJurisdiction]=useState('national'),[chosenRegency,setChosenRegency]=useState(''),[chosenCandidate,setChosenCandidate]=useState(''),[reviewStatusFilter,setReviewStatusFilter]=useState('');
+ const locationAliases={'sumatra selatan':'Sumatera Selatan','sumsel':'Sumatera Selatan','sumbar':'Sumatera Barat','sumatera barat':'Sumatera Barat','sumut':'Sumatera Utara','sumsel':'Sumatera Selatan','dki jakarta':'DKI Jakarta','jakarta':'DKI Jakarta','jabar':'Jawa Barat','jateng':'Jawa Tengah','jatim':'Jawa Timur','bali':'Bali'};
  const normalizedLocation=name=>{const value=String(name||'').trim();return locationAliases[value.toLocaleLowerCase('id-ID')]||value};
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
- const locationsFor=x=>signalNames(x.location_signals).map(normalizedLocation);
+ const locationsFor=x=>[...new Set([
+    ...signalNames(x.location_signals).map(normalizedLocation),
+    ...(x.processing_hints?.province_mentions||[]).map(normalizedLocation),
+    ...(x.incident_jurisdiction_review?.incident_jurisdiction_verified
+       ?[normalizedLocation(x.incident_jurisdiction_review.incident_province)]:[])
+   ].filter(Boolean))];
  const structuredPlaces=x=>(x.location_signals||[]).filter(s=>s&&typeof s==='object'&&s.province&&s.regency_city).map(s=>({province:normalizedLocation(s.province),regency:String(s.regency_city).trim()}));
  const canonicalCandidate=name=>{const raw=String(name||'').trim(),key=raw.toLocaleLowerCase('id-ID').replace(/^@/,'').replace(/[_\-.\s]+/g,'');return {prabowo:'Prabowo Subianto',prabowosubianto:'Prabowo Subianto',gibran:'Gibran Rakabuming Raka',gibranrakabuming:'Gibran Rakabuming Raka',gibranrakabumingraka:'Gibran Rakabuming Raka',anies:'Anies Baswedan',anis:'Anies Baswedan',aniesbaswedan:'Anies Baswedan',anisbaswedan:'Anies Baswedan',ganjar:'Ganjar Pranowo',ganjarpranowo:'Ganjar Pranowo',jokowi:'Joko Widodo',jokowidodo:'Joko Widodo',cakimin:'Muhaimin Iskandar',muhaiminiskandar:'Muhaimin Iskandar',cindymonicaid:'Cindy Monica',cindymonica:'Cindy Monica'}[key]||raw};
  const candidatesFor=x=>[...new Set(signalNames(x.candidate_signals).map(canonicalCandidate).filter(name=>name&&!name.startsWith('@')&&(!/^[a-z0-9_-]+[.][a-z0-9._-]+$/i.test(name)||name==='Cindy Monica')))];
- const unlocatedCount=useMemo(()=>findings.filter(x=>locationsFor(x).length===0).length,[findings]);
- const locations=useMemo(()=>[...new Set(findings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
+ const displayFindings=useMemo(()=>deduplicateInboxEvidence(findings),[findings]);
+ const duplicatesCollapsed=findings.length-displayFindings.length;
+ const unlocatedCount=useMemo(()=>displayFindings.filter(x=>locationsFor(x).length===0).length,[displayFindings]);
+ const locations=useMemo(()=>[...new Set(displayFindings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[displayFindings]);
  const provinceNames=new Set(['Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya']);
- const groupedLocations=useMemo(()=>({country:locations.filter(x=>x.toLowerCase()==='indonesia'),provinces:locations.filter(x=>provinceNames.has(x)),other:locations.filter(x=>x.toLowerCase()!=='indonesia'&&!provinceNames.has(x))}),[locations]);
+ const groupedLocations=useMemo(()=>({country:locations.filter(x=>x.toLowerCase()==='indonesia'),provinces:[...provinceNames].sort((a,b)=>a.localeCompare(b,'id')),other:locations.filter(x=>x.toLowerCase()!=='indonesia'&&!provinceNames.has(x))}),[locations]);
  const provinceFor=x=>locationsFor(x).filter(name=>provinceNames.has(name)).concat(structuredPlaces(x).map(s=>s.province)).filter((name,index,array)=>array.indexOf(name)===index);
- const regencies=useMemo(()=>chosenLocation?[...new Set(findings.flatMap(x=>structuredPlaces(x).filter(s=>s.province===chosenLocation).map(s=>s.regency)))].sort((a,b)=>a.localeCompare(b)):[],[findings,chosenLocation]);
- const uncategorizedCandidateCount=useMemo(()=>findings.filter(x=>candidatesFor(x).length===0).length,[findings]);
- const candidates=useMemo(()=>[...new Set(findings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[findings]);
-  const filtered=useMemo(()=>findings.filter(x=>{
+ const regencies=useMemo(()=>chosenLocation?[...new Set(displayFindings.flatMap(x=>structuredPlaces(x).filter(s=>s.province===chosenLocation).map(s=>s.regency)))].sort((a,b)=>a.localeCompare(b)):[],[findings,chosenLocation]);
+ const uncategorizedCandidateCount=useMemo(()=>displayFindings.filter(x=>candidatesFor(x).length===0).length,[displayFindings]);
+ const candidates=useMemo(()=>[...new Set(displayFindings.flatMap(candidatesFor))].sort((a,b)=>a.localeCompare(b)),[displayFindings]);
+  const filtered=useMemo(()=>displayFindings.filter(x=>{
   if(jurisdiction==='location'&&chosenLocation==='__unresolved__'&&provinceFor(x).length>0)return false;
   if(jurisdiction==='location'&&chosenLocation&&chosenLocation!=='__unresolved__'&&!provinceFor(x).includes(chosenLocation))return false;
   if(jurisdiction==='unresolved'&&locationsFor(x).length>0)return false;
@@ -415,7 +344,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   const date=String(x.published_at||x.post_time||x.created_at||'').slice(0,10);
   if((dateFrom||dateTo)&&(!date||(dateFrom&&date<dateFrom)||(dateTo&&date>dateTo)))return false;
   return !term||(JSON.stringify([x.text_content,x.campaign_name,x.author_name,x.location_signals,x.candidate_signals,x.potential_issues]).toLowerCase().includes(term.toLowerCase()))
- }),[findings,view,term,sentimentFilter,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
+ }),[displayFindings,view,term,sentimentFilter,jurisdiction,chosenLocation,chosenRegency,chosenCandidate,reviewStatusFilter,dateFrom,dateTo]);
  const ordered=useMemo(()=>[...filtered].sort((a,b)=>{const da=Date.parse(a.published_at||a.post_time||a.created_at||0)||0,db=Date.parse(b.published_at||b.post_time||b.created_at||0)||0;return sortDate==='newest'?db-da:da-db}),[filtered,sortDate]);
  const summary=useMemo(()=>{const counts={POSITIVE:0,NEGATIVE:0,NEUTRAL:0,UNCLASSIFIED:0};let engagement=0,views=0,engagementAvailable=0,viewsAvailable=0;for(const item of filtered){if(typeof item.engagement_total==='number'){engagement+=item.engagement_total;engagementAvailable++}if(typeof item.views==='number'){views+=item.views;viewsAvailable++}const raw=String(item.sentiment||'').toUpperCase();counts[['POSITIVE','NEGATIVE','NEUTRAL'].includes(raw)?raw:'UNCLASSIFIED']++}return {engagement,views,engagementAvailable,viewsAvailable,counts}},[filtered]);
  const keywordCloud=useMemo(()=>{
@@ -452,7 +381,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   </div>
   <div className="intel-card px-3 py-2" aria-label="Filter intelligence">
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">
-    <label className="text-xs flex-1 min-w-[125px]">Province<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
+    <label className="text-xs flex-1 min-w-[125px]">Province (source mention / verified)<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option></select></label>
      <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
@@ -513,34 +442,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     </div>}
    {campaign&&<div className="space-y-2"><button type="button" className="intel-ghost text-xs" disabled={usageBusy} onClick={loadUsageDiagnostics}>Load AI usage and failure diagnostics (free)</button>{usageDiagnostics&&<p className="text-xs text-slate-600">Posts assessed: {usageDiagnostics.posts_with_assessment_version} / {usageDiagnostics.authorized_source_posts} · Failed jobs: {usageDiagnostics.failed_jobs} · Provider-reported tokens: {usageDiagnostics.ai_usage?.input_tokens_reported??0} input / {usageDiagnostics.ai_usage?.output_tokens_reported??0} output · Costs: {usageDiagnostics.ai_usage?.cost_status||'UNAVAILABLE'} · Missing source text: {usageDiagnostics.missing_fields?.content??0}</p>}{usageError&&<p role="alert" className="text-xs text-red-700">{usageError}</p>}</div>}
   </section>}
-  {campaign&&<section className="intel-card p-3 space-y-3" aria-label="Persistent candidate, incident and narrative review">
-   <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Source-linked grouping review</h3><p className="text-xs text-slate-500">Exact duplicates, incident clusters and Emerging Narratives · saved separately from legal findings.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={previewFindingGroups}>Preview groups (free)</button><button type="button" className="intel-ghost text-xs" disabled={groupBusy} onClick={loadFindingGroups}>Saved groups</button></div></div>
-   {groupPreview&&<div className="text-xs space-y-2">
-    <p>{groupPreview.proposal_count} proposed group(s) · {groupPreview.eligible_posts} relevant assessed posts for incident/narrative analysis · {groupPreview.exact_duplicate_source_posts} source posts checked for exact duplication regardless of assessment.
-      {groupPreview.source_window_truncated?' Only the first 300 linked posts were scanned.':''}</p>
-    <p className="text-slate-600">Read-only evidence preview. No group is accepted or saved automatically. Missing narrative candidates can be valid when independent relevant sources are insufficient.</p>
-    {!!groupPreview.proposal_evidence?.length&&<div className="space-y-2 max-h-64 overflow-y-auto">
-      {groupPreview.proposal_evidence.map((proposal,i)=><article key={i} className="rounded border border-slate-200 p-2">
-        <strong>{proposal.type.replaceAll('_',' ')} · {proposal.sources.length} source(s)</strong>
-        <div className="space-y-1 mt-1">{proposal.sources.slice(0,4).map(source=><div key={source.id} className="bg-slate-50 rounded p-2">
-          <p className="text-slate-800 whitespace-pre-wrap break-words">{source.text_excerpt||'No source text supplied'}</p>
-          <p className="text-slate-500">Source {source.id} · {source.author_name||'Unknown author'} · {source.relevance_label==='NOT_REQUIRED_FOR_EXACT_DUPLICATE'?'Relevance not required':source.relevance_label}</p>
-          {safeOriginalUrl(source.canonical_url)&&<a className="underline" href={safeOriginalUrl(source.canonical_url)} target="_blank" rel="noreferrer">Inspect original source</a>}
-        </div>)}</div>
-      </article>)}
-    </div>}
-    {groupPreview.proposal_count>0&&<button type="button" className="intel-button text-xs" disabled={groupBusy} onClick={saveFindingGroups}>Save provisional groups for officer review</button>}
-  </div>}
-   {groupExpanded&&groupRows.length===0&&!groupBusy&&<p className="text-xs text-slate-500">No saved review groups yet. Preview existing assessed posts, then save proposed groups before officer review.</p>}
-   {!!groupRows.length&&<div className="space-y-2 max-h-64 overflow-y-auto">{groupRows.map(row=><div className="rounded-lg border border-slate-200 p-2 text-xs flex flex-wrap justify-between gap-2" key={row.id}><div><strong>{row.group_type.replaceAll('_',' ')} · {row.label}</strong><p className="text-slate-600">Source posts: {row.source_ids.length} · {row.review_status}</p>
-<p className="text-slate-500">{row.proposed_by_automation?'Automatically staged, unreviewed proposal · officer decision required':'Officer-created proposal · review status above'}</p><p className="text-slate-500">Human grouping decisions do not establish a legal violation.</p><button type="button" className="intel-ghost text-xs mt-1" disabled={groupBusy} onClick={()=>inspectGroupEvidence(row)}>View all group evidence</button><div className="flex flex-wrap gap-1 mt-1">{row.source_ids.map(id=><button key={id} type="button" className="intel-ghost text-xs" onClick={()=>{const source=findings.find(x=>String(x.id)===String(id)&&String(x.campaign_id)===String(row.campaign_id));if(source){setSelected(source);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}else{setGroupError('This source is outside the currently loaded Inbox findings. Open the matching campaign evidence view to inspect it.')}}}>Inspect source {id}</button>)}</div></div>{groupEvidence?.group_id===row.id&&<div className="basis-full space-y-2 border-t pt-2" aria-label="Source evidence for review">{groupEvidence.sources.map(src=><article key={src.id} className="border rounded p-2"><strong>Source {src.id} · {src.relevance_label}</strong><p className="whitespace-pre-wrap break-words mt-1">{src.text_content||'Source text unavailable'}</p><p className="text-slate-500">{src.author_name||'Unknown author'} · {src.published_at||'Date unavailable'}</p>{safeOriginalUrl(src.canonical_url)&&<a className="underline" href={safeOriginalUrl(src.canonical_url)} target="_blank" rel="noreferrer">Open original source</a>}</article>)}</div>}{row.review_status==='PROPOSED'&&<div className="flex gap-2"><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'ACCEPTED')}>Accept group</button><button className="intel-ghost text-xs" disabled={groupBusy} onClick={()=>reviewFindingGroup(row,'REJECTED')}>Reject group</button></div>}</div>)}</div>}
-   {groupNotice&&<p className="text-xs text-emerald-700" role="status">{groupNotice}</p>}{groupError&&<p className="text-xs text-red-700" role="alert">{groupError}</p>}
-  </section>}
   {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
   {loading?<p className="text-sm text-slate-500">Loading assessed campaign evidence…</p>:<div className="space-y-2">
    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-stretch">
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2 xl:relative xl:min-h-[680px]">
-    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} matching loaded · {findings.length} loaded{inboxPagination.total_eligible!=null?' of '+inboxPagination.total_eligible+' eligible':''}</span></div>
+    <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} unique matching loaded · {findings.length} source records loaded · {duplicatesCollapsed} exact duplicate(s) collapsed{inboxPagination.total_eligible!=null?' of '+inboxPagination.total_eligible+' eligible':''}</span></div>
     <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" tabIndex={0} aria-label="Post list, scroll to see more">
      {ordered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
       <div className="flex items-start justify-between gap-3">

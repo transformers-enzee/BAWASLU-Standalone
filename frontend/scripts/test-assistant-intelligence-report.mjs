@@ -54,7 +54,7 @@ assert.ok(page.includes("m.response_profile==='ACTION_REQUEST'&&") &&
           page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
   'executive reports cannot trigger the assignment desk or unrelated analytics');
 
-const assistantAnswer=read('./src/components/intel/AssistantAnswer.jsx');
+const assistantAnswer=read('../src/components/intel/AssistantAnswer.jsx');
 assert.ok(assistantAnswer.includes("const heading=line.match") &&
           assistantAnswer.includes("const Heading=level===1?'h2':level===2?'h3':'h4'") &&
           assistantAnswer.includes("return <Heading key={j}"),

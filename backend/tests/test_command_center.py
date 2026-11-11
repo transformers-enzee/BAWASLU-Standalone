@@ -234,6 +234,7 @@ def test_dashboard_alert_counts_ignore_out_of_period_recent_feed():
     assert out['indicators']['awaiting_review']==1
     assert out['signal_intelligence']['flagged_assessment_volume']==1
     assert out['coverage']['potential_alerts_basis']=='ALL_PERIOD_SCOPED_AUTHORIZED_UNDISMISSED_DISTINCT_POSTS'
+    assert out['signal_intelligence']['basis']=='PERIOD_SCOPED_AUTHORIZED_UNDISMISSED_DISTINCT_POSTS'
     assert len(out['alerts'])==1
     assert out['alerts'][0]['result_id']!=str(old_post.id)
     assert out['focus_actions'][0]['result_id']!=str(old_post.id)

@@ -282,3 +282,15 @@ def test_narrative_candidates_do_not_become_verified_findings():
     assert result['incident_clusters_verified']==0
     assert all(x['status']=='REQUIRES_HUMAN_REVIEW' for x in
                result['intelligence_players']['Emerging Narratives']['entries'])
+
+
+
+def test_south_sumatra_source_mentions_stay_unverified_before_human_review():
+    from app.processing_hints import source_hints, incident_location_cues
+    source='Bawaslu Sumatra Selatan menemukan dugaan kasus mencoblos lebih dari sekali di Kabupaten Musi Banyuasin dan Musi Rawas Utara.'
+    hints=source_hints(source)
+    assert hints['province_mentions']==['Sumatera Selatan']
+    assert hints['province_mentions_are_incident_location'] is False
+    assert hints['incident_jurisdiction_status']=='UNVERIFIED'
+    assert incident_location_cues(source)==['Sumatera Selatan']
+    assert incident_location_cues('Bawaslu Sumatra Selatan melaporkan data pemilu')==[]

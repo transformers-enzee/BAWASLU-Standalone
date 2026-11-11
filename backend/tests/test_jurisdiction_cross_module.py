@@ -194,3 +194,53 @@ def test_ui_jurisdiction_review_and_dispatch_are_explicit_and_free():
     assert 'campaignJurisdictionReview' in source
     assert 'This does not change regional access permissions' in source
     assert 'Profile location does not establish incident jurisdiction' in source
+
+
+
+def test_south_sumatra_repeat_voting_regency_context_is_one_unverified_province():
+    """Real TikTok post 177: both named incident regencies are in one province."""
+    db=fixture()
+    try:
+        post=db.get(SocialListeningResult,1)
+        post.text_content=(
+            'Badan Pengawas Pemilihan Umum atau Bawaslu Sumatra Selatan menemukan '
+            'dugaan kasus warga mencoblos lebih dari sekali di Kabupaten '
+            'Musi Banyuasin dan Musi Rawas Utara. #LintasiNews #Bawaslu'
+        )
+        db.commit()
+        preview=jurisdiction_action(db,user(),'campaignJurisdictionPreview',
+            {'result_id':'1'},'91')
+        assert preview['source_context_provinces_unverified']==['Sumatera Selatan']
+        assert preview['source_evidence_verified'] is False
+        assert preview['latest_review']['decision']=='UNREVIEWED'
+        assert preview['geographic_acl_expanded'] is False
+        assert db.query(CampaignJurisdictionReview).count()==0
+        confirmed=jurisdiction_action(db,user(),'campaignJurisdictionReview',
+            {'result_id':'1','decision':'CONFIRMED','province':'Sumatera Selatan',
+             'rationale':'The reported repeat voting is placed in Musi Banyuasin and Musi Rawas Utara.'},'91')
+        assert confirmed['latest_review']['incident_jurisdiction_verified'] is True
+        assert confirmed['latest_review']['incident_province']=='Sumatera Selatan'
+        assert confirmed['geographic_acl_expanded'] is False
+        assert confirmed['paid_provider_called'] is False
+        assert db.get(MonitoringCampaign,91).province=='Riau'
+    finally:db.close()
+
+
+def test_south_sumatra_publisher_location_alone_is_not_incident_jurisdiction():
+    db=fixture()
+    try:
+        post=db.get(SocialListeningResult,1)
+        post.text_content=(
+            'Bawaslu Sumatra Selatan berbicara tentang pemilu. '
+            'Akun kantor berasal dari Kabupaten Musi Banyuasin.'
+        )
+        db.commit()
+        preview=jurisdiction_action(db,user(),'campaignJurisdictionPreview',
+            {'result_id':'1'},'91')
+        assert preview['source_context_provinces_unverified']==[]
+        with pytest.raises(ValueError,match='ambiguous or unsupported'):
+            jurisdiction_action(db,user(),'campaignJurisdictionReview',
+                {'result_id':'1','decision':'CONFIRMED','province':'Sumatera Selatan',
+                 'rationale':'Publisher region is not proof of the incident location.'},'91')
+        assert db.query(CampaignJurisdictionReview).count()==0
+    finally:db.close()

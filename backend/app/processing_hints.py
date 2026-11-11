@@ -7,6 +7,8 @@ import re
 from datetime import datetime
 
 PROVINCE_ALIASES={
+    'sumatera selatan':'Sumatera Selatan', 'sumatra selatan':'Sumatera Selatan',
+    'sumsel':'Sumatera Selatan',
     'riau':'Riau', 'jawa timur':'Jawa Timur','jatim':'Jawa Timur',
     'jawa barat':'Jawa Barat','jabar':'Jawa Barat',
     'jawa tengah':'Jawa Tengah','jateng':'Jawa Tengah',
@@ -65,6 +67,17 @@ INCIDENT_CONTEXT_PREFIXES=(
     'kejadian di','insiden di','terjadi di','dugaan pelanggaran di',
     'laporan pelanggaran di','lokasi kejadian di','kecurangan di',
 )
+# Explicit regency names in a report of an incident may support a province
+# candidate for officer review. Never use the publisher's organization or a
+# profile address as evidence of where an incident occurred.
+INCIDENT_REGENCY_PROVINCES={
+    'musi banyuasin':'Sumatera Selatan',
+    'musi rawas utara':'Sumatera Selatan',
+}
+INCIDENT_REGIONAL_CONTEXT=(
+    'dugaan','kasus','mencoblos','pelanggaran','terjadi',
+    'insiden','kejadian','pencoblosan','pemungutan',
+)
 def incident_location_cues(text):
     folded=str(text or '').casefold()
     found=set()
@@ -73,6 +86,24 @@ def incident_location_cues(text):
             if re.search(r'(?<!\w)'+re.escape(prefix)+r'\s+'+
                          re.escape(alias)+r'(?!\w)',folded):
                 found.add(province)
+
+    names='|'.join(re.escape(name) for name in sorted(
+        INCIDENT_REGENCY_PROVINCES,key=len,reverse=True))
+    # The source must explicitly locate the reported incident in a regency.
+    # Both regencies in the TikTok's "di Kabupaten X dan Y" resolve to
+    # one *unverified* provincial candidate, not an automatic confirmation.
+    pattern=(r'(?<!\w)(?:di|pada)\s+(?:kabupaten|kab\.?)\s+'
+             r'(?P<first>'+names+r')'
+             r'(?:\s+(?:dan|serta)\s+(?:kabupaten\s+)?'
+             r'(?P<second>'+names+r'))?(?!\w)')
+    for match in re.finditer(pattern,folded):
+        context=folded[max(0,match.start()-140):match.start()]
+        if not any(_term_present(context,term)
+                   for term in INCIDENT_REGIONAL_CONTEXT):
+            continue
+        for name in (match.group('first'),match.group('second')):
+            if name:
+                found.add(INCIDENT_REGENCY_PROVINCES[name])
     return sorted(found)
 
 def attention_evidence_readiness(row):

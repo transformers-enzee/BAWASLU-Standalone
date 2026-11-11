@@ -157,7 +157,7 @@ def test_demokrasi_is_not_mistaken_for_a_demonstration_in_gibran_document_report
     assert finding['posts'][0]['message_original']==article
     assert 'Demonstrations' not in finding['title']
     assert 'public demonstrations' not in finding['summary']
-    assert 'Suket Gibran' in finding['title']
+    assert 'Gibran Education Documents' in finding['title']
     assert 'violations' in finding['players']
 
 

@@ -122,8 +122,10 @@ def test_verified_jurisdiction_is_revoked_if_latest_assessment_becomes_irrelevan
 def test_inbox_has_complete_source_review_actions_without_credit_spending():
     from pathlib import Path
     frontend=(Path(__file__).resolve().parents[2]/'frontend/src/pages/Inbox.jsx').read_text()
-    for action in ('campaignFindingGroupsPreview','campaignFindingGroupsSave',
-                   'campaignFindingGroupSources','campaignFindingGroupsReview'):
+    for action in ('campaignFlagReview','campaignJurisdictionPreview',
+                   'campaignJurisdictionReview'):
         assert action in frontend
-    assert 'View all group evidence' in frontend
+    assert 'Preview source-grounded location (free)' in frontend
     assert 'Open original source' in frontend
+    assert 'campaignFindingGroupsSave' not in frontend
+    assert 'deduplicateInboxEvidence(findings)' in frontend

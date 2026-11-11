@@ -247,7 +247,7 @@ def test_group_list_does_not_expose_unlinked_or_inaccessible_sources():
     finally:db.close()
 
 
-def test_frontend_offers_alias_editor_and_grouping_review_without_ai_calls():
+def test_frontend_offers_alias_editor_and_automatic_inbox_dedup_without_ai_calls():
     from pathlib import Path
     root=Path(__file__).resolve().parents[2]/'frontend'
     js=(root/'public/ui-freeze/watchlist-live.js').read_text(encoding='utf-8')
@@ -256,6 +256,8 @@ def test_frontend_offers_alias_editor_and_grouping_review_without_ai_calls():
     assert 'onUpdateAliases' in js
     assert "sentiment,flag:validatedFlag" in js
     assert 'newCandidateAliases' in html and 'editCandidateAliases' in html
-    assert 'campaignFindingGroupsSave' in inbox
-    assert 'campaignFindingGroupsReview' in inbox
-    assert 'Preview groups (free)' in inbox
+    assert 'campaignFindingGroupsSave' not in inbox
+    assert 'campaignFindingGroupsReview' not in inbox
+    assert 'Preview groups (free)' not in inbox
+    assert 'deduplicateInboxEvidence(findings)' in inbox
+    assert 'exact duplicate(s) collapsed' in inbox

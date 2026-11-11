@@ -85,6 +85,6 @@ def test_inbox_renders_player_and_topic_evidence_and_shahrin_qa():
     from pathlib import Path
     source=(Path(__file__).resolve().parents[2]/'frontend/src/pages/Inbox.jsx').read_text()
     for term in ('Processing and QA diagnostics','campaignQAHistorySummary',
-                 'Source-linked grouping review','Original source provenance'):
+                 'deduplicateInboxEvidence(findings)','Original source provenance'):
         assert term in source
     assert 'Detailed classification screening stays in Command Centre' in source

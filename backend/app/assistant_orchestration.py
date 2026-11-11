@@ -435,7 +435,8 @@ def complete_pdf_assignment_access(question,evidence,answer,cited_ids,language='
     body=str(answer or "").casefold()
     missing=[]
     if ("konfirmasi eksplisit" in excerpt and
-        not re.search(r"konfirmasi eksplisit|explicit confirm|persetujuan eksplisit",body)):
+        not re.search(r"(?:di)?konfirmasi (?:secara )?eksplisit|"
+                      r"explicit confirm|persetujuan eksplisit",body)):
         missing.append(("Saran AI harus ditinjau dan dikonfirmasi secara eksplisit oleh petugas berwenang."
                         if language=='id' else
                         "An authorized officer must review and explicitly confirm any AI assignment recommendation."))

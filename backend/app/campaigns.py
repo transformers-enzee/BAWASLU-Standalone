@@ -929,6 +929,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         page_limit=100
         page_selection={}
         pagination=None
+        available_provinces=[]
         if paged:
             from sqlalchemy import func, or_
             try:
@@ -953,29 +954,42 @@ def campaign_action(db:Session,p,action,data,id=None):
                         func.upper(EvidenceAssessment.relevance_label).in_(['RELEVANT','HIGHLY_RELEVANT']),
                         or_(EvidenceAssessment.model_version.is_(None),
                             EvidenceAssessment.model_version!='PRISM_PENDING_OPENAI')))
-            # Apply a source-linked province filter BEFORE pagination, otherwise
-            # older posts (such as 2024 source 177) cannot be found from a
-            # dropdown built only from the first 100 latest Inbox records.
-            # The match is a source mention / saved hint, NEVER human-verified
-            # incident jurisdiction or geographic access authorization.
+            from .inbox_provinces import (
+                matching_source_provinces,province_match_expression,PROVINCE_NAMES)
+            # Populate the dropdown from the *whole* authorized eligible Inbox
+            # population before applying this request's chosen province/page.
+            # Only source text and saved signals are consulted; no jurisdiction
+            # is verified, no AI request is made, and no raw provider payload
+            # is fetched. The query is bounded in batches at the ORM level.
+            if data.get('include_totals') is True:
+                from types import SimpleNamespace
+                found_provinces=set()
+                all_source_rows=eligible.with_entities(
+                    SocialListeningResult.run_id,SocialListeningResult.text_content,
+                    EvidenceAssessment.geographic_signals_json).yield_per(250)
+                for run_id,source_text,geographic_json in all_source_rows:
+                    if (p.get('geographic_scope')!='Nationwide' and
+                            not _result_in_scope(db,p,SimpleNamespace(run_id=run_id))):
+                        continue
+                    found_provinces.update(matching_source_provinces(source_text,geographic_json))
+                    if len(found_provinces)==len(PROVINCE_NAMES):
+                        break
+                available_provinces=sorted(found_provinces,key=str.casefold)
+
+            # Apply the identical token-boundary source-matching predicate
+            # BEFORE pagination. An older result such as post 177 must remain
+            # discoverable even when its ID is absent from the latest 100 posts.
             requested_province=str(data.get('province_filter') or '').strip()
             if requested_province:
                 if len(requested_province)>64 or not all(
                     c.isalpha() or c in " -.'" for c in requested_province):
                     raise ValueError('Invalid province filter')
-                from .processing_hints import PROVINCE_ALIASES
-                variants={requested_province.casefold()}
-                variants.update(alias for alias,canonical in PROVINCE_ALIASES.items()
-                                if canonical.casefold()==requested_province.casefold())
-                if requested_province.casefold()=='sumatera selatan':
-                    # Explicit incident regencies shown in source 177.
-                    variants.update(('musi banyuasin','musi rawas utara'))
-                source_text=func.lower(func.coalesce(SocialListeningResult.text_content,''))
-                stored_signals=func.lower(func.coalesce(EvidenceAssessment.geographic_signals_json,''))
-                eligible=eligible.filter(or_(*(
-                    [source_text.like('%'+word+'%') for word in sorted(variants)]
-                    +[stored_signals.like('%'+word+'%') for word in sorted(variants)]
-                )))
+                province_clause=province_match_expression(
+                    SocialListeningResult.text_content,
+                    EvidenceAssessment.geographic_signals_json,requested_province)
+                if province_clause is None:
+                    raise ValueError('Unknown province filter')
+                eligible=eligible.filter(province_clause)
             totals_summary=None
             if data.get('include_totals') is True:
                 # Aggregate across ALL authorized eligible rows before page slicing.
@@ -1216,6 +1230,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'author_name':item.author_name,'author_display':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[0],
                     'published_at':item.published_at,
                     'engagement_total':captured_engagement,'views':captured_views,
+                    # Informational source region; never a jurisdiction verdict.
+                    'source_provinces':__import__('app.inbox_provinces',fromlist=[
+                        'matching_source_provinces']).matching_source_provinces(
+                            item.text_content,assessment.geographic_signals_json),
                     'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
                     'sentiment_confidence':assessment.sentiment_confidence or '',
                     'sentiment_explanation':assessment.sentiment_explanation or '',
@@ -1262,6 +1280,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
                 'findings':records[:page_limit+1] if paged else records[:300],
                 'full_statistics':totals_summary if paged else None,
+                'available_provinces':available_provinces,
                 'pagination':pagination,
                 'campaigns':[{'id':str(x.id),'name':x.name} for x in visible],
                 'unassessed_count':unassessed,'assessment_counts':assessment_counts,'issue_categories':[{'id':key,'name':value} for key,value in active_categories.items()],'violation_diagnostics':violation_diagnostics,'job_counts':job_counts,'reconciliation':reconciliation,'processing_status':'Stored assessment job states; PROCESSING may be stale after a service restart. Automatic recovery is not yet enabled','scope_note':'Only explicitly assessed relevant evidence is displayed. Issue signals are preliminary, not findings of violations.',

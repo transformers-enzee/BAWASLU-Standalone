@@ -24,6 +24,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [qaHistory,setQAHistory]=useState(null),[qaBusy,setQABusy]=useState(false),[qaError,setQAError]=useState('');
  const [acceptance,setAcceptance]=useState(null),[acceptanceBusy,setAcceptanceBusy]=useState(false),[acceptanceError,setAcceptanceError]=useState('');
  const [chosenLocation,setChosenLocation]=useState('');
+ const [availableProvinces,setAvailableProvinces]=useState([]);
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
@@ -43,7 +44,13 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [,bumpReviewVersion]=useState(0);
  useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setFullStatistics(null);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE,include_totals:true,province_filter:chosenLocation}})
- .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});setFullStatistics(r.data.full_statistics||null);
+ .then(r=>{if(!active)return;
+  const options=r.data.available_provinces||[];
+  setAvailableProvinces(options);
+  if(chosenLocation&&!options.includes(chosenLocation)){
+    setChosenLocation('');setJurisdiction('national');
+  }
+  setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});setFullStatistics(r.data.full_statistics||null);
  if(requestedPost&&campaign===requestedCampaign){
   const found=(r.data.findings||[]).find(item=>String(item.id)===requestedPost&&String(item.campaign_id)===requestedCampaign);
   if(found)setSelected(found);
@@ -311,6 +318,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const signalNames=signals=>(signals||[]).map(s=>typeof s==='string'?s:(s?.name||s?.province||s?.regency_city||s?.value||'')).map(x=>String(x).trim()).filter(Boolean);
  const locationsFor=x=>[...new Set([
     ...signalNames(x.location_signals).map(normalizedLocation),
+    ...(x.source_provinces||[]).map(normalizedLocation),
     ...(x.processing_hints?.province_mentions||[]).map(normalizedLocation),
     ...(x.incident_jurisdiction_review?.incident_jurisdiction_verified
        ?[normalizedLocation(x.incident_jurisdiction_review.incident_province)]:[])
@@ -323,7 +331,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const unlocatedCount=useMemo(()=>displayFindings.filter(x=>locationsFor(x).length===0).length,[displayFindings]);
  const locations=useMemo(()=>[...new Set(displayFindings.flatMap(locationsFor))].sort((a,b)=>a.localeCompare(b)),[displayFindings]);
  const provinceNames=new Set(['Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya']);
- const groupedLocations=useMemo(()=>({country:locations.filter(x=>x.toLowerCase()==='indonesia'),provinces:[...provinceNames].sort((a,b)=>a.localeCompare(b,'id')),other:locations.filter(x=>x.toLowerCase()!=='indonesia'&&!provinceNames.has(x))}),[locations]);
+ const groupedLocations=useMemo(()=>({country:locations.filter(x=>x.toLowerCase()==='indonesia'),provinces:availableProvinces.filter(name=>provinceNames.has(name)).sort((a,b)=>a.localeCompare(b,'id')),other:locations.filter(x=>x.toLowerCase()!=='indonesia'&&!provinceNames.has(x))}),[locations,availableProvinces]);
  const provinceFor=x=>locationsFor(x).filter(name=>provinceNames.has(name)).concat(structuredPlaces(x).map(s=>s.province)).filter((name,index,array)=>array.indexOf(name)===index);
  const regencies=useMemo(()=>chosenLocation?[...new Set(displayFindings.flatMap(x=>structuredPlaces(x).filter(s=>s.province===chosenLocation).map(s=>s.regency)))].sort((a,b)=>a.localeCompare(b)):[],[findings,chosenLocation]);
  const uncategorizedCandidateCount=useMemo(()=>displayFindings.filter(x=>candidatesFor(x).length===0).length,[displayFindings]);
@@ -381,7 +389,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   </div>
   <div className="intel-card px-3 py-2" aria-label="Filter intelligence">
    <div className="flex flex-wrap xl:flex-nowrap items-end gap-2">
-    <label className="text-xs flex-1 min-w-[125px]">Province (source mention / verified)<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
+    <label className="text-xs flex-1 min-w-[125px]">Province (mentioned in posts)<select className="intel-input mt-1 w-full" value={chosenLocation} onChange={e=>{setChosenLocation(e.target.value);setJurisdiction('location');setSelected(null)}}><option value="">All provinces</option>{groupedLocations.provinces.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Candidate<select className="intel-input mt-1 w-full" value={chosenCandidate} onChange={e=>{setChosenCandidate(e.target.value);setSelected(null)}}><option value="">All candidates</option>{candidates.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
     <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option></select></label>
      <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>

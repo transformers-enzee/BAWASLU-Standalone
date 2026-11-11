@@ -294,3 +294,74 @@ def test_source_province_filter_rejects_malformed_value():
             campaign_action(db,user(),'campaignIntelligenceInbox',
                 {'campaign_id':'91','paged':True,'province_filter':'Riau% OR 1=1'})
     finally:db.close()
+
+
+def test_province_dropdown_only_includes_authorized_eligible_inbox_posts():
+    db=fixture()
+    try:
+        # One saved Riau assessment and one older South Sumatra source.
+        db.add(SocialListeningResult(id=2,run_id=1,platform='tiktok',
+            author_name='OfficialiNews',
+            text_content=('Bawaslu Sumatra Selatan menemukan dugaan kasus warga '
+                          'mencoblos lebih dari sekali di Kabupaten Musi Banyuasin '
+                          'dan Musi Rawas Utara.'),
+            canonical_url='https://example.test/177',
+            published_at='2024-02-18T13:00:00Z'))
+        db.add(CampaignEvidence(campaign_id=91,result_id=2))
+        db.add(EvidenceAssessment(campaign_id=91,result_id=2,assessment_version=1,
+            relevance_label='RELEVANT',sentiment='NEUTRAL',geographic_signals_json='[]'))
+        # A different campaign must not contaminate a selected campaign's menu.
+        db.add(MonitoringCampaign(id=92,name='East Java only',province='Jawa Timur',
+            created_by='11',primary_keywords_json='["pemilu"]',
+            secondary_keywords_json='[]',excluded_keywords_json='[]'))
+        db.add(SocialListeningResult(id=3,run_id=1,platform='instagram',
+            author_name='Reporter',text_content='Pelanggaran pemilu terjadi di Jawa Timur.',
+            canonical_url='https://example.test/3',
+            published_at='2026-11-10T00:00:00Z'))
+        db.add(CampaignEvidence(campaign_id=92,result_id=3))
+        db.add(EvidenceAssessment(campaign_id=92,result_id=3,assessment_version=1,
+            relevance_label='RELEVANT',sentiment='NEUTRAL',geographic_signals_json='[]'))
+        db.commit()
+        scoped=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'include_totals':True})
+        assert scoped['available_provinces']==['Riau','Sumatera Selatan']
+        assert 'Jawa Timur' not in scoped['available_provinces']
+        # The options still reflect ALL eligible posts, not only selected province.
+        filtered=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'include_totals':True,
+             'province_filter':'Sumatera Selatan'})
+        assert filtered['available_provinces']==scoped['available_provinces']
+        assert [row['id'] for row in filtered['findings']]==['2']
+        assert filtered['findings'][0]['source_provinces']==['Sumatera Selatan']
+        all_campaigns=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'paged':True,'include_totals':True})
+        assert set(all_campaigns['available_provinces'])=={
+            'Jawa Timur','Riau','Sumatera Selatan'}
+        # Zero posts means no option, even though the national dictionary knows it.
+        assert 'Bali' not in all_campaigns['available_provinces']
+    finally:db.close()
+
+
+def test_province_dropdown_excludes_irrelevant_and_partial_word_mentions():
+    from app.inbox_provinces import matching_source_provinces
+    assert matching_source_provinces('Kami kembali ke rumah dan melanjutkan diskusi')==[]
+    assert matching_source_provinces('Dugaan kasus di Kabupaten Musi Banyuasin')==['Sumatera Selatan']
+    db=fixture()
+    try:
+        db.add(SocialListeningResult(id=2,run_id=1,platform='instagram',
+            author_name='Reporter',text_content='Pemilu di Bali perlu dibahas',
+            published_at='2026-11-10T00:00:00Z'))
+        db.add(CampaignEvidence(campaign_id=91,result_id=2))
+        db.add(EvidenceAssessment(campaign_id=91,result_id=2,assessment_version=1,
+            relevance_label='IRRELEVANT',sentiment='NEUTRAL'))
+        db.commit()
+        data=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'include_totals':True})
+        assert data['available_provinces']==['Riau']
+        zero=campaign_action(db,user(),'campaignIntelligenceInbox',
+            {'campaign_id':'91','paged':True,'include_totals':True,
+             'province_filter':'Bali'})
+        assert zero['findings']==[]
+        assert zero['full_statistics']['posts']==0
+        assert zero['available_provinces']==['Riau']
+    finally:db.close()

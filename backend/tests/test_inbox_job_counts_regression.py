@@ -23,5 +23,7 @@ def test_inbox_hides_review_group_ui_and_uses_nondestructive_exact_content_dedup
     assert 'deduplicateInboxEvidence(findings)' in source
     assert 'exact duplicate(s) collapsed' in source
     assert 'province_filter:chosenLocation' in source
-    assert 'Province (source mention / verified)' in source
-    assert "provinces:[...provinceNames].sort" in source
+    assert 'Province (mentioned in posts)' in source
+    assert 'availableProvinces.filter(name=>provinceNames.has(name))' in source
+    assert "setAvailableProvinces(options)" in source
+    assert '(x.source_provinces||[])' in source

@@ -244,3 +244,74 @@ def test_human_sentiment_correction_excludes_legacy_prism_from_paid_batch_and_ac
         assert result['paid_provider_called'] is False
         assert db.query(EvidenceAssessment).count()==1
     finally:db.close()
+
+
+def test_saved_sentiment_is_independent_of_pending_topic_and_cache_revises_on_officer_override():
+    from app.officer_sentiment import OfficerSentimentCorrection
+    db,c=db_with_posts(2)
+    try:
+        db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+            sentiment='POSITIVE',sentiment_model='gpt-6-offline-source-tone-v1',
+            sentiment_confidence='LOW',relevance_label='RELEVANT',
+            topic_labels_json='[]'))
+        db.commit()
+        initial=campaign_action(db,principal(),'campaignDashboard',{},'91')
+        assert initial['sentiment']['Positive']==1
+        assert initial['sentiment_pending_count']==1
+        assert initial['sentiment_classified_count']==1
+        # An officer correction invalidates the dashboard cache on its own.
+        db.add(OfficerSentimentCorrection(campaign_id=91,result_id=1,sentiment='NEGATIVE',
+            rationale='Saved officer correction',actor_id=11))
+        db.commit()
+        updated=campaign_action(db,principal(),'campaignDashboard',{},'91')
+        assert updated['sentiment']['Positive']==0
+        assert updated['sentiment']['Negative']==1
+        assert updated['sentiment_pending_count']==1
+    finally:db.close()
+
+
+def test_legacy_missing_stance_and_assessed_uncertainty_not_conflated():
+    from app.sentiment_processing import latest_saved_sentiments
+    db,c=db_with_posts(3)
+    try:
+        db.add_all([
+            EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+                sentiment='UNCLASSIFIED',sentiment_model='socialcrawl-prism-stance',
+                relevance_label='RELEVANT'),
+            EvidenceAssessment(campaign_id=91,result_id=2,assessment_version=1,
+                sentiment='UNCLASSIFIED',sentiment_model='gpt-4o-mini',
+                relevance_label='RELEVANT')
+        ])
+        db.commit()
+        states=latest_saved_sentiments(db,91)
+        assert states[1]=='Pending assessment'
+        assert states[2]=='Unclassified'
+        assert 3 not in states
+        dash=campaign_action(db,principal(),'campaignDashboard',{},'91')
+        assert dash['sentiment_pending_count']==2
+        assert dash['sentiment_unclassified_count']==1
+    finally:db.close()
+
+
+def test_offline_backfill_is_cached_and_never_rebilled():
+    db,c=db_with_posts(1)
+    try:
+        db.add_all([
+            EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+                sentiment='UNCLASSIFIED',sentiment_model='socialcrawl-prism-stance',
+                relevance_label='RELEVANT'),
+            EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=2,
+                sentiment='NEUTRAL',sentiment_model='gpt-6-offline-source-tone-v1',
+                sentiment_confidence='LOW',relevance_label='RELEVANT')
+        ])
+        db.commit()
+        preview=campaign_action(db,principal(),'campaignSentimentBatchPreview',{},'91')
+        assert preview['eligible_total']==0
+        assert preview['estimated_ai_calls']==0
+        cached=_classify_campaign_sentiment(db,principal(),c,
+            {'result_id':'1','confirm_ai_cost':True})
+        assert cached['cached'] is True
+        assert cached['paid_provider_called'] is False
+        assert cached['sentiment']=='Neutral'
+        assert db.query(EvidenceAssessment).count()==2
+    finally:db.close()

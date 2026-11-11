@@ -1453,6 +1453,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             principal=json.dumps(p,sort_keys=True,default=str)
         # Invalidate cached analytics immediately when campaign evidence changes.
         from .models import EvidenceAssessment
+        from .officer_sentiment import OfficerSentimentCorrection
         from .sentiment_processing import latest_saved_sentiments
         from .topic_themes import latest_saved_categories,UNCATEGORIZED,PENDING
         from sqlalchemy import func
@@ -1462,9 +1463,13 @@ def campaign_action(db:Session,p,action,data,id=None):
         assessment_revision=db.query(func.count(EvidenceAssessment.id),
             func.max(EvidenceAssessment.id)).filter(
                 EvidenceAssessment.campaign_id==c.id).one()
+        correction_revision=db.query(func.count(OfficerSentimentCorrection.id),
+            func.max(OfficerSentimentCorrection.id)).filter(
+                OfficerSentimentCorrection.campaign_id==c.id).one()
         cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword,
                    int(evidence_revision[0] or 0), int(evidence_revision[1] or 0),
-                   int(assessment_revision[0] or 0), int(assessment_revision[1] or 0))
+                   int(assessment_revision[0] or 0), int(assessment_revision[1] or 0),
+                   int(correction_revision[0] or 0), int(correction_revision[1] or 0))
         cached=_dashboard_cache_get(cache_key)
         if cached is not None:return cached
         query=db.query(CampaignEvidence,SocialListeningResult).join(SocialListeningResult,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==c.id,
@@ -1585,10 +1590,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             if source_day:
                 daily_types.setdefault(source_day,{'posts':0,'comments':0})[content_kind]+=1
             category=saved_topics.get(result_id,PENDING)
-            # PRISM's provisional stance is not a completed full sentiment
-            # assessment; keep pending distinct from a genuine UNCLASSIFIED.
-            tone=('Pending assessment' if category==PENDING
-                  else saved_sentiments.get(result_id,'Unclassified'))
+            # Topic assessment and sentiment classification are independent.
+            # A source can have a saved sentiment while its topic is still pending.
+            tone=saved_sentiments.get(result_id,'Pending assessment')
             sentiment[tone]+=1
             theme_counts[category]+=1
             theme_sentiments.setdefault(category,Counter())[tone]+=1

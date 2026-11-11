@@ -44,15 +44,38 @@ def relevance_is_assessed(record):
 
 
 def latest_saved_sentiments(db,campaign_id):
-    """One bulk DB query for the latest annotation per campaign post."""
+    """One campaign-scoped saved-truth read, including officer overrides.
+
+    Sentiment assessment status is independent of topic-classification status.
+    A missing provider stance is pending; a completed uncertain AI assessment
+    remains Unclassified. No paid inference or per-post lookups occur here.
+    """
     from .models import EvidenceAssessment
+    from .officer_sentiment import OfficerSentimentCorrection
     latest={}
-    rows=(db.query(EvidenceAssessment.result_id,EvidenceAssessment.sentiment)
+    rows=(db.query(EvidenceAssessment.result_id,EvidenceAssessment.sentiment,
+                   EvidenceAssessment.sentiment_model)
           .filter(EvidenceAssessment.campaign_id==int(campaign_id))
           .order_by(EvidenceAssessment.assessment_version.desc(),
                     EvidenceAssessment.id.desc()).yield_per(1000))
-    for result_id,label in rows:
+    for result_id,label,model in rows:
         if result_id in latest:continue
-        raw=str(label or '').upper()
-        latest[result_id]=raw.title() if raw in ('POSITIVE','NEUTRAL','NEGATIVE') else 'Unclassified'
+        raw=str(label or '').strip().upper()
+        if raw in ('POSITIVE','NEUTRAL','NEGATIVE'):
+            latest[result_id]=raw.title()
+        elif sentiment_is_assessed(type('SavedTone',(),{'sentiment':raw,
+                                                       'sentiment_model':model})()):
+            latest[result_id]='Unclassified'
+        else:
+            latest[result_id]='Pending assessment'
+    # Officer decisions always win; one bounded query, not N+1 post lookups.
+    corrections=(db.query(OfficerSentimentCorrection.result_id,
+                          OfficerSentimentCorrection.sentiment)
+                 .filter(OfficerSentimentCorrection.campaign_id==int(campaign_id))
+                 .order_by(OfficerSentimentCorrection.id.desc()).yield_per(1000))
+    overridden=set()
+    for result_id,label in corrections:
+        if result_id not in overridden:
+            latest[result_id]=str(label).strip().title()
+            overridden.add(result_id)
     return latest

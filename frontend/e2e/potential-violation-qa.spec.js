@@ -17,7 +17,8 @@ const findings=[
   relevance_label:'RELEVANT',relevance_confidence:'MEDIUM',explanation:'Topically relevant only.',
   location_signals:[],candidate_signals:['Prabowo Subianto'],potential_issues:[],assessment_version:1,model_version:'mock-fixture',can_review_flag:false},
 ];
-const payload={findings,campaigns:[{id:'1',name:'QA Campaign'}],unassessed_count:0,
+const payload={findings,campaigns:[{id:'1',name:'QA Campaign'}],
+ available_provinces:['DKI Jakarta'],unassessed_count:0,
  // Full-scope statistics are separately loaded by the current Inbox UI.
  full_statistics:{posts:3,potential_violations:1,sentiments:{POSITIVE:0,NEUTRAL:0,NEGATIVE:0},
    views:0,views_reported:0,engagement:0,engagement_reported:0,
@@ -218,6 +219,8 @@ test('candidate filtering narrows posts without labeling untagged posts as candi
 test('province selection excludes unlocated posts and clearing restores them',async({page})=>{
  const paidCalls=await setup(page);
  const selector=page.locator('[aria-label="Filter intelligence"] select').first();
+ await expect(selector.locator('option[value="DKI Jakarta"]')).toHaveCount(1);
+ await expect(selector.locator('option[value="Jawa Timur"]')).toHaveCount(0);
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(3);
  await selector.selectOption('DKI Jakarta');
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(1);

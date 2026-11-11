@@ -441,13 +441,16 @@ def complete_pdf_assignment_access(question,evidence,answer,cited_ids,language='
                      ("dikonfirmasi oleh manusia" in excerpt or
                       "konfirmasi manusia" in excerpt or
                       "wajib dikonfirmasi" in excerpt))
-    locus_covered=bool(re.search(
-        r"(?:locus|lokasi kejadian|incident location).{0,150}"
-        r"(?:diverifikasi|dikonfirmasi|verifikasi|konfirmasi|verified|confirmed)"
-        r".{0,65}(?:manusia|petugas|human|officer)|"
-        r"(?:manusia|petugas|human|officer).{0,100}"
-        r"(?:memverifikasi|mengonfirmasi|memastikan|verifies|confirms)"
-        r".{0,80}(?:locus|lokasi kejadian|incident location)",body))
+    # The answer must state a mandatory human-confirmed location condition.
+    # Merely saying "an officer verifies location" is too weak for provincial
+    # routing; require a mandatory condition in the same sentence.
+    locus_covered=any(
+        re.search(r"(?:locus|lokasi kejadian|incident location)",sentence)
+        and re.search(r"(?:manusia|petugas|human|officer)",sentence)
+        and re.search(r"(?:wajib|harus|sebelum|prasyarat|must|requires?|before|only after)",sentence)
+        and re.search(r"(?:verifik|konfirm|verif|confirm)",sentence)
+        for sentence in re.split(r"[.!?\\n]+",body)
+    )
     if locus_supported and not locus_covered:
         missing.append((
             "Untuk penugasan ke provinsi, locus atau lokasi kejadian wajib "

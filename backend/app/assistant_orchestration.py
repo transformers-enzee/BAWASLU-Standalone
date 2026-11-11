@@ -449,7 +449,7 @@ def complete_pdf_assignment_access(question,evidence,answer,cited_ids,language='
         and re.search(r"(?:manusia|petugas|human|officer)",sentence)
         and re.search(r"(?:wajib|harus|sebelum|prasyarat|must|requires?|before|only after)",sentence)
         and re.search(r"(?:verifik|konfirm|verif|confirm)",sentence)
-        for sentence in re.split(r"[.!?\\n]+",body)
+        for sentence in re.split(r"[.!?\n]+",body)
     )
     if locus_supported and not locus_covered:
         missing.append((

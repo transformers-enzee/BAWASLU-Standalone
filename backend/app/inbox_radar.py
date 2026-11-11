@@ -162,6 +162,38 @@ def _saved_concern_summary(row):
         return 'A public concern refers to: “'+re.sub(r'\s+',' ',quote)[:140].strip()+'”. The report requires checking.'
     return 'A public concern was recorded and remains subject to further review.'
 
+def _normalized_platform(value):
+    """Display one stable platform vocabulary across Inbox and Command Centre.
+
+    This is presentation normalization only; raw evidence is never modified.
+    """
+    name=str(value or 'Unknown').strip().casefold()
+    return {
+        'twitter':'X','x':'X','twitter-ai-search':'X',
+        'youtube':'YouTube','facebook':'Facebook','instagram':'Instagram',
+        'tiktok':'TikTok','threads':'Threads',
+        'online_news':'News','news':'News'
+    }.get(name,name.title() if name else 'Unknown')
+
+def _selection_rank(row):
+    """Retain the strongest *authorized saved* status for a repeated source.
+
+    When the same social post is linked to multiple authorized campaigns,
+    list order must not erase another campaign's flagged finding.
+    A human-confirmed review outranks unreviewed signals. An explicit
+    dismissal applies to its own campaign assessment only.
+    """
+    review=str(row.get('flag_review_status') or '').upper()
+    flagged=row.get('is_flagged') is True and review!='FLAG_DISMISSED'
+    rank=(3 if flagged and review=='FLAG_CONFIRMED'
+          else 2 if flagged and review=='FURTHER_INVESTIGATION'
+          else 1 if flagged else 0)
+    try:version=int(row.get('assessment_version') or 0)
+    except (TypeError,ValueError):version=0
+    try:campaign=int(row.get('campaign_id') or 0)
+    except (TypeError,ValueError):campaign=0
+    return (rank,version,campaign)
+
 def _source(row):
     rid=str(row.get('id') or '')
     cid=str(row.get('campaign_id') or '')
@@ -172,7 +204,7 @@ def _source(row):
         'published_at_raw':str(row.get('published_at') or '')[:64],
         'message_original':str(row.get('text_content') or '')[:5000],
         'source_url':str(row.get('canonical_url') or ''),
-        'platform':str(row.get('platform') or 'Unknown'),
+        'platform':_normalized_platform(row.get('platform')),
         'assessment_version':row.get('assessment_version'),
         'sentiment':str(row.get('sentiment') or 'UNCLASSIFIED').upper(),
         'geographic_mentions_unverified':_geo_mentions(row),
@@ -222,7 +254,7 @@ def compile_inbox_findings(rows,states=None):
         rid=str(row.get('id') or '')
         cid=str(row.get('campaign_id') or '')
         if not rid.isdigit() or not cid.isdigit():continue
-        if rid not in selected:
+        if rid not in selected or _selection_rank(row)>_selection_rank(selected[rid]):
             selected[rid]=row
     grouped={}
     for row in selected.values():

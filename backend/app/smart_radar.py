@@ -303,8 +303,14 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         "mode":"SAVED_INBOX_SOURCE_OF_TRUTH","scoring_ready":False,
         "feed_source":"CAMPAIGN_INTELLIGENCE_INBOX_SAVED_ASSESSMENTS",
         "inbox_source_scope":"PERMISSION_SCOPED_RELEVANT_ONLY",
+        # The saved Inbox feed loads up to 300 links PER permitted campaign,
+        # not 300 posts globally. Its unique-source dashboard is not a full
+        # campaign-post count and must not be compared as if denominators match.
         "inbox_window_limit":300,
-        "truncated_to_inbox_window":len(inbox.get("findings") or [])>=300,
+        "inbox_window_unit":"LINKS_PER_AUTHORIZED_CAMPAIGN",
+        "source_total_semantics":"UNIQUE_SOCIAL_POSTS_IN_RECENT_INBOX_WINDOW",
+        "truncated_to_inbox_window":None,
+        "inbox_window_truncation_status":"NOT_DETERMINED_FROM_RELEVANT_RECORD_COUNT",
         "disclaimer":"Only authorized, relevant saved Inbox assessments. Topic groups do not establish a shared incident or legal conclusion. No AI calls.",
         "jurisdictions":[],"timezone":"Asia/Jakarta","paid_provider_called":False}
     with _DASHBOARD_LOCK:

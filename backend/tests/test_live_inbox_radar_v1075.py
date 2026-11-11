@@ -105,3 +105,39 @@ def test_discover_only_allows_socialcrawl_host_and_maps_topic_stance():
         safe_url('https://socialcrawl.dev.attacker.example/v1/prism/discover')
     assert STANCE['positive']=='POSITIVE'
     assert STANCE['no_opinion']=='NEUTRAL'
+
+
+def test_cross_campaign_duplicate_preserves_authorized_violation_signal_in_any_order():
+    # An unrelated non-flagged campaign assessment must not hide a flagged
+    # saved assessment of the same underlying SOCIAL post.
+    plain=post(475,campaign_id='1',is_flagged=False,assessment_version=2)
+    flagged=post(475,campaign_id='4',is_flagged=True,
+                 flag_review_status='FURTHER_INVESTIGATION',assessment_version=3)
+    for rows in ([plain,flagged],[flagged,plain]):
+        output=compile_inbox_findings(rows)
+        assert sum(x['supporting_posts'] for x in output)==1
+        assert len(output)==1
+        assert 'violations' in output[0]['players']
+        assert output[0]['posts'][0]['campaign_id']=='4'
+        assert output[0]['posts'][0]['review_status']=='FURTHER_INVESTIGATION'
+
+
+def test_dismissal_in_one_campaign_does_not_silence_separate_flagged_campaign():
+    dismissed=post(476,campaign_id='1',is_flagged=True,flag_review_status='FLAG_DISMISSED')
+    flagged=post(476,campaign_id='4',is_flagged=True,flag_review_status='FLAG_CONFIRMED')
+    output=compile_inbox_findings([dismissed,flagged])
+    assert len(output)==1 and 'violations' in output[0]['players']
+    assert output[0]['posts'][0]['campaign_id']=='4'
+    assert output[0]['posts'][0]['review_status']=='FLAG_CONFIRMED'
+
+
+def test_command_centre_platform_labels_match_inbox_full_statistics():
+    rows=[post(701,platform='twitter-ai-search'),
+          post(702,platform='twitter'),
+          post(703,platform='tiktok'),
+          post(704,platform='instagram'),
+          post(705,platform='online_news')]
+    findings=compile_inbox_findings(rows)
+    from collections import Counter
+    counts=Counter(p['platform'] for finding in findings for p in finding['posts'])
+    assert counts=={'X':2,'TikTok':1,'Instagram':1,'News':1}

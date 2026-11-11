@@ -360,7 +360,7 @@ def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,langua
               if language=='id' else
               "The available PDF excerpts do not establish the requested "
               "platform-moderation comparison.")
-        return str(answer or "").rstrip()+"\\n\\n"+note, list(cited_ids or [])
+        return str(answer or "").rstrip()+"\n\n"+note, list(cited_ids or [])
     row=qualifying[0]
     ref=str(row["record_id"])
     if language=='id':
@@ -386,7 +386,7 @@ def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,langua
             "rules. Review the current platform policy and original content "
             "and, if appropriate, use its official review channel without "
             "substituting moderation for legal investigation. ["+ref+"]")
-    return str(answer or "").rstrip()+"\\n\\n"+addition, list(dict.fromkeys([*(cited_ids or []),ref]))
+    return str(answer or "").rstrip()+"\n\n"+addition, list(dict.fromkeys([*(cited_ids or []),ref]))
 
 
 def formal_evidence_count(evidence):
@@ -586,6 +586,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         answer,additional_refs=complete_pdf_moderation_comparison(
             question,evidence,answer,result["cited_ids"],result["language_code"])
         result["cited_ids"]=additional_refs
+        quality["cited_evidence_count"]=len(additional_refs)
+        quality["review_required"]=bool(evidence) and not bool(additional_refs)
     if web_research:
         public_heading={"id":"Sumber publik","en":"Public sources","es":"Fuentes públicas",
                         "fr":"Sources publiques","de":"Öffentliche Quellen","pt":"Fontes públicas",

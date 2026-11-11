@@ -93,6 +93,8 @@ def test_pdf_multisection_reply_completes_missing_moderation_from_actual_page_on
         ["DOC-1-P6"],"id")
     assert "Moderasi platform berbeda" in answer
     assert "DOC-1-P7" in answer
+    assert "\n\n**Moderasi platform" in answer
+    assert "\\\\n" not in answer
     assert citations==["DOC-1-P6","DOC-1-P7"]
     assert "Social Listening" not in answer
     # Never fill a legal question from an unrelated PDF page.

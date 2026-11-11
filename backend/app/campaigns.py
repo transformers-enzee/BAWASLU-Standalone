@@ -304,6 +304,7 @@ def _batch_preview(db,p,c,data=None):
     from .models import SocialListeningResult
     from .socialcrawl import _result_in_scope
     from .sentiment_processing import sentiment_is_assessed
+    from .officer_sentiment import latest_corrections
     payload=data or {}
     if not _editable(p,c):raise PermissionError('Campaign owner or national administrator required')
     try:limit=int(payload.get('sample_limit',10))
@@ -314,6 +315,7 @@ def _batch_preview(db,p,c,data=None):
     result_ids=[rid for (rid,) in db.query(CampaignEvidence.result_id).filter(
         CampaignEvidence.campaign_id==c.id,
         CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).all()]
+    corrections=latest_corrections(db,[(c.id,rid) for rid in result_ids])
     eligible=[];seen=set();missing_text=0;prior_count=0
     for rid in result_ids:
         if rid in seen:continue
@@ -323,8 +325,14 @@ def _batch_preview(db,p,c,data=None):
         if not str(item.text_content or '').strip():
             missing_text+=1;continue
         prior=_current_assessment(db,c.id,item.id)
-        if sentiment_is_assessed(prior):prior_count+=1
-        if not sentiment_is_assessed(prior) or (payload.get('retry_unclassified') is True and str(prior.sentiment or '').upper()=='UNCLASSIFIED'):eligible.append(str(item.id))
+        if (c.id,item.id) in corrections:
+            # Officer corrections are authoritative and never cost-eligible.
+            prior_count+=1
+            continue
+        assessed=sentiment_is_assessed(prior)
+        if assessed:prior_count+=1
+        if not assessed or (payload.get('retry_unclassified') is True and str(prior.sentiment or '').upper()=='UNCLASSIFIED'):
+            eligible.append(str(item.id))
     selection=eligible if payload.get('all_remaining') is True else eligible[:limit]
     return {'unclassified':len(eligible),
             'selected_ids':selection,'sample_limit':limit,
@@ -352,6 +360,12 @@ def _classify_campaign_sentiment(db,p,c,data):
     if not link or not row or not _result_in_scope(db,p,row):
         raise ValueError('Evidence record is not accessible')
     from .sentiment_processing import sentiment_is_assessed, normalize_sentiment_output
+    from .officer_sentiment import latest_corrections
+    correction=latest_corrections(db,[(c.id,row.id)]).get((c.id,row.id))
+    if correction:
+        return {'sentiment':correction.sentiment.title(),'confidence':'HUMAN_REVIEWED',
+                'explanation':correction.rationale or '', 'model':'OFFICER_CORRECTION',
+                'cached':True,'paid_provider_called':False}
     prior=_current_assessment(db,c.id,row.id)
     if sentiment_is_assessed(prior) and not ((data or {}).get('retry_unclassified') is True and str(prior.sentiment or '').upper()=='UNCLASSIFIED'):
         return {'sentiment':_latest_sentiment(db,c.id,row.id),

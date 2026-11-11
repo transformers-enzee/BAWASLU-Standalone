@@ -31,6 +31,10 @@ def sentiment_is_assessed(record):
     if not record:return False
     label=str(getattr(record,'sentiment','') or '').strip().upper()
     model=str(getattr(record,'sentiment_model','') or '').strip()
+    # Legacy Prism rows used the provider model name even when the provider's
+    # stance.label was null. No classification occurred in that case.
+    if label=='UNCLASSIFIED' and model=='socialcrawl-prism-stance':
+        return False
     return bool(model) or label in ('POSITIVE','NEUTRAL','NEGATIVE')
 
 def relevance_is_assessed(record):

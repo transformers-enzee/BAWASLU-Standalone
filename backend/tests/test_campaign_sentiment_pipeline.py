@@ -204,3 +204,43 @@ def test_explicit_uncertain_ai_sentiment_is_never_relabelled_neutral(monkeypatch
         assert record.relevance_label=='RELEVANT'
         assert record.explanation=='Preserved relevance'
     finally:db.close()
+
+
+def test_legacy_prism_null_stance_is_eligible_without_changing_saved_label():
+    db,c=db_with_posts(1)
+    try:
+        db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+            relevance_label='RELEVANT',sentiment='UNCLASSIFIED',
+            sentiment_model='socialcrawl-prism-stance',
+            sentiment_explanation='Stance toward monitored campaign topic; not a general endorsement'))
+        db.commit()
+        stored=db.query(EvidenceAssessment).one()
+        assert not sentiment_is_assessed(stored)
+        preview=campaign_action(db,principal(),'campaignSentimentBatchPreview',{},'91')
+        assert preview['eligible_total']==1 and preview['selected_ids']==['1']
+        assert preview['paid_provider_called'] is False
+        assert stored.sentiment=='UNCLASSIFIED'
+    finally:db.close()
+
+
+def test_human_sentiment_correction_excludes_legacy_prism_from_paid_batch_and_action():
+    from app.officer_sentiment import OfficerSentimentCorrection
+    db,c=db_with_posts(1)
+    try:
+        db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+            relevance_label='RELEVANT',sentiment='UNCLASSIFIED',
+            sentiment_model='socialcrawl-prism-stance'))
+        db.add(OfficerSentimentCorrection(campaign_id=91,result_id=1,sentiment='NEGATIVE',
+            rationale='Human assessment',actor_id=11))
+        db.commit()
+        preview=campaign_action(db,principal(),'campaignSentimentBatchPreview',
+            {'retry_unclassified':True},'91')
+        assert preview['eligible_total']==0 and preview['already_labeled']==1
+        assert preview['estimated_ai_calls']==0
+        # Even an explicitly confirmed request must reuse the human label.
+        result=_classify_campaign_sentiment(db,principal(),c,
+            {'result_id':'1','confirm_ai_cost':True,'retry_unclassified':True})
+        assert result['sentiment']=='Negative' and result['cached'] is True
+        assert result['paid_provider_called'] is False
+        assert db.query(EvidenceAssessment).count()==1
+    finally:db.close()

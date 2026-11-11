@@ -47,7 +47,7 @@ assert.ok(watch.includes('data-original-content'));
 assert.ok(read('src/lib/LanguageContext.jsx').includes("pagination[2]+' dari '+pagination[3]"));
 assert.ok(read('index.html').includes('bawaslu-ui-translation-fallback.js'));
 assert.ok(!read('public/ui-freeze/smart-radar-live.js').includes('renderInboxLineage()'), 'Remove Live Inbox source-count banner');
-assert.ok(read('public/ui-freeze/smart-radar-live.js').includes('presentation-only grouping') || read('public/ui-freeze/smart-radar-live.js').includes('Presentation-only grouping'), 'Sentiment grouping must be display only');
+assert.ok(read('public/ui-freeze/smart-radar-live.js').includes("['UNCLASSIFIED',unlabeled]") && !read('public/ui-freeze/smart-radar-live.js').includes("['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]"), 'Unclassified sentiment must remain separate from Neutral in display');
 assert.ok(read('src/pages/Inbox.jsx').includes('<TranslatedIntelligenceText text={signal.explanation'), 'AI flag explanations use translation-only display');
 assert.ok(read('public/ui-freeze/watchlist-live.js').includes("!$('#panel')?.classList.contains('open')"));
 assert.ok(read('src/pages/Inbox.jsx').includes('hidden className="hidden" aria-label="AI operations and diagnostics"'));

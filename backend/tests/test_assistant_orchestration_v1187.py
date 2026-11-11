@@ -74,3 +74,42 @@ def test_cross_module_formal_count_recognizes_source_identifiers_and_types():
     ]
     assert formal_evidence_count(records)==2
     assert formal_evidence_count(records[1:3])==0
+
+
+def test_pdf_multisection_reply_completes_missing_moderation_from_actual_page_only():
+    from app.assistant_orchestration import complete_pdf_moderation_comparison
+    prompt=("Berdasarkan PDF, jelaskan penanganan dugaan pelanggaran hukum "
+            "dan bedakan dengan moderasi konten berdasarkan aturan platform.")
+    excerpts=[
+        {"record_id":"DOC-1-P6","record_type":"PDF_KNOWLEDGE",
+         "source_excerpt":"Tindak lanjut dugaan pelanggaran hukum membutuhkan pengamanan bukti."},
+        {"record_id":"DOC-1-P7","record_type":"PDF_KNOWLEDGE",
+         "source_excerpt":("Aturan platform dan moderasi: Pelanggaran hukum dan "
+                           "pelanggaran ketentuan platform adalah dua pertanyaan "
+                           "berbeda. Tentukan platform, kebijakan resmi, dan kanal peninjauan.")},
+    ]
+    answer,citations=complete_pdf_moderation_comparison(
+        prompt,excerpts,"Registrasi bukti dan periksa kewenangan [DOC-1-P6]",
+        ["DOC-1-P6"],"id")
+    assert "Moderasi platform berbeda" in answer
+    assert "DOC-1-P7" in answer
+    assert citations==["DOC-1-P6","DOC-1-P7"]
+    assert "Social Listening" not in answer
+    # Never fill a legal question from an unrelated PDF page.
+    short,refs=complete_pdf_moderation_comparison(
+        prompt,excerpts[:1],"Langkah awal [DOC-1-P6]",["DOC-1-P6"],"id")
+    assert "tidak dapat dijawab" in short
+    assert refs==["DOC-1-P6"]
+    # No duplication if the model already answered both requested topics.
+    complete=("Penanganan hukum memerlukan bukti; moderasi menilai aturan "
+              "platform menurut kebijakan platform. [DOC-1-P7]")
+    untouched,refs=complete_pdf_moderation_comparison(
+        prompt,excerpts,complete,["DOC-1-P7"],"id")
+    assert untouched==complete and refs==["DOC-1-P7"]
+    # A PDF answer not asking about moderation is left exactly as generated.
+    plain,refs=complete_pdf_moderation_comparison(
+        "Jelaskan proses registrasi informasi awal.",excerpts,
+        "Registrasikan informasi [DOC-1-P6]",["DOC-1-P6"],"id")
+    assert plain=="Registrasikan informasi [DOC-1-P6]"
+    assert refs==["DOC-1-P6"
+    ]

@@ -327,6 +327,68 @@ def research_public_web(question, key, model, base):
         return None
 
 
+def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,language='id'):
+    """Fill an omitted requested PDF subquestion using only a matching page excerpt.
+
+    The model is prompted to cover every subquestion; this no-API safeguard
+    handles omitted platform-moderation explanations without accessing other
+    evidence modules or asserting an unverified legal rule.
+    """
+    q=str(question or "").casefold()
+    wants_comparison=(bool(re.search(r"moderas|moderation|aturan platform|platform polic",q)) and
+                      bool(re.search(r"pelanggaran hukum|penanganan hukum|legal handl|electoral law",q)))
+    if not wants_comparison:
+        return answer,cited_ids
+    # A short mention of moderation alone does not establish that the requested
+    # legal-vs-platform distinction has been explained.
+    body=str(answer or "").casefold()
+    already_covers=(bool(re.search(r"moderas|moderation|pedoman komunitas|community guidelines",body)) and
+                    bool(re.search(r"aturan platform|kebijakan platform|platform polic|platform rules|ketentuan platform",body)))
+    if already_covers:
+        return answer,cited_ids
+    qualifying=[]
+    for row in evidence or []:
+        if row.get("record_type")!="PDF_KNOWLEDGE":
+            continue
+        excerpt=str(row.get("source_excerpt") or "").casefold()
+        if ("moderasi" in excerpt and "pelanggaran hukum" in excerpt and
+            ("aturan platform" in excerpt or "ketentuan platform" in excerpt)):
+            qualifying.append(row)
+    if not qualifying:
+        note=("Bagian perbandingan moderasi platform tidak dapat dijawab dari "
+              "halaman PDF yang tersedia."
+              if language=='id' else
+              "The available PDF excerpts do not establish the requested "
+              "platform-moderation comparison.")
+        return str(answer or "").rstrip()+"\\n\\n"+note, list(cited_ids or [])
+    row=qualifying[0]
+    ref=str(row["record_id"])
+    if language=='id':
+        addition=(
+            "**Moderasi platform berbeda dari penanganan hukum.** "
+            "Penanganan dugaan pelanggaran pemilu memerlukan pemeriksaan fakta, "
+            "bukti, norma, dan kewenangan petugas, sedangkan moderasi konten "
+            "mengikuti kebijakan resmi platform yang berlaku. Konten dapat "
+            "melanggar aturan platform tanpa merupakan pelanggaran pemilu, "
+            "dan dugaan pelanggaran pemilu belum tentu melanggar aturan platform. "
+            "Petugas perlu memeriksa kebijakan platform terkini, membandingkan "
+            "konten asli dengan ketentuan yang relevan, serta jika diperlukan "
+            "mengajukan peninjauan melalui kanal resmi tanpa menggantikan "
+            "proses pemeriksaan hukum. ["+ref+"]")
+    else:
+        addition=(
+            "**Platform moderation is separate from legal handling.** "
+            "Suspected election-law violations require authorized assessment "
+            "of facts, evidence, applicable rules and jurisdiction, whereas "
+            "platform moderation follows the platform's current policies. "
+            "A post may breach platform rules without violating election law, "
+            "and a suspected election-law violation need not breach platform "
+            "rules. Review the current platform policy and original content "
+            "and, if appropriate, use its official review channel without "
+            "substituting moderation for legal investigation. ["+ref+"]")
+    return str(answer or "").rstrip()+"\\n\\n"+addition, list(dict.fromkeys([*(cited_ids or []),ref]))
+
+
 def formal_evidence_count(evidence):
     """Recognize authorized Inbox evidence whether or not older records carry a type."""
     return sum(bool(row.get("record_type")=="FORMAL_INTELLIGENCE" or
@@ -378,6 +440,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             "PDF pages, election-law articles, or incidents. Do not include social statistics, "
             "candidate summaries, charts, cases, action suggestions, report drafts, or generic "
             "investigation checklists unless the officer specifically asks. "
+            "Answer EVERY independently requested subquestion; being concise is not "
+            "permission to omit an entire requested topic. If the question asks for "
+            "legal handling versus platform moderation, use separate concise paragraphs: "
+            "(1) legal handling and its PDF page citation, (2) platform moderation, "
+            "its distinct governing rules and its PDF page citation. If one topic "
+            "has no retrieved supporting page, explicitly disclose that evidence gap. "
+            "Do not cite a page merely because it was retrieved; explain what it says. "
             "Put the full answer in direct_answer; leave observations, interpretation, "
             "next_checks and detected_tags empty. If the PDF is unreviewed or synthetic, "
             "mention that clearly ONCE in one short sentence. Answer in the user's language."
@@ -513,6 +582,10 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                         else result.get("next_checks") or []
     })
     answer = answer_text(result, bool(evidence),result["language_code"])
+    if pdf_guidance:
+        answer,additional_refs=complete_pdf_moderation_comparison(
+            question,evidence,answer,result["cited_ids"],result["language_code"])
+        result["cited_ids"]=additional_refs
     if web_research:
         public_heading={"id":"Sumber publik","en":"Public sources","es":"Fuentes públicas",
                         "fr":"Sources publiques","de":"Öffentliche Quellen","pt":"Fontes públicas",

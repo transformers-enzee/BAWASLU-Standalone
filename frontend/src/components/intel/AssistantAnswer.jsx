@@ -55,6 +55,15 @@ export default function AssistantAnswer({text}){
   const lines=block.split('\n');const tbl=tableParts(lines);
   if(tbl)return <div key={i} className="overflow-x-auto rounded-lg border border-[#ecdedd]"><table className="w-full min-w-[680px] table-fixed text-left text-sm leading-relaxed"><thead className="bg-[#fbf3f1]"><tr>{tbl.heads.map((h,j)=><th key={j} className="break-words px-4 py-3 align-top font-semibold text-[#801b24]">{rich(h)}</th>)}</tr></thead><tbody>{tbl.body.map((r,k)=><tr key={k} className="border-t border-[#ecdedd]">{tbl.heads.map((_,j)=><td key={j} className="break-words whitespace-normal px-4 py-3 align-top">{rich(r[j]||'')}</td>)}</tr>)}</tbody></table></div>;
   return <div key={i} className="space-y-1">{lines.map((line,j)=>{
+   // Executive intelligence reports use Markdown headings. Keep semantic
+   // heading structure while leaving source citations and tables unchanged.
+   const heading=line.match(/^ {0,3}(#{1,4})\s+(.+?)\s*#*\s*$/);
+   if(heading){
+    const level=heading[1].length;
+    const Heading=level===1?'h2':level===2?'h3':'h4';
+    const size=level===1?'text-lg':level===2?'text-base':'text-sm';
+    return <Heading key={j} className={`mt-2 mb-2 font-semibold leading-snug text-[#801b24] ${size}`}>{rich(heading[2])}</Heading>;
+   }
    const bullet=line.match(/^\s*[-*]\s+(.+)$/),number=line.match(/^\s*(\d+[.)])\s+(.+)$/);
    if(bullet)return <div key={j} className="flex gap-2"><span aria-hidden="true">•</span><span>{rich(bullet[1])}</span></div>;
    if(number)return <div key={j} className="flex gap-2"><strong>{number[1]}</strong><span>{rich(number[2])}</span></div>;

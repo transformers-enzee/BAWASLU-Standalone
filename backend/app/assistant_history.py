@@ -69,7 +69,7 @@ def clean_messages(messages):
             "evidence_snapshot": item.get("evidence_snapshot") if isinstance(item.get("evidence_snapshot"),dict) else None,
             "response_profile": (str(item.get("response_profile") or "")[:24]
               if str(item.get("response_profile") or "") in
-              ("PDF_GUIDANCE","SOCIAL_ANALYSIS","CASE_REVIEW","ACTION_REQUEST","GENERAL")
+              ("PDF_GUIDANCE","SOCIAL_ANALYSIS","CASE_REVIEW","CROSS_MODULE_REVIEW","ACTION_REQUEST","GENERAL")
               else ""),
             "answer_language": str(item.get("answer_language") or "")[:12],
             "detected_tags": [t for t in (item.get("detected_tags") or [])[:18] if isinstance(t,dict)] if isinstance(item.get("detected_tags"),list) else [],

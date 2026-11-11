@@ -8,6 +8,7 @@ import re
 PDF_GUIDANCE="PDF_GUIDANCE"
 SOCIAL_ANALYSIS="SOCIAL_ANALYSIS"
 CASE_REVIEW="CASE_REVIEW"
+CROSS_MODULE_REVIEW="CROSS_MODULE_REVIEW"
 ACTION_REQUEST="ACTION_REQUEST"
 GENERAL="GENERAL"
 
@@ -43,6 +44,11 @@ _CASE=re.compile(
     r"periksa\s+(?:kasus|unggahan|bukti)|review\s+(?:this|the)\s+(?:case|post)|"
     r"dugaan pelanggaran\s+(?:oleh|pada|terhadap)|"
     r"kasus\s*#?\d+|post\s*#?\d+)\b",re.I)
+_CROSS_MODULE=re.compile(
+    r"\b(?:bandingkan|perbandingan|komparasi|compare|comparison|comparative|"
+    r"lintas.modul|cross.module|konsistensi|persamaan|perbedaan|"
+    r"similarities|differences)\b",re.I)
+
 _FOLLOWUP=re.compile(
     r"\b(?:itu|tersebut|tadi|sebelumnya|what about|how about|"
     r"bagaimana dengan|lalu|then|and|selanjutnya)\b",re.I)
@@ -73,6 +79,10 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
         return ACTION_REQUEST
     if specific_case:
         return CASE_REVIEW
+    modules=bool(re.search(r"\b(?:intelligence inbox|intel inbox|inbox)\b",q,re.I) and
+                 re.search(r"\b(?:social listening|social media)\b",q,re.I))
+    if modules and _CROSS_MODULE.search(q):
+        return CROSS_MODULE_REVIEW
     if social:
         return SOCIAL_ANALYSIS
     if cited and (document_question or procedural or continuing_document):
@@ -99,6 +109,36 @@ def select_case_reference_pages(question,pages,limit=3):
     return [row for row in visible
             if not any(heading in str(row.get("source_excerpt") or "").casefold()
                        for heading in _CASE_TRAINING_PAGE_HEADINGS)][:limit]
+
+
+def cross_module_formal_focus(question,items):
+    """Keep only subject-matched, already authorized Inbox records.
+
+    Human-approved relevance is not the same as relevance to this question.
+    General cross-module comparisons with no identifiable subject retain the
+    existing retrieval behavior; named actor/system queries use strict focus.
+    """
+    from .assistant_social_focus import query_candidates
+    from .processing_hints import CANDIDATE_ALIASES
+    q=str(question or "").casefold()
+    candidates=query_candidates(q)
+    anchors=set()
+    for canonical,aliases in CANDIDATE_ALIASES.items():
+        if canonical.casefold() in candidates:
+            anchors.update(str(a).casefold().strip() for a in set(aliases)|{canonical}
+                           if len(str(a).strip())>=4)
+    for marker in ("silon","sirekap","pdpb","dpt","dkpp","ptun"):
+        if re.search(r"(?<!\w)"+re.escape(marker)+r"(?!\w)",q):
+            anchors.add(marker)
+    if not anchors:
+        return list(items or [])
+    accepted=[]
+    for item in items or []:
+        content=" ".join(str(getattr(item,key,"") or "")
+                         for key in ("title","original_content","source_name","source_id")).casefold()
+        if any(re.search(r"(?<!\w)"+re.escape(anchor)+r"(?!\w)",content) for anchor in anchors):
+            accepted.append(item)
+    return accepted
 
 
 def evidence_for_profile(profile,formal, social, pdf):

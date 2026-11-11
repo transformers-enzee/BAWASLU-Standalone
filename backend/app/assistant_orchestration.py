@@ -328,7 +328,8 @@ def research_public_web(question, key, model, base):
 
 
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
-             reference_catalog=None, response_profile='SOCIAL_ANALYSIS'):
+             reference_catalog=None, response_profile='SOCIAL_ANALYSIS',
+             duplicate_groups=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -338,7 +339,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     language = language_directive(question)
     pdf_guidance=response_profile=='PDF_GUIDANCE'
     web_research = (research_public_web(question, key, model, base)
-                    if mode != "GROUNDED" and not pdf_guidance else None)
+                    if mode != "GROUNDED" and not pdf_guidance and response_profile!="CROSS_MODULE_REVIEW" else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
@@ -357,6 +358,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         ),
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
+        "formal_record_count":sum(r.get("record_type")=="FORMAL_INTELLIGENCE" for r in evidence),
+        "potential_duplicate_groups":(duplicate_groups or [])[:6],
         "response_depth": response_depth,
         "response_profile": response_profile,
         "response_language_rule": language["rule"],
@@ -400,9 +403,23 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "of a sentence (e.g. [SOCIAL-205]), never as bare IDs inside prose. "
         "Do not invent court decision contents or statutory provisions."
         if response_profile=="CASE_REVIEW" else "")
+    cross_module_focus=(
+        "\n\nCROSS_MODULE_REVIEW: Compare only records supplied under available_records. "
+        "Clearly separate Intelligence Inbox from Social Listening and describe the "
+        "different review_status versus verification_status fields. Do not cite or "
+        "display irrelevant Inbox matches; zero formal_record_count means state that "
+        "NO relevant authorized Inbox records were selected. No source ID may be "
+        "invented. Summarize overlaps and differences in three concise observations "
+        "with bracketed IDs on directly supported claims, and supply specific next "
+        "checks. The potential_duplicate_groups are only similarity heuristics: "
+        "mention plausible reposts without treating them as independent evidence "
+        "or claiming they are certainly coordinated. Do not present sentiment "
+        "charts or post-population extrapolations unless explicitly requested. "
+        "Do not mistake officer validation of relevance for verified legal fact."
+        if response_profile=="CROSS_MODULE_REVIEW" else "")
     request = {
         "model": model, "store": False,
-        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus},
+        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},

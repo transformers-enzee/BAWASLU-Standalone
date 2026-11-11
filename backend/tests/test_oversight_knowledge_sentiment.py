@@ -680,3 +680,77 @@ def test_case_reference_filter_retains_procedure_not_unrelated_simulation_traini
     assert [r["record_id"] for r in select_case_reference_pages(question,pages)]==["DOC-1-P6"]
     explicit=select_case_reference_pages("Investigasi kasus simulasi BWS-RAG-042",pages)
     assert {r["record_id"] for r in explicit}=={"DOC-1-P6","DOC-1-P10","DOC-1-P12"}
+
+
+
+def test_cross_module_comparison_routing_preserves_explicit_sentiment_requests():
+    from app.assistant_response_profile import choose_response_profile,CROSS_MODULE_REVIEW,SOCIAL_ANALYSIS
+    q=("Bandingkan informasi yang tersimpan di Intelligence Inbox dan Social Listening "
+       "mengenai akses Bawaslu terhadap Silon KPU serta Gibran Rakabuming Raka.")
+    assert choose_response_profile(q)==CROSS_MODULE_REVIEW
+    assert choose_response_profile("Analisis sentimen Gibran dari Social Listening")==SOCIAL_ANALYSIS
+
+
+def test_cross_module_focus_excludes_unrelated_approved_inbox_items():
+    from types import SimpleNamespace
+    from app.assistant_response_profile import cross_module_formal_focus
+    question=("Bandingkan Intelligence Inbox dan Social Listening mengenai "
+              "akses Silon dan pendidikan Gibran Rakabuming Raka")
+    rows=[
+        SimpleNamespace(intelligence_id="INT-2026-000001",
+                        title="Muhammad Bobby Afif Nasution",
+                        original_content="Biografi gubernur Sumatera Utara",source_name=""),
+        SimpleNamespace(intelligence_id="INT-2026-000004",
+                        title="ibarat globe berjalan #debat #bawaslu",
+                        original_content="debate activity",source_name=""),
+        SimpleNamespace(intelligence_id="INT-2026-000099",
+                        title="Dokumen akses Silon dalam kasus pendidikan",
+                        original_content="Verifikasi persyaratan Gibran",source_name=""),
+    ]
+    selected=cross_module_formal_focus(question,rows)
+    assert [r.intelligence_id for r in selected]==["INT-2026-000099"]
+    assert cross_module_formal_focus(question,rows[:2])==[]
+    assert cross_module_formal_focus("Bandingkan kedua modul",rows)==rows
+
+
+def test_cross_module_duplicate_groups_and_featured_cards_are_distinct():
+    from app.assistant_social_focus import potential_duplicate_groups,source_cards_for_question
+    common=("Dalam cuplikan video diskusi ini, narasumber menyoroti persoalan "
+            "krusial terkait minimnya akses pengawasan Bawaslu dalam melakukan "
+            "verifikasi dokumen serta kredensial pendidikan Gibran.")
+    rows=[{"id":179,"text_content":common+" Pertanyaan lanjutan tentang KPU."},
+          {"id":184,"text_content":common+" Pertanyaan lanjutan tentang KPU"},
+          {"id":205,"text_content":"Pemeriksaan dokumen pendidikan Gibran secara resmi dibahas pada rapat komisi pemilihan umum."}]
+    groups=potential_duplicate_groups(rows)
+    assert groups and set(groups[0]["source_ids"])=={"SOCIAL-179","SOCIAL-184"}
+    cards=source_cards_for_question(rows,["SOCIAL-179","SOCIAL-184"],lambda r:{"id":r["id"]},
+                                    limit=4,distinct_content=True)
+    assert [r["id"] for r in cards]==[179,205]
+
+
+def test_cross_module_endpoint_discloses_missing_inbox_and_skips_sentiment_charts(monkeypatch,db):
+    from app import domain,campaigns,assistant_orchestration
+    from app.main import intelligence_assistant
+    monkeypatch.setattr(domain,"list_intelligence",lambda *_:[])
+    monkeypatch.setattr(campaigns,"campaign_action",lambda *_args,**_kwargs:{
+        "findings":[{"id":9901,"campaign_name":"bawaslu","platform":"tiktok",
+                     "text_content":"Bawaslu membahas akses Silon KPU terkait pendidikan Gibran Rakabuming Raka",
+                     "relevance_label":"RELEVANT","sentiment":"NEUTRAL"}]})
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        assert kwargs["response_profile"]=="CROSS_MODULE_REVIEW"
+        assert all(row["record_type"]=="SOCIAL_LISTENING" for row in evidence)
+        return ("Tidak ditemukan Inbox relevan. Klaim belum terverifikasi [SOCIAL-9901]",
+                ["SOCIAL-9901"],{"answer_language":"id","detected_tags":[],
+                    "analytical_findings":{"observations":["Klaim akses Silon [SOCIAL-9901]"],
+                                          "review_steps":["Periksa dokumen KPU"]}})
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    result=intelligence_assistant({
+        "question":"Bandingkan Intelligence Inbox dan Social Listening terkait akses Silon KPU dan pendidikan Gibran Rakabuming Raka",
+        "previousQuestion":"","analysisMode":"AUTO","responseDepth":"DEEP",
+        "conversationContext":[]},user(db,1),db)
+    assert result["response_profile"]=="CROSS_MODULE_REVIEW"
+    assert result["evidence_snapshot"] is None
+    assert result["grounding"]["formal_selected_count"]==0
+    assert result["grounding"]["social_selected_count"]==1
+    assert all(row["record_type"]=="SOCIAL_LISTENING" for row in result["records"])
+    assert result["featured_sources"][0]["id"]=="SOCIAL-9901"

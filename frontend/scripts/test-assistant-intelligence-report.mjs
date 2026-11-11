@@ -33,8 +33,10 @@ assert.match(withoutRepeatedFindingRefs('SOCIAL-740, SOCIAL-296, SOCIAL-306, dan
 assert.match(withoutRepeatedFindingRefs('According to DOC-1-P6, the officer checks records.','en'),/the cited document page/);
 assert.ok(page.includes('maxLength={1000}')&&page.includes('slice(0,120)'),
   'full investigation questions and bounded history titles are supported');
-assert.ok(page.includes("m.response_profile==='CASE_REVIEW'")&&page.includes('formal_selected_count'),
-  'case review transparently discloses when selected Inbox records are missing');
+assert.ok(page.includes("'CROSS_MODULE_REVIEW'")&&page.includes('formal_selected_count'),
+  'case and cross-module comparisons disclose missing relevant Inbox evidence');
+assert.ok(page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
+  'only sentiment/social analysis should show the numerical dashboard');
 assert.ok(records.includes("t('sources_heading')"),'visual source gallery present');
 assert.ok(records.includes('featured?.length?featured:records||[]'),'historical social evidence remains visible');
 assert.ok(dashboard.includes('Every chart uses the same')&&dashboard.includes('snapshot.matched_pool_count'),

@@ -4,6 +4,7 @@ These are display filters over already permission-scoped, evidence-checked
 signals. They do not alter assessments or make legal determinations.
 """
 import re
+from difflib import SequenceMatcher
 from .processing_hints import CANDIDATE_ALIASES
 
 _GEO=re.compile(r"\b(?:provinsi|province|provincial|daerah|wilayah|"
@@ -87,6 +88,42 @@ def focus_social_tags(tags,question,allowed_ids=(),limit=4):
     return result
 
 
+def _normalized_story(row):
+    body=str(row.get("text_content") or "").casefold()
+    body=re.sub(r"https?://\S+"," ",body)
+    body=re.sub(r"\W+"," ",body).strip()
+    return body[:650]
+
+
+def _same_story(left,right):
+    if not left or not right or min(len(left),len(right))<85:
+        return False
+    if left==right:
+        return True
+    return SequenceMatcher(None,left,right,autojunk=False).ratio()>=0.92
+
+
+def potential_duplicate_groups(chosen_social,limit=6):
+    """Report near-identical saved post text as a possibility, never corroboration."""
+    rows=list(chosen_social or [])
+    groups=[]
+    grouped=set()
+    bodies=[_normalized_story(row) for row in rows]
+    for i,row in enumerate(rows):
+        if i in grouped or not bodies[i]:
+            continue
+        matches=[j for j in range(i+1,len(rows))
+                 if j not in grouped and _same_story(bodies[i],bodies[j])]
+        if matches:
+            indexes=[i]+matches
+            groups.append({"source_ids":["SOCIAL-"+str(rows[j]["id"]) for j in indexes],
+                           "status":"POSSIBLE_DUPLICATE_TEXT_NOT_INDEPENDENT_CORROBORATION"})
+            grouped.update(indexes)
+            if len(groups)>=limit:
+                break
+    return groups
+
+
 def source_cards_for_question(chosen_social,cited,view,limit=4,distinct_content=False):
     """Choose source cards among the same records the model actually read."""
     cited_set={str(x) for x in cited or []}
@@ -96,13 +133,12 @@ def source_cards_for_question(chosen_social,cited,view,limit=4,distinct_content=
         return [view(row) for row in (matching+remainder)[:max(0,limit)]]
     # Case reviews prefer distinct story text over syndicated cross-platform copies.
     cards=[]
-    seen=set()
+    seen=[]
     for row in matching+remainder:
-        body=re.sub(r"\W+"," ",str(row.get("text_content") or "").casefold()).strip()
-        fingerprint=body[:140] if len(body)>=50 else "source:"+str(row.get("id"))
-        if fingerprint in seen:
+        body=_normalized_story(row)
+        if any(_same_story(body,prior) for prior in seen):
             continue
-        seen.add(fingerprint)
+        seen.append(body)
         cards.append(view(row))
         if len(cards)>=max(0,limit):
             break

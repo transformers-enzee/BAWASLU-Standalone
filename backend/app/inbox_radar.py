@@ -221,6 +221,9 @@ def _source(row):
         'candidate_names':_candidate_names(row),
         'verified_incident_province':_verified_incident_province(row),
         'review_status':row.get('flag_review_status'),
+        # Preserve the officer's source-level flag reviews separately from
+        # Command Centre finding workflow actions.
+        'review_history':list(row.get('flag_review_history') or [])[:10],
         'source_verification_status':'SAVED_INBOX_ASSESSMENT_UNVERIFIED',
     }
 
@@ -372,6 +375,10 @@ def compile_inbox_findings(rows,states=None):
         state=states.get(key) or {}
         g['status']=state.get('status') or ('pending' if g['attention'] else 'awareness')
         g['human_reviewed']=bool(state.get('first_reviewed_at'))
+        source_flag_status=next((str(post['review_status']) for post in evidence
+            if post.get('review_status')), '')
+        g['source_flag_review_status']=(source_flag_status or 'AWAITING_REVIEW'
+            if g['kind']=='source_review' else source_flag_status)
         g['next_followup']=str(state.get('next_followup') or '')
         g['updated_at']=str(state.get('updated_at') or '')
         g['review_suggested']=g['attention']

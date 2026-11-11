@@ -149,3 +149,19 @@ def test_command_centre_unclassified_has_independent_clickthrough_and_legend():
     assert "kind==='NEUTRAL'" not in js
     assert "['NEUTRAL',Number(sentimentCounts.NEUTRAL||0)+unlabeled]" not in js
     assert 'Positive · Neutral · Negative · Unclassified' in html
+
+def test_command_centre_shows_separate_inbox_flag_review_and_finding_workflow():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
+    js=(root/'frontend/public/ui-freeze/smart-radar-live.js').read_text(encoding='utf-8')
+    assert 'Finding workflow:' in html
+    assert 'Source flag:' in html
+    assert 'Inbox flag review history' in html
+    assert 'Command Centre Finding Actions' in html
+    assert 'No Command Centre finding actions yet.' in html
+    assert 'const sourceFlagHtml=' in html
+    assert '${sourceFlagHtml(p)}' in html
+    assert 'post.review_status ||' in js
+    assert 'post.review_history' in js
+    assert 'source_flag_review_status: f.source_flag_review_status' in js

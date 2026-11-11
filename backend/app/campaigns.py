@@ -760,6 +760,10 @@ def campaign_action(db:Session,p,action,data,id=None):
         review_id=review.id
         db.commit()
         audit(db,p,'EvidenceReview',review_id,'POTENTIAL_FLAG_REVIEW',{'campaign_id':campaign.id,'result_id':item.id,'assessment_id':assessment.id,'assessment_version':assessment.assessment_version,'decision':decision,'legacy_signal_present':any(s.get('signal_provenance')=='LEGACY_MISSING_TYPE' for s in valid_signals)})
+        from .inbox_read_cache import invalidate as invalidate_inbox_reads
+        from .smart_radar import invalidate_dashboard_cache
+        invalidate_inbox_reads()
+        invalidate_dashboard_cache()
         return {'saved':True,'decision':decision,'review_id':str(review_id),'paid_provider_called':False}
     if action in ('campaignAssessmentAudit','campaignAssessmentCorrection'):
         from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult

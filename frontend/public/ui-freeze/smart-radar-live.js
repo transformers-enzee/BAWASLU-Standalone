@@ -78,6 +78,7 @@
       player: (f.players || [])[0] || 'narratives', topics: f.topics || [],
       geo: 'all', published_at: f.published_at || '',
       day: 0, status: f.status || 'awareness',
+      source_flag_review_status: f.source_flag_review_status || '',
       summary: f.summary || '', insights: f.insights || {}, ai_summary: Boolean(f.ai_summary), ai_model: f.ai_model || '', summary_evidence_sample: f.summary_evidence_sample || null,
       violation: (f.players || []).includes('violations'),
       posts: [], source_count: Number(f.supporting_posts ?? 0), supporting_posts: Number(f.supporting_posts ?? 0),
@@ -550,6 +551,7 @@
     const loaded = (finding.posts || []).length;
     if (referenced !== loaded) throw Error('Finding evidence count mismatch: ' + referenced + ' referenced, ' + loaded + ' loaded');
     model.source_count = referenced;
+    model.source_flag_review_status = finding.source_flag_review_status || model.source_flag_review_status;
     model.posts = (finding.posts||[]).map(post=>[
       post.account_raw || 'Unknown public account',
       post.published_at_raw || 'Unknown time',
@@ -559,7 +561,9 @@
       post.platform || '',
       post.sentiment || 'UNCLASSIFIED',
       Array.isArray(post.geographic_mentions_unverified)?post.geographic_mentions_unverified:[],
-      post.verified_incident_province || ''
+      post.verified_incident_province || '',
+      post.review_status || '',
+      Array.isArray(post.review_history) ? post.review_history : []
     ]);
     return model;
   }

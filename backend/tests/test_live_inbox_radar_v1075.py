@@ -200,3 +200,33 @@ def test_command_centre_source_drawer_displays_saved_sentiment_instead_of_hardco
     assert "'NEGATIVE','" not in html or "NEGATIVE:'Negative'" in html
     assert "post.sentiment || 'UNCLASSIFIED'" in script
     assert "Potential violation: Preliminary topic signal" not in html
+
+def test_source_level_officer_reviews_do_not_complete_command_centre_finding():
+    row=post(740,campaign_id='5',text_content='Reported Gibran document dispute',
+        is_flagged=True,flag_review_status='FURTHER_INVESTIGATION',
+        potential_issues=[{'category_name':'Potential Violation'}],
+        flag_review_history=[
+          {'decision':'FURTHER_INVESTIGATION','assessment_version':2,
+           'reviewed_at':'2026-11-11T07:00:22','rationale':'Further verification is required'},
+          {'decision':'FURTHER_INVESTIGATION','assessment_version':2,
+           'reviewed_at':'2026-11-11T06:30:14','rationale':'Need more information'}])
+    finding=compile_inbox_findings([row])[0]
+    assert finding['id']=='INBOX-V-5-740'
+    assert finding['source_flag_review_status']=='FURTHER_INVESTIGATION'
+    assert finding['status']=='pending'  # Separate finding workflow has no action.
+    assert finding['human_reviewed'] is False
+    assert finding['posts'][0]['review_status']=='FURTHER_INVESTIGATION'
+    assert len(finding['posts'][0]['review_history'])==2
+    assert finding['posts'][0]['review_history'][0]['rationale']=='Further verification is required'
+
+
+def test_unreviewed_flag_and_independent_finding_action_are_distinct():
+    source=post(741,is_flagged=True)
+    pending=compile_inbox_findings([source])[0]
+    assert pending['source_flag_review_status']=='AWAITING_REVIEW'
+    assert pending['posts'][0]['review_history']==[]
+    reviewed=compile_inbox_findings([source],{
+        pending['id']:{'status':'investigating','first_reviewed_at':'2026-11-11'}})[0]
+    assert reviewed['status']=='investigating'
+    assert reviewed['human_reviewed'] is True
+    assert reviewed['source_flag_review_status']=='AWAITING_REVIEW'

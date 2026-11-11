@@ -152,6 +152,7 @@ def build_command_center(db,p,data=None):
     category_names={row.id:row.name for row in categories}
     phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active.is_(True)).all()
     relevant={}
+    period_relevant_rows=[]
     alerts_by_post={}
     region_posts=defaultdict(set)
     region_captured=defaultdict(set)
@@ -173,6 +174,9 @@ def build_command_center(db,p,data=None):
             source_updated=post.collected_at
         if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):
             continue
+        # Reuse the same authorized, publication-period-scoped assessments for
+        # candidate and issue inventories; no second query or unbounded feed.
+        period_relevant_rows.append((assessment,post))
         note={'result_id':str(post.id),'campaign_id':str(campaign.id),
               'campaign_name':campaign.name,'source_url':post.canonical_url,
               'platform':post.platform,'author':post.author_name or post.observed_handle or 'Unknown author',
@@ -427,35 +431,20 @@ def build_command_center(db,p,data=None):
         'records':len(v['records']),'confirmed':len(v['confirmed']),'associated':len(v['mentioned']),'pending':len(v['pending']),
         'potential_signals':len(v['potential'])} for code,v in regional_intel.items()]
     regional_intelligence.sort(key=lambda x:(x['potential_signals'],x['pending'],x['records']),reverse=True)
-    # Read-only signal volume inventory. Only authorized saved assessments are
-    # counted; a source mention is not a legal finding or suspicion of a person.
-    # Resolve known candidate aliases before counting. Post-ID sets prevent
-    # multiple spellings in one source from inflating mention volume.
-    candidate_aliases={
-        'gibran':'Gibran Rakabuming Raka',
-        'gibran rakabuming':'Gibran Rakabuming Raka',
-        'gibran rakabuming raka':'Gibran Rakabuming Raka',
-        'prabowo':'Prabowo Subianto',
-        'prabowo subianto':'Prabowo Subianto',
-    }
+    # One source of truth for the breakdowns and headline KPIs: all the
+    # permission-checked latest assessments for the selected publication period.
+    # The recency-limited feed is for recent activity cards ONLY.
+    # Count distinct source IDs even when posts appear in several campaigns.
+    from .processing_hints import normalize_candidate_signals
     candidate_inventory={}
     category_post_ids=defaultdict(set)
-    seen_signal_posts=set()
-    for assessment,post in (all_recent if campaigns_ids else []):
-        if post.id in seen_signal_posts or not _result_in_scope(db,p,post):continue
-        seen_signal_posts.add(post.id)
-        if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT'):continue
-        for item in _as_list(assessment.candidate_signals_json):
-            name=(item.get('name') or item.get('value') or '') if isinstance(item,dict) else item
-            name=str(name or '').strip()[:120]
+    for assessment,post in period_relevant_rows:
+        for name in normalize_candidate_signals(_as_list(assessment.candidate_signals_json)):
+            name=str(name).strip()[:120]
             if len(name)<3:continue
-            normalized=re.sub(r'\\s+',' ',name).strip().casefold()
-            name=candidate_aliases.get(normalized,name)
             key=name.casefold()
-            entry=candidate_inventory.setdefault(key,{'name':name,'posts':set()})
-            entry['posts'].add(post.id)
+            candidate_inventory.setdefault(key,{'name':name,'posts':set()})['posts'].add(post.id)
         signals=validated_issue_signals(_as_list(assessment.potential_issue_signals_json),category_names,post.text_content)
-        # Issue volume uses saved quote-validated assessment signals only.
         for signal in signals:
             category_post_ids[str(signal['category_name'])].add(post.id)
     candidate_coverage=sorted(

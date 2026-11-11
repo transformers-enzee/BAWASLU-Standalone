@@ -239,3 +239,71 @@ def test_dashboard_alert_counts_ignore_out_of_period_recent_feed():
     assert out['alerts'][0]['result_id']!=str(old_post.id)
     assert out['focus_actions'][0]['result_id']!=str(old_post.id)
     db.close()
+
+
+def test_signal_inventory_respects_period_and_shared_candidate_normalization():
+    db=SessionLocal()
+    p=_actor(db,'scoped-inventory@test.local','National Administrator','Nationwide')
+    db.add(IssueCategory(id=1,name='Potensi Politik Uang',active=True));db.commit()
+    _,post,assessment=_evidence(db,'Jawa Barat',
+        'Reported election vote buying in local campaign, pending verification.',True,'current-inventory')
+    assessment.candidate_signals_json=json.dumps(['Prabowo','prabowo subianto'])
+    _,old_post,old_assessment=_evidence(db,'Jawa Tengah',
+        'Reported election vote buying in old campaign, pending verification.',True,'historic-inventory')
+    old_post.published_at='2024-01-01T09:15:00'
+    old_assessment.candidate_signals_json=json.dumps(['Gibran','Anies Baswedan'])
+    db.commit()
+    selected=build_command_center(db,p,{'period':'7d'})
+    assert selected['indicators']['relevant_mentions']==1
+    assert selected['signal_intelligence']['candidate_mentions']==[
+        {'name':'Prabowo Subianto','mentions':1}]
+    assert selected['signal_intelligence']['issue_categories']==[
+        {'category':'Potensi Politik Uang','posts':1}]
+    historical=build_command_center(db,p,{'period':'all'})
+    assert historical['indicators']['relevant_mentions']==2
+    assert {c['name']:c['mentions'] for c in historical['signal_intelligence']['candidate_mentions']}=={
+        'Prabowo Subianto':1,'Gibran Rakabuming Raka':1,'Anies Baswedan':1}
+    assert historical['signal_intelligence']['issue_categories']==[
+        {'category':'Potensi Politik Uang','posts':2}]
+    db.close()
+
+
+def test_shared_source_inbox_and_command_centre_counts_stay_deduplicated():
+    from app.campaigns import campaign_action
+    from app.inbox_radar import compile_inbox_findings
+    from app.officer_sentiment import OfficerSentimentCorrection
+    db=SessionLocal()
+    p=_actor(db,'cross-module-counts@test.local','National Administrator','Nationwide')
+    db.add(IssueCategory(id=1,name='Potensi Politik Uang',active=True));db.commit()
+    c,post,assessment=_evidence(db,'Jawa Barat',
+        'Reported election vote buying in local campaign, pending verification.',True,'shared-inventory')
+    assessment.candidate_signals_json=json.dumps(['Gibran'])
+    assessment.sentiment='NEUTRAL'
+    second=MonitoringCampaign(name='Second scoped monitoring',province='Jawa Barat',
+        primary_keywords_json='["pemilu"]',status='DRAFT',created_by='test')
+    db.add(second);db.flush()
+    db.add(CampaignEvidence(campaign_id=second.id,result_id=post.id))
+    db.add(EvidenceAssessment(campaign_id=second.id,result_id=post.id,
+        assessment_version=1,relevance_label='RELEVANT',sentiment='NEUTRAL',
+        candidate_signals_json=json.dumps(['Gibran Rakabuming Raka']),
+        potential_issue_signals_json=assessment.potential_issue_signals_json))
+    db.flush()
+    db.add(OfficerSentimentCorrection(campaign_id=c.id,result_id=post.id,
+        sentiment='NEGATIVE',rationale='Saved human interpretation',actor_id=int(p['id'])))
+    db.commit()
+    home=build_command_center(db,p,{'period':'7d'})
+    rows=campaign_action(db,p,'campaignIntelligenceInbox',{})['findings']
+    inbox=compile_inbox_findings(rows)
+    assert home['coverage']['captured_posts_in_period']==1
+    assert home['coverage']['assessed_pairs_in_period']==2
+    assert home['indicators']['relevant_mentions']==1
+    assert home['indicators']['potential_alerts']==1
+    assert home['signal_intelligence']['flagged_assessment_volume']==1
+    assert home['signal_intelligence']['candidate_mentions']==[
+        {'name':'Gibran Rakabuming Raka','mentions':1}]
+    assert home['signal_intelligence']['issue_categories']==[
+        {'category':'Potensi Politik Uang','posts':1}]
+    assert sum(x['supporting_posts'] for x in inbox)==1
+    assert len([x for x in inbox if 'violations' in x['players']])==1
+    assert rows and any(r['sentiment']=='NEGATIVE' for r in rows)
+    db.close()

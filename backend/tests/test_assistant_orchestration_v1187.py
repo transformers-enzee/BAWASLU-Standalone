@@ -223,3 +223,46 @@ def test_pdf_assignment_roles_retest_fills_only_missing_supported_page8_rules():
         "Jelaskan aturan moderasi platform berdasarkan PDF.",
         [page8],original,["DOC-1-P8"],"id")
     assert unrelated==original and refs4==["DOC-1-P8"]
+
+
+def test_pdf_assignment_requires_human_locus_even_when_other_safeguards_present():
+    from app.assistant_orchestration import complete_pdf_assignment_access
+    question=("Berdasarkan dokumen PDF, jelaskan persyaratan penugasan nasional "
+              "dan provinsi, termasuk peran petugas, verifikasi lokasi kejadian, "
+              "dan pembatasan akses pengguna.")
+    page8={"record_id":"DOC-1-P8","record_type":"PDF_KNOWLEDGE",
+           "source_excerpt":(
+               "Penugasan nasional dan provinsi. Rekomendasi AI bukan "
+               "keputusan pemberian kewenangan. Petugas memberikan konfirmasi "
+               "eksplisit. Untuk tugas yang ditujukan ke provinsi, locus "
+               "kejadian wajib dikonfirmasi oleh manusia; penyebutan provinsi "
+               "dalam teks saja tidak cukup. Penerima harus mempunyai peran "
+               "dan cakupan akses yang sesuai. Pengguna Viewer tidak boleh "
+               "membuat penugasan atau memvalidasi laporan. "
+               "Penugasan berulang harus dicegah agar tidak duplikat.")}
+    already_good_except_locus=(
+        "Penugasan nasional atau provinsi dilakukan setelah petugas berwenang "
+        "memeriksa kewenangan dan memverifikasi lokasi kejadian. Penugasan "
+        "provinsi memerlukan akses yang sah. Rekomendasi AI wajib ditinjau "
+        "dan dikonfirmasi secara eksplisit oleh petugas, serta penerima harus "
+        "memiliki peran dan cakupan akses yang sesuai. [DOC-1-P8]\\n\\n"
+        "**Persyaratan akses dan persetujuan:** Pengguna Viewer tidak boleh "
+        "membuat penugasan atau memvalidasi laporan. Penugasan berulang "
+        "dengan sumber, tim, dan status yang sama harus dicegah agar tidak "
+        "membuat kasus duplikat. [DOC-1-P8]"
+    )
+    final,refs=complete_pdf_assignment_access(
+        question,[page8],already_good_except_locus,["DOC-1-P8"],"id")
+    assert "dikonfirmasi oleh manusia terlebih dahulu" in final
+    assert "penyebutan provinsi" in final
+    assert final.count("**Persyaratan akses dan persetujuan:**")==2
+    assert refs==["DOC-1-P8"]
+    repeated,refs2=complete_pdf_assignment_access(
+        question,[page8],final,refs,"id")
+    assert repeated==final and refs2==refs
+    already_human=already_good_except_locus+(
+        "\\n\\nLocus kejadian harus diverifikasi oleh petugas sebelum "
+        "menugaskan tim provinsi. [DOC-1-P8]")
+    same,_=complete_pdf_assignment_access(
+        question,[page8],already_human,["DOC-1-P8"],"id")
+    assert same==already_human

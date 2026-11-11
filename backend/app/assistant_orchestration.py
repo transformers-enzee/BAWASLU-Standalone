@@ -434,6 +434,28 @@ def complete_pdf_assignment_access(question,evidence,answer,cited_ids,language='
     excerpt=str(page.get("source_excerpt") or "").casefold()
     body=str(answer or "").casefold()
     missing=[]
+    # A province appearing in a post is a location tag, never proof of locus.
+    # Do not confuse officer approval of the AI suggestion with independent
+    # human verification of the underlying incident location.
+    locus_supported=("locus kejadian" in excerpt and
+                     ("dikonfirmasi oleh manusia" in excerpt or
+                      "konfirmasi manusia" in excerpt or
+                      "wajib dikonfirmasi" in excerpt))
+    locus_covered=bool(re.search(
+        r"(?:locus|lokasi kejadian|incident location).{0,150}"
+        r"(?:diverifikasi|dikonfirmasi|verifikasi|konfirmasi|verified|confirmed)"
+        r".{0,65}(?:manusia|petugas|human|officer)|"
+        r"(?:manusia|petugas|human|officer).{0,100}"
+        r"(?:memverifikasi|mengonfirmasi|memastikan|verifies|confirms)"
+        r".{0,80}(?:locus|lokasi kejadian|incident location)",body))
+    if locus_supported and not locus_covered:
+        missing.append((
+            "Untuk penugasan ke provinsi, locus atau lokasi kejadian wajib "
+            "dikonfirmasi oleh manusia terlebih dahulu; penyebutan provinsi "
+            "dalam unggahan saja tidak cukup."
+            if language=='id' else
+            "Before provincial assignment, an authorized person must verify "
+            "the incident location; mentioning a province in a post is insufficient."))
     if ("konfirmasi eksplisit" in excerpt and
         not re.search(r"(?:di)?konfirmasi (?:secara )?eksplisit|"
                       r"explicit confirm|persetujuan eksplisit",body)):

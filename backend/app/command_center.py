@@ -465,7 +465,7 @@ def build_command_center(db,p,data=None):
         [{'category':name,'posts':len(ids)} for name,ids in category_post_ids.items()],
         key=lambda row:(-row['posts'],row['category']))[:10]
     # Descriptive operational queue size only, NEVER a person's guilt score.
-    review_volume=len(latest_alerts)
+    review_volume=len(alerts)
     activity_band=('HIGH VOLUME' if review_volume>=20 else
                    'ELEVATED VOLUME' if review_volume>=5 else
                    'LOW VOLUME' if review_volume>0 else 'NO FLAGS')
@@ -562,7 +562,7 @@ def build_command_center(db,p,data=None):
     # Action-oriented briefing: point to supported reviews, never fabricate an
     # AI narrative or turn missing assessments into a finding of no risk.
     focus=[]
-    for item in latest_alerts[:3]:
+    for item in alerts[:3]:
         focus.append({'kind':'REVIEW_EVIDENCE','title':'Review preliminary '+item['category']+' signal',
             'detail':(item.get('description') or item.get('summary') or '')[:180],
             'campaign_id':item['campaign_id'],'result_id':item['result_id'],
@@ -582,8 +582,8 @@ def build_command_center(db,p,data=None):
             'generated_at':datetime.utcnow().isoformat()+'Z',
             'latest_evidence_at':source_updated.isoformat()+'Z' if source_updated else None,
             'indicators':{'relevant_mentions':len(relevant),
-                'potential_alerts':len(latest_alerts),
-                'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in latest_alerts),
+                'potential_alerts':len(alerts),
+                'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in alerts),
                 'emerging_issues':None},
             'briefing':briefing,'focus_actions':focus,'attention_actions':attention[:4],
             'alerts':latest_alerts[:10], 'latest_intelligence':recent,
@@ -618,6 +618,7 @@ def build_command_center(db,p,data=None):
                         'unassessed_posts_in_period':unassessed_coverage,
                         'assessed_pairs_in_period':evidence_checked,'relevant_distinct_posts':len(relevant),
                         'distinct_campaigns_in_scope':len(campaigns_by_id),
+                        'potential_alerts_basis':'ALL_PERIOD_SCOPED_AUTHORIZED_UNDISMISSED_DISTINCT_POSTS',
                         'warning':'Publication-date counts and newly collected counts are different measures. AI relevance and potential alerts require stored assessments. Province indicates campaign monitoring scope, not verified author location.'},
             'capabilities':{'emerging_issues':False,'ai_generated_new_summary':False,
                             'cross_module_assistant':False},

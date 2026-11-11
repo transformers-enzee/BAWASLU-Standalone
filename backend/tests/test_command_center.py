@@ -218,3 +218,23 @@ def test_recently_assessed_geography_is_scoped_to_selected_publication_period():
     assert build_command_center(db,actor)['regional_inbox_signals']==[]
     assert any(x['province']=='Jawa Barat' for x in build_command_center(db,actor,{'period':'all'})['regional_inbox_signals'])
     db.close()
+
+def test_dashboard_alert_counts_ignore_out_of_period_recent_feed():
+    """Headline, flagged volume and focus must use the period-scoped full set."""
+    db=SessionLocal()
+    p=_actor(db,'period-alerts@test.local','National Administrator','Nationwide')
+    db.add(IssueCategory(id=1,name='Potensi Politik Uang',active=True));db.commit()
+    _evidence(db,'Jawa Barat','Allegation of election vote buying in local campaign.',True,'new-alert')
+    _,old_post,_=_evidence(db,'Jawa Tengah','Allegation of election vote buying in previous years.',True,'old-alert')
+    old_post.published_at='2024-01-01T09:15:00'
+    db.commit()
+    out=build_command_center(db,p,{'period':'7d'})
+    assert out['indicators']['relevant_mentions']==1
+    assert out['indicators']['potential_alerts']==1
+    assert out['indicators']['awaiting_review']==1
+    assert out['signal_intelligence']['flagged_assessment_volume']==1
+    assert out['coverage']['potential_alerts_basis']=='ALL_PERIOD_SCOPED_AUTHORIZED_UNDISMISSED_DISTINCT_POSTS'
+    assert len(out['alerts'])==1
+    assert out['alerts'][0]['result_id']!=str(old_post.id)
+    assert out['focus_actions'][0]['result_id']!=str(old_post.id)
+    db.close()

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend ./backend
 # Include the Inbox source for zero-credit cross-layer regression assertions.
 COPY frontend/src/pages/Inbox.jsx ./frontend/src/pages/Inbox.jsx
+COPY frontend/src/api/base44Client.js ./frontend/src/api/base44Client.js
 COPY frontend/public/ui-freeze/watchlist-live.js ./frontend/public/ui-freeze/watchlist-live.js
 COPY frontend/public/ui-freeze/watchlist-v2_2.html ./frontend/public/ui-freeze/watchlist-v2_2.html
 COPY frontend/src/components/intel/CampaignPanel.jsx ./frontend/src/components/intel/CampaignPanel.jsx

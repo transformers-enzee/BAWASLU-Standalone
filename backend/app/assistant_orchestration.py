@@ -350,7 +350,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
-        "question": question[:500], "previous_question": previous[:500],
+        "question": question[:1000], "previous_question": previous[:1000],
         "mode": mode, "available_records": evidence,
         "available_pdf_library": (reference_catalog or [])[:24],
         "pdf_reference_guidance": (

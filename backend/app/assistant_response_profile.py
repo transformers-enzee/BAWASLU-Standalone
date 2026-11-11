@@ -49,6 +49,16 @@ _CROSS_MODULE=re.compile(
     r"lintas.modul|cross.module|konsistensi|persamaan|perbedaan|"
     r"similarities|differences)\b",re.I)
 
+# The user may explicitly prohibit Social Listening in a PDF-only question.
+# Such negated module names are not a request for social intelligence.
+_EXPLICIT_PDF_SOURCE=re.compile(
+    r"\b(?:berdasarkan|menurut|mengacu\s+pada|according\s+to|based\s+on|"
+    r"using|from|hanya\s+dari|only\s+from)\s+"
+    r"(?:(?:dokumen|the|file|uploaded|yang|tersimpan)\s+){0,3}"
+    r"(?:pdf\b|ai\s+reference\s+library\b)"
+    r"|\b(?:gunakan|use|jawab|answer)\b[^\n.]{0,90}"
+    r"\b(?:hanya|only)\b[^\n.]{0,30}\bpdf\b",re.I)
+
 _FOLLOWUP=re.compile(
     r"\b(?:itu|tersebut|tadi|sebelumnya|what about|how about|"
     r"bagaimana dengan|lalu|then|and|selanjutnya)\b",re.I)
@@ -75,6 +85,8 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
                    if isinstance(row,dict) and row.get("role")=="user"),"")
     continuing_document=(bool(_FOLLOWUP.search(q)) and
                          bool(_PDF.search(prev) or (_PROCEDURE.search(prev) and not _SOCIAL.search(prev))))
+    if _EXPLICIT_PDF_SOURCE.search(q):
+        return PDF_GUIDANCE
     if action and not (document_question and not specific_case):
         return ACTION_REQUEST
     if specific_case:

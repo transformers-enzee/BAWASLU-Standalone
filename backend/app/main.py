@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'141.5','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'141.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -712,7 +712,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     general=requested=='GENERAL' or (
-        requested=='AUTO' and is_conceptual(q) and not pdf_evidence)
+        requested=='AUTO' and response_profile!=PDF_GUIDANCE and
+        is_conceptual(q) and not pdf_evidence)
     source_warning=''
     social_rows=[]
     selected_formal=[]
@@ -750,6 +751,25 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         [assistant_evidence_record(row) for row in selected_formal],
         [social_evidence(row) for row in chosen_social],
         context_pdf)
+    if response_profile==PDF_GUIDANCE and not evidence:
+        message=('Tidak ditemukan halaman PDF terindeks yang relevan dan dapat '
+                 'diakses untuk pertanyaan ini. Saya tidak dapat menyimpulkan '
+                 'isi dokumen tanpa kutipan halaman yang tersedia.'
+                 if language=='id' else
+                 'No matching, accessible indexed PDF passages were found for '
+                 'this question. I cannot infer the document contents without '
+                 'available page excerpts.')
+        return {'answer':message,'records':[],'provider':{'mode':'NO_PDF_EVIDENCE'},
+                'response_profile':PDF_GUIDANCE,'evidence_snapshot':None,
+                'analytical_findings':None,'featured_sources':[],
+                'answer_language':language,'detected_tags':[],
+                'presentation_labels':{},
+                'grounding':{'accessible_count':0,'selected_count':0,
+                             'supporting_count':0,'formal_selected_count':0,
+                             'social_selected_count':0,
+                             'scope':'AUTHORIZED_PDF_REFERENCES',
+                             'source_types':[],'reference_pdf_count':len(reference_catalog),
+                             'reference_page_count':0,'limited':True}}
     if general or (not evidence and requested=='AUTO'):
         try:
             text,provider=generate_general_openai_answer(q,previous)

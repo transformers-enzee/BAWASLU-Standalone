@@ -754,3 +754,71 @@ def test_cross_module_endpoint_discloses_missing_inbox_and_skips_sentiment_chart
     assert result["grounding"]["social_selected_count"]==1
     assert all(row["record_type"]=="SOCIAL_LISTENING" for row in result["records"])
     assert result["featured_sources"][0]["id"]=="SOCIAL-9901"
+
+
+
+def test_test4_pdf_only_request_ignores_negated_social_modules(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import assistant_orchestration,domain,campaigns
+    _chat_pdf_fixture(db,scope="NATIONAL",digest="8")
+    prompt=(
+        "Berdasarkan dokumen PDF BAWASLU_Sample_AI_Knowledge_Full_Text yang tersimpan "
+        "dalam AI Reference Library, jelaskan langkah-langkah penanganan awal "
+        "informasi dugaan pelanggaran pemilu. Bedakan secara jelas antara proses "
+        "penanganan dugaan pelanggaran hukum dan moderasi konten berdasarkan "
+        "kebijakan platform media sosial. Gunakan hanya informasi yang benar-benar "
+        "tersedia dalam PDF, sertakan sitasi halaman yang tepat, dan jelaskan "
+        "status dokumen tersebut apakah merupakan simulasi atau SOP resmi Bawaslu. "
+        "Jangan menggunakan sumber Social Listening atau Intelligence Inbox "
+        "untuk menjawab pertanyaan ini. Jangan mengarang ketentuan hukum, "
+        "nomor pasal, atau prosedur yang tidak tersedia dalam dokumen. "
+        "Jika informasi tidak tersedia, nyatakan secara eksplisit."
+    )
+    assert len(prompt)<=1000
+    from app.assistant_response_profile import choose_response_profile
+    assert choose_response_profile(prompt,pdf_evidence=[{"record_id":"DOC-1-P6"}])=="PDF_GUIDANCE"
+    def forbidden(*args,**kwargs):
+        raise AssertionError("PDF-only Test 4 must not query Social Listening or Inbox")
+    monkeypatch.setattr(domain,"list_intelligence",forbidden)
+    monkeypatch.setattr(campaigns,"campaign_action",forbidden)
+    seen={}
+    def fake_generate(question,previous,evidence,mode,**kwargs):
+        seen["profile"]=kwargs["response_profile"]
+        assert mode=="GROUNDED"
+        assert evidence and all(row["record_type"]=="PDF_KNOWLEDGE" for row in evidence)
+        rid=next(row["record_id"] for row in evidence if row["page"]==6)
+        return "Dokumen simulasi, bukan SOP resmi ["+rid+"]",[rid],{
+            "answer_language":"id","detected_tags":[{"type":"CANDIDATE","label":"Gibran"}],
+            "analytical_findings":{"observations":["irrelevant finding"]}}
+    monkeypatch.setattr(assistant_orchestration,"generate",fake_generate)
+    response=intelligence_assistant({"question":prompt,"previousQuestion":"",
+        "analysisMode":"AUTO","responseDepth":"DEEP","conversationContext":[]},
+        user(db,1),db)
+    assert seen["profile"]=="PDF_GUIDANCE"
+    assert response["response_profile"]=="PDF_GUIDANCE"
+    assert response["evidence_snapshot"] is None
+    assert response["analytical_findings"] is None
+    assert response["detected_tags"]==[]
+    assert response["featured_sources"]==[]
+    assert response["records"] and all(r["record_type"]=="PDF_KNOWLEDGE"
+                                       for r in response["records"])
+    assert response["grounding"]["formal_selected_count"]==0
+    assert response["grounding"]["social_selected_count"]==0
+
+
+def test_explicit_pdf_only_without_available_pages_does_not_hallucinate(monkeypatch,db):
+    from app.main import intelligence_assistant
+    from app import domain,campaigns,intelligence_assistant as legacy
+    from app import assistant_knowledge
+    monkeypatch.setattr(assistant_knowledge,"retrieve_chat_knowledge",lambda *_a,**_k:[])
+    monkeypatch.setattr(domain,"list_intelligence",
+                        lambda *_a,**_k:(_ for _ in ()).throw(AssertionError("Inbox read")))
+    monkeypatch.setattr(campaigns,"campaign_action",
+                        lambda *_a,**_k:(_ for _ in ()).throw(AssertionError("Social read")))
+    result=intelligence_assistant({"question":"Berdasarkan dokumen PDF, jelaskan aturan.",
+        "previousQuestion":"","analysisMode":"AUTO","responseDepth":"DEEP",
+        "conversationContext":[]},user(db,1),db)
+    assert result["response_profile"]=="PDF_GUIDANCE"
+    assert result["records"]==[]
+    assert result["provider"]["mode"]=="NO_PDF_EVIDENCE"
+    assert result["grounding"]["scope"]=="AUTHORIZED_PDF_REFERENCES"

@@ -45,3 +45,7 @@ assert.ok(dashboard.includes('data-advanced-social-metrics'),
   'additional engagement and date statistics are collapsed by default');
 assert.ok(records.includes('rel="noopener noreferrer"'),'external links isolated');
 console.log('Frontend intelligence report checks passed');
+
+const profileContract=read('../../backend/app/assistant_response_profile.py');
+assert.match(profileContract,/_EXPLICIT_PDF_SOURCE/);
+assert.match(profileContract,/if _EXPLICIT_PDF_SOURCE\.search\(q\):/);

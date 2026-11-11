@@ -77,6 +77,10 @@ def _surface_issues(evidence):
     topics=[]
     for source in evidence:
         body=str(source.get('message_original') or '').casefold()
+        if (re.search(r'\bgibran\b',body) and
+                re.search(r'\b(?:suket|ijazah|penyetaraan)\b',body)):
+            if 'questions about Gibran candidate education documents' not in topics:
+                topics.append('questions about Gibran candidate education documents')
         for expression,description in patterns:
             if re.search(expression,body) and description not in topics:
                 topics.append(description)
@@ -113,6 +117,9 @@ def _headline(value, limit=86):
 def _specific_issue_title(body,kind):
     t=str(body or '').casefold()
     if kind=='source_review':
+        if (re.search(r'\bgibran\b',t) and
+                re.search(r'\b(?:suket|ijazah|penyetaraan)\b',t)):
+            return 'Reported Dispute Over Gibran Education Documents'
         if 'mencoblos lebih dari sekali' in t and 'musi' in t:return 'Reported Repeat Voting in South Sumatra'
         if 'people power' in t and '2019' in t:return 'Historical Claims About 2019 Election Protests'
         if 'gerakan keadilan rakyat' in t:return 'Protesters Question Bawaslu 2024 Election Oversight'

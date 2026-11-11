@@ -170,3 +170,33 @@ def test_actual_demonstration_still_produces_demonstration_specific_finding():
     row2=post(742,text_content='Demonstrasi di Bawaslu terkait hasil pengawasan',
               is_flagged=True,potential_issues=[{'category_name':'Potential Violation'}])
     assert 'Demonstrations' in compile_inbox_findings([row2])[0]['title']
+
+
+def test_saved_gibran_education_document_dispute_gets_source_grounded_title_and_summary():
+    source=('Suket Gibran Dinyatakan Tidak Sah oleh MA, PKS: Pansus Harus Segera Dibentuk. '
+            'MA melalui Putusan Nomor 742 K/TUN/2026 mengabulkan kasasi penggugat '
+            'dan menyatakan surat keterangan penyetaraan pendidikan SMA Gibran tidak sah. '
+            'Teks ini berkaitan dengan integritas proses demokrasi.')
+    finding=compile_inbox_findings([post(740,campaign_id='5',
+        text_content=source,sentiment='NEGATIVE',is_flagged=True,
+        potential_issues=[{'category_name':'Election Administration',
+            'signal_type':'REPORTED_INCIDENT',
+            'evidence_quote':'surat keterangan penyetaraan pendidikan SMA Gibran tidak sah'}])])[0]
+    assert finding['id']=='INBOX-V-5-740'
+    assert finding['title']=='Reported Dispute Over Gibran Education Documents'
+    assert 'questions about Gibran candidate education documents' in finding['summary']
+    assert 'public demonstrations' not in finding['summary']
+    assert finding['posts'][0]['sentiment']=='NEGATIVE'
+    assert finding['sentiment_counts']=={'NEGATIVE':1}
+
+
+def test_command_centre_source_drawer_displays_saved_sentiment_instead_of_hardcoded_value():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    html=(root/'frontend/public/ui-freeze/smart-radar-v6_2.html').read_text(encoding='utf-8')
+    script=(root/'frontend/public/ui-freeze/smart-radar-live.js').read_text(encoding='utf-8')
+    assert "Sentiment: Not classified" not in html
+    assert "[String(p[6]||'').toUpperCase()]" in html
+    assert "'NEGATIVE','" not in html or "NEGATIVE:'Negative'" in html
+    assert "post.sentiment || 'UNCLASSIFIED'" in script
+    assert "Potential violation: Preliminary topic signal" not in html

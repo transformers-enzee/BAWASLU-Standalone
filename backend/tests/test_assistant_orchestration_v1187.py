@@ -172,3 +172,54 @@ def test_pdf_moderation_complete_realworld_retest_has_no_duplicate_appendix():
              "against the original content, review supporting context, and "
              "use the official appeal channel if necessary. [DOC-1-P7]")
     assert pdf_moderation_section_is_complete(english)
+
+
+
+def test_pdf_assignment_roles_retest_fills_only_missing_supported_page8_rules():
+    from app.assistant_orchestration import complete_pdf_assignment_access
+    question=("Berdasarkan PDF BAWASLU, jelaskan persyaratan penugasan nasional "
+              "dan provinsi termasuk peran petugas, verifikasi lokasi kejadian, "
+              "dan pembatasan akses pengguna.")
+    page8={"record_id":"DOC-1-P8","record_type":"PDF_KNOWLEDGE","page":8,
+           "source_excerpt":(
+               "Penugasan nasional dan provinsi: Syarat membuat penugasan dari AI "
+               "Assistant. Harus ada sumber. AI dapat menyarankan departemen, "
+               "tetapi petugas harus meninjau rekomendasi dan memberikan "
+               "konfirmasi eksplisit. Untuk tugas yang ditujukan ke provinsi, "
+               "locus kejadian wajib dikonfirmasi oleh manusia. Penerima harus "
+               "mempunyai peran dan cakupan akses yang sesuai. Pengguna Viewer "
+               "tidak boleh membuat penugasan atau memvalidasi laporan. "
+               "Jika sumber, tim dan status tugas sama, pembuatan berulang "
+               "harus dicegah agar tidak menghasilkan kasus duplikat.")}
+    original=(
+        "Dokumen mensimulasikan bahwa penugasan nasional atau provinsi dilakukan "
+        "setelah kewenangan dan lokasi kejadian diperiksa. Provinsi kejadian "
+        "terverifikasi menjadi syarat penugasan. [DOC-1-P8]\n\n"
+        "Peran petugas mencakup registrasi informasi awal dan pemeriksaan "
+        "yurisdiksi; cuplikan yang tersedia tidak memuat matriks atau rincian "
+        "pembatasan akses pengguna. [DOC-1-P6] [DOC-1-P2]"
+    )
+    final,refs=complete_pdf_assignment_access(
+        question,[page8],original,["DOC-1-P8","DOC-1-P6","DOC-1-P2"],"id")
+    assert "tidak memuat matriks" not in final
+    assert "konfirmasi secara eksplisit" in final
+    assert "Penerima penugasan" in final
+    assert "Viewer tidak boleh" in final
+    assert "kasus duplikat" in final
+    assert refs==["DOC-1-P8","DOC-1-P6","DOC-1-P2"]
+    assert final.count("**Persyaratan akses dan persetujuan:**")==1
+    # If already covered, leave content and citations unchanged.
+    existing,refs2=complete_pdf_assignment_access(
+        question,[page8],final,refs,"id")
+    assert existing==final and refs2==refs
+    # Do not invent these role restrictions for another PDF document.
+    other,refs3=complete_pdf_assignment_access(
+        question,[{"record_id":"DOC-2-P4","record_type":"PDF_KNOWLEDGE",
+                   "source_excerpt":"Penugasan perlu pemeriksaan lokasi."}],
+        original,["DOC-2-P4"],"id")
+    assert other==original and refs3==["DOC-2-P4"]
+    # Irrelevant document question must not be affected.
+    unrelated,refs4=complete_pdf_assignment_access(
+        "Jelaskan aturan moderasi platform berdasarkan PDF.",
+        [page8],original,["DOC-1-P8"],"id")
+    assert unrelated==original and refs4==["DOC-1-P8"]

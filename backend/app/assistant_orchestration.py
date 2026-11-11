@@ -413,6 +413,61 @@ def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,langua
     return str(answer or "").rstrip()+"\n\n"+addition, list(dict.fromkeys([*(cited_ids or []),ref]))
 
 
+def complete_pdf_assignment_access(question,evidence,answer,cited_ids,language='id'):
+    """Supply requested access safeguards only when a retrieved PDF page says so.
+
+    No generic RBAC assumptions or unrelated-module evidence can be used. If a
+    subrule isn't present in the authorized excerpt, do not infer it.
+    """
+    q=str(question or "").casefold()
+    wants_assignment=bool(re.search(r"penugasan|assignments?|routing|penugasan provinsi",q))
+    wants_roles=bool(re.search(r"akses|access|pembatasan|peran|roles?|permissions?|viewer|pengguna",q))
+    if not (wants_assignment and wants_roles):
+        return answer,cited_ids
+    page=next((row for row in evidence or []
+               if row.get("record_type")=="PDF_KNOWLEDGE"
+               and re.search(r"\bpenugasan\b",str(row.get("source_excerpt") or ""),re.I)
+               and re.search(r"\bviewer\b",str(row.get("source_excerpt") or ""),re.I)
+               and re.search(r"cakupan akses",str(row.get("source_excerpt") or ""),re.I)),None)
+    if not page:
+        return answer,cited_ids
+    excerpt=str(page.get("source_excerpt") or "").casefold()
+    body=str(answer or "").casefold()
+    missing=[]
+    if ("konfirmasi eksplisit" in excerpt and
+        not re.search(r"konfirmasi eksplisit|explicit confirm|persetujuan eksplisit",body)):
+        missing.append(("Saran AI harus ditinjau dan dikonfirmasi secara eksplisit oleh petugas berwenang."
+                        if language=='id' else
+                        "An authorized officer must review and explicitly confirm any AI assignment recommendation."))
+    if ("penerima" in excerpt and "cakupan akses" in excerpt and
+        not re.search(r"penerima.{0,110}(peran|akses)|recipient.{0,110}(role|access)",body)):
+        missing.append(("Penerima penugasan wajib memiliki peran dan cakupan akses yang sesuai."
+                        if language=='id' else
+                        "The assigned recipient must have the appropriate role and access scope."))
+    if ("viewer" in excerpt and "tidak boleh" in excerpt and
+        not re.search(r"viewer.{0,130}(tidak boleh|dilarang|cannot|must not|not allowed)",body)):
+        missing.append(("Pengguna Viewer tidak boleh membuat penugasan atau memvalidasi laporan."
+                        if language=='id' else
+                        "Viewer users must not create assignments or validate reports."))
+    if ("duplikat" in excerpt and
+        not re.search(r"duplikat|duplicate|penugasan berulang|repeated assignments",body)):
+        missing.append(("Penugasan berulang dengan sumber, tim, dan status yang sama harus dicegah agar tidak membuat kasus duplikat."
+                        if language=='id' else
+                        "Avoid duplicate cases from repeated assignments with the same source, team and status."))
+    if not missing:
+        return answer,cited_ids
+    # Remove one specifically unsupported denial only if the indexed source
+    # demonstrably includes a Viewer restriction and access-scope requirement.
+    answer=re.sub(
+        r";?\s*cuplikan yang tersedia tidak memuat matriks atau rincian "
+        r"pembatasan akses pengguna\.?",
+        "",str(answer or ""),flags=re.I)
+    ref=str(page.get("record_id") or "")
+    heading=("**Persyaratan akses dan persetujuan:** " if language=='id'
+             else "**Authorization and access safeguards:** ")
+    return answer.rstrip()+"\n\n"+heading+" ".join(missing)+" ["+ref+"]",list(dict.fromkeys([*(cited_ids or []),ref]))
+
+
 def formal_evidence_count(evidence):
     """Recognize authorized Inbox evidence whether or not older records carry a type."""
     return sum(bool(row.get("record_type")=="FORMAL_INTELLIGENCE" or
@@ -471,6 +526,11 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             "its distinct governing rules and its PDF page citation. If one topic "
             "has no retrieved supporting page, explicitly disclose that evidence gap. "
             "Do not cite a page merely because it was retrieved; explain what it says. "
+            "For national/provincial assignment questions, specifically cover "
+            "the retrieved page's human locus check, human confirmation of "
+            "AI recommendations, recipient role/scope, Viewer prohibitions and "
+            "duplicate-assignment safeguard when those rules are present. "
+            "Never say access details are absent when the cited page states them. "
             "Put the full answer in direct_answer; leave observations, interpretation, "
             "next_checks and detected_tags empty. If the PDF is unreviewed or synthetic, "
             "mention that clearly ONCE in one short sentence. Answer in the user's language."
@@ -609,6 +669,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     if pdf_guidance:
         answer,additional_refs=complete_pdf_moderation_comparison(
             question,evidence,answer,result["cited_ids"],result["language_code"])
+        answer,additional_refs=complete_pdf_assignment_access(
+            question,evidence,answer,additional_refs,result["language_code"])
         result["cited_ids"]=additional_refs
         quality["cited_evidence_count"]=len(additional_refs)
         quality["review_required"]=bool(evidence) and not bool(additional_refs)

@@ -601,7 +601,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              "Use citations tied to claims and distinguish allegations from verified facts. "
              "A PDF is supplemental only when the officer explicitly asks for its procedure."
              if response_profile == 'SOCIAL_ANALYSIS' else
-             ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")) )
+             ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")) ))
     }
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "

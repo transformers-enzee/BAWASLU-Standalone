@@ -48,9 +48,12 @@ assert.ok(kb.includes('/upload')&&kb.includes('new FormData')&&kb.includes('defa
   'PDF uploader must use authenticated multipart form and scoped sharing');
 assert.ok(records.includes("record_type==='PDF_KNOWLEDGE'")&&records.includes('document_id'),
   'PDF page citations must be shown as accessible source cards');
-assert.ok(radarHtml.includes('id="legalOversight"')&&radarHtml.includes('id="legalCaseQueue"')&&
-          radarHtml.includes('id="platformRulesQueue"')&&radarHtml.includes('id="legalFollowup"'),
-  'Command Centre shows separate legal and platform-rules boxes');
+assert.ok(!radarHtml.includes('id="legalOversight"')&&
+   !radarHtml.includes('id="legalCaseQueue"')&&
+   !radarHtml.includes('id="platformRulesQueue"')&&
+   !radarHtml.includes('id="legalFollowup"')&&
+   !radarHtml.includes('Legal Violations &amp; Follow-up'),
+  'Command Centre legal-follow-up section must be hidden until explicitly restored');
 assert.ok(radarJs.includes('data?.platform_policy_screening')&&
    radarJs.includes('const platformCases=')&&radarJs.includes('review_categories')&&
    radarJs.includes('policy_url')&&radarJs.includes('Source-text signal')&&
@@ -62,8 +65,9 @@ assert.ok(radarJs.includes('legal_follow_up_casework')&&
    radarJs.includes('Open assignments &amp; reports')&&
    radarJs.includes('No automatic legal conclusion'),
    'Command Centre must show separately authorized legal follow-up casework');
-assert.ok(radarJs.includes('/api/oversight/legal-summary')&&radarJs.includes('renderLegalOversight'),
-  'Command Centre legal review must use scoped backend evidence');
+assert.ok(radarJs.includes('/api/oversight/legal-summary')&&radarJs.includes('renderLegalOversight')&&
+  !radarJs.includes('    refreshLegalOversight(epoch);'),
+  'Retain optional legal-review implementation but do not request it without the UI');
 assert.ok(radarJs.includes("epoch!==dashboardEpoch"),'late legal response must not replace a newer dashboard');
 new Script(radarJs,{filename:'smart-radar-live.js'});
 console.log('PASS legal screening, officer sentiment and PDF knowledge frontend checks');

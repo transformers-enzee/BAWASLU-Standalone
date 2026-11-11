@@ -396,8 +396,9 @@
     if(primary.mode!=='SAVED_INBOX_SOURCE_OF_TRUTH')throw Error('Radar returned a non-Inbox evidence feed');
     if(!Array.isArray(primary.findings))throw Error('Incomplete authorized dashboard response');
     dashboard=primary;
-    // Legal/policy review is supplementary and never delays the main dashboard.
-    refreshLegalOversight(epoch);
+    // Legal/policy review is retained for potential future reinstatement;
+    // its panel is intentionally removed from Command Centre for now.
+    // Do not make the supplementary API request when the section is absent.
     // Geographic options reflect saved source mentions, not confirmed incident location.
     const geoSelect=$('#geo');
     if(geoSelect&&!geoSelect.disabled){

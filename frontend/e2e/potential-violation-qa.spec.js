@@ -185,7 +185,7 @@ test('authorized officer can save a review and see the updated status without re
  await drawer.getByLabel(/Reason for decision/).fill('Further source verification is required.');
  page.once('dialog',dialog=>dialog.accept());
  await drawer.getByRole('button',{name:'Save human review'}).click();
- await expect(drawer.getByText('Current status:').locator('..')).toContainText('FURTHER_INVESTIGATION');
+ await expect(drawer.getByTestId('flag-review-current-status')).toHaveText('FURTHER_INVESTIGATION');
  await expect(drawer.getByRole('status')).toContainText('Human review decision saved');
  expect(reviewCalls).toBe(1);
  expect(unexpectedCalls).toBe(0);

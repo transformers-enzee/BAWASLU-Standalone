@@ -75,3 +75,8 @@ assert.ok(inboxReview.includes('data-testid="flag-review-current-status" data-i1
           localeBridge.includes('const EXCLUDE=') &&
           localeBridge.includes('[data-i18n-exempt]'),
  'Saved officer-review status must not be reverted by the locale text-node cache');
+
+const knowledgeLibrary=read('../src/components/intel/AssistantKnowledgeLibrary.jsx');
+assert.ok(knowledgeLibrary.includes('data-i18n-exempt="true"') &&
+          knowledgeLibrary.includes('aria-label="Assistant PDF knowledge library"'),
+ 'PDF library must not be text-restored to its stale loading placeholder by locale bridge');

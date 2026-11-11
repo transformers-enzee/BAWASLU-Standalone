@@ -143,7 +143,10 @@ export default function AssistantKnowledgeLibrary(){
   try{await request('/'+doc.id,'DELETE');await refresh();}
   catch(e){setError(e.message)}finally{setBusy(false)}
  }
- return <section className="rounded-xl border border-[#dce5ec] bg-white" aria-label="Assistant PDF knowledge library">
+ // This component has its own controlled bilingual labels. The shell's
+ // mutation-based language bridge must not cache/restore its initial
+ // "Loading PDF library..." text after React resolves the document list.
+ return <section data-i18n-exempt="true" className="rounded-xl border border-[#dce5ec] bg-white" aria-label="Assistant PDF knowledge library">
   <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f8fafc]" aria-expanded={expanded} onClick={toggleLibrary}>
    <span className="flex items-center gap-3"><BookOpen size={19} className="text-[#801b24]"/><span><strong className="text-sm text-[#243447]">{id?'Pustaka Referensi AI (PDF)':'AI Reference Library (PDF)'}</strong><span className="block text-xs text-[#64748b]">{documentsLoaded&&docs.length?
         (id?'PDF tersedia otomatis sebagai konteks percakapan; AI mengutip halaman saat relevan.':

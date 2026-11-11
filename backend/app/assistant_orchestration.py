@@ -327,6 +327,13 @@ def research_public_web(question, key, model, base):
         return None
 
 
+def formal_evidence_count(evidence):
+    """Recognize authorized Inbox evidence whether or not older records carry a type."""
+    return sum(bool(row.get("record_type")=="FORMAL_INTELLIGENCE" or
+                    str(row.get("record_id") or "").startswith("INT-"))
+               for row in evidence or [])
+
+
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
              reference_catalog=None, response_profile='SOCIAL_ANALYSIS',
              duplicate_groups=None):
@@ -358,7 +365,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         ),
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
-        "formal_record_count":sum(r.get("record_type")=="FORMAL_INTELLIGENCE" for r in evidence),
+        "formal_record_count":formal_evidence_count(evidence),
         "potential_duplicate_groups":(duplicate_groups or [])[:6],
         "response_depth": response_depth,
         "response_profile": response_profile,

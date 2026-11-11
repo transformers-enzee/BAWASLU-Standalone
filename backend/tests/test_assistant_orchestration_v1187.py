@@ -62,3 +62,15 @@ def test_broad_narrative_question_retrieves_recent_sample_when_no_literal_keywor
           _row(12,"Local polling administration discussed")]
     selected,count=_social_select(rows,"What are the main emerging narratives?")
     assert count==2 and len(selected)==2
+
+
+def test_cross_module_formal_count_recognizes_source_identifiers_and_types():
+    from app.assistant_orchestration import formal_evidence_count
+    records=[
+        {"record_id":"INT-2026-000099","title":"Saved case"},
+        {"record_id":"SOCIAL-42","record_type":"SOCIAL_LISTENING"},
+        {"record_id":"DOC-1-P6","record_type":"PDF_KNOWLEDGE"},
+        {"record_id":"INT-2026-000100","record_type":"FORMAL_INTELLIGENCE"},
+    ]
+    assert formal_evidence_count(records)==2
+    assert formal_evidence_count(records[1:3])==0

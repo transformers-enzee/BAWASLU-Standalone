@@ -250,6 +250,7 @@ def assistant_evidence_record(item):
     source,_=clean_article_text(item.original_content or '')
     return {
       'record_id':item.intelligence_id,
+      'record_type':'FORMAL_INTELLIGENCE',
       'title':item.title or '',
       'publication_date':item.publication_date or '',
       'publication_datetime':item.publication_datetime or '',

@@ -46,6 +46,6 @@ assert.ok(dashboard.includes('data-advanced-social-metrics'),
 assert.ok(records.includes('rel="noopener noreferrer"'),'external links isolated');
 console.log('Frontend intelligence report checks passed');
 
-const profileContract=read('../../backend/app/assistant_response_profile.py');
-assert.match(profileContract,/_EXPLICIT_PDF_SOURCE/);
-assert.match(profileContract,/if _EXPLICIT_PDF_SOURCE\.search\(q\):/);
+assert.ok(page.includes("m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags")
+    && page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
+    'PDF-only responses cannot render candidate tags or social charts');

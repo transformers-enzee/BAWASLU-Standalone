@@ -760,7 +760,18 @@ def test_cross_module_endpoint_discloses_missing_inbox_and_skips_sentiment_chart
 def test_test4_pdf_only_request_ignores_negated_social_modules(monkeypatch,db):
     from app.main import intelligence_assistant
     from app import assistant_orchestration,domain,campaigns
-    _chat_pdf_fixture(db,scope="NATIONAL",digest="8")
+    document=_chat_pdf_fixture(db,scope="NATIONAL",digest="8")
+    from app import assistant_knowledge
+    # The fixture has a short excerpt. Mock the authorized retrieval result so
+    # this test isolates endpoint routing, rather than lexical ranking.
+    page6={
+        "record_id":f"DOC-{document.id}-P6","record_type":"PDF_KNOWLEDGE",
+        "document_id":document.id,"title":document.title,"filename":document.filename,
+        "page":6,"source_excerpt":"Tindak lanjut dugaan pelanggaran hukum: amankan bukti digital.",
+        "verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION"
+    }
+    monkeypatch.setattr(assistant_knowledge,"retrieve_chat_knowledge",
+                        lambda *_args,**_kwargs:[page6])
     prompt=(
         "Berdasarkan dokumen PDF BAWASLU_Sample_AI_Knowledge_Full_Text yang tersimpan "
         "dalam AI Reference Library, jelaskan langkah-langkah penanganan awal "
@@ -808,7 +819,7 @@ def test_test4_pdf_only_request_ignores_negated_social_modules(monkeypatch,db):
 
 def test_explicit_pdf_only_without_available_pages_does_not_hallucinate(monkeypatch,db):
     from app.main import intelligence_assistant
-    from app import domain,campaigns,intelligence_assistant as legacy
+    from app import domain,campaigns
     from app import assistant_knowledge
     monkeypatch.setattr(assistant_knowledge,"retrieve_chat_knowledge",lambda *_a,**_k:[])
     monkeypatch.setattr(domain,"list_intelligence",

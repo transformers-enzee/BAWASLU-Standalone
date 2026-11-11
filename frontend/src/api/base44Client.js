@@ -8,7 +8,7 @@ function cachedInboxRead(payload){
   const current=token();
   if(lastReadToken!==current){invalidateInboxCache();lastReadToken=current;}
   const data=payload.data||{};
-  const key=JSON.stringify([current,data.campaign_id||'',data.result_id||'',data.paged===true,data.cursor||'',data.page_size||'',data.include_totals===true]);
+  const key=JSON.stringify([current,data.campaign_id||'',data.result_id||'',data.paged===true,data.cursor||'',data.page_size||'',data.include_totals===true,data.province_filter||'']);
   const now=Date.now();
   const cached=inboxReadCache.get(key);
   if(cached&&cached.expires>now)return cached.promise;

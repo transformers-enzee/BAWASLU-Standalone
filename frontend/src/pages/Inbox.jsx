@@ -463,10 +463,10 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
         </div>
        </div>
      </button>)}
-     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">{inboxPagination.has_more?'No matching posts in the loaded set. Load older posts to continue searching.':'No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection and assessment.'}</p>}
+     {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">{chosenLocation?'No assessed posts match this province in your authorized campaign scope. Source mentions are unverified until officer review.':inboxPagination.has_more?'No matching posts in the loaded set. Load older posts to continue searching.':'No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection and assessment.'}</p>}
      {inboxPagination.has_more&&<button type="button" className="intel-ghost w-full py-3 font-semibold" disabled={loadingMore} onClick={loadOlderInboxPosts}>{loadingMore?'Loading older posts…':'Load 100 older posts'}</button>}
      {loadMoreError&&<p role="alert" className="text-sm text-red-700">{loadMoreError}</p>}
-     {findings.length>0&&<p className="text-[11px] text-slate-500 px-1">List filters apply to loaded posts. Statistics represent all eligible evidence in the selected campaign scope.</p>}
+     {findings.length>0&&<p className="text-[11px] text-slate-500 px-1">List filters apply to loaded posts. Statistics represent all eligible evidence in the selected campaign and province scope.</p>}
     </div>
    </section>
    <div className="grid grid-rows-2 gap-3 xl:sticky xl:top-4 min-w-0">

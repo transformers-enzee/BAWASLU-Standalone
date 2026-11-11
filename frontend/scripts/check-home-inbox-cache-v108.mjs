@@ -13,3 +13,7 @@ assert.match(radar,/readCache = new Map\(\)/);
 assert.match(radar,/SAVED_INBOX_SOURCE_OF_TRUTH/);
 assert.match(radar,/clearReadCache\(\)/);
 console.log('Scoped RAM caching, expiry, single-flight and invalidation contracts passed');
+
+assert.match(client,/data\.include_totals===true,data\.province_filter\|\|''/);
+const main=readFileSync('../backend/app/main.py','utf8');
+assert.match(main,/'province_filter':\(body\.data or \{\}\)\.get\('province_filter'\)/);

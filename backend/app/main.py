@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'146.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'146.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -264,7 +264,8 @@ def social_listening(body:FunctionIn,background_tasks:BackgroundTasks,user:User=
                 'paged':(body.data or {}).get('paged'),
                 'cursor':(body.data or {}).get('cursor'),
                 'page_size':(body.data or {}).get('page_size'),
-                'include_totals':(body.data or {}).get('include_totals')},
+                'include_totals':(body.data or {}).get('include_totals'),
+                'province_filter':(body.data or {}).get('province_filter')},
                 lambda:social_listening_action(db,p,body.action,body.data,body.id))
         else:
             # Evict when any campaign/source/assessment action may alter data.

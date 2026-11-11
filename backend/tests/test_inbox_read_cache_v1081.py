@@ -66,3 +66,31 @@ def test_concurrent_authorized_reads_share_one_loader():
         values=[job.result(timeout=5) for job in jobs]
     assert calls[0]==1
     assert all(x['findings'][0]['id']==1001 for x in values)
+
+
+def test_province_filter_participates_in_both_authorized_read_cache_keys():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    browser=(root/'frontend/src/api/base44Client.js').read_text(encoding='utf-8')
+    server=(root/'backend/app/main.py').read_text(encoding='utf-8')
+    inbox=(root/'frontend/src/pages/Inbox.jsx').read_text(encoding='utf-8')
+    assert "data.include_totals===true,data.province_filter||''" in browser
+    assert "'province_filter':(body.data or {}).get('province_filter')" in server
+    assert 'province_filter:chosenLocation' in inbox
+    assert '},[campaign,chosenLocation]);' in inbox
+
+
+def test_province_scoped_keys_do_not_share_results_with_unfiltered_query():
+    invalidate()
+    calls=[]
+    def load(label):
+        calls.append(label)
+        return {'findings':[{'id':label}]}
+    p={'id':'1','role':'National Administrator','geographic_scope':'Nationwide'}
+    base={'campaign_id':'','paged':True,'page_size':100}
+    south={**base,'province_filter':'Sumatera Selatan'}
+    assert read(p,base,lambda:load('all'))['findings'][0]['id']=='all'
+    assert read(p,south,lambda:load('south'))['findings'][0]['id']=='south'
+    assert read(p,base,lambda:load('wrong'))['findings'][0]['id']=='all'
+    assert read(p,south,lambda:load('wrong'))['findings'][0]['id']=='south'
+    assert calls==['all','south']

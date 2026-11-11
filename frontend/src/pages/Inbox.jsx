@@ -160,26 +160,29 @@ function SocialEvidenceInbox({onOpenCasework}){
   setReviewBusy(true);setReviewError('');setReviewNotice('');
   try{
    const payload={result_id:selected.id,assessment_version:selected.assessment_version,decision:reviewDecision,rationale:reviewRationale.trim()};
-   await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
-   const updated={...selected,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'};
+   const saved=await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
+   // Resolve once from the acknowledged write, not from form state that is
+   // cleared immediately after saving.
+   const savedDecision=String(saved.data?.decision||payload.decision);
+   const updated={...selected,flag_review_status:savedDecision,is_flagged:savedDecision!=='FLAG_DISMISSED'};
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
    setReviewDecision('');setReviewRationale('');
-   setConfirmedReview({id:String(selected.id),campaign_id:String(selected.campaign_id),decision:reviewDecision});
-   acknowledgedReview.current.set(String(selected.campaign_id)+':'+String(selected.id),reviewDecision);
+   setConfirmedReview({id:String(selected.id),campaign_id:String(selected.campaign_id),decision:savedDecision});
+   acknowledgedReview.current.set(String(selected.campaign_id)+':'+String(selected.id),savedDecision);
    bumpReviewVersion(previous=>previous+1);
    setReviewNotice({
      message:'Human review decision saved. Current status updated; original assessment preserved.',
-     decision:reviewDecision,id:String(selected.id),campaign_id:String(selected.campaign_id)
+     decision:savedDecision,id:String(selected.id),campaign_id:String(selected.campaign_id)
    });
-   await refreshReviewedPost(selected,reviewDecision);
+   await refreshReviewedPost(selected,savedDecision);
    // The successful audit write is authoritative for this open drawer.
    // A concurrent pre-save feed response must not revert the visible status.
    setSelected(current=>current&&String(current.id)===String(selected.id)&&
      String(current.campaign_id)===String(selected.campaign_id)
-     ?{...current,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'}:current);
+     ?{...current,flag_review_status:savedDecision,is_flagged:savedDecision!=='FLAG_DISMISSED'}:current);
    setFindings(rows=>rows.map(row=>String(row.id)===String(selected.id)&&
      String(row.campaign_id)===String(selected.campaign_id)
-     ?{...row,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'}:row));
+     ?{...row,flag_review_status:savedDecision,is_flagged:savedDecision!=='FLAG_DISMISSED'}:row));
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
   finally{setReviewBusy(false)}
  }

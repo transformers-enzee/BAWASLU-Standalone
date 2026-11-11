@@ -59,3 +59,12 @@ assert.ok(assistantAnswer.includes("const heading=line.match") &&
           assistantAnswer.includes("const Heading=level===1?'h2':level===2?'h3':'h4'") &&
           assistantAnswer.includes("return <Heading key={j}"),
   'Markdown executive report section titles render as headings, not raw ## text');
+
+const navigation=read('../src/components/intel/AccessNavigation.jsx');
+const demoNavigation=read('../src/demo/DemoAccessNavigation.jsx');
+const library=read('../src/components/intel/AssistantKnowledgeLibrary.jsx');
+assert.ok(navigation.includes('>COMMAND CENTRE<')&&demoNavigation.includes('>COMMAND CENTRE<'),
+ 'sidebar masthead uses Command Centre branding');
+assert.ok(library.includes('documentsLoaded')&&library.includes('toggleLibrary')&&
+          library.includes('PDF unavailable')&&library.includes('Loading PDF library'),
+ 'PDF count must not display zero while list is unavailable or loading');

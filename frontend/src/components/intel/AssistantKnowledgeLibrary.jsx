@@ -15,6 +15,8 @@ export default function AssistantKnowledgeLibrary(){
  const {language}=useLanguage();
  const id=language==='id';
  const [docs,setDocs]=useState([]);
+ const [documentsLoaded,setDocumentsLoaded]=useState(false);
+ const [documentsLoading,setDocumentsLoading]=useState(true);
  const [expanded,setExpanded]=useState(false);
  const [status,setStatus]=useState(null);
  const [busy,setBusy]=useState(false);
@@ -33,16 +35,39 @@ export default function AssistantKnowledgeLibrary(){
 
 
  async function refresh(){
-  const data=await request('/documents');
-  setDocs(data.documents||[]);
-  setStatus(data);
-  setScope(data.default_scope||'NATIONAL');
-  setProvince(data.default_province||'');
+  setDocumentsLoading(true);setError('');
+  try{
+   const data=await request('/documents');
+   setDocs(data.documents||[]);
+   setDocumentsLoaded(true);
+   setStatus(data);
+   setScope(data.default_scope||'NATIONAL');
+   setProvince(data.default_province||'');
+  }catch(e){
+   setDocumentsLoaded(false);
+   setError(e.message||'Knowledge library unavailable');
+   throw e;
+  }finally{setDocumentsLoading(false)}
  }
- useEffect(()=>{let active=true;request('/documents').then(data=>{
-  if(!active)return;
-  setDocs(data.documents||[]);setStatus(data);setScope(data.default_scope||'NATIONAL');setProvince(data.default_province||'');
- }).catch(()=>{});return()=>{active=false}},[]);
+ useEffect(()=>{
+  let active=true;
+  request('/documents').then(data=>{
+   if(!active)return;
+   setDocs(data.documents||[]);setStatus(data);
+   setScope(data.default_scope||'NATIONAL');
+   setProvince(data.default_province||'');
+   setDocumentsLoaded(true);setError('');
+  }).catch(e=>{if(active){setDocumentsLoaded(false);setError(e.message||'Knowledge library unavailable')}})
+   .finally(()=>{if(active)setDocumentsLoading(false)});
+  return()=>{active=false};
+ },[]);
+ async function toggleLibrary(){
+  const next=!expanded;
+  setExpanded(next);
+  if(next&&!documentsLoading){
+   try{await refresh()}catch{/* Error is shown in the expanded library. */}
+  }
+ }
  async function upload(){
   if(!file||busy)return;
   if(file.size>5*1024*1024){setError(id?'PDF maksimal 5 MB.':'PDF maximum is 5 MB.');return}
@@ -107,13 +132,16 @@ export default function AssistantKnowledgeLibrary(){
   catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <section className="rounded-xl border border-[#dce5ec] bg-white" aria-label="Assistant PDF knowledge library">
-  <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f8fafc]" aria-expanded={expanded} onClick={()=>setExpanded(x=>!x)}>
-   <span className="flex items-center gap-3"><BookOpen size={19} className="text-[#801b24]"/><span><strong className="text-sm text-[#243447]">{id?'Pustaka Referensi AI (PDF)':'AI Reference Library (PDF)'}</strong><span className="block text-xs text-[#64748b]">{docs.length?
+  <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f8fafc]" aria-expanded={expanded} onClick={toggleLibrary}>
+   <span className="flex items-center gap-3"><BookOpen size={19} className="text-[#801b24]"/><span><strong className="text-sm text-[#243447]">{id?'Pustaka Referensi AI (PDF)':'AI Reference Library (PDF)'}</strong><span className="block text-xs text-[#64748b]">{documentsLoaded&&docs.length?
         (id?'PDF tersedia otomatis sebagai konteks percakapan; AI mengutip halaman saat relevan.':
         'PDFs are available to the conversation automatically; the assistant cites relevant pages.'):
-        (id?'Unggah PDF sekali agar AI dapat menggunakannya saat menjawab.':
-        'Upload a PDF once; the assistant can use it in future chat replies.')}</span></span></span>
-   <span className="shrink-0 text-xs text-[#801b24] font-semibold">{docs.length} PDF{docs.length>0?' · '+(id?'Otomatis':'Auto'):''} · {expanded?'−':'+'}</span>
+        documentsLoading?(id?'Memuat daftar PDF...':'Loading PDF library...'):
+        !documentsLoaded?(id?'Daftar PDF tidak tersedia. Buka untuk mencoba lagi.':
+                              'PDF list unavailable. Open to retry.'):
+        (id?'Belum ada PDF yang dapat diakses pada akun ini.':
+            'No PDFs available to this account.')}</span></span></span>
+   <span className="shrink-0 text-xs text-[#801b24] font-semibold">{documentsLoading?'…':documentsLoaded?docs.length+' PDF'+(docs.length>0?' · '+(id?'Otomatis':'Auto'):''):(id?'PDF tidak tersedia':'PDF unavailable')} · {expanded?'−':'+'}</span>
   </button>
   {expanded&&<div className="border-t p-4 space-y-4">
    <p className="text-xs text-[#64748b]"><ShieldCheck size={13} className="inline mr-1"/>{id?
@@ -168,7 +196,7 @@ export default function AssistantKnowledgeLibrary(){
       </div>
     </div>}
    </div>)}
-   {!docs.length&&<p className="text-sm text-[#64748b]">{id?'Belum ada PDF. Unggah dokumen resmi yang relevan agar AI dapat mengutipnya.':'No PDFs uploaded yet. Add a relevant authorized document for the assistant to cite.'}</p>}</div>
+   {documentsLoaded&&!docs.length&&<p className="text-sm text-[#64748b]">{id?'Belum ada PDF. Unggah dokumen resmi yang relevan agar AI dapat mengutipnya.':'No PDFs uploaded yet. Add a relevant authorized document for the assistant to cite.'}</p>}</div>
   </div>}
  </section>;
 }

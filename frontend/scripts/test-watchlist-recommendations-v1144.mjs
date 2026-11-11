@@ -11,7 +11,10 @@ const nodes=new Map(),listeners=new Map(),calls=[],activation=[],creation=[];
 const element=key=>{
   if(!nodes.has(key))nodes.set(key,{
     id:key,textContent:'',innerHTML:'',value:'',style:{},dataset:{},
-    classList:{add(){},remove(){},contains(){return false}},
+    classList:(()=>{
+      const names=new Set();
+      return {add(name){names.add(name)},remove(name){names.delete(name)},contains(name){return names.has(name)}};
+    })(),
     focus(){},setSelectionRange(){},setAttribute(){},
     insertAdjacentHTML(_where,markup){this.innerHTML+=markup},
     addEventListener(name,listener){listeners.set(key+':'+name,listener)}

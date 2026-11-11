@@ -327,6 +327,33 @@ def research_public_web(question, key, model, base):
         return None
 
 
+def pdf_moderation_section_is_complete(answer):
+    """Check for a substantive legal-vs-platform explanation, not fixed wording.
+
+    This protects well-written PDF answers from a duplicate fallback paragraph.
+    It requires a real contrast, a platform policy, and a verification or
+    review step within the same moderation discussion.
+    """
+    for paragraph in re.split(r"\n+",str(answer or "")):
+        body=paragraph.casefold()
+        if len(body)<140:
+            continue
+        signals=(
+            bool(re.search(r"moderas|moderation",body)),
+            "platform" in body,
+            bool(re.search(r"kebijakan|aturan|ketentuan|policy|rules|guidelines",body)),
+            bool(re.search(r"peninjauan|ditinjau|telaah|identifikasi|dibandingkan|"
+                           r"bandingkan|periksa|pemeriksaan|review|appeal|compare|"
+                           r"verify|check",body)),
+            bool(re.search(r"berbeda|terpisah|bukan pengganti|tidak sama|"
+                           r"separate|distinct|different|does not replace|"
+                           r"not a substitute",body)),
+        )
+        if all(signals):
+            return True
+    return False
+
+
 def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,language='id'):
     """Fill an omitted requested PDF subquestion using only a matching page excerpt.
 
@@ -339,12 +366,9 @@ def complete_pdf_moderation_comparison(question,evidence,answer,cited_ids,langua
                       bool(re.search(r"pelanggaran hukum|penanganan hukum|legal handl|electoral law",q)))
     if not wants_comparison:
         return answer,cited_ids
-    # A short mention of moderation alone does not establish that the requested
-    # legal-vs-platform distinction has been explained.
-    body=str(answer or "").casefold()
-    already_covers=(bool(re.search(r"moderas|moderation|pedoman komunitas|community guidelines",body)) and
-                    bool(re.search(r"aturan platform|kebijakan platform|platform polic|platform rules|ketentuan platform",body)))
-    if already_covers:
+    # Judge coverage by meaning and actionable detail, not literal phrase order.
+    # Real answers can say "kebijakan resminya" instead of "kebijakan platform".
+    if pdf_moderation_section_is_complete(answer):
         return answer,cited_ids
     qualifying=[]
     for row in evidence or []:

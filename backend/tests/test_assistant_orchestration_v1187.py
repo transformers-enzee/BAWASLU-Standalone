@@ -115,3 +115,50 @@ def test_pdf_multisection_reply_completes_missing_moderation_from_actual_page_on
     assert plain=="Registrasikan informasi [DOC-1-P6]"
     assert refs==["DOC-1-P6"
     ]
+
+
+def test_pdf_moderation_complete_realworld_retest_has_no_duplicate_appendix():
+    from app.assistant_orchestration import (
+        complete_pdf_moderation_comparison,pdf_moderation_section_is_complete)
+    question=("Berdasarkan dokumen PDF, jelaskan penanganan dugaan pelanggaran "
+              "hukum dan bedakan proses itu dari moderasi konten berdasarkan "
+              "kebijakan platform media sosial.")
+    excerpts=[{"record_type":"PDF_KNOWLEDGE","record_id":"DOC-1-P6",
+               "source_excerpt":"Langkah penanganan dugaan pelanggaran hukum."},
+              {"record_type":"PDF_KNOWLEDGE","record_id":"DOC-1-P7",
+               "source_excerpt":"Moderasi dan aturan platform berbeda dari "
+                                "pelanggaran hukum; kaji ketentuan platform."}]
+    original=(
+        "Dokumen tersebut secara eksplisit berstatus simulasi untuk uji AI, "
+        "bukan SOP resmi Bawaslu. [DOC-1-P6]\\n\\n"
+        "**Penanganan awal dugaan pelanggaran hukum:** Registrasikan informasi "
+        "awal, amankan teks, media dan URL, verifikasi aktor dan lokasi, lalu "
+        "petugas berwenang memeriksa aturan pemilu relevan. [DOC-1-P6]\\n\\n"
+        "**Moderasi konten platform:** ini merupakan proses yang berbeda dari "
+        "penanganan hukum. Platform harus diidentifikasi, kebijakan resminya "
+        "yang terbaru diperoleh dari sumber primer, kategori pelanggaran "
+        "dibandingkan dengan konten asli, dan bukti atau konteks yang masih "
+        "kurang dicatat. Bila diperlukan, permintaan peninjauan diajukan "
+        "melalui kanal resmi platform, sementara pengamanan bukti dan kajian "
+        "hukum tetap dipisahkan. [DOC-1-P7]"
+    )
+    assert pdf_moderation_section_is_complete(original)
+    final,refs=complete_pdf_moderation_comparison(
+        question,excerpts,original,["DOC-1-P6","DOC-1-P7"],"id")
+    assert final==original
+    assert refs==["DOC-1-P6","DOC-1-P7"]
+    assert final.count("**Moderasi") == 1
+    # Mere mention of 'moderasi platform' does not pass a detailed comparison.
+    partial="Moderasi platform perlu ditinjau. [DOC-1-P7]"
+    assert not pdf_moderation_section_is_complete(partial)
+    completed,refs=complete_pdf_moderation_comparison(
+        question,excerpts,partial,["DOC-1-P7"],"id")
+    assert completed!=partial
+    assert "Moderasi platform berbeda" in completed
+    assert refs==["DOC-1-P7"]
+    # A concise English discussion with evidence-backed contrast is enough.
+    english=("Platform moderation is a separate process from handling an "
+             "election-law allegation. Check the platform's current policy "
+             "against the original content, review supporting context, and "
+             "use the official appeal channel if necessary. [DOC-1-P7]")
+    assert pdf_moderation_section_is_complete(english)

@@ -663,7 +663,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     {<div className="border-t pt-3 space-y-3">
      <h4 className="font-semibold">Human flag review</h4>
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
-     <p className="text-xs">Current status: <strong data-testid="flag-review-current-status" aria-live="polite">{
+     <p className="text-xs">Current status: <strong data-testid="flag-review-current-status" data-i18n-exempt="true" aria-live="polite">{
       (reviewNotice&&typeof reviewNotice==='object'?reviewNotice.decision:null)
       ||acknowledgedReview.current.get(String(selected.campaign_id)+':'+String(selected.id))
       ||selected.flag_review_status

@@ -68,3 +68,10 @@ assert.ok(navigation.includes('>COMMAND CENTRE<')&&demoNavigation.includes('>COM
 assert.ok(library.includes('documentsLoaded')&&library.includes('toggleLibrary')&&
           library.includes('PDF unavailable')&&library.includes('Loading PDF library'),
  'PDF count must not display zero while list is unavailable or loading');
+
+const inboxReview=read('../src/pages/Inbox.jsx');
+const localeBridge=read('../src/components/intel/InterfaceLanguageBridge.jsx');
+assert.ok(inboxReview.includes('data-testid="flag-review-current-status" data-i18n-exempt="true"') &&
+          localeBridge.includes('const EXCLUDE=') &&
+          localeBridge.includes('[data-i18n-exempt]'),
+ 'Saved officer-review status must not be reverted by the locale text-node cache');

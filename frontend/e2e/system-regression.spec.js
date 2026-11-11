@@ -33,9 +33,9 @@ test('language toggle remains operational after cross-module navigation',async({
   await uiLogin(page);
   for(const route of ['/','/command-center','/watchlist','/social-listening','/inbox','/assistant','/add']){
     await page.goto(route);
-    await page.getByRole('button',{name:'Bahasa Indonesia',exact:true}).click();
-    await expect(page.getByRole('button',{name:'English',exact:true})).toBeVisible();
-    await page.getByRole('button',{name:'English',exact:true}).click();
-    await expect(page.getByRole('button',{name:'Bahasa Indonesia',exact:true})).toBeVisible();
+    await page.locator('header button[aria-pressed]').nth(1).click();
+    await expect(page.locator('header button[aria-pressed]').nth(0)).toBeVisible();
+    await page.locator('header button[aria-pressed]').nth(0).click();
+    await expect(page.locator('header button[aria-pressed]').nth(1)).toBeVisible();
   }
 });

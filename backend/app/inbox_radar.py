@@ -62,10 +62,13 @@ def _category(row):
     return ''
 
 def _surface_issues(evidence):
-    """Describe only phrases grounded in saved source evidence; no new legal verdict."""
+    """Describe only phrases grounded in saved source evidence; no new legal verdict.
+
+    Whole-word demo matching avoids interpreting 'demokrasi' as a protest.
+    """
     patterns=(
         (r'mencoblos lebih dari sekali|multiple ballots|multiple voting','possible repeat voting'),
-        (r'demo|demonstrasi|people power|unjuk rasa','public demonstrations questioning election oversight'),
+        (r'\b(?:demo|demonstrasi)\b|people power|unjuk rasa','public demonstrations questioning election oversight'),
         (r'kecurangan|fraud|dicurangi','allegations of election irregularities'),
         (r'netralitas|tidak netral|keberpihakan','questions about officials\' impartiality'),
         (r'politik uang|serangan fajar|money politics','possible vote buying'),
@@ -84,7 +87,7 @@ def _surface_issues(evidence):
 _REVIEW_ISSUES=(
  (r'mencoblos lebih dari sekali|multiple ballots|multiple voting|vote twice','Allegation of Repeat Voting'),
  (r'politik uang|serangan fajar|money politics|vote buying','Alleged Vote Buying'),
- (r'demo|demonstrasi|unjuk rasa|people power','Demonstrations Questioning Election Oversight'),
+ (r'\b(?:demo|demonstrasi)\b|unjuk rasa|people power','Demonstrations Questioning Election Oversight'),
  (r'kecurangan|fraud|dicurangi|irregularit','Reported Election Irregularities'),
  (r'netralitas|tidak netral|keberpihakan|impartiality','Questions About Official Neutrality'),
  (r'daftar pemilih|voter registration|voter register|\bdpt\b','Voter Registration Concerns'),
@@ -95,7 +98,7 @@ _CONCERN_ISSUES=(
  (r'pendaftaran|registrasi|registration|daftar pemilih','Voter Registration Information'),
  (r'pelayanan|service|lambat|slow response','Public Service Responsiveness'),
  (r'netralitas|tidak netral|neutrality|impartiality','Oversight Neutrality'),
- (r'demo|demonstrasi|unjuk rasa|pengawasan|oversight','Election Oversight'),
+ (r'\b(?:demo|demonstrasi)\b|unjuk rasa|pengawasan|oversight','Election Oversight'),
  (r'penghitungan|rekapitulasi|vote counting','Vote Counting Transparency'),
  (r'logistik|polling station|tempat pemungutan|\btps\b','Polling Station Logistics'),
 )

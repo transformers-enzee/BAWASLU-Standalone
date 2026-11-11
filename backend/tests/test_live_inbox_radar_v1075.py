@@ -141,3 +141,32 @@ def test_command_centre_platform_labels_match_inbox_full_statistics():
     from collections import Counter
     counts=Counter(p['platform'] for finding in findings for p in finding['posts'])
     assert counts=={'X':2,'TikTok':1,'Instagram':1,'News':1}
+
+
+def test_demokrasi_is_not_mistaken_for_a_demonstration_in_gibran_document_report():
+    # Regression based on staging finding INBOX-V-5-740. The original news post
+    # discusses Gibran's education-certificate dispute and democratic integrity,
+    # not a public demonstration.
+    article=('Suket Gibran Dinyatakan Tidak Sah oleh MA, PKS: Pansus Harus Segera '
+             'Dibentuk. Ini berkaitan dengan integritas proses demokrasi dan '
+             'kepercayaan masyarakat terhadap negara.')
+    finding=compile_inbox_findings([post(740,campaign_id='5',
+        text_content=article,is_flagged=True,flag_review_status='FURTHER_INVESTIGATION',
+        potential_issues=[{'category_name':'Potential Violation'}])])[0]
+    assert finding['source_ids']==['social:740']
+    assert finding['posts'][0]['message_original']==article
+    assert 'Demonstrations' not in finding['title']
+    assert 'public demonstrations' not in finding['summary']
+    assert 'Suket Gibran' in finding['title']
+    assert 'violations' in finding['players']
+
+
+def test_actual_demonstration_still_produces_demonstration_specific_finding():
+    row=post(741,text_content='Demo di depan kantor Bawaslu menuntut transparansi pemilu',
+             is_flagged=True,potential_issues=[{'category_name':'Potential Violation'}])
+    finding=compile_inbox_findings([row])[0]
+    assert finding['title']=='Demonstrations Questioning Election Oversight'
+    assert 'public demonstrations' in finding['summary']
+    row2=post(742,text_content='Demonstrasi di Bawaslu terkait hasil pengawasan',
+              is_flagged=True,potential_issues=[{'category_name':'Potential Violation'}])
+    assert 'Demonstrations' in compile_inbox_findings([row2])[0]['title']

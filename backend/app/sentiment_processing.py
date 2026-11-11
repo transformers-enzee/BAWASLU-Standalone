@@ -63,8 +63,7 @@ def latest_saved_sentiments(db,campaign_id):
         raw=str(label or '').strip().upper()
         if raw in ('POSITIVE','NEUTRAL','NEGATIVE'):
             latest[result_id]=raw.title()
-        elif sentiment_is_assessed(type('SavedTone',(),{'sentiment':raw,
-                                                       'sentiment_model':model})()):
+        elif model and not (raw=='UNCLASSIFIED' and model=='socialcrawl-prism-stance'):
             latest[result_id]='Unclassified'
         else:
             latest[result_id]='Pending assessment'

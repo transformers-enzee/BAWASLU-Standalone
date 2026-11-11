@@ -18,6 +18,10 @@ def principal():
 
 
 def db_with_posts(count=2):
+    # A new SQLite database can reuse the same campaign IDs across tests.
+    # Isolate the process-local analytics cache before creating each fixture.
+    from app import campaigns as campaigns_module
+    campaigns_module._DASH_CACHE.clear()
     engine=create_engine('sqlite:///:memory:')
     Base.metadata.create_all(engine)
     db=Session(engine)

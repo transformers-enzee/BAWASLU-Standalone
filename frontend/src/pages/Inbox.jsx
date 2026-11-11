@@ -160,6 +160,14 @@ function SocialEvidenceInbox({onOpenCasework}){
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
    setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
    await refreshReviewedPost(selected,reviewDecision);
+   // The successful audit write is authoritative for this open drawer.
+   // A concurrent pre-save feed response must not revert the visible status.
+   setSelected(current=>current&&String(current.id)===String(selected.id)&&
+     String(current.campaign_id)===String(selected.campaign_id)
+     ?{...current,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'}:current);
+   setFindings(rows=>rows.map(row=>String(row.id)===String(selected.id)&&
+     String(row.campaign_id)===String(selected.campaign_id)
+     ?{...row,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'}:row));
   }catch(e){setReviewError(e.response?.data?.detail||e.message||'Unable to save review')}
   finally{setReviewBusy(false)}
  }

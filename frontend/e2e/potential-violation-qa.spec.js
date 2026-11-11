@@ -7,7 +7,8 @@ const source='SIMULASI / FIKTIF: Seorang warga mengaku melihat pembagian uang ke
 const findings=[
  {id:'101',campaign_id:'1',campaign_name:'QA Campaign',platform:'instagram',text_content:source,
   relevance_label:'RELEVANT',relevance_confidence:'HIGH',explanation:'Preliminary allegation in source content; requires independent verification.',
-  location_signals:['Jakarta'],candidate_signals:[],potential_issues:[{category_id:7,category_name:'Politik Uang',evidence_quote:'pembagian uang kepada pemilih',explanation:'Preliminary signal only',signal_provenance:'LEGACY_MISSING_TYPE',requires_human_verification:true}],
+  location_signals:['Jakarta'],incident_province:'DKI Jakarta',incident_jurisdiction_verified:true,
+  candidate_signals:[],potential_issues:[{category_id:7,category_name:'Politik Uang',evidence_quote:'pembagian uang kepada pemilih',explanation:'Preliminary signal only',signal_provenance:'LEGACY_MISSING_TYPE',requires_human_verification:true}],
   assessment_version:1,model_version:'mock-fixture',canonical_url:'https://example.org/source/101',can_review_flag:false},
  {id:'102',campaign_id:'1',campaign_name:'QA Campaign',platform:'x',text_content:'Diskusi kebijakan publik tanpa dugaan pelanggaran.',
   relevance_label:'RELEVANT',relevance_confidence:'HIGH',explanation:'Relevant policy discussion, no violation evidence.',
@@ -17,6 +18,10 @@ const findings=[
   location_signals:[],candidate_signals:['Prabowo Subianto'],potential_issues:[],assessment_version:1,model_version:'mock-fixture',can_review_flag:false},
 ];
 const payload={findings,campaigns:[{id:'1',name:'QA Campaign'}],unassessed_count:0,
+ // Full-scope statistics are separately loaded by the current Inbox UI.
+ full_statistics:{posts:3,potential_violations:1,sentiments:{POSITIVE:0,NEUTRAL:0,NEGATIVE:0},
+   views:0,views_reported:0,engagement:0,engagement_reported:0,
+   platforms:{Instagram:2,X:1}},
  assessment_counts:{PENDING:0,RELEVANT:3,IRRELEVANT:0,UNCERTAIN:0,OTHER:0},
  job_counts:{PENDING:0,PROCESSING:0,COMPLETED:3,FAILED:0},reconciliation:null,processing_status:'Stored QA data'};
 

@@ -103,11 +103,21 @@ def test_pdf_multisection_reply_completes_missing_moderation_from_actual_page_on
     assert "tidak dapat dijawab" in short
     assert refs==["DOC-1-P6"]
     # No duplication if the model already answered both requested topics.
-    complete=("Penanganan hukum memerlukan bukti; moderasi menilai aturan "
-              "platform menurut kebijakan platform. [DOC-1-P7]")
+    complete=("**Moderasi platform:** berbeda dari penanganan hukum yang "
+              "memerlukan bukti dan pemeriksaan kewenangan. Untuk moderasi "
+              "konten platform, periksa kebijakan platform yang berlaku, "
+              "bandingkan unggahan dengan aturan tersebut, dan gunakan "
+              "kanal peninjauan resmi jika diperlukan. [DOC-1-P7]")
     untouched,refs=complete_pdf_moderation_comparison(
         prompt,excerpts,complete,["DOC-1-P7"],"id")
     assert untouched==complete and refs==["DOC-1-P7"]
+    # A bare mention of a platform rule does not explain the requested distinction.
+    shallow=("Penanganan hukum memerlukan bukti; moderasi menilai aturan "
+             "platform menurut kebijakan platform. [DOC-1-P7]")
+    expanded,refs=complete_pdf_moderation_comparison(
+        prompt,excerpts,shallow,["DOC-1-P7"],"id")
+    assert expanded!=shallow
+    assert "Moderasi platform berbeda" in expanded
     # A PDF answer not asking about moderation is left exactly as generated.
     plain,refs=complete_pdf_moderation_comparison(
         "Jelaskan proses registrasi informasi awal.",excerpts,

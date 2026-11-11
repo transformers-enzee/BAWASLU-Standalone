@@ -49,3 +49,7 @@ console.log('Frontend intelligence report checks passed');
 assert.ok(page.includes("m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags")
     && page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
     'PDF-only responses cannot render candidate tags or social charts');
+
+assert.ok(page.includes("m.response_profile==='ACTION_REQUEST'&&") &&
+          page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
+  'executive reports cannot trigger the assignment desk or unrelated analytics');

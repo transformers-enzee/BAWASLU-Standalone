@@ -136,7 +136,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'142.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'142.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -709,7 +709,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     pdf_evidence=retrieve_chat_knowledge(
         db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
     from .assistant_response_profile import (
-        choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW)
+        choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     general=requested=='GENERAL' or (
         requested=='AUTO' and response_profile!=PDF_GUIDANCE and
@@ -723,7 +723,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not general and response_profile!=PDF_GUIDANCE:
         accessible=list_intelligence(db,p)
         focus_pool=(cross_module_formal_focus(q,accessible)
-                    if response_profile==CROSS_MODULE_REVIEW else accessible)
+                    if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) else accessible)
         selected_formal=select_assistant_records(q,focus_pool,limit=10)
         try:
             from .campaigns import campaign_action
@@ -744,7 +744,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                  question_mentions_pdf(q) else [])
     if response_profile==CASE_REVIEW:
         context_pdf=select_case_reference_pages(q,context_pdf)
-    if response_profile==CROSS_MODULE_REVIEW and not question_mentions_pdf(q):
+    if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) and not question_mentions_pdf(q):
         context_pdf=[]
     evidence=evidence_for_profile(
         response_profile,
@@ -814,10 +814,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':''}
     cited=[]
     duplicate_groups=(potential_duplicate_groups(chosen_social)
-                      if response_profile==CROSS_MODULE_REVIEW else [])
+                      if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) else [])
     try:
         text,cited,meta=generate(q,previous,evidence,
-            'GROUNDED' if requested=='DATA' or response_profile==PDF_GUIDANCE else 'HYBRID',
+            'GROUNDED' if requested=='DATA' or response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else 'HYBRID',
             history=history,
             response_depth='EXECUTIVE' if response_profile==PDF_GUIDANCE else response_depth,
             reference_catalog=reference_catalog,response_profile=response_profile,
@@ -866,7 +866,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         snapshot['matched_pool_count']=matched_social
         snapshot['statistics_scope']='SAME_SELECTED_POSTS_AS_AI_ANALYSIS'
         featured=source_cards_for_question(chosen_social,cited,social_record_view,limit=4)
-    if response_profile in (CASE_REVIEW,CROSS_MODULE_REVIEW):
+    if response_profile in (CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT):
         featured=source_cards_for_question(chosen_social,cited,social_record_view,
                                           limit=4,distinct_content=True)
     if response_profile==PDF_GUIDANCE:
@@ -878,12 +878,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if response_profile in (SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW):
         displayed_tags=focus_social_tags(
             displayed_tags,q,[x.get('record_id') for x in evidence],limit=4)
-    if response_profile==PDF_GUIDANCE:
+    if response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT):
         displayed_tags=[]
     return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
         'provider':meta,'response_profile':response_profile,
         'evidence_snapshot':snapshot,
-        'analytical_findings':None if response_profile==PDF_GUIDANCE else meta.get('analytical_findings'),
+        'analytical_findings':None if response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else meta.get('analytical_findings'),
         'featured_sources':featured,
         'answer_language':meta.get('answer_language') or language,
         'detected_tags':displayed_tags,

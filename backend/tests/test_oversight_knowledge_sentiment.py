@@ -885,3 +885,38 @@ def test_pdf_hybrid_retrieval_stitches_all_authorized_page8_chunks(db):
     # Existing single-chunk documents must remain unchanged.
     solo=merge_rankings([first],[],[pdf],limit=1)
     assert solo[0]["source_excerpt"]==first.text_content
+
+
+
+def test_executive_report_is_not_an_assignment_action():
+    from app.assistant_response_profile import (choose_response_profile,
+        EXECUTIVE_REPORT,ACTION_REQUEST,CROSS_MODULE_REVIEW)
+    prompt=("Susun laporan ringkas intelijen eksekutif untuk pimpinan Bawaslu "
+            "mengenai percakapan publik terkait akses Bawaslu terhadap Silon KPU "
+            "dan pengawasan persyaratan pendidikan Gibran Rakabuming Raka. "
+            "Gunakan hanya bukti relevan Social Listening dan Intelligence Inbox. "
+            "Susun laporan dengan bagian Ringkasan Eksekutif, Temuan Utama, "
+            "Analisis Sentimen dan Narasi, Implikasi Pengawasan, Keterbatasan "
+            "dan Status Verifikasi, serta Rekomendasi Prioritas.")
+    assert choose_response_profile(prompt)==EXECUTIVE_REPORT
+    assert choose_response_profile("Susun laporan ringkas intelijen eksekutif "
+                                   "dari Social Listening")==EXECUTIVE_REPORT
+    assert choose_response_profile("Siapkan penugasan atas SOCIAL-179")==ACTION_REQUEST
+    assert choose_response_profile("Bandingkan Intelligence Inbox dan Social Listening "
+                                   "tentang Silon")==CROSS_MODULE_REVIEW
+
+
+def test_executive_report_focus_excludes_unrelated_inbox_records():
+    from types import SimpleNamespace
+    from app.assistant_response_profile import cross_module_formal_focus
+    items=[
+        SimpleNamespace(title="Muhammad Bobby Afif Nasution",original_content="Bio",
+                        source_id="",source_name=""),
+        SimpleNamespace(title="ibarat globe berjalan #debat",original_content="BAWASLU",
+                        source_id="",source_name=""),
+        SimpleNamespace(title="Akses Silon",original_content="Gibran Rakabuming Raka",
+                        source_id="",source_name=""),
+    ]
+    q=("Susun laporan intelijen eksekutif dari Social Listening dan "
+       "Intelligence Inbox mengenai akses Silon KPU dan pendidikan Gibran")
+    assert cross_module_formal_focus(q,items)==items[2:]

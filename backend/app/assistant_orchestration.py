@@ -512,8 +512,9 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     allowed = {r["record_id"] for r in evidence}
     language = language_directive(question)
     pdf_guidance=response_profile=='PDF_GUIDANCE'
+    executive_report=response_profile=='EXECUTIVE_REPORT'
     web_research = (research_public_web(question, key, model, base)
-                    if mode != "GROUNDED" and not pdf_guidance and response_profile!="CROSS_MODULE_REVIEW" else None)
+                    if mode != "GROUNDED" and not pdf_guidance and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
@@ -534,6 +535,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "source_count": len(evidence),
         "formal_record_count":formal_evidence_count(evidence),
         "potential_duplicate_groups":(duplicate_groups or [])[:6],
+        "report_sample_statistics":(evidence_snapshot([r for r in evidence
+            if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
         "response_depth": response_depth,
         "response_profile": response_profile,
         "response_language_rule": language["rule"],
@@ -561,6 +564,29 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             "next_checks and detected_tags empty. If the PDF is unreviewed or synthetic, "
             "mention that clearly ONCE in one short sentence. Answer in the user's language."
             if pdf_guidance else
+            ("Write a finished executive intelligence brief, NOT an officer assignment, "
+             "operational handoff, report draft, dashboard, or action request. "
+             "Put the complete polished report in direct_answer using exactly six "
+             "short sections with these headings: (1) Ringkasan Eksekutif, "
+             "(2) Temuan Utama, (3) Analisis Sentimen dan Narasi, "
+             "(4) Implikasi Pengawasan, (5) Keterbatasan dan Status Verifikasi, "
+             "(6) Rekomendasi Prioritas. Make all six substantive, concise, "
+             "and clearly distinguish attributed social claims from verified facts. "
+             "Use ONLY the authorized Social Listening and Intelligence Inbox records "
+             "present in available_records, no online research or PDF assumptions. "
+             "If formal_record_count is zero, state NO relevant Inbox record was selected "
+             "and never cite unrelated Inbox IDs. "
+             "Use report_sample_statistics as the sole source of sample counts, "
+             "sentiment labels and platform distribution. A sample counts posts "
+             "rather than people or independent witnesses. "
+             "Explain possible duplicate posts using potential_duplicate_groups "
+             "without overstating certainty. Use bracketed source IDs on important "
+             "findings, never invent a court ruling or statute. Put an appropriately "
+             "cautious verification recommendation in section 6. "
+             "Leave observations, next_checks, interpretation, limitations and "
+             "detected_tags empty; avoid repeating sections. Answer in formal "
+             "Indonesian as requested."
+             if executive_report else
             ("This is social-intelligence analysis, not an operational handoff. "
              "The source records supplied here are exactly the same posts used in the "
              "visible charts; any numerical sentiment breakdown or percentages MUST "
@@ -683,9 +709,15 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "presentation_labels": result["validated_ui_labels"]
     }
     social_brief=response_profile=='SOCIAL_ANALYSIS'
+    if executive_report:
+        result["observations"]=[]
+        result["interpretation"]=""
+        result["next_checks"]=[]
+        result["limitations"]=[]
+        result["validated_tags"]=[]
     result["visual_report"] = bool(evidence) and not pdf_guidance
     result["compact_social"]=social_brief
-    meta["analytical_findings"] = (None if pdf_guidance else {
+    meta["analytical_findings"] = (None if pdf_guidance or executive_report else {
         "observations": (result.get("observations") or [])[:3] if social_brief
                          else result.get("observations") or [],
         "review_steps": (result.get("next_checks") or [])[:2] if social_brief

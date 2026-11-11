@@ -9,6 +9,7 @@ PDF_GUIDANCE="PDF_GUIDANCE"
 SOCIAL_ANALYSIS="SOCIAL_ANALYSIS"
 CASE_REVIEW="CASE_REVIEW"
 CROSS_MODULE_REVIEW="CROSS_MODULE_REVIEW"
+EXECUTIVE_REPORT="EXECUTIVE_REPORT"
 ACTION_REQUEST="ACTION_REQUEST"
 GENERAL="GENERAL"
 
@@ -44,6 +45,11 @@ _CASE=re.compile(
     r"periksa\s+(?:kasus|unggahan|bukti)|review\s+(?:this|the)\s+(?:case|post)|"
     r"dugaan pelanggaran\s+(?:oleh|pada|terhadap)|"
     r"kasus\s*#?\d+|post\s*#?\d+)\b",re.I)
+_EXECUTIVE_REPORT=re.compile(
+    r"(?:\b(?:laporan|briefing|brief|report)\b.{0,65}\b(?:eksekutif|intelijen|pimpinan|executive|intelligence)\b|"
+    r"\b(?:susun|susunkan|siapkan|prepare|create|draft)\b.{0,50}"
+    r"\b(?:laporan\s+(?:ringkas\s+)?intelijen|executive\s+(?:intelligence\s+)?(?:briefing|report))\b|"
+    r"\b(?:executive\s+summary|ringkasan\s+eksekutif)\b)",re.I)
 _CROSS_MODULE=re.compile(
     r"\b(?:bandingkan|perbandingan|komparasi|compare|comparison|comparative|"
     r"lintas.modul|cross.module|konsistensi|persamaan|perbedaan|"
@@ -87,6 +93,11 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
                          bool(_PDF.search(prev) or (_PROCEDURE.search(prev) and not _SOCIAL.search(prev))))
     if _EXPLICIT_PDF_SOURCE.search(q):
         return PDF_GUIDANCE
+    # A narrative executive briefing is not a request to create assignments,
+    # populate a report draft, or transfer a case into an officer workflow.
+    if _EXECUTIVE_REPORT.search(q) and social and not re.search(
+            r"(?:buatkan?s+penugasan|tugaskan|assigns+to|alihs+kans+kasus)",q,re.I):
+        return EXECUTIVE_REPORT
     if action and not (document_question and not specific_case):
         return ACTION_REQUEST
     if specific_case:

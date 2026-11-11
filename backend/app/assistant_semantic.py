@@ -134,7 +134,31 @@ def semantic_search(db,documents,question):
         logger.exception("ASSISTANT_SEMANTIC_QUERY_FAILED")
         return []
 
-def merge_rankings(lexical,semantic,documents,limit):
+def stitch_pdf_page(chunks,max_chars=3000):
+    """Join ordered chunks from ONE page, removing PDF extractor overlap.
+
+    This must not be called across documents or pages. The excerpt budget is
+    bounded so full-page grounding doesn't inflate response-model usage.
+    """
+    merged=""
+    for chunk in sorted(chunks,key=lambda c:(c.sequence,c.id)):
+        piece=str(chunk.text_content or "").strip()
+        if not piece:
+            continue
+        if not merged:
+            merged=piece
+            continue
+        overlap=0
+        max_overlap=min(400,len(merged),len(piece))
+        for n in range(max_overlap,31,-1):
+            if merged[-n:].casefold()==piece[:n].casefold():
+                overlap=n
+                break
+        merged+=piece[overlap:] if overlap else "\n"+piece
+    return merged[:max(200,min(int(max_chars),5000))]
+
+
+def merge_rankings(lexical,semantic,documents,limit,db=None):
     """Rank-fusion: matches from both strategies get a relevance advantage."""
     indexed={doc.id:doc for doc in documents}
     scores={}
@@ -151,17 +175,39 @@ def merge_rankings(lexical,semantic,documents,limit):
         weight=1.10 if doc.review_status=="OFFICER_REVIEWED" else 1.0
         ranking.append((item["score"]*weight,chunk.id,chunk,doc,item["methods"]))
     ranking.sort(key=lambda x:(-x[0],-x[1]))
-    out=[]
+    picked=[]
     used_pages=set()
     for score,_,chunk,doc,methods in ranking:
         key=(doc.id,chunk.page)
         if key in used_pages:continue
         used_pages.add(key)
+        picked.append((chunk,doc,methods))
+        if len(picked)>=max(1,min(int(limit),12)):break
+    page_chunks={}
+    if db is not None and picked:
+        # The lexical/semantic winner may be chunk 2 of the same page. Fetch
+        # the COMPLETE authorized page, not only that winning fragment.
+        # All pairs come from pre-filtered _visible documents, preventing
+        # cross-province or cross-document source leakage.
+        from sqlalchemy import and_,or_
+        from .assistant_knowledge import KnowledgeChunk
+        constraints=[and_(KnowledgeChunk.document_id==doc.id,
+                          KnowledgeChunk.page==chunk.page)
+                     for chunk,doc,_ in picked]
+        siblings=db.query(KnowledgeChunk).filter(
+            or_(*constraints)).order_by(
+            KnowledgeChunk.document_id,KnowledgeChunk.page,
+            KnowledgeChunk.sequence,KnowledgeChunk.id).all()
+        for sibling in siblings:
+            page_chunks.setdefault((sibling.document_id,sibling.page),[]).append(sibling)
+    out=[]
+    for chunk,doc,methods in picked:
+        excerpt=stitch_pdf_page(page_chunks.get((doc.id,chunk.page),[chunk]))
         out.append({
             "record_id":f"DOC-{doc.id}-P{chunk.page}",
             "record_type":"PDF_KNOWLEDGE","document_id":doc.id,
             "title":doc.title,"filename":doc.filename,"page":chunk.page,
-            "source_excerpt":chunk.text_content[:1500],
+            "source_excerpt":excerpt,
             "source_url":f"/api/assistant-knowledge/{doc.id}/download",
             "scope":doc.scope,"province":doc.province,"publication_date":"",
             "document_type":doc.document_type,"issuer":doc.issuer,
@@ -171,7 +217,6 @@ def merge_rankings(lexical,semantic,documents,limit):
             "document_is_authority_unverified":doc.review_status!="OFFICER_REVIEWED",
             "match_method":"HYBRID" if len(methods)>1 else next(iter(methods))
         })
-        if len(out)>=max(1,min(int(limit),12)):break
     return out
 
 def retrieve_hybrid(db,profile,question,limit=6,semantic=True):
@@ -188,4 +233,4 @@ def retrieve_hybrid(db,profile,question,limit=6,semantic=True):
     if not docs:return []
     lexical=lexical_search(db,docs,question,terms)
     semantic_rows=semantic_search(db,docs,question) if semantic else []
-    return merge_rankings(lexical,semantic_rows,docs,limit)
+    return merge_rankings(lexical,semantic_rows,docs,limit,db=db)

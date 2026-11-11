@@ -833,3 +833,55 @@ def test_explicit_pdf_only_without_available_pages_does_not_hallucinate(monkeypa
     assert result["records"]==[]
     assert result["provider"]["mode"]=="NO_PDF_EVIDENCE"
     assert result["grounding"]["scope"]=="AUTHORIZED_PDF_REFERENCES"
+
+
+
+def test_pdf_hybrid_retrieval_stitches_all_authorized_page8_chunks(db):
+    """Regression: the real PDF's routing paragraph ranked after its access rules."""
+    from app.assistant_semantic import merge_rankings
+    pdf=KnowledgePDF(title="BAWASLU Sample AI Knowledge",filename="knowledge.pdf",
+        scope="NATIONAL",province="",content_sha256="e"*64,
+        content_bytes=b"%PDF-synthetic-fixture",pages=8,
+        extracted_chars=2100,uploaded_by=1,active=True)
+    db.add(pdf);db.flush()
+    first=KnowledgeChunk(document_id=pdf.id,page=8,sequence=14,
+        text_content=(
+            "Penugasan nasional dan provinsi. AI dapat menyarankan departemen, "
+            "tetapi petugas harus meninjau rekomendasi dan memberikan konfirmasi "
+            "eksplisit. Untuk penugasan provinsi, locus kejadian harus "
+            "dikonfirmasi manusia. Penerima harus mempunyai peran dan cakupan "
+            "akses yang sesuai. Pengguna Viewer tidak boleh membuat penugasan "
+            "atau memvalidasi laporan. Penugasan berulang dengan sumber tim "
+            "dan status sama harus dicegah agar tidak menghasilkan kasus duplikat. "
+            "Data dan Informasi Validasi sumber, tautan dan metadata."))
+    last=KnowledgeChunk(document_id=pdf.id,page=8,sequence=15,
+        text_content=(
+            "Data dan Informasi Validasi sumber, tautan dan metadata. "
+            "Kunci pengujian: provinsi disebut dalam sumber = tag lokasi. "
+            "Provinsi kejadian terverifikasi = syarat routing. "
+            "Kedua hal ini tidak boleh diperlakukan sama."))
+    db.add_all([first,last]);db.flush()
+    private=KnowledgePDF(title="Internal province-only",filename="private.pdf",
+        scope="PROVINCE",province="Bali",content_sha256="f"*64,
+        content_bytes=b"%PDF-private",pages=8,extracted_chars=500,
+        uploaded_by=1,active=True)
+    db.add(private);db.flush()
+    db.add(KnowledgeChunk(document_id=private.id,page=8,sequence=1,
+        text_content="SECRET_CROSS_SCOPE_MARKER must never leak in national document."))
+    db.commit()
+    # Simulate the exact failure: the SECOND chunk wins keyword ranking.
+    rows=merge_rankings([last],[],[pdf],limit=1,db=db)
+    assert len(rows)==1
+    assert rows[0]["record_id"]==f"DOC-{pdf.id}-P8"
+    body=rows[0]["source_excerpt"]
+    assert "Viewer tidak boleh" in body
+    assert "konfirmasi eksplisit" in body
+    assert "cakupan akses" in body
+    assert "kasus duplikat" in body
+    assert "syarat routing" in body
+    assert body.count("Data dan Informasi Validasi sumber, tautan dan metadata.")==1
+    assert "SECRET_CROSS_SCOPE_MARKER" not in body
+    assert len(body)<=3000
+    # Existing single-chunk documents must remain unchanged.
+    solo=merge_rankings([first],[],[pdf],limit=1)
+    assert solo[0]["source_excerpt"]==first.text_content

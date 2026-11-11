@@ -111,6 +111,9 @@ def test_frontend_cue_is_opt_in_and_human_rationale_is_not_generated():
     assert 'Your independent evidence assessment' in source
     # Backend may be briefly stale after a successful officer review; do not
     # overwrite the local saved decision until Inbox confirms the new status.
-    assert 'await refreshReviewedPost(selected,reviewDecision)' in source
+    # Use the decision acknowledged by the successful write, rather than
+    # a possibly reset form selection, when refreshing the saved assessment.
+    assert 'const savedDecision=String(saved.data?.decision||payload.decision)' in source
+    assert 'await refreshReviewedPost(selected,savedDecision)' in source
     assert "await refreshReviewedPost(selected,'FURTHER_INVESTIGATION')" in source
     assert 'if(expectedStatus&&refreshed.flag_review_status!==expectedStatus)return' in source

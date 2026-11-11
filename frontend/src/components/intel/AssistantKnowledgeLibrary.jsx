@@ -3,13 +3,25 @@ import {BookOpen,Upload,FileText,Download,Trash2,ShieldCheck,CheckCircle,Brain} 
 import {useLanguage} from '@/lib/LanguageContext';
 const BASE='/api/assistant-knowledge';
 function token(){return window.localStorage.getItem('bawaslu_access_token')||''}
-async function request(path,method='GET',payload){
- const response=await fetch(BASE+path,{method,cache:'no-store',headers:{
-  Authorization:'Bearer '+token(),...(payload instanceof FormData?{}:{'Content-Type':'application/json'})
- },...(payload?{body:payload instanceof FormData?payload:JSON.stringify(payload)}:{})});
- const json=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(typeof json.detail==='string'?json.detail:'Knowledge request failed');
- return json;
+async function request(path,method='GET',payload,signal){
+ // The document list is a metadata-only read; do not let a stalled fetch
+ // leave the entire library in a permanent loading state. Uploads and
+ // indexing are intentionally excluded from this deadline.
+ const listRead=path==='/documents'&&method==='GET';
+ const controller=listRead?new AbortController():null;
+ const timer=controller?setTimeout(()=>controller.abort(),12000):null;
+ try{
+  const response=await fetch(BASE+path,{method,cache:'no-store',signal:signal||controller?.signal,headers:{
+   Authorization:'Bearer '+token(),...(payload instanceof FormData?{}:{'Content-Type':'application/json'})
+  },...(payload?{body:payload instanceof FormData?payload:JSON.stringify(payload)}:{})});
+  const json=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(typeof json.detail==='string'?json.detail:'Knowledge request failed ('+response.status+')');
+  if(listRead&&!Array.isArray(json.documents))throw Error('PDF list response is incomplete. Open the library to retry.');
+  return json;
+ }catch(error){
+  if(error.name==='AbortError')throw Error('PDF list request timed out. Open the library to retry.');
+  throw error;
+ }finally{if(timer!==null)clearTimeout(timer)}
 }
 export default function AssistantKnowledgeLibrary(){
  const {language}=useLanguage();

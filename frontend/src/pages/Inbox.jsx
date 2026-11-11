@@ -35,6 +35,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [issueCategories,setIssueCategories]=useState([]),[manualCategory,setManualCategory]=useState(''),[manualRationale,setManualRationale]=useState(''),[manualCue,setManualCue]=useState(null);
  const [correctionType,setCorrectionType]=useState('TOPICS'),[correctionTopics,setCorrectionTopics]=useState([]),[correctionQuote,setCorrectionQuote]=useState(''),[correctionConcern,setCorrectionConcern]=useState(''),[correctionRationale,setCorrectionRationale]=useState(''),[correctionBusy,setCorrectionBusy]=useState(false),[correctionMessage,setCorrectionMessage]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
+ const [confirmedReview,setConfirmedReview]=useState(null);
  useEffect(()=>{let active=true;setLoading(true);setError('');setFindings([]);setFullStatistics(null);setInboxPagination({has_more:false,next_cursor:null,total_eligible:null});setLoadMoreError('');
  base44.functions.invoke('socialListening',{action:'campaignIntelligenceInbox',data:{campaign_id:campaign,result_id:requestedPost,paged:true,page_size:INBOX_PAGE_SIZE,include_totals:true}})
  .then(r=>{if(!active)return;setFindings(r.data.findings||[]);setInboxPagination(r.data.pagination||{has_more:false,next_cursor:null,total_eligible:null});setFullStatistics(r.data.full_statistics||null);
@@ -158,7 +159,9 @@ function SocialEvidenceInbox({onOpenCasework}){
    await base44.functions.invoke('socialListening',{action:'campaignFlagReview',id:selected.campaign_id,data:payload});
    const updated={...selected,flag_review_status:reviewDecision,is_flagged:reviewDecision!=='FLAG_DISMISSED'};
    setSelected(updated);setFindings(previous=>previous.map(item=>item.id===selected.id&&item.campaign_id===selected.campaign_id?updated:item));
-   setReviewDecision('');setReviewRationale('');setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
+   setReviewDecision('');setReviewRationale('');
+   setConfirmedReview({id:String(selected.id),campaign_id:String(selected.campaign_id),decision:reviewDecision});
+   setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
    await refreshReviewedPost(selected,reviewDecision);
    // The successful audit write is authoritative for this open drawer.
    // A concurrent pre-save feed response must not revert the visible status.
@@ -648,7 +651,10 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     {<div className="border-t pt-3 space-y-3">
      <h4 className="font-semibold">Human flag review</h4>
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
-     <p className="text-xs">Current status: <strong>{selected.flag_review_status||((selected.is_flagged||(selected.potential_issues||[]).length>0)?'Awaiting review':'Not flagged for violation')}</strong></p>
+     <p className="text-xs">Current status: <strong>{confirmedReview&&
+      confirmedReview.id===String(selected.id)&&confirmedReview.campaign_id===String(selected.campaign_id)
+        ?confirmedReview.decision:
+      (selected.flag_review_status||((selected.is_flagged||(selected.potential_issues||[]).length>0)?'Awaiting review':'Not flagged for violation'))}</strong></p>
      {(selected.flag_review_history||[]).length>0&&<details className="text-xs"><summary className="cursor-pointer font-semibold">Review history ({selected.flag_review_history.length} most recent)</summary><ol className="mt-2 space-y-2">{selected.flag_review_history.map((entry,index)=><li key={index} className="border-l-2 border-slate-200 pl-2"><strong>{entry.decision.replaceAll('_',' ')}</strong> · Assessment v{entry.assessment_version} · {entry.reviewed_at?new Date(entry.reviewed_at).toLocaleString():'Date unavailable'}<p className="text-slate-500">{entry.rationale}</p></li>)}</ol></details>}
      {selected.can_review_flag&&!(selected.potential_issues||[]).length&&!selected.is_flagged&&<div className="border border-amber-200 rounded-lg p-3 space-y-2"><p className="text-xs font-semibold">Flag this relevant post manually</p><p className="text-xs text-slate-500">Preliminary human concern only — not a legal finding.</p><label htmlFor="manual-issue-category" className="text-xs">Issue category</label><select id="manual-issue-category" className="intel-input w-full" value={manualCategory} onChange={e=>setManualCategory(e.target.value)}><option value="">Select active category</option>{issueCategories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select><label htmlFor="manual-flag-rationale" className="text-xs">Reason (at least 10 characters)</label>{manualCue?.post_id===String(selected.id)&&manualCue?.campaign_id===String(selected.campaign_id)&&
       manualCue?.category_id===String(manualCategory)&&

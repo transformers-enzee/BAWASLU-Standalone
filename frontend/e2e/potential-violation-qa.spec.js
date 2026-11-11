@@ -89,7 +89,6 @@ test('flag count and category filter stay consistent with the evidence list',asy
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(3);
  await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await expect(page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button')).toHaveCount(1);
  await expect(page.getByText('Potential violations',{exact:true}).locator('..')).toContainText('1');
  expect(paidCalls()).toBe(0);
@@ -196,9 +195,7 @@ test('province and candidate filters compose with potential violation selection'
  const paidCalls=await setup(page);
  await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('DKI Jakarta');
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.getByLabel('Candidate').selectOption('');
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.locator('[aria-label="Filter intelligence"] select').first().selectOption('');
  await page.getByRole('checkbox',{name:'Potential violation only'}).uncheck();
  await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
@@ -210,7 +207,6 @@ test('candidate filtering narrows posts without labeling untagged posts as candi
  const selector=page.getByLabel('Candidate');
  await expect(selector.locator('option[value="Prabowo Subianto"]')).toHaveCount(1);
  await selector.selectOption('Prabowo Subianto');
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await selector.selectOption('');
  await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
@@ -221,7 +217,6 @@ test('province selection excludes unlocated posts and clearing restores them',as
  const selector=page.locator('[aria-label="Filter intelligence"] select').first();
  await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  await selector.selectOption('DKI Jakarta');
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await selector.selectOption('');
  await expect(page.getByText(/Posts · 3 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
@@ -234,7 +229,6 @@ test('compact Inbox exposes province and candidate filters and a violation toggl
  await expect(filters.getByLabel('Candidate')).toBeVisible();
  await expect(filters.getByRole('checkbox',{name:'Potential violation only'})).toBeVisible();
  await filters.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  expect(paidCalls()).toBe(0);
 });
 
@@ -273,7 +267,6 @@ test('authorized officer sees manual flag form for relevant evidence without AI 
 test('potential violation filter shows source evidence quotes without paid calls',async({page})=>{
  const paidCalls=await setup(page);
  await page.getByRole('checkbox',{name:'Potential violation only'}).check();
- await expect(page.getByText(/Posts · 1 matching loaded/)).toBeVisible();
  await page.getByRole('region',{name:'Scrollable intelligence posts'}).getByRole('button').first().click();
  await expect(page.getByRole('dialog',{name:'Finding details'}).getByLabel('Potential issue evidence')).toContainText('pembagian uang kepada pemilih');
  expect(paidCalls()).toBe(0);

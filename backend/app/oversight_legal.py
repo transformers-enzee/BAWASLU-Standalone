@@ -90,6 +90,19 @@ def legal_snapshot(db,p):
         "policy_url_checked_on":"2026-11-10"
     } for key in used_platforms if key in PLATFORM_POLICIES]
     refs=retrieve_knowledge(db,p,"pelanggaran pemilu perbawaslu peraturan hukum aturan media sosial",3)
+    # Legal follow-up uses separately authorized, audited officer Casework.
+    # This read never creates a case or treats AI evidence as a legal verdict.
+    from .casework import CaseAssignment,_visible as case_visible
+    legal_departments={"Hukum & Sengketa","Penanganan Pelanggaran"}
+    case_sample=db.query(CaseAssignment).order_by(
+        CaseAssignment.updated_at.desc(),CaseAssignment.id.desc()).limit(120).all()
+    visible_legal=[case for case in case_sample
+        if case.target_department in legal_departments and
+           case_visible(case,p,int(p["id"]))]
+    case_statuses=Counter(case.status for case in visible_legal)
+    case_items=[{"id":case.id,"status":case.status,
+        "department":case.target_department,"source_id":case.source_id,
+        "campaign_id":case.campaign_id} for case in visible_legal[:6]]
     return {
         "platform_policy_screening":{
             "review_queue":platform_reviews[:12],
@@ -114,6 +127,12 @@ def legal_snapshot(db,p):
                            for x in refs],
         "legal_verdict":"NONE",
         "platform_rule_verdict":"NONE",
+        "legal_follow_up_casework":{
+            "tracked_assignments_in_sample":len(visible_legal),
+            "status_counts":dict(case_statuses),"recent_assignments":case_items,
+            "sample_limit":120,"counts_are_sample_only":True,
+            "authoritative_officer_casework":True,
+            "automated_legal_verdict":False},
         "legal_follow_up_steps":STEPS["id"],
         "notices":{
             "id":"Dugaan pelanggaran hukum tidak sama dengan pelanggaran pedoman komunitas platform. Takedown bukan penyelesaian proses hukum. Verifikasi peraturan resmi terkini, unsur, wewenang, bukti dan proses penanganan oleh petugas.",

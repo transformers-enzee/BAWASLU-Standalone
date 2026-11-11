@@ -93,6 +93,12 @@ def correct_sentiment(body:CorrectionBody,user:User=Depends(current_user),db:Ses
             "rationale":note},ensure_ascii=False),
         occurred_at=datetime.now(timezone.utc).isoformat()))
     db.commit()
+    # A committed officer decision takes precedence in the Inbox and
+    # Command Centre immediately on this worker; other workers use TTL.
+    from .inbox_read_cache import invalidate as invalidate_inbox
+    from .smart_radar import invalidate_dashboard_cache
+    invalidate_inbox()
+    invalidate_dashboard_cache()
     return {"correction":correction_view(row),"unchanged":False,"paid_provider_called":False}
 
 @router.get("/history/{campaign_id}/{result_id}")

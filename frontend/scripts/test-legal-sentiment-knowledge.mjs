@@ -7,13 +7,18 @@ const inbox=read('src/pages/Inbox.jsx');
 const form=read('src/components/intel/SentimentCorrection.jsx');
 const kb=read('src/components/intel/AssistantKnowledgeLibrary.jsx');
 const assistant=read('src/pages/IntelligenceAssistant.jsx');
+const campaign=read('src/components/intel/CampaignPanel.jsx');
 const records=read('src/components/intel/AssistantRecords.jsx');
 const radarHtml=read('public/ui-freeze/smart-radar-v6_2.html');
 const radarJs=read('public/ui-freeze/smart-radar-live.js');
-assert.ok(captured.includes('SentimentCorrection')&&captured.includes('can_correct_sentiment'),
+assert.ok(captured.includes('SentimentCorrection')&&captured.includes('can_correct_sentiment')&&
+    captured.includes('onSentimentCorrected?.(correction)'),
   'Captured Posts must allow scoped officer sentiment correction');
-assert.ok(inbox.includes('SentimentCorrection')&&inbox.includes('setFullStatistics'),
+assert.ok(inbox.includes('SentimentCorrection')&&inbox.includes('setFullStatistics')&&
+    inbox.includes("'Officer corrected'"),
   'Inbox must allow correction and update visible counts');
+assert.ok(campaign.includes('onSentimentCorrected={()=>refreshSentimentViews()'),
+    'Social Listening must refresh its dashboard after saving an officer sentiment correction');
 assert.ok(form.includes('/api/officer-sentiment/correct')&&form.includes('Authorization:')&&
    form.includes('sentiment:label'), 'sentiment correction requires authenticated officer write');
 assert.ok(!form.includes('rationale:')&&!form.includes('reason.trim()')&&
@@ -53,6 +58,10 @@ assert.ok(radarJs.includes('data?.platform_policy_screening')&&
  'platform rule screening must use independent, source-specific evidence and official policy links');
 assert.ok(!radarJs.includes("platform.innerHTML='<p class=\"small muted\">Platform-rule status: not assessed"),
  'platform review must not render the original generic legal-case list');
+assert.ok(radarJs.includes('legal_follow_up_casework')&&
+   radarJs.includes('Open assignments &amp; reports')&&
+   radarJs.includes('No automatic legal conclusion'),
+   'Command Centre must show separately authorized legal follow-up casework');
 assert.ok(radarJs.includes('/api/oversight/legal-summary')&&radarJs.includes('renderLegalOversight'),
   'Command Centre legal review must use scoped backend evidence');
 assert.ok(radarJs.includes("epoch!==dashboardEpoch"),'late legal response must not replace a newer dashboard');

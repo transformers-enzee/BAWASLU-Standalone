@@ -920,3 +920,60 @@ def test_executive_report_focus_excludes_unrelated_inbox_records():
     q=("Susun laporan intelijen eksekutif dari Social Listening dan "
        "Intelligence Inbox mengenai akses Silon KPU dan pendidikan Gibran")
     assert cross_module_formal_focus(q,items)==items[2:]
+
+
+
+def test_officer_sentiment_write_invalidates_authorized_read_caches(monkeypatch,db):
+    import app.inbox_read_cache as inbox_cache
+    import app.smart_radar as radar
+    calls=[]
+    monkeypatch.setattr(inbox_cache,"invalidate",lambda:calls.append("inbox"))
+    monkeypatch.setattr(radar,"invalidate_dashboard_cache",lambda:calls.append("radar"))
+    first=correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,
+         sentiment="NEUTRAL"),user(db,1),db)
+    assert first["unchanged"] is False
+    assert calls==["inbox","radar"]
+    same=correct_sentiment(CorrectionBody(campaign_id=70,result_id=200,
+         sentiment="NEUTRAL"),user(db,1),db)
+    assert same["unchanged"] is True
+    assert calls==["inbox","radar"]
+    assert db.query(EvidenceAssessment).first().sentiment=="NEGATIVE"
+
+
+def test_legal_followup_uses_visible_officer_casework_not_model_verdict(monkeypatch,db):
+    from app.casework import CaseAssignment
+    import app.campaigns as campaigns
+    import app.assistant_knowledge as knowledge
+    monkeypatch.setattr(campaigns,"campaign_action",lambda *a,**kw:{"findings":[]})
+    monkeypatch.setattr(knowledge,"retrieve_knowledge",lambda *a,**kw:[])
+    db.add_all([
+        CaseAssignment(id=10,title="Evidence review",source_type="SOCIAL",
+           source_id="200",campaign_id=70,source_url="",
+           originating_scope="PROVINCE",originating_province="Riau",
+           target_scope="PROVINCE",target_province="Riau",
+           verified_province="Riau",target_department="Hukum & Sengketa",
+           created_by=1,status="IN_REVIEW"),
+        CaseAssignment(id=11,title="Other province evidence",source_type="SOCIAL",
+           source_id="201",campaign_id=70,source_url="",
+           originating_scope="PROVINCE",originating_province="Bali",
+           target_scope="PROVINCE",target_province="Bali",
+           verified_province="Bali",target_department="Hukum & Sengketa",
+           created_by=1,status="ASSIGNED"),
+        CaseAssignment(id=12,title="Media communications",source_type="SOCIAL",
+           source_id="200",campaign_id=70,source_url="",
+           originating_scope="PROVINCE",originating_province="Riau",
+           target_scope="PROVINCE",target_province="Riau",
+           verified_province="Riau",target_department="Humas & Hubungan Masyarakat",
+           created_by=1,status="OPEN")
+    ])
+    db.commit()
+    national=legal_snapshot(db,p(db,1))
+    assert national["legal_follow_up_casework"]["tracked_assignments_in_sample"]==2
+    assert national["legal_follow_up_casework"]["automated_legal_verdict"] is False
+    assert national["legal_verdict"]=="NONE"
+    regional=legal_snapshot(db,p(db,2))
+    followup=regional["legal_follow_up_casework"]
+    assert followup["tracked_assignments_in_sample"]==1
+    assert followup["recent_assignments"][0]["id"]==10
+    assert followup["status_counts"]=={"IN_REVIEW":1}
+    assert regional["platform_rule_verdict"]=="NONE"

@@ -360,7 +360,18 @@
     }
     const stepsList=Array.isArray(data?.legal_follow_up_steps)?data.legal_follow_up_steps:[];
     const refs=(data?.legal_references||[]).slice(0,3);
-    steps.innerHTML='<ol style="padding-left:20px;margin:8px 0">'+stepsList.map(x=>'<li style="margin-bottom:6px">'+label(x)+'</li>').join('')+'</ol>'+
+    const followup=data?.legal_follow_up_casework||{};
+    const caseItems=Array.isArray(followup.recent_assignments)?followup.recent_assignments:[];
+    const caseworkHtml='<div style="margin:12px 0;padding:10px;border:1px solid #e4e9ee;border-radius:9px">'+
+      '<strong class="small">Officer legal follow-up (audited Casework)</strong>'+
+      '<p class="small muted">Casework status is recorded by authorized officers. No automatic legal conclusion or takedown is implied. This shows a permission-scoped recent-assignment sample.</p>'+
+      (caseItems.length?caseItems.map(item=>'<div class="small" style="padding:6px 0;border-top:1px solid #eef1f4">'+
+        '<strong>Case #'+Number(item.id)+' · '+label(item.status)+'</strong> · '+label(item.department)+
+        ' · Source #'+label(item.source_id)+
+        ' · <a href="/inbox?casework=1&case_id='+encodeURIComponent(item.id)+'" target="_top" rel="noopener noreferrer">Open casework ↗</a></div>').join(''):
+        '<p class="small muted">No legal-department assignments visible in the recent Casework sample.</p>')+
+      '<p class="small"><a href="/inbox?casework=1" target="_top" rel="noopener noreferrer">Open assignments &amp; reports ↗</a></p></div>';
+    steps.innerHTML=caseworkHtml+'<ol style="padding-left:20px;margin:8px 0">'+stepsList.map(x=>'<li style="margin-bottom:6px">'+label(x)+'</li>').join('')+'</ol>'+
       (refs.length?'<div class="small muted">Uploaded PDF references (authority/currentness not yet validated): '+
         refs.map(r=>label(r.title)+' · p.'+Number(r.page)).join(' · ')+'</div>':
         '<div class="small muted">No matched uploaded legal PDF. Check current official law and platform policies before any formal decision.</div>');

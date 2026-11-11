@@ -28,7 +28,7 @@ function Post({post,campaignId,onCorrected,isEnglish}){
   </div>
  </article>;
 }
-export default function CapturedPostList({campaignId,refreshKey=0}){
+export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCorrected}){
  const {language}=useLanguage();
  const isEnglish=language==='en';
  const t=(en,id)=>isEnglish?en:id;
@@ -40,6 +40,7 @@ export default function CapturedPostList({campaignId,refreshKey=0}){
   savedCorrections.current.set(sentimentCorrectionKey(campaignId,post.id),correction);
   setPosts(rows=>rows.map(row=>String(row.id)===String(post.id)?
     correctedSentimentPost(row,correction):row));
+  onSentimentCorrected?.(correction);
  };
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
  const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');

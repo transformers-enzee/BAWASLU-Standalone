@@ -385,12 +385,7 @@ def _classify_campaign_sentiment(db,p,c,data):
     label=outcome.get('sentiment')
     if label not in ('POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED'):
         raise ValueError('AI returned an unsupported sentiment')
-    if label=='UNCLASSIFIED':
-        # Last fallback is clearly marked neutral-by-default, not an observed neutral opinion.
-        outcome['sentiment']='NEUTRAL'
-        outcome['confidence']='LOW'
-        outcome['explanation']='Neutral display fallback: AI could not establish a reliable sentiment; not evidence of neutrality.'
-        label='NEUTRAL'
+    # Uncertainty is a valid completed assessment; never relabel as Neutral.
     # Normalize confidence without ever repurposing relevance confidence.
     normalized=normalize_sentiment_output({
         'sentiment':label,'sentiment_confidence':outcome.get('confidence'),

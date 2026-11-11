@@ -193,3 +193,21 @@ def test_store_up_to_100_unique_results_without_ai_or_paid_provider(monkeypatch)
     assert db.query(SocialListeningResult).count()==100
     assert db.query(EvidenceAssessment).count()==100
     db.close()
+
+
+def test_missing_provider_stance_is_pending_not_falsely_assessed(monkeypatch):
+    from app.sentiment_processing import sentiment_is_assessed
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    db=SessionLocal()
+    campaign,run=seed(db)
+    item=post('missing-stance','https://instagram.com/p/missing-stance')
+    item['judgments']['stance']={'label':None,'confidence':0.47}
+    prism_discover.store(db,run,campaign,[item],full_assessment=True)
+    record=db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id).one()
+    assert record.relevance_label=='RELEVANT'
+    assert record.sentiment=='UNCLASSIFIED'
+    assert record.sentiment_model==''
+    assert record.sentiment_confidence==''
+    assert not sentiment_is_assessed(record)
+    assert 'did not supply' in record.sentiment_explanation
+    db.close()

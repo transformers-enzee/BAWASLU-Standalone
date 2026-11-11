@@ -270,12 +270,14 @@ def store(db,run,c,items,full_assessment=False):
         stance=((raw.get('judgments') or {}).get('stance') or {})
         relevance=((raw.get('judgments') or {}).get('relevance') or {}).get('p')
         provider_relevant=isinstance(relevance,(int,float)) and relevance>=0.5
+        provider_label=STANCE.get(str(stance.get('label') or '').lower())
         assessment=EvidenceAssessment(campaign_id=c.id,result_id=row.id,assessment_version=1,
             model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT' if provider_relevant else 'UNASSESSED',
-            sentiment=STANCE.get(str(stance.get('label') or '').lower(),'UNCLASSIFIED'),
-            sentiment_confidence=str(stance.get('confidence') or '')[:32],
-            sentiment_model='socialcrawl-prism-stance',
-            sentiment_explanation='Stance toward monitored campaign topic; not a general endorsement',
+            sentiment=provider_label or 'UNCLASSIFIED',
+            sentiment_confidence=str(stance.get('confidence') or '')[:32] if provider_label else '',
+            sentiment_model='socialcrawl-prism-stance' if provider_label else '',
+            sentiment_explanation=('Stance toward monitored campaign topic; not a general endorsement'
+                                   if provider_label else 'Provider did not supply a supported stance label'),
             explanation='Provider Discover collected; awaiting OpenAI topic analysis')
         db.add(assessment);new.append((row,assessment))
         assessed.add(row.id)

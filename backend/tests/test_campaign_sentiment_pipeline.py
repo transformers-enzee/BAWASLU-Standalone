@@ -173,3 +173,34 @@ def test_campaign_ui_refresh_and_cost_confirmation_are_explicit():
     assert 'Sentiment batch size' in source
     assert 'confirm_ai_cost:true' in source
     assert 'setDashboard(d.data);setEvidence(e.data.evidence||[]);' in source
+
+
+def test_explicit_uncertain_ai_sentiment_is_never_relabelled_neutral(monkeypatch):
+    import httpx
+    db,c=db_with_posts(1)
+    try:
+        db.add(EvidenceAssessment(campaign_id=91,result_id=1,assessment_version=1,
+            relevance_label='RELEVANT',explanation='Preserved relevance'))
+        db.commit()
+        monkeypatch.setenv('OPENAI_API_KEY','test-key-not-real')
+        class Response:
+            def raise_for_status(self):pass
+            def json(self):return {'model':'mock','output_text':json.dumps({
+                'sentiment':'UNCLASSIFIED','confidence':'HIGH',
+                'explanation':'The source does not establish a clear emotional tone.'})}
+        class Client:
+            def __init__(self,*a,**kw):pass
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def post(self,*a,**kw):return Response()
+        monkeypatch.setattr(httpx,'Client',Client)
+        result=_classify_campaign_sentiment(db,principal(),c,
+            {'result_id':'1','confirm_ai_cost':True})
+        assert result['sentiment']=='Unclassified'
+        assert result['confidence']=='LOW'
+        record=db.query(EvidenceAssessment).filter_by(campaign_id=91,result_id=1).order_by(
+            EvidenceAssessment.assessment_version.desc()).first()
+        assert record.sentiment=='UNCLASSIFIED' and record.sentiment_confidence=='LOW'
+        assert record.relevance_label=='RELEVANT'
+        assert record.explanation=='Preserved relevance'
+    finally:db.close()

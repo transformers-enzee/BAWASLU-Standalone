@@ -55,8 +55,9 @@ test('campaign editor uses seven fixed sources without legacy filters',async({pa
  await page.goto('/social-listening');
  await page.getByRole('button',{name:/create campaign/i}).click();
  const editor=page.getByRole('form',{name:'Campaign editor'});
- await expect(editor.getByRole('note',{name:'Default collection coverage'})).toBeVisible();
- await expect(editor.getByText('TikTok · Instagram · YouTube · Facebook · X · Threads · Online News')).toBeVisible();
+ // Collection sources are backend defaults, not a user-editable platform widget.
+ await expect(editor.getByLabel('Description')).toBeVisible();
+ await expect(editor.getByRole('textbox',{name:'Main keywords'})).toBeVisible();
  await expect(editor.getByText(/Language|End date|Province \(optional|Regency \/ City/)).toHaveCount(0);
  await expect(editor.getByRole('group',{name:/platforms/i})).toHaveCount(0);
 });

@@ -167,7 +167,10 @@ function SocialEvidenceInbox({onOpenCasework}){
    setConfirmedReview({id:String(selected.id),campaign_id:String(selected.campaign_id),decision:reviewDecision});
    acknowledgedReview.current.set(String(selected.campaign_id)+':'+String(selected.id),reviewDecision);
    bumpReviewVersion(previous=>previous+1);
-   setReviewNotice('Human review decision saved. Current status updated; original assessment preserved.');
+   setReviewNotice({
+     message:'Human review decision saved. Current status updated; original assessment preserved.',
+     decision:reviewDecision,id:String(selected.id),campaign_id:String(selected.campaign_id)
+   });
    await refreshReviewedPost(selected,reviewDecision);
    // The successful audit write is authoritative for this open drawer.
    // A concurrent pre-save feed response must not revert the visible status.
@@ -658,7 +661,10 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      <h4 className="font-semibold">Human flag review</h4>
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
      <p className="text-xs">Current status: <strong>{
-      acknowledgedReview.current.get(String(selected.campaign_id)+':'+String(selected.id))
+      (reviewNotice&&typeof reviewNotice==='object'&&
+       reviewNotice.id===String(selected.id)&&
+       reviewNotice.campaign_id===String(selected.campaign_id)?reviewNotice.decision:null)
+      ||acknowledgedReview.current.get(String(selected.campaign_id)+':'+String(selected.id))
       ||(confirmedReview&&confirmedReview.id===String(selected.id)&&
       confirmedReview.campaign_id===String(selected.campaign_id)?confirmedReview.decision:null)
       ||selected.flag_review_status
@@ -676,7 +682,9 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       <button type="button" className="intel-button" disabled={reviewBusy||!reviewDecision||reviewRationale.trim().length<10} onClick={submitFlagReview}>{reviewBusy?'Saving…':'Save human review'}</button>
      </>}{!selected.can_review_flag&&<p className="text-xs text-slate-500">Human validation permission is required for review actions.</p>}
      {reviewError&&<p role="alert" className="text-xs text-red-700">{reviewError}</p>}
-     {reviewNotice&&<p role="status" className="text-xs text-green-700">{reviewNotice}</p>}
+     {reviewNotice&&<p role="status" className="text-xs text-green-700">{
+       typeof reviewNotice==='string'?reviewNotice:reviewNotice.message
+      }</p>}
     </div>}
    </div>
    </section>

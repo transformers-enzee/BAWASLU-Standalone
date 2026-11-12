@@ -43,7 +43,7 @@ assert.ok(casePage.includes('r.is_latest_version')&&
     'Superseded reports are visible history, not approvable reports');
 assert.ok(casePage.includes('!activeReport?.is_latest_version'),
     'Outdated report drafts are not editable in the UI');
-assert.ok(app.includes("'build_version':'147.7'")&&
-    shell.includes('data-build-version="147.7"'),
+assert.ok(app.includes("'build_version':'147.8'")&&
+    shell.includes('data-build-version="147.8"'),
     'Backend/frontend version increments together');
-console.log('PASS v147.7 contextual officer follow-up, current-version report approval and SQL authorization contracts');
+console.log('PASS v147.8 contextual officer follow-up, current-version report approval and SQL authorization contracts');

@@ -104,7 +104,7 @@ def test_existing_case_link_reuses_case_and_hides_other_provinces_cases():
         bali=contextual_casework_links(db,permission(db,3),3,evidence())
         assert bali["visible_existing_case_count"]==0
         assert bali["source_actions"][0]["existing_case_id"] is None
-        assert str(case_id) not in bali["source_actions"][0]["casework_url"]
+        assert parse_qs(urlsplit(bali["source_actions"][0]["casework_url"]).query).get("case_id") is None
         with pytest.raises(HTTPException) as err:
             case_detail(case_id,user(db,3),db)
         assert err.value.status_code==404

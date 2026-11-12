@@ -1,4 +1,4 @@
-# BAWASLU Phase 2 — Officer Follow-up and Audit Integrity (v147.7)
+# BAWASLU Phase 2 — Officer Follow-up and Audit Integrity (v147.8)
 
 **Staging branch:** `architecture-v2-foundation-20261015`  
 **Design:** Command Centre finding details → source-specific Intelligence Inbox casework; no new navigation module.  

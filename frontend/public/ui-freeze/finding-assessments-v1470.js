@@ -82,6 +82,29 @@
    const provenance=result.source_provenance||{};
    const matches=provenance.source_count_matches_finding;
    const missing=Number(provenance.missing_original_text||0)+Number(provenance.missing_original_url||0);
+   const follow=result.follow_up||{};
+   const linked=(follow.source_actions||[]);
+   const followHtml='<h4>'+text('Officer casework follow-up','Tindak lanjut penugasan petugas')+'</h4>'+
+     '<p class="tiny muted">'+text(
+       'Opens existing Inbox casework. Source access and evidence are rechecked; no assignment, legal decision or takedown happens automatically.',
+       'Membuka penugasan Inbox. Hak akses dan bukti diperiksa kembali; tidak ada penugasan, keputusan hukum atau takedown otomatis.')+'</p>'+
+     (linked.length?linked.map(source=>{
+       const url=source.casework_url?safeUrl(source.casework_url):'';
+       const existing=Number(source.existing_case_id||0);
+       const title=existing?text('Open existing assignment','Buka penugasan yang ada')+
+         ' #'+existing:text('Start source-linked officer review','Mulai telaah petugas berdasarkan sumber');
+       return '<div class="soft small" style="margin:8px 0"><strong>Social #'+escapeHtml(source.source_id)+
+         ' · '+text('Campaign','Kampanye')+' #'+escapeHtml(source.campaign_id)+'</strong>'+
+         (existing?' · '+escapeHtml(source.existing_case_status||''):'')+
+         (url?'<p><a href="'+escapeHtml(url)+'" target="_top" rel="noopener noreferrer">'+title+' ↗</a></p>':
+           '<p class="tiny muted">'+text('Read-only access: assignment creation is not permitted.','Akses hanya-baca: pembuatan penugasan tidak diizinkan.')+'</p>')+
+         '</div>';
+     }).join(''):
+     '<p class="tiny muted">'+text('No eligible saved social post for contextual casework.','Tidak ada postingan tersimpan yang memenuhi syarat penugasan berbasis sumber.')+'</p>')+
+     (follow.source_actions_sampled?'<p class="tiny muted">'+
+       text('Showing first eight source actions; inspect the other evidence in this finding.','Menampilkan delapan tindakan sumber pertama; periksa bukti lainnya pada temuan ini.')+'</p>':'')+
+     '<p class="tiny muted">'+text('Visible existing assignments: ','Penugasan yang dapat diakses: ')+
+       Number(follow.visible_existing_case_count||0)+'</p>';
    panel.innerHTML='<h3 style="margin:0 0 6px">'+text('Assessments & Recommendations','Penilaian & Rekomendasi')+'</h3>'+
     '<p class="tiny muted">'+text('Saved source evidence only · Preliminary assessment · Officer decision required','Hanya bukti tersimpan · Penilaian awal · Keputusan petugas diperlukan')+'</p>'+
     '<p class="tiny muted">'+text('Unique Inbox sources assessed: ','Sumber unik Inbox yang ditelaah: ')+
@@ -94,8 +117,9 @@
     '<button type="button" role="tab" data-review-tab="legal" aria-selected="true" class="button primary">'+text('Legal Assessment','Penilaian Hukum')+'</button>'+
     '<button type="button" role="tab" data-review-tab="policy" aria-selected="false" class="button">'+text('Platform Policy','Aturan Platform')+'</button></div>'+
     '<div data-review-detail role="tabpanel"></div>'+
+    '<div data-officer-casework>'+followHtml+'</div>'+
     '<p class="small" style="margin-top:14px"><a href="/inbox?casework=1" target="_top" rel="noopener noreferrer">'+
-    text('Open audited officer assignments and reports','Buka penugasan dan laporan petugas')+' ↗</a></p>';
+    text('Browse my authorized casework queue','Buka antrean penugasan sesuai hak akses')+' ↗</a></p>';
    drawer.appendChild(panel);
    const renderTab=kind=>{
      panel.querySelector('[data-review-detail]').innerHTML=kind==='legal'?legalHtml(result.legal):policyHtml(result.platform_policy);

@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, and_, or_
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from .db import Base, get_db
 from .models import (User, AccessGrant, IntelligenceItem, EvidenceAssessment)
@@ -107,6 +107,43 @@ def _visible(case, p, user_id):
         case.target_scope == "PROVINCE" and case.target_province == province and
         case.verified_province == province
     )
+
+def _authorized_cases_query(db, p, user_id):
+    """Apply geographical visibility in SQL before bounded officer queue reads.
+
+    This mirrors _visible; callers retain _visible as a second protection.
+    """
+    q = db.query(CaseAssignment)
+    scope = p.get("geographic_scope")
+    province = p.get("province") or ""
+    if scope == "Nationwide":
+        return q
+    if scope == "Province":
+        if not province:
+            return q.filter(CaseAssignment.id == -1)
+        return q.filter(or_(
+            and_(CaseAssignment.originating_scope == "PROVINCE",
+                 CaseAssignment.originating_province == province),
+            and_(CaseAssignment.target_scope == "PROVINCE",
+                 CaseAssignment.target_province == province,
+                 CaseAssignment.verified_province == province)))
+    return q.filter(or_(
+        CaseAssignment.created_by == user_id,
+        and_(CaseAssignment.assignee_id == user_id,
+             CaseAssignment.verified_province == province)))
+
+
+def _current_report_ids(db, case_ids):
+    """Return latest audit report version for each permitted case."""
+    if not case_ids:
+        return {}
+    rows = db.query(CaseReport).filter(CaseReport.case_id.in_(case_ids)).order_by(
+        CaseReport.created_at.desc(), CaseReport.id.desc()).all()
+    latest = {}
+    for report in rows:
+        latest.setdefault(report.case_id, report)
+    return latest
+
 
 def _editable(case, p, user_id):
     return _visible(case, p, user_id) and has(p, "add_intelligence") and (
@@ -369,14 +406,13 @@ def _queue_flags(case,p,user_id,reviewable_ids):
 def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile(db,user)
     _require(p)
-    cases = db.query(CaseAssignment).order_by(CaseAssignment.updated_at.desc()).limit(300).all()
+    cases = _authorized_cases_query(db,p,user.id).order_by(
+        CaseAssignment.updated_at.desc(),CaseAssignment.id.desc()).limit(300).all()
     visible=[c for c in cases if _visible(c,p,user.id)]
     ids=[c.id for c in visible]
-    reviewable=set()
-    if ids and has(p,"human_validation"):
-        reviewable={r.case_id for r in db.query(CaseReport.case_id).filter(
-            CaseReport.case_id.in_(ids),CaseReport.status=="SUBMITTED",
-            CaseReport.created_by!=user.id).all()}
+    latest=_current_report_ids(db,ids) if has(p,"human_validation") else {}
+    reviewable={case_id for case_id,report in latest.items()
+                if report.status=="SUBMITTED" and report.created_by!=user.id}
     rows=[]
     counters={"all":0,"assigned_to_me":0,"team_unassigned":0,
               "needs_my_review":0,"sent_by_me":0,"received_from_other_team":0}
@@ -392,6 +428,10 @@ def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)
     return {"cases":rows,"queue_counts":counters,
             "current_team":{"scope":_team(p)[0],"province":_team(p)[1]},
             "can_review_reports":has(p,"human_validation"),
+            "report_status_basis":"LATEST_REPORT_VERSION_PER_CASE",
+            "query_scope":"SQL_AND_CASEWORK_VISIBILITY",
+            "queue_window_limit":300,
+            "queue_is_sample":len(visible)==300,
             "paid_provider_called":False}
 
 @router.post("/cases")
@@ -430,10 +470,16 @@ def case_detail(case_id: int, user: User = Depends(current_user), db: Session = 
     if not case or not _visible(case,p,user.id):
         raise HTTPException(404,"Case not found")
     transitions = db.query(CaseTransition).filter_by(case_id=case_id).order_by(CaseTransition.id.asc()).limit(200).all()
-    reports = db.query(CaseReport).filter_by(case_id=case_id).order_by(CaseReport.id.desc()).limit(50).all()
+    reports = db.query(CaseReport).filter_by(case_id=case_id).order_by(
+        CaseReport.created_at.desc(),CaseReport.id.desc()).limit(50).all()
+    report_views=[]
+    for index,report in enumerate(reports):
+        item=_report_view(report)
+        item["is_latest_version"]=(index==0)
+        report_views.append(item)
     return {"case":_case_view(case),"events":[{"id":x.id,"action":x.action,"actor_id":x.actor_id,
             "details":_json(x.details_json,{}),"at":x.happened_at.isoformat()} for x in transitions],
-            "reports":[_report_view(x) for x in reports],"can_edit":_editable(case,p,user.id),
+            "reports":report_views,"can_edit":_editable(case,p,user.id),
             "can_approve":has(p,"human_validation"),
              "can_acknowledge":_receiving_officer(case,p,user.id)}
 
@@ -586,6 +632,10 @@ def update_report(report_id: int,body: ReportDraft,user:User=Depends(current_use
     case=db.get(CaseAssignment,report.case_id) if report else None
     if not case or not _editable(case,p,user.id) or report.status not in ("DRAFT","RETURNED"):
         raise HTTPException(403,"Report is not editable")
+    latest=(db.query(CaseReport.id).filter_by(case_id=case.id)
+        .order_by(CaseReport.created_at.desc(),CaseReport.id.desc()).first())
+    if latest and int(latest[0])!=report.id:
+        raise HTTPException(409,"A newer report exists; edit the latest report instead")
     report.title=body.title
     report.executive_summary=body.executive_summary
     report.findings=body.findings
@@ -598,10 +648,14 @@ def update_report(report_id: int,body: ReportDraft,user:User=Depends(current_use
 @router.post("/reports/{report_id}/transition")
 def transition_report(report_id:int,body:ReportAction,user:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile(db,user)
-    report=db.get(CaseReport,report_id)
+    report=db.query(CaseReport).filter_by(id=report_id).with_for_update().one_or_none()
     case=db.get(CaseAssignment,report.case_id) if report else None
     if not case or not _visible(case,p,user.id):
         raise HTTPException(404,"Report not found")
+    latest=(db.query(CaseReport.id).filter_by(case_id=case.id)
+        .order_by(CaseReport.created_at.desc(),CaseReport.id.desc()).first())
+    if latest and int(latest[0])!=report.id:
+        raise HTTPException(409,"A newer report exists; open the latest report for review")
     action=body.status
     if action=="SUBMITTED":
         if not _editable(case,p,user.id) or report.status not in ("DRAFT","RETURNED"):
@@ -648,15 +702,15 @@ def assistant_workspace(user: User = Depends(current_user), db: Session = Depend
     """Cheap permission-filtered workload snapshot, no model requests."""
     p=profile(db,user)
     _require(p)
-    visible=[c for c in db.query(CaseAssignment)
-        .order_by(CaseAssignment.updated_at.desc()).limit(300).all()
+    visible=[c for c in _authorized_cases_query(db,p,user.id)
+        .order_by(CaseAssignment.updated_at.desc(),CaseAssignment.id.desc()).limit(300).all()
         if _visible(c,p,user.id)]
     active=[c for c in visible if c.status!="CLOSED"]
     mine=[c for c in active if c.assignee_id==user.id]
     ids=[c.id for c in visible]
-    reports=(db.query(CaseReport).filter(CaseReport.case_id.in_(ids),
-        CaseReport.status=="SUBMITTED").all() if ids else [])
-    pending=[r for r in reports if r.created_by!=user.id] if has(p,"human_validation") else []
+    latest=_current_report_ids(db,ids) if has(p,"human_validation") else {}
+    pending=[r for r in latest.values()
+             if r.status=="SUBMITTED" and r.created_by!=user.id]
     return {
         "can_create":has(p,"add_intelligence"),
         "my_assignments":len(mine),

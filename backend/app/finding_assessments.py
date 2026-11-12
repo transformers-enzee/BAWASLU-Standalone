@@ -5,6 +5,7 @@ It never determines a legal/platform violation, initiates a takedown,
 creates a case, or invokes paid AI providers.
 """
 from collections import Counter
+from urllib.parse import urlencode
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -182,6 +183,79 @@ def assess_finding(db, permission, finding):
     }
 
 
+
+
+def contextual_casework_links(db, permission, user_id, finding):
+    """Read-only contextual handoff to existing, permission-scoped Inbox casework.
+
+    Only saved posts inside the already-authorized finding can be offered.
+    Non-numeric source IDs are rejected instead of being interpolated into a
+    database query or a clickable case creation URL.
+    """
+    from .casework import (CaseAssignment, _visible as can_view_case,
+                           _authorized_cases_query)
+    available=[]
+    seen=set()
+    for post in finding.get("posts") or []:
+        sid=str(post.get("result_id") or "").strip()
+        cid=str(post.get("campaign_id") or "").strip()
+        if not sid.isascii() or not sid.isdigit() or not cid.isascii() or not cid.isdigit() or int(sid)<1 or int(cid)<1:
+            continue
+        key=(sid,str(int(cid)))
+        if key in seen:continue
+        seen.add(key)
+        available.append(key)
+    # Bounded related-case lookup; the query is also keyed by explicit campaign.
+    source_ids=[key[0] for key in available]
+    campaign_ids=[int(key[1]) for key in available]
+    related=[]
+    if source_ids:
+        related=_authorized_cases_query(db,permission,user_id).filter(
+            CaseAssignment.source_type=="SOCIAL",
+            CaseAssignment.source_id.in_(source_ids),
+            CaseAssignment.campaign_id.in_(campaign_ids)
+        ).order_by(CaseAssignment.updated_at.desc(),CaseAssignment.id.desc()).limit(200).all()
+    visible=[case for case in related if can_view_case(case,permission,user_id)
+             and (case.source_id,str(case.campaign_id or "")) in seen]
+    chosen={}
+    for case in visible:
+        key=(case.source_id,str(case.campaign_id))
+        if key not in chosen or (chosen[key].status=="CLOSED" and case.status!="CLOSED"):
+            chosen[key]=case
+    can_create=has(permission,"add_intelligence")
+    links=[]
+    for sid,cid in available[:8]:
+        case=chosen.get((sid,cid))
+        if case:
+            url="/inbox?"+urlencode({"casework":1,"case_id":case.id,"tab":"reports"})
+        else:
+            url="/inbox?"+urlencode({
+                "casework":1,"source_type":"SOCIAL","source_id":sid,
+                "campaign_id":cid,"tab":"assignments"})
+        links.append({
+            "source_type":"SOCIAL","source_id":sid,"campaign_id":cid,
+            "existing_case_id":case.id if case else None,
+            "existing_case_status":case.status if case else None,
+            "existing_case_department":case.target_department if case else "",
+            "can_create_assignment":can_create,
+            # No officer is auto-assigned. The link opens the *existing*
+            # embedded Inbox workflow which rechecks source permissions.
+            "casework_url":url if can_create or case is not None else None,
+        })
+    return {
+        "casework_url":next((item["casework_url"] for item in links
+                             if item["casework_url"]),"/inbox?casework=1"),
+        "source_actions":links,
+        "source_actions_total":len(available),
+        "source_actions_sampled":len(available)>len(links),
+        "related_case_lookup_sampled":len(related)>=200,
+        "visible_existing_case_count":len({c.id for c in visible}),
+        "can_create_assignment":can_create,
+        "no_assignment_created":True,
+        "officer_confirmation_required":True,
+        "evidence_must_be_rechecked":True,
+    }
+
 @router.get("/{finding_id}")
 def finding_assessments(finding_id: str, user: User = Depends(current_user),
                         db: Session = Depends(get_db)):
@@ -195,4 +269,7 @@ def finding_assessments(finding_id: str, user: User = Depends(current_user),
                     if item.get("id") == finding_id), None)
     if finding is None:
         raise HTTPException(404, "Finding unavailable")
-    return assess_finding(db, permission, finding)
+    assessment=assess_finding(db, permission, finding)
+    assessment["follow_up"].update(
+        contextual_casework_links(db,permission,user.id,finding))
+    return assessment

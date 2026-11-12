@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const root=new URL('../',import.meta.url);
+const read=p=>readFileSync(new URL(p,root),'utf8');
+const html=read('public/ui-freeze/smart-radar-v6_2.html');
+const plugin=read('public/ui-freeze/finding-assessments-v1470.js');
+const main=read('../backend/app/main.py');
+const api=read('../backend/app/finding_assessments.py');
+assert.ok(html.includes('/ui-freeze/finding-assessments-v1470.js'),'Assessment enhancement mounted in approved drawer');
+assert.ok(html.includes('Command Centre Intelligence Players'),'Locked player hierarchy remains unchanged');
+assert.ok(!html.includes('id="legalCaseQueue"'),'Removed standalone legal section remains hidden');
+assert.ok(plugin.includes('ui.openFinding=async')&&plugin.includes("data-review-tab"),'Finding drawer uses legal and platform tabs');
+assert.ok(plugin.includes('/api/finding-assessments/')&&plugin.includes('/inbox?casework=1'),'Evidence API and existing casework reused');
+assert.ok(api.includes('access_findings')&&api.includes('semantic=False'),'Permission-scoped and no paid embedding');
+assert.ok(main.includes('finding_assessments_router'),'Router mounted');
+console.log('PASS v147.0 finding assessment UI/API contracts');

@@ -30,6 +30,7 @@ from .smart_radar_qa_alignment import router as smart_radar_qa_alignment_router
 from .demo_feedback import router as demo_feedback_router
 from .casework import router as casework_router
 from .management_reporting import router as management_reporting_router
+from .finding_assessments import router as finding_assessments_router
 from .officer_sentiment import router as officer_sentiment_router
 from .assistant_knowledge import router as assistant_knowledge_router
 from .oversight_legal import router as oversight_legal_router
@@ -39,6 +40,7 @@ app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
 app.include_router(demo_feedback_router)
 app.include_router(casework_router)
 app.include_router(management_reporting_router)
+app.include_router(finding_assessments_router)
 app.include_router(officer_sentiment_router)
 app.include_router(assistant_knowledge_router)
 app.include_router(oversight_legal_router)
@@ -138,7 +140,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'146.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'147.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

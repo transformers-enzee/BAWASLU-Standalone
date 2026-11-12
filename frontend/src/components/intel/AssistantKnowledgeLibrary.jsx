@@ -174,6 +174,7 @@ export default function AssistantKnowledgeLibrary(){
       <select className="intel-input mt-1 w-full" value={documentType} onChange={e=>setDocumentType(e.target.value)}>
        <option value="REGULATION">{id?'Peraturan / regulasi':'Regulation'}</option>
        <option value="SOP">SOP</option><option value="REPORT">{id?'Laporan':'Report'}</option>
+        <option value="REPORT_TEMPLATE">{id?'Template laporan':'Report template'}</option>
        <option value="GUIDANCE">{id?'Panduan':'Guidance'}</option>
        <option value="OTHER">{id?'Lainnya':'Other'}</option>
       </select>

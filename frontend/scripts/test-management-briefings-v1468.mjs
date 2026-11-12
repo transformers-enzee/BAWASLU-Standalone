@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const root=new URL('../',import.meta.url);
+const read=path=>readFileSync(new URL(path,root),'utf8');
+const radar=read('src/pages/SmartRadar.jsx');
+const briefing=read('src/components/intel/ManagementBriefings.jsx');
+const api=read('../backend/app/management_reporting.py');
+const main=read('../backend/app/main.py');
+assert.ok(radar.includes('ManagementBriefings')&&radar.includes('setMode'),'Command Centre includes Reports & Briefings switch');
+assert.ok(radar.includes('/ui-freeze/smart-radar-v6_2.html'),'Existing approved Command Centre unchanged');
+assert.ok(briefing.includes('briefing.csv')&&briefing.includes('window.print()'),'CSV and print-to-PDF actions wired');
+assert.ok(briefing.includes('Authorization')&&briefing.includes('data-i18n-exempt'),'Authorized bilingual UI');
+assert.ok(api.includes('_visible(')&&api.includes('AUTHORIZED_OFFICER_CASEWORK'),'Scoping and provenance');
+assert.ok(main.includes('management_reporting_router'),'API mounted');
+console.log('PASS v146.8 management reporting frontend contract');

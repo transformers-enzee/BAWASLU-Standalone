@@ -22,7 +22,7 @@ router=APIRouter(prefix="/api/assistant-knowledge",tags=["assistant-knowledge"])
 MAX_BYTES=5*1024*1024
 MAX_PAGES=80
 MAX_CHARS=160000
-DOCUMENT_TYPES={"REGULATION","SOP","REPORT","GUIDANCE","OTHER"}
+DOCUMENT_TYPES={"REGULATION","SOP","REPORT","REPORT_TEMPLATE","GUIDANCE","OTHER"}
 
 class KnowledgePDF(Base):
     __tablename__="assistant_knowledge_pdfs"

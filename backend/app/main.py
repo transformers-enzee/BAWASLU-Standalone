@@ -17,6 +17,7 @@ from .source_retrieval import _language_detection
 from .smart_radar import router as smart_radar_router
 from .issue_distribution import router as issue_distribution_router
 from .assistant_history import router as assistant_history_router
+from .assistant_eval_sampling import router as assistant_eval_sampling_router
 from .integration_readiness import router as integration_readiness_router
 from .source_lineage import router as source_lineage_router
 from .deployment_readiness import router as deployment_readiness_router
@@ -47,6 +48,7 @@ app.include_router(oversight_legal_router)
 app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
+app.include_router(assistant_eval_sampling_router)
 app.include_router(integration_readiness_router)
 app.include_router(source_lineage_router)
 app.include_router(deployment_readiness_router)
@@ -140,7 +142,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -775,7 +777,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                              'scope':'AUTHORIZED_PDF_REFERENCES',
                              'source_types':[],'reference_pdf_count':len(reference_catalog),
                              'reference_page_count':0,'limited':True}}
-    if general or (not evidence and requested=='AUTO'):
+    # An explicitly named saved post is an exact-source question. Never
+    # substitute GPT general context when the ID was not authorized/found.
+    import re as _assistant_re
+    explicit_social_id=bool(_assistant_re.search(
+        r"(?<!\w)SOCIAL-[0-9]{1,12}(?!\w)",q,flags=_assistant_re.I))
+    if general or (not evidence and requested=='AUTO' and not explicit_social_id):
         try:
             text,provider=generate_general_openai_answer(q,previous)
         except AssistantProviderError as exc:
@@ -802,7 +809,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                 'grounding':{'accessible_count':len(accessible),
                     'selected_count':0,'supporting_count':0,'scope':'GPT_GENERAL_NO_PRIVATE_RECORDS',
                     'source_types':[],'matched_social':0,'limited':True}}
-    if requested=='DATA' and not evidence:
+    if (requested=='DATA' or explicit_social_id) and not evidence:
         no_match={
             'id':'Tidak ditemukan catatan BAWASLU yang sesuai dalam cakupan akses Anda. Saya tidak akan menebak dari pengetahuan umum pada mode bukti tersimpan.',
             'en':'No matching BAWASLU records were found in your authorized scope. I will not substitute unsupported general knowledge for saved evidence.',

@@ -137,6 +137,28 @@ def _keywords(question):
 
 def _social_select(rows, question, limit=18):
     """Only approved relevance classes can be used as source-grounded evidence."""
+    # A source-ID question must never drift into unrelated saved posts.
+    # The rows were already jurisdiction/campaign-scoped by campaign_action;
+    # explicit IDs cannot bypass that authorization. Only relevant saved
+    # records with actual text remain eligible for Assistant evidence.
+    exact_ids=set(re.findall(r"(?<!\w)SOCIAL-([0-9]{1,12})(?!\w)",
+        str(question or ""),flags=re.I))
+    if exact_ids:
+        exact={}
+        for row in rows or []:
+            rid=str(row.get("id") or "")
+            if (rid not in exact_ids or
+                str(row.get("relevance_label") or "").upper() not in RELEVANT or
+                not str(row.get("text_content") or "").strip()):
+                continue
+            old=exact.get(rid)
+            def version(item):
+                try:return int(item.get("assessment_version") or 0)
+                except (ValueError,TypeError):return 0
+            if old is None or version(row)>version(old):
+                exact[rid]=row
+        chosen=sorted(exact.values(),key=lambda x:int(x["id"]))
+        return chosen[:limit],len(exact)
     terms = _keywords(question)
     selected = {}
     for row in rows:

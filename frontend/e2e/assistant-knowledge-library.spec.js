@@ -277,3 +277,72 @@ test('Assistant local review rejects unsupported unpaired scoring sheets',async(
  await expect(panel.getByTestId('assistant-review-dimension-citation_grounding'))
   .toContainText('0/0 supported');
 });
+
+
+test('Assistant prepares real-source evaluation questions without calling the AI model',async({page})=>{
+ const prepared=[];
+ page.on('request',req=>{
+  if(req.url().includes('/api/functions/intelligenceAssistant'))prepared.push(req.url());
+ });
+ await page.route('**/api/assistant-evaluation/questions?target=*',route=>
+  route.fulfill({status:200,contentType:'application/json',
+   body:JSON.stringify({
+    framework:'BAWASLU_ASSISTANT_EVALUATION_PLAN_V1488',
+    target_questions:24,prepared_questions:1,shortfall:23,
+    category_available_sources:{POTENTIAL_VIOLATION_SIGNAL:1,PUBLIC_CONCERN:0},
+    category_selected_questions:{POTENTIAL_VIOLATION_SIGNAL:1},
+    missing_categories:['PUBLIC_CONCERN'],
+    questions:[{
+      question_number:1,category:'POTENTIAL_VIOLATION_SIGNAL',
+      source_record_id:'SOCIAL-42',source_url:'https://example.invalid/post/42',
+      platform:'Instagram',
+      question:'For saved relevant Social Listening source [SOCIAL-42] on Instagram, describe alleged conduct; do not determine a violation.'
+    }],
+    negative_control:{source_record_id:'SOCIAL-0',
+      question:'Review saved source [SOCIAL-0] and explicitly state no matching source exists.',
+      excluded_from_real_source_count:true}
+   })}));
+ await login(page);
+ await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-evaluation-sampler');
+ await expect(panel).toBeVisible();
+ await expect(panel.getByTestId('assistant-evaluation-generate')).toHaveCount(0);
+ await panel.getByRole('button',{name:/Prepare real-source Assistant evaluation questions/}).click();
+ await panel.getByTestId('assistant-evaluation-generate').click();
+ const result=panel.getByTestId('assistant-evaluation-sampler-result');
+ await expect(result).toContainText('1/24 real-source questions prepared');
+ await expect(result).toContainText('23 not available');
+ await expect(result).toContainText('Public concern');
+ await expect(result).toContainText('non-random sample');
+ expect(prepared).toHaveLength(0);
+ await panel.getByTestId('assistant-evaluation-use-question').first().click();
+ await expect(page.locator('form input[maxlength="1000"]'))
+  .toHaveValue(/SOCIAL-42/);
+ await expect(panel.getByTestId('assistant-evaluation-question-prepared'))
+  .toContainText('press Send yourself');
+ expect(prepared).toHaveLength(0);
+ const download=page.waitForEvent('download');
+ await panel.getByTestId('assistant-evaluation-export').click();
+ const file=await download;
+ expect(file.suggestedFilename()).toBe('BAWASLU-assistant-evaluation-questions-v1488.json');
+ const {readFile}=await import('node:fs/promises');
+ const data=JSON.parse(await readFile(await file.path(),'utf8'));
+ expect(data.questions).toHaveLength(1);
+ expect(data.questions[0].source_record_id).toBe('SOCIAL-42');
+ expect(data.negative_control.excluded_from_real_source_count).toBe(true);
+ expect(prepared).toHaveLength(0);
+});
+
+test('Assistant evaluation preparation does not reveal sources without authorization',async({page})=>{
+ await page.route('**/api/assistant-evaluation/questions?target=*',route=>
+  route.fulfill({status:403,contentType:'application/json',
+    body:JSON.stringify({detail:'Intelligence evaluation requires view permission'})}));
+ await login(page);
+ await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-evaluation-sampler');
+ await panel.getByRole('button',{name:/Prepare real-source Assistant evaluation questions/}).click();
+ await panel.getByTestId('assistant-evaluation-generate').click();
+ await expect(panel.getByRole('alert')).toContainText('view permission');
+ await expect(panel.getByTestId('assistant-evaluation-sampler-result')).toHaveCount(0);
+ await expect(panel.getByTestId('assistant-evaluation-use-question')).toHaveCount(0);
+});

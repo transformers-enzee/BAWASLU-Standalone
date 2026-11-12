@@ -51,7 +51,7 @@ const main=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'ut
 const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
 assert.ok(source.includes('assistant-human-scoring-export')&&
  source.includes('completedOfficerScoringCsv')&&source.includes('setConfirmed(false)'));
-assert.ok(page.includes('<AssistantHumanScoring/>'));
+assert.ok(page.includes('<AssistantHumanScoring incomingPacket={scoringPacket}/>'));
 const release=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
 assert.ok(release&&shell.includes('data-build-version="'+release+'"')&&
  shell.includes('>v'+release+'</footer>'));

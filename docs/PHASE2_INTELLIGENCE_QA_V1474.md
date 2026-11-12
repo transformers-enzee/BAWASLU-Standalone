@@ -1,4 +1,4 @@
-# BAWASLU Phase 2 — Intelligence Integrity and Assessment QA (v147.4 implementation, v147.5 validation)
+# BAWASLU Phase 2 — Intelligence Integrity and Assessment QA (v147.4 implementation, v147.6 validation)
 
 **Environment:** `architecture-v2-foundation-20261015` staging only.  
 **Scope:** Phase 2 Tasks 1–3: saved Inbox source consistency, legal PDF references, social-platform policy screening.  
@@ -33,6 +33,6 @@ These are different denominators. Campaign links may overlap; assessment-version
 
 ## QA release acceptance
 
-The code-release checklist is complete only when the GitHub backend tests, production frontend build, version contract, UI validation, PostgreSQL-security check, offline-assessment contract and Playwright browser suite pass **and** Render reports the exact `v147.5` corrective commit live.
+The code-release checklist is complete only when the GitHub backend tests, production frontend build, version contract, UI validation, PostgreSQL-security check, offline-assessment contract and Playwright browser suite pass **and** Render reports the exact `v147.6` corrective commit live.
 
 The client/legal acceptance gate is separate and remains open until current regulations and actual findings receive competent officer review.

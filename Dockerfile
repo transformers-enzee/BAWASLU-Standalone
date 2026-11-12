@@ -3,6 +3,9 @@ WORKDIR /src/frontend
 COPY frontend/package*.json ./
 RUN npm install --no-audit --no-fund
 COPY frontend ./
+# Frontend contract checks verify backend API/source semantics at build time.
+# These sources are present only in the temporary build stage, not browser assets.
+COPY backend /src/backend
 RUN npm run build
 
 FROM python:3.12-slim

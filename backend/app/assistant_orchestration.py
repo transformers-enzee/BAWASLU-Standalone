@@ -135,14 +135,28 @@ Return JSON matching the required schema. Every cited_ids entry MUST be a suppli
 def _keywords(question):
     return [t for t in _tokens(question) if len(t) > 2 and t not in STOP][:14]
 
+def exact_social_source_ids(question):
+    """Recognize saved Social Listening IDs without interpreting them as grants."""
+    return set(re.findall(r"(?<!\w)SOCIAL-([0-9]{1,12})(?!\w)",
+        str(question or ""), flags=re.I))
+
+
+def exact_social_selection_complete(question, selected, limit=20):
+    """A comparison is unsafe if even one explicit ID is missing or inaccessible."""
+    requested=exact_social_source_ids(question)
+    return not requested or (
+        len(requested)<=limit and
+        {str(row.get("id") or "") for row in selected or []}==requested
+    )
+
+
 def _social_select(rows, question, limit=18):
     """Only approved relevance classes can be used as source-grounded evidence."""
     # A source-ID question must never drift into unrelated saved posts.
     # The rows were already jurisdiction/campaign-scoped by campaign_action;
     # explicit IDs cannot bypass that authorization. Only relevant saved
     # records with actual text remain eligible for Assistant evidence.
-    exact_ids=set(re.findall(r"(?<!\w)SOCIAL-([0-9]{1,12})(?!\w)",
-        str(question or ""),flags=re.I))
+    exact_ids=exact_social_source_ids(question)
     if exact_ids:
         exact={}
         for row in rows or []:
@@ -158,6 +172,8 @@ def _social_select(rows, question, limit=18):
             if old is None or version(row)>version(old):
                 exact[rid]=row
         chosen=sorted(exact.values(),key=lambda x:int(x["id"]))
+        if not exact_social_selection_complete(question,chosen,limit):
+            return [],0
         return chosen[:limit],len(exact)
     terms = _keywords(question)
     selected = {}

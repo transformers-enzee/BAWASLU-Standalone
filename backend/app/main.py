@@ -142,7 +142,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.8','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -635,6 +635,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     )
     from .assistant_orchestration import (
         _social_select, social_evidence, social_record_view,
+        exact_social_source_ids, exact_social_selection_complete,
         is_conceptual, generate, evidence_fallback
     )
     # Preserve the existing endpoint contract for older clients. The upgraded
@@ -718,9 +719,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
-    general=requested=='GENERAL' or (
+    explicit_social_ids=exact_social_source_ids(q)
+    general=not explicit_social_ids and (requested=='GENERAL' or (
         requested=='AUTO' and response_profile!=PDF_GUIDANCE and
-        is_conceptual(q) and not pdf_evidence)
+        is_conceptual(q) and not pdf_evidence))
     source_warning=''
     social_rows=[]
     selected_formal=[]
@@ -753,6 +755,13 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         context_pdf=select_case_reference_pages(q,context_pdf)
     if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) and not question_mentions_pdf(q):
         context_pdf=[]
+    if explicit_social_ids and not exact_social_selection_complete(q,chosen_social,limit=20):
+        # A missing or unauthorized named source cannot be replaced with a
+        # different formal record or an unrelated PDF, even in a comparison.
+        selected_formal=[]
+        chosen_social=[]
+        context_pdf=[]
+        response_profile=SOCIAL_ANALYSIS
     evidence=evidence_for_profile(
         response_profile,
         [assistant_evidence_record(row) for row in selected_formal],
@@ -779,9 +788,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                              'reference_page_count':0,'limited':True}}
     # An explicitly named saved post is an exact-source question. Never
     # substitute GPT general context when the ID was not authorized/found.
-    import re as _assistant_re
-    explicit_social_id=bool(_assistant_re.search(
-        r"(?<!\w)SOCIAL-[0-9]{1,12}(?!\w)",q,flags=_assistant_re.I))
+    explicit_social_id=bool(explicit_social_ids)
     if general or (not evidence and requested=='AUTO' and not explicit_social_id):
         try:
             text,provider=generate_general_openai_answer(q,previous)

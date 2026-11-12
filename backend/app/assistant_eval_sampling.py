@@ -47,13 +47,13 @@ ALLOWED_PLATFORMS={
 
 def _http_url(raw):
     value=str(raw or "").strip()
-    if len(value)>1500 or any(ch in value for ch in "\r\n\t"):
+    if len(value)>1500 or any(ch.isspace() or ord(ch)<32 or ord(ch)==127 or ch=="\\" for ch in value):
         return ""
     try:
         parts=urlsplit(value)
     except ValueError:
         return ""
-    if parts.scheme not in ("https","http") or not parts.netloc or parts.username or parts.password:
+    if parts.scheme not in ("https","http") or not parts.netloc or not parts.hostname or parts.username or parts.password:
         return ""
     return value
 

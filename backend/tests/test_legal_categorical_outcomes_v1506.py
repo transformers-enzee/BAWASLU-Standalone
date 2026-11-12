@@ -76,6 +76,7 @@ def test_absent_pdf_does_not_certify_definitive_legal_conclusion():
     assert meta["legal_categorical_outcome_needs_officer_review"] is True
     assert legal["status"]=="REVIEW_REQUIRED"
     assert meta["audit_used_paid_provider"] is False
+    assert meta["human_review_required"] is True
 
 def test_neutral_casework_summary_does_not_raise_false_guilt_claim():
     text,meta,legal=audit(
@@ -83,4 +84,4 @@ def test_neutral_casework_summary_does_not_raise_false_guilt_claim():
         question="Summarize the procedure")
     assert meta["legal_categorical_outcome_flags"]==[]
     assert "Legal certainty caution" not in text
-    assert legal["status"]=="PASS"
+    assert legal["status"]=="NOT_APPLICABLE"

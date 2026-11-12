@@ -343,6 +343,6 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_reference_limit_added":bool(pdf_guidance and needs_legal_warning
                                            and not legally_reviewed),
         "audit_used_paid_provider":False,
-        "human_review_required":bool(records),
+        "human_review_required":bool(records or categorical_outcome_flags or enforcement_flags),
     }
     return text,cited,metadata

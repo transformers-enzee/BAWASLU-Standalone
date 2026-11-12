@@ -1,5 +1,7 @@
 # BAWASLU v148.5 — Human Answer-Quality Review Packet Export
 
+**Release note:** v148.6 corrects stale version-specific assertions in the v148.4 and v148.5 regression scripts. The v148.5 review-export capability and security boundaries are unchanged.
+
 **Environment:** staging only, architecture-v2-foundation-20261015.
 **Purpose:** Make the human review of genuine Assistant question–evidence–answer examples reproducible without inventing model accuracy, legal clearance or officer approval.
 

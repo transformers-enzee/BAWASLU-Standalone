@@ -5,6 +5,7 @@ import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
 import AssistantKnowledgeLibrary from '@/components/intel/AssistantKnowledgeLibrary';
+import AssistantReviewConsolidation from '@/components/intel/AssistantReviewConsolidation';
 import {textFor} from '@/lib/assistantResponseLocale';
 import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
 import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/AssistantActionDesk';
@@ -139,6 +140,7 @@ export default function IntelligenceAssistant(){
   </header>
   <UserWorkspacePulse/>
   <AssistantKnowledgeLibrary/>
+  <AssistantReviewConsolidation/>
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
    <button type="button" className="intel-button" disabled={busy||historyBusy} onClick={newConversation}><Plus size={15}/>{t('new_conversation')}</button>

@@ -21,6 +21,9 @@ const nonCryptoFingerprint=value=>{
   for(const c of String(value)){hash^=c.codePointAt(0);hash=Math.imul(hash,16777619)}
   return (hash>>>0).toString(16).padStart(8,'0');
 };
+export const assistantReviewPacketId=(question,answer)=>
+  'AR-'+nonCryptoFingerprint(String(question??'')+'\0'+String(answer??''));
+
 const sourceView=row=>({
   record_id:asText(row.record_id||row.intelligence_id||row.id,120),
   record_type:asText(row.record_type,60),
@@ -59,10 +62,10 @@ export function buildAssistantReviewPacket({question,answer,buildVersion='unknow
   const rawChecks=response.grounding?.answer_quality?.checks||[];
   const review=Object.fromEntries(rawChecks.map(c=>[c.id,c]));
   const cited=response.grounding?.grounding_audit?.displayed_citation_ids||[];
-  const fingerprint=nonCryptoFingerprint(q+'\0'+answerText);
+  const packetId=assistantReviewPacketId(q,answerText);
   const snapshot={
     schema_version:'BAWASLU_ASSISTANT_REVIEW_V1485',
-    packet_id:'AR-'+fingerprint,
+    packet_id:packetId,
     packet_id_is_cryptographic_signature:false,
     export_time_utc:asText(exportedAt||new Date().toISOString(),40),
     app_build_version:asText(buildVersion,30),
@@ -121,10 +124,11 @@ export function assistantReviewScorecardCsv(packet){
     throw new Error('Invalid reviewer packet.');
   }
   const header=['packet_id','dimension','automated_status','human_score_0_1_NA',
-    'evidence_reference','reviewer_note','reviewer_id','review_date_utc'];
+    'evidence_reference','reviewer_note','reviewer_id','review_date_utc',
+    'adjudicated_score_0_1_NA','adjudicator_id','adjudication_note'];
   const rows=(packet.human_scorecard?.checks||[]).map(check=>{
     const automated=(packet.automated_checks?.checks||[]).find(item=>item.id===check.id);
-    return [packet.packet_id,check.id,automated?.automated_status||'NOT_RUN','','','','',''];
+    return [packet.packet_id,check.id,automated?.automated_status||'NOT_RUN','','','','','','','',''];
   });
   return '\ufeff'+[csvRow(header),...rows.map(csvRow)].join('\r\n')+'\r\n';
 }

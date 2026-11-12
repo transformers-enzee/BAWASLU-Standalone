@@ -190,3 +190,90 @@ test('Assistant review packet exports preserve blank human scores',async({page})
  expect(sheet).toContain('REVIEW_REQUIRED');
  expect(sheet.trim().split(/\r?\n/)).toHaveLength(5);
 });
+
+
+test('Assistant consolidates independently scored local review sheets without calling an API',async({page})=>{
+ const {buildAssistantReviewPacket,assistantReviewScorecardCsv}=await import('../src/lib/assistantReviewPacket.js');
+ const packet=buildAssistantReviewPacket({
+  question:'What happened in Riau?',
+  answer:{role:'assistant',text:'Riau discussion needs verification. [SOCIAL-44]',
+   records:[{record_id:'SOCIAL-44',record_type:'SOCIAL_LISTENING',
+     source_excerpt:'Local oversight record in Riau'}],
+   grounding:{grounding_audit:{displayed_citation_ids:['SOCIAL-44']},
+    answer_quality:{checks:[{id:'citation_grounding',status:'PASS'}]}}},
+  buildVersion:'148.7',exportedAt:'2026-11-12T05:00:00Z'
+ });
+ const header=assistantReviewScorecardCsv(packet).replace(/^\ufeff/,'').split('\r\n')[0];
+ const escape=value=>'"'+String(value??'').replace(/"/g,'""')+'"';
+ const sheet=(reviewer,score)=>'\ufeff'+[
+  header,
+  ...['citation_grounding','source_relevance','legal_uncertainty',
+      'cross_module_consistency'].map(d=>
+     [packet.packet_id,d,'PASS',d==='citation_grounding'?score:'',
+      d==='citation_grounding'?'SOCIAL-44':'',
+      d==='citation_grounding'?'Officer checked source excerpt and context.':'',
+      d==='citation_grounding'?reviewer:'',
+      d==='citation_grounding'?'2026-11-12T05:10:00Z':'',
+      '','',''].map(escape).join(',')
+   )
+ ].join('\r\n')+'\r\n';
+ const networkWrites=[];
+ page.on('request',request=>{
+  if(request.method()!=='GET'&&request.url().includes('assistant-review'))
+   networkWrites.push(request.url());
+ });
+ await login(page);
+ await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-review-consolidation');
+ await panel.getByRole('button',{name:/Human answer-review consolidation/}).click();
+ await expect(panel).toContainText('All files stay in this browser session.');
+ await panel.getByTestId('assistant-review-file-input').setInputFiles([
+  {name:'Riau-response.json',mimeType:'application/json',
+   buffer:Buffer.from(JSON.stringify(packet))},
+  {name:'review-officer-a.csv',mimeType:'text/csv',
+   buffer:Buffer.from(sheet('officer_one','1'))},
+  {name:'review-officer-b.csv',mimeType:'text/csv',
+   buffer:Buffer.from(sheet('officer_two','1'))}
+ ]);
+ const result=panel.getByTestId('assistant-review-consolidation-result');
+ await expect(result).toContainText('1 evidence packets');
+ await expect(result).toContainText('2 scored sheets accepted');
+ const citation=panel.getByTestId('assistant-review-dimension-citation_grounding');
+ await expect(citation).toContainText('100%');
+ await expect(citation).toContainText('1/1 supported');
+ await expect(citation).toContainText('Reviewer agreement: 100%');
+ const legal=panel.getByTestId('assistant-review-dimension-legal_uncertainty');
+ await expect(legal).toContainText('0/0 supported');
+ await expect(result).toContainText('not a verified AI accuracy rate');
+ const download=page.waitForEvent('download');
+ await panel.getByTestId('assistant-review-summary-export').click();
+ const file=await download;
+ expect(file.suggestedFilename()).toBe('BAWASLU-human-review-aggregate-v1487.json');
+ const {readFile}=await import('node:fs/promises');
+ const summary=JSON.parse(await readFile(await file.path(),'utf8'));
+ expect(summary.packet_count).toBe(1);
+ expect(summary.human_accuracy_percentage).toBeNull();
+ expect(summary.dimension_stats[0].consensus_scored).toBe(1);
+ expect(summary.dimension_stats[1].consensus_scored).toBe(0);
+ expect(summary.client_acceptance_certified).toBe(false);
+ expect(JSON.stringify(summary)).not.toContain('Local oversight record in Riau');
+ expect(JSON.stringify(summary)).not.toContain('officer_one');
+ expect(networkWrites).toEqual([]);
+});
+
+test('Assistant local review rejects unsupported unpaired scoring sheets',async({page})=>{
+ await login(page);
+ await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-review-consolidation');
+ await panel.getByRole('button',{name:/Human answer-review consolidation/}).click();
+ const csv='packet_id,dimension,automated_status,human_score_0_1_NA,evidence_reference,reviewer_note,reviewer_id,review_date_utc\n'+
+  ['citation_grounding','source_relevance','legal_uncertainty','cross_module_consistency']
+   .map(d=>'AR-00000000,'+d+',PASS,,,,,').join('\n')+'\n';
+ await panel.getByTestId('assistant-review-file-input').setInputFiles([
+  {name:'unpaired-review.csv',mimeType:'text/csv',buffer:Buffer.from(csv)}
+ ]);
+ await expect(panel.getByTestId('assistant-review-import-errors'))
+  .toContainText('Missing matching JSON evidence packet');
+ await expect(panel.getByTestId('assistant-review-dimension-citation_grounding'))
+  .toContainText('0/0 supported');
+});

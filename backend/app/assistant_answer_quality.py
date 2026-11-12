@@ -111,7 +111,13 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         unattributed=grounding.get("legal_article_claims_without_local_pdf_citation") or []
         unreviewed_cited=int(grounding.get("cited_unreviewed_pdf_pages") or 0)
         enforcement=bool(grounding.get("legal_enforcement_recommendation_needs_officer_review"))
-        if enforcement:
+        categorical=grounding.get("legal_categorical_outcome_flags") or []
+        if categorical:
+            checks.append(_status("legal_uncertainty",REVIEW,
+                "The answer asserts a legal violation, guilt, or penalty as established. Citations do not establish official adjudication or legal currentness.",
+                categorical_outcome_flags=categorical,
+                enforcement_directive_flags=grounding.get("legal_enforcement_directive_flags") or []))
+        elif enforcement:
             checks.append(_status("legal_uncertainty",REVIEW,
                 "Assertive legal enforcement or penalty language requires authorized officer review, irrespective of cited PDF review status. No legal conclusion is verified.",
                 enforcement_directive_flags=grounding.get("legal_enforcement_directive_flags") or []))

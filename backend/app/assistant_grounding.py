@@ -141,6 +141,63 @@ def _assertive_enforcement_recommendations(answer):
         flags.append("ASSERTIVE_ENFORCEMENT_DIRECTIVE")
     return list(dict.fromkeys(flags))
 
+
+# A deterministic review-only detector of definite legal outcomes. Unlike
+# article citations, these claims can be phrased without "pasal" or "article".
+# These patterns flag apparent unsupported certainty, NOT actual guilt or law.
+_CONFIRMED_VIOLATION_EN=re.compile(
+    r"\b(?:(?:the|this)\s+(?:electoral\s+|election\s+|legal\s+)?"
+    r"(?:violation|offen[sc]e)\s+(?:is|was|has\s+been)\s+(?:confirmed|proven)|"
+    r"(?:evidence|records?)\s+(?:confirms?|proves?)\s+(?:an?\s+)?"
+    r"(?:electoral\s+|election\s+|legal\s+)?(?:violation|offen[sc]e)|"
+    r"(?:candidate|official|officer|suspect|person)\s+"
+    r"(?:has\s+|have\s+|had\s+)?(?:violated|committed\s+(?:an?\s+)?(?:electoral\s+)?(?:violation|offen[sc]e))"
+    r"(?:\s+(?:election|electoral)\s+law)?)\b",re.I)
+_CONFIRMED_GUILT_EN=re.compile(
+    r"\b(?:is|was|are|were|has\s+been|have\s+been)\s+"
+    r"(?:legally\s+|criminally\s+)?(?:guilty|convicted|liable)\b",re.I)
+_CONFIRMED_OUTCOME_EN=re.compile(
+    r"\b(?:is|was|has\s+been|have\s+been)\s+"
+    r"(?:already\s+)?(?:disqualified|banned|sentenced|fined|penalized|penalised)\b",re.I)
+_CONFIRMED_VIOLATION_ID=re.compile(
+    r"\b(?:terbukti\s+melanggar|telah\s+melanggar\s+(?:hukum|undang.undang|"
+    r"peraturan\s+pemilu)|pelanggaran\s+(?:ini\s+)?(?:telah\s+)?terbukti|"
+    r"telah\s+terjadi\s+pelanggaran\s+(?:hukum|pemilu))\b",re.I)
+_CONFIRMED_GUILT_ID=re.compile(
+    r"\b(?:dinyatakan\s+bersalah|telah\s+bersalah|terbukti\s+bersalah)\b",re.I)
+_CONFIRMED_OUTCOME_ID=re.compile(
+    r"\b(?:telah\s+(?:didiskualifikasi|dipidana|dihukum|didenda)|"
+    r"sanksi\s+(?:telah\s+)?dijatuhkan|hak\s+(?:dipilih|politik)\s+(?:telah\s+)?dicabut)\b",re.I)
+_UNCERTAIN_OUTCOME=re.compile(
+    r"\b(?:alleged(?:ly)?|allegation|suspected|potential(?:ly)?|"
+    r"may|might|could|unverified|unconfirmed|reportedly|"
+    r"appears\s+to|claims?\s+that|"
+    r"diduga|dugaan|terduga|berpotensi|mungkin|"
+    r"belum\s+(?:terbukti|diverifikasi|dikonfirmasi)|"
+    r"masih\s+(?:perlu|dalam)\s+(?:verifikasi|pemeriksaan)|"
+    r"perlu\s+(?:diverifikasi|diperiksa))\b",re.I)
+
+def _asserted_legal_outcomes(answer):
+    """Review categorical verdict/outcome language absent legal article IDs.
+
+    Scan independent clauses; quoted, explicitly negated or hedged clauses
+    cannot certify wrongdoing. Result categories are *detection labels* only.
+    """
+    flags=[]
+    for clause in _CLAUSE_BOUNDARY.split(str(answer or "")):
+        clause=clause.strip()
+        if not clause or clause.endswith("?") or _QUOTED_ATTRIBUTION.search(clause):
+            continue
+        if _NEGATED_RECOMMENDATION.search(clause) or _UNCERTAIN_OUTCOME.search(clause):
+            continue
+        if _CONFIRMED_VIOLATION_EN.search(clause) or _CONFIRMED_VIOLATION_ID.search(clause):
+            flags.append("ASSERTED_CONFIRMED_VIOLATION")
+        if _CONFIRMED_GUILT_EN.search(clause) or _CONFIRMED_GUILT_ID.search(clause):
+            flags.append("ASSERTED_LEGAL_GUILT")
+        if _CONFIRMED_OUTCOME_EN.search(clause) or _CONFIRMED_OUTCOME_ID.search(clause):
+            flags.append("ASSERTED_ENFORCEMENT_OUTCOME")
+    return list(dict.fromkeys(flags))
+
 def _message(language, key):
     choices={
         "unreviewed":{
@@ -164,6 +221,9 @@ def _message(language, key):
         "enforcement":{
             "id":"Peringatan tindakan hukum: Jawaban ini memuat arahan penegakan atau sanksi yang bersifat tegas. Kutipan PDF tidak memverifikasi kewenangan, fakta kasus, atau dasar hukumnya. Jangan laksanakan tanpa penilaian petugas berwenang.",
             "en":"Enforcement caution: This answer contains an assertive enforcement or penalty recommendation. PDF citations do not verify legal authority, case facts, or applicable law. Do not act without an authorized officer's review."},
+        "categorical_verdict":{
+            "id":"Peringatan kepastian hukum: Jawaban ini menyampaikan pelanggaran, kesalahan, atau sanksi sebagai hal yang sudah pasti. Bukti tersimpan dan kutipan PDF saja tidak membuktikan putusan atau status hukum. Petugas berwenang harus memverifikasi sumber dan status resmi.",
+            "en":"Legal certainty caution: The answer presents a violation, guilt, or penalty as an established outcome. Saved evidence and PDF references alone do not confirm a legal ruling or status. An authorized officer must verify official records."},
     }
     return choices[key].get(language,choices[key]["en"])
 
@@ -216,8 +276,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
     unattributed_articles=_uncited_article_claims(raw,records)
     enforcement_flags=_assertive_enforcement_recommendations(raw)
+    categorical_outcome_flags=_asserted_legal_outcomes(raw)
     needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids
-                             or enforcement_flags)
+                             or enforcement_flags or categorical_outcome_flags)
     notes=[]
     pdf_guidance=profile=="PDF_GUIDANCE"
     if pdf_guidance:
@@ -234,6 +295,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         notes.append(_message(language,"article_unattributed"))
     if enforcement_flags:
         notes.append(_message(language,"enforcement"))
+    if categorical_outcome_flags:
+        notes.append(_message(language,"categorical_verdict"))
     if records and not cited and not pdf_guidance:
         notes.append(_message(language,"uncited"))
     for note in notes:
@@ -268,6 +331,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_enforcement_directive_flags":enforcement_flags,
         "legal_enforcement_recommendation_needs_officer_review":bool(enforcement_flags),
         "legal_enforcement_classification_basis":"CONSERVATIVE_LANGUAGE_HEURISTIC_ONLY",
+        "legal_categorical_outcome_flags":categorical_outcome_flags,
+        "legal_categorical_outcome_needs_officer_review":bool(categorical_outcome_flags),
+        "legal_categorical_outcome_classification_basis":"HEURISTIC_ONLY_NOT_LEGAL_VERDICT",
         "legal_currentness_verified":False,
         "legal_verdict_confirmed":False,
         "source_truth_verified":False,

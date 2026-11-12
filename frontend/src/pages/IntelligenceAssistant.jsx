@@ -221,6 +221,8 @@ export default function IntelligenceAssistant(){
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
           {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
+          {m.grounding.grounding_audit.legal_categorical_outcome_needs_officer_review&&
+           <p data-testid="assistant-categorical-legal-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Jawaban menyatakan pelanggaran, kesalahan, atau sanksi sebagai sudah pasti. Periksa putusan dan sumber resmi sebelum bertindak.':'This answer presents a violation, guilt, or penalty as established. Verify official decisions and records before acting.'}</p>}
           {m.grounding.grounding_audit.legal_enforcement_recommendation_needs_officer_review&&
            <p data-testid="assistant-legal-enforcement-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Arahan penegakan atau sanksi dalam jawaban memerlukan penilaian petugas berwenang. Kutipan PDF tidak membuktikan kewenangan atau dasar hukum.':'An enforcement or penalty recommendation requires authorized officer review. PDF citations do not prove legal authority or applicability.'}</p>}
           {(m.grounding.grounding_audit.legal_article_claims_without_local_pdf_citation_count||0)>0&&

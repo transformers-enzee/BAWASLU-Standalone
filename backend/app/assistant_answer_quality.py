@@ -106,7 +106,12 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
             "Legal-document verification was not requested."))
     elif legal_question:
         valid_legal=int(grounding.get("cited_officer_reviewed_legal_pages") or 0)
-        if valid_legal==0:
+        missing_articles=grounding.get("legal_article_numbers_not_found_in_cited_pdf") or []
+        if missing_articles:
+            checks.append(_status("legal_uncertainty",REVIEW,
+                "Named legal article numbers were not located in the cited PDF page excerpts. Verify official text and applicability.",
+                unmatched_article_count=len(missing_articles)))
+        elif valid_legal==0:
             checks.append(_status("legal_uncertainty",REVIEW,
                 "No cited officer-reviewed legal page; legal currentness and applicable law require official verification.",
                 reviewed_legal_pages=0))

@@ -221,6 +221,8 @@ export default function IntelligenceAssistant(){
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
           {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
+          {m.grounding.grounding_audit.legal_article_reference_needs_review&&
+           <p data-testid="assistant-legal-article-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Nomor pasal dalam jawaban tidak ditemukan pada kutipan halaman PDF yang dirujuk. Periksa naskah hukum resmi.':'An article number in this answer was not found in its cited PDF page excerpts. Verify the official legal text.'}</p>}
           {(m.grounding.grounding_audit.cited_unreviewed_pdf_pages||0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditinjau petugas dan keberlakuan hukumnya belum diverifikasi.':'Cited PDF is not officer-reviewed, and legal currentness is unverified.'}</p>}
          </div>}

@@ -57,7 +57,7 @@ def test_english_issue_specific_report_has_no_cross_province_source():
         assert len(template["source_appendix"])==2
         assert all("Bali" not in item["source_reference"]
                    for item in template["source_appendix"])
-        assert "not a census" in " ".join(template["methodology"])
+        assert "not a census" in " ".join(template["methodology"]).casefold()
         assert template["recommended_actions"]
         assert template["source_appendix"][0]["source_url"].startswith("https://")
     finally: db.close()

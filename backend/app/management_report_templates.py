@@ -79,7 +79,7 @@ def build_interim_template(snapshot, language="id"):
             "report_status": _clean(case.get("latest_report_status") or "-", 40),
             "source_reference": reference,
             "source_url": _safe_link(case.get("source_url")),
-            "source_excerpt": _clean(case.get("evidence_excerpt"), 320),
+            "source_excerpt": _clean(case.get("evidence_excerpt") or case.get("source_excerpt"), 320),
             "verified_province": _clean(case.get("verified_province"), 100),
             "verification_note": _t(language,
                 "Status alur kerja; isi sumber belum merupakan temuan hukum yang dipastikan.",

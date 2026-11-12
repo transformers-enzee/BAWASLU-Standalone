@@ -158,6 +158,9 @@ def build_interim_template(snapshot, language="id"):
             _t(language,
                 "Angka monitoring dan penugasan dipisahkan karena berasal dari populasi dan waktu dasar berbeda; tidak ada dugaan yang dikonfirmasi sebagai pelanggaran.",
                 "Monitoring and assignment KPIs use different populations and time bases. No suspected issue is a confirmed legal violation."),
+            _t(language,
+                f"Kategori indikasi dapat tumpang tindih: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} unggahan memiliki lebih dari satu indikasi dan jumlah kategori tidak boleh dijumlahkan. Konflik waktu publikasi {int(monitoring.get('source_publication_time_conflicts') or 0)}, sentimen {int(monitoring.get('source_sentiment_conflicts') or 0)}, dan platform {int(monitoring.get('source_platform_conflicts') or 0)} ditandai, bukan ditebak.",
+                f"Signal categories are non-additive: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} posts have overlapping preliminary signals. Duplicate finding links are deduplicated. Conflicting publication times ({int(monitoring.get('source_publication_time_conflicts') or 0)}), sentiments ({int(monitoring.get('source_sentiment_conflicts') or 0)}), and platforms ({int(monitoring.get('source_platform_conflicts') or 0)}) are flagged, not guessed."),
         ])
     scorecard = [
         {"label": _t(language,"Penugasan","Assignments"), "value":assigned},

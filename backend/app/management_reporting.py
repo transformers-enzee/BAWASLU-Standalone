@@ -8,6 +8,7 @@ from typing import Literal
 from datetime import datetime, timedelta, timezone
 import csv
 import io
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import and_, or_
@@ -85,55 +86,91 @@ def _utc_publication_time(raw):
 
 
 def monitoring_snapshot_from_findings(findings, start, end, topic=""):
-    """Pure, deduplicated and sample-limited view over AUTHORIZED Inbox findings.
+    """Reconcile authorized links before applying a topic or counting a post.
 
-    Period means original post publication time (not capture time).
-    No claims about total social conversation volume are made.
+    One canonical post may be linked to multiple findings with different
+    preliminary signals. Neither link order nor inconsistent metadata should
+    silently determine management counts.
     """
-    seen=set()
-    sentiments=Counter()
-    platforms=Counter()
-    unique_relevant=0
-    period_posts=0
-    unknown_dates=0
-    outside_window=0
-    flagged=0
-    concerns=0
-    narratives=0
+    from .platform_policy_screening import PLATFORM_POLICIES, normalize_platform
+    groups={}
     topic_needle=str(topic or "").casefold().strip()
     for finding in findings or []:
         kind=str(finding.get("kind") or "")
+        players=set(finding.get("players") or [])
+        signals=set()
+        if kind=="source_review" or "violations" in players:
+            signals.add("POTENTIAL_VIOLATION")
+        if kind=="discussion" or "concerns" in players:
+            signals.add("PUBLIC_CONCERN")
+        if kind=="narrative_candidate" and "narratives" in players:
+            signals.add("EMERGING_NARRATIVE")
         for post in finding.get("posts") or []:
             if not isinstance(post,dict):
                 continue
             sid=str(post.get("canonical_source_id") or "").strip()
-            if not sid or sid in seen:
+            if not sid:
                 continue
-            seen.add(sid)
-            if topic_needle and topic_needle not in " ".join([
+            grouped=groups.setdefault(sid,{"posts":[],"signals":set(),
+                                            "topic_match":not bool(topic_needle)})
+            grouped["posts"].append(post)
+            grouped["signals"].update(signals)
+            if topic_needle and topic_needle in " ".join([
                 str(post.get("message_original") or ""),
-                str(finding.get("title") or "")
+                str(finding.get("title") or ""),
             ]).casefold():
-                continue
-            unique_relevant+=1
-            published=_utc_publication_time(post.get("published_at_raw"))
-            if published is None:
-                unknown_dates+=1
-                continue
-            if not (start<=published<=end):
-                outside_window+=1
-                continue
-            period_posts+=1
-            sentiment=str(post.get("sentiment") or "UNCLASSIFIED").upper()
-            sentiments[sentiment if sentiment in ("POSITIVE","NEGATIVE","NEUTRAL")
-                       else "UNCLASSIFIED"]+=1
-            platforms[str(post.get("platform") or "Unknown")]+=1
-            if kind=="source_review":
-                flagged+=1
-            if kind=="discussion" or "concerns" in (finding.get("players") or []):
-                concerns+=1
-            if kind=="narrative_candidate" and "narratives" in (finding.get("players") or []):
-                narratives+=1
+                grouped["topic_match"]=True
+
+    sentiments=Counter()
+    platforms=Counter()
+    unique_relevant=period_posts=unknown_dates=outside_window=0
+    flagged=concerns=narratives=overlap=0
+    date_conflicts=sentiment_conflicts=platform_conflicts=0
+    duplicate_links_removed=0
+    for record in groups.values():
+        if not record["topic_match"]:
+            continue
+        posts=record["posts"]
+        unique_relevant+=1
+        duplicate_links_removed+=len(posts)-1
+
+        valid_dates={timestamp for row in posts
+                     if (timestamp:=_utc_publication_time(row.get("published_at_raw"))) is not None}
+        if len(valid_dates)>1:
+            date_conflicts+=1
+        if len(valid_dates)!=1:
+            unknown_dates+=1
+            continue
+        published=next(iter(valid_dates))
+        if not (start<=published<=end):
+            outside_window+=1
+            continue
+
+        period_posts+=1
+        labels={str(row.get("sentiment") or "").upper().strip() for row in posts}
+        known_levels=labels.intersection({"POSITIVE","NEGATIVE","NEUTRAL"})
+        if len(known_levels)>1:
+            sentiment_conflicts+=1
+        sentiment=next(iter(known_levels)) if len(known_levels)==1 else "UNCLASSIFIED"
+        sentiments[sentiment]+=1
+
+        platform_keys={normalize_platform(row.get("platform")) for row in posts
+                       if str(row.get("platform") or "").strip()}
+        if len(platform_keys)>1:
+            platform_conflicts+=1
+        if len(platform_keys)==1:
+            key=next(iter(platform_keys))
+            platform=PLATFORM_POLICIES[key][0] if key in PLATFORM_POLICIES else key[:80]
+        else:
+            platform="Unknown"
+        platforms[platform]+=1
+
+        signals=record["signals"]
+        flagged+=int("POTENTIAL_VIOLATION" in signals)
+        concerns+=int("PUBLIC_CONCERN" in signals)
+        narratives+=int("EMERGING_NARRATIVE" in signals)
+        overlap+=int(len(signals)>1)
+
     assert period_posts==sum(sentiments.values())==sum(platforms.values())
     return {
         "enabled":True,
@@ -144,6 +181,12 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
         "flagged_potential_violation_posts":flagged,
         "public_concern_posts":concerns,
         "emerging_narrative_posts":narratives,
+        "signal_overlapping_sources_in_period":overlap,
+        "signal_categories_are_non_additive":True,
+        "deduplicated_source_links_removed":duplicate_links_removed,
+        "source_publication_time_conflicts":date_conflicts,
+        "source_sentiment_conflicts":sentiment_conflicts,
+        "source_platform_conflicts":platform_conflicts,
         "sentiment_counts":dict(sentiments),
         "platform_counts":dict(platforms),
         "publication_time_basis":"EXPLICIT_UTC_OR_OFFSET_SOURCE_PUBLISHED_AT",
@@ -156,8 +199,12 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
         "source_basis":"PERMISSION_SCOPED_SAVED_INTELLIGENCE_INBOX",
         "derived_from_officer_casework":False,
         "paid_provider_called":False,
-        "disclaimer":"Counts are deduplicated saved relevant posts with explicit publication timestamps from a bounded authorized Inbox window. They are not all captured posts, total online conversations, unique people, verified incidents, or confirmed violations.",
+        "disclaimer":("Deduplicated authorized saved posts may have overlapping preliminary "
+                      "issue signals, so category totals are non-additive. Conflicting source "
+                      "metadata is not silently resolved. Publication dates require explicit "
+                      "timezones; this is not all captured content or confirmed violations."),
     }
+
 
 
 def build_briefing(db: Session, access: dict, user_id: int,
@@ -265,7 +312,7 @@ def briefing(period: str = "weekly", topic: str = "", language: Literal["id","en
 
 def _safe_csv_cell(value):
     value = str(value if value is not None else "")
-    return "'" + value if value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
+    return "'" + value if re.match(r"^\s*[=+@-]", value) or value.startswith(("\t", "\r", "\n")) else value
 
 
 @router.get("/briefing.csv")

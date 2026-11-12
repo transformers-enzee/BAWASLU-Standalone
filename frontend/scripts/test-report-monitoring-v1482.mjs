@@ -10,8 +10,12 @@ const shell=read('src/components/intel/Shell.jsx');
 assert.ok(backend.includes('def monitoring_snapshot_from_findings'), 'Pure monitoring view required');
 assert.ok(backend.includes('live_inbox_findings(db, access)'), 'Reuse authorized saved Inbox only');
 assert.ok(backend.includes('_utc_publication_time'), 'No capture-time/publication-time mixing');
-assert.ok(backend.includes('sid in seen'), 'Deduplicate repeated linked social source IDs');
+assert.ok(backend.includes('groups.setdefault(sid')&&backend.includes('grouped["signals"].update(signals)'),
+  'Deduplicate cross-finding source links without dropping other signals');
 assert.ok(backend.includes('if not (start<=published<=end)'), 'Rolling UTC date window');
+assert.ok(backend.includes('source_publication_time_conflicts')&&
+  backend.includes('source_sentiment_conflicts'),
+  'Report source metadata conflicts instead of arbitrarily choosing first link');
 assert.ok(backend.includes('inbox_truncation_status":"UNKNOWN"'),
   'Never claim complete provider collection from a sample');
 assert.ok(backend.includes('source_basis":"PERMISSION_SCOPED_SAVED_INTELLIGENCE_INBOX"'),
@@ -27,6 +31,9 @@ assert.ok(template.includes('unapproved')||template.includes('DRAFT_NOT_APPROVED
 assert.ok(ui.includes('data-testid="briefing-monitoring-option"')&&
   ui.includes('include_monitoring:String(includeMonitoring)'),
   'Explicit opt-in not an unbounded default backend query');
+assert.ok(ui.includes('data-testid="briefing-signal-overlap"')&&
+  ui.includes('monitoring.source_publication_time_conflicts'),
+  'Management UI must explain non-additive preliminary signals and conflicts');
 assert.ok(ui.includes('data-testid="briefing-intelligence-monitoring"')&&
   ui.includes('monitoring.publication_date_unknown'),
   'Onscreen monitoring distinguishes missing source dates');

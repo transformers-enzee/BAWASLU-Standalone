@@ -56,9 +56,12 @@ def test_utc_window_deduplicates_and_never_guesses_missing_dates():
     assert report["publication_date_unknown"]==1
     assert report["published_outside_period"]==1
     assert report["flagged_potential_violation_posts"]==2
-    assert report["public_concern_posts"]==1
+    assert report["public_concern_posts"]==2
+    assert report["signal_overlapping_sources_in_period"]==1
+    assert report["source_sentiment_conflicts"]==1
+    assert report["deduplicated_source_links_removed"]==1
     assert report["emerging_narrative_posts"]==0
-    assert report["sentiment_counts"]=={"NEGATIVE":1,"POSITIVE":1,"NEUTRAL":1}
+    assert report["sentiment_counts"]=={"UNCLASSIFIED":1,"POSITIVE":1,"NEUTRAL":1}
     assert report["platform_counts"]=={"X":2,"Instagram":1}
     assert sum(report["sentiment_counts"].values())==report["published_in_period"]
     assert report["inbox_truncation_status"]=="UNKNOWN"

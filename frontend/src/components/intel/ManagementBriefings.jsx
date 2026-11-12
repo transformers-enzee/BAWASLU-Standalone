@@ -121,6 +121,14 @@ export default function ManagementBriefings(){
     ].map(([label,data])=><div key={label}><h4 className="text-sm font-semibold">{label}</h4>
       {entries(data).length?entries(data).map(([name,count])=><p key={name} className="flex justify-between border-b py-1 text-xs"><span>{name}</span><strong>{count}</strong></p>):
       <p className="text-xs text-[#64748b]">{t('No dated posts in this sampled window','Tidak ada unggahan dengan waktu valid dalam sampel periode ini')}</p>}</div>)}</div>
+    <p data-testid="briefing-signal-overlap" className="mt-3 text-xs text-[#866b43]">
+      {t('Preliminary issue categories can overlap for the same post and must not be summed.',
+         'Kategori indikasi awal dapat tumpang tindih untuk unggahan yang sama dan tidak boleh dijumlahkan.')}
+      {' '}{t('Overlapping posts:','Unggahan tumpang tindih:')} {monitoring.signal_overlapping_sources_in_period??0}.
+      {' '}{t('Conflicting publication times:','Konflik waktu publikasi:')} {monitoring.source_publication_time_conflicts??0}.
+      {' '}{t('Conflicting sentiments:','Konflik sentimen:')} {monitoring.source_sentiment_conflicts??0}.
+      {' '}{t('Conflicting platforms:','Konflik platform:')} {monitoring.source_platform_conflicts??0}.
+    </p>
     <p className="mt-3 text-xs text-[#866b43]">{t('Window: up to 300 links per authorized campaign. Publication time unknown or outside the period:',
       'Jendela: maksimal 300 tautan per kampanye yang diizinkan. Waktu publikasi tidak diketahui atau di luar periode:')} {monitoring.publication_date_unknown??0} / {monitoring.published_outside_period??0}.
       {' '}{t('Completeness cannot be inferred from a zero count.','Jumlah nol tidak berarti seluruh unggahan sudah tercakup.')}</p>

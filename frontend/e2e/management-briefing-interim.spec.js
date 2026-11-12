@@ -83,6 +83,8 @@ test('Optional Inbox monitoring is independent, sampled and export-consistent',a
   unique_relevant_sources_in_recent_inbox:3,
   publication_date_unknown:1,published_outside_period:0,
   flagged_potential_violation_posts:1,public_concern_posts:1,
+  signal_overlapping_sources_in_period:1,source_publication_time_conflicts:0,
+  source_sentiment_conflicts:0,source_platform_conflicts:0,
   sentiment_counts:{NEGATIVE:1,NEUTRAL:1},
   platform_counts:{X:1,Reddit:1},
   inbox_window_limit:300,inbox_window_unit:'LINKS_PER_AUTHORIZED_CAMPAIGN',
@@ -121,6 +123,8 @@ test('Optional Inbox monitoring is independent, sampled and export-consistent',a
  await expect(panel).toContainText(/Published in selected window|Dipublikasikan dalam periode/);
  await expect(panel).toContainText(/not an all-platform census|bukan sensus seluruh platform/i);
  await expect(panel).toContainText('300');
+ await expect(panel.getByTestId('briefing-signal-overlap')).toContainText('1');
+ await expect(panel.getByTestId('briefing-signal-overlap')).toContainText(/must not be summed|tidak boleh dijumlahkan/);
  const download=page.waitForEvent('download');
  await page.getByRole('button',{name:'Word (.docx)'}).click();
  await download;

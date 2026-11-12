@@ -7,6 +7,13 @@ const STATUS={OPEN:'Baru',ASSIGNED:'Ditugaskan',IN_REVIEW:'Dalam peninjauan',NEE
 const REPORT={DRAFT:'Draf',SUBMITTED:'Menunggu persetujuan',RETURNED:'Perlu revisi',APPROVED:'Disetujui'};
 const TAGS={CANDIDATE:'Kandidat',PROVINCE:'Provinsi',SUSPECTED_VIOLATION:'Indikasi pelanggaran',BAWASLU_ISSUE:'Isu BAWASLU',ELECTORAL_ISSUE:'Isu kepemiluan'};
 const initialReport={title:'',executive_summary:'',findings:'',verification_notes:'',recommendations:''};
+const TRACE_LABELS={
+ source_linked:['Original source linked','Sumber asli tertaut'],
+ receiving_officer_accepted:['Receiving officer accepted','Petugas penerima menerima'],
+ original_source_checked:['Original source access reviewed','Akses sumber asli diperiksa'],
+ latest_report_submitted:['Current report submitted','Laporan terkini diajukan'],
+ independent_report_approval:['Independent officer approval','Persetujuan pemeriksa lain']
+};
 function Label({children}){return <span className="text-xs font-semibold text-[#53657b]">{children}</span>}
 const field='w-full rounded-lg border border-[#dbe3ec] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ab454d]';
 const small='rounded-lg border border-[#dbe3ec] bg-white px-3 py-2 text-sm hover:bg-[#f7f9fb]';
@@ -53,6 +60,9 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
  const [preview,setPreview]=useState(null),[newTitle,setNewTitle]=useState('');
  const [department,setDepartment]=useState('Data & Analisis'),[scope,setScope]=useState('NATIONAL'),[province,setProvince]=useState(''),[assignee,setAssignee]=useState('');
  const [note,setNote]=useState(''),[routeNote,setRouteNote]=useState(''),[stateNote,setStateNote]=useState('');
+ const [sourceReviewStatus,setSourceReviewStatus]=useState('SOURCE_CHECKED');
+ const [sourceReviewNote,setSourceReviewNote]=useState('');
+ const [sourceOpened,setSourceOpened]=useState(false);
  const [newStatus,setNewStatus]=useState('IN_REVIEW');
  const [form,setForm]=useState(initialReport),[editReport,setEditReport]=useState(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
@@ -71,7 +81,7 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
   const id=Number(params.get('case_id')||0);
   if(Number.isInteger(id)&&id>0)selectCase(id);
  },[]);
- async function selectCase(id){setSelected(id);setError('');try{const d=await request('/cases/'+id);setDetail(d);setScope(d.case.target_scope);setProvince(d.case.target_province);setDepartment(d.case.target_department);setAssignee(d.case.assignee_id?String(d.case.assignee_id):'');setNewStatus(d.case.status==='CLOSED'?'CLOSED':'IN_REVIEW');
+ async function selectCase(id){setSelected(id);setError('');setSourceReviewNote('');setSourceOpened(false);try{const d=await request('/cases/'+id);setDetail(d);setScope(d.case.target_scope);setProvince(d.case.target_province);setDepartment(d.case.target_department);setAssignee(d.case.assignee_id?String(d.case.assignee_id):'');setNewStatus(d.case.status==='CLOSED'?'CLOSED':'IN_REVIEW');
    const opening=(params.get('tab')==='reports'&&d.reports?.length)?d.reports[0]:null;
    setEditReport(opening?.id||null);
    setForm(opening?{title:opening.title,executive_summary:opening.executive_summary,
@@ -94,6 +104,17 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
   previewSource();
  }},[embedded,sourceId,showNew,options?.can_create]);
  async function createCase(){await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab(initialTab==='reports'?'reports':'assignments')},tr('Assignment created. Review the evidence and prepare the report.','Penugasan dibuat. Periksa bukti dan siapkan laporan.'))}
+ async function recordSourceReview(){
+  if(!selected||busy)return;
+  await act(async()=>{
+   await request('/cases/'+selected+'/source-review','POST',{
+    status:sourceReviewStatus,note:sourceReviewNote.trim(),
+    original_source_opened:sourceOpened
+   });
+   setSourceReviewNote('');setSourceOpened(false);
+  },tr('Source-access review recorded in the audit trail. This is not a legal verdict.',
+      'Pemeriksaan akses sumber dicatat dalam audit. Ini bukan putusan hukum.'));
+ }
  async function acknowledge(){
   if(!selected||busy)return;
   await act(async()=>{await request('/cases/'+selected+'/acknowledge','POST',{})},
@@ -174,6 +195,21 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
     {embedded&&selectedCase&&!focused&&<button type="button" className={small+' text-xs'} onClick={()=>{setSelected(null);setDetail(null)}}>{tr('Back to assignments','Kembali ke penugasan')}</button>}
     {!selectedCase&&!embedded&&<section className="intel-card p-8 text-center text-[#64748b]"><ClipboardList size={28} className="mx-auto mb-3"/><p>{tr('Select an assignment to review its evidence and report.','Pilih penugasan untuk meninjau bukti dan laporannya.')}</p></section>}
     {selectedCase&&<><section className="intel-card p-5 space-y-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="text-xs font-semibold text-[#801b24]">KASUS #{selectedCase.id} · {selectedCase.source_type}</p><h2 className="text-lg font-bold mt-1 text-[#273444] break-words">{selectedCase.title}</h2></div><CaseBadge status={selectedCase.status} english={isEnglish}/></div><div className="grid sm:grid-cols-2 gap-2 text-sm"><p><strong>{tr('Destination','Tujuan')}:</strong> {selectedCase.target_department} — {selectedCase.target_scope==='NATIONAL'?'Nasional':selectedCase.target_province}</p><p><strong>{tr('Officer','Petugas')}:</strong> {options?.officers?.find(o=>o.id===selectedCase.assignee_id)?.name||'Antrean departemen'}</p><p><strong>{tr('Verified incident province','Provinsi kejadian terverifikasi')}:</strong> {selectedCase.verified_province||'Belum terverifikasi'}</p><p><strong>Status:</strong> {isEnglish?EN_STATUS[selectedCase.status]||selectedCase.status:STATUS[selectedCase.status]||selectedCase.status}</p></div><TagList tags={selectedCase.tags}/><p className="text-sm whitespace-pre-wrap bg-[#f7f9fb] rounded-lg p-3">{selectedCase.source_excerpt}</p><LinkSource href={selectedCase.source_url}/></section>
+      {detail?.workflow_trace&&<section className="intel-card p-4 space-y-2" data-casework-acceptance-trace>
+       <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-[#263749]">{tr('Officer workflow trace','Jejak alur kerja petugas')}</h3>
+        <span className="text-sm font-bold tabular-nums text-[#801b24]">{detail.workflow_trace.completed}/{detail.workflow_trace.total}</span>
+       </div>
+       <div className="grid gap-1 sm:grid-cols-2">
+        {detail.workflow_trace.steps?.map(step=><div key={step.key} className="flex items-start gap-2 text-xs">
+         <span aria-hidden="true" className={step.done?'text-[#116846]':'text-[#8b9aaa]'}>{step.done?'✓':'○'}</span>
+         <span>{(TRACE_LABELS[step.key]||[step.key,step.key])[isEnglish?0:1]}</span>
+        </div>)}
+       </div>
+       <p className="text-xs text-[#65788b]">{tr(
+        'Audit evidence of workflow progress only. Source truth, legal findings and client acceptance remain unverified.',
+        'Hanya bukti audit kemajuan alur kerja. Kebenaran sumber, temuan hukum, dan penerimaan klien belum diverifikasi.')}</p>
+      </section>}
       {tab==='assignments'&&<>{detail?.can_acknowledge&&<section className="intel-card p-5 space-y-2 border-l-4 border-[#a52a2f]">
          <h3 className="font-bold text-[#801b24]">{tr('Incoming assignment','Penugasan masuk')}</h3>
          <p className="text-sm text-[#53657b]">{tr(
@@ -183,6 +219,41 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
            <CheckCircle2 size={15} className="inline mr-1"/>{tr('Accept & start review','Terima & mulai penelaahan')}
          </button>
        </section>}
+       <section className="intel-card p-5 space-y-3" data-casework-source-review>
+        <h3 className="font-bold text-[#801b24]">{tr('Original source access review','Pemeriksaan akses sumber asli')}</h3>
+        <p className="text-xs text-[#65788b]">{tr(
+         'Record whether you opened the original source and checked its context. This does not verify the allegation or establish a legal violation.',
+         'Catat apakah sumber asli telah dibuka dan konteksnya diperiksa. Ini tidak memverifikasi tuduhan atau menetapkan pelanggaran hukum.')}</p>
+        {detail?.workflow_trace?.latest_source_review_status&&<p className="text-xs text-[#53657b]">
+         {tr('Latest recorded outcome: ','Hasil terakhir: ')}<strong>{detail.workflow_trace.latest_source_review_status}</strong>
+        </p>}
+        {detail?.can_record_source_review?<div className="space-y-3">
+         <label className="block space-y-1"><Label>{tr('Review outcome','Hasil pemeriksaan')}</Label>
+          <select className={field} value={sourceReviewStatus} onChange={e=>{setSourceReviewStatus(e.target.value);setSourceOpened(false)}}>
+           <option value="SOURCE_CHECKED">{tr('Original opened and context reviewed','Sumber asli dibuka dan konteks ditinjau')}</option>
+           <option value="NEEDS_INFORMATION">{tr('More information required','Memerlukan informasi tambahan')}</option>
+           <option value="SOURCE_UNAVAILABLE">{tr('Original unavailable','Sumber asli tidak dapat diakses')}</option>
+          </select>
+         </label>
+         {sourceReviewStatus==='SOURCE_CHECKED'&&<label className="flex items-start gap-2 text-xs text-[#53657b]">
+          <input type="checkbox" checked={sourceOpened} onChange={e=>setSourceOpened(e.target.checked)} disabled={!selectedCase.source_url||busy}/>
+          {tr('I opened the original linked source (not just the AI summary).',
+              'Saya membuka sumber asli tertaut (bukan hanya ringkasan AI).')}
+         </label>}
+         <label className="block space-y-1"><Label>{tr('Review note (minimum 20 characters)','Catatan peninjauan (minimum 20 karakter)')}</Label>
+          <textarea className={field} rows={3} value={sourceReviewNote} disabled={busy}
+           onChange={e=>setSourceReviewNote(e.target.value)}
+           placeholder={tr('What did you check and what still needs verification?','Apa yang diperiksa dan apa yang masih perlu diverifikasi?')}/>
+         </label>
+         <button type="button" className={primary} onClick={recordSourceReview}
+          disabled={busy||sourceReviewNote.trim().length<20||
+           (sourceReviewStatus==='SOURCE_CHECKED'&&(!sourceOpened||!selectedCase.source_url))}>
+          {tr('Record source review','Catat pemeriksaan sumber')}
+         </button>
+        </div>:<p className="text-xs text-[#64748b]">{tr(
+         'Only the receiving officer who has accepted this assignment can record source review.',
+         'Hanya petugas penerima yang telah menerima penugasan yang dapat mencatat pemeriksaan sumber.')}</p>}
+       </section>
        <section className="intel-card p-5 space-y-4"><h3 className="font-bold text-[#801b24]"><ArrowRightLeft size={16} className="inline mr-2"/>{tr('Transfer to team / department','Alihkan ke tim / departemen')}</h3><div className="grid md:grid-cols-2 gap-3"><label className="space-y-1"><Label>{tr('Department','Departemen')}</Label><select disabled={!detail?.can_edit||busy} className={field} value={department} onChange={e=>setDepartment(e.target.value)}>{options?.departments?.map(d=><option key={d}>{d}</option>)}</select></label><label className="space-y-1"><Label>{tr('Team','Tim')}</Label><select disabled={!detail?.can_edit||busy} className={field} value={scope} onChange={e=>{setScope(e.target.value);setAssignee('');setProvince(e.target.value==='PROVINCE'?(selectedCase.verified_province||''):'' )}}><option value="NATIONAL">Nasional</option><option value="PROVINCE" disabled={!selectedCase.verified_province}>Provinsi (lokasi terkonfirmasi)</option></select></label>{scope==='PROVINCE'&&<label className="space-y-1"><Label>{tr('Province','Provinsi')}</Label><input className={field} value={province} readOnly/></label>}<label className="space-y-1"><Label>{tr('Receiving officer','Petugas penerima')}</Label><select disabled={!detail?.can_edit||busy} className={field} value={assignee} onChange={e=>setAssignee(e.target.value)}><option value="">{tr('Department queue','Antrean departemen')}</option>{eligible.map(o=><option value={o.id} key={o.id}>{o.name}</option>)}</select></label></div><textarea className={field} rows={2} value={routeNote} disabled={!detail?.can_edit} onChange={e=>setRouteNote(e.target.value)} placeholder="Alasan pengalihan (minimal 8 karakter)"/><button className={primary} disabled={!detail?.can_edit||busy||routeNote.trim().length<8} onClick={route}>{tr('Send assignment','Kirim penugasan')}</button></section><section className="intel-card p-5 space-y-3"><h3 className="font-bold text-[#801b24]">{tr('Update status','Perbarui status')}</h3><div className="flex flex-wrap gap-2"><select className={field+' max-w-xs'} value={newStatus} onChange={e=>setNewStatus(e.target.value)} disabled={!detail?.can_edit}>{Object.entries(STATUS).filter(([code])=>code!=='CLOSED'||detail?.can_approve).map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><button className={primary} disabled={!detail?.can_edit||busy||stateNote.trim().length<8} onClick={status}>{tr('Save status','Simpan status')}</button></div><textarea className={field} value={stateNote} onChange={e=>setStateNote(e.target.value)} rows={2} placeholder="Catatan perubahan (minimal 8 karakter)" disabled={!detail?.can_edit}/></section><section className="intel-card p-5"><h3 className="font-bold text-[#801b24]">{tr('Activity history','Riwayat dan audit')}</h3><div className="mt-3 space-y-2">{detail?.events?.map(event=><div className="border-l-2 border-[#d1b1b5] pl-3 py-1" key={event.id}><p className="text-sm font-semibold">{event.action.replaceAll('_',' ')}</p><p className="text-xs text-[#64748b]"><DateText value={event.at}/> · Petugas #{event.actor_id}</p><p className="text-xs mt-1 text-[#64748b]">{event.details?.note||''}</p></div>)}</div></section></>}
       {tab==='reports'&&<><section className="intel-card p-5"><div className="flex justify-between gap-2 mb-4 flex-wrap"><h3 className="font-bold text-[#801b24]">{tr('Reports and approval','Laporan dan persetujuan')}</h3><div className="flex flex-wrap gap-2">{detail?.can_edit&&<><button className={small} onClick={()=>beginReport(null)}>{tr('New draft','Draf baru')}</button><button className={small} onClick={aiDraft} disabled={busy}>{tr('Draft with AI','Buat draf analisis dengan AI')}</button></>}</div></div>{detail?.reports?.map(r=><div key={r.id} className="border border-[#e5eaf0] rounded-lg p-4 mb-3"><div className="flex justify-between gap-2"><div><p className="font-semibold">{r.title}</p><p className="text-xs text-[#64748b] mt-1">Laporan #{r.id} · <DateText value={r.updated_at}/></p></div><CaseBadge status={r.status} english={isEnglish}/></div><p className="text-xs whitespace-pre-wrap mt-2 line-clamp-4">{r.executive_summary||r.findings||'Belum ada isi.'}</p><div className="flex flex-wrap gap-2 mt-3"><button className={small} onClick={()=>{setEditReport(r.id);setForm({title:r.title,executive_summary:r.executive_summary,findings:r.findings,verification_notes:r.verification_notes,recommendations:r.recommendations})}}>{tr('View report','Baca laporan')}</button>{detail?.can_edit&&r.is_latest_version&&['DRAFT','RETURNED'].includes(r.status)&&<button className={small} onClick={()=>reportTransition(r,'SUBMITTED')} disabled={busy}>{tr('Submit for approval','Ajukan persetujuan')}</button>}{detail?.can_approve&&r.is_latest_version&&r.status==='SUBMITTED'&&r.created_by!==options?.current_user_id&&<><button className={small} disabled={busy} onClick={()=>reportTransition(r,'APPROVED')}>{tr('Approve','Setujui')}</button><button className={small} disabled={busy} onClick={()=>reportTransition(r,'RETURNED')}>{tr('Return','Kembalikan')}</button></>}</div>{!r.is_latest_version&&<p className="mt-2 text-xs font-semibold text-[#8c4350]">{tr('Superseded report version · audit history only','Versi laporan lama · hanya riwayat audit')}</p>}{r.review_comment&&<p className="mt-2 text-xs text-[#8c4350]">Umpan balik: {r.review_comment}</p>}</div>)}{!detail?.reports?.length&&<p className="text-sm text-[#64748b]">Belum ada laporan. Gunakan draf manual atau draf AI yang harus diperiksa petugas.</p>}</section>
        {(form.title||editReport)&&<section className="intel-card p-5 space-y-3"><h3 className="font-bold text-[#801b24]">{tr('Report editor','Editor laporan')}</h3>{[['title','Judul',1],['executive_summary','Ringkasan eksekutif',4],['findings','Temuan dan bukti',5],['verification_notes','Pemeriksaan dan keterbatasan bukti',4],['recommendations','Rekomendasi tindak lanjut',4]].map(([key,label,rows])=><label className="block space-y-1" key={key}><Label>{label}</Label>{rows===1?<input className={field} value={form[key]} onChange={e=>setForm(old=>({...old,[key]:e.target.value}))}/>:<textarea className={field} rows={rows} value={form[key]} onChange={e=>setForm(old=>({...old,[key]:e.target.value}))}/>}</label>)}<div className="flex gap-2 flex-wrap"><button className={primary} disabled={!detail?.can_edit||busy||!form.title||(!!editReport&&(!['DRAFT','RETURNED'].includes(activeReport?.status)||!activeReport?.is_latest_version))} onClick={saveReport}>{tr('Save draft','Simpan draf')}</button>{editReport&&<button className={small} onClick={()=>{const r=detail?.reports?.find(x=>x.id===editReport);if(r){document.title=r.title;window.print()}}}><Printer size={14} className="inline mr-1"/> Cetak laporan</button>}</div></section>}</>}

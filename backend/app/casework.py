@@ -23,6 +23,7 @@ DEPARTMENTS = (
 SCOPES = ("NATIONAL", "PROVINCE")
 CASE_STATES = ("OPEN", "ASSIGNED", "IN_REVIEW", "NEEDS_INFORMATION", "CLOSED")
 REPORT_STATES = ("DRAFT", "SUBMITTED", "RETURNED", "APPROVED")
+SOURCE_REVIEW_STATES = ("SOURCE_CHECKED", "NEEDS_INFORMATION", "SOURCE_UNAVAILABLE")
 
 class CaseAssignment(Base):
     __tablename__ = "case_assignments"
@@ -321,6 +322,62 @@ def _report_view(report):
         "created_at":report.created_at.isoformat(),"updated_at":report.updated_at.isoformat()
     }
 
+def _acceptance_trace(case, transitions, reports):
+    """Evidence-linked procedural trace, NOT certification of a legal conclusion.
+
+    Only an affirmative latest source-check, acknowledged receiving officer,
+    current-report submission, and an independent recorded approval qualify.
+    A missing event cannot be inferred from a mutable status alone.
+    """
+    events=list(transitions)
+    latest_report=reports[0] if reports else None
+    def event_for(action, report_id=None):
+        return next((event for event in reversed(events)
+            if event.action==action and (report_id is None or
+                _json(event.details_json,{}).get("report_id")==report_id)),None)
+    created=event_for("CREATED") or event_for("ASSISTANT_HANDOFF")
+    acknowledged=event_for("ACKNOWLEDGED")
+    routed=event_for("ROUTED")
+    accepted=bool(acknowledged and (not routed or acknowledged.id>routed.id))
+    latest_review=event_for("SOURCE_REVIEW_RECORDED")
+    review_data=_json(latest_review.details_json,{}) if latest_review else {}
+    source_checked=bool(
+        latest_review and review_data.get("status")=="SOURCE_CHECKED"
+        and review_data.get("original_source_opened") is True
+        and review_data.get("source_type")==case.source_type
+        and str(review_data.get("source_id"))==str(case.source_id)
+        and review_data.get("source_url")==case.source_url)
+    report_id=latest_report.id if latest_report else None
+    submitted=bool(latest_report and latest_report.status in ("SUBMITTED","APPROVED")
+        and event_for("REPORT_SUBMITTED",report_id))
+    approved=bool(latest_report and latest_report.status=="APPROVED"
+        and latest_report.reviewed_by and latest_report.reviewed_by!=latest_report.created_by
+        and event_for("REPORT_APPROVED",report_id))
+    steps=[
+        ("source_linked",bool(created and case.source_id and case.source_url)),
+        ("receiving_officer_accepted",accepted),
+        ("original_source_checked",source_checked),
+        ("latest_report_submitted",submitted),
+        ("independent_report_approval",approved),
+    ]
+    completed=sum(1 for _,done in steps if done)
+    return {
+        "steps":[{"key":key,"done":done} for key,done in steps],
+        "completed":completed,"total":len(steps),
+        "workflow_trace_complete":completed==len(steps),
+        "latest_source_review_status":review_data.get("status") if latest_review else None,
+        "latest_source_review_note":review_data.get("note") if latest_review else None,
+        "latest_report_id":report_id,
+        "event_window_limited":len(events)>=200,
+        "report_window_limited":len(reports)>=50,
+        "evidence_source_is_confirmed_true":False,
+        "legal_violation_determined":False,
+        "client_acceptance_certified":False,
+        "source_of_truth":"EXISTING_CASE_TRANSITIONS_AND_LATEST_CASE_REPORT",
+        "paid_provider_called":False,
+    }
+
+
 def _record_event(db, case, user_id, action, details):
     db.add(CaseTransition(case_id=case.id,actor_id=user_id,action=action,
                           details_json=json.dumps(details,ensure_ascii=False)))
@@ -358,6 +415,11 @@ class ReportDraft(BaseModel):
 class ReportAction(BaseModel):
     status: str
     review_comment: str = Field(default="",max_length=2000)
+
+class SourceReviewAction(BaseModel):
+    status: str
+    note: str = Field(min_length=20,max_length=1500)
+    original_source_opened: bool = False
 
 @router.get("/options")
 def options(user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -481,7 +543,10 @@ def case_detail(case_id: int, user: User = Depends(current_user), db: Session = 
             "details":_json(x.details_json,{}),"at":x.happened_at.isoformat()} for x in transitions],
             "reports":report_views,"can_edit":_editable(case,p,user.id),
             "can_approve":has(p,"human_validation"),
-             "can_acknowledge":_receiving_officer(case,p,user.id)}
+            "can_record_source_review":(_editable(case,p,user.id)
+                and case.assignee_id==user.id and case.status=="IN_REVIEW"),
+            "workflow_trace":_acceptance_trace(case,transitions,reports),
+            "can_acknowledge":_receiving_officer(case,p,user.id)}
 
 @router.post("/cases/{case_id}/acknowledge")
 def acknowledge_case(case_id:int,user:User=Depends(current_user),
@@ -506,6 +571,43 @@ def acknowledge_case(case_id:int,user:User=Depends(current_user),
     audit(db,p,"CaseAssignment",case.id,"CASE_ACKNOWLEDGED",{
         "before":before,"after":"IN_REVIEW","assigned_to":user.id})
     return _case_view(case)
+
+
+@router.post("/cases/{case_id}/source-review")
+def record_source_review(case_id: int, body: SourceReviewAction,
+                         user: User=Depends(current_user),
+                         db: Session=Depends(get_db)):
+    """Human source-access attestation. This is NOT a factual/legal verdict."""
+    p=profile(db,user)
+    _require(p,"add_intelligence")
+    case=db.query(CaseAssignment).filter_by(id=case_id).with_for_update().one_or_none()
+    if not case or not _visible(case,p,user.id):
+        raise HTTPException(404,"Case not found")
+    if not _editable(case,p,user.id) or case.status!="IN_REVIEW" or case.assignee_id!=user.id:
+        raise HTTPException(403,"Only the current receiving officer may record source review")
+    if body.status not in SOURCE_REVIEW_STATES:
+        raise HTTPException(422,"Invalid source review state")
+    if len(body.note.strip())<20:
+        raise HTTPException(422,"Explain the source review in at least 20 characters")
+    if body.status=="SOURCE_CHECKED" and (
+        not body.original_source_opened or not case.source_url.startswith(("https://","http://"))):
+        raise HTTPException(422,"Open the saved original source URL before attesting a source check")
+    details={
+        "status":body.status,"note":body.note.strip(),
+        "original_source_opened":bool(body.original_source_opened),
+        "source_type":case.source_type,"source_id":case.source_id,
+        "campaign_id":case.campaign_id,"source_url":case.source_url,
+        "not_a_content_or_legal_verdict":True,
+    }
+    case.updated_at=datetime.utcnow()
+    _record_event(db,case,user.id,"SOURCE_REVIEW_RECORDED",details)
+    audit(db,p,"CaseAssignment",case.id,"SOURCE_REVIEW_RECORDED",{
+        "source_type":case.source_type,"source_id":case.source_id,
+        "status":body.status,"original_source_opened":body.original_source_opened})
+    return {"case_id":case.id,"status":body.status,
+            "original_source_opened":body.original_source_opened,
+            "requires_separate_legal_assessment":True,
+            "officer_id":user.id,"paid_provider_called":False}
 
 
 @router.post("/cases/{case_id}/route")

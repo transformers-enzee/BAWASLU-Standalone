@@ -63,18 +63,30 @@ def _claim_level_article_mismatches(answer,records):
     return failures
 
 
-def _uncited_article_claims(answer):
-    """Count article-bearing statements lacking a local PDF page citation.
+def _uncited_article_claims(answer,records):
+    """Spot article statements without attributable, authorized PDF pages.
 
-    These spans are not necessarily wrong; they are insufficiently attributed.
-    Citations on another sentence or social IDs are not substitutes.
+    A citation on the immediately next line/sentence is accepted only when
+    that entire next span consists of actual authorized PDF references.
+    Other narrative text between claim and citation is not treated as local
+    attribution. This reduces false flags without trusting arbitrary cards.
     """
     results=[]
-    for span in re.split(r"(?<=[.!?;])\s+|\n+",str(answer or "")):
+    spans=re.split(r"(?<=[.!?;])\s+|\n+",str(answer or ""))
+    for i,span in enumerate(spans):
         articles=_article_ids(span)
         if not articles or span.strip().endswith("?"):
             continue
-        pdf_ids=[ref for ref in _SOURCE_REF.findall(span) if ref.startswith("DOC-")]
+        pdf_ids=[ref for ref in _SOURCE_REF.findall(span)
+                 if ref.startswith("DOC-") and ref in records and
+                 records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+        if not pdf_ids and i+1<len(spans):
+            next_span=spans[i+1].strip()
+            refs=_SOURCE_REF.findall(next_span)
+            if refs and _SOURCE_REF.sub("",next_span).strip()=="":
+                pdf_ids=[ref for ref in refs
+                         if ref.startswith("DOC-") and ref in records and
+                         records[ref].get("record_type")=="PDF_KNOWLEDGE"]
         if not pdf_ids:
             results.extend(articles)
     return list(dict.fromkeys(results))
@@ -99,7 +111,7 @@ _QUOTED_ATTRIBUTION=re.compile(
     r"^\s*(?:[\"'“‘]|(?:according\s+to|reported(?:ly)?|mengutip|menurut\s+sumber)\b)",re.I)
 # Split independent clauses so negation or quotation in one statement does
 # not suppress a new enforcement instruction after "but"/"namun"/"tetapi".
-_CLAUSE_BOUNDARY=re.compile(r"(?<=[.!?;])\s+|\n+|\s*[,;:]\s*|\s+\b(?:but|however|namun|tetapi)\b\s+",re.I)
+_CLAUSE_BOUNDARY=re.compile(r"(?<=[.!?;])\s+|\n+|\s*[;:]\s*|\s+\b(?:but|however|namun|tetapi)\b\s+",re.I)
 _ENFORCEMENT_EN_INFIX=re.compile(r"\b(?:must|shall|should)\s+(?:immediately\s+|now\s+)?(?:be\s+)?",re.I)
 _ENFORCEMENT_ID_INFIX=re.compile(r"\b(?:harus|wajib|segera|langsung)\s+(?:segera\s+|langsung\s+)?",re.I)
 
@@ -202,7 +214,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                       doc.get("document_type") in _LEGAL_DOC_TYPES]
     article_ids,missing_article_ids=_legal_article_presence(raw,doc_refs)
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
-    unattributed_articles=_uncited_article_claims(raw)
+    unattributed_articles=_uncited_article_claims(raw,records)
     enforcement_flags=_assertive_enforcement_recommendations(raw)
     needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids
                              or enforcement_flags)

@@ -400,3 +400,40 @@ test('Assistant locally completes a genuine scoring worksheet without submitting
  expect(content).not.toContain('Unverified public post excerpt');
  expect(modelCalls).toBe(0);
 });
+
+test('Assistant scoring importer distinguishes question plan from answered packet',async({page})=>{
+ await login(page);await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-human-scoring');
+ await panel.getByRole('button',{name:/Prepare independent officer scoring sheet/}).click();
+ await panel.getByTestId('assistant-human-scoring-file').setInputFiles({
+  name:'BAWASLU-assistant-evaluation-questions-v1488.json',mimeType:'application/json',
+  buffer:Buffer.from(JSON.stringify({framework:'BAWASLU_ASSISTANT_EVALUATION_PLAN_V1488',questions:[]}))
+ });
+ await expect(panel.getByTestId('assistant-scoring-import-error')).toContainText('prepared question plan');
+ await expect(panel.getByTestId('assistant-human-scoring-workspace')).toHaveCount(0);
+});
+test('Assistant can score a fresh answer directly without reimport or a second model call',async({page})=>{
+ let count=0;
+ await page.route('**/api/functions/intelligenceAssistant',route=>{
+  count++;
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   answer:'The saved allegation is unverified [SOCIAL-81]',
+   records:[{record_id:'SOCIAL-81',record_type:'SOCIAL_LISTENING',source_excerpt:'Example',
+    source_url:'https://example.invalid/post/81'}],
+   response_profile:'SOCIAL_ANALYSIS',provider:{mode:'OPENAI_GROUNDED'},
+   grounding:{selected_count:1,supporting_count:1,answer_quality:{review_required_checks:1,checks:[
+    {id:'citation_grounding',status:'REVIEW_REQUIRED'},
+    {id:'source_relevance',status:'PASS'},
+    {id:'legal_uncertainty',status:'NOT_APPLICABLE'},
+    {id:'cross_module_consistency',status:'NOT_APPLICABLE'}]}},
+   answer_language:'en',detected_tags:[],presentation_labels:{}
+  })});
+ });
+ await login(page);await page.goto('/assistant');
+ await page.locator('form input[maxlength="1000"]').fill('Review [SOCIAL-81]');
+ await page.locator('form button[type="submit"]').click();
+ await expect(page.getByTestId('assistant-human-review-export')).toBeVisible();
+ await page.getByTestId('assistant-score-this-answer').click();
+ await expect(page.getByTestId('assistant-human-scoring-workspace')).toContainText('Packet AR-');
+ expect(count).toBe(1);
+});

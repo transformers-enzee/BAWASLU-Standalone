@@ -42,6 +42,7 @@ export default function IntelligenceAssistant(){
  // Export only fresh answers generated in this authenticated page session.
  // Historical chat source access may have changed since the answer was saved.
  const [reviewableIndexes,setReviewableIndexes]=useState(()=>new Set());
+ const [scoringPacket,setScoringPacket]=useState(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
@@ -64,14 +65,14 @@ export default function IntelligenceAssistant(){
  },[]);
  function newConversation(){
   if(busy||historyBusy)return;
-  setActive(null);setMessages([]);setReviewableIndexes(new Set());setQuestion('');setError('');setHistoryError('');
+  setActive(null);setMessages([]);setReviewableIndexes(new Set());setScoringPacket(null);setQuestion('');setError('');setHistoryError('');
  }
  async function openThread(id){
   if(busy||historyBusy)return;
   setHistoryBusy(true);setHistoryError('');setError('');
   try{
    const thread=await historyRequest('/'+encodeURIComponent(id));
-   setActive(thread.id);setMessages(thread.messages||[]);setReviewableIndexes(new Set());setQuestion('');
+   setActive(thread.id);setMessages(thread.messages||[]);setReviewableIndexes(new Set());setScoringPacket(null);setQuestion('');
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
@@ -84,6 +85,18 @@ export default function IntelligenceAssistant(){
    if(activeIdRef.current===id){setActive(null);setMessages([]);setReviewableIndexes(new Set())}
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
+ }
+ function scoreThisAnswer(index){
+  try{
+   if(!reviewableIndexes.has(index))
+    throw Error('Only new answers from this authenticated session can be scored. Re-run older questions.');
+   const answer=messages[index];
+   const prompt=messages[index-1]?.role==='user'?messages[index-1].text:'';
+   const version=document.querySelector('[data-build-version]')?.getAttribute('data-build-version')||'unknown';
+   setScoringPacket(buildAssistantReviewPacket({question:prompt,answer,buildVersion:version}));
+   setError('');
+   document.querySelector('[data-testid="assistant-human-scoring"]')?.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){setError(e?.message||'Could not open scoring for this answer.')}
  }
  function exportAnswerReview(index,format){
   try{
@@ -144,7 +157,7 @@ export default function IntelligenceAssistant(){
   <AssistantKnowledgeLibrary/>
   <AssistantEvaluationSampler disabled={busy||historyBusy}
    onPrepare={prompt=>{setQuestion(prompt);setAnalysisMode('DATA');setError('')}}/>
-  <AssistantHumanScoring/>
+  <AssistantHumanScoring incomingPacket={scoringPacket}/>
   <AssistantReviewConsolidation/>
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
@@ -211,6 +224,8 @@ export default function IntelligenceAssistant(){
           ?'Unduhan manual ini memuat potongan bukti yang dapat Anda akses. Simpan dengan aman. Skor petugas belum diisi dan belum ada persetujuan.'
           :'Manual downloads contain evidence excerpts you can access. Store securely. Reviewer scores are blank and no approval has occurred.'}</p>
          <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={()=>scoreThisAnswer(i)}
+           data-testid="assistant-score-this-answer" className="intel-button text-xs">Score this answer</button>
           <button type="button" onClick={()=>exportAnswerReview(i,'json')} data-testid="assistant-review-json"
            className="intel-ghost text-xs"><Download size={13}/> {(m.answer_language||'id')==='id'?'Ekspor bukti penilaian (.json)':'Export review evidence (.json)'}</button>
           <button type="button" onClick={()=>exportAnswerReview(i,'csv')} data-testid="assistant-review-csv"

@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {officerReviewImportProblem} from '../src/lib/assistantReviewImport.js';
+import {buildAssistantReviewPacket} from '../src/lib/assistantReviewPacket.js';
+import {validateReviewPacket,REVIEW_DIMENSIONS} from '../src/lib/assistantReviewAggregation.js';
+assert.match(officerReviewImportProblem({framework:'BAWASLU_ASSISTANT_EVALUATION_PLAN_V1488'}),/prepared question plan/);
+assert.match(officerReviewImportProblem({schema_version:'BAWASLU_OFFLINE_HUMAN_REVIEW_AGGREGATION_V1487'}),/aggregate human-review summary/);
+assert.match(officerReviewImportProblem({threads:[]}),/conversation history/);
+assert.match(officerReviewImportProblem({no:'schema'}),/Unrecognized JSON export/);
+const packet=buildAssistantReviewPacket({question:'Review [SOCIAL-12]',answer:{role:'assistant',text:'Unverified source [SOCIAL-12]',records:[],
+ grounding:{answer_quality:{checks:REVIEW_DIMENSIONS.map(id=>({id,status:'REVIEW_REQUIRED'}))}}},buildVersion:'149.4'});
+assert.equal(officerReviewImportProblem(packet),'');
+assert.equal(validateReviewPacket(packet).packet_id,packet.packet_id);
+assert.throws(()=>validateReviewPacket({...packet,assistant_answer:'Changed'}),/does not match/);
+const source=readFileSync(new URL('../src/components/intel/AssistantHumanScoring.jsx',import.meta.url),'utf8');
+const page=readFileSync(new URL('../src/pages/IntelligenceAssistant.jsx',import.meta.url),'utf8');
+const main=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'utf8');
+const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
+assert.ok(source.includes('officerReviewImportProblem(next)')&&source.includes('validateReviewPacket(incomingPacket)'));
+assert.ok(page.includes('data-testid="assistant-score-this-answer"')&&page.includes('incomingPacket={scoringPacket}'));
+const version=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+assert.equal(version,'149.4');
+assert.ok(shell.includes('data-build-version="'+version+'"')&&shell.includes('>v'+version+'</footer>'));
+console.log('PASS v149.4 human scoring import messages, direct staging, and build version');

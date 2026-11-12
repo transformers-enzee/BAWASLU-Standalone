@@ -1,7 +1,8 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {FilePenLine,ChevronDown,Download,UploadCloud} from 'lucide-react';
 import {REVIEW_DIMENSIONS,validateReviewPacket} from '@/lib/assistantReviewAggregation';
 import {blankOfficerScores,officerScoreCompletion,completedOfficerScoringCsv} from '@/lib/assistantReviewScoring';
+import {officerReviewImportProblem} from '@/lib/assistantReviewImport';
 
 const DISPLAY={
  citation_grounding:'Citation grounding',
@@ -16,7 +17,7 @@ const safeSourceUrl=value=>{
  }catch{return ''}
 };
 
-export default function AssistantHumanScoring(){
+export default function AssistantHumanScoring({incomingPacket=null}){
  const [open,setOpen]=useState(false);
  const [packet,setPacket]=useState(null);
  const [ratings,setRatings]=useState(blankOfficerScores);
@@ -25,17 +26,30 @@ export default function AssistantHumanScoring(){
  const [error,setError]=useState('');
  const [loading,setLoading]=useState(false);
  const progress=packet?officerScoreCompletion(packet,ratings,reviewerId):null;
+ useEffect(()=>{
+  if(!incomingPacket)return;
+  setOpen(true);setPacket(null);setError('');setConfirmed(false);setReviewerId('');
+  setRatings(blankOfficerScores());
+  try{
+   const issue=officerReviewImportProblem(incomingPacket);
+   if(issue)throw Error(issue);
+   validateReviewPacket(incomingPacket);
+   setPacket(incomingPacket);
+  }catch(e){setError(e?.message||'This answer cannot be scored.')}
+ },[incomingPacket]);
 
  async function importPacket(event){
   const input=event.currentTarget;
   const file=input.files?.[0];
-  setPacket(null);setRatings(blankOfficerScores());setConfirmed(false);setError('');
+  setPacket(null);setRatings(blankOfficerScores());setConfirmed(false);setReviewerId('');setError('');
   if(!file)return;
   setLoading(true);
   try{
    if(!file.name.toLowerCase().endsWith('.json'))throw Error('Choose an original Assistant review packet (.json).');
    if(file.size>2*1024*1024)throw Error('Packet is above the 2 MB local file limit.');
    const next=JSON.parse(await file.text());
+   const issue=officerReviewImportProblem(next);
+   if(issue)throw Error(issue);
    validateReviewPacket(next);
    if(next.human_scorecard?.checks?.length!==4)throw Error('Missing four rating dimensions.');
    setPacket(next);
@@ -69,7 +83,8 @@ export default function AssistantHumanScoring(){
   </button>
   {open&&<div className="space-y-3 border-t border-[#e8edf2] px-4 pb-4 pt-3">
    <p className="text-xs leading-5 text-[#65788b]">
-    Import an actual AI answer packet exported in this system, inspect its original source evidence,
+    Use Score this answer below a newly generated reply, or import the original BAWASLU-assistant-review-AR-xxxxxxxx.json packet.
+    Prepared question plans and aggregate JSON summaries are not valid scoring inputs. Inspect its original source evidence,
     and enter your own scores. Everything stays in this browser session. Do not use synthetic
     examples as BAWASLU human acceptance. Importing a file does not authenticate its author.
    </p>
@@ -79,7 +94,9 @@ export default function AssistantHumanScoring(){
      className="block w-full text-xs" disabled={loading} onChange={importPacket}/>
    </label>
    {loading&&<p role="status" className="text-xs">Inspecting local packet...</p>}
-   {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
+   {error&&<div role="alert" data-testid="assistant-scoring-import-error" className="rounded-md border border-red-200 p-3 text-xs text-red-700">
+    <p>{error}</p><p className="mt-2">Prepare a question, press Send, then choose Score this answer or Export review evidence (.json) beneath the AI reply.</p>
+   </div>}
    {packet&&<div data-testid="assistant-human-scoring-workspace" className="space-y-3">
     <p className="text-xs text-[#805f25]">
      Packet {packet.packet_id}. The packet ID is not cryptographic proof. Independent source review

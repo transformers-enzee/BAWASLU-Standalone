@@ -1,0 +1,413 @@
+{
+  "version": "148.4",
+  "fixture_type": "SYNTHETIC_DELIBERATE_CONTRAST_CASES_NOT_HUMAN_GOLD",
+  "purpose": "Offline regression not empirical AI accuracy",
+  "checks": [
+    "citation_grounding",
+    "source_relevance",
+    "legal_uncertainty",
+    "cross_module_consistency"
+  ],
+  "cases": [
+    {
+      "case_id": "source_cited_gibran",
+      "question": "Gibran",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-11",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Gibran statement discussed by users",
+          "sentiment": "NEGATIVE",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "An unverified post discusses Gibran. [SOCIAL-11]",
+      "model_cited_ids": [
+        "SOCIAL-11"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "citation_not_displayed",
+      "question": "Prabowo",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-12",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Prabowo cited in a saved statement",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "Saved source context is available.",
+      "model_cited_ids": [
+        "SOCIAL-12"
+      ],
+      "expected": [
+        "REVIEW_REQUIRED",
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "off_topic_source",
+      "question": "Gibran",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-13",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Ganjar discussed in campaign monitoring",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "Saved discussion refers to Ganjar. [SOCIAL-13]",
+      "model_cited_ids": [
+        "SOCIAL-13"
+      ],
+      "expected": [
+        "PASS",
+        "REVIEW_REQUIRED",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "made_up_citation",
+      "question": "Riau",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-14",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau oversight conversation",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "An allegation appeared in Riau. [SOCIAL-14] [SOCIAL-999]",
+      "model_cited_ids": [
+        "SOCIAL-14",
+        "SOCIAL-999"
+      ],
+      "expected": [
+        "REVIEW_REQUIRED",
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "broad_no_focus",
+      "question": "Apa itu sentimen?",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-15",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Konten positif dan negatif dalam diskusi",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "Konten bermacam sentimen. [SOCIAL-15]",
+      "model_cited_ids": [
+        "SOCIAL-15"
+      ],
+      "expected": [
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "riau_in_two_modules",
+      "question": "Compare Riau",
+      "profile": "CROSS_MODULE_REVIEW",
+      "evidence": [
+        {
+          "record_id": "INT-2026-014",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "source_excerpt": "Riau officer case record",
+          "review_status": "Validated as Relevant Intelligence",
+          "verification_status": "UNVERIFIED"
+        },
+        {
+          "record_id": "SOCIAL-16",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau social-media post",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "The Inbox and saved post both mention Riau. [INT-2026-014] [SOCIAL-16]",
+      "model_cited_ids": [
+        "INT-2026-014",
+        "SOCIAL-16"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "PASS"
+      ]
+    },
+    {
+      "case_id": "missing_formal_comparison",
+      "question": "Compare Riau",
+      "profile": "CROSS_MODULE_REVIEW",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-17",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau local discussion",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "Only saved social content is available. [SOCIAL-17]",
+      "model_cited_ids": [
+        "SOCIAL-17"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "case_id": "missing_social_comparison",
+      "question": "Compare Riau",
+      "profile": "CROSS_MODULE_REVIEW",
+      "evidence": [
+        {
+          "record_id": "INT-2026-015",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "source_excerpt": "Riau formal report",
+          "review_status": "Validated as Relevant Intelligence",
+          "verification_status": "UNVERIFIED"
+        }
+      ],
+      "answer": "Only Inbox case evidence is available. [INT-2026-015]",
+      "model_cited_ids": [
+        "INT-2026-015"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "case_id": "unreviewed_law_pdf",
+      "question": "Which election law applies?",
+      "profile": "PDF_GUIDANCE",
+      "evidence": [
+        {
+          "record_id": "DOC-1-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "source_excerpt": "Simulation of officer workflow and source verification",
+          "review_status": "UNREVIEWED",
+          "document_type": "REGULATION",
+          "legal_currentness_verified": false
+        }
+      ],
+      "answer": "The uploaded page is a simulation. [DOC-1-P3]",
+      "model_cited_ids": [
+        "DOC-1-P3"
+      ],
+      "expected": [
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "reviewed_law_currentness",
+      "question": "Which election law applies?",
+      "profile": "PDF_GUIDANCE",
+      "evidence": [
+        {
+          "record_id": "DOC-6-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "source_excerpt": "An officer-reviewed reference lists legal procedures",
+          "review_status": "OFFICER_REVIEWED",
+          "document_type": "REGULATION",
+          "legal_currentness_verified": false
+        }
+      ],
+      "answer": "The uploaded legal reference lists procedural steps. [DOC-6-P8]",
+      "model_cited_ids": [
+        "DOC-6-P8"
+      ],
+      "expected": [
+        "PASS",
+        "NOT_APPLICABLE",
+        "PASS",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "unreviewed_pdf_summary",
+      "question": "Summarize my uploaded PDF",
+      "profile": "PDF_GUIDANCE",
+      "evidence": [
+        {
+          "record_id": "DOC-1-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "source_excerpt": "Simulation notes on internal approval flow",
+          "review_status": "UNREVIEWED",
+          "document_type": "REGULATION",
+          "legal_currentness_verified": false
+        }
+      ],
+      "answer": "The file describes an approval workflow. [DOC-1-P4]",
+      "model_cited_ids": [
+        "DOC-1-P4"
+      ],
+      "expected": [
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "social_not_legal_authority",
+      "question": "What electoral law applies?",
+      "profile": "PDF_GUIDANCE",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-18",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "An online user alleges improper campaign funding",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "The user alleges misconduct. [SOCIAL-18]",
+      "model_cited_ids": [
+        "SOCIAL-18"
+      ],
+      "expected": [
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "duplicate_sentiment_conflict",
+      "question": "Riau",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-19",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau source discussed",
+          "sentiment": "NEGATIVE",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        },
+        {
+          "record_id": "SOCIAL-19",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau source discussed",
+          "sentiment": "POSITIVE",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "One saved Riau post appears. [SOCIAL-19]",
+      "model_cited_ids": [
+        "SOCIAL-19"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "case_id": "duplicate_sentiment_consistent",
+      "question": "Riau",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-20",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau posted administrative update",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        },
+        {
+          "record_id": "SOCIAL-20",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Riau posted administrative update",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "One Riau source appears twice in linked campaign data. [SOCIAL-20]",
+      "model_cited_ids": [
+        "SOCIAL-20"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "indonesian_post_relevance",
+      "question": "Pilkada di Riau",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [
+        {
+          "record_id": "SOCIAL-21",
+          "record_type": "SOCIAL_LISTENING",
+          "source_excerpt": "Diskusi publik tentang Pilkada Riau tahun ini",
+          "sentiment": "NEUTRAL",
+          "verification_status": "UNVERIFIED_SOCIAL_SOURCE"
+        }
+      ],
+      "answer": "Sumber membahas Pilkada Riau. [SOCIAL-21]",
+      "model_cited_ids": [
+        "SOCIAL-21"
+      ],
+      "expected": [
+        "PASS",
+        "PASS",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    {
+      "case_id": "no_authorized_evidence",
+      "question": "Gibran",
+      "profile": "SOCIAL_ANALYSIS",
+      "evidence": [],
+      "answer": "No saved matching records are available.",
+      "model_cited_ids": [],
+      "expected": [
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE",
+        "NOT_APPLICABLE"
+      ]
+    }
+  ]
+}

@@ -79,3 +79,51 @@ test('Assistant distinguishes cited IDs from contextual source cards',async({pag
  await expect(audit).toContainText('Source cards are context only');
  await expect(audit).toContainText('not the truth of source claims');
 });
+
+
+test('Assistant shows four answer readiness checks without claiming human accuracy',async({page})=>{
+ await page.route('**/api/functions/intelligenceAssistant',route=>
+  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   answer:'One saved source discusses Riau; an officer must check the original. [SOCIAL-12]',
+   records:[{
+    id:'12',record_id:'SOCIAL-12',record_type:'SOCIAL_LISTENING',
+    source_post_id:'12',campaign_id:1,platform:'Instagram',
+    source_name:'Example account',source_excerpt:'Riau local election discussion',
+    source_url:'https://example.invalid/post/12',
+    verification_status:'UNVERIFIED_SOCIAL_SOURCE'
+   }],
+   response_profile:'SOCIAL_ANALYSIS',provider:{mode:'OPENAI_GROUNDED'},
+   grounding:{selected_count:1,supporting_count:1,cited_count:1,
+    source_card_count:1,source_card_basis:'CITED_SOURCE',
+    grounding_audit:{audit_version:'ASSISTANT_GROUNDING_V1483',
+     displayed_citation_count:1,cited_unreviewed_pdf_pages:0,
+     legal_currentness_verified:false,claims_semantically_verified:false},
+    answer_quality:{
+     framework:'ASSISTANT_ANSWER_READINESS_V1484',
+     evaluation_type:'DETERMINISTIC_HEURISTICS_NOT_HUMAN_ACCURACY',
+     passed_checks:1,review_required_checks:1,not_applicable_checks:2,
+     human_accuracy:null,human_gold_answers_evaluated:0,
+     checks:[
+       {id:'citation_grounding',status:'PASS'},
+       {id:'source_relevance',status:'REVIEW_REQUIRED'},
+       {id:'legal_uncertainty',status:'NOT_APPLICABLE'},
+       {id:'cross_module_consistency',status:'NOT_APPLICABLE'}
+     ]
+    }
+   },
+   answer_language:'en',detected_tags:[],presentation_labels:{}
+  })}));
+ await login(page);
+ await page.goto('/assistant');
+ await page.locator('form input[maxlength="1000"]').fill('Summarize the saved post from Riau');
+ await page.locator('form button[type="submit"]').click();
+ const qa=page.getByTestId('assistant-answer-quality');
+ await expect(qa).toBeVisible();
+ await expect(qa.locator('summary')).toContainText('1 require review');
+ await qa.locator('summary').click();
+ await expect(qa).toContainText('Rule-based checks, not an accuracy score or human validation.');
+ await expect(qa).toContainText('source relevance');
+ await expect(qa).toContainText('REVIEW REQUIRED');
+ await expect(qa).toContainText('cross module consistency');
+ await expect(qa).toContainText('Source truth and legal conclusions still require an authorized officer.');
+});

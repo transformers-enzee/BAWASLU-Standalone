@@ -140,7 +140,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.4','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -840,6 +840,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     text,cited,grounding_audit=audit_assistant_answer(
         q,evidence,text,cited,profile=response_profile,language=answer_lang)
     meta['grounding_audit']=grounding_audit
+    from .assistant_answer_quality import evaluate_answer_quality
+    answer_quality=evaluate_answer_quality(
+        q,evidence,text,cited,profile=response_profile,grounding=grounding_audit)
+    meta['answer_quality']=answer_quality
     if isinstance(meta.get('quality'),dict):
         meta['quality']['cited_evidence_count']=len(cited)
         meta['quality']['citation_ids_valid']=grounding_audit['citation_ids_valid']
@@ -911,6 +915,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'cited_count':len(cited),'source_card_count':len(support),
             'source_card_basis':'CITED_SOURCE' if cited else 'CONTEXTUAL_SELECTED_SOURCE',
             'grounding_audit':grounding_audit,
+            'answer_quality':answer_quality,
             'matched_social':matched_social,
             'formal_selected_count':len(selected_formal),
             'social_selected_count':len(chosen_social),

@@ -171,6 +171,15 @@ export default function IntelligenceAssistant(){
           <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditelaah petugas; keberlakuan hukum belum diverifikasi.':'A cited PDF is not officer-reviewed; current legal force is unverified.'}</p>}
          <p className="mt-1">{(m.answer_language||'id')==='id'?'Pemeriksaan ini memvalidasi ID rujukan, bukan kebenaran klaim sumber.':'This check validates reference IDs, not the truth of source claims.'}</p>
         </div>}
+        {m.grounding?.answer_quality?.checks?.length>0&&
+         <details data-testid="assistant-answer-quality" className="mt-2 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
+          <summary className="cursor-pointer font-semibold">{(m.answer_language||'id')==='id'?'Pemeriksaan kualitas otomatis':'Automated answer checks'} · {m.grounding.answer_quality.review_required_checks} {(m.answer_language||'id')==='id'?'perlu ditinjau':'require review'}</summary>
+          <p className="mt-2 text-[#946b31]">{(m.answer_language||'id')==='id'?'Pemeriksaan berbasis aturan, bukan skor akurasi atau validasi manusia.':'Rule-based checks, not an accuracy score or human validation.'}</p>
+          <div className="mt-2 space-y-1">{m.grounding.answer_quality.checks.map(check=>
+           <p key={check.id} className="flex items-start justify-between gap-2"><span>{check.id.replace(/_/g,' ')}</span>
+            <span className="font-semibold shrink-0">{check.status==='PASS'?'PASS':check.status==='REVIEW_REQUIRED'?'REVIEW REQUIRED':'N/A'}</span></p>)}</div>
+          <p className="mt-2">{(m.answer_language||'id')==='id'?'Setiap kesimpulan hukum dan kebenaran bukti tetap memerlukan petugas yang berwenang.':'Source truth and legal conclusions still require an authorized officer.'}</p>
+         </details>}
         {m.response_profile!=='PDF_GUIDANCE'&&m.grounding?.supporting_count>0&&
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}

@@ -52,6 +52,7 @@ const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta
 assert.ok(source.includes('assistant-human-scoring-export')&&
  source.includes('completedOfficerScoringCsv')&&source.includes('setConfirmed(false)'));
 assert.ok(page.includes('<AssistantHumanScoring/>'));
-assert.ok(main.includes("'build_version':'149.2'")&&
- shell.includes('data-build-version="149.2"')&&shell.includes('>v149.2</footer>'));
-console.log('PASS v149.2 offline independent scoring workbench, complete CSV exports, validation, formula hygiene and version alignment');
+const release=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+assert.ok(release&&shell.includes('data-build-version="'+release+'"')&&
+ shell.includes('>v'+release+'</footer>'));
+console.log('PASS offline independent scoring workbench, complete CSV exports, validation, formula hygiene and dynamic version alignment');

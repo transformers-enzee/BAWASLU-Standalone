@@ -297,10 +297,15 @@ def deactivate_pdf(document_id:int,user:User=Depends(current_user),db:Session=De
     db.commit()
     return {"active":False,"paid_provider_called":False}
 
-def retrieve_knowledge(db,p,question,limit=6,semantic=True):
-    """Private, permission-filtered hybrid search with lexical fallback."""
+def retrieve_knowledge(db,p,question,limit=6,semantic=True,reviewed_legal_only=False):
+    """Private scope-checked retrieval; optionally require reviewed legal PDFs.
+
+    Reviewed means officer metadata review, NOT verification that the law
+    remains in force. Keep default broad retrieval for existing AI chat.
+    """
     from .assistant_semantic import retrieve_hybrid
-    return retrieve_hybrid(db,p,question,limit=limit,semantic=semantic)
+    return retrieve_hybrid(db,p,question,limit=limit,semantic=semantic,
+                           reviewed_legal_only=reviewed_legal_only)
 
 
 # Uploaded PDFs are durable chat references, not per-message attachments. The

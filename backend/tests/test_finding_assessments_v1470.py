@@ -13,8 +13,8 @@ def post(source, platform, text, campaign="42"):
 def test_dual_assessment_never_conflates_legal_and_platform_rules(monkeypatch):
     import app.finding_assessments as module
     observed=[]
-    def no_paid(db,p,question,limit,semantic):
-        observed.append((limit,semantic))
+    def no_paid(db,p,question,limit,semantic,reviewed_legal_only=False):
+        observed.append((limit,semantic,reviewed_legal_only,question))
         return [{
             "document_id":91,"page":2,"title":"Officer reviewed SOP",
             "issuer":"BAWASLU","record_id":"DOC-91-P2",
@@ -35,14 +35,17 @@ def test_dual_assessment_never_conflates_legal_and_platform_rules(monkeypatch):
     assert result["legal"]["status"]=="PRELIMINARY_REVIEW_RECOMMENDED"
     assert result["legal"]["approved_reference_pages"][0]["document_id"]==91
     assert len(result["legal"]["approved_reference_pages"])==1
-    assert result["legal"]["unreviewed_matched_pages"]==1
+    assert result["legal"]["unreviewed_matched_pages"] is None
+    assert result["legal"]["unreviewed_matches_excluded_before_ranking"] is True
     assert result["platform_policy"]["potential_review_queue"][0]["status"]=="REVIEW_INDICATED"
     assert result["platform_policy"]["status_counts"]["REVIEW_INDICATED"]==1
     assert result["legal"]["official_legal_verdict"] is False
     assert result["platform_policy"]["platform_violation_confirmed"] is False
     assert result["follow_up"]["created_assignment"] is False
     assert result["paid_provider_called"] is False
-    assert observed==[(8,False)]
+    assert len(observed)==1
+    assert observed[0][:3]==(8,False,True)
+    assert "peraturan pengawasan pemilu" in observed[0][3]
 
 
 def test_contextual_news_criticism_is_not_a_confirmed_platform_breach(monkeypatch):
@@ -77,7 +80,7 @@ def test_authorization_and_unknown_finding_fail_closed(monkeypatch):
 def test_not_a_paid_model_or_automatic_takedown(monkeypatch):
     import app.finding_assessments as module
     monkeypatch.setattr(module,"retrieve_knowledge",lambda *a,**k:[])
-    f={"id":"f","players":["violations"],"posts":[post(8,"reddit","A public complaint")]}
+    f={"id":"f","players":["violations"],"posts":[post(8,"mastodon","A public complaint")]}
     result=assess_finding(None,{},f)
     assert result["platform_policy"]["status_counts"]["POLICY_NOT_CONFIGURED"]==1
     assert result["legal"]["statutory_articles_verified"] is False

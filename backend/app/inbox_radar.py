@@ -182,6 +182,7 @@ def _normalized_platform(value):
         'twitter':'X','x':'X','twitter-ai-search':'X',
         'youtube':'YouTube','facebook':'Facebook','instagram':'Instagram',
         'tiktok':'TikTok','threads':'Threads',
+        'reddit':'Reddit','linkedin':'LinkedIn','telegram':'Telegram',
         'online_news':'News','news':'News'
     }.get(name,name.title() if name else 'Unknown')
 

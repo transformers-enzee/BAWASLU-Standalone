@@ -219,7 +219,7 @@ def merge_rankings(lexical,semantic,documents,limit,db=None):
         })
     return out
 
-def retrieve_hybrid(db,profile,question,limit=6,semantic=True):
+def retrieve_hybrid(db,profile,question,limit=6,semantic=True,reviewed_legal_only=False):
     from .assistant_knowledge import KnowledgePDF,_visible
     from .intelligence_assistant import STOPWORDS
     from .access import has
@@ -228,8 +228,15 @@ def retrieve_hybrid(db,profile,question,limit=6,semantic=True):
             if word not in STOPWORDS and not word.isnumeric()]
     terms=list(dict.fromkeys(tokens))[:16]
     if not terms:return []
-    docs=[doc for doc in db.query(KnowledgePDF).filter_by(active=True).order_by(
-        KnowledgePDF.id.desc()).limit(150).all() if _visible(profile,doc)]
+    query=db.query(KnowledgePDF).filter_by(active=True)
+    if reviewed_legal_only:
+        # Reject unreviewed and irrelevant document types BEFORE SQL LIMIT and
+        # lexical ranking. These are still unverified for legal currentness.
+        query=query.filter(
+            KnowledgePDF.review_status=="OFFICER_REVIEWED",
+            KnowledgePDF.document_type.in_(("REGULATION","SOP","GUIDANCE")))
+    docs=[doc for doc in query.order_by(KnowledgePDF.id.desc()).limit(150).all()
+          if _visible(profile,doc)]
     if not docs:return []
     lexical=lexical_search(db,docs,question,terms)
     semantic_rows=semantic_search(db,docs,question) if semantic else []

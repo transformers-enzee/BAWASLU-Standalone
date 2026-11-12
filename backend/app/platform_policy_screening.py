@@ -19,8 +19,19 @@ PLATFORM_POLICIES = {
     "threads": ("Threads", "https://www.meta.com/safety/topics/safety-basics/policies/"),
     "twitter": ("X", "https://help.x.com/en/rules-and-policies/x-rules"),
     "youtube": ("YouTube", "https://support.google.com/youtube/answer/2802268?hl=en"),
+    "reddit": ("Reddit", "https://redditinc.com/policies/reddit-rules"),
+    "linkedin": ("LinkedIn", "https://www.linkedin.com/legal/professional-community-policies"),
+    "telegram": ("Telegram", "https://telegram.org/tos"),
 }
-POLICY_LINK_CHECKED="2026-11-10"
+POLICY_LINK_CHECKED="2026-11-12"
+# These URLs point to provider rules, NOT a verified policy version or
+# a conclusion for an individual post. Community/private-channel applicability
+# must be checked by a human before any enforcement report.
+PLATFORM_POLICY_CAVEATS = {
+    "reddit": "Subreddit community rules may additionally apply; sitewide rules are not a subreddit finding.",
+    "telegram": "Telegram public-content rules may differ from private chat contexts; confirm visibility before reporting.",
+    "linkedin": "Professional Community Policies require checking context and newsworthiness exceptions.",
+}
 PLATFORM_ALIASES = {
     "x":"twitter", "twitter-ai-search":"twitter", "twitter_ai_search":"twitter",
     "twitter.com":"twitter", "x.com":"twitter",
@@ -28,6 +39,10 @@ PLATFORM_ALIASES = {
     "instagram-ai-search":"instagram",
     "facebook-ai-search":"facebook",
     "youtube-ai-search":"youtube",
+    "reddit-ai-search":"reddit",
+    "linkedin-ai-search":"linkedin",
+    "telegram-ai-search":"telegram",
+    "telegram_public":"telegram",
 }
 
 # Very narrow, intentional calls to action rather than mere word mentions.
@@ -116,6 +131,9 @@ def screen_platform_text(platform, source_text):
         "legal_violation_confirmed":False,
         "policy_version_verified":False,
         "context_required":bool(matches),
+        "policy_scope_note": PLATFORM_POLICY_CAVEATS.get(platform_id,
+             "Check the current provider rules and relevant content context."),
+        "policy_link_is_official_entrypoint_only": bool(policy),
         "political_criticism_is_not_a_violation":True,
     }
 

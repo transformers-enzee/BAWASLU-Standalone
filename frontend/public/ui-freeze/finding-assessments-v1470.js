@@ -27,6 +27,8 @@
    const refs=data.approved_reference_pages||[];
    const steps=data.recommended_follow_up||[];
    return '<p class="small muted">'+escapeHtml(data.notice)+'</p>'+
+    '<p class="tiny muted">'+text('References: officer-reviewed legal PDFs only; no current statutory article or legal effect has been verified.',
+         'Rujukan: hanya PDF hukum yang ditelaah petugas; pasal dan keberlakuannya belum diverifikasi.')+'</p>'+
     '<p class="small"><strong>'+text('Current assessment:','Hasil penilaian:')+'</strong> '+(
       data.status==='PRELIMINARY_REVIEW_RECOMMENDED'?
        text('A saved potential-violation signal requires officer legal review.','Indikasi dugaan pelanggaran tersimpan, diperlukan telaah hukum petugas.'):
@@ -37,6 +39,7 @@
       '<div class="soft small"><strong>'+escapeHtml(row.title)+' · '+text('page','halaman')+' '+Number(row.page)+'</strong>'+
       '<p>'+escapeHtml(String(row.excerpt||'').slice(0,450))+'</p><div class="tiny muted">'+escapeHtml(row.record_id)+' · '+
       text('Officer-reviewed upload, legal currency not verified.','Dokumen telah ditelaah, keberlakuan hukum belum diverifikasi.')+
+      ' · '+escapeHtml(row.match_method||'KEYWORD')+
       ' <a href="/assistant" target="_top" rel="noopener noreferrer">'+text('Open Knowledge Library','Buka Pustaka Pengetahuan')+' ↗</a></div></div>').join(''):
       '<p class="small muted">'+text('No matching officer-reviewed regulation or SOP. Upload and review current official rules before citing any provision.','Tidak ada peraturan atau SOP cocok yang telah ditelaah. Unggah dan tinjau aturan resmi terkini sebelum mengutip pasal.')+'</p>')+
     '<h4>'+text('Follow-up considerations','Pertimbangan tindak lanjut')+'</h4><ol style="padding-left:22px">'+
@@ -56,6 +59,7 @@
        const labels=(row.categories||[]).map(key=>row.category_labels?.[key]?.[lang]||key);
        return '<div class="soft small"><strong>'+escapeHtml(row.platform)+' · '+renderStatus(row.status)+'</strong>'+
          '<div>'+labels.map(escapeHtml).join(', ')+'</div><p>'+escapeHtml(row.excerpt||'')+'</p>'+
+         (row.policy_scope_note?'<p class="tiny muted">'+escapeHtml(row.policy_scope_note)+'</p>':'')+
          (link?'<a href="'+escapeHtml(link)+'" rel="noopener noreferrer" target="_blank">'+text('Original post','Postingan asli')+' ↗</a> · ':'')+
          (policy?'<a href="'+escapeHtml(policy)+'" rel="noopener noreferrer" target="_blank">'+text('Platform policy','Aturan platform')+' ↗</a>':'')+
          '</div>';
@@ -63,7 +67,8 @@
      '<p class="small muted">'+text('No direct harmful-content pattern detected in saved source text. This does not certify policy compliance.','Tidak ada pola langsung terdeteksi dari teks tersimpan. Bukan sertifikasi kepatuhan aturan platform.')+'</p>')+
     (links.length?'<h4>'+text('Official policy entrypoints (versions unverified)','Tautan aturan resmi (versi belum diverifikasi)')+'</h4>'+
      links.map(row=>'<p class="small"><a href="'+escapeHtml(safeUrl(row.policy_url))+
-     '" rel="noopener noreferrer" target="_blank">'+escapeHtml(row.platform)+' ↗</a></p>').join(''):'')+
+     '" rel="noopener noreferrer" target="_blank">'+escapeHtml(row.platform)+' ↗</a>'+
+     (row.policy_scope_note?'<span class="tiny muted"> · '+escapeHtml(row.policy_scope_note)+'</span>':'')+'</p>').join(''):'')+
     '<p class="tiny muted">'+text('Ordinary political criticism and negative sentiment are not platform-rule breaches.','Kritik politik dan sentimen negatif biasa bukan pelanggaran aturan platform.')+'</p>';
  }
  function install(id, result){
@@ -74,8 +79,17 @@
    panel.id='findingAssessments';
    panel.setAttribute('aria-label',text('Finding assessments and recommendations','Penilaian dan rekomendasi temuan'));
    panel.style.cssText='margin:22px 0;padding:18px;border:1px solid #dce5ec;border-radius:12px;background:#fff';
+   const provenance=result.source_provenance||{};
+   const matches=provenance.source_count_matches_finding;
+   const missing=Number(provenance.missing_original_text||0)+Number(provenance.missing_original_url||0);
    panel.innerHTML='<h3 style="margin:0 0 6px">'+text('Assessments & Recommendations','Penilaian & Rekomendasi')+'</h3>'+
     '<p class="tiny muted">'+text('Saved source evidence only · Preliminary assessment · Officer decision required','Hanya bukti tersimpan · Penilaian awal · Keputusan petugas diperlukan')+'</p>'+
+    '<p class="tiny muted">'+text('Unique Inbox sources assessed: ','Sumber unik Inbox yang ditelaah: ')+
+     Number(result.source_count_assessed||0)+
+     ' · '+text('Duplicate links removed: ','Tautan duplikat dihapus: ')+Number(provenance.duplicate_links_removed||0)+
+     (matches===false?' · '+text('Source count mismatch: review evidence mapping','Jumlah sumber tidak sesuai: periksa pemetaan bukti'):'')+
+     (missing?' · '+text('Missing original text/URL: ','Teks/URL asli tidak tersedia: ')+missing:'')+
+     '</p>'+
     '<div role="tablist" aria-label="Assessment categories" style="display:flex;gap:8px;margin:12px 0">'+
     '<button type="button" role="tab" data-review-tab="legal" aria-selected="true" class="button primary">'+text('Legal Assessment','Penilaian Hukum')+'</button>'+
     '<button type="button" role="tab" data-review-tab="policy" aria-selected="false" class="button">'+text('Platform Policy','Aturan Platform')+'</button></div>'+

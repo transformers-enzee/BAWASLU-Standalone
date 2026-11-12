@@ -174,7 +174,7 @@ export default function IntelligenceAssistant(){
     <AssistantHumanScoring incomingPacket={scoringPacket}/>
     <AssistantReviewConsolidation/>
    </div>}
-  </section>
+  </section>}
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
    <button type="button" className="intel-button" disabled={busy||historyBusy} onClick={newConversation}><Plus size={15}/>{t('new_conversation')}</button>

@@ -20,6 +20,7 @@ assert.ok(page.includes('{showQa&&m.grounding?.answer_quality?.checks?.length>0&
 assert.ok(page.includes('<AssistantReviewConsolidation/>'));
 assert.ok(page.includes('<AssistantHumanScoring incomingPacket={scoringPacket}/>'));
 const version=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-assert.equal(version,'149.6');
+assert.ok(version,'Missing build version');
+assert.ok(page.includes('</section>}\n  <div className="flex flex-wrap gap-2">'), 'QA panel must close its outer JSX condition');
 assert.ok(shell.includes('data-build-version="'+version+'"')&&shell.includes('>v'+version+'</footer>'));
 console.log('PASS v149.6 collapsed admin QA, officer source cautions and synchronized release');

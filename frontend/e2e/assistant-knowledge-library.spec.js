@@ -127,3 +127,66 @@ test('Assistant shows four answer readiness checks without claiming human accura
  await expect(qa).toContainText('cross module consistency');
  await expect(qa).toContainText('Source truth and legal conclusions still require an authorized officer.');
 });
+
+
+test('Assistant review packet exports preserve blank human scores',async({page})=>{
+ await page.route('**/api/functions/intelligenceAssistant',route=>
+  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   answer:'An unverified Riau report requires officer checking. [SOCIAL-11]',
+   records:[{
+    record_id:'SOCIAL-11',record_type:'SOCIAL_LISTENING',source_post_id:'11',
+    platform:'Instagram',campaign_id:90,source_name:'Example account',
+    source_excerpt:'Riau saved post alleging an electoral irregularity',
+    source_url:'https://example.invalid/post/11',
+    private_note:'DO_NOT_EXPORT'
+   }],
+   response_profile:'SOCIAL_ANALYSIS',
+   provider:{mode:'OPENAI_GROUNDED'},
+   grounding:{
+    grounding_audit:{
+     displayed_citation_ids:['SOCIAL-11'],cited_unreviewed_pdf_pages:0,
+     claims_semantically_verified:false
+    },
+    answer_quality:{
+     framework:'ASSISTANT_ANSWER_READINESS_V1484',review_required_checks:1,
+     checks:[
+      {id:'citation_grounding',status:'PASS',reason:'Identifier matches'},
+      {id:'source_relevance',status:'REVIEW_REQUIRED',reason:'Review source'},
+      {id:'legal_uncertainty',status:'NOT_APPLICABLE'},
+      {id:'cross_module_consistency',status:'NOT_APPLICABLE'}
+     ]
+    }
+   },
+   answer_language:'en',detected_tags:[],presentation_labels:{}
+  })}));
+ await login(page);
+ await page.goto('/assistant');
+ await page.locator('form input[maxlength="1000"]').fill('What is happening in Riau?');
+ await page.locator('form button[type="submit"]').click();
+ const review=page.getByTestId('assistant-human-review-export');
+ await expect(review).toBeVisible();
+ await expect(review).toContainText('Reviewer scores are blank and no approval has occurred');
+ const jsonEvent=page.waitForEvent('download');
+ await review.getByTestId('assistant-review-json').click();
+ const json=await jsonEvent;
+ expect(json.suggestedFilename()).toMatch(/^BAWASLU-assistant-review-AR-[a-f0-9]{8}\.json$/);
+ const {readFile}=await import('node:fs/promises');
+ const snapshot=JSON.parse(await readFile(await json.path(),'utf8'));
+ expect(snapshot.schema_version).toBe('BAWASLU_ASSISTANT_REVIEW_V1485');
+ expect(snapshot.question).toBe('What is happening in Riau?');
+ expect(snapshot.human_accuracy).toBeNull();
+ expect(snapshot.officer_approved).toBe(false);
+ expect(snapshot.human_scorecard.checks).toHaveLength(4);
+ expect(snapshot.human_scorecard.checks.every(c=>c.human_score===null)).toBe(true);
+ expect(snapshot.evidence_snapshot.exported_records[0].record_id).toBe('SOCIAL-11');
+ expect(JSON.stringify(snapshot)).not.toContain('DO_NOT_EXPORT');
+ const csvEvent=page.waitForEvent('download');
+ await review.getByTestId('assistant-review-csv').click();
+ const csv=await csvEvent;
+ expect(csv.suggestedFilename().replace('.csv','.json')).toBe(json.suggestedFilename());
+ const sheet=await readFile(await csv.path(),'utf8');
+ expect(sheet).toContain('human_score_0_1_NA');
+ expect(sheet).toContain('source_relevance');
+ expect(sheet).toContain('REVIEW_REQUIRED');
+ expect(sheet.trim().split(/\r?\n/)).toHaveLength(5);
+});

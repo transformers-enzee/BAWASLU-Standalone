@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown } from 'lucide-react';
+import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown, Download } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
@@ -10,6 +10,7 @@ import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenc
 import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/AssistantActionDesk';
 import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
 import { useLanguage } from '@/lib/LanguageContext';
+import {buildAssistantReviewPacket,downloadAssistantReviewFile} from '@/lib/assistantReviewPacket';
 
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
 async function historyRequest(path='',method='GET',body=null){
@@ -35,6 +36,9 @@ export default function IntelligenceAssistant(){
  const starters=starterKeys.map(t);
  const initialQuery=new URLSearchParams(window.location.search).get('q')||'';
  const [question,setQuestion]=useState(initialQuery),[messages,setMessages]=useState([]);
+ // Export only fresh answers generated in this authenticated page session.
+ // Historical chat source access may have changed since the answer was saved.
+ const [reviewableIndexes,setReviewableIndexes]=useState(()=>new Set());
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
@@ -57,14 +61,14 @@ export default function IntelligenceAssistant(){
  },[]);
  function newConversation(){
   if(busy||historyBusy)return;
-  setActive(null);setMessages([]);setQuestion('');setError('');setHistoryError('');
+  setActive(null);setMessages([]);setReviewableIndexes(new Set());setQuestion('');setError('');setHistoryError('');
  }
  async function openThread(id){
   if(busy||historyBusy)return;
   setHistoryBusy(true);setHistoryError('');setError('');
   try{
    const thread=await historyRequest('/'+encodeURIComponent(id));
-   setActive(thread.id);setMessages(thread.messages||[]);setQuestion('');
+   setActive(thread.id);setMessages(thread.messages||[]);setReviewableIndexes(new Set());setQuestion('');
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
@@ -74,9 +78,22 @@ export default function IntelligenceAssistant(){
   try{
    await historyRequest('/'+encodeURIComponent(id),'DELETE');
    setThreads(old=>old.filter(x=>x.id!==id));
-   if(activeIdRef.current===id){setActive(null);setMessages([])}
+   if(activeIdRef.current===id){setActive(null);setMessages([]);setReviewableIndexes(new Set())}
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
+ }
+ function exportAnswerReview(index,format){
+  try{
+   if(!reviewableIndexes.has(index))
+    throw new Error('For permission safety, only answers generated in this session can be exported. Re-run older questions to refresh evidence access.');
+   const answer=messages[index];
+   const originalQuestion=messages[index-1]?.role==='user'?messages[index-1].text:'';
+   const buildVersion=document.querySelector('[data-build-version]')?.getAttribute('data-build-version')||'unknown';
+   const packet=buildAssistantReviewPacket({
+    question:originalQuestion,answer,buildVersion
+   });
+   downloadAssistantReviewFile(packet,format);
+  }catch(e){setError(e?.message||'Review export could not be created.')}
  }
  async function ask(text){
   const q=String(text||'').trim();
@@ -97,6 +114,7 @@ export default function IntelligenceAssistant(){
    };
    const full=[...outgoing,answer];
    setMessages(full);
+   setReviewableIndexes(old=>new Set([...old,outgoing.length]));
    try{
     const title=String(messages[0]?.text||q).slice(0,120);
     const saved=await historyRequest('','PUT',{
@@ -180,6 +198,18 @@ export default function IntelligenceAssistant(){
             <span className="font-semibold shrink-0">{check.status==='PASS'?'PASS':check.status==='REVIEW_REQUIRED'?'REVIEW REQUIRED':'N/A'}</span></p>)}</div>
           <p className="mt-2">{(m.answer_language||'id')==='id'?'Setiap kesimpulan hukum dan kebenaran bukti tetap memerlukan petugas yang berwenang.':'Source truth and legal conclusions still require an authorized officer.'}</p>
          </details>}
+        {m.grounding?.answer_quality?.checks?.length>0&&reviewableIndexes.has(i)&&<div data-testid="assistant-human-review-export" className="mt-3 rounded-lg border border-[#e6e0c9] bg-[#fffcf4] px-3 py-2 text-xs text-[#665b43]">
+         <p className="font-semibold">{(m.answer_language||'id')==='id'?'Siapkan penilaian petugas':'Prepare human review'}</p>
+         <p className="mt-1">{(m.answer_language||'id')==='id'
+          ?'Unduhan manual ini memuat potongan bukti yang dapat Anda akses. Simpan dengan aman. Skor petugas belum diisi dan belum ada persetujuan.'
+          :'Manual downloads contain evidence excerpts you can access. Store securely. Reviewer scores are blank and no approval has occurred.'}</p>
+         <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={()=>exportAnswerReview(i,'json')} data-testid="assistant-review-json"
+           className="intel-ghost text-xs"><Download size={13}/> {(m.answer_language||'id')==='id'?'Ekspor bukti penilaian (.json)':'Export review evidence (.json)'}</button>
+          <button type="button" onClick={()=>exportAnswerReview(i,'csv')} data-testid="assistant-review-csv"
+           className="intel-ghost text-xs"><Download size={13}/> {(m.answer_language||'id')==='id'?'Ekspor lembar skor kosong (.csv)':'Export blank scoring sheet (.csv)'}</button>
+         </div>
+        </div>}
         {m.response_profile!=='PDF_GUIDANCE'&&m.grounding?.supporting_count>0&&
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}

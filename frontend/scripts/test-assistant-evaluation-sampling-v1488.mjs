@@ -21,11 +21,13 @@ assert.ok(endpoint.includes('new_social_crawls":0')&&
  endpoint.includes('paid_ai_calls":0')&&
  endpoint.includes('database_writes":0'),
  'Sampler never calls crawling, AI or writes DB');
-assert.ok(assistant.includes('exact_ids=set(re.findall')&&
+assert.ok(assistant.includes('exact_ids=exact_social_source_ids(question)')&&
+ assistant.includes('exact_social_selection_complete(question,chosen,limit)')&&
  assistant.includes('return chosen[:limit],len(exact)'),
  'Explicit saved source IDs cannot drift to unrelated posts');
-assert.ok(api.includes('explicit_social_id=bool')&&
- api.includes("not evidence and requested=='AUTO' and not explicit_social_id"),
+assert.ok(api.includes('explicit_social_id=bool(explicit_social_ids)')&&
+ api.includes("not evidence and requested=='AUTO' and not explicit_social_id")&&
+ api.includes('selected_formal=[]')&&api.includes('context_pdf=[]'),
  'An inaccessible exact source must not trigger GPT general fallback');
 assert.ok(panel.includes('assistant-evaluation-sampler-result')&&
  panel.includes('Prepare questions (no AI call)')&&

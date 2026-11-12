@@ -5,7 +5,7 @@ It never determines a legal/platform violation, initiates a takedown,
 creates a case, or invokes paid AI providers.
 """
 from collections import Counter
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -45,28 +45,61 @@ def _legal_search_query(finding, posts):
 def assess_finding(db, permission, finding):
     """Build read-only assessments only from the scoped finding's original posts."""
     posts = finding.get("posts") or []
-    seen = set()
-    ordered = []
-    for post in posts:
-        ident = (str(post.get("canonical_source_id") or post.get("result_id") or ""),
-                 str(post.get("source_url") or ""))
-        if ident == ("", ""):
-            ident = ("fallback", str(len(ordered)))
-        if ident in seen:
-            continue
-        seen.add(ident)
-        ordered.append(post)
+    # A canonical post can have many campaign links and different saved URLs.
+    groups={}
+    for index,post in enumerate(posts):
+        canonical=str(post.get("canonical_source_id") or "").strip()
+        result_id=str(post.get("result_id") or "").strip()
+        source_url=str(post.get("source_url") or "").strip()
+        identity=(("canonical",canonical) if canonical else
+                  ("result",result_id) if result_id else
+                  ("url",source_url) if source_url else ("unidentified",str(index)))
+        groups.setdefault(identity,[]).append(post)
+
+    def safe_source_url(row):
+        raw=str(row.get("source_url") or "").strip()
+        try:
+            parsed=urlsplit(raw)
+            return raw if (parsed.scheme in ("http","https") and
+                           parsed.hostname and not parsed.username and not parsed.password) else ""
+        except ValueError:
+            return ""
+
+    ordered=[]
+    linked_variants=[]
+    text_conflicts=url_conflicts=platform_conflicts=0
+    for variants in groups.values():
+        texts={str(v.get("message_original") or "").strip() for v in variants
+               if str(v.get("message_original") or "").strip()}
+        urls={safe_source_url(v) for v in variants if safe_source_url(v)}
+        keys={str(v.get("platform") or "").strip().casefold()
+              for v in variants if str(v.get("platform") or "").strip()}
+        text_conflicts+=int(len(texts)>1)
+        url_conflicts+=int(len(urls)>1)
+        platform_conflicts+=int(len(keys)>1)
+        chosen=max(variants,key=lambda v:(
+            bool(str(v.get("message_original") or "").strip()),
+            bool(safe_source_url(v)),len(str(v.get("message_original") or ""))))
+        ordered.append(chosen)
+        linked_variants.append(variants)
     candidates = []
     status_counts = Counter()
     missing_original_text = 0
     missing_original_url = 0
     platforms = {}
-    for post in ordered:
+    for post, variants in zip(ordered,linked_variants):
         if not str(post.get("message_original") or "").strip():
             missing_original_text += 1
-        if not str(post.get("source_url") or "").strip():
+        if not safe_source_url(post):
             missing_original_url += 1
-        outcome = screen_platform_text(post.get("platform"), post.get("message_original"))
+        outcomes=[screen_platform_text(v.get("platform"),v.get("message_original")) for v in variants]
+        cues=[row for row in outcomes if row["status"] in ("REVIEW_INDICATED","CONTEXT_REVIEW_REQUIRED")]
+        if cues:
+            outcome=min(cues,key=lambda row:0 if row["status"]=="CONTEXT_REVIEW_REQUIRED" else 1)
+            if len({row["platform_key"] for row in cues})>1:
+                outcome={**outcome,"status":"CONTEXT_REVIEW_REQUIRED"}
+        else:
+            outcome=min(outcomes,key=lambda row:POLICY_PRIORITY.get(row["status"],10))
         status_counts[outcome["status"]] += 1
         if outcome.get("policy_url"):
             platforms[outcome["platform_key"]] = {
@@ -81,7 +114,10 @@ def assess_finding(db, permission, finding):
                 "source_id": str(post.get("canonical_source_id") or ""),
                 "result_id": str(post.get("result_id") or ""),
                 "campaign_id": str(post.get("campaign_id") or ""),
-                "source_url": str(post.get("source_url") or ""),
+                "source_url": safe_source_url(post),
+                "linked_source_variants": len(variants),
+                "source_text_conflict": len({str(v.get("message_original") or "").strip()
+                    for v in variants if str(v.get("message_original") or "").strip()})>1,
                 "platform": outcome["platform"],
                 "status": outcome["status"],
                 "categories": outcome["review_categories"],
@@ -132,6 +168,12 @@ def assess_finding(db, permission, finding):
                 if isinstance(finding.get("supporting_posts"), int) else None),
             "missing_original_text": missing_original_text,
             "missing_original_url": missing_original_url,
+            "source_text_conflicts": text_conflicts,
+            "source_url_conflicts": url_conflicts,
+            "source_platform_conflicts": platform_conflicts,
+            "original_source_url_validation": "HTTP_OR_HTTPS_ONLY",
+            "conflicting_source_metadata_requires_review": bool(
+                text_conflicts or url_conflicts or platform_conflicts),
             "all_sources_verification_unresolved": True,
         },
         "assessment_mode": "READ_ONLY_SAVED_EVIDENCE",

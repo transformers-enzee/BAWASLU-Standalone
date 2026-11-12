@@ -59,6 +59,9 @@
        const labels=(row.categories||[]).map(key=>row.category_labels?.[key]?.[lang]||key);
        return '<div class="soft small"><strong>'+escapeHtml(row.platform)+' · '+renderStatus(row.status)+'</strong>'+
          '<div>'+labels.map(escapeHtml).join(', ')+'</div><p>'+escapeHtml(row.excerpt||'')+'</p>'+
+         (row.source_text_conflict?'<p class="tiny muted">'+
+          text('Conflicting saved excerpts: verify the original post before taking action.',
+               'Kutipan tersimpan berbeda: periksa postingan asli sebelum bertindak.')+'</p>':'')+
          (row.policy_scope_note?'<p class="tiny muted">'+escapeHtml(row.policy_scope_note)+'</p>':'')+
          (link?'<a href="'+escapeHtml(link)+'" rel="noopener noreferrer" target="_blank">'+text('Original post','Postingan asli')+' ↗</a> · ':'')+
          (policy?'<a href="'+escapeHtml(policy)+'" rel="noopener noreferrer" target="_blank">'+text('Platform policy','Aturan platform')+' ↗</a>':'')+
@@ -112,6 +115,11 @@
      ' · '+text('Duplicate links removed: ','Tautan duplikat dihapus: ')+Number(provenance.duplicate_links_removed||0)+
      (matches===false?' · '+text('Source count mismatch: review evidence mapping','Jumlah sumber tidak sesuai: periksa pemetaan bukti'):'')+
      (missing?' · '+text('Missing original text/URL: ','Teks/URL asli tidak tersedia: ')+missing:'')+
+     (provenance.conflicting_source_metadata_requires_review?
+      ' · '+text('Conflicting saved source evidence (text/URL/platform): ',
+                 'Bukti sumber tersimpan berbeda (teks/URL/platform): ')+
+      [provenance.source_text_conflicts||0,provenance.source_url_conflicts||0,
+       provenance.source_platform_conflicts||0].join('/'):'')+
      '</p>'+
     '<div role="tablist" aria-label="Assessment categories" style="display:flex;gap:8px;margin:12px 0">'+
     '<button type="button" role="tab" data-review-tab="legal" aria-selected="true" class="button primary">'+text('Legal Assessment','Penilaian Hukum')+'</button>'+

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import {useOutletContext} from 'react-router-dom';
 import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown, Download } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
@@ -14,6 +15,7 @@ import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/Assist
 import TranslatedAssistantAnswer from '@/components/intel/TranslatedAssistantAnswer';
 import { useLanguage } from '@/lib/LanguageContext';
 import {buildAssistantReviewPacket,downloadAssistantReviewFile} from '@/lib/assistantReviewPacket';
+import {canShowAssistantQa} from '@/lib/assistantQaVisibility';
 
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
 async function historyRequest(path='',method='GET',body=null){
@@ -36,6 +38,10 @@ async function historyRequest(path='',method='GET',body=null){
 }
 export default function IntelligenceAssistant(){
  const {t}=useLanguage();
+ const {access}=useOutletContext()||{};
+ const canViewQa=canShowAssistantQa(access,{demo:!!window.__BAWASLU_DEMO_REPLICA__});
+ const [qaOpen,setQaOpen]=useState(false);
+ const showQa=canViewQa&&qaOpen;
  const starters=starterKeys.map(t);
  const initialQuery=new URLSearchParams(window.location.search).get('q')||'';
  const [question,setQuestion]=useState(initialQuery),[messages,setMessages]=useState([]);
@@ -155,10 +161,20 @@ export default function IntelligenceAssistant(){
   </header>
   <UserWorkspacePulse/>
   <AssistantKnowledgeLibrary/>
-  <AssistantEvaluationSampler disabled={busy||historyBusy}
-   onPrepare={prompt=>{setQuestion(prompt);setAnalysisMode('DATA');setError('')}}/>
-  <AssistantHumanScoring incomingPacket={scoringPacket}/>
-  <AssistantReviewConsolidation/>
+  {canViewQa&&<section data-testid="assistant-qa-tools" className="rounded-xl border border-[#e5e9ee] bg-white">
+   <button type="button" data-testid="assistant-qa-tools-toggle" aria-expanded={qaOpen}
+    className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-semibold text-[#536578]"
+    onClick={()=>setQaOpen(v=>!v)}>
+    <span>Development QA tools (administrators)</span><span aria-hidden="true">{qaOpen?'Hide':'Show'}</span>
+   </button>
+   {showQa&&<div data-testid="assistant-qa-tools-content" className="space-y-3 border-t border-[#e5e9ee] p-3">
+    <p className="text-xs leading-5 text-[#64748b]">Internal evaluation only. No official BAWASLU approval is implied, and preparing questions does not make a paid AI call.</p>
+    <AssistantEvaluationSampler disabled={busy||historyBusy}
+     onPrepare={prompt=>{setQuestion(prompt);setAnalysisMode('DATA');setError('')}}/>
+    <AssistantHumanScoring incomingPacket={scoringPacket}/>
+    <AssistantReviewConsolidation/>
+   </div>}
+  </section>
   <div className="flex flex-wrap gap-2">
    <button type="button" className="intel-ghost" aria-expanded={showHistory} onClick={()=>setShowHistory(v=>!v)}><History size={15}/> Conversation history</button>
    <button type="button" className="intel-button" disabled={busy||historyBusy} onClick={newConversation}><Plus size={15}/>{t('new_conversation')}</button>
@@ -200,7 +216,15 @@ export default function IntelligenceAssistant(){
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
        </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>
-        {m.grounding?.grounding_audit&&<div data-testid="assistant-grounding-integrity" className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
+        {m.grounding?.grounding_audit&&!showQa&&<div data-testid="assistant-source-caution"
+          className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
+          <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
+          {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
+           <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
+          {(m.grounding.grounding_audit.cited_unreviewed_pdf_pages||0)>0&&
+           <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditinjau petugas dan keberlakuan hukumnya belum diverifikasi.':'Cited PDF is not officer-reviewed, and legal currentness is unverified.'}</p>}
+         </div>}
+         {showQa&&m.grounding?.grounding_audit&&<div data-testid="assistant-grounding-integrity" className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
          <p className="font-semibold">{(m.answer_language||'id')==='id'?'Integritas rujukan jawaban':'Answer citation integrity'}</p>
          <p className="mt-1">{m.grounding.cited_count??0} {(m.answer_language||'id')==='id'?'ID sumber dikutip dalam jawaban':'source IDs cited in the answer'} · {m.grounding.source_card_count??0} {(m.answer_language||'id')==='id'?'kartu sumber tersedia':'source cards available'}.</p>
          {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
@@ -209,7 +233,7 @@ export default function IntelligenceAssistant(){
           <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditelaah petugas; keberlakuan hukum belum diverifikasi.':'A cited PDF is not officer-reviewed; current legal force is unverified.'}</p>}
          <p className="mt-1">{(m.answer_language||'id')==='id'?'Pemeriksaan ini memvalidasi ID rujukan, bukan kebenaran klaim sumber.':'This check validates reference IDs, not the truth of source claims.'}</p>
         </div>}
-        {m.grounding?.answer_quality?.checks?.length>0&&
+        {showQa&&m.grounding?.answer_quality?.checks?.length>0&&
          <details data-testid="assistant-answer-quality" className="mt-2 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
           <summary className="cursor-pointer font-semibold">{(m.answer_language||'id')==='id'?'Pemeriksaan kualitas otomatis':'Automated answer checks'} · {m.grounding.answer_quality.review_required_checks} {(m.answer_language||'id')==='id'?'perlu ditinjau':'require review'}</summary>
           <p className="mt-2 text-[#946b31]">{(m.answer_language||'id')==='id'?'Pemeriksaan berbasis aturan, bukan skor akurasi atau validasi manusia.':'Rule-based checks, not an accuracy score or human validation.'}</p>
@@ -218,7 +242,7 @@ export default function IntelligenceAssistant(){
             <span className="font-semibold shrink-0">{check.status==='PASS'?'PASS':check.status==='REVIEW_REQUIRED'?'REVIEW REQUIRED':'N/A'}</span></p>)}</div>
           <p className="mt-2">{(m.answer_language||'id')==='id'?'Setiap kesimpulan hukum dan kebenaran bukti tetap memerlukan petugas yang berwenang.':'Source truth and legal conclusions still require an authorized officer.'}</p>
          </details>}
-        {m.grounding?.answer_quality?.checks?.length>0&&reviewableIndexes.has(i)&&<div data-testid="assistant-human-review-export" className="mt-3 rounded-lg border border-[#e6e0c9] bg-[#fffcf4] px-3 py-2 text-xs text-[#665b43]">
+        {showQa&&m.grounding?.answer_quality?.checks?.length>0&&reviewableIndexes.has(i)&&<div data-testid="assistant-human-review-export" className="mt-3 rounded-lg border border-[#e6e0c9] bg-[#fffcf4] px-3 py-2 text-xs text-[#665b43]">
          <p className="font-semibold">{(m.answer_language||'id')==='id'?'Siapkan penilaian petugas':'Prepare human review'}</p>
          <p className="mt-1">{(m.answer_language||'id')==='id'
           ?'Unduhan manual ini memuat potongan bukti yang dapat Anda akses. Simpan dengan aman. Skor petugas belum diisi dan belum ada persetujuan.'

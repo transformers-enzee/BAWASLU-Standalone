@@ -3,6 +3,12 @@ import config from '../playwright.config.js';
 
 const email='admin@bawaslu.local';
 const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
+async function enableQa(page){
+ const button=page.getByTestId('assistant-qa-tools-toggle');
+ await expect(button).toBeVisible();
+ await button.click();
+ await expect(page.getByTestId('assistant-qa-tools-content')).toBeVisible();
+}
 async function login(page){
  await page.goto('/login');
  await page.getByLabel(/email/i).fill(email);
@@ -70,6 +76,7 @@ test('Assistant distinguishes cited IDs from contextual source cards',async({pag
   })}));
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  await page.locator('form input[maxlength="1000"]').fill('Summarize the saved BAWASLU post');
  await page.locator('form button[type="submit"]').click();
  const audit=page.getByTestId('assistant-grounding-integrity');
@@ -115,6 +122,7 @@ test('Assistant shows four answer readiness checks without claiming human accura
   })}));
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  await page.locator('form input[maxlength="1000"]').fill('Summarize the saved post from Riau');
  await page.locator('form button[type="submit"]').click();
  const qa=page.getByTestId('assistant-answer-quality');
@@ -161,6 +169,7 @@ test('Assistant review packet exports preserve blank human scores',async({page})
   })}));
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  await page.locator('form input[maxlength="1000"]').fill('What is happening in Riau?');
  await page.locator('form button[type="submit"]').click();
  const review=page.getByTestId('assistant-human-review-export');
@@ -224,6 +233,7 @@ test('Assistant consolidates independently scored local review sheets without ca
  });
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-review-consolidation');
  await panel.getByRole('button',{name:/Human answer-review consolidation/}).click();
  await expect(panel).toContainText('All files stay in this browser session.');
@@ -264,6 +274,7 @@ test('Assistant consolidates independently scored local review sheets without ca
 test('Assistant local review rejects unsupported unpaired scoring sheets',async({page})=>{
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-review-consolidation');
  await panel.getByRole('button',{name:/Human answer-review consolidation/}).click();
  const csv='packet_id,dimension,automated_status,human_score_0_1_NA,evidence_reference,reviewer_note,reviewer_id,review_date_utc\n'+
@@ -304,6 +315,7 @@ test('Assistant prepares real-source evaluation questions without calling the AI
    })}));
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-evaluation-sampler');
  await expect(panel).toBeVisible();
  await expect(panel.getByTestId('assistant-evaluation-generate')).toHaveCount(0);
@@ -339,6 +351,7 @@ test('Assistant evaluation preparation does not reveal sources without authoriza
     body:JSON.stringify({detail:'Intelligence evaluation requires view permission'})}));
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-evaluation-sampler');
  await panel.getByRole('button',{name:/Prepare real-source Assistant evaluation questions/}).click();
  await panel.getByTestId('assistant-evaluation-generate').click();
@@ -368,6 +381,7 @@ test('Assistant locally completes a genuine scoring worksheet without submitting
  });
  await login(page);
  await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-human-scoring');
  await expect(panel).toBeVisible();
  await panel.getByRole('button',{name:/Prepare independent officer scoring sheet/}).click();
@@ -403,6 +417,7 @@ test('Assistant locally completes a genuine scoring worksheet without submitting
 
 test('Assistant scoring importer distinguishes question plan from answered packet',async({page})=>{
  await login(page);await page.goto('/assistant');
+ await enableQa(page);
  const panel=page.getByTestId('assistant-human-scoring');
  await panel.getByRole('button',{name:/Prepare independent officer scoring sheet/}).click();
  await panel.getByTestId('assistant-human-scoring-file').setInputFiles({
@@ -430,10 +445,57 @@ test('Assistant can score a fresh answer directly without reimport or a second m
   })});
  });
  await login(page);await page.goto('/assistant');
+ await enableQa(page);
  await page.locator('form input[maxlength="1000"]').fill('Review [SOCIAL-81]');
  await page.locator('form button[type="submit"]').click();
  await expect(page.getByTestId('assistant-human-review-export')).toBeVisible();
  await page.getByTestId('assistant-score-this-answer').click();
  await expect(page.getByTestId('assistant-human-scoring-workspace')).toContainText('Packet AR-');
  expect(count).toBe(1);
+});
+
+
+test('Normal officer sees concise verification and no developer QA scoring',async({page})=>{
+ await page.route('**/api/functions/getMyEffectiveAccess',route=>
+  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   access:{status:'Active',role:'Provincial Analyst',province:'Riau',
+    permissions:{view_intelligence:true,administration:false}}
+  })}));
+ await page.route('**/api/functions/intelligenceAssistant',route=>
+  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+   answer:'Unverified report requires officer review. [SOCIAL-88]',
+   records:[{record_id:'SOCIAL-88',record_type:'SOCIAL_LISTENING',
+    source_excerpt:'Public evidence requiring verification',source_url:'https://example.invalid/88'}],
+   response_profile:'SOCIAL_ANALYSIS',provider:{mode:'DETERMINISTIC_FALLBACK'},
+   grounding:{cited_count:1,source_card_count:1,supporting_count:1,
+    grounding_audit:{displayed_citation_ids:['SOCIAL-88'],cited_unreviewed_pdf_pages:1},
+    answer_quality:{review_required_checks:1,checks:[{id:'source_relevance',status:'REVIEW_REQUIRED'}]}},
+   answer_language:'en',detected_tags:[],presentation_labels:{}
+  })}));
+ await login(page);
+ await page.goto('/assistant');
+ await expect(page.getByTestId('assistant-qa-tools-toggle')).toHaveCount(0);
+ await expect(page.getByTestId('assistant-evaluation-sampler')).toHaveCount(0);
+ await expect(page.getByTestId('assistant-human-scoring')).toHaveCount(0);
+ await expect(page.getByTestId('assistant-review-consolidation')).toHaveCount(0);
+ await page.locator('form input[maxlength="1000"]').fill('Review saved source');
+ await page.locator('form button[type="submit"]').click();
+ const caution=page.getByTestId('assistant-source-caution');
+ await expect(caution).toContainText('Supporting sources require officer verification');
+ await expect(caution).toContainText('legal currentness is unverified');
+ await expect(page.getByTestId('assistant-answer-quality')).toHaveCount(0);
+ await expect(page.getByTestId('assistant-human-review-export')).toHaveCount(0);
+});
+
+test('Administrator QA controls are hidden by default and opt-in only',async({page})=>{
+ await login(page);
+ await page.goto('/assistant');
+ const toggle=page.getByTestId('assistant-qa-tools-toggle');
+ await expect(toggle).toBeVisible();
+ await expect(toggle).toHaveAttribute('aria-expanded','false');
+ await expect(page.getByTestId('assistant-human-scoring')).toHaveCount(0);
+ await enableQa(page);
+ await expect(page.getByTestId('assistant-human-scoring')).toBeVisible();
+ await toggle.click();
+ await expect(page.getByTestId('assistant-qa-tools-content')).toHaveCount(0);
 });

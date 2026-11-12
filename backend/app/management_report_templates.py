@@ -107,7 +107,21 @@ def build_interim_template(snapshot, language="id"):
         actions.append(_t(language,
             "Lakukan pemantauan lanjutan dan pemeriksaan sumber asli sebelum keputusan penanganan.",
             "Continue monitoring and verify original evidence before any follow-up decision."))
+    coverage = snapshot.get("report_coverage") or {}
+    case_count = int(metrics.get("assignments") or 0)
+    sampled = len(findings)
+    coverage_note = _t(language,
+        f"Penugasan dalam periode: {case_count}. Rincian kasus dalam draf: {sampled} dari maksimal 8. "
+        f"Laporan berdasarkan versi terbaru per penugasan: {int(metrics.get('assignments_with_reports') or 0)} "
+        f"penugasan memiliki laporan, {int(metrics.get('assignments_without_reports') or 0)} belum memiliki laporan.",
+        f"Assignments in reporting period: {case_count}. Detailed cases included: {sampled}, maximum 8. "
+        f"Using only the latest report version per assignment, {int(metrics.get('assignments_with_reports') or 0)} "
+        f"assignments have reports and {int(metrics.get('assignments_without_reports') or 0)} have none.")
     caveats = [
+        coverage_note,
+        _t(language,
+           "Status laporan yang dihitung berasal dari versi laporan terbaru pada setiap penugasan; versi lama tetap dalam jejak audit tetapi tidak menggandakan KPI.",
+           "Report-status KPIs use the latest report version per assignment; older versions remain in the audit trail but do not inflate KPIs."),
         _t(language,
            "Hanya penugasan casework yang dapat diakses oleh pengguna ini, dibuat dalam periode UTC bergulir yang dipilih. Bukan sensus seluruh posting atau Inbox.",
            "Only casework assignments authorized for this user and created in the selected rolling UTC window. Not a census of all posts or Inbox items."),
@@ -148,6 +162,8 @@ def build_interim_template(snapshot, language="id"):
         "findings": findings,
         "recommended_actions": actions,
         "methodology": caveats,
+        "coverage_note": coverage_note,
+        "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
         "source_appendix": [
             {"case_id":row["case_id"],"source_reference":row["source_reference"],
              "source_url":row["source_url"],"status":row["status"]}

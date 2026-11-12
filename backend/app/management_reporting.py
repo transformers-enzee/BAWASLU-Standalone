@@ -10,6 +10,7 @@ import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from .auth import current_user
 from .db import get_db
@@ -36,10 +37,28 @@ def scoped_cases(db: Session, access: dict, user_id: int, period: str, topic: st
     _require(access)
     end = now or datetime.utcnow()
     start = end - timedelta(days=PERIOD_DAYS[period])
-    candidates = (db.query(CaseAssignment)
-        .filter(CaseAssignment.created_at >= start, CaseAssignment.created_at <= end)
-        .order_by(CaseAssignment.created_at.desc(), CaseAssignment.id.desc()).all())
-    # Apply the Action Desk's visibility model before aggregating or filtering.
+    # Narrow SQL at the database first, not after fetching every province's cases.
+    # This predicate mirrors casework._visible; retain that guard as defense in depth.
+    query = db.query(CaseAssignment).filter(
+        CaseAssignment.created_at >= start, CaseAssignment.created_at <= end)
+    geographic_scope = access.get("geographic_scope")
+    province = access.get("province") or ""
+    if geographic_scope == "Province":
+        if not province:
+            return [], start, end, topic
+        query = query.filter(or_(
+            and_(CaseAssignment.originating_scope == "PROVINCE",
+                 CaseAssignment.originating_province == province),
+            and_(CaseAssignment.target_scope == "PROVINCE",
+                 CaseAssignment.target_province == province,
+                 CaseAssignment.verified_province == province)))
+    elif geographic_scope != "Nationwide":
+        query = query.filter(or_(
+            CaseAssignment.created_by == user_id,
+            and_(CaseAssignment.assignee_id == user_id,
+                 CaseAssignment.verified_province == province)))
+    candidates = query.order_by(
+        CaseAssignment.created_at.desc(), CaseAssignment.id.desc()).all()
     authorized = [row for row in candidates if _visible(row, access, user_id)]
     if topic:
         needle = topic.casefold()
@@ -60,15 +79,18 @@ def build_briefing(db: Session, access: dict, user_id: int,
                 CaseTransition.happened_at >= start,
                 CaseTransition.happened_at <= end).all() if ids else [])
     statuses = Counter(row.status for row in cases)
-    report_counts = Counter(row.status for row in reports)
+    # Report versions are an audit trail. Operational KPIs reflect ONLY the
+    # most recent version for each assignment, not every historical report.
+    latest_by_case = {}
+    for report in sorted(reports, key=lambda row: (row.created_at, row.id)):
+        latest_by_case[report.case_id] = report
+    latest_reports = {case_id: report.status for case_id, report in latest_by_case.items()}
+    report_counts = Counter(latest_reports.values())
     departments = Counter(row.target_department for row in cases)
     provinces = Counter(row.verified_province or "Unverified" for row in cases)
     source_keys = {(row.source_type, row.source_id,
                     row.campaign_id if row.source_type == "SOCIAL" else None)
                    for row in cases}
-    latest_reports = {}
-    for report in sorted(reports, key=lambda item: (item.created_at, item.id)):
-        latest_reports[report.case_id] = report.status
     snapshot = {
         "period": period,
         "topic_filter": topic,
@@ -83,10 +105,26 @@ def build_briefing(db: Session, access: dict, user_id: int,
             "closed_assignments": statuses["CLOSED"],
             "submitted_reports": report_counts["SUBMITTED"],
             "approved_reports": report_counts["APPROVED"],
+            "assignments_with_reports": len(latest_by_case),
+            "assignments_without_reports": len(cases) - len(latest_by_case),
+            "report_versions_recorded": len(reports),
             "officer_transitions_in_window": len(transitions),
         },
         "case_status_counts": dict(statuses),
         "report_status_counts": dict(report_counts),
+        "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
+        "report_coverage": {
+            "assignments_in_period": len(cases),
+            "assignments_with_reports": len(latest_by_case),
+            "assignments_without_reports": len(cases) - len(latest_by_case),
+            "stored_report_versions": len(reports),
+            "preview_limit": 12,
+            "preview_rows": min(len(cases), 12),
+            "template_limit": 8,
+            "template_rows": min(len(cases), 8),
+            "preview_is_sample": len(cases) > 12,
+            "template_is_sample": len(cases) > 8,
+        },
         "department_counts": dict(departments),
         "verified_incident_province_counts": dict(provinces),
         "recent_cases": [
@@ -102,6 +140,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "disclaimer": DISCLAIMER,
         "data_basis": "AUTHORIZED_OFFICER_CASEWORK",
         "counts_complete_for_window": True,
+        "query_scope": "SQL_AND_CASEWORK_VISIBILITY",
         "generated_by_ai": False,
         "paid_provider_called": False,
     }
@@ -137,7 +176,8 @@ def briefing_csv(period: str = "weekly", topic: str = "",
     return Response(content="\ufeff" + buffer.getvalue(),
                     media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="bawaslu-casework-briefing.csv"',
-                             "Cache-Control": "no-store"})
+                             "Cache-Control": "private, no-store",
+                             "X-Report-Source": "AUTHORIZED_OFFICER_CASEWORK"})
 
 
 def _export_report(kind: str, period: str, topic: str, language: str, user: User, db: Session):

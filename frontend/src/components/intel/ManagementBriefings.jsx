@@ -51,7 +51,7 @@ export default function ManagementBriefings(){
    }catch(e){setError(String(e.message||e))}
    finally{setExporting(false)}
  }
- const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{};
+ const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{};
  return <section id="management-briefing" data-i18n-exempt="true" className="mx-auto max-w-6xl space-y-5 bg-[#faf9f8] p-5 text-[#243b52] md:p-8">
   <style>{'@media print {body * {visibility:hidden!important} #management-briefing, #management-briefing * {visibility:visible!important} #management-briefing {position:absolute!important;left:0;top:0;width:100%;background:white!important} .briefing-no-print {display:none!important}}'}</style>
   <header className="flex flex-wrap justify-between gap-4">
@@ -99,13 +99,20 @@ export default function ManagementBriefings(){
      [t('Active assignments','Penugasan aktif'),m.active_assignments],
      [t('Approved case reports','Laporan disetujui'),m.approved_reports]
    ].map(([label,value])=><div key={label} className="rounded-xl border bg-white p-4"><strong className="block text-3xl tabular-nums">{value||0}</strong><p className="mt-2 text-xs text-[#64748b]">{label}</p></div>)}</div>
+   <section data-testid="briefing-data-coverage" className="rounded-xl border border-[#dce5ec] bg-white p-4 text-sm">
+    <h3 className="font-semibold text-[#24384c]">{t('Coverage and report status integrity','Cakupan dan integritas status laporan')}</h3>
+    <p className="mt-2 text-[#52657a]">{t('Full authorized casework in this period:','Seluruh penugasan sesuai hak akses dalam periode ini:')} <strong>{coverage.assignments_in_period??m.assignments??0}</strong>. {t('Recent list shows','Daftar terbaru menampilkan')} <strong>{coverage.preview_rows??recent.length}</strong> / {coverage.preview_limit??12}; {t('report appendix shows','lampiran laporan menampilkan')} <strong>{coverage.template_rows??template.findings?.length??0}</strong> / {coverage.template_limit??8}.</p>
+    <p className="mt-2 text-[#52657a]">{t('Assignments with a report:','Penugasan dengan laporan:')} <strong>{m.assignments_with_reports??0}</strong> · {t('Without a report:','Tanpa laporan:')} <strong>{m.assignments_without_reports??0}</strong> · {t('Stored report versions:','Versi laporan tersimpan:')} <strong>{m.report_versions_recorded??0}</strong>.</p>
+    <p className="mt-2 text-xs text-[#866b43]">{t('Approval and submission KPIs use only the latest saved report version per assignment. Previous versions remain audit history. Preview rows are samples, not the denominator of the KPIs.',
+      'KPI persetujuan dan pengajuan hanya menghitung versi laporan terbaru per penugasan. Versi sebelumnya tetap berada dalam riwayat audit. Daftar temuan hanya sampel, bukan dasar jumlah KPI.')}</p>
+   </section>
    <section className="rounded-xl border bg-white p-5"><h3 className="font-semibold">{t('Executive snapshot','Ringkasan eksekutif')}</h3>
     <p className="mt-2 text-sm leading-6">{template.executive_summary}</p><p className="mt-3 text-xs text-[#866b43]">{report.disclaimer}</p></section>
    <div className="grid gap-4 md:grid-cols-2">{[
      [t('Casework status','Status penugasan'),report.case_status_counts],
      [t('Department workload','Beban kerja unit'),report.department_counts],
      [t('Verified incident provinces','Provinsi kejadian terverifikasi'),report.verified_incident_province_counts],
-     [t('Related report status','Status laporan terkait'),report.report_status_counts]
+     [t('Latest report status by assignment','Status laporan terbaru per penugasan'),report.report_status_counts]
    ].map(([heading,data])=><div key={heading} className="rounded-xl border bg-white p-4"><h3 className="mb-3 font-semibold">{heading}</h3>
     {entries(data).length?entries(data).map(([name,value])=><div key={name} className="flex justify-between border-b py-2 text-sm"><span>{name}</span><strong>{value}</strong></div>):<p className="text-sm text-[#64748b]">{t('No records','Tidak ada data')}</p>}</div>)}</div>
 

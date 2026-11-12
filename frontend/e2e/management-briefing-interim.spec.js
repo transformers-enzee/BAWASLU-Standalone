@@ -16,9 +16,14 @@ const sample={
  window_end_utc:'2026-11-08T00:00:00Z',
  scope:{geographic_scope:'Province',province:'Riau'},
  metrics:{assignments:1,unique_linked_sources:1,active_assignments:1,
-  closed_assignments:0,submitted_reports:0,approved_reports:0},
+  closed_assignments:0,submitted_reports:0,approved_reports:0,
+  assignments_with_reports:1,assignments_without_reports:0,report_versions_recorded:2},
  case_status_counts:{OPEN:1},report_status_counts:{},
  department_counts:{'Penanganan Pelanggaran':1},verified_incident_province_counts:{Riau:1},
+ report_coverage:{assignments_in_period:1,assignments_with_reports:1,
+   assignments_without_reports:0,stored_report_versions:2,
+   preview_limit:12,preview_rows:1,template_limit:8,template_rows:1,
+   preview_is_sample:false,template_is_sample:false},
  recent_cases:[{id:9,title:'Riau source review',created_at:'2026-11-03T10:00:00',
   status:'OPEN',department:'Penanganan Pelanggaran',source_type:'SOCIAL',
   source_id:'15',source_url:'https://example.invalid/post/15'}],
@@ -56,6 +61,9 @@ test('Command Centre interim template renders source-backed preview and PDF down
  await expect(template).toBeVisible();
  await expect(template).toContainText('INTERIM-1.0');
  await expect(template).toContainText('DRAFT');
+ const coverage=page.getByTestId('briefing-data-coverage');
+ await expect(coverage).toContainText(/Stored report versions|Versi laporan tersimpan/);
+ await expect(coverage).toContainText(/latest saved report version per assignment|versi laporan terbaru per penugasan/i);
  await expect(page.getByText('Riau source review').first()).toBeVisible();
  await expect(page.getByText(/Source-linked assignments|Penugasan beserta sumber/)).toBeVisible();
  await expect(page.getByRole('button',{name:'Word (.docx)'})).toBeVisible();

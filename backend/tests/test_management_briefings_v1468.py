@@ -89,7 +89,8 @@ def test_csv_scoped_and_formula_safe():
         assert len(rows)==2
         assert all("Riau" in row["Case title"] for row in rows)
         assert _safe_csv_cell("=HYPERLINK(1)")=="'=HYPERLINK(1)"
-        assert result.headers["cache-control"]=="no-store"
+        assert result.headers["cache-control"]=="private, no-store"
+        assert result.headers["X-Report-Source"]=="AUTHORIZED_OFFICER_CASEWORK"
     finally: db.close()
 
 

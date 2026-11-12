@@ -64,6 +64,38 @@ def _claim_level_article_mismatches(answer,records):
 
 
 
+
+# Constrained safety triage for assertive enforcement prescriptions. This is a
+# language-pattern flag only; it cannot verify legal intent or consequences.
+_ENFORCEMENT_EN=re.compile(
+    r"\b(?:must|shall|immediately|should)\s+(?:(?:be|now)\s+)?"
+    r"(?:arrest(?:ed)?|detain(?:ed)?|imprison(?:ed)?|prosecute(?:d)?|"
+    r"fine(?:d)?|penali[sz]e(?:d)?|sentence(?:d)?|convict(?:ed)?|"
+    r"ban(?:ned)?|disqualif(?:y|ied)|revoke|remove\s+(?:the\s+)?(?:candidate|official))\b",
+    re.I)
+_ENFORCEMENT_ID=re.compile(
+    r"\b(?:harus|wajib|segera|langsung)\s+(?:(?:di|untuk)\s+)?"
+    r"(?:ditangkap|tangkap|ditahan|tahan|dipidana|pidanakan|dihukum|"
+    r"dipenjara|penjarakan|didenda|denda|didiskualifikasi|diskualifikasi|"
+    r"dicabut\s+hak|cabut\s+hak)\b",re.I)
+_NEGATED_RECOMMENDATION=re.compile(
+    r"\b(?:not|never|should\s+not|must\s+not|tidak|jangan|belum|bukan)\b",re.I)
+# Don't classify questions, quoted source text, or explicit negations as a
+# positive recommendation merely because a keyword is present.
+def _assertive_enforcement_recommendations(answer):
+    spans=re.split(r"(?<=[.!?;])\s+|\n+",str(answer or ""))
+    flags=[]
+    for span in spans:
+        if not span.strip() or span.strip().endswith("?"):
+            continue
+        if _NEGATED_RECOMMENDATION.search(span):
+            continue
+        if re.search(r"(?:^\s*[\"'“‘]|(?:according to|reported|mengutip|menurut\s+sumber)\b)",span,re.I):
+            continue
+        if _ENFORCEMENT_EN.search(span) or _ENFORCEMENT_ID.search(span):
+            flags.append("ASSERTIVE_ENFORCEMENT_DIRECTIVE")
+    return list(dict.fromkeys(flags))
+
 def _message(language, key):
     choices={
         "unreviewed":{
@@ -81,6 +113,9 @@ def _message(language, key):
         "article_mismatch":{
             "id":"Peringatan rujukan pasal: Nomor pasal yang disebut dalam jawaban tidak ditemukan dalam kutipan halaman PDF hukum yang benar-benar dirujuk. Periksa naskah resmi sebelum mengandalkan rekomendasi ini.",
             "en":"Legal article caution: An article number stated in the answer was not found in the actually cited PDF page excerpts. Check the official legal text before relying on this recommendation."},
+        "enforcement":{
+            "id":"Peringatan tindakan hukum: Jawaban ini memuat arahan penegakan atau sanksi yang bersifat tegas. Kutipan PDF tidak memverifikasi kewenangan, fakta kasus, atau dasar hukumnya. Jangan laksanakan tanpa penilaian petugas berwenang.",
+            "en":"Enforcement caution: This answer contains an assertive enforcement or penalty recommendation. PDF citations do not verify legal authority, case facts, or applicable law. Do not act without an authorized officer's review."},
     }
     return choices[key].get(language,choices[key]["en"])
 
@@ -131,7 +166,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                       doc.get("document_type") in _LEGAL_DOC_TYPES]
     article_ids,missing_article_ids=_legal_article_presence(raw,doc_refs)
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
-    needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids)
+    enforcement_flags=_assertive_enforcement_recommendations(raw)
+    needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids
+                             or enforcement_flags)
     notes=[]
     pdf_guidance=profile=="PDF_GUIDANCE"
     if pdf_guidance:
@@ -144,6 +181,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
             notes.append(_message(language,"currentness"))
     if article_ids and (missing_article_ids or local_article_mismatches):
         notes.append(_message(language,"article_mismatch"))
+    if enforcement_flags:
+        notes.append(_message(language,"enforcement"))
     if records and not cited and not pdf_guidance:
         notes.append(_message(language,"uncited"))
     for note in notes:
@@ -172,6 +211,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_article_reference_needs_review":bool(
             missing_article_ids or local_article_mismatches),
         "legal_article_semantic_support_verified":False,
+        "legal_enforcement_directive_flags":enforcement_flags,
+        "legal_enforcement_recommendation_needs_officer_review":bool(enforcement_flags),
+        "legal_enforcement_classification_basis":"CONSERVATIVE_LANGUAGE_HEURISTIC_ONLY",
         "legal_currentness_verified":False,
         "legal_verdict_confirmed":False,
         "source_truth_verified":False,

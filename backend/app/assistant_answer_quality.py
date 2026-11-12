@@ -108,7 +108,12 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         valid_legal=int(grounding.get("cited_officer_reviewed_legal_pages") or 0)
         missing_articles=grounding.get("legal_article_numbers_not_found_in_cited_pdf") or []
         local_mismatches=grounding.get("legal_article_claim_citation_mismatches") or []
-        if missing_articles or local_mismatches:
+        enforcement=bool(grounding.get("legal_enforcement_recommendation_needs_officer_review"))
+        if enforcement:
+            checks.append(_status("legal_uncertainty",REVIEW,
+                "Assertive legal enforcement or penalty language requires authorized officer review, irrespective of cited PDF review status. No legal conclusion is verified.",
+                enforcement_directive_flags=grounding.get("legal_enforcement_directive_flags") or []))
+        elif missing_articles or local_mismatches:
             checks.append(_status("legal_uncertainty",REVIEW,
                 "Named legal articles were not located in the corresponding cited PDF sentence or available PDF excerpts. Verify original passages and applicability.",
                 unmatched_article_count=len(missing_articles),

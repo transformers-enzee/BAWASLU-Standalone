@@ -32,6 +32,6 @@ assert.ok(drawer.includes('source_count_matches_finding')&&drawer.includes('poli
   'Finding detail presents evidence reconciliation and platform context');
 assert.ok(html.includes('finding-assessments-v1470.js'),'Retain existing drawer enhancement');
 assert.ok(!html.includes('id="legalCaseQueue"'),'Do not reinstate standalone legal section');
-assert.ok(app.includes("'build_version':'147.4'")&&shell.includes('data-build-version="147.4"'),
+assert.ok(app.includes("'build_version':'147.5'")&&shell.includes('data-build-version="147.5"'),
   'Build version matches both backend and frontend');
-console.log('PASS v147.4 Phase 2 assessment provenance, reviewed citations and nine-platform policy contracts');
+console.log('PASS v147.5 Phase 2 assessment provenance, reviewed citations and nine-platform policy contracts');

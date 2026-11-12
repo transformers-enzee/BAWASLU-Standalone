@@ -11,7 +11,8 @@ independent of Indonesian electoral law.
 import re
 
 # Official public entrypoints; recheck changes to specific policies with the
-# providers before a formal moderation report. Verified as accessible 2026-11-10.
+# providers before a formal moderation report. Entry points checked 2026-11-12;
+# this does not establish any provider policy version as current.
 PLATFORM_POLICIES = {
     "tiktok": ("TikTok", "https://www.tiktok.com/community-guidelines/en/"),
     "instagram": ("Instagram", "https://www.meta.com/safety/topics/safety-basics/policies/"),

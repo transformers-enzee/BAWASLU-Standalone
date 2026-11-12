@@ -310,7 +310,7 @@ def test_platform_screening_news_quote_and_warning_are_contextual():
 
 def test_platform_screening_unsupported_platform_does_not_claim_policy_review():
     from app.platform_policy_screening import screen_platform_text
-    unknown=screen_platform_text("reddit","Ayo serbu akun mereka")
+    unknown=screen_platform_text("mastodon","Ayo serbu akun mereka")
     assert unknown["status"]=="POLICY_NOT_CONFIGURED"
     assert unknown["policy_url"] is None
     assert unknown["platform_violation_confirmed"] is False
@@ -339,10 +339,10 @@ def test_platform_screening_queue_is_independent_of_legal_queue(monkeypatch,db):
     legal_ids={item["source_id"] for item in snapshot["review_queue"]}
     assert legal_ids=={"203"}
     screened=snapshot["platform_policy_screening"]
-    assert screened["screened_posts_in_sample"]==3
-    assert screened["review_signal_count_in_sample"]==1
+    assert screened["screened_posts_in_sample"]==4
+    assert screened["review_signal_count_in_sample"]==2
     assert screened["reported_or_contextual_count_in_sample"]==1
-    assert [item["source_id"] for item in screened["review_queue"]]==["201","202"]
+    assert [item["source_id"] for item in screened["review_queue"]]==["201","204","202"]
     assert all(item["platform_violation_confirmed"] is False for item in screened["review_queue"])
     assert snapshot["legal_verdict"]=="NONE"
     assert snapshot["platform_rule_verdict"]=="NONE"

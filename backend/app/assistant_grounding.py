@@ -26,19 +26,41 @@ def _article_ids(text):
 
 
 def _legal_article_presence(answer,doc_refs):
-    """Check named articles against cited PDF page excerpts only.
-
-    Uncited selected pages, source cards and social posts are not authority.
-    A positive text presence is not semantic entailment or legal currentness.
-    """
+    """Look for named articles in actually cited PDF pages, never source cards."""
     mentioned=_article_ids(answer)
-    if not mentioned:
-        return [],[]
     page_articles=set()
     for row in doc_refs:
         page_articles.update(_article_ids(row.get("source_excerpt")))
-    missing=[x for x in mentioned if x not in page_articles]
-    return mentioned,missing
+    return mentioned,[x for x in mentioned if x not in page_articles]
+
+
+def _claim_level_article_mismatches(answer,records):
+    """Check article numbers against PDF citations in their own sentence.
+
+    An article mentioned near DOC-2-P4 cannot be authenticated by an
+    unrelated DOC-1-P1 cited in another sentence. This heuristic is limited
+    to explicit bracket IDs and punctuation-bound sentence spans; it does
+    NOT infer factual or legal entailment.
+    """
+    failures=[]
+    spans=re.split(r"(?<=[.!?;])\s+|\n+",str(answer or ""))
+    for span in spans:
+        articles=_article_ids(span)
+        if not articles:
+            continue
+        citations=[ref for ref in dict.fromkeys(_SOURCE_REF.findall(span))
+                   if ref.startswith("DOC-") and
+                   ref in records and
+                   records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+        if not citations:
+            continue  # no local PDF claim citation, handled by global check
+        available=set()
+        for ref in citations:
+            available.update(_article_ids(records[ref].get("source_excerpt")))
+        for article in articles:
+            if article not in available:
+                failures.append({"article":article,"cited_page_ids":citations})
+    return failures
 
 
 
@@ -108,6 +130,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                       if doc.get("review_status")=="OFFICER_REVIEWED" and
                       doc.get("document_type") in _LEGAL_DOC_TYPES]
     article_ids,missing_article_ids=_legal_article_presence(raw,doc_refs)
+    local_article_mismatches=_claim_level_article_mismatches(raw,records)
     needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids)
     notes=[]
     pdf_guidance=profile=="PDF_GUIDANCE"
@@ -119,7 +142,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
             if not legally_reviewed:
                 notes.append(_message(language,"no_authority"))
             notes.append(_message(language,"currentness"))
-    if article_ids and missing_article_ids:
+    if article_ids and (missing_article_ids or local_article_mismatches):
         notes.append(_message(language,"article_mismatch"))
     if records and not cited and not pdf_guidance:
         notes.append(_message(language,"uncited"))
@@ -143,8 +166,11 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_question":needs_legal_warning,
         "legal_article_numbers_mentioned":article_ids,
         "legal_article_numbers_not_found_in_cited_pdf":missing_article_ids,
+        "legal_article_claim_citation_mismatches":local_article_mismatches,
+        "legal_article_claim_citation_mismatch_count":len(local_article_mismatches),
         "legal_article_excerpt_text_check":"LEXICAL_ONLY_NOT_LEGAL_VALIDATION",
-        "legal_article_reference_needs_review":bool(missing_article_ids),
+        "legal_article_reference_needs_review":bool(
+            missing_article_ids or local_article_mismatches),
         "legal_article_semantic_support_verified":False,
         "legal_currentness_verified":False,
         "legal_verdict_confirmed":False,

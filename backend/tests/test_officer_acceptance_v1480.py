@@ -165,7 +165,8 @@ def test_only_current_assigned_receiving_officer_can_record_review():
         assert after["can_record_source_review"] is False
         with pytest.raises(HTTPException) as err:
             record_source_review(case["id"],_review(),_user(db,2),db)
-        assert err.value.status_code==403
+        # Former province cannot discover the case after it leaves its scope.
+        assert err.value.status_code==404
     finally:
         db.close()
 

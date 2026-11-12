@@ -1,5 +1,7 @@
 # BAWASLU — Real Officer Acceptance Runbook (v148.0)
 
+**Release note:** v148.1 corrects the access-control test to require HTTP 404 after a case leaves a province's authorized scope. The feature was introduced in v148.0.
+
 **Environment:** Staging only, `architecture-v2-foundation-20261015`.  
 **Scope:** Operational proof of a genuine source-linked officer assignment, original source inspection, independent report approval and an auditable trail.  
 **Do not claim legal compliance or client sign-off from this workflow alone.**

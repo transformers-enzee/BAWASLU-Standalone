@@ -4,6 +4,7 @@ Counts are assignments created in a rolling UTC window, not social post
 counts or legally established electoral violations. No paid AI calls.
 """
 from collections import Counter
+from typing import Literal
 from datetime import datetime, timedelta
 import csv
 import io
@@ -15,6 +16,7 @@ from .db import get_db
 from .models import User
 from .access import profile
 from .casework import CaseAssignment, CaseReport, CaseTransition, _require, _visible
+from .management_report_templates import build_interim_template, render_pdf, render_docx, render_xlsx
 
 router = APIRouter(prefix="/api/management-reporting", tags=["management-reporting"])
 PERIOD_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
@@ -48,7 +50,7 @@ def scoped_cases(db: Session, access: dict, user_id: int, period: str, topic: st
 
 
 def build_briefing(db: Session, access: dict, user_id: int,
-                   period: str = "weekly", topic: str = "", now=None):
+                   period: str = "weekly", topic: str = "", now=None, language="id"):
     cases, start, end, topic = scoped_cases(db, access, user_id, period, topic, now)
     ids = [item.id for item in cases]
     reports = (db.query(CaseReport).filter(CaseReport.case_id.in_(ids)).all()
@@ -67,7 +69,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
     latest_reports = {}
     for report in sorted(reports, key=lambda item: (item.created_at, item.id)):
         latest_reports[report.case_id] = report.status
-    return {
+    snapshot = {
         "period": period,
         "topic_filter": topic,
         "window_start_utc": start.isoformat() + "Z",
@@ -93,7 +95,8 @@ def build_briefing(db: Session, access: dict, user_id: int,
              "source_id": row.source_id, "campaign_id": row.campaign_id,
              "source_url": row.source_url, "verified_province": row.verified_province,
              "created_at": row.created_at.isoformat(),
-             "latest_report_status": latest_reports.get(row.id)}
+             "latest_report_status": latest_reports.get(row.id),
+             "evidence_excerpt": (row.source_excerpt or "")[:320]}
             for row in cases[:12]
         ],
         "disclaimer": DISCLAIMER,
@@ -102,12 +105,14 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "generated_by_ai": False,
         "paid_provider_called": False,
     }
+    snapshot["template"] = build_interim_template(snapshot, language)
+    return snapshot
 
 
 @router.get("/briefing")
-def briefing(period: str = "weekly", topic: str = "",
+def briefing(period: str = "weekly", topic: str = "", language: Literal["id","en"] = "id",
              user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return build_briefing(db, profile(db, user), user.id, period, topic)
+    return build_briefing(db, profile(db, user), user.id, period, topic, language=language)
 
 
 def _safe_csv_cell(value):
@@ -133,3 +138,41 @@ def briefing_csv(period: str = "weekly", topic: str = "",
                     media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="bawaslu-casework-briefing.csv"',
                              "Cache-Control": "no-store"})
+
+
+def _export_report(kind: str, period: str, topic: str, language: str, user: User, db: Session):
+    """Rebuild only the officer-authorized casework snapshot for this export."""
+    snapshot = build_briefing(db, profile(db, user), user.id, period, topic, language=language)
+    template = snapshot["template"]
+    generators = {
+        "pdf": (render_pdf, "application/pdf"),
+        "docx": (render_docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        "xlsx": (render_xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    }
+    generator, media_type = generators[kind]
+    content = generator(template)
+    filename = "bawaslu-interim-briefing-" + period + "." + kind
+    return Response(
+        content=content, media_type=media_type,
+        headers={"Cache-Control": "private, no-store",
+                 "X-Report-Template": template["template_version"],
+                 "X-Report-Approval": "DRAFT_NOT_APPROVED",
+                 "Content-Disposition": 'attachment; filename="' + filename + '"'})
+
+
+@router.get("/briefing.pdf")
+def briefing_pdf(period: str = "weekly", topic: str = "", language: Literal["id","en"] = "id",
+                 user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return _export_report("pdf", period, topic, language, user, db)
+
+
+@router.get("/briefing.docx")
+def briefing_docx(period: str = "weekly", topic: str = "", language: Literal["id","en"] = "id",
+                  user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return _export_report("docx", period, topic, language, user, db)
+
+
+@router.get("/briefing.xlsx")
+def briefing_xlsx(period: str = "weekly", topic: str = "", language: Literal["id","en"] = "id",
+                  user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return _export_report("xlsx", period, topic, language, user, db)

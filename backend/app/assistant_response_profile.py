@@ -13,6 +13,7 @@ EXECUTIVE_REPORT="EXECUTIVE_REPORT"
 ACTION_REQUEST="ACTION_REQUEST"
 GENERAL="GENERAL"
 
+_EXACT_PDF_PAGE=re.compile(r"(?<![\w-])DOC-[1-9][0-9]{0,11}-P[1-9][0-9]{0,7}(?![\w-])",re.I)
 _PDF=re.compile(
     r"\b(?:pdf|dokumen|document|reference|referensi|rujukan|lampiran|"
     r"uploaded|diunggah|terunggah|manual|sop|pedoman)\b",re.I)
@@ -73,6 +74,8 @@ _FOLLOWUP=re.compile(
 def choose_response_profile(question, previous="", pdf_evidence=None,
                             analysis_mode="AUTO", history=None):
     q=str(question or "").strip()
+    if _EXACT_PDF_PAGE.search(str(question or "")):
+        return PDF_GUIDANCE
     if str(analysis_mode or "").upper()=="GENERAL":
         return GENERAL
     if not q:

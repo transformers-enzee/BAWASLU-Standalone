@@ -142,7 +142,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'149.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'150.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -708,19 +708,20 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.
     from .assistant_knowledge import (
-        retrieve_chat_knowledge,authorized_reference_catalog)
+        retrieve_chat_knowledge,authorized_reference_catalog,explicit_pdf_page_refs)
     history=body.get('conversationContext') or []
     history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
              for x in history[-6:] if isinstance(x,dict) and
              x.get('role') in ('user','assistant')] if isinstance(history,list) else []
     reference_catalog=authorized_reference_catalog(db,p)
+    explicit_pdf_ids=explicit_pdf_page_refs(q)
     pdf_evidence=retrieve_chat_knowledge(
-        db,p,q,previous,history,limit=6) if requested!='GENERAL' else []
+        db,p,q,previous,history,limit=6) if requested!='GENERAL' or explicit_pdf_ids else []
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
     explicit_social_ids=exact_social_source_ids(q)
-    general=not explicit_social_ids and (requested=='GENERAL' or (
+    general=not explicit_social_ids and not explicit_pdf_ids and (requested=='GENERAL' or (
         requested=='AUTO' and response_profile!=PDF_GUIDANCE and
         is_conceptual(q) and not pdf_evidence))
     source_warning=''

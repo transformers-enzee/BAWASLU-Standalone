@@ -327,6 +327,65 @@ _SUMMARY_RE=re.compile(
     r"\b(?:summary|summarize|summarise|overview|whole|all|entire|"
     r"ringkas|ringkasan|rangkum|rangkuman|seluruh|keseluruhan|isi)\b",re.I)
 
+# Explicit document-page references are source selectors, never a permission grant.
+_DOC_PAGE_REF=re.compile(r"(?<![\w-])DOC-([1-9][0-9]{0,11})-P([1-9][0-9]{0,7})(?![\w-])",re.I)
+
+def explicit_pdf_page_refs(question):
+    """Distinct positive document/page identifiers mentioned by the officer."""
+    return list(dict.fromkeys((int(doc),int(page))
+        for doc,page in _DOC_PAGE_REF.findall(str(question or ""))))
+
+
+def retrieve_exact_pdf_pages(db,p,question,limit=6):
+    """All-or-nothing, already-authorized page selection (no semantic API calls).
+
+    Missing, withdrawn, inaccessible and unindexed pages return the same empty
+    result; never substitute a different document for an explicit page ID.
+    """
+    from .assistant_semantic import stitch_pdf_page
+    requested=explicit_pdf_page_refs(question)
+    if not requested or len(requested)>max(1,min(int(limit),12)):
+        return []
+    if not has_view_knowledge(p):
+        return []
+    ids={doc_id for doc_id,_ in requested}
+    docs=db.query(KnowledgePDF).filter(KnowledgePDF.id.in_(ids),
+                                      KnowledgePDF.active==True).all()
+    allowed={doc.id:doc for doc in docs if _visible(p,doc)}
+    if len(allowed)!=len(ids):
+        return []
+    chunks=db.query(KnowledgeChunk).filter(
+        KnowledgeChunk.document_id.in_(ids)).order_by(
+        KnowledgeChunk.document_id,KnowledgeChunk.page,
+        KnowledgeChunk.sequence,KnowledgeChunk.id).all()
+    by_page={}
+    for chunk in chunks:
+        by_page.setdefault((chunk.document_id,chunk.page),[]).append(chunk)
+    if any(not by_page.get(key) for key in requested):
+        return []
+    results=[]
+    for doc_id,page in requested:
+        doc=allowed[doc_id]
+        excerpt=stitch_pdf_page(by_page[(doc_id,page)])
+        if not excerpt.strip():
+            return []
+        results.append({
+            "record_id":f"DOC-{doc.id}-P{page}",
+            "record_type":"PDF_KNOWLEDGE","document_id":doc.id,
+            "title":doc.title,"filename":doc.filename,"page":page,
+            "source_excerpt":excerpt,
+            "source_url":f"/api/assistant-knowledge/{doc.id}/download",
+            "scope":doc.scope,"province":doc.province,
+            "document_type":doc.document_type,"issuer":doc.issuer,
+            "review_status":doc.review_status,
+            "legal_currentness_verified":False,
+            "verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION",
+            "document_is_authority_unverified":doc.review_status!="OFFICER_REVIEWED",
+            "match_method":"EXACT_AUTHORIZED_PAGE_ID",
+        })
+    return results
+
+
 def authorized_reference_catalog(db,p,limit=24):
     """Only visible documents are available to the chat or its catalog."""
     _access(p)
@@ -352,29 +411,31 @@ def _document_overview(db,p,limit):
         KnowledgePDF.id.desc()).limit(150).all()
     visible=[doc for doc in docs if _visible(p,doc)][:2]
     if not visible:return []
+    from .assistant_semantic import stitch_pdf_page
     candidates=[]
     for doc in visible:
         chunks=db.query(KnowledgeChunk).filter_by(document_id=doc.id).order_by(
-            KnowledgeChunk.page,KnowledgeChunk.sequence).all()
+            KnowledgeChunk.page,KnowledgeChunk.sequence,KnowledgeChunk.id).all()
         if not chunks:continue
-        first_by_page={}
-        for chunk in chunks:first_by_page.setdefault(chunk.page,chunk)
-        pages=sorted(first_by_page)
-        # Sample across the whole document, not only page one or its questions.
+        by_page={}
+        for chunk in chunks:
+            by_page.setdefault(chunk.page,[]).append(chunk)
+        pages=sorted(by_page)
+        # Sample across the whole document; preserve every selected page's
+        # indexed chunks rather than silently omitting the remaining text.
         slots=min(5,len(pages))
         chosen=[pages[round(i*(len(pages)-1)/max(1,slots-1))]
                 for i in range(slots)]
-        candidates.extend(first_by_page[page] for page in dict.fromkeys(chosen))
-    # Preserve chosen document/page order for broad summaries.
+        candidates.extend((doc,page,by_page[page]) for page in dict.fromkeys(chosen))
     output=[]
-    for chunk in candidates[:max(1,min(limit,10))]:
-        doc=next((doc for doc in visible if doc.id==chunk.document_id),None)
-        if doc is None:continue
+    for doc,page,page_chunks in candidates[:max(1,min(limit,10))]:
+        excerpt=stitch_pdf_page(page_chunks,max_chars=3000)
+        if not excerpt.strip():continue
         output.append({
-            "record_id":f"DOC-{doc.id}-P{chunk.page}",
+            "record_id":f"DOC-{doc.id}-P{page}",
             "record_type":"PDF_KNOWLEDGE","document_id":doc.id,
-            "title":doc.title,"filename":doc.filename,"page":chunk.page,
-            "source_excerpt":chunk.text_content[:1500],
+            "title":doc.title,"filename":doc.filename,"page":page,
+            "source_excerpt":excerpt,
             "source_url":f"/api/assistant-knowledge/{doc.id}/download",
             "scope":doc.scope,"province":doc.province,
             "document_type":doc.document_type,"issuer":doc.issuer,
@@ -398,6 +459,8 @@ def retrieve_chat_knowledge(db,p,question,previous="",history=None,limit=6,
     if not q:return []
     if not has_view_knowledge(p):
         return []
+    if explicit_pdf_page_refs(q):
+        return retrieve_exact_pdf_pages(db,p,q,limit=limit)
     previous_topic=_last_substantive_user_question(previous,history)
     followup=(bool(_FOLLOWUP_RE.search(q) or _CONTEXT_RE.search(q)) and
               bool(previous_topic) and previous_topic.casefold()!=q.casefold())

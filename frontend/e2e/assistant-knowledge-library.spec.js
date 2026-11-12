@@ -346,3 +346,57 @@ test('Assistant evaluation preparation does not reveal sources without authoriza
  await expect(panel.getByTestId('assistant-evaluation-sampler-result')).toHaveCount(0);
  await expect(panel.getByTestId('assistant-evaluation-use-question')).toHaveCount(0);
 });
+
+test('Assistant locally completes a genuine scoring worksheet without submitting a model call',async({page})=>{
+ const {buildAssistantReviewPacket}=await import('../src/lib/assistantReviewPacket.js');
+ const {REVIEW_DIMENSIONS,parseReviewCsv}=await import('../src/lib/assistantReviewAggregation.js');
+ const scoringPacket=buildAssistantReviewPacket({
+  question:'Review saved source [SOCIAL-901]',
+  answer:{
+   role:'assistant',text:'The source alleges an issue that is not independently verified. [SOCIAL-901]',
+   records:[{record_id:'SOCIAL-901',record_type:'SOCIAL_LISTENING',
+    source_url:'https://example.invalid/post/901',
+    source_excerpt:'Unverified public post excerpt'}],
+   grounding:{grounding_audit:{displayed_citation_ids:['SOCIAL-901']},
+    answer_quality:{checks:REVIEW_DIMENSIONS.map(id=>({id,status:'REVIEW_REQUIRED'}))}}
+  },buildVersion:'149.2'
+ });
+ let modelCalls=0;
+ await page.route('**/api/functions/intelligenceAssistant',route=>{
+  modelCalls++;
+  return route.fulfill({status:500,body:'Unexpected model call'});
+ });
+ await login(page);
+ await page.goto('/assistant');
+ const panel=page.getByTestId('assistant-human-scoring');
+ await expect(panel).toBeVisible();
+ await panel.getByRole('button',{name:/Prepare independent officer scoring sheet/}).click();
+ await panel.getByTestId('assistant-human-scoring-file').setInputFiles({
+  name:'review-packet.json',mimeType:'application/json',
+  buffer:Buffer.from(JSON.stringify(scoringPacket))
+ });
+ const workspace=panel.getByTestId('assistant-human-scoring-workspace');
+ await expect(workspace).toContainText(scoringPacket.packet_id);
+ await expect(panel.getByTestId('assistant-human-scoring-export')).toBeDisabled();
+ await panel.getByTestId('assistant-reviewer-id').fill('officer_a');
+ for(const id of REVIEW_DIMENSIONS){
+  await panel.getByTestId('assistant-score-'+id).selectOption('1');
+  await panel.getByTestId('assistant-evidence-'+id).fill('SOCIAL-901');
+  await panel.getByTestId('assistant-note-'+id).fill('Original source inspected by the reviewer.');
+ }
+ await expect(panel.getByTestId('assistant-human-scoring-progress')).toContainText('4/4');
+ await expect(panel.getByTestId('assistant-human-scoring-export')).toBeDisabled();
+ await panel.getByTestId('assistant-scoring-confirm').check();
+ const downloadPromise=page.waitForEvent('download');
+ await panel.getByTestId('assistant-human-scoring-export').click();
+ const result=await downloadPromise;
+ expect(result.suggestedFilename()).toBe('BAWASLU-officer-scoring-'+scoringPacket.packet_id+'.csv');
+ const {readFile}=await import('node:fs/promises');
+ const content=await readFile(await result.path(),'utf8');
+ const parsed=parseReviewCsv(content);
+ expect(parsed.entries).toHaveLength(4);
+ expect(parsed.entries.every(entry=>entry.reviewer_id==='officer_a')).toBe(true);
+ expect(parsed.entries.every(entry=>entry.evidence_reference==='SOCIAL-901')).toBe(true);
+ expect(content).not.toContain('Unverified public post excerpt');
+ expect(modelCalls).toBe(0);
+});

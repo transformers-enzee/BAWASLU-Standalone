@@ -66,6 +66,14 @@ def build_interim_template(snapshot, language="id"):
         f"have approved workflow status. These are not total social conversation counts "
         f"or confirmed legal violations."
     )
+    monitoring = snapshot.get("monitoring") or {}
+    monitoring_enabled = monitoring.get("enabled") is True
+    if monitoring_enabled:
+        observed = int(monitoring.get("published_in_period") or 0)
+        unknown = int(monitoring.get("publication_date_unknown") or 0)
+        summary += _t(language,
+            f" Secara terpisah, {observed} unggahan relevan dalam sampel Inbox berizin memiliki tanggal publikasi dalam periode ini; {unknown} unggahan tidak memiliki cap waktu zona yang dapat dipercaya. Ini bukan jumlah seluruh unggahan yang dikumpulkan.",
+            f" Separately, {observed} relevant saved Inbox posts have explicit publication timestamps in the selected window; {unknown} posts lack a reliable zoned timestamp. This is not the total number of captured posts.")
     findings = []
     for case in rows[:8]:
         reference = (f"SOCIAL #{case.get('source_id')} / campaign #{case.get('campaign_id')}"
@@ -107,6 +115,10 @@ def build_interim_template(snapshot, language="id"):
         actions.append(_t(language,
             "Lakukan pemantauan lanjutan dan pemeriksaan sumber asli sebelum keputusan penanganan.",
             "Continue monitoring and verify original evidence before any follow-up decision."))
+    if monitoring_enabled and int(monitoring.get("flagged_potential_violation_posts") or 0):
+        actions.append(_t(language,
+            "Prioritaskan pemeriksaan sumber asli pada unggahan Inbox bertanda dugaan pelanggaran; jangan anggap sinyal otomatis sebagai kesimpulan hukum.",
+            "Prioritize original-source verification for flagged Inbox posts; an automated signal is not a legal finding."))
     coverage = snapshot.get("report_coverage") or {}
     case_count = int(metrics.get("assignments") or 0)
     sampled = len(findings)
@@ -135,6 +147,31 @@ def build_interim_template(snapshot, language="id"):
            "Template sementara ini bukan format resmi BAWASLU; membutuhkan pemeriksaan dan persetujuan petugas sebelum distribusi.",
            "This interim template is not an official BAWASLU format; it requires officer review and approval before distribution."),
     ]
+    if monitoring_enabled:
+        caveats.extend([
+            _t(language,
+                "Bagian pemantauan diambil dari sampel Inbox relevan berizin yang dibatasi 300 tautan per kampanye. Sumber dihitung unik lintas kampanye, bukan seluruh pengumpulan atau seluruh percakapan.",
+                "Monitoring draws from a bounded authorized, relevant Inbox window of up to 300 links per campaign. Sources are unique across campaigns, not all captured content or online conversations."),
+            _t(language,
+                f"Periode pemantauan dihitung dari waktu publikasi asli yang memiliki zona waktu: {int(monitoring.get('published_in_period') or 0)} tercakup, {int(monitoring.get('publication_date_unknown') or 0)} tanpa waktu yang dapat dipastikan, {int(monitoring.get('published_outside_period') or 0)} di luar periode. Kelengkapan sampel tidak dapat dipastikan.",
+                f"Monitoring uses only original publication timestamps with explicit offsets: {int(monitoring.get('published_in_period') or 0)} in period, {int(monitoring.get('publication_date_unknown') or 0)} without reliable timestamps, {int(monitoring.get('published_outside_period') or 0)} outside the period. Sample completeness is unknown."),
+            _t(language,
+                "Angka monitoring dan penugasan dipisahkan karena berasal dari populasi dan waktu dasar berbeda; tidak ada dugaan yang dikonfirmasi sebagai pelanggaran.",
+                "Monitoring and assignment KPIs use different populations and time bases. No suspected issue is a confirmed legal violation."),
+        ])
+    scorecard = [
+        {"label": _t(language,"Penugasan","Assignments"), "value":assigned},
+        {"label": _t(language,"Sumber unik","Unique sources"),"value":linked},
+        {"label": _t(language,"Masih aktif","Active cases"),"value":active},
+        {"label": _t(language,"Laporan disetujui","Reports approved"),"value":approved},
+    ]
+    if monitoring_enabled:
+        scorecard.extend([
+            {"label": _t(language,"Unggahan terpantau (sampel)","Observed Inbox posts (sample)"),
+             "value":int(monitoring.get("published_in_period") or 0)},
+            {"label": _t(language,"Unggahan bertanda dugaan","Flagged source posts"),
+             "value":int(monitoring.get("flagged_potential_violation_posts") or 0)},
+        ])
     return {
         "template_id": TEMPLATE_ID,
         "template_version": TEMPLATE_VERSION,
@@ -149,12 +186,8 @@ def build_interim_template(snapshot, language="id"):
         "window_start_utc": snapshot["window_start_utc"],
         "window_end_utc": snapshot["window_end_utc"],
         "executive_summary": summary,
-        "scorecard": [
-            {"label": _t(language,"Penugasan","Assignments"), "value":assigned},
-            {"label": _t(language,"Sumber unik","Unique sources"),"value":linked},
-            {"label": _t(language,"Masih aktif","Active cases"),"value":active},
-            {"label": _t(language,"Laporan disetujui","Reports approved"),"value":approved},
-        ],
+        "scorecard": scorecard,
+        "monitoring_summary": monitoring if monitoring_enabled else {"enabled":False},
         "operational_breakdown": [
             {"label":_clean(key,120),"value":int(value)}
             for key,value in sorted(snapshot.get("department_counts",{}).items(),

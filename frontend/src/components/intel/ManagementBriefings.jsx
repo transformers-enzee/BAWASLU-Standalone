@@ -11,9 +11,10 @@ export default function ManagementBriefings(){
  const {language}=useLanguage(),id=language==='id';
  const t=(english,indonesian)=>id?indonesian:english;
  const [period,setPeriod]=useState('weekly'),[draftTopic,setDraftTopic]=useState(''),[topic,setTopic]=useState('');
+ const [includeMonitoring,setIncludeMonitoring]=useState(false);
  const [report,setReport]=useState(null),[busy,setBusy]=useState(true),[exporting,setExporting]=useState(false);
  const [error,setError]=useState(''),[refresh,setRefresh]=useState(0);
- const params=new URLSearchParams({period,topic,language:id?'id':'en'}).toString();
+ const params=new URLSearchParams({period,topic,language:id?'id':'en',include_monitoring:String(includeMonitoring)}).toString();
  useEffect(()=>{
    const controller=new AbortController();setBusy(true);setError('');
    fetch(API+'/briefing?'+params,{cache:'no-store',headers:auth(),signal:controller.signal})
@@ -51,7 +52,7 @@ export default function ManagementBriefings(){
    }catch(e){setError(String(e.message||e))}
    finally{setExporting(false)}
  }
- const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{};
+ const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{},monitoring=report?.monitoring||{};
  return <section id="management-briefing" data-i18n-exempt="true" className="mx-auto max-w-6xl space-y-5 bg-[#faf9f8] p-5 text-[#243b52] md:p-8">
   <style>{'@media print {body * {visibility:hidden!important} #management-briefing, #management-briefing * {visibility:visible!important} #management-briefing {position:absolute!important;left:0;top:0;width:100%;background:white!important} .briefing-no-print {display:none!important}}'}</style>
   <header className="flex flex-wrap justify-between gap-4">
@@ -75,6 +76,10 @@ export default function ManagementBriefings(){
    <label className="min-w-[180px] flex-1 text-xs font-semibold">{t('Topic (optional)','Topik (opsional)')}
     <input className="intel-input mt-1 w-full" maxLength={120} value={draftTopic} onChange={e=>setDraftTopic(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setTopic(draftTopic.trim())}} placeholder={t('Filter case title or excerpt','Filter judul atau kutipan')}/></label>
    <button type="button" className="intel-ghost text-sm" onClick={()=>setTopic(draftTopic.trim())}>{t('Apply','Terapkan')}</button>
+   <label className="flex items-center gap-2 self-center text-xs text-[#52657a]" data-testid="briefing-monitoring-option">
+    <input type="checkbox" checked={includeMonitoring} onChange={e=>setIncludeMonitoring(e.target.checked)}/>
+    {t('Include saved Inbox monitoring (may take longer)','Sertakan pemantauan Inbox tersimpan (dapat lebih lama)')}
+   </label>
   </div>
   {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
   {busy&&<p role="status" className="text-sm text-[#64748b]">{t('Loading authorized data…','Memuat data yang diizinkan…')}</p>}
@@ -99,6 +104,27 @@ export default function ManagementBriefings(){
      [t('Active assignments','Penugasan aktif'),m.active_assignments],
      [t('Approved case reports','Laporan disetujui'),m.approved_reports]
    ].map(([label,value])=><div key={label} className="rounded-xl border bg-white p-4"><strong className="block text-3xl tabular-nums">{value||0}</strong><p className="mt-2 text-xs text-[#64748b]">{label}</p></div>)}</div>
+   {monitoring.enabled===true&&<section data-testid="briefing-intelligence-monitoring" className="rounded-xl border border-[#dce5ec] bg-white p-5">
+    <h3 className="font-semibold text-[#24384c]">{t('Saved Inbox monitoring — separate evidence population','Pemantauan Inbox tersimpan — populasi bukti terpisah')}</h3>
+    <p className="mt-2 text-xs leading-5 text-[#866b43]">{t(
+      'Sampled authorized relevant posts by original publication time (not capture time). This is not an all-platform census, a unique-person count, or a confirmed legal violation.',
+      'Sampel unggahan relevan sesuai hak akses berdasarkan waktu publikasi asli (bukan waktu pengambilan). Ini bukan sensus seluruh platform, jumlah orang unik, atau konfirmasi pelanggaran hukum.')}</p>
+    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">{[
+      [t('Published in selected window','Dipublikasikan dalam periode'),monitoring.published_in_period],
+      [t('Flagged source posts','Unggahan bertanda dugaan'),monitoring.flagged_potential_violation_posts],
+      [t('Public concern posts','Unggahan keluhan publik'),monitoring.public_concern_posts],
+      [t('Time not verifiable','Waktu tidak terverifikasi'),monitoring.publication_date_unknown]
+    ].map(([label,value])=><div key={label} className="rounded-lg bg-[#f7f9fb] p-3"><strong className="block text-xl tabular-nums">{value??0}</strong><p className="mt-1 text-xs text-[#64748b]">{label}</p></div>)}</div>
+    <div className="mt-3 grid gap-3 md:grid-cols-2">{[
+      [t('Platform breakdown','Rincian platform'),monitoring.platform_counts],
+      [t('Sentiment distribution','Distribusi sentimen'),monitoring.sentiment_counts]
+    ].map(([label,data])=><div key={label}><h4 className="text-sm font-semibold">{label}</h4>
+      {entries(data).length?entries(data).map(([name,count])=><p key={name} className="flex justify-between border-b py-1 text-xs"><span>{name}</span><strong>{count}</strong></p>):
+      <p className="text-xs text-[#64748b]">{t('No dated posts in this sampled window','Tidak ada unggahan dengan waktu valid dalam sampel periode ini')}</p>}</div>)}</div>
+    <p className="mt-3 text-xs text-[#866b43]">{t('Window: up to 300 links per authorized campaign. Publication time unknown or outside the period:',
+      'Jendela: maksimal 300 tautan per kampanye yang diizinkan. Waktu publikasi tidak diketahui atau di luar periode:')} {monitoring.publication_date_unknown??0} / {monitoring.published_outside_period??0}.
+      {' '}{t('Completeness cannot be inferred from a zero count.','Jumlah nol tidak berarti seluruh unggahan sudah tercakup.')}</p>
+   </section>}
    <section data-testid="briefing-data-coverage" className="rounded-xl border border-[#dce5ec] bg-white p-4 text-sm">
     <h3 className="font-semibold text-[#24384c]">{t('Coverage and report status integrity','Cakupan dan integritas status laporan')}</h3>
     <p className="mt-2 text-[#52657a]">{t('Full authorized casework in this period:','Seluruh penugasan sesuai hak akses dalam periode ini:')} <strong>{coverage.assignments_in_period??m.assignments??0}</strong>. {t('Recent list shows','Daftar terbaru menampilkan')} <strong>{coverage.preview_rows??recent.length}</strong> / {coverage.preview_limit??12}; {t('report appendix shows','lampiran laporan menampilkan')} <strong>{coverage.template_rows??template.findings?.length??0}</strong> / {coverage.template_limit??8}.</p>

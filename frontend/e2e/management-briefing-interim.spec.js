@@ -74,3 +74,57 @@ test('Command Centre interim template renders source-backed preview and PDF down
  expect(download.suggestedFilename()).toBe('bawaslu-interim-briefing-weekly.pdf');
  expect(paid).toEqual([]);
 });
+
+
+test('Optional Inbox monitoring is independent, sampled and export-consistent',async({page})=>{
+ const requested=[];
+ const monitoring={
+  enabled:true,published_in_period:2,
+  unique_relevant_sources_in_recent_inbox:3,
+  publication_date_unknown:1,published_outside_period:0,
+  flagged_potential_violation_posts:1,public_concern_posts:1,
+  sentiment_counts:{NEGATIVE:1,NEUTRAL:1},
+  platform_counts:{X:1,Reddit:1},
+  inbox_window_limit:300,inbox_window_unit:'LINKS_PER_AUTHORIZED_CAMPAIGN',
+  inbox_truncation_status:'UNKNOWN',legal_violations_confirmed:false,
+  all_platform_conversations_counted:false
+ };
+ const withMonitoring={...sample,monitoring,
+  template:{...sample.template,
+   scorecard:[{label:'Observed Inbox posts (sample)',value:2}],
+   methodology:[...sample.template.methodology,'Monitoring sample is not a census'],
+   monitoring_summary:monitoring}};
+ page.route('**/api/management-reporting/briefing?*',route=>{
+  const url=route.request().url();
+  requested.push(url);
+  const data=new URL(url).searchParams.get('include_monitoring')==='true'
+    ?withMonitoring:sample;
+  return route.fulfill({status:200,contentType:'application/json',
+    body:JSON.stringify(data)});
+ });
+ let exportUrl='';
+ page.route('**/api/management-reporting/briefing.docx?*',route=>{
+  exportUrl=route.request().url();
+  return route.fulfill({status:200,headers:{
+   'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+   'Content-Disposition':'attachment; filename="bawaslu-interim-briefing-weekly.docx"'
+  },body:Buffer.from('PK synthetic fixture')});
+ });
+ await login(page);
+ await page.goto('/smart-radar');
+ await page.getByRole('button',{name:/Reports & Briefings|Laporan & Ringkasan/}).click();
+ await expect(page.getByTestId('briefing-monitoring-option')).toBeVisible();
+ await expect(page.getByTestId('briefing-intelligence-monitoring')).toHaveCount(0);
+ await page.getByTestId('briefing-monitoring-option').locator('input').check();
+ const panel=page.getByTestId('briefing-intelligence-monitoring');
+ await expect(panel).toBeVisible();
+ await expect(panel).toContainText(/Published in selected window|Dipublikasikan dalam periode/);
+ await expect(panel).toContainText(/not an all-platform census|bukan sensus seluruh platform/i);
+ await expect(panel).toContainText('300');
+ const download=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Word (.docx)'}).click();
+ await download;
+ expect(exportUrl).toContain('include_monitoring=true');
+ expect(requested.some(x=>x.includes('include_monitoring=false'))).toBeTruthy();
+ expect(requested.some(x=>x.includes('include_monitoring=true'))).toBeTruthy();
+});

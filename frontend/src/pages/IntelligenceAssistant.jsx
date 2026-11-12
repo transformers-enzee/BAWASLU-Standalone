@@ -223,6 +223,10 @@ export default function IntelligenceAssistant(){
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
           {m.grounding.grounding_audit.legal_enforcement_recommendation_needs_officer_review&&
            <p data-testid="assistant-legal-enforcement-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Arahan penegakan atau sanksi dalam jawaban memerlukan penilaian petugas berwenang. Kutipan PDF tidak membuktikan kewenangan atau dasar hukum.':'An enforcement or penalty recommendation requires authorized officer review. PDF citations do not prove legal authority or applicability.'}</p>}
+          {(m.grounding.grounding_audit.legal_article_claims_without_local_pdf_citation_count||0)>0&&
+           <p data-testid="assistant-unattributed-article-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Ada pernyataan pasal tanpa kutipan halaman PDF pada kalimat yang sama. Periksa rujukannya.':'An article-level statement lacks a PDF page citation in the same sentence. Check its source.'}</p>}
+          {m.grounding.grounding_audit.mixed_review_status_cited_pdf_pages&&
+           <p data-testid="assistant-mixed-pdf-review-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Sebagian halaman PDF yang dikutip belum ditelaah petugas, meskipun halaman lain telah ditelaah.':'Some cited PDF pages have not been officer-reviewed, even though others have.'}</p>}
           {m.grounding.grounding_audit.legal_article_reference_needs_review&&
            <p data-testid="assistant-legal-article-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Nomor pasal dalam jawaban tidak ditemukan pada kutipan halaman PDF yang dirujuk. Periksa naskah hukum resmi.':'An article number in this answer was not found in its cited PDF page excerpts. Verify the official legal text.'}</p>}
           {(m.grounding.grounding_audit.cited_unreviewed_pdf_pages||0)>0&&

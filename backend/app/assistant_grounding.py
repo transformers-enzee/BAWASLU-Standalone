@@ -63,6 +63,21 @@ def _claim_level_article_mismatches(answer,records):
     return failures
 
 
+def _uncited_article_claims(answer):
+    """Count article-bearing statements lacking a local PDF page citation.
+
+    These spans are not necessarily wrong; they are insufficiently attributed.
+    Citations on another sentence or social IDs are not substitutes.
+    """
+    results=[]
+    for span in re.split(r"(?<=[.!?;])\s+|\n+",str(answer or "")):
+        articles=_article_ids(span)
+        if not articles or span.strip().endswith("?"):
+            continue
+        pdf_ids=[ref for ref in _SOURCE_REF.findall(span) if ref.startswith("DOC-")]
+        if not pdf_ids:
+            results.extend(articles)
+    return list(dict.fromkeys(results))
 
 
 # Constrained safety triage for assertive enforcement prescriptions. This is a
@@ -80,20 +95,38 @@ _ENFORCEMENT_ID=re.compile(
     r"dicabut\s+hak|cabut\s+hak)\b",re.I)
 _NEGATED_RECOMMENDATION=re.compile(
     r"\b(?:not|never|should\s+not|must\s+not|tidak|jangan|belum|bukan)\b",re.I)
-# Don't classify questions, quoted source text, or explicit negations as a
-# positive recommendation merely because a keyword is present.
+_QUOTED_ATTRIBUTION=re.compile(
+    r"^\s*(?:[\"'“‘]|(?:according\s+to|reported(?:ly)?|mengutip|menurut\s+sumber)\b)",re.I)
+# Split independent clauses so negation or quotation in one statement does
+# not suppress a new enforcement instruction after "but"/"namun"/"tetapi".
+_CLAUSE_BOUNDARY=re.compile(r"(?<=[.!?;])\s+|\n+|\s*[,;:]\s*|\s+\b(?:but|however|namun|tetapi)\b\s+",re.I)
+_ENFORCEMENT_EN_INFIX=re.compile(r"\b(?:must|shall|should)\s+(?:immediately\s+|now\s+)?(?:be\s+)?",re.I)
+_ENFORCEMENT_ID_INFIX=re.compile(r"\b(?:harus|wajib|segera|langsung)\s+(?:segera\s+|langsung\s+)?",re.I)
+
 def _assertive_enforcement_recommendations(answer):
-    spans=re.split(r"(?<=[.!?;])\s+|\n+",str(answer or ""))
+    """Flag narrow coercive directives, respecting each separate clause.
+
+    Explicit quoted-source clauses and negated directives are excluded,
+    but an unrelated negation cannot hide a later positive instruction.
+    """
     flags=[]
-    for span in spans:
-        if not span.strip() or span.strip().endswith("?"):
+    for clause in _CLAUSE_BOUNDARY.split(str(answer or "")):
+        clause=clause.strip()
+        if not clause or clause.endswith("?") or _QUOTED_ATTRIBUTION.search(clause):
             continue
-        if _NEGATED_RECOMMENDATION.search(span):
+        matches=list(_ENFORCEMENT_EN.finditer(clause))+list(_ENFORCEMENT_ID.finditer(clause))
+        # Some natural phrasings put the urgency adverb between the modality
+        # and the enforcement verb; normalize only these limited patterns.
+        normalized=_ENFORCEMENT_EN_INFIX.sub(lambda m:m.group().split()[0]+" ",clause)
+        normalized=_ENFORCEMENT_ID_INFIX.sub(lambda m:m.group().split()[0]+" ",normalized)
+        if not matches:
+            matches=list(_ENFORCEMENT_EN.finditer(normalized))+list(_ENFORCEMENT_ID.finditer(normalized))
+        if not matches:
             continue
-        if re.search(r"(?:^\s*[\"'“‘]|(?:according to|reported|mengutip|menurut\s+sumber)\b)",span,re.I):
+        # Negation must apply locally to the directive, not to another clause.
+        if _NEGATED_RECOMMENDATION.search(clause):
             continue
-        if _ENFORCEMENT_EN.search(span) or _ENFORCEMENT_ID.search(span):
-            flags.append("ASSERTIVE_ENFORCEMENT_DIRECTIVE")
+        flags.append("ASSERTIVE_ENFORCEMENT_DIRECTIVE")
     return list(dict.fromkeys(flags))
 
 def _message(language, key):
@@ -110,6 +143,9 @@ def _message(language, key):
         "uncited":{
             "id":"Catatan bukti: Jawaban ini tidak mencantumkan kutipan ID sumber yang tampil. Kartu sumber di bawah hanya konteks, bukan dukungan terverifikasi untuk setiap klaim.",
             "en":"Evidence caution: This answer does not display supporting source-ID citations. Source cards below provide context, not verified support for every claim."},
+        "article_unattributed":{
+            "id":"Peringatan rujukan: Ada pernyataan pasal hukum tanpa kutipan halaman PDF di kalimat yang sama. Petugas harus menelusuri rujukan sebelum mengandalkannya.",
+            "en":"Legal source caution: An article-level statement lacks a PDF page citation in the same sentence. An officer must trace its source before relying on it."},
         "article_mismatch":{
             "id":"Peringatan rujukan pasal: Nomor pasal yang disebut dalam jawaban tidak ditemukan dalam kutipan halaman PDF hukum yang benar-benar dirujuk. Periksa naskah resmi sebelum mengandalkan rekomendasi ini.",
             "en":"Legal article caution: An article number stated in the answer was not found in the actually cited PDF page excerpts. Check the official legal text before relying on this recommendation."},
@@ -166,6 +202,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                       doc.get("document_type") in _LEGAL_DOC_TYPES]
     article_ids,missing_article_ids=_legal_article_presence(raw,doc_refs)
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
+    unattributed_articles=_uncited_article_claims(raw)
     enforcement_flags=_assertive_enforcement_recommendations(raw)
     needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids
                              or enforcement_flags)
@@ -181,6 +218,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
             notes.append(_message(language,"currentness"))
     if article_ids and (missing_article_ids or local_article_mismatches):
         notes.append(_message(language,"article_mismatch"))
+    if unattributed_articles:
+        notes.append(_message(language,"article_unattributed"))
     if enforcement_flags:
         notes.append(_message(language,"enforcement"))
     if records and not cited and not pdf_guidance:
@@ -199,6 +238,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "citation_ids_valid":True,  # only after deterministic filtering
         "cited_pdf_pages":len(doc_refs),
         "cited_unreviewed_pdf_pages":len(unreviewed),
+        "mixed_review_status_cited_pdf_pages":bool(unreviewed and legally_reviewed),
         "selected_unreviewed_pdf_pages":len(selected_unreviewed),
         "cited_officer_reviewed_legal_pages":len(legally_reviewed),
         "selected_pdf_pages":len(all_doc_refs),
@@ -207,9 +247,11 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_article_numbers_not_found_in_cited_pdf":missing_article_ids,
         "legal_article_claim_citation_mismatches":local_article_mismatches,
         "legal_article_claim_citation_mismatch_count":len(local_article_mismatches),
+        "legal_article_claims_without_local_pdf_citation":unattributed_articles,
+        "legal_article_claims_without_local_pdf_citation_count":len(unattributed_articles),
         "legal_article_excerpt_text_check":"LEXICAL_ONLY_NOT_LEGAL_VALIDATION",
         "legal_article_reference_needs_review":bool(
-            missing_article_ids or local_article_mismatches),
+            missing_article_ids or local_article_mismatches or unattributed_articles),
         "legal_article_semantic_support_verified":False,
         "legal_enforcement_directive_flags":enforcement_flags,
         "legal_enforcement_recommendation_needs_officer_review":bool(enforcement_flags),

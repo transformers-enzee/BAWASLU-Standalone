@@ -162,6 +162,15 @@ export default function IntelligenceAssistant(){
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
        </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>
+        {m.grounding?.grounding_audit&&<div data-testid="assistant-grounding-integrity" className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
+         <p className="font-semibold">{(m.answer_language||'id')==='id'?'Integritas rujukan jawaban':'Answer citation integrity'}</p>
+         <p className="mt-1">{m.grounding.cited_count??0} {(m.answer_language||'id')==='id'?'ID sumber dikutip dalam jawaban':'source IDs cited in the answer'} · {m.grounding.source_card_count??0} {(m.answer_language||'id')==='id'?'kartu sumber tersedia':'source cards available'}.</p>
+         {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
+          <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan kutipan pendukung dari jawaban.':'Source cards are context only, not citations supporting the answer.'}</p>}
+         {(m.grounding.grounding_audit.cited_unreviewed_pdf_pages||0)>0&&
+          <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditelaah petugas; keberlakuan hukum belum diverifikasi.':'A cited PDF is not officer-reviewed; current legal force is unverified.'}</p>}
+         <p className="mt-1">{(m.answer_language||'id')==='id'?'Pemeriksaan ini memvalidasi ID rujukan, bukan kebenaran klaim sumber.':'This check validates reference IDs, not the truth of source claims.'}</p>
+        </div>}
         {m.response_profile!=='PDF_GUIDANCE'&&m.grounding?.supporting_count>0&&
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}

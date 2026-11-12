@@ -140,7 +140,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.2','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'148.3','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -832,6 +832,19 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code,
               'answer_language':language,'detected_tags':fallback_tags(evidence),
               'presentation_labels':{}}
+    # The model's structured citation list and visible bracket citations can
+    # disagree. Use the citations actually printed and selected for this user;
+    # a contextual source card is not proof that a claim was cited.
+    from .assistant_grounding import audit_assistant_answer
+    answer_lang=meta.get('answer_language') or language
+    text,cited,grounding_audit=audit_assistant_answer(
+        q,evidence,text,cited,profile=response_profile,language=answer_lang)
+    meta['grounding_audit']=grounding_audit
+    if isinstance(meta.get('quality'),dict):
+        meta['quality']['cited_evidence_count']=len(cited)
+        meta['quality']['citation_ids_valid']=grounding_audit['citation_ids_valid']
+        meta['quality']['review_required']=bool(evidence) and not bool(cited)
+        meta['quality']['citations_reconciled_with_visible_answer']=True
     formal_by_id={record.intelligence_id:record for record in selected_formal}
     social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
     pdf_by_id={row['record_id']:row for row in context_pdf}
@@ -895,6 +908,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         'presentation_labels':meta.get('presentation_labels') or {},
         'grounding':{'accessible_count':len(accessible),
             'selected_count':len(evidence),'supporting_count':len(support),
+            'cited_count':len(cited),'source_card_count':len(support),
+            'source_card_basis':'CITED_SOURCE' if cited else 'CONTEXTUAL_SELECTED_SOURCE',
+            'grounding_audit':grounding_audit,
             'matched_social':matched_social,
             'formal_selected_count':len(selected_formal),
             'social_selected_count':len(chosen_social),

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 import csv
 import io
 import re
+from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import and_, or_
@@ -85,6 +86,15 @@ def _utc_publication_time(raw):
     return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def _safe_original_source_url(value):
+    try:
+        url=urlsplit(str(value or "").strip())
+        return bool(url.scheme in ("http","https") and url.hostname
+                    and not url.username and not url.password)
+    except ValueError:
+        return False
+
+
 def monitoring_snapshot_from_findings(findings, start, end, topic=""):
     """Reconcile authorized links before applying a topic or counting a post.
 
@@ -127,6 +137,8 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
     flagged=concerns=narratives=overlap=0
     date_conflicts=sentiment_conflicts=platform_conflicts=0
     duplicate_links_removed=0
+    source_text_missing=source_url_missing=source_policy_unconfigured=0
+    source_original_text_conflicts=0
     for record in groups.values():
         if not record["topic_match"]:
             continue
@@ -147,6 +159,10 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
             continue
 
         period_posts+=1
+        source_text_missing+=int(not any(str(p.get("message_original") or "").strip() for p in posts))
+        source_url_missing+=int(not any(_safe_original_source_url(p.get("source_url")) for p in posts))
+        source_original_text_conflicts+=int(len({str(p.get("message_original") or "").strip()
+              for p in posts if str(p.get("message_original") or "").strip()})>1)
         labels={str(row.get("sentiment") or "").upper().strip() for row in posts}
         known_levels=labels.intersection({"POSITIVE","NEGATIVE","NEUTRAL"})
         if len(known_levels)>1:
@@ -164,6 +180,7 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
         else:
             platform="Unknown"
         platforms[platform]+=1
+        source_policy_unconfigured+=int(len(platform_keys)!=1 or next(iter(platform_keys)) not in PLATFORM_POLICIES)
 
         signals=record["signals"]
         flagged+=int("POTENTIAL_VIOLATION" in signals)
@@ -189,6 +206,17 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
         "source_platform_conflicts":platform_conflicts,
         "sentiment_counts":dict(sentiments),
         "platform_counts":dict(platforms),
+        "source_quality":{
+            "sampled_published_sources":period_posts,
+            "missing_original_text":source_text_missing,
+            "missing_safe_original_url":source_url_missing,
+            "conflicting_saved_original_text":source_original_text_conflicts,
+            "platform_policy_reference_unconfigured":source_policy_unconfigured,
+            "counts_are_unique_sources":True,
+            "counts_are_not_official_violations":True,
+            "time_basis":"EXPLICIT_ORIGINAL_PUBLICATION_TIME",
+            "sample_completeness_verified":False,
+        },
         "publication_time_basis":"EXPLICIT_UTC_OR_OFFSET_SOURCE_PUBLISHED_AT",
         "period_semantics":"SOURCE_PUBLICATION_WINDOW_NOT_CAPTURE_WINDOW",
         "inbox_window_limit":300,

@@ -121,6 +121,12 @@ export default function ManagementBriefings(){
     ].map(([label,data])=><div key={label}><h4 className="text-sm font-semibold">{label}</h4>
       {entries(data).length?entries(data).map(([name,count])=><p key={name} className="flex justify-between border-b py-1 text-xs"><span>{name}</span><strong>{count}</strong></p>):
       <p className="text-xs text-[#64748b]">{t('No dated posts in this sampled window','Tidak ada unggahan dengan waktu valid dalam sampel periode ini')}</p>}</div>)}</div>
+    <div data-testid="briefing-sampled-evidence-quality" className="mt-3 rounded-lg border border-[#dce5ec] bg-[#fbfcfd] p-3 text-xs text-[#56697c]">
+      <strong>{t("Original evidence readiness (sampled posts)","Kesiapan bukti asli (sampel unggahan)")}</strong>
+      <p className="mt-1">{t("Missing original post text","Teks postingan asli tidak tersedia")}: {monitoring.source_quality?.missing_original_text??0} · {t("Missing safe original URL","URL asli aman tidak tersedia")}: {monitoring.source_quality?.missing_safe_original_url??0}</p>
+      <p className="mt-1">{t("Conflicting saved excerpts","Kutipan tersimpan berbeda")}: {monitoring.source_quality?.conflicting_saved_original_text??0} · {t("Unconfigured platform policies","Aturan platform belum tersedia")}: {monitoring.source_quality?.platform_policy_reference_unconfigured??0}</p>
+      <p className="mt-1 text-[#876532]">{t("These counts cover unique dated posts in the selected authorized sample, not all captured posts or proven violations.","Angka ini mencakup unggahan unik dengan waktu valid dalam sampel berizin, bukan seluruh unggahan atau pelanggaran yang terbukti.")}</p>
+    </div>
     <p data-testid="briefing-signal-overlap" className="mt-3 text-xs text-[#866b43]">
       {t('Preliminary issue categories can overlap for the same post and must not be summed.',
          'Kategori indikasi awal dapat tumpang tindih untuk unggahan yang sama dan tidak boleh dijumlahkan.')}

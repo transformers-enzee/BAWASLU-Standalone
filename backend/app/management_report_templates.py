@@ -74,6 +74,12 @@ def build_interim_template(snapshot, language="id"):
         summary += _t(language,
             f" Secara terpisah, {observed} unggahan relevan dalam sampel Inbox berizin memiliki tanggal publikasi dalam periode ini; {unknown} unggahan tidak memiliki cap waktu zona yang dapat dipercaya. Ini bukan jumlah seluruh unggahan yang dikumpulkan.",
             f" Separately, {observed} relevant saved Inbox posts have explicit publication timestamps in the selected window; {unknown} posts lack a reliable zoned timestamp. This is not the total number of captured posts.")
+    if monitoring_enabled:
+        quality=monitoring.get("source_quality") or {}
+        if int(quality.get("missing_original_text") or 0) or int(quality.get("missing_safe_original_url") or 0):
+            summary += _t(language,
+                f" Sebelum tindak lanjut, periksa {int(quality.get('missing_original_text') or 0)} sumber sampel tanpa teks asli dan {int(quality.get('missing_safe_original_url') or 0)} sumber tanpa tautan asli yang aman.",
+                f" Before follow-up, inspect {int(quality.get('missing_original_text') or 0)} sampled sources missing original text and {int(quality.get('missing_safe_original_url') or 0)} without safe original URLs.")
     findings = []
     for case in rows[:8]:
         reference = (f"SOCIAL #{case.get('source_id')} / campaign #{case.get('campaign_id')}"

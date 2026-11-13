@@ -16,6 +16,7 @@ from .access import profile, has
 from .platform_policy_screening import screen_platform_text
 from .oversight_legal import STEPS
 from .assistant_knowledge import retrieve_knowledge
+from .finding_review_readiness import build_finding_review_readiness
 
 router = APIRouter(prefix="/api/finding-assessments", tags=["finding-assessments"])
 LEGAL_TYPES = {"REGULATION", "SOP", "GUIDANCE"}
@@ -145,6 +146,9 @@ def assess_finding(db, permission, finding):
     references = [{
         "document_id": row["document_id"], "page": row["page"],
         "title": row["title"], "issuer": row.get("issuer") or "",
+        "legal_version_label": str(row.get("legal_version_label") or "")[:120],
+        "legal_effective_date": str(row.get("legal_effective_date") or "")[:10],
+        "legal_election_type": row.get("legal_election_type") if row.get("legal_election_type") in {"PEMILU","PILKADA","BOTH"} else "UNSPECIFIED",
         "record_id": row["record_id"],
         "download_url": row["source_url"],
         "excerpt": row.get("source_excerpt") or "",
@@ -153,7 +157,7 @@ def assess_finding(db, permission, finding):
         "match_method": row.get("match_method") or "KEYWORD",
         "authority_is_currently_in_force": "NOT_VERIFIED",
     } for row in reviewed[:4]]
-    return {
+    assessment = {
         "finding_id": str(finding["id"]),
         "finding_title": str(finding.get("title") or ""),
         "source_count_assessed": len(ordered),
@@ -223,6 +227,8 @@ def assess_finding(db, permission, finding):
         },
         "paid_provider_called": False,
     }
+    assessment["review_readiness"] = build_finding_review_readiness(finding, assessment)
+    return assessment
 
 
 

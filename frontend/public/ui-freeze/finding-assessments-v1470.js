@@ -23,6 +23,29 @@
    CONTEXT_REVIEW_REQUIRED:text('Context review required','Periksa konteks'),
    NO_DIRECT_SIGNAL_IDENTIFIED:text('No direct signal','Tidak ada indikasi langsung')
  }[value]||escapeHtml(value||''));
+
+ const REVIEW_LABELS={"NO_SAVED_SOURCE_EVIDENCE":["No saved evidence","Bukti tersimpan tidak tersedia"],"SOURCE_COUNT_RECONCILIATION":["Reconcile finding source counts","Cocokkan jumlah sumber dan temuan"],"CONFLICTING_SAVED_SOURCE_METADATA":["Conflicting saved source metadata","Metadata sumber tersimpan berbeda"],"ORIGINAL_POST_VERIFICATION":["Verify original post text and URL","Periksa teks dan URL postingan asli"],"REVIEWED_LEGAL_REFERENCE_REQUIRED":["Locate reviewed official legal reference","Cari rujukan hukum resmi yang ditelaah"],"LEGAL_VERSION_METADATA_INCOMPLETE":["Check version and effective date","Periksa versi dan tanggal berlaku"],"POSSIBLE_ELECTION_TYPE_MISMATCH":["Verify Pemilu/Pilkada applicability","Periksa kesesuaian Pemilu/Pilkada"],"ELECTION_TYPE_METADATA_UNKNOWN":["Confirm applicable election type","Konfirmasi jenis pemilihan"],"LEGAL_CURRENTNESS_AND_AUTHORITY_UNVERIFIED":["Verify legal force and authority","Periksa keberlakuan hukum dan kewenangan"],"PLATFORM_POST_CONTEXT_REVIEW":["Review original post in policy context","Tinjau postingan asli dan aturan platform"],"CURRENT_PLATFORM_POLICY_UNVERIFIED":["Check current official platform rules","Periksa aturan platform resmi terkini"],"PLATFORM_POLICY_REFERENCE_UNAVAILABLE":["Find unsupported platform's official policy","Cari kebijakan resmi platform yang belum didukung"]};
+ function readinessHtml(readiness){
+  if(!readiness||readiness.schema!=='BAWASLU_COMMAND_CENTRE_FINDING_READINESS_V1531')return '';
+  const issues=Array.isArray(readiness.issues)?readiness.issues:[];
+  const render=row=>{
+   const names=REVIEW_LABELS[row.code]||[row.code,row.code];
+   const refs=(row.legal_page_ids||[]).map(escapeHtml);
+   return '<li class="small" style="margin:7px 0"><strong>'+escapeHtml(row.priority)+' · '+
+    escapeHtml(names[lang==='id'?1:0])+'</strong>'+
+    (refs.length?'<span class="tiny muted" style="display:block">'+text('Cited pages: ','Halaman rujukan: ')+refs.join(', ')+'</span>':'')+
+    (Number(row.affected_count||0)>1?'<span class="tiny muted"> · '+Number(row.affected_count)+'</span>':'')+'</li>';
+  };
+  return '<section data-testid="finding-review-readiness" class="soft" style="padding:12px;margin:12px 0">'+
+   '<strong>'+text('Officer review priorities','Prioritas pemeriksaan petugas')+
+   ' · '+issues.length+'</strong>'+
+   '<p class="tiny muted">'+text('P1/P2/P3 are review order, not violation severity. No automated legal/platform decision.','P1/P2/P3 adalah urutan pemeriksaan, bukan tingkat pelanggaran. Tidak ada keputusan hukum/platform otomatis.')+'</p>'+
+   (issues.length?'<ol style="padding-left:20px">'+issues.slice(0,3).map(render).join('')+'</ol>'+
+    (issues.length>3?'<details data-testid="finding-review-more"><summary>'+text('More checks','Pemeriksaan lainnya')+
+      ' · '+(issues.length-3)+'</summary><ol style="padding-left:20px">'+issues.slice(3).map(render).join('')+'</ol></details>':''):
+    '<p class="tiny muted">'+text('No additional source gaps detected. Official law and platform currentness remain unverified.','Tidak terdeteksi celah sumber tambahan. Keberlakuan hukum dan aturan platform tetap belum diverifikasi.')+'</p>')+
+   '</section>';
+ }
  function legalHtml(data){
    const refs=data.approved_reference_pages||[];
    const steps=data.recommended_follow_up||[];
@@ -40,6 +63,9 @@
       '<p>'+escapeHtml(String(row.excerpt||'').slice(0,450))+'</p><div class="tiny muted">'+escapeHtml(row.record_id)+' · '+
       text('Officer-reviewed upload, legal currency not verified.','Dokumen telah ditelaah, keberlakuan hukum belum diverifikasi.')+
       ' · '+escapeHtml(row.match_method||'KEYWORD')+
+      (row.legal_version_label?' · '+text('Recorded version: ','Versi tercatat: ')+escapeHtml(row.legal_version_label):'')+
+      (row.legal_effective_date?' · '+text('Recorded effective date: ','Tanggal berlaku tercatat: ')+escapeHtml(row.legal_effective_date):'')+
+      ' · '+text('Election type: ','Jenis pemilihan: ')+escapeHtml(row.legal_election_type||'UNSPECIFIED')+
       ' <a href="/assistant" target="_top" rel="noopener noreferrer">'+text('Open Knowledge Library','Buka Pustaka Pengetahuan')+' ↗</a></div></div>').join(''):
       '<p class="small muted">'+text('No matching officer-reviewed regulation or SOP. Upload and review current official rules before citing any provision.','Tidak ada peraturan atau SOP cocok yang telah ditelaah. Unggah dan tinjau aturan resmi terkini sebelum mengutip pasal.')+'</p>')+
     '<h4>'+text('Follow-up considerations','Pertimbangan tindak lanjut')+'</h4><ol style="padding-left:22px">'+
@@ -121,6 +147,7 @@
       [provenance.source_text_conflicts||0,provenance.source_url_conflicts||0,
        provenance.source_platform_conflicts||0].join('/'):'')+
      '</p>'+
+    readinessHtml(result.review_readiness)+
     '<div role="tablist" aria-label="Assessment categories" style="display:flex;gap:8px;margin:12px 0">'+
     '<button type="button" role="tab" data-review-tab="legal" aria-selected="true" class="button primary">'+text('Legal Assessment','Penilaian Hukum')+'</button>'+
     '<button type="button" role="tab" data-review-tab="policy" aria-selected="false" class="button">'+text('Platform Policy','Aturan Platform')+'</button></div>'+

@@ -1,0 +1,3 @@
+# v156.1 Audit linkage regression fixture correction
+
+The v156.0 build correctly rejected stage 1 for synthetic case assignments with CREATED events but no saved source URL. Two tests incorrectly assumed that CREATED alone confirmed linked source evidence. Corrected synthetic positive cases to supply the saved URL required by the existing _acceptance_trace function. Added explicit negative coverage showing that an event without source URL does not mark the source-linked stage observed. Business and database authorization logic unchanged; run full automated pipeline before declaring staging live.

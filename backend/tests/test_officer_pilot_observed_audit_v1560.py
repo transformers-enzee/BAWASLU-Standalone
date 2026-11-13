@@ -13,7 +13,7 @@ def _run(monkeypatch,db):
 def test_existing_case_stage_observed_only_from_real_audit_event(monkeypatch):
     db=dataset()
     try:
-        case=_case(11);db.add(case);db.flush()
+        case=_case(11);case.source_url="https://example.test/post/11";db.add(case);db.flush()
         db.add(CaseTransition(case_id=case.id,actor_id=1,action="CREATED",
                               details_json="{}"))
         db.commit()
@@ -54,7 +54,7 @@ def test_source_without_case_has_no_audit_trace(monkeypatch):
 def test_unlinked_source_does_not_expose_prior_case_audit(monkeypatch):
     db=dataset()
     try:
-        case=_case(11);db.add(case);db.flush()
+        case=_case(11);case.source_url="https://example.test/post/11";db.add(case);db.flush()
         db.add(CaseTransition(case_id=case.id,actor_id=1,action="CREATED",
                               details_json="{}"))
         db.commit()
@@ -72,6 +72,8 @@ def test_two_cases_have_independent_per_case_event_windows():
     db=dataset()
     try:
         first=_case(11);second=_case(12)
+        first.source_url="https://example.test/post/11"
+        second.source_url="https://example.test/post/12"
         db.add_all([first,second]);db.flush()
         for i in range(200):
             db.add(CaseTransition(case_id=first.id,actor_id=1,action="NOTE",
@@ -83,4 +85,17 @@ def test_two_cases_have_independent_per_case_event_windows():
         assert out[first.id]["audit_event_window_limited"] is True
         assert out[second.id]["observed_stages"]["source_linked"] is True
         assert out[second.id]["audit_event_window_limited"] is False
+    finally:db.close()
+
+
+def test_created_audit_event_without_source_url_does_not_claim_linkage(monkeypatch):
+    db=dataset()
+    try:
+        case=_case(11);db.add(case);db.flush()
+        db.add(CaseTransition(case_id=case.id,actor_id=1,action="CREATED",details_json="{}"))
+        db.commit()
+        item=_run(monkeypatch,db)["items"][0]
+        assert item["acceptance_case_audit_evidence_available"] is True
+        assert item["acceptance_workflow_checklist"][0]["audit_observed"] is False
+        assert item["acceptance_audit_observed_stage_count"]==0
     finally:db.close()

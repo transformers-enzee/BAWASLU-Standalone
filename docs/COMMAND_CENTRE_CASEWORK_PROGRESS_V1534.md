@@ -1,0 +1,5 @@
+# v153.4 Command Centre officer progress and evidence attestation
+
+Reuses the existing source-review, receiving-officer acceptance, report submission, and independent approval audit trace from Inbox casework. Command Centre receives only five safe boolean stages plus operational status, not notes or private event details. Related-case lookup already enforces the jurisdiction filter; up to eight selected visible cases are fetched in two windowed SQL queries for latest report and 200 latest events per case. No casework writes.
+
+Management reporting now summarizes authorized assignments with original-source attestation explicitly recorded inside the selected period, those needing attention, and those with no event observed. Absence of a recorded event in a time window does not imply no historic review. Existing report-version status counts remain unchanged. Interim bilingual draft summaries/actions and Command Centre UI use the same conservative distinction. No automatic law/platform decisions, approvals, case assignments or takedowns. No database schema change and no paid AI calls. Mandatory Python/JS release regression gates added.

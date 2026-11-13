@@ -17,6 +17,7 @@ from .platform_policy_screening import screen_platform_text
 from .oversight_legal import STEPS
 from .assistant_knowledge import retrieve_knowledge
 from .finding_source_review import source_review_plan
+from .finding_case_progress import summarize_authorized_case_progress
 from .finding_review_readiness import build_finding_review_readiness
 
 router = APIRouter(prefix="/api/finding-assessments", tags=["finding-assessments"])
@@ -274,6 +275,9 @@ def contextual_casework_links(db, permission, user_id, finding):
         key=(case.source_id,str(case.campaign_id))
         if key not in chosen or (chosen[key].status=="CLOSED" and case.status!="CLOSED"):
             chosen[key]=case
+    # Only up to eight authorized source-linked cases are summarized.
+    selected_cases=[chosen[(sid,cid)] for sid,cid in available[:8] if (sid,cid) in chosen]
+    progress_by_case=summarize_authorized_case_progress(db,selected_cases)
     can_create=has(permission,"add_intelligence")
     links=[]
     for sid,cid in available[:8]:
@@ -289,6 +293,7 @@ def contextual_casework_links(db, permission, user_id, finding):
             "existing_case_id":case.id if case else None,
             "existing_case_status":case.status if case else None,
             "existing_case_department":case.target_department if case else "",
+            "workflow_progress":progress_by_case.get(case.id) if case else None,
             "can_create_assignment":can_create,
             # No officer is auto-assigned. The link opens the *existing*
             # embedded Inbox workflow which rechecks source permissions.
@@ -326,9 +331,11 @@ def finding_assessments(finding_id: str, user: User = Depends(current_user),
         contextual_casework_links(db,permission,user.id,finding))
     # Only the casework module may authorize actionable URLs. Never synthesize
     # links from a canonical source ID or a preliminary policy status.
-    allowed={(item["source_id"],item["campaign_id"]):item.get("casework_url")
+    allowed={(item["source_id"],item["campaign_id"]):item
              for item in assessment["follow_up"].get("source_actions",[])
              if item.get("casework_url")}
     for row in assessment["source_investigation"]["actions"]:
-        row["casework_url"]=allowed.get((row["result_id"],row["campaign_id"]))
+        action=allowed.get((row["result_id"],row["campaign_id"])) or {}
+        row["casework_url"]=action.get("casework_url")
+        row["workflow_progress"]=action.get("workflow_progress")
     return assessment

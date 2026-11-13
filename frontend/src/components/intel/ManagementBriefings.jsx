@@ -98,6 +98,21 @@ export default function ManagementBriefings(){
     </div>
    </div>
    <p className="rounded-lg border bg-white p-3 text-xs text-[#64748b]">{report.window_start_utc} — {report.window_end_utc} · {report.scope?.geographic_scope==='Nationwide'?t('National','Nasional'):report.scope?.province} {report.topic_filter?' · '+report.topic_filter:''}</p>
+   {report.casework_progress?.schema==='BAWASLU_CASEWORK_PROGRESS_V1534'&&
+    <section data-testid="briefing-casework-progress" className="rounded-xl border border-[#dce5ec] bg-white p-4">
+     <h3 className="font-semibold">{t('Officer casework and source attestation','Penugasan petugas dan catatan verifikasi sumber')}</h3>
+     <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">{[
+      [t('Awaiting receiving team','Menunggu penerimaan tim'),report.casework_progress.waiting_for_receiving_team_status],
+      [t('In review','Dalam pemeriksaan'),report.casework_progress.in_review_status],
+      [t('Source checks logged in window','Verifikasi sumber tercatat dalam periode'),report.casework_progress.source_check_attested_in_window],
+      [t('Source reviews requiring attention','Catatan sumber perlu ditindaklanjuti'),report.casework_progress.source_review_requires_attention_in_window],
+      [t('No source-review event observed','Tidak ada peristiwa pemeriksaan dalam periode'),report.casework_progress.source_review_event_not_observed_in_window],
+      [t('Latest reports awaiting approval','Laporan terbaru menunggu persetujuan'),report.casework_progress.latest_report_awaiting_approval]
+     ].map(([name,value])=><div key={name} className="rounded-lg bg-[#f7f9fb] p-3">
+      <strong className="block text-lg tabular-nums">{value??0}</strong>
+      <p className="mt-1 text-xs">{name}</p></div>)}</div>
+     <p className="mt-3 text-xs text-[#876532]">{t('Audited source checks count only events within the selected reporting period. A missing event does not prove the source was never reviewed. Report approval is a workflow state, not a legal determination.','Verifikasi sumber hanya menghitung peristiwa dalam periode laporan. Peristiwa yang tidak tercatat tidak berarti sumber belum pernah diperiksa. Persetujuan laporan adalah status alur kerja, bukan keputusan hukum.')}</p>
+    </section>}
    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[
      [t('Assignments created','Penugasan dibuat'),m.assignments],
      [t('Unique linked sources','Sumber terkait unik'),m.unique_linked_sources],

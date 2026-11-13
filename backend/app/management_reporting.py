@@ -253,6 +253,56 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
 
 
 
+def _casework_evidence_progress(cases,transitions,latest_by_case):
+    """Evidence status only from audited source events already loaded for the period.
+
+    A status of IN_REVIEW or APPROVED is not source authentication or legal
+    accuracy. No additional database query, no raw notes, and no AI request.
+    """
+    latest={}
+    for row in sorted(transitions,key=lambda event:event.id):
+        if row.action=="SOURCE_REVIEW_RECORDED":
+            latest[row.case_id]=row
+    from .casework import _json
+    checked=needs_attention=not_observed=0
+    for case in cases:
+        event=latest.get(case.id)
+        if not event:
+            not_observed+=1
+            continue
+        details=_json(event.details_json,{})
+        valid=(details.get("status")=="SOURCE_CHECKED"
+            and details.get("original_source_opened") is True
+            and details.get("source_type")==case.source_type
+            and str(details.get("source_id"))==str(case.source_id)
+            and details.get("source_url")==case.source_url)
+        if valid:checked+=1
+        else:needs_attention+=1
+    reports=Counter(row.status for row in latest_by_case.values())
+    return {
+        "schema":"BAWASLU_CASEWORK_PROGRESS_V1534",
+        "authorized_assignments":len(cases),
+        "waiting_for_receiving_team_status":sum(row.status in ("OPEN","ASSIGNED") for row in cases),
+        "in_review_status":sum(row.status=="IN_REVIEW" for row in cases),
+        "needs_information_status":sum(row.status=="NEEDS_INFORMATION" for row in cases),
+        "source_check_attested_in_window":checked,
+        "source_review_requires_attention_in_window":needs_attention,
+        "source_review_event_not_observed_in_window":not_observed,
+        "latest_report_not_recorded":len(cases)-len(latest_by_case),
+        "latest_report_awaiting_approval":reports["SUBMITTED"],
+        "latest_report_approved_workflow_status":reports["APPROVED"],
+        "source_review_basis":"LATEST_SOURCE_REVIEW_EVENT_IN_SELECTED_REPORTING_PERIOD",
+        "report_basis":"LATEST_REPORT_VERSION_PER_CASE",
+        "population":"AUTHORIZED_CASES_CREATED_IN_PERIOD",
+        "missing_event_does_not_mean_never_reviewed":True,
+        "independent_approval_is_not_legal_determination":True,
+        "source_truth_verified":False,
+        "legal_verdict_confirmed":False,
+        "created_casework_actions":False,
+        "additional_database_queries":0,
+    }
+
+
 def build_briefing(db: Session, access: dict, user_id: int,
                    period: str = "weekly", topic: str = "", now=None, language="id",
                    include_monitoring=False):
@@ -272,6 +322,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         latest_by_case[report.case_id] = report
     latest_reports = {case_id: report.status for case_id, report in latest_by_case.items()}
     report_counts = Counter(latest_reports.values())
+    casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     departments = Counter(row.target_department for row in cases)
     provinces = Counter(row.verified_province or "Unverified" for row in cases)
     source_keys = {(row.source_type, row.source_id,
@@ -298,6 +349,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         },
         "case_status_counts": dict(statuses),
         "report_status_counts": dict(report_counts),
+        "casework_progress":casework_progress,
         "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
         "report_coverage": {
             "assignments_in_period": len(cases),

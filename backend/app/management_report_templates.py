@@ -99,7 +99,31 @@ def build_interim_template(snapshot, language="id"):
                 "Status alur kerja; isi sumber belum merupakan temuan hukum yang dipastikan.",
                 "Casework status only; source claims are not established legal findings."),
         })
+    progress=snapshot.get("casework_progress") or {}
+    if progress.get("schema")=="BAWASLU_CASEWORK_PROGRESS_V1534":
+        pending=int(progress.get("waiting_for_receiving_team_status") or 0)
+        checked=int(progress.get("source_check_attested_in_window") or 0)
+        not_observed=int(progress.get("source_review_event_not_observed_in_window") or 0)
+        awaiting=int(progress.get("latest_report_awaiting_approval") or 0)
+        summary += _t(language,
+            f" Dalam casework yang berizin, {checked} penugasan memiliki pemeriksaan sumber asli yang tercatat pada periode ini, sedangkan {not_observed} tidak memiliki catatan pemeriksaan sumber dalam periode. Tidak tercatat bukan berarti belum pernah diperiksa.",
+            f" Within authorized casework, {checked} assignments have an audited original-source check in this reporting window; {not_observed} have no source-review event observed in the window. Absence is not proof that no earlier review occurred.")
     actions = []
+    if progress.get("schema")=="BAWASLU_CASEWORK_PROGRESS_V1534":
+        if pending:
+            actions.append(_t(language,
+                f"Tindaklanjuti penerimaan penugasan untuk {pending} kasus berstatus baru atau ditugaskan; pastikan otorisasi petugas penerima.",
+                f"Follow up receiving-officer acceptance for {pending} cases currently open or assigned; confirm authorized ownership."))
+        needs=int(progress.get("source_review_requires_attention_in_window") or 0)
+        if needs:
+            actions.append(_t(language,
+                f"Tinjau kembali {needs} catatan pemeriksaan sumber yang belum memenuhi syarat verifikasi sumber asli dalam periode ini.",
+                f"Recheck {needs} source-review records that do not meet original-source attestation conditions in this window."))
+        if awaiting:
+            actions.append(_t(language,
+                f"Rujuk {awaiting} laporan versi terbaru yang diajukan kepada pemeriksa independen berwenang.",
+                f"Route {awaiting} latest-version submitted reports to authorized independent reviewers."))
+
     if active:
         actions.append(_t(language,
             f"Tinjau {active} penugasan aktif terhadap sumber asli dan bukti pendukung; catat verifikasi petugas.",

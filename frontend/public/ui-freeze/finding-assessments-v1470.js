@@ -47,6 +47,31 @@
    '</section>';
  }
 
+
+ const WORKFLOW_STEP_LABELS={
+  source_linked:['Source linked','Sumber terhubung'],
+  receiving_officer_accepted:['Receiving officer accepted','Petugas penerima menerima'],
+  original_source_checked:['Original source reviewed','Sumber asli diperiksa'],
+  latest_report_submitted:['Latest report submitted','Laporan terbaru diajukan'],
+  independent_report_approval:['Independent report approved','Laporan disetujui pemeriksa independen']
+ };
+ function caseworkProgressHtml(progress){
+  if(!progress||progress.schema!=='BAWASLU_CASEWORK_AUDIT_PROGRESS_V1534')return '';
+  const steps=Array.isArray(progress.steps)?progress.steps:[];
+  return '<div data-testid="finding-casework-audit-progress" class="soft small" style="margin:6px 0;padding:8px">'+
+   '<strong>'+text('Audited officer casework','Penugasan petugas yang teraudit')+
+   ' #'+Number(progress.case_id||0)+'</strong>'+
+   '<p class="tiny muted">'+text('Case status: ','Status kasus: ')+escapeHtml(progress.case_status||'UNKNOWN')+
+   ' · '+text('Latest report: ','Laporan terbaru: ')+escapeHtml(progress.latest_report_status||'NO_REPORT')+'</p>'+
+   '<p class="tiny">'+Number(progress.completed_steps||0)+'/'+Number(progress.total_steps||5)+' '+
+   text('documented workflow steps','tahap alur kerja yang tercatat')+'</p>'+
+   '<ol style="padding-left:20px;margin:4px 0">'+steps.map(step=>{
+    const label=(WORKFLOW_STEP_LABELS[step.key]||[step.key,step.key])[lang==='id'?1:0];
+    return '<li>'+escapeHtml(label)+' · '+(step.done?text('Recorded','Tercatat'):text('Not confirmed in this audit view','Belum terkonfirmasi pada rekaman ini'))+'</li>';
+   }).join('')+'</ol>'+
+   (progress.event_history_may_be_incomplete?'<p class="tiny muted">'+text('Audit history is capped. Earlier events may be missing.','Riwayat audit dibatasi. Peristiwa sebelumnya mungkin tidak terlihat.')+'</p>':'')+
+   '<p class="tiny muted">'+text('These are workflow records, not proof of source truth, legal violations, or client acceptance.','Ini hanya catatan alur kerja, bukan bukti kebenaran sumber, pelanggaran hukum, atau penerimaan klien.')+'</p></div>';
+ }
  const SOURCE_STEPS={
   RECOVER_ORIGINAL_POST_TEXT:['Recover original post text','Temukan teks postingan asli'],
   RECOVER_OR_VALIDATE_ORIGINAL_POST_URL:['Locate and validate original source URL','Temukan dan validasi URL sumber asli'],
@@ -72,6 +97,7 @@
     ' · '+text('Saved links: ','Tautan tersimpan: ')+Number(row.linked_variants||0)+'</div>'+
     (row.saved_text_conflict||row.saved_url_conflict||row.saved_platform_conflict?
       '<p class="tiny muted">'+text('Conflicting saved text, URL or platform. Verify before acting.','Teks, URL, atau platform tersimpan berbeda. Periksa sebelum bertindak.')+'</p>':'')+
+    caseworkProgressHtml(row.workflow_progress)+
     '<ol style="padding-left:20px;margin:6px 0">'+steps.map(code=>
        '<li>'+escapeHtml((SOURCE_STEPS[code]||[code,code])[lang==='id'?1:0])+'</li>').join('')+'</ol>'+
     (original?'<a href="'+escapeHtml(original)+'" target="_blank" rel="noopener noreferrer">'+
@@ -172,6 +198,7 @@
        return '<div class="soft small" style="margin:8px 0"><strong>Social #'+escapeHtml(source.source_id)+
          ' · '+text('Campaign','Kampanye')+' #'+escapeHtml(source.campaign_id)+'</strong>'+
          (existing?' · '+escapeHtml(source.existing_case_status||''):'')+
+         caseworkProgressHtml(source.workflow_progress)+
          (url?'<p><a href="'+escapeHtml(url)+'" target="_top" rel="noopener noreferrer">'+title+' ↗</a></p>':
            '<p class="tiny muted">'+text('Read-only access: assignment creation is not permitted.','Akses hanya-baca: pembuatan penugasan tidak diizinkan.')+'</p>')+
          '</div>';

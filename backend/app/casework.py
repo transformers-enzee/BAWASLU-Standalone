@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, and_, or_
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, and_, or_, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from .db import Base, get_db
 from .models import (User, AccessGrant, IntelligenceItem, EvidenceAssessment, CampaignEvidence)
@@ -421,6 +421,38 @@ class SourceReviewAction(BaseModel):
     note: str = Field(min_length=20,max_length=1500)
     original_source_opened: bool = False
 
+def _pilot_visible_active_cases(db,p,user_id,rows):
+    """One newest visible active case per authorized (source,campaign) pair.
+
+    Apply scope, exact campaign matching, and active status in SQL BEFORE the
+    window partition. This avoids the prior arbitrary 250-case result cap.
+    """
+    pairs=sorted({(row["source_id"],row["campaign_id"])
+                  for row in rows if row.get("source_id") and row.get("campaign_id")})
+    if not pairs:
+        return []
+    predicates=[
+        and_(CaseAssignment.source_id==sid,
+             CaseAssignment.campaign_id==int(cid))
+        for sid,cid in pairs[:12]
+    ]
+    permitted=(_authorized_cases_query(db,p,user_id)
+        .filter(CaseAssignment.source_type=="SOCIAL",
+                CaseAssignment.status!="CLOSED",
+                or_(*predicates)).subquery())
+    ranked=(db.query(
+        permitted.c.id.label("case_id"),
+        func.row_number().over(
+            partition_by=(permitted.c.source_id,permitted.c.campaign_id),
+            order_by=permitted.c.id.desc()).label("rank_no")
+        ).subquery())
+    cases=(db.query(CaseAssignment)
+        .join(ranked,CaseAssignment.id==ranked.c.case_id)
+        .filter(ranked.c.rank_no==1)
+        .order_by(CaseAssignment.id.desc()).all())
+    return [case for case in cases if _visible(case,p,user_id)]
+
+
 @router.get("/pilot-intake")
 def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """On-demand, read-only officer intake suggestions from existing Inbox.
@@ -435,16 +467,11 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     _require(p,"add_intelligence")
     findings,_=live_inbox_findings(db,p)
     preview=officer_pilot_candidates(findings,limit=12)
-    source_ids=[row["source_id"] for row in preview["items"]]
-    visible=[]
-    if source_ids:
-        candidates=(_authorized_cases_query(db,p,user.id)
-            .filter(CaseAssignment.source_type=="SOCIAL",
-                    CaseAssignment.source_id.in_(source_ids))
-            .order_by(CaseAssignment.id.desc()).limit(250).all())
-        visible=[case for case in candidates if _visible(case,p,user.id)]
+    visible=_pilot_visible_active_cases(db,p,user.id,preview["items"])
     result=officer_pilot_candidates(findings,visible,limit=12)
-    result["visible_case_lookup_limit"]=250
+    result["visible_case_lookup_basis"]="LATEST_ACTIVE_VISIBLE_CASE_PER_SOURCE_AND_CAMPAIGN"
+    result["visible_case_lookup_pairs_limit"]=12
+    result["visible_case_lookup_arbitrary_case_cap_removed"]=True
     result["requires_officer_permission"]="add_intelligence"
     result["permission_checked_at_request"]=True
     result["inbox_source_rescoped_on_action"]=True

@@ -27,10 +27,16 @@ def _original_url_available(value):
         return False
 
 def _positive_id(value):
+    """Reject huge, non-ASCII, signed and forged IDs before SQL or URLs."""
+    if isinstance(value,bool):
+        return ""
     value=str(value or "").strip()
-    if value.isascii() and value.isdigit() and int(value)>0:
-        return str(int(value))
-    return ""
+    if not value or len(value)>19 or not value.isascii() or not value.isdigit():
+        return ""
+    number=int(value)
+    if not 0<number<=9223372036854775807:
+        return ""
+    return str(number)
 
 def officer_pilot_candidates(findings,visible_cases=(),limit=12):
     """Deduplicate by original post ID. Prefer a complete available source

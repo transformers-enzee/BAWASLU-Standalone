@@ -586,6 +586,31 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["preview_latest_saved_recheck_count"]=sum(counts.values())
     result["preview_latest_recheck_is_not_full_cohort"]=True
     result["latest_saved_eligibility_is_not_source_authenticity"]=True
+    # One deterministic officer next action per displayed source. This is
+    # an operational triage hint, not a legal severity/routing decision.
+    action_counts={}
+    for item in result["items"]:
+        state=item["latest_saved_eligibility"]
+        if state=="SOURCE_NOT_IN_AUTHORIZED_SCOPE":
+            action="SOURCE_UNAVAILABLE"
+        elif state=="LATEST_ASSESSMENT_NOT_RELEVANT":
+            action="RECHECK_LATEST_ASSESSMENT"
+        elif not item.get("source_text_available") or not item.get("original_source_url_available"):
+            action="RECOVER_SAVED_EVIDENCE"
+        elif item.get("jurisdiction_verification_changed_since_inbox"):
+            action="RECONFIRM_INCIDENT_JURISDICTION"
+        elif item.get("flag_review_recheck_required"):
+            action="REVIEW_UPDATED_FLAG_ASSESSMENT"
+        elif item.get("case_already_exists_in_visible_scope"):
+            action="CONTINUE_EXISTING_CASE"
+        else:
+            action="REVIEW_SOURCE_IN_INBOX"
+        item["pilot_next_action"]=action
+        item["pilot_action_is_preliminary"]=True
+        action_counts[action]=action_counts.get(action,0)+1
+    result["pilot_next_action_counts"]=action_counts
+    result["pilot_next_action_counts_preview_only"]=True
+    result["pilot_next_action_not_legal_determination"]=True
     result["preview_existing_case_count"]=sum(int(
         item["case_already_exists_in_visible_scope"]) for item in result["items"])
     result["preview_new_source_review_count"]=sum(int(

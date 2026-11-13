@@ -41,6 +41,15 @@ const PILOT_STEPS={
  latest_report_submitted:['Current report submission','Pengajuan laporan terbaru'],
  independent_report_approval:['Independent report approval','Persetujuan laporan independen']
 };
+const PILOT_NEXT_ACTIONS={
+ SOURCE_UNAVAILABLE:['Source inaccessible; contact an administrator','Sumber tidak dapat diakses; hubungi administrator'],
+ RECHECK_LATEST_ASSESSMENT:['Recheck current assessment','Periksa kembali penilaian terkini'],
+ RECOVER_SAVED_EVIDENCE:['Recover saved evidence','Pulihkan bukti tersimpan'],
+ RECONFIRM_INCIDENT_JURISDICTION:['Reconfirm incident jurisdiction','Konfirmasi ulang yurisdiksi kejadian'],
+ REVIEW_UPDATED_FLAG_ASSESSMENT:['Review updated violation flag','Tinjau tanda dugaan pelanggaran terbaru'],
+ CONTINUE_EXISTING_CASE:['Continue existing case','Lanjutkan kasus tersedia'],
+ REVIEW_SOURCE_IN_INBOX:['Review saved source in Inbox','Periksa sumber tersimpan di Inbox']
+};
 const PILOT_INTAKE_SIGNALS={
  SAVED_SOURCE_FLAG_REVIEW:['Saved source flag for officer review','Tanda sumber tersimpan untuk pemeriksaan petugas'],
  SAVED_PUBLIC_CONCERN_DISCUSSION:['Saved public-concern discussion','Pembahasan keluhan publik tersimpan'],
@@ -332,6 +341,15 @@ export default function ManagementBriefings(){
          <span>{t('Flag signals needing renewed review (preview)','Sinyal tanda perlu peninjauan ulang (pratinjau)')}: <strong>{pilotIntake.preview_flag_signal_recheck_count??0}</strong></span>
          <span>{t('Jurisdiction verification changed (preview)','Verifikasi yurisdiksi berubah (pratinjau)')}: <strong>{pilotIntake.preview_jurisdiction_verification_changed_count??0}</strong></span>
         </div>
+        {(pilotIntake.items||[]).length>0&&
+         <div data-testid="briefing-pilot-next-actions" className="mb-3 rounded-lg border border-[#dce5ec] bg-white p-3">
+          <p className="text-xs font-semibold">{t('Next actions for displayed sources','Tindakan selanjutnya untuk sumber yang ditampilkan')}</p>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#64748b]">
+           {Object.entries(pilotIntake.pilot_next_action_counts||{}).map(([key,value])=>
+            <span key={key}>{(PILOT_NEXT_ACTIONS[key]||[key,key])[id?1:0]}: <strong>{value}</strong></span>)}
+          </div>
+          <p className="mt-2 text-xs text-[#876532]">{t('Preview only. Officer verification, authorization and legal review remain required.','Hanya pratinjau. Pemeriksaan petugas, otorisasi dan kajian hukum tetap diperlukan.')}</p>
+         </div>}
         {(pilotIntake.items||[]).length>0?
          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
           <thead><tr className="border-b"><th className="p-2">{t('Saved source','Sumber tersimpan')}</th>
@@ -343,7 +361,9 @@ export default function ManagementBriefings(){
            <td className="p-2"><strong>#{item.source_id}</strong>
             <span className="ml-1">{item.platform}</span>
             {item.incident_jurisdiction_verified&&<span className="block text-[#64748b]">{item.verified_incident_province}</span>}</td>
-           <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}</td>
+           <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}
+            {item.pilot_next_action&&<span data-testid="pilot-source-next-action" className="mt-1 block font-semibold text-[#116d85]">
+             {(PILOT_NEXT_ACTIONS[item.pilot_next_action]||[item.pilot_next_action,item.pilot_next_action])[id?1:0]}</span>}</td>
            <td className="p-2">{item.latest_saved_eligibility==='SOURCE_NOT_IN_AUTHORIZED_SCOPE'?
             t('Source no longer available in your permission scope','Sumber tidak lagi tersedia dalam cakupan izin Anda'):
             item.latest_saved_eligibility==='LATEST_ASSESSMENT_NOT_RELEVANT'?

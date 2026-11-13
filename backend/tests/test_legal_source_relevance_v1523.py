@@ -70,3 +70,17 @@ def test_social_only_question_does_not_generate_legal_relevance_warning():
     _,r,_=run("Summarize Riau social discussion",[row],
               "Discussion [SOCIAL-1].")
     assert r["status"]=="NOT_APPLICABLE"
+
+def test_question_request_verbs_do_not_create_false_missing_topic():
+    _,r,_=run("Which law governs Riau bribery?",
+              [page("DOC-3-P2",body="Riau bribery monitoring.")],
+              "Relevant excerpt [DOC-3-P2].")
+    assert r["status"]=="PASS"
+    assert r["missing_terms"]==[]
+
+def test_indonesian_topic_mismatch_requires_officer_check():
+    _,r,_=run("Peraturan tentang politik uang di Riau?",
+              [page("DOC-3-P2",body="Pedoman pendaftaran pemilih nasional.")],
+              "Dokumen [DOC-3-P2].")
+    assert r["status"]=="REVIEW_REQUIRED"
+    assert "riau" in r["missing_terms"]

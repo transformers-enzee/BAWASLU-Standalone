@@ -47,7 +47,8 @@ _LEGAL_FOCUS_STOP={
     "rules","rule","applicable","apply","applies","authority","authorized",
     "legalitas","sanksi","sanction","sanctions","pemilu","pilkada",
     "election","elections","electoral","regional","local","guidance",
-    "sop","tindak","lanjut","please","could","what","which","does",
+    "sop","tindak","lanjut","govern","governs","governing","address",
+    "addresses","addressed","relevant","related","please","could","what","which","does",
     "with","about","show","explain","whether","bawaslu"
 }
 

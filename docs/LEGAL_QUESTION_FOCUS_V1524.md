@@ -1,0 +1,1 @@
+# BAWASLU v152.4 legal question topic calibration\n\nExclude generic legal question verbs such as governs/addresses from source-alignment focus terms. Keep specific named places and alleged conduct as focused terms. Add English and Indonesian synthetic checks, preserving lexical-only uncertainty and existing four legacy readiness checks.\n

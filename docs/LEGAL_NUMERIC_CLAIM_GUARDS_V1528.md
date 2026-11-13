@@ -1,0 +1,3 @@
+# v152.8: Citation-local legal dates and quantities
+
+This adds warning-only checks for explicitly formatted dates and measured numeric durations and percentages in AI legal answer statements. Only displayed authorized citations to REGULATION/SOP/GUIDANCE pages count. Contextual reports and uncited pages cannot satisfy support. A date or number missing from the cited excerpt requires officer review, but its presence is never proof of semantic truth or legal currentness. Existing Pasal citation, obligation, and polarity checks remain independent. Seventeen synthetic regressions are included in mandatory staging pytest. No paid AI calls, DB changes, legal conclusion or automatic case action.

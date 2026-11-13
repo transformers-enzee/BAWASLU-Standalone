@@ -4,6 +4,7 @@ These are reproducible warning signals, NOT factual entailment, officer approval
 accuracy scores, or a substitute for a human-scored answer benchmark. No IO.
 """
 import re
+from .assistant_numeric_claims import evaluate_legal_numeric_claims
 from .assistant_claim_consistency import evaluate_legal_claim_consistency
 
 PASS="PASS"
@@ -254,12 +255,14 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
 
     legal_alignment=_legal_reference_alignment(question,rows,cited,grounding)
     legal_consistency=evaluate_legal_claim_consistency(question,evidence,answer,cited,grounding)
+    numeric_consistency=evaluate_legal_numeric_claims(question,evidence,answer,cited,grounding)
     needs=[x["id"] for x in checks if x["status"]==REVIEW]
     return {
         "framework":"ASSISTANT_ANSWER_READINESS_V1484",
         "evaluation_type":"DETERMINISTIC_HEURISTICS_NOT_HUMAN_ACCURACY",
         "legal_source_alignment":legal_alignment,
         "legal_claim_passage_consistency":legal_consistency,
+        "legal_numeric_claim_source_alignment":numeric_consistency,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),
         "not_applicable_checks":sum(x["status"]==NA for x in checks),

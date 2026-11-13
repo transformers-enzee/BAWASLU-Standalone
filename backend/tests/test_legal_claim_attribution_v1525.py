@@ -53,3 +53,10 @@ def test_bilingual_legal_prohibition_requires_local_legal_page():
     _,meta,_=audit("Pelanggaran tersebut dilarang dalam aturan ini.",
                    question="Apa dasar hukum pelanggaran?")
     assert meta["prescriptive_legal_claims_without_local_legal_citation_count"]==1
+
+def test_report_only_claim_reuses_existing_missing_legal_source_step():
+    _,meta,_=audit("Officials must report incidents [DOC-2-P1].",
+                   [row("DOC-2-P1","REPORT")])
+    assert "LEGAL_CLAIM_LOCAL_CITATION" in meta["legal_review_reason_codes"]
+    assert [step["code"] for step in meta["officer_review_steps"]]==[
+        "LOCATE_AUTHORIZED_LEGAL_REFERENCE"]

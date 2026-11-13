@@ -353,7 +353,7 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
         add("RECHECK_MISSING_OR_OMITTED_REFERENCES",cited)
     if "LEGAL_ARTICLE_ATTRIBUTION" in reasons:
         add("MATCH_CITED_LEGAL_PASSAGES",legal_pdf)
-    if "LEGAL_CLAIM_LOCAL_CITATION" in reasons:
+    if "LEGAL_CLAIM_LOCAL_CITATION" in reasons and legal_pdf:
         add("TRACE_EACH_PRESCRIPTIVE_LEGAL_CLAIM",legal_pdf)
     if "CITED_UNREVIEWED_PDF" in reasons:
         add("REQUEST_DOCUMENT_REVIEW",[

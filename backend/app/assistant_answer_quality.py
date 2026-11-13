@@ -38,6 +38,64 @@ def _status(name,status,reason,**details):
     return {"id":name,"status":status,"reason":reason,**details}
 
 
+
+# A source-alignment indicator is deliberately separate from the legacy four
+# readiness checks. It does not assert legal truth or document applicability.
+_LEGAL_FOCUS_STOP={
+    "hukum","peraturan","regulasi","undang","undangan","pasal","aturan",
+    "legal","law","laws","statute","statutory","regulation","regulations",
+    "rules","rule","applicable","apply","applies","authority","authorized",
+    "legalitas","sanksi","sanction","sanctions","pemilu","pilkada",
+    "election","elections","electoral","regional","local","guidance",
+    "sop","tindak","lanjut","please","could","what","which","does",
+    "with","about","show","explain","whether","bawaslu"
+}
+
+def _legal_reference_alignment(question,rows,cited,grounding):
+    """Lexical signal on cited eligible pages only; never legal validation.
+
+    Do not let uncited pages or contextual reports satisfy relevance.
+    A conflict in officer-entered election metadata takes priority over
+    lexical overlap. Lack of specific terms is unknown, not a pass.
+    """
+    if not grounding.get("legal_question"):
+        return _status("legal_source_alignment",NA,
+            "No legal-reference question identified by the grounding audit.",
+            lexical_only=True,legal_applicability_verified=False)
+    legal=[rows[ref] for ref in cited if ref in rows
+           and rows[ref].get("record_type")=="PDF_KNOWLEDGE"
+           and rows[ref].get("document_type") in {"REGULATION","SOP","GUIDANCE"}]
+    if not legal:
+        return _status("legal_source_alignment",REVIEW,
+            "No cited eligible legal-reference page exists; source relevance cannot be confirmed.",
+            cited_legal_pages=0,lexical_only=True,legal_applicability_verified=False)
+    conflicts=grounding.get("legal_election_type_scope_review_ids") or []
+    if conflicts:
+        return _status("legal_source_alignment",REVIEW,
+            "A cited legal reference has unresolved election-type scope; officer verification required.",
+            cited_legal_pages=len(legal),scope_review_ids=conflicts,
+            lexical_only=True,legal_applicability_verified=False)
+    focus=sorted(t for t in _terms(question) if t not in _LEGAL_FOCUS_STOP)[:10]
+    if not focus:
+        return _status("legal_source_alignment",NA,
+            "No distinctive question terms remain for lexical topic alignment. Citation and article checks still apply.",
+            cited_legal_pages=len(legal),focus_terms=[],
+            lexical_only=True,legal_applicability_verified=False)
+    corpus=" ".join(str(v or "") for doc in legal for v in
+                    (doc.get("title"),doc.get("source_excerpt")))
+    matched=sorted(_terms(corpus).intersection(focus))
+    missing=sorted(set(focus)-set(matched))
+    if missing:
+        return _status("legal_source_alignment",REVIEW,
+            "Question-specific terms are absent from the cited legal pages or their titles; inspect source relevance.",
+            cited_legal_pages=len(legal),focus_terms=focus,
+            matched_terms=matched,missing_terms=missing,
+            lexical_only=True,legal_applicability_verified=False)
+    return _status("legal_source_alignment",PASS,
+        "All distinctive question terms occur in cited legal page text or titles; this is lexical overlap only, not proof of legal relevance.",
+        cited_legal_pages=len(legal),focus_terms=focus,matched_terms=matched,
+        missing_terms=[],lexical_only=True,legal_applicability_verified=False)
+
 def evaluate_answer_quality(question,evidence,answer,cited_ids,
                             profile="SOCIAL_ANALYSIS",grounding=None):
     """Four conservative checks on the post-citation-audit answer.
@@ -191,10 +249,12 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         checks.append(_status("cross_module_consistency",NA,
             "No cross-module comparison or conflicting saved-source classification in this answer."))
 
+    legal_alignment=_legal_reference_alignment(question,rows,cited,grounding)
     needs=[x["id"] for x in checks if x["status"]==REVIEW]
     return {
         "framework":"ASSISTANT_ANSWER_READINESS_V1484",
         "evaluation_type":"DETERMINISTIC_HEURISTICS_NOT_HUMAN_ACCURACY",
+        "legal_source_alignment":legal_alignment,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),
         "not_applicable_checks":sum(x["status"]==NA for x in checks),

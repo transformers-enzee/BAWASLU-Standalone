@@ -327,6 +327,22 @@ def build_briefing(db: Session, access: dict, user_id: int,
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     followup_queue=management_followup_queue(cases,latest_by_case,transitions)
     investigation_readiness=investigation_readiness_board(cases,latest_by_case,transitions)
+    # Compare complete authorization-scoped totals, never the 12-row previews.
+    # An empty case table means there is no human casework sample to evaluate.
+    management_consistency={
+        "schema":"BAWASLU_MANAGEMENT_CASEWORK_RECONCILIATION_V1539",
+        "authorized_cases_in_window":len(cases),
+        "real_casework_sample_available":bool(cases),
+        "followup_attention_count":followup_queue["attention_count"],
+        "readiness_attention_count":investigation_readiness["review_attention_count"],
+        "followup_readiness_counts_match":(
+            followup_queue["attention_count"]==investigation_readiness["review_attention_count"]),
+        "window_scope":"AUTHORIZED_CASES_CREATED_IN_SELECTED_UTC_PERIOD",
+        "source_review_scope":"EVENTS_OBSERVED_IN_SELECTED_UTC_PERIOD",
+        "sample_is_not_formal_officer_acceptance":True,
+        "automatic_casework_actions_created":False,
+        "legal_verdict_confirmed":False,
+    }
     departments = Counter(row.target_department for row in cases)
     provinces = Counter(row.verified_province or "Unverified" for row in cases)
     source_keys = {(row.source_type, row.source_id,
@@ -356,6 +372,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "casework_progress":casework_progress,
         "followup_queue":followup_queue,
         "investigation_readiness":investigation_readiness,
+        "management_consistency":management_consistency,
         "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
         "report_coverage": {
             "assignments_in_period": len(cases),

@@ -127,7 +127,7 @@ def build_interim_template(snapshot, language="id"):
         summary += _t(language,
             f" Dalam penugasan yang dibuat pada periode laporan ini, {total} kasus memiliki petunjuk tindak lanjut operasional, termasuk {urgent} prioritas P1. P1 menunjukkan urutan tinjauan, bukan tingkat pelanggaran.",
             f" Among assignments created in this reporting window, {total} have suggested operational follow-up, including {urgent} P1 review items. P1 is review order, not violation severity.")
-    followup_labels={"RECEIVING_TEAM_ACCEPTANCE":["Konfirmasi penerimaan oleh tim petugas","Confirm receiving-team acceptance"],"CASE_INFORMATION_FOLLOWUP":["Lengkapi informasi kasus yang masih dibutuhkan","Complete missing case information"],"SOURCE_REVIEW_RECHECK":["Periksa ulang catatan sumber dan bukti asli","Recheck original-source review record"],"CHECK_HISTORICAL_SOURCE_REVIEW":["Periksa riwayat audit untuk verifikasi sumber sebelumnya","Inspect audit history for earlier source review"],"SUBMIT_OR_REVISE_LATEST_REPORT":["Lengkapi atau ajukan ulang versi laporan terbaru","Complete or resubmit latest report version"],"CREATE_OFFICER_REPORT":["Susun laporan petugas berdasarkan sumber yang ditinjau","Prepare officer report based on reviewed source"],"INDEPENDENT_REPORT_REVIEW":["Minta telaah independen atas laporan yang diajukan","Request independent review of submitted report"]}
+    followup_labels={"RECEIVING_TEAM_ACCEPTANCE":["Konfirmasi penerimaan oleh tim petugas","Confirm receiving-team acceptance"],"CASE_INFORMATION_FOLLOWUP":["Lengkapi informasi kasus yang masih dibutuhkan","Complete missing case information"],"SOURCE_REVIEW_RECHECK":["Periksa ulang catatan sumber dan bukti asli","Recheck original-source review record"],"CHECK_HISTORICAL_SOURCE_REVIEW":["Periksa riwayat audit untuk verifikasi sumber sebelumnya","Inspect audit history for earlier source review"],"SUBMIT_OR_REVISE_LATEST_REPORT":["Lengkapi atau ajukan ulang versi laporan terbaru","Complete or resubmit latest report version"],"CREATE_OFFICER_REPORT":["Susun laporan petugas berdasarkan sumber yang ditinjau","Prepare officer report based on reviewed source"],"INDEPENDENT_REPORT_REVIEW":["Minta telaah independen atas laporan yang diajukan","Request independent review of submitted report"],"RECONCILE_CASE_REPORT_STATUS":["Selaraskan status kasus dan persetujuan laporan yang tidak konsisten","Reconcile conflicting case and report approval states"]}
     actions = []
     if readiness_enabled:
         counts=readiness.get("group_counts") or {}
@@ -160,8 +160,8 @@ def build_interim_template(snapshot, language="id"):
                 f"Recheck {needs} source-review records that do not meet original-source attestation conditions in this window."))
         if awaiting:
             actions.append(_t(language,
-                f"Rujuk {awaiting} laporan versi terbaru yang diajukan kepada pemeriksa independen berwenang.",
-                f"Route {awaiting} latest-version submitted reports to authorized independent reviewers."))
+                f"Sebelum merujuk {awaiting} laporan terbaru yang diajukan ke pemeriksa independen berwenang, periksa riwayat sumber asli dan status kasus. Pengajuan tidak membuktikan kelengkapan verifikasi.",
+                f"Before routing {awaiting} latest submitted reports to authorized independent reviewers, check source-review history and case status. Submission alone does not prove verification."))
 
     if active:
         actions.append(_t(language,

@@ -6,7 +6,7 @@ NOT proof that the source was never reviewed. No additional DB query, AI calls,
 automatic case actions, authority assumptions, or legal conclusions.
 """
 from collections import Counter
-from .casework import _json
+from .management_investigation_readiness import classify_case_readiness
 
 _LEVEL={"P1":0,"P2":1,"P3":2}
 _ACTIONS={
@@ -17,6 +17,7 @@ _ACTIONS={
     "SUBMIT_OR_REVISE_LATEST_REPORT",
     "CREATE_OFFICER_REPORT",
     "INDEPENDENT_REPORT_REVIEW",
+    "RECONCILE_CASE_REPORT_STATUS",
 }
 
 def management_followup_queue(cases,latest_by_case,transitions):
@@ -34,35 +35,34 @@ def management_followup_queue(cases,latest_by_case,transitions):
         report=latest_by_case.get(case.id)
         report_status=str(report.status) if report else "NO_REPORT"
         review=events.get(case.id)
-        data=_json(review.details_json,{}) if review else {}
-        checked=bool(review and data.get("status")=="SOURCE_CHECKED"
-            and data.get("original_source_opened") is True
-            and data.get("source_type")==case.source_type
-            and str(data.get("source_id"))==str(case.source_id)
-            and data.get("source_url")==case.source_url)
-        if report_status=="SUBMITTED":
-            code,level,actor="INDEPENDENT_REPORT_REVIEW","P1","INDEPENDENT_REVIEWER"
-        elif case.status in {"OPEN","ASSIGNED"}:
-            code,level,actor="RECEIVING_TEAM_ACCEPTANCE","P1","RECEIVING_TEAM"
-        elif case.status=="NEEDS_INFORMATION":
-            code,level,actor="CASE_INFORMATION_FOLLOWUP","P1","ASSIGNED_OFFICER"
-        elif review and not checked:
-            code,level,actor="SOURCE_REVIEW_RECHECK","P1","ASSIGNED_OFFICER"
-        elif report_status in {"DRAFT","RETURNED"} and checked:
-            code,level,actor="SUBMIT_OR_REVISE_LATEST_REPORT","P2","ASSIGNED_OFFICER"
-        elif report_status=="APPROVED":
+        group,reason,step,case_status,report_status,observed,checked=classify_case_readiness(
+            case,report,review)
+        # A submitted report is not ready for independent sign-off simply
+        # because its report status says SUBMITTED. Source-review ambiguity
+        # takes precedence, consistently with the readiness dashboard.
+        if group=="WORKFLOW_COMPLETE":
             approved_excluded+=1
             continue
-        elif not review and case.status=="IN_REVIEW":
+        if reason=="APPROVED_REPORT_WITH_UNRESOLVED_CASE_STATUS":
+            code,level,actor="RECONCILE_CASE_REPORT_STATUS","P1","AUTHORIZED_CASEWORK_REVIEWER"
+        elif group=="EVIDENCE_RECHECK":
+            code,level,actor="SOURCE_REVIEW_RECHECK","P1","ASSIGNED_OFFICER"
+        elif group=="REVIEW_HISTORY_CHECK":
             code,level,actor="CHECK_HISTORICAL_SOURCE_REVIEW","P2","ASSIGNED_OFFICER"
-        elif report_status=="NO_REPORT" and checked:
-            code,level,actor="CREATE_OFFICER_REPORT","P2","ASSIGNED_OFFICER"
-        elif report_status in {"DRAFT","RETURNED"}:
+        elif group=="INDEPENDENT_REVIEW":
+            code,level,actor="INDEPENDENT_REPORT_REVIEW","P1","INDEPENDENT_REVIEWER"
+        elif reason=="RECEIVING_OFFICER_NOT_YET_ACCEPTED":
+            code,level,actor="RECEIVING_TEAM_ACCEPTANCE","P1","RECEIVING_TEAM"
+        elif reason=="CASE_INFORMATION_REQUESTED":
+            code,level,actor="CASE_INFORMATION_FOLLOWUP","P1","ASSIGNED_OFFICER"
+        elif group=="OFFICER_ACTION" and report_status in {"DRAFT","RETURNED"}:
             code,level,actor="SUBMIT_OR_REVISE_LATEST_REPORT","P2","ASSIGNED_OFFICER"
+        elif group=="OFFICER_ACTION" and report_status=="NO_REPORT":
+            code,level,actor="CREATE_OFFICER_REPORT","P2","ASSIGNED_OFFICER"
         else:
-            # Avoid inventing work or an administrative decision from an
-            # unsupported status or an already completed report.
-            continue
+            # Do not claim a clear approval or confidently route an unknown
+            # workflow state from a partially observed time window.
+            code,level,actor="RECONCILE_CASE_REPORT_STATUS","P2","AUTHORIZED_CASEWORK_REVIEWER"
         if code not in _ACTIONS:
             continue
         cid=int(case.id)
@@ -73,7 +73,10 @@ def management_followup_queue(cases,latest_by_case,transitions):
             "responsible_role_hint":actor,
             "case_status":str(case.status),
             "latest_report_status":report_status,
-            "latest_source_review_observed_in_window":bool(review),
+            "latest_source_review_observed_in_window":observed,
+            "aligned_readiness_group":group,
+            "aligned_readiness_reason":reason,
+            "reconciliation_is_workflow_only":True,
             "source_review_attested_in_window":checked,
             "casework_url":f"/inbox?casework=1&case_id={cid}&tab=reports",
             "authorized_case_only":True,
@@ -86,6 +89,8 @@ def management_followup_queue(cases,latest_by_case,transitions):
         "schema":"BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536",
         "case_population":"AUTHORIZED_ASSIGNMENTS_CREATED_IN_SELECTED_UTC_PERIOD",
         "status":"READ_ONLY_OFFICER_ACTION_HINTS",
+        "classification_basis":"SHARED_INVESTIGATION_READINESS_V1539",
+        "independent_review_requires_window_source_attestation":True,
         "authorized_case_population":len(cases),
         "attention_count":len(items),
         "priority_counts":{level:sum(x["priority"]==level for x in items)

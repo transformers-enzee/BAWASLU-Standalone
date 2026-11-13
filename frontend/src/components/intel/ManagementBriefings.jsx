@@ -9,7 +9,8 @@ const FOLLOWUP_ACTIONS={
  CHECK_HISTORICAL_SOURCE_REVIEW:['Check earlier source-review audit','Periksa riwayat pemeriksaan sumber'],
  SUBMIT_OR_REVISE_LATEST_REPORT:['Complete or resubmit latest report','Lengkapi atau ajukan ulang laporan terbaru'],
  CREATE_OFFICER_REPORT:['Prepare source-backed officer report','Siapkan laporan petugas berbasis sumber'],
- INDEPENDENT_REPORT_REVIEW:['Obtain independent report review','Minta pemeriksaan laporan independen']
+ INDEPENDENT_REPORT_REVIEW:['Obtain independent report review','Minta pemeriksaan laporan independen'],
+ RECONCILE_CASE_REPORT_STATUS:['Reconcile conflicting case/report status','Selaraskan status kasus dan laporan yang tidak konsisten'],
 };
 function followupLink(row){
  const url=String(row?.casework_url||'');
@@ -240,6 +241,19 @@ export default function ManagementBriefings(){
     <ol className="ml-5 mt-3 list-decimal space-y-2 text-sm text-[#405366]">{(template.recommended_actions||[]).map((action,index)=><li key={index}>{action}</li>)}</ol>
     <p className="mt-3 text-xs text-[#8a6944]">{t('Recommendations are procedural prompts; no assignments, takedowns, or approvals were created.','Rekomendasi ini hanya panduan prosedur; tidak ada penugasan, takedown, atau persetujuan yang dibuat.')}</p>
    </section>
+   {report.management_consistency?.schema==='BAWASLU_MANAGEMENT_CASEWORK_RECONCILIATION_V1539'&&
+    <section data-testid="briefing-casework-reconciliation" className="rounded-xl border border-[#dce5ec] bg-white p-4">
+     {report.management_consistency.real_casework_sample_available?
+      <p className="text-xs text-[#56697c]">
+       {report.management_consistency.followup_readiness_counts_match?
+        t('Casework consistency verified: the follow-up and readiness counts refer to the same authorized cases.','Konsistensi penugasan terverifikasi: jumlah tindak lanjut dan kesiapan merujuk kasus berizin yang sama.'):
+        t('Management review required: follow-up and readiness counts disagree. Do not use these totals for approval.','Pemeriksaan manajemen diperlukan: jumlah tindak lanjut dan kesiapan berbeda. Jangan gunakan jumlah ini untuk persetujuan.')}
+      </p>:
+      <div data-testid="briefing-no-real-casework" className="text-sm text-[#56697c]">
+       <strong>{t('No officer casework available in this reporting period','Tidak ada penugasan petugas dalam periode laporan ini')}</strong>
+       <p className="mt-1 text-xs">{t('This is an empty authorized casework sample, not a successful officer evaluation or formal acceptance. The source-monitoring figures are separate.','Ini sampel penugasan berizin yang kosong, bukan hasil evaluasi petugas atau penerimaan resmi. Angka pemantauan sumber dihitung terpisah.')}</p>
+      </div>}
+    </section>}
    {readiness.schema==='BAWASLU_INVESTIGATION_READINESS_V1537'&&
     <section data-testid="briefing-investigation-readiness" className="rounded-xl border border-[#dce5ec] bg-white p-4">
      <div className="flex flex-wrap items-start justify-between gap-3">

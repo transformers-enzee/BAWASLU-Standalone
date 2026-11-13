@@ -18,6 +18,53 @@ _REVIEW_CODES={
     "VERIFY_UNRECOGNIZED_CASE_STATE","NO_AUTOMATED_ACTION",
 }
 
+def classify_case_readiness(case,report,event):
+    """Single source of truth for officer review routing and management readiness.
+
+    Observed attestation is a workflow event in the selected report period,
+    not an assessment of legal truth or evidence authenticity.
+    """
+    report_status=str(report.status) if report else "NO_REPORT"
+    case_status=str(case.status or "UNKNOWN")
+    details=_json(event.details_json,{}) if event else {}
+    if not isinstance(details,dict):
+        details={}
+    observed=bool(event)
+    attested=bool(event and details.get("status")=="SOURCE_CHECKED"
+        and details.get("original_source_opened") is True
+        and details.get("source_type")==case.source_type
+        and str(details.get("source_id"))==str(case.source_id)
+        and details.get("source_url")==case.source_url)
+    if case_status=="CLOSED":
+        group,reason,step="WORKFLOW_COMPLETE","CASE_CLOSED_WORKFLOW","NO_AUTOMATED_ACTION"
+    elif report_status=="APPROVED":
+        if case_status in {"OPEN","ASSIGNED","NEEDS_INFORMATION"}:
+            group,reason,step="OTHER_FOLLOWUP","APPROVED_REPORT_WITH_UNRESOLVED_CASE_STATUS","VERIFY_UNRECOGNIZED_CASE_STATE"
+        else:
+            group,reason,step="WORKFLOW_COMPLETE","LATEST_REPORT_WORKFLOW_APPROVED","NO_AUTOMATED_ACTION"
+    elif report_status=="SUBMITTED":
+        if attested:
+            group,reason,step="INDEPENDENT_REVIEW","SUBMITTED_WITH_WINDOW_SOURCE_ATTESTATION","INDEPENDENT_REVIEW_OF_SUBMITTED_REPORT"
+        elif observed:
+            group,reason,step="EVIDENCE_RECHECK","SUBMITTED_WITH_UNRESOLVED_WINDOW_SOURCE_REVIEW","RECHECK_ORIGINAL_SOURCE"
+        else:
+            group,reason,step="REVIEW_HISTORY_CHECK","SUBMITTED_WITHOUT_WINDOW_SOURCE_REVIEW_EVENT","INSPECT_EARLIER_AUDIT_HISTORY"
+    elif case_status in {"OPEN","ASSIGNED"}:
+        group,reason,step="OFFICER_ACTION","RECEIVING_OFFICER_NOT_YET_ACCEPTED","RECEIVING_OFFICER_ACCEPTANCE"
+    elif case_status=="NEEDS_INFORMATION":
+        group,reason,step="OFFICER_ACTION","CASE_INFORMATION_REQUESTED","COMPLETE_CASE_INFORMATION"
+    elif observed and not attested:
+        group,reason,step="EVIDENCE_RECHECK","LATEST_WINDOW_SOURCE_CHECK_NOT_ATTESTED","RECHECK_ORIGINAL_SOURCE"
+    elif not observed:
+        group,reason,step="REVIEW_HISTORY_CHECK","NO_WINDOW_SOURCE_REVIEW_EVENT","INSPECT_EARLIER_AUDIT_HISTORY"
+    elif attested and report_status in {"NO_REPORT","DRAFT","RETURNED"}:
+        group,reason,step="OFFICER_ACTION","SOURCE_CHECK_LOGGED_REPORT_DECISION_PENDING","OFFICER_REPORT_DECISION"
+    else:
+        group,reason,step="OTHER_FOLLOWUP","WORKFLOW_STATUS_NOT_CLASSIFIED","VERIFY_UNRECOGNIZED_CASE_STATE"
+    assert step in _REVIEW_CODES
+    return group,reason,step,case_status,report_status,observed,attested
+
+
 def investigation_readiness_board(cases,latest_by_case,transitions):
     """One conservative classification per case, including workflow-complete cases.
 
@@ -33,45 +80,9 @@ def investigation_readiness_board(cases,latest_by_case,transitions):
     preview=[]
     for case in cases:
         report=latest_by_case.get(case.id)
-        report_status=str(report.status) if report else "NO_REPORT"
-        case_status=str(case.status or "UNKNOWN")
         event=source_events.get(case.id)
-        details=_json(event.details_json,{}) if event else {}
-        if not isinstance(details,dict):
-            details={}
-        observed=bool(event)
-        attested=bool(event and details.get("status")=="SOURCE_CHECKED"
-            and details.get("original_source_opened") is True
-            and details.get("source_type")==case.source_type
-            and str(details.get("source_id"))==str(case.source_id)
-            and details.get("source_url")==case.source_url)
-        if case_status=="CLOSED":
-            group,reason,step="WORKFLOW_COMPLETE","CASE_CLOSED_WORKFLOW","NO_AUTOMATED_ACTION"
-        elif report_status=="APPROVED":
-            if case_status in {"OPEN","ASSIGNED","NEEDS_INFORMATION"}:
-                group,reason,step="OTHER_FOLLOWUP","APPROVED_REPORT_WITH_UNRESOLVED_CASE_STATUS","VERIFY_UNRECOGNIZED_CASE_STATE"
-            else:
-                group,reason,step="WORKFLOW_COMPLETE","LATEST_REPORT_WORKFLOW_APPROVED","NO_AUTOMATED_ACTION"
-        elif report_status=="SUBMITTED":
-            if attested:
-                group,reason,step="INDEPENDENT_REVIEW","SUBMITTED_WITH_WINDOW_SOURCE_ATTESTATION","INDEPENDENT_REVIEW_OF_SUBMITTED_REPORT"
-            elif observed:
-                group,reason,step="EVIDENCE_RECHECK","SUBMITTED_WITH_UNRESOLVED_WINDOW_SOURCE_REVIEW","RECHECK_ORIGINAL_SOURCE"
-            else:
-                group,reason,step="REVIEW_HISTORY_CHECK","SUBMITTED_WITHOUT_WINDOW_SOURCE_REVIEW_EVENT","INSPECT_EARLIER_AUDIT_HISTORY"
-        elif case_status in {"OPEN","ASSIGNED"}:
-            group,reason,step="OFFICER_ACTION","RECEIVING_OFFICER_NOT_YET_ACCEPTED","RECEIVING_OFFICER_ACCEPTANCE"
-        elif case_status=="NEEDS_INFORMATION":
-            group,reason,step="OFFICER_ACTION","CASE_INFORMATION_REQUESTED","COMPLETE_CASE_INFORMATION"
-        elif observed and not attested:
-            group,reason,step="EVIDENCE_RECHECK","LATEST_WINDOW_SOURCE_CHECK_NOT_ATTESTED","RECHECK_ORIGINAL_SOURCE"
-        elif not observed:
-            group,reason,step="REVIEW_HISTORY_CHECK","NO_WINDOW_SOURCE_REVIEW_EVENT","INSPECT_EARLIER_AUDIT_HISTORY"
-        elif attested and report_status in {"NO_REPORT","DRAFT","RETURNED"}:
-            group,reason,step="OFFICER_ACTION","SOURCE_CHECK_LOGGED_REPORT_DECISION_PENDING","OFFICER_REPORT_DECISION"
-        else:
-            group,reason,step="OTHER_FOLLOWUP","WORKFLOW_STATUS_NOT_CLASSIFIED","VERIFY_UNRECOGNIZED_CASE_STATE"
-        assert step in _REVIEW_CODES
+        group,reason,step,case_status,report_status,observed,attested=classify_case_readiness(
+            case,report,event)
         counts[group]+=1
         categories[reason]+=1
         if group=="WORKFLOW_COMPLETE":

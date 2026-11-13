@@ -97,12 +97,20 @@ def test_returned_report_needs_revision():
     a=action(follow(case(),reports={1:report("RETURNED")},events=[review()]))
     assert a["action_code"]=="SUBMIT_OR_REVISE_LATEST_REPORT"
 
-def test_submitted_latest_report_takes_independent_review_priority():
+def test_submitted_report_without_window_source_event_requires_history_inspection():
     a=action(follow(case(),reports={1:report("SUBMITTED")}))
+    assert a["action_code"]=="CHECK_HISTORICAL_SOURCE_REVIEW"
+    assert a["priority"]=="P2"
+    assert a["responsible_role_hint"]=="ASSIGNED_OFFICER"
+    assert a["source_review_attested_in_window"] is False
+    assert a["aligned_readiness_group"]=="REVIEW_HISTORY_CHECK"
+
+def test_submitted_with_window_source_attestation_routes_to_independent_review():
+    a=action(follow(case(),reports={1:report("SUBMITTED")},events=[review()]))
     assert a["action_code"]=="INDEPENDENT_REPORT_REVIEW"
     assert a["priority"]=="P1"
     assert a["responsible_role_hint"]=="INDEPENDENT_REVIEWER"
-    assert a["source_review_attested_in_window"] is False
+    assert a["source_review_attested_in_window"] is True
 
 def test_latest_approved_report_not_reassigned():
     x=follow(case(),reports={1:report("APPROVED")})

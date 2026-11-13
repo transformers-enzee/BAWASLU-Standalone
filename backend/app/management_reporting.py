@@ -95,6 +95,19 @@ def _safe_original_source_url(value):
         return False
 
 
+def _source_quality_review_priorities(text_missing,url_missing,text_conflict,policy_missing,unknown_time):
+    """Bounded actions from count aggregates, not inferred case outcomes."""
+    checks=(
+        ("VERIFY_ORIGINAL_POST_TEXT","P1",text_missing),
+        ("VERIFY_ORIGINAL_SOURCE_URL","P1",url_missing),
+        ("RECONCILE_CONFLICTING_SAVED_EXCERPTS","P1",text_conflict),
+        ("CHECK_CURRENT_PLATFORM_RULES","P2",policy_missing),
+        ("RECOVER_EXPLICIT_PUBLICATION_TIME","P2",unknown_time),
+    )
+    return [{"code":code,"priority":priority,"affected_sources":int(count)}
+            for code,priority,count in checks if int(count or 0)>0]
+
+
 def monitoring_snapshot_from_findings(findings, start, end, topic=""):
     """Reconcile authorized links before applying a topic or counting a post.
 
@@ -216,6 +229,11 @@ def monitoring_snapshot_from_findings(findings, start, end, topic=""):
             "counts_are_not_official_violations":True,
             "time_basis":"EXPLICIT_ORIGINAL_PUBLICATION_TIME",
             "sample_completeness_verified":False,
+            "review_priorities":_source_quality_review_priorities(
+                source_text_missing,source_url_missing,source_original_text_conflicts,
+                source_policy_unconfigured,unknown_dates),
+            "undated_sources_outside_published_denominator":unknown_dates,
+            "review_priorities_are_not_casework_actions":True,
         },
         "publication_time_basis":"EXPLICIT_UTC_OR_OFFSET_SOURCE_PUBLISHED_AT",
         "period_semantics":"SOURCE_PUBLICATION_WINDOW_NOT_CAPTURE_WINDOW",

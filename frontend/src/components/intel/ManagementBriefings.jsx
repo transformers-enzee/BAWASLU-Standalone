@@ -127,6 +127,23 @@ export default function ManagementBriefings(){
       <p className="mt-1">{t("Conflicting saved excerpts","Kutipan tersimpan berbeda")}: {monitoring.source_quality?.conflicting_saved_original_text??0} · {t("Unconfigured platform policies","Aturan platform belum tersedia")}: {monitoring.source_quality?.platform_policy_reference_unconfigured??0}</p>
       <p className="mt-1 text-[#876532]">{t("These counts cover unique dated posts in the selected authorized sample, not all captured posts or proven violations.","Angka ini mencakup unggahan unik dengan waktu valid dalam sampel berizin, bukan seluruh unggahan atau pelanggaran yang terbukti.")}</p>
     </div>
+    {(monitoring.source_quality?.review_priorities||[]).length>0&&
+     <div data-testid="briefing-evidence-follow-up" className="mt-3 rounded-lg border border-[#dce5ec] bg-white p-3 text-xs">
+      <strong>{t('Recommended source verification (sampled monitoring)','Verifikasi sumber yang disarankan (sampel pemantauan)')}</strong>
+      <ul className="mt-2 space-y-1">
+       {(monitoring.source_quality.review_priorities||[]).map(item=>{
+        const names={
+         VERIFY_ORIGINAL_POST_TEXT:t('Recover original post text','Cari teks postingan asli'),
+         VERIFY_ORIGINAL_SOURCE_URL:t('Validate original source URL','Validasi URL sumber asli'),
+         RECONCILE_CONFLICTING_SAVED_EXCERPTS:t('Reconcile conflicting excerpts','Cocokkan kutipan yang berbeda'),
+         CHECK_CURRENT_PLATFORM_RULES:t('Locate current platform rules','Cari aturan platform terkini'),
+         RECOVER_EXPLICIT_PUBLICATION_TIME:t('Confirm original publication time','Konfirmasi waktu publikasi asli')
+        };
+        return <li key={item.code} className="flex flex-wrap gap-2"><strong>{item.priority}</strong><span>{names[item.code]||item.code}:</span><span>{item.affected_sources}</span></li>;
+       })}
+      </ul>
+      <p className="mt-2 text-[#876532]">{t('These are source-quality tasks, not violation findings or automatic case assignments. Undated sources are outside the dated-post denominator.','Ini adalah pemeriksaan kualitas sumber, bukan temuan pelanggaran atau penugasan otomatis. Sumber tanpa waktu tidak termasuk dalam jumlah unggahan bertanggal.')}</p>
+     </div>}
     <p data-testid="briefing-signal-overlap" className="mt-3 text-xs text-[#866b43]">
       {t('Preliminary issue categories can overlap for the same post and must not be summed.',
          'Kategori indikasi awal dapat tumpang tindih untuk unggahan yang sama dan tidak boleh dijumlahkan.')}

@@ -16,6 +16,7 @@ from .access import profile, has
 from .platform_policy_screening import screen_platform_text
 from .oversight_legal import STEPS
 from .assistant_knowledge import retrieve_knowledge
+from .finding_source_review import source_review_plan
 from .finding_review_readiness import build_finding_review_readiness
 
 router = APIRouter(prefix="/api/finding-assessments", tags=["finding-assessments"])
@@ -84,6 +85,7 @@ def assess_finding(db, permission, finding):
         ordered.append(chosen)
         linked_variants.append(variants)
     candidates = []
+    source_outcomes=[]
     status_counts = Counter()
     missing_original_text = 0
     missing_original_url = 0
@@ -101,6 +103,7 @@ def assess_finding(db, permission, finding):
                 outcome={**outcome,"status":"CONTEXT_REVIEW_REQUIRED"}
         else:
             outcome=min(outcomes,key=lambda row:POLICY_PRIORITY.get(row["status"],10))
+        source_outcomes.append(outcome)
         status_counts[outcome["status"]] += 1
         if outcome.get("policy_url"):
             platforms[outcome["platform_key"]] = {
@@ -228,6 +231,7 @@ def assess_finding(db, permission, finding):
         "paid_provider_called": False,
     }
     assessment["review_readiness"] = build_finding_review_readiness(finding, assessment)
+    assessment["source_investigation"] = source_review_plan(ordered,linked_variants,source_outcomes,flagged)
     return assessment
 
 
@@ -320,4 +324,11 @@ def finding_assessments(finding_id: str, user: User = Depends(current_user),
     assessment=assess_finding(db, permission, finding)
     assessment["follow_up"].update(
         contextual_casework_links(db,permission,user.id,finding))
+    # Only the casework module may authorize actionable URLs. Never synthesize
+    # links from a canonical source ID or a preliminary policy status.
+    allowed={(item["source_id"],item["campaign_id"]):item.get("casework_url")
+             for item in assessment["follow_up"].get("source_actions",[])
+             if item.get("casework_url")}
+    for row in assessment["source_investigation"]["actions"]:
+        row["casework_url"]=allowed.get((row["result_id"],row["campaign_id"]))
     return assessment

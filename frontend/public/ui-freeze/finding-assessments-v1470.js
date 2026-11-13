@@ -46,6 +46,53 @@
     '<p class="tiny muted">'+text('No additional source gaps detected. Official law and platform currentness remain unverified.','Tidak terdeteksi celah sumber tambahan. Keberlakuan hukum dan aturan platform tetap belum diverifikasi.')+'</p>')+
    '</section>';
  }
+
+ const SOURCE_STEPS={
+  RECOVER_ORIGINAL_POST_TEXT:['Recover original post text','Temukan teks postingan asli'],
+  RECOVER_OR_VALIDATE_ORIGINAL_POST_URL:['Locate and validate original source URL','Temukan dan validasi URL sumber asli'],
+  RECONCILE_SAVED_SOURCE_VARIANTS:['Resolve conflicting saved versions','Cocokkan versi sumber tersimpan yang berbeda'],
+  VERIFY_ORIGINAL_POST_CONTEXT_AND_PUBLICATION:['Verify context and publication time','Periksa konteks dan waktu publikasi'],
+  COMPARE_CURRENT_PLATFORM_RULES:['Compare current platform policy with original content','Bandingkan aturan platform terkini dengan konten asli'],
+  LOCATE_CURRENT_PLATFORM_POLICY:['Locate official platform policy','Cari aturan platform resmi'],
+  CHECK_ELECTORAL_LAW_AND_JURISDICTION:['Check relevant law and jurisdiction with an officer','Periksa hukum dan kewenangan dengan petugas'],
+  OFFICER_DECISION_REQUIRED:['Officer decision required before action','Keputusan petugas diperlukan sebelum tindakan']
+ };
+ function sourceInvestigationHtml(plan){
+  if(!plan||plan.schema!=='BAWASLU_SOURCE_INVESTIGATION_PLAN_V1533')return '';
+  const actions=Array.isArray(plan.actions)?plan.actions:[];
+  const draw=row=>{
+   const original=safeUrl(row.source_url);
+   const rawCase=String(row.casework_url||'');
+   const casework=/^\/inbox(?:\?|$)/.test(rawCase)?safeUrl(rawCase):'';
+   const steps=(row.officer_check_codes||[]).slice(0,8);
+   return '<li class="soft small" style="margin:8px 0">'+
+    '<strong>'+escapeHtml(row.priority||'P3')+' · '+escapeHtml(row.source_id||row.result_id||'Unidentified saved source')+
+    ' · '+escapeHtml(row.platform||'Unknown')+'</strong>'+
+    '<div class="tiny muted">'+text('Policy text screening: ','Pemeriksaan teks aturan: ')+escapeHtml(row.policy_status||'INSUFFICIENT_SOURCE')+
+    ' · '+text('Saved links: ','Tautan tersimpan: ')+Number(row.linked_variants||0)+'</div>'+
+    (row.saved_text_conflict||row.saved_url_conflict||row.saved_platform_conflict?
+      '<p class="tiny muted">'+text('Conflicting saved text, URL or platform. Verify before acting.','Teks, URL, atau platform tersimpan berbeda. Periksa sebelum bertindak.')+'</p>':'')+
+    '<ol style="padding-left:20px;margin:6px 0">'+steps.map(code=>
+       '<li>'+escapeHtml((SOURCE_STEPS[code]||[code,code])[lang==='id'?1:0])+'</li>').join('')+'</ol>'+
+    (original?'<a href="'+escapeHtml(original)+'" target="_blank" rel="noopener noreferrer">'+
+      text('Open saved original URL (unverified)','Buka URL asli tersimpan (belum diverifikasi)')+' ↗</a>':
+      '<span class="tiny muted">'+text('No valid original URL available','URL asli tidak tersedia atau tidak valid')+'</span>')+
+    (casework?' · <a href="'+escapeHtml(casework)+'" target="_top" rel="noopener noreferrer">'+
+      text('Open authorized Inbox casework','Buka penugasan Inbox sesuai hak akses')+' ↗</a>':'')+
+    '</li>';
+  };
+  return '<section data-testid="finding-source-investigation" class="soft" style="padding:12px;margin:12px 0">'+
+   '<strong>'+text('Source-by-source investigation checklist','Daftar pemeriksaan setiap sumber')+
+   ' · '+Number(plan.source_count||0)+'</strong>'+
+   '<p class="tiny muted">'+text('Saved sources are deduplicated. Review order is not legal severity. No source-level violation is confirmed.','Sumber tersimpan telah digabung tanpa duplikat. Urutan pemeriksaan bukan tingkat pelanggaran. Belum ada pelanggaran sumber yang terbukti.')+'</p>'+
+   (actions.length?'<ol style="padding-left:20px">'+actions.slice(0,3).map(draw).join('')+'</ol>'+
+    (actions.length>3?'<details data-testid="finding-more-source-checks"><summary>'+
+      text('View remaining source checks','Lihat pemeriksaan sumber lainnya')+' · '+(actions.length-3)+'</summary>'+
+      '<ol style="padding-left:20px">'+actions.slice(3).map(draw).join('')+'</ol></details>':'')+
+    (plan.sampled?'<p class="tiny muted">'+text('Only the first 12 priority sources are shown; examine the full authorized finding for the remainder.','Hanya 12 sumber prioritas ditampilkan; periksa temuan berizin untuk sumber lainnya.')+'</p>':''):
+    '<p class="tiny muted">'+text('No saved sources available for per-source review.','Tidak ada sumber tersimpan untuk diperiksa.')+'</p>')+
+   '</section>';
+ }
  function legalHtml(data){
    const refs=data.approved_reference_pages||[];
    const steps=data.recommended_follow_up||[];
@@ -148,6 +195,7 @@
        provenance.source_platform_conflicts||0].join('/'):'')+
      '</p>'+
     readinessHtml(result.review_readiness)+
+    sourceInvestigationHtml(result.source_investigation)+
     '<div role="tablist" aria-label="Assessment categories" style="display:flex;gap:8px;margin:12px 0">'+
     '<button type="button" role="tab" data-review-tab="legal" aria-selected="true" class="button primary">'+text('Legal Assessment','Penilaian Hukum')+'</button>'+
     '<button type="button" role="tab" data-review-tab="policy" aria-selected="false" class="button">'+text('Platform Policy','Aturan Platform')+'</button></div>'+

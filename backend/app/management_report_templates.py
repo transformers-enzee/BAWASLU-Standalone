@@ -125,6 +125,31 @@ def build_interim_template(snapshot, language="id"):
         actions.append(_t(language,
             "Prioritaskan pemeriksaan sumber asli pada unggahan Inbox bertanda dugaan pelanggaran; jangan anggap sinyal otomatis sebagai kesimpulan hukum.",
             "Prioritize original-source verification for flagged Inbox posts; an automated signal is not a legal finding."))
+    if monitoring_enabled:
+        quality=monitoring.get("source_quality") or {}
+        for row in (quality.get("review_priorities") or [])[:5]:
+            count=int(row.get("affected_sources") or 0)
+            code=row.get("code")
+            if code=="VERIFY_ORIGINAL_POST_TEXT":
+                actions.append(_t(language,
+                    f"Periksa teks unggahan asli untuk {count} sumber yang terpantau sebelum membuat rekomendasi.",
+                    f"Verify original post text for {count} monitored sources before recommending follow-up."))
+            elif code=="VERIFY_ORIGINAL_SOURCE_URL":
+                actions.append(_t(language,
+                    f"Verifikasi tautan asli untuk {count} sumber; tautan yang aman belum berarti konten telah diperiksa.",
+                    f"Validate original links for {count} sources; a safe URL does not verify the content."))
+            elif code=="RECONCILE_CONFLICTING_SAVED_EXCERPTS":
+                actions.append(_t(language,
+                    f"Cocokkan kutipan berbeda pada {count} sumber tersimpan dengan postingan aslinya.",
+                    f"Reconcile conflicting saved excerpts for {count} sources against the original posts."))
+            elif code=="CHECK_CURRENT_PLATFORM_RULES":
+                actions.append(_t(language,
+                    f"Cari dan telaah aturan resmi platform untuk {count} sumber dengan referensi aturan yang belum tersedia.",
+                    f"Locate current official platform policies for {count} sources without configured rules."))
+            elif code=="RECOVER_EXPLICIT_PUBLICATION_TIME":
+                actions.append(_t(language,
+                    f"Konfirmasi waktu publikasi asli untuk {count} sumber tanpa tanggal andal sebelum menilai periode.",
+                    f"Confirm original publication times for {count} sources lacking reliable timestamps before assigning them to the reporting period."))
     coverage = snapshot.get("report_coverage") or {}
     case_count = int(metrics.get("assignments") or 0)
     sampled = len(findings)

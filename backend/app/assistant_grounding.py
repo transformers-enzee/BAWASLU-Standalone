@@ -251,6 +251,37 @@ def _message(language, key):
     return choices[key].get(language,choices[key]["en"])
 
 
+def _officer_review_steps(cited, records, reasons, legal_question, has_legal_flags):
+    """Advisory steps only. Uses only IDs in the displayed, authorized citations.
+
+    Never issues a casework action, records an approval or infers a legal
+    finding. No uncited or excess source is exposed through the steps.
+    """
+    social=[ref for ref in cited if records[ref].get("record_type")=="SOCIAL_LISTENING"]
+    formal=[ref for ref in cited if records[ref].get("record_type")=="FORMAL_INTELLIGENCE"]
+    pdf=[ref for ref in cited if records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+    steps=[]
+    def add(code,refs):
+        steps.append({"code":code,"source_ids":refs[:12],"status":"NOT_STARTED",
+                      "officer_action_only":True})
+    if social:
+        add("VERIFY_ORIGINAL_POST_CONTEXT",social)
+    if "CITATION_INTEGRITY" in reasons:
+        add("RECHECK_MISSING_OR_OMITTED_REFERENCES",cited)
+    if "LEGAL_ARTICLE_ATTRIBUTION" in reasons:
+        add("MATCH_CITED_LEGAL_PASSAGES",pdf)
+    if "CITED_UNREVIEWED_PDF" in reasons:
+        add("REQUEST_DOCUMENT_REVIEW",[
+            ref for ref in pdf if records[ref].get("review_status")!="OFFICER_REVIEWED"])
+    if (legal_question or has_legal_flags) and not pdf:
+        add("LOCATE_AUTHORIZED_LEGAL_REFERENCE",[])
+    if "CATEGORICAL_LEGAL_OUTCOME" in reasons:
+        add("VERIFY_OFFICIAL_LEGAL_OUTCOME",formal+pdf)
+    if "ENFORCEMENT_RECOMMENDATION" in reasons:
+        add("CONFIRM_AUTHORITY_BEFORE_ANY_ACTION",formal+pdf)
+    return steps
+
+
 def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                            profile="SOCIAL_ANALYSIS", language="id"):
     """Reconcile cited IDs against the ACTUAL displayed answer.
@@ -344,6 +375,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         review_reasons.append("CITED_UNREVIEWED_PDF")
     if excess or rejected:
         review_reasons.append("CITATION_INTEGRITY")
+    review_steps=_officer_review_steps(
+        cited,records,review_reasons,needs_legal_warning,
+        bool(enforcement_flags or categorical_outcome_flags))
     metadata={
         "audit_version":"ASSISTANT_GROUNDING_V1483",
         "scope":"ONLY_CURRENTLY_AUTHORIZED_SELECTED_RECORDS",
@@ -383,6 +417,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_verdict_confirmed":False,
         "legal_review_reason_codes":review_reasons,
         "legal_review_reason_count":len(review_reasons),
+        "officer_review_steps":review_steps,
+        "officer_review_steps_are_advisory":True,
+        "officer_review_steps_auto_completed":False,
         "legal_action_ready":False,
         "source_truth_verified":False,
         "source_cards_are_citations":False,

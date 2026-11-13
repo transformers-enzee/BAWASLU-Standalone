@@ -219,6 +219,26 @@ export default function IntelligenceAssistant(){
         {m.grounding?.grounding_audit&&!showQa&&<div data-testid="assistant-source-caution"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
+          {(m.grounding.grounding_audit.officer_review_steps||[]).length>0&&
+           <details data-testid="assistant-officer-review-steps" className="mt-2">
+             <summary className="cursor-pointer font-semibold text-[#52657a]">{(m.answer_language||'id')==='id'?'Langkah pemeriksaan petugas':'Officer review steps'} · {m.grounding.grounding_audit.officer_review_steps.length}</summary>
+             <ol className="mt-2 list-decimal space-y-2 pl-5">
+              {m.grounding.grounding_audit.officer_review_steps.map((step,j)=>{
+               const id=(m.answer_language||'id')==='id';
+               const labels={
+                VERIFY_ORIGINAL_POST_CONTEXT:id?'Periksa postingan asli, konteks, dan waktu publikasi.':'Inspect the original post, context, and publication time.',
+                RECHECK_MISSING_OR_OMITTED_REFERENCES:id?'Periksa rujukan yang tidak tersedia atau terpotong.':'Recheck missing or omitted source references.',
+                MATCH_CITED_LEGAL_PASSAGES:id?'Cocokkan setiap pasal dengan halaman PDF yang dirujuk.':'Match each legal article to its cited PDF page.',
+                REQUEST_DOCUMENT_REVIEW:id?'Minta penelaahan dokumen yang belum ditinjau petugas.':'Request officer review of unreviewed documents.',
+                LOCATE_AUTHORIZED_LEGAL_REFERENCE:id?'Cari dokumen hukum resmi yang dapat diakses sebelum menyimpulkan.':'Locate authorized official legal text before drawing conclusions.',
+                VERIFY_OFFICIAL_LEGAL_OUTCOME:id?'Verifikasi putusan atau status hukum melalui catatan resmi.':'Verify any asserted legal outcome against official records.',
+                CONFIRM_AUTHORITY_BEFORE_ANY_ACTION:id?'Pastikan fakta kasus, kewenangan, dan dasar hukum sebelum tindakan.':'Confirm case facts, authority, and law before any action.'
+               };
+               return <li key={step.code+'-'+j}><span>{labels[step.code]||step.code}</span>{step.source_ids?.length>0&&<span className="block text-[#718096]">{(id?'Rujukan ditampilkan: ':'Displayed references: ')+step.source_ids.join(', ')}</span>}</li>;
+              })}
+             </ol>
+             <p className="mt-2 text-[#718096]">{(m.answer_language||'id')==='id'?'Daftar ini hanya panduan. Tidak ada tindakan atau persetujuan otomatis.':'Guidance only. No action or approval is performed automatically.'}</p>
+           </details>}
           {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
           {(m.grounding.grounding_audit.legal_review_reason_count||0)>1&&

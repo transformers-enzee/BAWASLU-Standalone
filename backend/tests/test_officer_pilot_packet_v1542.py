@@ -172,7 +172,10 @@ def test_source_text_title_urls_and_audit_notes_not_exposed_in_packet():
         assert "PRIVATE_CASE_TITLE" not in content
         assert "PRIVATE_FULL_EVIDENCE" not in content
         assert "private.example.invalid" not in content
-        assert "Officer " not in content
+        # Column headers intentionally say "Officer assessment"; verify
+        # actual fixture identities, not the header vocabulary, are absent.
+        assert "Officer 1" not in content
+        assert "Officer 2" not in content
     finally:db.close()
 
 def test_csv_formula_injection_prefixes_untrusted_case_status():

@@ -1,0 +1,3 @@
+# BAWASLU v154.3 QA privacy-contract correction
+
+The v154.2 staging build ran 784 backend tests: 783 passed and one test failed because it searched for the generic text `Officer ` in the entire CSV output, including the deliberately named blank worksheet columns `Officer assessment` and `Officer reviewer`. The actual private case title, source text and source URL exclusion assertions passed. v154.3 changes the remaining check to assert concrete fixture officer names are absent from the exported payload. Both human assessment fields remain present but blank. Sequential backend/frontend version updated and full staging QA re-run. No database writes or schema changes.

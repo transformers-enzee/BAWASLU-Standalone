@@ -1,0 +1,5 @@
+# v155.6: Pilot saved-source snapshot reconciliation
+
+The on-demand officer pilot shortlist remains based on the permission-scoped Inbox window, but cached source-availability indicators could be stale. During the existing bounded recheck of the 12 displayed sources, read the currently saved post text and canonical URL (booleans only), plus the newest assessment version. Recalculate missing text/URL reasons and disable a new casework handoff when evidence is now missing. If a previously absent URL is now saved and source eligibility remains valid, restore the ordinary permission-rechecked human casework link. Existing visible cases remain accessible for further review even when underlying evidence is incomplete.
+
+Report availability changes and assessment version drift relative to the Inbox snapshot only when the snapshot version was present. Never return original post text or raw URLs in the pilot response. Keep full-window snapshot counts explicitly separate from fresh preview counts, legal approval, verified incident jurisdiction, and source authenticity. No database schema changes, paid calls, live case creation, or officer approval.

@@ -478,11 +478,16 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     # Recheck the displayed shortlist against current saved source and role
     # access; the permission-scoped Inbox snapshot may have become stale.
     from .jurisdiction_review import scoped_post
+    from .officer_pilot_intake import _original_url_available
+    from urllib.parse import urlencode
     counts={"LATEST_SAVED_ELIGIBLE":0,"LATEST_ASSESSMENT_NOT_RELEVANT":0,
             "SOURCE_NOT_IN_AUTHORIZED_SCOPE":0}
+    changed_availability=0
+    changed_assessment=0
     for item in result["items"]:
+        post=None
         try:
-            _,_,relevant=scoped_post(db,p,item["campaign_id"],item["source_id"])
+            campaign,post,relevant=scoped_post(db,p,item["campaign_id"],item["source_id"])
             state="LATEST_SAVED_ELIGIBLE" if relevant else "LATEST_ASSESSMENT_NOT_RELEVANT"
         except (PermissionError,ValueError):
             state="SOURCE_NOT_IN_AUTHORIZED_SCOPE"
@@ -490,6 +495,49 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
         item["latest_saved_eligibility_checked"]=True
         item["source_truth_verified"]=False
         counts[state]+=1
+        if post is not None:
+            # Check the current saved post and latest assessment, not the
+            # potentially cached Inbox evidence passed into the shortlist.
+            assessment=(db.query(EvidenceAssessment).filter_by(
+                campaign_id=campaign.id,result_id=post.id).order_by(
+                EvidenceAssessment.assessment_version.desc(),
+                EvidenceAssessment.id.desc()).first())
+            latest_version=(assessment.assessment_version if assessment else None)
+            snapshot_version=item.get("inbox_snapshot_assessment_version")
+            item["latest_saved_assessment_version"]=latest_version
+            item["assessment_version_changed_since_inbox"]=(
+                str(latest_version)!=str(snapshot_version)
+                if snapshot_version is not None and latest_version is not None else None)
+            if item["assessment_version_changed_since_inbox"] is True:
+                changed_assessment+=1
+            old_text=item["source_text_available"]
+            old_url=item["original_source_url_available"]
+            has_text=bool(str(post.text_content or "").strip())
+            has_url=_original_url_available(post.canonical_url)
+            item["source_text_available"]=has_text
+            item["original_source_url_available"]=has_url
+            item["missing_saved_evidence_fields"]=(
+                (["ORIGINAL_TEXT"] if not has_text else [])+
+                (["ORIGINAL_URL"] if not has_url else []))
+            item["source_recovery_reason"]=(
+                "MISSING_TEXT_AND_URL" if not has_text and not has_url else
+                "MISSING_ORIGINAL_TEXT" if not has_text else
+                "MISSING_ORIGINAL_URL" if not has_url else
+                "NO_RECOVERY_NEEDED")
+            item["source_availability_changed_since_inbox"]=(
+                old_text!=has_text or old_url!=has_url)
+            if item["source_availability_changed_since_inbox"]:
+                changed_availability+=1
+            if state=="LATEST_SAVED_ELIGIBLE" and not item["case_already_exists_in_visible_scope"]:
+                if has_text and has_url:
+                    item["casework_link"]="/inbox?"+urlencode({
+                        "casework":"1","source_type":"SOCIAL",
+                        "source_id":item["source_id"],"campaign_id":item["campaign_id"],
+                        "tab":"assignments"})
+                    item["review_step"]="REVIEW_IN_INBOX"
+                else:
+                    item["casework_link"]=None
+                    item["review_step"]="RECOVER_SOURCE_EVIDENCE"
         if state!="LATEST_SAVED_ELIGIBLE":
             item["casework_link"]=None
             item["review_step"]="RECHECK_SAVED_SOURCE"
@@ -497,7 +545,18 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
                 item["source_link"]=None
                 item["visible_open_case_id"]=None
                 item["case_already_exists_in_visible_scope"]=False
+                item["incident_jurisdiction_verified"]=False
+                item["verified_incident_province"]=""
     result["preview_latest_saved_eligible_count"]=counts["LATEST_SAVED_ELIGIBLE"]
+    result["preview_source_availability_changed_count"]=changed_availability
+    result["preview_assessment_version_changed_count"]=changed_assessment
+    result["preview_current_saved_text_available_count"]=sum(int(
+        item.get("source_text_available",False)) for item in result["items"]
+        if item["latest_saved_eligibility"]!="SOURCE_NOT_IN_AUTHORIZED_SCOPE")
+    result["preview_current_saved_url_available_count"]=sum(int(
+        item.get("original_source_url_available",False)) for item in result["items"]
+        if item["latest_saved_eligibility"]!="SOURCE_NOT_IN_AUTHORIZED_SCOPE")
+    result["availability_counts_cover_authorized_window_only_as_inbox_snapshot"]=True
     result["preview_latest_irrelevant_count"]=counts["LATEST_ASSESSMENT_NOT_RELEVANT"]
     result["preview_now_unavailable_count"]=counts["SOURCE_NOT_IN_AUTHORIZED_SCOPE"]
     result["preview_latest_saved_recheck_count"]=sum(counts.values())

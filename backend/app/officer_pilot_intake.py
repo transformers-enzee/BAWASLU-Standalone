@@ -67,6 +67,7 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
                     "platform":str(post.get("platform") or "Unknown")[:55],
                     "review_signal":_REASONS[kind],
                     "saved_assessment_only":True,
+                    "inbox_snapshot_assessment_version":post.get("assessment_version"),
                     "source_text_available":has_text,
                     "original_source_url_available":has_url,
                     "missing_saved_evidence_fields":missing_fields,

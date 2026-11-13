@@ -85,6 +85,9 @@ def test_topic_filter_applies_to_saved_text_and_finding_title_only():
 def test_monitoring_opt_in_preserves_fast_casework_default_and_scoped_sources(monkeypatch):
     db=dataset()
     calls=[]
+    # The fixture creates its casework rows at the real current UTC time.
+    # A frozen 2026-11-12 end date excluded newly created 2026-11-13 rows.
+    runtime_now=datetime.utcnow()
     try:
         from app import inbox_radar
         def authorized_feed(connection, principal, states=None):
@@ -98,11 +101,11 @@ def test_monitoring_opt_in_preserves_fast_casework_default_and_scoped_sources(mo
                          sentiment="NEUTRAL"),title="Riau public concern")],{}
         monkeypatch.setattr(inbox_radar,"live_inbox_findings",authorized_feed)
         access=profile(db,db.get(User,2))
-        baseline=build_briefing(db,access,2,now=NOW,language="en")
+        baseline=build_briefing(db,access,2,now=runtime_now,language="en")
         assert calls==[]
         assert baseline["monitoring"]["enabled"] is False
         assert baseline["metrics"]["assignments"]==2
-        scoped=build_briefing(db,access,2,now=NOW,language="en",
+        scoped=build_briefing(db,access,2,now=runtime_now,language="en",
                              include_monitoring=True)
         assert calls==["Riau"]
         assert scoped["monitoring"]["published_in_period"]==2
@@ -118,7 +121,7 @@ def test_monitoring_opt_in_preserves_fast_casework_default_and_scoped_sources(mo
         assert "Inbox window of up to 300 links per campaign" in " ".join(scoped["template"]["methodology"])
         assert scoped["paid_provider_called"] is False
 
-        bali=build_briefing(db,profile(db,db.get(User,3)),3,now=NOW,
+        bali=build_briefing(db,profile(db,db.get(User,3)),3,now=runtime_now,
                            language="en",include_monitoring=True)
         assert bali["monitoring"]["platform_counts"]=={"Facebook":1}
         assert "Riau" not in str(bali["template"]["monitoring_summary"])

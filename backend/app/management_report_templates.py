@@ -108,7 +108,25 @@ def build_interim_template(snapshot, language="id"):
         summary += _t(language,
             f" Dalam casework yang berizin, {checked} penugasan memiliki pemeriksaan sumber asli yang tercatat pada periode ini, sedangkan {not_observed} tidak memiliki catatan pemeriksaan sumber dalam periode. Tidak tercatat bukan berarti belum pernah diperiksa.",
             f" Within authorized casework, {checked} assignments have an audited original-source check in this reporting window; {not_observed} have no source-review event observed in the window. Absence is not proof that no earlier review occurred.")
+    followup=snapshot.get("followup_queue") or {}
+    followup_enabled=followup.get("schema")=="BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536"
+    if followup_enabled:
+        total=int(followup.get("attention_count") or 0)
+        urgent=int((followup.get("priority_counts") or {}).get("P1") or 0)
+        summary += _t(language,
+            f" Dalam penugasan yang dibuat pada periode laporan ini, {total} kasus memiliki petunjuk tindak lanjut operasional, termasuk {urgent} prioritas P1. P1 menunjukkan urutan tinjauan, bukan tingkat pelanggaran.",
+            f" Among assignments created in this reporting window, {total} have suggested operational follow-up, including {urgent} P1 review items. P1 is review order, not violation severity.")
+    followup_labels={"RECEIVING_TEAM_ACCEPTANCE":["Konfirmasi penerimaan oleh tim petugas","Confirm receiving-team acceptance"],"CASE_INFORMATION_FOLLOWUP":["Lengkapi informasi kasus yang masih dibutuhkan","Complete missing case information"],"SOURCE_REVIEW_RECHECK":["Periksa ulang catatan sumber dan bukti asli","Recheck original-source review record"],"CHECK_HISTORICAL_SOURCE_REVIEW":["Periksa riwayat audit untuk verifikasi sumber sebelumnya","Inspect audit history for earlier source review"],"SUBMIT_OR_REVISE_LATEST_REPORT":["Lengkapi atau ajukan ulang versi laporan terbaru","Complete or resubmit latest report version"],"CREATE_OFFICER_REPORT":["Susun laporan petugas berdasarkan sumber yang ditinjau","Prepare officer report based on reviewed source"],"INDEPENDENT_REPORT_REVIEW":["Minta telaah independen atas laporan yang diajukan","Request independent review of submitted report"]}
     actions = []
+    if followup_enabled:
+        for item in (followup.get("items") or [])[:3]:
+            case_id=int(item.get("case_id") or 0)
+            labels=followup_labels.get(item.get("action_code"))
+            if case_id>0 and labels:
+                priority=item.get("priority") if item.get("priority") in ("P1","P2","P3") else "P3"
+                actions.append(_t(language,
+                    f"Kasus #{case_id} ({priority}): {labels[0]}. Periksa izin dan bukti pada alur kerja Inbox sebelum bertindak.",
+                    f"Case #{case_id} ({priority}): {labels[1]}. Recheck permissions and evidence in the Inbox workflow before any action."))
     if progress.get("schema")=="BAWASLU_CASEWORK_PROGRESS_V1534":
         if pending:
             actions.append(_t(language,
@@ -184,6 +202,10 @@ def build_interim_template(snapshot, language="id"):
         f"Assignments in reporting period: {case_count}. Detailed cases included: {sampled}, maximum 8. "
         f"Using only the latest report version per assignment, {int(metrics.get('assignments_with_reports') or 0)} "
         f"assignments have reports and {int(metrics.get('assignments_without_reports') or 0)} have none.")
+    if followup_enabled:
+        # Follow-up text is a read-only management aid. Records outside the
+        # reporting cohort and earlier review events are not established absent.
+        pass
     caveats = [
         coverage_note,
         _t(language,
@@ -217,6 +239,10 @@ def build_interim_template(snapshot, language="id"):
                 f"Kategori indikasi dapat tumpang tindih: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} unggahan memiliki lebih dari satu indikasi dan jumlah kategori tidak boleh dijumlahkan. Konflik waktu publikasi {int(monitoring.get('source_publication_time_conflicts') or 0)}, sentimen {int(monitoring.get('source_sentiment_conflicts') or 0)}, dan platform {int(monitoring.get('source_platform_conflicts') or 0)} ditandai, bukan ditebak.",
                 f"Signal categories are non-additive: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} posts have overlapping preliminary signals. Duplicate finding links are deduplicated. Conflicting publication times ({int(monitoring.get('source_publication_time_conflicts') or 0)}), sentiments ({int(monitoring.get('source_sentiment_conflicts') or 0)}), and platforms ({int(monitoring.get('source_platform_conflicts') or 0)}) are flagged, not guessed."),
         ])
+    if followup_enabled:
+        caveats.append(_t(language,
+            "Daftar tindak lanjut menunjukkan maksimal 12 kasus dalam cakupan yang dibuat pada periode ini. Kasus lama tidak ikut dalam populasi; catatan sumber yang tidak terlihat dalam periode bisa ada pada riwayat sebelumnya. Petunjuk tidak melakukan penugasan atau persetujuan otomatis.",
+            "Follow-up preview shows at most 12 authorized cases created in this period. Older cases are outside the cohort and earlier source-review events may exist. Suggestions do not assign, approve, or close cases."))
     scorecard = [
         {"label": _t(language,"Penugasan","Assignments"), "value":assigned},
         {"label": _t(language,"Sumber unik","Unique sources"),"value":linked},
@@ -252,6 +278,14 @@ def build_interim_template(snapshot, language="id"):
                                     key=lambda x:(-x[1],x[0]))],
         "findings": findings,
         "recommended_actions": actions,
+        "followup_queue_summary":({
+            "schema":"BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536",
+            "attention_count":int(followup.get("attention_count") or 0),
+            "priority_counts":followup.get("priority_counts") or {},
+            "preview_is_sample":bool(followup.get("preview_is_sample")),
+            "only_authorized_cases":True,
+            "automatic_actions_created":False,
+        } if followup_enabled else None),
         "methodology": caveats,
         "coverage_note": coverage_note,
         "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",

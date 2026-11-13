@@ -2,6 +2,19 @@ import {useEffect, useState} from 'react';
 import {Download, Printer, RefreshCw, FileBarChart2} from 'lucide-react';
 import {useLanguage} from '@/lib/LanguageContext';
 
+const FOLLOWUP_ACTIONS={
+ RECEIVING_TEAM_ACCEPTANCE:['Accept assigned case','Terima penugasan kasus'],
+ CASE_INFORMATION_FOLLOWUP:['Complete requested case information','Lengkapi informasi kasus'],
+ SOURCE_REVIEW_RECHECK:['Recheck original-source review','Periksa ulang sumber asli'],
+ CHECK_HISTORICAL_SOURCE_REVIEW:['Check earlier source-review audit','Periksa riwayat pemeriksaan sumber'],
+ SUBMIT_OR_REVISE_LATEST_REPORT:['Complete or resubmit latest report','Lengkapi atau ajukan ulang laporan terbaru'],
+ CREATE_OFFICER_REPORT:['Prepare source-backed officer report','Siapkan laporan petugas berbasis sumber'],
+ INDEPENDENT_REPORT_REVIEW:['Obtain independent report review','Minta pemeriksaan laporan independen']
+};
+function followupLink(row){
+ const url=String(row?.casework_url||'');
+ return /^\/inbox\?casework=1&case_id=[1-9]\d*&tab=reports$/.test(url)?url:null;
+}
 const API='/api/management-reporting';
 const auth=()=>({Authorization:'Bearer '+(window.localStorage.getItem('bawaslu_access_token')||'')});
 const entries=o=>Object.entries(o||{}).sort((a,b)=>b[1]-a[1]);
@@ -12,6 +25,7 @@ export default function ManagementBriefings(){
  const t=(english,indonesian)=>id?indonesian:english;
  const [period,setPeriod]=useState('weekly'),[draftTopic,setDraftTopic]=useState(''),[topic,setTopic]=useState('');
  const [includeMonitoring,setIncludeMonitoring]=useState(false);
+ const [followupPriority,setFollowupPriority]=useState('ALL');
  const [report,setReport]=useState(null),[busy,setBusy]=useState(true),[exporting,setExporting]=useState(false);
  const [error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  const params=new URLSearchParams({period,topic,language:id?'id':'en',include_monitoring:String(includeMonitoring)}).toString();
@@ -52,7 +66,8 @@ export default function ManagementBriefings(){
    }catch(e){setError(String(e.message||e))}
    finally{setExporting(false)}
  }
- const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{},monitoring=report?.monitoring||{};
+ const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{},monitoring=report?.monitoring||{},followup=report?.followup_queue||{};
+ const followupRows=(Array.isArray(followup.items)?followup.items:[]).filter(item=>followupPriority==='ALL'||item.priority===followupPriority);
  return <section id="management-briefing" data-i18n-exempt="true" className="mx-auto max-w-6xl space-y-5 bg-[#faf9f8] p-5 text-[#243b52] md:p-8">
   <style>{'@media print {body * {visibility:hidden!important} #management-briefing, #management-briefing * {visibility:visible!important} #management-briefing {position:absolute!important;left:0;top:0;width:100%;background:white!important} .briefing-no-print {display:none!important}}'}</style>
   <header className="flex flex-wrap justify-between gap-4">
@@ -205,6 +220,45 @@ export default function ManagementBriefings(){
     <ol className="ml-5 mt-3 list-decimal space-y-2 text-sm text-[#405366]">{(template.recommended_actions||[]).map((action,index)=><li key={index}>{action}</li>)}</ol>
     <p className="mt-3 text-xs text-[#8a6944]">{t('Recommendations are procedural prompts; no assignments, takedowns, or approvals were created.','Rekomendasi ini hanya panduan prosedur; tidak ada penugasan, takedown, atau persetujuan yang dibuat.')}</p>
    </section>
+   {followup.schema==='BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536'&&
+    <section data-testid="briefing-management-followup" className="rounded-xl border border-[#dce5ec] bg-white p-4">
+     <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+       <h3 className="font-semibold">{t('Management follow-up queue','Antrian tindak lanjut manajemen')}</h3>
+       <p className="mt-1 text-xs text-[#64748b]">{t('Read-only recommendations based on authorized cases created in the reporting period. Open a case in Inbox for the actual permitted workflow.','Rekomendasi hanya-baca berdasarkan kasus berizin yang dibuat pada periode laporan. Buka kasus di Inbox untuk alur kerja sesuai hak akses.')}</p>
+      </div>
+      <label className="text-xs font-semibold">{t('Review priority','Prioritas pemeriksaan')}
+       <select data-testid="briefing-followup-filter" className="intel-input mt-1 block" value={followupPriority} onChange={event=>setFollowupPriority(event.target.value)}>
+        <option value="ALL">{t('All','Semua')}</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+       </select>
+      </label>
+     </div>
+     <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">{[
+      [t('Cases requiring review','Kasus perlu ditelaah'),followup.attention_count],
+      ['P1',followup.priority_counts?.P1],
+      ['P2',followup.priority_counts?.P2],
+      [t('Closed cases outside queue','Kasus ditutup di luar antrian'),followup.closed_cases_excluded]
+     ].map(([name,count])=><div key={name} className="rounded-lg bg-[#f7f9fb] p-3">
+      <strong className="block text-lg tabular-nums">{count??0}</strong><p className="mt-1 text-xs">{name}</p>
+     </div>)}</div>
+     <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs">
+      <thead><tr className="border-b"><th className="p-2">{t('Priority','Prioritas')}</th>
+       <th className="p-2">{t('Case','Kasus')}</th><th className="p-2">{t('Suggested next check','Pemeriksaan berikutnya')}</th>
+       <th className="p-2">{t('Current state','Status saat ini')}</th><th className="p-2">{t('Open casework','Buka penugasan')}</th></tr></thead>
+      <tbody>{followupRows.map(item=><tr className="border-b" key={item.case_id}>
+       <td className="p-2 font-semibold">{item.priority}</td>
+       <td className="p-2 font-semibold">#{item.case_id}</td>
+       <td className="p-2">{(FOLLOWUP_ACTIONS[item.action_code]||[item.action_code,item.action_code])[id?1:0]}</td>
+       <td className="p-2">{item.case_status} · {item.latest_report_status}</td>
+       <td className="p-2">{followupLink(item)?
+        <a href={followupLink(item)} className="text-[#116d85] underline" rel="noopener noreferrer">{t('Open in Inbox','Buka di Inbox')}</a>:
+        <span className="text-[#64748b]">{t('Unavailable','Tidak tersedia')}</span>}</td>
+      </tr>)}</tbody>
+     </table></div>
+     {!followupRows.length&&<p className="mt-2 text-sm text-[#64748b]">{t('No matching authorized follow-up items in this reporting cohort.','Tidak ada tindak lanjut berizin yang sesuai dalam periode laporan ini.')}</p>}
+     {followup.preview_is_sample&&<p data-testid="briefing-followup-sampled" className="mt-2 text-xs text-[#876532]">{t('Only the first 12 prioritized cases are displayed. Filters apply to this preview, not the complete queue.','Hanya 12 kasus prioritas pertama ditampilkan. Filter berlaku untuk pratinjau ini, bukan seluruh antrian.')}</p>}
+     <p className="mt-2 text-xs text-[#876532]">{t('P1/P2/P3 indicate review order, not legal severity. A missing source-review event in this window does not mean no earlier review occurred. No assignment, report approval, or takedown is triggered.','P1/P2/P3 adalah urutan pemeriksaan, bukan tingkat pelanggaran. Tidak tercatatnya pemeriksaan sumber pada periode ini bukan berarti tidak pernah ditelaah. Tidak ada penugasan, persetujuan, atau takedown otomatis.')}</p>
+    </section>}
    <section className="rounded-xl border bg-white p-4"><h3 className="font-semibold">{t('Source-linked assignments','Penugasan beserta sumber')}</h3>
     <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">{t('Case','Kasus')}</th><th className="p-2">{t('Date','Tanggal')}</th><th className="p-2">{t('Status','Status')}</th><th className="p-2">{t('Unit','Unit')}</th><th className="p-2">{t('Evidence','Bukti')}</th></tr></thead>
     <tbody>{recent.map(item=><tr className="border-t" key={item.id}><td className="p-2">{item.title}</td><td className="p-2">{item.created_at?.slice(0,10)}</td><td className="p-2">{item.status}</td><td className="p-2">{item.department}</td><td className="p-2">{sourceUrl(item.source_url)?<a className="text-[#116d85] underline" href={sourceUrl(item.source_url)} target="_blank" rel="noopener noreferrer">{t('Original','Asli')}</a>:item.source_type+' #'+item.source_id}</td></tr>)}</tbody></table></div>

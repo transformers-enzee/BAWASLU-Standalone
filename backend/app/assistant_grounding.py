@@ -14,6 +14,36 @@ _LEGAL_QUESTION=re.compile(
     r"legal|laws?|electoral law|election law|statutory|statute|regulation|"
     r"legislation|criminal liability)\b",re.I)
 _LEGAL_DOC_TYPES={"REGULATION","SOP","GUIDANCE"}
+
+# These words are routing hints, not a determination that a particular law applies.
+_ELECTION_TYPE_HINTS={
+    "PEMILU":re.compile(r"\\b(?:pemilu|general elections?|legislative elections?|presidential elections?)\\b",re.I),
+    "PILKADA":re.compile(r"\\b(?:pilkada|pemilihan kepala daerah|regional head elections?|local head elections?)\\b",re.I),
+}
+
+def _election_types(text):
+    value=str(text or "")
+    return sorted(kind for kind,pattern in _ELECTION_TYPE_HINTS.items()
+                  if pattern.search(value))
+
+def _legal_election_scope(question,legal_docs):
+    """Compare explicit question terms with document titles only.
+    Unknown/ambiguous wording does not establish incompatibility or applicability.
+    """
+    requested=_election_types(question)
+    details=[]
+    for doc in legal_docs:
+        title_types=_election_types(doc.get("title"))
+        details.append({"record_id":str(doc.get("record_id") or ""),
+                        "title_scope":title_types,
+                        "scope_unambiguous":len(title_types)==1})
+    conflicts=[item["record_id"] for item in details
+               if len(requested)==1 and item["scope_unambiguous"]
+               and requested[0] not in item["title_scope"]]
+    unknown=[item["record_id"] for item in details
+             if not item["scope_unambiguous"]]
+    return requested,details,conflicts,unknown
+
 # This is an exact text-presence check only. It cannot prove whether an
 # article applies, whether amendments exist, or whether an interpretation is
 # legally correct. Never extract article numbers from the explanatory caution.
@@ -282,6 +312,8 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
             ref for ref in pdf if records[ref].get("review_status")!="OFFICER_REVIEWED"])
     if (legal_question or has_legal_flags) and not legal_pdf:
         add("LOCATE_AUTHORIZED_LEGAL_REFERENCE",[])
+    if "LEGAL_ELECTION_SCOPE" in reasons:
+        add("VERIFY_ELECTION_TYPE_APPLICABILITY",legal_pdf)
     if "CATEGORICAL_LEGAL_OUTCOME" in reasons:
         add("VERIFY_OFFICIAL_LEGAL_OUTCOME",formal+legal_pdf)
     if "ENFORCEMENT_RECOMMENDATION" in reasons:
@@ -338,6 +370,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                          if doc.get("review_status")!="OFFICER_REVIEWED"]
     legal_doc_refs=[doc for doc in doc_refs
                     if doc.get("document_type") in _LEGAL_DOC_TYPES]
+    requested_election_types,election_scope_rows,election_scope_conflicts,election_scope_unknown=_legal_election_scope(question,legal_doc_refs)
     legally_reviewed=[doc for doc in legal_doc_refs
                       if doc.get("review_status")=="OFFICER_REVIEWED"]
     legal_unreviewed=[doc for doc in legal_doc_refs
@@ -385,6 +418,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         review_reasons.append("LEGAL_ARTICLE_ATTRIBUTION")
     if unreviewed:
         review_reasons.append("CITED_UNREVIEWED_PDF")
+    if len(requested_election_types)==1 and (election_scope_conflicts or election_scope_unknown):
+        review_reasons.append("LEGAL_ELECTION_SCOPE")
     if excess or rejected:
         review_reasons.append("CITATION_INTEGRITY")
     review_steps=_officer_review_steps(
@@ -427,6 +462,14 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                                       else "OFFICER_REVIEWED_NOT_LEGALLY_VERIFIED"),
         "legal_source_review_is_approval":False,
         "legal_document_type_eligibility_verified":False,
+        "legal_document_version_metadata_available":False,
+        "legal_document_version_verified":False,
+        "legal_document_effective_date_verified":False,
+        "legal_question_election_type_hints":requested_election_types,
+        "legal_cited_title_election_type_hints":election_scope_rows,
+        "legal_election_type_title_conflict_ids":election_scope_conflicts,
+        "legal_election_type_title_unknown_ids":election_scope_unknown,
+        "legal_election_type_applicability_verified":False,
         "cited_unreviewed_pdf_pages":len(unreviewed),
         "mixed_review_status_cited_pdf_pages":bool(unreviewed and legally_reviewed),
         "selected_unreviewed_pdf_pages":len(selected_unreviewed),

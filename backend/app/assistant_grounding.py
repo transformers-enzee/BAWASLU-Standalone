@@ -51,7 +51,8 @@ def _claim_level_article_mismatches(answer,records):
         citations=[ref for ref in dict.fromkeys(_SOURCE_REF.findall(span))
                    if ref.startswith("DOC-") and
                    ref in records and
-                   records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+                   records[ref].get("record_type")=="PDF_KNOWLEDGE" and
+                   records[ref].get("document_type") in _LEGAL_DOC_TYPES]
         if not citations:
             continue  # no local PDF claim citation, handled by global check
         available=set()
@@ -79,14 +80,16 @@ def _uncited_article_claims(answer,records):
             continue
         pdf_ids=[ref for ref in _SOURCE_REF.findall(span)
                  if ref.startswith("DOC-") and ref in records and
-                 records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+                 records[ref].get("record_type")=="PDF_KNOWLEDGE" and
+                 records[ref].get("document_type") in _LEGAL_DOC_TYPES]
         if not pdf_ids and i+1<len(spans):
             next_span=spans[i+1].strip()
             refs=_SOURCE_REF.findall(next_span)
             if refs and _SOURCE_REF.sub("",next_span).strip()=="":
                 pdf_ids=[ref for ref in refs
                          if ref.startswith("DOC-") and ref in records and
-                         records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+                         records[ref].get("record_type")=="PDF_KNOWLEDGE" and
+                 records[ref].get("document_type") in _LEGAL_DOC_TYPES]
         if not pdf_ids:
             results.extend(articles)
     return list(dict.fromkeys(results))

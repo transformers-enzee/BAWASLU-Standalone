@@ -1,0 +1,1 @@
+# BAWASLU v151.5\n\nClaim-level article attribution considers only cited regulation, SOP and guidance documents. Ordinary reports may supply context, but cannot satisfy legal article attribution even when the excerpt repeats the article number. Four automated regression cases were added. No legal currentness, authenticity or applicability is certified.\n

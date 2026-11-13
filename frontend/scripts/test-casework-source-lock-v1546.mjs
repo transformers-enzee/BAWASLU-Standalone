@@ -25,7 +25,7 @@ assert.ok(ui.includes('The requested destination was not changed.'));
 assert.ok(ui.includes('Use the separate Route action to make an audited transfer.'));
 const sourceCheck=source.indexOf('source = _source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)');
 const lock=source.indexOf('    _lock_assignment_source(db,source)');
-const duplicate=source.indexOf('    active_candidates=(_authorized_cases_query(db,p,user.id)');
+const duplicate=source.indexOf('    existing=(_authorized_cases_query(db,p,user.id)');
 assert.ok(sourceCheck>=0&&sourceCheck<lock&&lock<duplicate);
 const back=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
 const front=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];

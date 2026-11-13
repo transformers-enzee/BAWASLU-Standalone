@@ -9,12 +9,12 @@ const main=read('../backend/app/main.py');
 const shell=read('src/components/intel/Shell.jsx');
 assert.ok(casework.includes('db.query(User).filter(User.id==user.id).with_for_update().first()') ||
     casework.includes('_lock_assignment_source(db,source)'),'Source-scoped or original user-scoped duplicate locking required');
-assert.ok(casework.includes('active_candidates=(_authorized_cases_query(db,p,user.id)'));
-assert.ok(casework.includes('if _visible(case,p,user.id)'));
+assert.ok(casework.includes('existing=(_authorized_cases_query(db,p,user.id)'));
+assert.ok(casework.includes('if existing is not None and not _visible(existing,p,user.id):'));
 assert.ok(casework.includes('return {**_case_view(existing),"existing":True,"assignment_created":False'));
 assert.ok(casework.includes('return {**_case_view(item),"existing":False,"assignment_created":True'));
 assert.ok(casework.indexOf('source = _source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)')<
-    casework.indexOf('active_candidates=(_authorized_cases_query(db,p,user.id)'));
+    casework.indexOf('existing=(_authorized_cases_query(db,p,user.id)'));
 assert.ok(pilot.includes('rank=(not (has_text and has_url), _RANK[kind]'));
 assert.ok(pilot.includes('source_prefill_available_count'));
 assert.ok(pilot.includes('source_recovery_required_count'));

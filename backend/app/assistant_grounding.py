@@ -11,7 +11,7 @@ import re
 _SOURCE_REF=re.compile(r"\[((?:INT|SOCIAL)-[A-Za-z0-9:_-]+|DOC-[0-9]+-P[0-9]+)\]")
 _LEGAL_QUESTION=re.compile(
     r"\b(?:hukum|undang.undang|pidana|pasal|perbawaslu|peraturan|sanksi|"
-    r"legal|electoral law|election law|statutory|statute|regulation|"
+    r"legal|law|electoral law|election law|statutory|statute|regulation|"
     r"legislation|criminal liability)\b",re.I)
 _LEGAL_DOC_TYPES={"REGULATION","SOP","GUIDANCE"}
 # This is an exact text-presence check only. It cannot prove whether an

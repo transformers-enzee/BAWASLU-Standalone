@@ -1,0 +1,2 @@
+# BAWASLU v152.2: enforcement of legal regression tests at deployment
+The Docker build runs the previously added seven legal-reference regression test modules as part of the pre-deploy pytest gate. The frontend build runs its v152.0 legal-document metadata contract assertions before Vite bundling. This prevents an untested legal metadata or source-attribution regression from silently deploying. No database schema change or legal verdict is performed.

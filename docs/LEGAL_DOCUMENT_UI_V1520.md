@@ -1,0 +1,1 @@
+# BAWASLU v152.0 officer-entered legal document metadata\n\nAdds three fields in officer review UI (recorded version, effective date and election type). Existing metadata is loaded when editing and posted to the validated review endpoint. Values are unverified records and do not determine legal applicability. Added static UI contract test.\n

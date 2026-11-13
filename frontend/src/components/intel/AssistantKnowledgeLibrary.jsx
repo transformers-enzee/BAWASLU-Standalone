@@ -43,6 +43,7 @@ export default function AssistantKnowledgeLibrary(){
  const [semanticIndex,setSemanticIndex]=useState(false);
  const [reviewing,setReviewing]=useState(null);
  const [reviewNotes,setReviewNotes]=useState('');
+ const [reviewMeta,setReviewMeta]=useState({legal_version_label:'',legal_effective_date:'',legal_election_type:'UNSPECIFIED'});
 
 
 
@@ -131,6 +132,9 @@ export default function AssistantKnowledgeLibrary(){
    const result=await request('/'+doc.id+'/review','POST',{
     document_type:doc.document_type||'OTHER',
     issuer:doc.issuer||'',
+    legal_version_label:reviewMeta.legal_version_label.trim(),
+    legal_effective_date:reviewMeta.legal_effective_date,
+    legal_election_type:reviewMeta.legal_election_type,
     notes:reviewNotes,reviewed:approved});
    await refresh();
    setReviewing(null);setReviewNotes('');
@@ -195,12 +199,27 @@ export default function AssistantKnowledgeLibrary(){
    <div className="space-y-2">{docs.map(doc=><div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e3e9ef] p-3"><div className="flex gap-2 items-start"><FileText size={16} className="text-[#801b24] mt-1"/><div><p className="text-sm font-semibold">{doc.title}</p><p className="text-xs text-[#64748b]">{doc.pages} {id?'halaman':'pages'} · {doc.scope==='NATIONAL'?(id?'Nasional':'National'):doc.province} · {doc.extracted_chars.toLocaleString()} {id?'karakter':'characters'}</p>
        <p className="text-xs mt-1 text-[#53657b]">{doc.document_type||'OTHER'} · {doc.issuer|| (id?'Penerbit belum diisi':'Issuer unspecified')} · {doc.review_status==='OFFICER_REVIEWED'?(id?'Ditelaah petugas':'Officer reviewed'):(id?'Belum ditelaah':'Not reviewed')} · {doc.embedding_status==='READY'?(id?'Semantik siap':'Semantic ready'):(id?'Kata kunci saja':'Keyword search only')}</p>
       </div></div><div className="flex gap-2 flex-wrap items-center"><button type="button" className="intel-ghost text-xs" onClick={()=>download(doc)} disabled={busy}><Download size={13} className="inline mr-1"/>{id?'Unduh':'Download'}</button>{status?.can_upload&&doc.embedding_status!=='READY'&&<button type="button" disabled={busy} className="intel-ghost text-xs" onClick={()=>indexDocument(doc)}><Brain size={13} className="inline mr-1"/>{id?'Indeks semantik':'Semantic index'}</button>}
-     {status?.can_review&&<button type="button" disabled={busy} className="intel-ghost text-xs" onClick={()=>{setReviewing(doc.id);setReviewNotes(doc.review_notes||'')}}><CheckCircle size={13} className="inline mr-1"/>{id?'Tinjau dokumen':'Review document'}</button>}
+     {status?.can_review&&<button type="button" disabled={busy} className="intel-ghost text-xs" onClick={()=>{setReviewing(doc.id);setReviewNotes(doc.review_notes||'');setReviewMeta({legal_version_label:doc.legal_version_label||'',legal_effective_date:doc.legal_effective_date||'',legal_election_type:doc.legal_election_type||'UNSPECIFIED'})}}><CheckCircle size={13} className="inline mr-1"/>{id?'Tinjau dokumen':'Review document'}</button>}
      {status?.can_upload&&<button type="button" className="intel-ghost text-xs text-red-700" disabled={busy} onClick={()=>remove(doc)}><Trash2 size={13}/></button>}</div>
     {reviewing===doc.id&&<div className="w-full border-t border-[#e3e9ef] pt-2 mt-2 space-y-2">
       <p className="text-xs text-[#53657b]">{id?
         'Pemeriksaan dokumen bukan verifikasi bahwa regulasi masih berlaku. Periksa penerbit, keaslian, perubahan dan pencabutan terlebih dahulu.':
         'Document review does not certify that a regulation is still in force. Check authenticity, amendments and repeal.'}</p>
+      <div className="grid gap-2 md:grid-cols-3">
+       <label className="text-xs">{id?'Versi dokumen (sebagaimana tercatat)':'Recorded document version'}
+        <input data-testid="legal-document-version" className="intel-input mt-1 w-full" maxLength={120} value={reviewMeta.legal_version_label} onChange={e=>setReviewMeta(x=>({...x,legal_version_label:e.target.value}))} placeholder={id?'Belum diketahui':'Unknown'}/>
+       </label>
+       <label className="text-xs">{id?'Tanggal berlaku (belum diverifikasi)':'Effective date (unverified)'}
+        <input data-testid="legal-document-effective-date" type="date" className="intel-input mt-1 w-full" value={reviewMeta.legal_effective_date} onChange={e=>setReviewMeta(x=>({...x,legal_effective_date:e.target.value}))}/>
+       </label>
+       <label className="text-xs">{id?'Jenis pemilihan':'Election type'}
+        <select data-testid="legal-document-election-type" className="intel-input mt-1 w-full" value={reviewMeta.legal_election_type} onChange={e=>setReviewMeta(x=>({...x,legal_election_type:e.target.value}))}>
+         <option value="UNSPECIFIED">{id?'Tidak ditentukan':'Unspecified'}</option>
+         <option value="PEMILU">Pemilu</option><option value="PILKADA">Pilkada</option>
+         <option value="BOTH">{id?'Keduanya':'Both'}</option>
+        </select>
+       </label>
+      </div>
       <textarea rows={2} className="intel-input w-full" maxLength={1500} value={reviewNotes}
         onChange={e=>setReviewNotes(e.target.value)}
         placeholder={id?'Catatan pemeriksaan (min 12 karakter)':'Review notes (min 12 characters)'}/>

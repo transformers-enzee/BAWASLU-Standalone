@@ -1,0 +1,3 @@
+# v152.7: claim-to-passage modality consistency
+
+This batch adds an offline, narrowly bounded lexical comparison for reversals such as "must report" vs "must not report" and "wajib melapor" vs "tidak wajib melapor" in an answer and the locally cited eligible legal-reference page. Only displayed authorized citations count, and unrelated reports/uncited documents cannot satisfy or trigger a comparison. Mixed-source wording and unmatched actions are left unknown. Results are warnings for authorized officer review, NOT legal determinations or semantic entailment. Eleven synthetic regressions are mandatory in the Render Docker build. No external calls, casework action, or database changes.

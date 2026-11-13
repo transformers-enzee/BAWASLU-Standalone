@@ -10,6 +10,7 @@ import AssistantLegalReviewSummary from '@/components/intel/AssistantLegalReview
 import AssistantReviewConsolidation from '@/components/intel/AssistantReviewConsolidation';
 import AssistantHumanScoring from '@/components/intel/AssistantHumanScoring';
 import AssistantEvaluationSampler from '@/components/intel/AssistantEvaluationSampler';
+import AssistantLegalBenchmark from '@/components/intel/AssistantLegalBenchmark';
 import {textFor} from '@/lib/assistantResponseLocale';
 import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
 import AssistantActionDesk, {UserWorkspacePulse} from '@/components/intel/AssistantActionDesk';
@@ -170,6 +171,7 @@ export default function IntelligenceAssistant(){
    </button>
    {showQa&&<div data-testid="assistant-qa-tools-content" className="space-y-3 border-t border-[#e5e9ee] p-3">
     <p className="text-xs leading-5 text-[#64748b]">Internal evaluation only. No official BAWASLU approval is implied, and preparing questions does not make a paid AI call.</p>
+    <AssistantLegalBenchmark disabled={busy||historyBusy}/>
     <AssistantEvaluationSampler disabled={busy||historyBusy}
      onPrepare={prompt=>{setQuestion(prompt);setAnalysisMode('DATA');setError('')}}/>
     <AssistantHumanScoring incomingPacket={scoringPacket}/>

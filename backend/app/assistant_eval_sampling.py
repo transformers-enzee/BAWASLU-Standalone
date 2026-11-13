@@ -262,3 +262,16 @@ def evaluation_questions(
     response.headers["Cache-Control"]="private, no-store"
     response.headers["X-Evaluation-Generation"]="NONE"
     return build_evaluation_question_plan(findings,target=target)
+
+@router.get("/legal-benchmark")
+def legal_benchmark(response:Response,user:User=Depends(current_user),
+                    db:Session=Depends(get_db)):
+    """Admin-only fixed synthetic quality-gate results, never user records."""
+    principal=profile(db,user)
+    if not has(principal,"administration") or not has(principal,"view_intelligence"):
+        raise HTTPException(403,"Administrator intelligence QA access required")
+    response.headers["Cache-Control"]="private, no-store"
+    response.headers["X-Evaluation-Generation"]="NONE"
+    from .assistant_legal_benchmark import run_legal_signal_benchmark
+    return run_legal_signal_benchmark()
+

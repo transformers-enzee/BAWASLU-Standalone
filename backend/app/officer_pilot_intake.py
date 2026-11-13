@@ -92,13 +92,19 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
         row["original_source_url_available"]) for row in rows)
     visible={}
     for case in visible_cases or ():
-        if str(getattr(case,"source_type","")).upper()!="SOCIAL" or getattr(case,"status","")=="CLOSED":
+        # Presentation defense-in-depth: case lists may arrive unsorted.
+        if str(getattr(case,"source_type","")).strip().upper()!="SOCIAL":
+            continue
+        if str(getattr(case,"status","")).strip().upper()=="CLOSED":
             continue
         sid=_positive_id(getattr(case,"source_id",None))
         cid=_positive_id(getattr(case,"campaign_id",None))
         case_id=_positive_id(getattr(case,"id",None))
         if sid and cid and case_id:
-            visible.setdefault((sid,cid),case_id)
+            key=(sid,cid)
+            # Do not rely on incoming order for duplicate active assignments.
+            if key not in visible or int(case_id)>int(visible[key]):
+                visible[key]=case_id
     for row in rows:
         existing=visible.get((row["source_id"],row["campaign_id"]))
         if existing:

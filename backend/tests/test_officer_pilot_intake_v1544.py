@@ -234,3 +234,25 @@ def test_no_role_or_province_permissions_bypassed_by_forged_source_id():
         assert exc.value.status_code in (403,422)
         assert db.query(CaseAssignment).count()==0
     finally:db.close()
+
+
+def test_unsorted_active_cases_select_latest_case_without_trusting_input_order():
+    recent=Obj(id=91,source_type="SOCIAL",source_id="11",campaign_id=90,status="OPEN")
+    earlier=Obj(id=25,source_type="SOCIAL",source_id="11",campaign_id=90,status="OPEN")
+    for visible in ([recent,earlier],[earlier,recent]):
+        row=list_rows([finding()],visible=visible)["items"][0]
+        assert row["visible_open_case_id"]==91
+        assert row["casework_link"]=="/inbox?casework=1&case_id=91&tab=reports"
+
+def test_case_matching_ignores_closed_status_case_and_whitespace():
+    old=Obj(id=99,source_type="social",source_id="11",campaign_id=90,status=" closed ")
+    active=Obj(id=27,source_type=" SOCIAL ",source_id="11",campaign_id=90,status="OPEN")
+    row=list_rows([finding()],visible=[old,active])["items"][0]
+    assert row["visible_open_case_id"]==27
+    assert row["review_step"]=="CONTINUE_VISIBLE_CASEWORK"
+
+def test_case_matching_remains_scoped_to_exact_campaign_when_newer_case_exists():
+    other=Obj(id=200,source_type="SOCIAL",source_id="11",campaign_id=91,status="OPEN")
+    matching=Obj(id=21,source_type="SOCIAL",source_id="11",campaign_id=90,status="OPEN")
+    row=list_rows([finding()],visible=[other,matching])["items"][0]
+    assert row["visible_open_case_id"]==21

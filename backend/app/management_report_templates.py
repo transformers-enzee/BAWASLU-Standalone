@@ -108,6 +108,17 @@ def build_interim_template(snapshot, language="id"):
         summary += _t(language,
             f" Dalam casework yang berizin, {checked} penugasan memiliki pemeriksaan sumber asli yang tercatat pada periode ini, sedangkan {not_observed} tidak memiliki catatan pemeriksaan sumber dalam periode. Tidak tercatat bukan berarti belum pernah diperiksa.",
             f" Within authorized casework, {checked} assignments have an audited original-source check in this reporting window; {not_observed} have no source-review event observed in the window. Absence is not proof that no earlier review occurred.")
+    readiness=snapshot.get("investigation_readiness") or {}
+    readiness_enabled=readiness.get("schema")=="BAWASLU_INVESTIGATION_READINESS_V1537"
+    if readiness_enabled:
+        counts=readiness.get("group_counts") or {}
+        need_evidence=int(counts.get("EVIDENCE_RECHECK") or 0)
+        historical=int(counts.get("REVIEW_HISTORY_CHECK") or 0)
+        officer=int(counts.get("OFFICER_ACTION") or 0)
+        pending_independent_count=int(counts.get("INDEPENDENT_REVIEW") or 0)
+        summary+=_t(language,
+            f" Kesiapan tindak lanjut dalam penugasan berizin: {need_evidence} perlu pemeriksaan sumber ulang, {historical} perlu pemeriksaan riwayat audit, {officer} menunggu tindakan petugas, dan {pending_independent_count} laporan telah diajukan dengan catatan pemeriksaan sumber pada periode ini dan menunggu pemeriksa independen. Kelompok ini tidak memvalidasi fakta atau hukum.",
+            f" Investigation follow-up across authorized assignments: {need_evidence} need source rechecks, {historical} need historical audit inspection, {officer} await officer action, and {pending_independent_count} submitted reports have a source-check event recorded in this window and await independent review. These groups do not validate facts or law.")
     followup=snapshot.get("followup_queue") or {}
     followup_enabled=followup.get("schema")=="BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536"
     if followup_enabled:
@@ -118,6 +129,16 @@ def build_interim_template(snapshot, language="id"):
             f" Among assignments created in this reporting window, {total} have suggested operational follow-up, including {urgent} P1 review items. P1 is review order, not violation severity.")
     followup_labels={"RECEIVING_TEAM_ACCEPTANCE":["Konfirmasi penerimaan oleh tim petugas","Confirm receiving-team acceptance"],"CASE_INFORMATION_FOLLOWUP":["Lengkapi informasi kasus yang masih dibutuhkan","Complete missing case information"],"SOURCE_REVIEW_RECHECK":["Periksa ulang catatan sumber dan bukti asli","Recheck original-source review record"],"CHECK_HISTORICAL_SOURCE_REVIEW":["Periksa riwayat audit untuk verifikasi sumber sebelumnya","Inspect audit history for earlier source review"],"SUBMIT_OR_REVISE_LATEST_REPORT":["Lengkapi atau ajukan ulang versi laporan terbaru","Complete or resubmit latest report version"],"CREATE_OFFICER_REPORT":["Susun laporan petugas berdasarkan sumber yang ditinjau","Prepare officer report based on reviewed source"],"INDEPENDENT_REPORT_REVIEW":["Minta telaah independen atas laporan yang diajukan","Request independent review of submitted report"]}
     actions = []
+    if readiness_enabled:
+        counts=readiness.get("group_counts") or {}
+        if int(counts.get("EVIDENCE_RECHECK") or 0):
+            actions.append(_t(language,
+                f"Periksa ulang sumber asli pada {int(counts.get('EVIDENCE_RECHECK') or 0)} kasus dengan catatan pemeriksaan terakhir dalam periode ini yang belum memenuhi syarat pemeriksaan; jangan menarik kesimpulan hukum.",
+                f"Recheck original sources for {int(counts.get('EVIDENCE_RECHECK') or 0)} cases whose latest observed review did not satisfy source-check attestation. Do not infer legal outcomes."))
+        if int(counts.get("REVIEW_HISTORY_CHECK") or 0):
+            actions.append(_t(language,
+                f"Telaah riwayat audit pada {int(counts.get('REVIEW_HISTORY_CHECK') or 0)} kasus tanpa catatan pemeriksaan sumber yang terlihat dalam periode ini. Catatan lebih lama mungkin tersedia.",
+                f"Inspect historical audit records for {int(counts.get('REVIEW_HISTORY_CHECK') or 0)} cases without a source-review event observed in this period; earlier records may exist."))
     if followup_enabled:
         for item in (followup.get("items") or [])[:3]:
             case_id=int(item.get("case_id") or 0)
@@ -239,6 +260,10 @@ def build_interim_template(snapshot, language="id"):
                 f"Kategori indikasi dapat tumpang tindih: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} unggahan memiliki lebih dari satu indikasi dan jumlah kategori tidak boleh dijumlahkan. Konflik waktu publikasi {int(monitoring.get('source_publication_time_conflicts') or 0)}, sentimen {int(monitoring.get('source_sentiment_conflicts') or 0)}, dan platform {int(monitoring.get('source_platform_conflicts') or 0)} ditandai, bukan ditebak.",
                 f"Signal categories are non-additive: {int(monitoring.get('signal_overlapping_sources_in_period') or 0)} posts have overlapping preliminary signals. Duplicate finding links are deduplicated. Conflicting publication times ({int(monitoring.get('source_publication_time_conflicts') or 0)}), sentiments ({int(monitoring.get('source_sentiment_conflicts') or 0)}), and platforms ({int(monitoring.get('source_platform_conflicts') or 0)}) are flagged, not guessed."),
         ])
+    if readiness_enabled:
+        caveats.append(_t(language,
+            "Klasifikasi kesiapan investigasi adalah petunjuk alur kerja. Catatan sumber hanya diperiksa dalam periode pelaporan yang dipilih. Laporan diajukan tidak sama dengan fakta, dasar hukum, atau persetujuan akhir yang telah diverifikasi.",
+            "Investigation readiness is workflow triage. Source events are observed only in the selected reporting period. A submitted report is not proof of verified facts, applicable law, or final approval."))
     if followup_enabled:
         caveats.append(_t(language,
             "Daftar tindak lanjut menunjukkan maksimal 12 kasus dalam cakupan yang dibuat pada periode ini. Kasus lama tidak ikut dalam populasi; catatan sumber yang tidak terlihat dalam periode bisa ada pada riwayat sebelumnya. Petunjuk tidak melakukan penugasan atau persetujuan otomatis.",
@@ -278,6 +303,18 @@ def build_interim_template(snapshot, language="id"):
                                     key=lambda x:(-x[1],x[0]))],
         "findings": findings,
         "recommended_actions": actions,
+        "investigation_readiness_summary":({
+            "schema":"BAWASLU_INVESTIGATION_READINESS_V1537",
+            "authorized_case_count":int(readiness.get("authorized_case_count") or 0),
+            "review_attention_count":int(readiness.get("review_attention_count") or 0),
+            "group_counts":{key:int(value) for key,value in (readiness.get("group_counts") or {}).items()
+                            if key in ("EVIDENCE_RECHECK","REVIEW_HISTORY_CHECK","OFFICER_ACTION",
+                                       "INDEPENDENT_REVIEW","WORKFLOW_COMPLETE","OTHER_FOLLOWUP")},
+            "historical_review_uncertain":True,
+            "source_truth_verified":False,
+            "legal_outcome_confirmed":False,
+            "automatic_actions_created":False,
+        } if readiness_enabled else None),
         "followup_queue_summary":({
             "schema":"BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536",
             "attention_count":int(followup.get("attention_count") or 0),

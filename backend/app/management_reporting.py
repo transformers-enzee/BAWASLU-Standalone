@@ -21,6 +21,7 @@ from .access import profile
 from .casework import CaseAssignment, CaseReport, CaseTransition, _require, _visible
 from .management_report_templates import build_interim_template, render_pdf, render_docx, render_xlsx
 from .management_followup_queue import management_followup_queue
+from .management_investigation_readiness import investigation_readiness_board
 
 router = APIRouter(prefix="/api/management-reporting", tags=["management-reporting"])
 PERIOD_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
@@ -325,6 +326,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
     report_counts = Counter(latest_reports.values())
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     followup_queue=management_followup_queue(cases,latest_by_case,transitions)
+    investigation_readiness=investigation_readiness_board(cases,latest_by_case,transitions)
     departments = Counter(row.target_department for row in cases)
     provinces = Counter(row.verified_province or "Unverified" for row in cases)
     source_keys = {(row.source_type, row.source_id,
@@ -353,6 +355,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "report_status_counts": dict(report_counts),
         "casework_progress":casework_progress,
         "followup_queue":followup_queue,
+        "investigation_readiness":investigation_readiness,
         "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
         "report_coverage": {
             "assignments_in_period": len(cases),

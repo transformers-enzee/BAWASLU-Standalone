@@ -15,6 +15,24 @@ function followupLink(row){
  const url=String(row?.casework_url||'');
  return /^\/inbox\?casework=1&case_id=[1-9]\d*&tab=reports$/.test(url)?url:null;
 }
+const READINESS_GROUPS={
+ EVIDENCE_RECHECK:['Source recheck needed','Perlu pemeriksaan ulang sumber'],
+ REVIEW_HISTORY_CHECK:['Earlier audit review needed','Perlu pemeriksaan riwayat audit'],
+ OFFICER_ACTION:['Officer action pending','Menunggu tindakan petugas'],
+ INDEPENDENT_REVIEW:['Submitted for independent review','Diajukan untuk pemeriksaan independen'],
+ WORKFLOW_COMPLETE:['Workflow completed (not legal clearance)','Alur kerja selesai (bukan validasi hukum)'],
+ OTHER_FOLLOWUP:['Unclassified workflow follow-up','Tindak lanjut alur kerja lainnya']
+};
+const READINESS_STEPS={
+ RECHECK_ORIGINAL_SOURCE:['Recheck original source evidence','Periksa ulang bukti sumber asli'],
+ INSPECT_EARLIER_AUDIT_HISTORY:['Inspect earlier audit events','Periksa peristiwa audit sebelumnya'],
+ RECEIVING_OFFICER_ACCEPTANCE:['Confirm receiving-officer acceptance','Konfirmasi penerimaan oleh petugas'],
+ COMPLETE_CASE_INFORMATION:['Complete requested case information','Lengkapi informasi kasus yang diminta'],
+ OFFICER_REPORT_DECISION:['Officer to decide next report step','Petugas menentukan langkah laporan berikutnya'],
+ INDEPENDENT_REVIEW_OF_SUBMITTED_REPORT:['Review submitted report independently','Telaah laporan yang diajukan secara independen'],
+ VERIFY_UNRECOGNIZED_CASE_STATE:['Verify current workflow state','Verifikasi status alur kerja saat ini'],
+ NO_AUTOMATED_ACTION:['No automated action','Tidak ada tindakan otomatis']
+};
 const API='/api/management-reporting';
 const auth=()=>({Authorization:'Bearer '+(window.localStorage.getItem('bawaslu_access_token')||'')});
 const entries=o=>Object.entries(o||{}).sort((a,b)=>b[1]-a[1]);
@@ -26,6 +44,7 @@ export default function ManagementBriefings(){
  const [period,setPeriod]=useState('weekly'),[draftTopic,setDraftTopic]=useState(''),[topic,setTopic]=useState('');
  const [includeMonitoring,setIncludeMonitoring]=useState(false);
  const [followupPriority,setFollowupPriority]=useState('ALL');
+ const [readinessGroup,setReadinessGroup]=useState('ALL');
  const [report,setReport]=useState(null),[busy,setBusy]=useState(true),[exporting,setExporting]=useState(false);
  const [error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  const params=new URLSearchParams({period,topic,language:id?'id':'en',include_monitoring:String(includeMonitoring)}).toString();
@@ -66,8 +85,9 @@ export default function ManagementBriefings(){
    }catch(e){setError(String(e.message||e))}
    finally{setExporting(false)}
  }
- const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{},monitoring=report?.monitoring||{},followup=report?.followup_queue||{};
+ const m=report?.metrics||{},recent=report?.recent_cases||[],template=report?.template||{},coverage=report?.report_coverage||{},monitoring=report?.monitoring||{},followup=report?.followup_queue||{},readiness=report?.investigation_readiness||{};
  const followupRows=(Array.isArray(followup.items)?followup.items:[]).filter(item=>followupPriority==='ALL'||item.priority===followupPriority);
+ const readinessRows=(Array.isArray(readiness.preview)?readiness.preview:[]).filter(item=>readinessGroup==='ALL'||item.group===readinessGroup);
  return <section id="management-briefing" data-i18n-exempt="true" className="mx-auto max-w-6xl space-y-5 bg-[#faf9f8] p-5 text-[#243b52] md:p-8">
   <style>{'@media print {body * {visibility:hidden!important} #management-briefing, #management-briefing * {visibility:visible!important} #management-briefing {position:absolute!important;left:0;top:0;width:100%;background:white!important} .briefing-no-print {display:none!important}}'}</style>
   <header className="flex flex-wrap justify-between gap-4">
@@ -220,6 +240,49 @@ export default function ManagementBriefings(){
     <ol className="ml-5 mt-3 list-decimal space-y-2 text-sm text-[#405366]">{(template.recommended_actions||[]).map((action,index)=><li key={index}>{action}</li>)}</ol>
     <p className="mt-3 text-xs text-[#8a6944]">{t('Recommendations are procedural prompts; no assignments, takedowns, or approvals were created.','Rekomendasi ini hanya panduan prosedur; tidak ada penugasan, takedown, atau persetujuan yang dibuat.')}</p>
    </section>
+   {readiness.schema==='BAWASLU_INVESTIGATION_READINESS_V1537'&&
+    <section data-testid="briefing-investigation-readiness" className="rounded-xl border border-[#dce5ec] bg-white p-4">
+     <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+       <h3 className="font-semibold">{t('Investigation readiness overview','Ringkasan kesiapan investigasi')}</h3>
+       <p className="mt-1 text-xs text-[#64748b]">{t('Audited workflow and latest report status for authorized cases created in the selected UTC reporting period.','Alur kerja teraudit dan status laporan terbaru untuk kasus berizin yang dibuat selama periode UTC terpilih.')}</p>
+      </div>
+      <label className="text-xs font-semibold">{t('Review group','Kelompok pemeriksaan')}
+       <select data-testid="briefing-readiness-filter" className="intel-input mt-1 block" value={readinessGroup} onChange={event=>setReadinessGroup(event.target.value)}>
+        <option value="ALL">{t('All pending','Semua yang tertunda')}</option>
+        {Object.entries(READINESS_GROUPS).filter(([key])=>key!=='WORKFLOW_COMPLETE').map(([key,names])=>
+         <option key={key} value={key}>{names[id?1:0]}</option>)}
+       </select>
+      </label>
+     </div>
+     <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+      {Object.entries(READINESS_GROUPS).map(([key,names])=><div key={key} className="rounded-lg bg-[#f7f9fb] p-3">
+       <strong className="block text-lg tabular-nums">{readiness.group_counts?.[key]??0}</strong>
+       <p className="mt-1 text-xs">{names[id?1:0]}</p>
+      </div>)}
+     </div>
+     <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs">
+      <thead><tr className="border-b">
+       <th className="p-2">{t('Case','Kasus')}</th>
+       <th className="p-2">{t('Observed readiness','Kesiapan teramati')}</th>
+       <th className="p-2">{t('Next officer check','Pemeriksaan berikutnya')}</th>
+       <th className="p-2">{t('Report state','Status laporan')}</th>
+       <th className="p-2">{t('Open case','Buka kasus')}</th>
+      </tr></thead>
+      <tbody>{readinessRows.map(item=><tr key={item.case_id} className="border-b">
+       <td className="p-2 font-semibold">#{item.case_id}</td>
+       <td className="p-2">{(READINESS_GROUPS[item.group]||[item.group,item.group])[id?1:0]}</td>
+       <td className="p-2">{(READINESS_STEPS[item.next_check_code]||[item.next_check_code,item.next_check_code])[id?1:0]}</td>
+       <td className="p-2">{item.latest_report_status}</td>
+       <td className="p-2">{followupLink(item)?
+        <a className="text-[#116d85] underline" href={followupLink(item)} rel="noopener noreferrer">{t('Open in Inbox','Buka di Inbox')}</a>:
+        <span className="text-[#64748b]">{t('Unavailable','Tidak tersedia')}</span>}</td>
+      </tr>)}</tbody>
+     </table></div>
+     {!readinessRows.length&&<p className="mt-2 text-xs text-[#64748b]">{t('No matching cases in the current authorized preview.','Tidak ada kasus yang cocok dalam pratinjau berizin.')}</p>}
+     {readiness.preview_is_sample&&<p data-testid="briefing-readiness-sample-limit" className="mt-2 text-xs text-[#876532]">{t('This is a 12-case preview of prioritized pending work; totals reflect the full authorized reporting cohort.','Ini pratinjau 12 kasus prioritas tertunda; jumlah total mencakup seluruh penugasan berizin dalam periode.')}</p>}
+     <p className="mt-3 text-xs text-[#876532]">{t('These categories indicate workflow evidence, not legal or factual clearance. Source-review records are only observed within this reporting window; earlier records may exist. Submitted reports still require independent human approval.','Kelompok ini menunjukkan bukti alur kerja, bukan kepastian hukum atau fakta. Catatan pemeriksaan sumber hanya diamati dalam periode ini; catatan lebih lama mungkin ada. Laporan yang diajukan tetap memerlukan persetujuan manusia independen.')}</p>
+    </section>}
    {followup.schema==='BAWASLU_AUTHORIZED_FOLLOWUP_QUEUE_V1536'&&
     <section data-testid="briefing-management-followup" className="rounded-xl border border-[#dce5ec] bg-white p-4">
      <div className="flex flex-wrap items-center justify-between gap-3">

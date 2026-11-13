@@ -22,7 +22,7 @@ from .casework import CaseAssignment, CaseReport, CaseTransition, _require, _vis
 from .management_report_templates import build_interim_template, render_pdf, render_docx, render_xlsx
 from .management_followup_queue import management_followup_queue
 from .management_investigation_readiness import investigation_readiness_board
-from .officer_pilot_readiness import officer_pilot_readiness
+from .officer_pilot_readiness import officer_pilot_readiness, officer_pilot_case_rows
 
 router = APIRouter(prefix="/api/management-reporting", tags=["management-reporting"])
 PERIOD_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
@@ -306,23 +306,29 @@ def _casework_evidence_progress(cases,transitions,latest_by_case):
     }
 
 
-def build_briefing(db: Session, access: dict, user_id: int,
-                   period: str = "weekly", topic: str = "", now=None, language="id",
-                   include_monitoring=False):
-    cases, start, end, topic = scoped_cases(db, access, user_id, period, topic, now)
-    ids = [item.id for item in cases]
-    reports = (db.query(CaseReport).filter(CaseReport.case_id.in_(ids)).all()
-               if ids else [])
-    transitions = (db.query(CaseTransition)
+def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
+    """Reuse the exact same permission-scoped, latest-report window for
+    management views and the officer's downloadable review worksheet."""
+    cases,start,end,topic=scoped_cases(db,access,user_id,period,topic,now)
+    ids=[row.id for row in cases]
+    reports=(db.query(CaseReport).filter(CaseReport.case_id.in_(ids)).all()
+             if ids else [])
+    transitions=(db.query(CaseTransition)
         .filter(CaseTransition.case_id.in_(ids),
                 CaseTransition.happened_at >= start,
                 CaseTransition.happened_at <= end).all() if ids else [])
+    latest={}
+    for report in sorted(reports,key=lambda row:(row.created_at,row.id)):
+        latest[report.case_id]=report
+    return cases,start,end,topic,reports,transitions,latest
+
+
+def build_briefing(db: Session, access: dict, user_id: int,
+                   period: str = "weekly", topic: str = "", now=None, language="id",
+                   include_monitoring=False):
+    cases,start,end,topic,reports,transitions,latest_by_case=_scoped_casework_window(
+        db,access,user_id,period,topic,now)
     statuses = Counter(row.status for row in cases)
-    # Report versions are an audit trail. Operational KPIs reflect ONLY the
-    # most recent version for each assignment, not every historical report.
-    latest_by_case = {}
-    for report in sorted(reports, key=lambda row: (row.created_at, row.id)):
-        latest_by_case[report.case_id] = report
     latest_reports = {case_id: report.status for case_id, report in latest_by_case.items()}
     report_counts = Counter(latest_reports.values())
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
@@ -458,6 +464,60 @@ def briefing_csv(period: str = "weekly", topic: str = "",
                     headers={"Content-Disposition": 'attachment; filename="bawaslu-casework-briefing.csv"',
                              "Cache-Control": "private, no-store",
                              "X-Report-Source": "AUTHORIZED_OFFICER_CASEWORK"})
+
+
+@router.get("/officer-pilot.csv")
+def officer_pilot_csv(period: str = "weekly", topic: str = "",
+                      user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    """Download evidence-minimized acceptance worksheet (no automatic signoff).
+
+    A worksheet is produced even for an empty casework scope, with headers
+    only, making absence of real cases explicit through response metadata.
+    """
+    access=profile(db,user)
+    cases,start,end,_,_,transitions,latest=_scoped_casework_window(
+        db,access,user.id,period,topic)
+    rows=officer_pilot_case_rows(cases,latest,transitions)
+    buffer=io.StringIO(newline="")
+    writer=csv.writer(buffer,lineterminator="\r\n")
+    writer.writerow([
+        "Case ID","Current case status","Latest report status",
+        "Reporting window start UTC","Reporting window end UTC",
+        "Source linked (window audit)","Receiving officer accepted (window audit)",
+        "Original source reviewed (window audit)",
+        "Latest report submitted (window audit)",
+        "Independent reviewer approved (window audit)",
+        "Observed stages (of 5)","Next audit check","Audit window truncated",
+        "Inbox casework link (permission rechecked)",
+        "Officer assessment (human entry)","Officer reviewer (human entry)",
+        "Independent reviewer (human entry)","Acceptance decision (human entry)",
+        "Acceptance date UTC (human entry)","Review notes (human entry)"
+    ])
+    for row in rows:
+        steps=row["observed_stages"]
+        audit=["OBSERVED_IN_WINDOW" if steps[stage] else "NOT_OBSERVED_IN_WINDOW"
+            for stage in ("source_linked","receiving_officer_accepted",
+                          "original_source_checked","latest_report_submitted",
+                          "independent_report_approval")]
+        cells=[row["case_id"],row["case_status"],row["latest_report_status"],
+               start.isoformat()+"Z",end.isoformat()+"Z",
+               *audit,row["observed_stage_count"],
+               row["next_unobserved_step"] or "",
+               "YES" if row["audit_event_window_limited"] else "NO",
+               row["casework_url"],"","","","","",""]
+        writer.writerow([_safe_csv_cell(v) for v in cells])
+    return Response(
+        content="\ufeff"+buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Cache-Control":"private, no-store",
+            "Content-Disposition":
+                'attachment; filename="bawaslu-officer-pilot-worksheet-'+period+'.csv"',
+            "X-Pilot-Case-Count":str(len(rows)),
+            "X-Pilot-Approval":"AWAITING_HUMAN_REVIEW",
+            "X-Pilot-Data-Basis":"AUTHORIZED_CASEWORK_WINDOW_AUDIT",
+        })
 
 
 def _export_report(kind: str, period: str, topic: str, language: str, user: User,

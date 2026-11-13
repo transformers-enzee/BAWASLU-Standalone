@@ -34,6 +34,13 @@ const READINESS_STEPS={
  VERIFY_UNRECOGNIZED_CASE_STATE:['Verify current workflow state','Verifikasi status alur kerja saat ini'],
  NO_AUTOMATED_ACTION:['No automated action','Tidak ada tindakan otomatis']
 };
+const PILOT_STEPS={
+ source_linked:['Source linkage','Tautan sumber'],
+ receiving_officer_accepted:['Receiving officer acceptance','Penerimaan petugas'],
+ original_source_checked:['Original source check','Pemeriksaan sumber asli'],
+ latest_report_submitted:['Current report submission','Pengajuan laporan terbaru'],
+ independent_report_approval:['Independent report approval','Persetujuan laporan independen']
+};
 const API='/api/management-reporting';
 const auth=()=>({Authorization:'Bearer '+(window.localStorage.getItem('bawaslu_access_token')||'')});
 const entries=o=>Object.entries(o||{}).sort((a,b)=>b[1]-a[1]);
@@ -66,6 +73,21 @@ export default function ManagementBriefings(){
      const link=document.createElement('a');link.href=url;link.download='bawaslu-casework-'+period+'.csv';
      document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
    }catch(e){setError(e.message)}finally{setExporting(false)}
+ }
+
+ async function exportPilotWorksheet(){
+   setExporting(true);setError('');
+   try{
+     const response=await fetch(API+'/officer-pilot.csv?'+new URLSearchParams({period,topic}).toString(),
+       {headers:auth(),cache:'no-store'});
+     if(!response.ok)throw Error('Officer pilot worksheet unavailable ('+response.status+')');
+     const url=URL.createObjectURL(await response.blob());
+     const anchor=document.createElement('a');
+     anchor.href=url;anchor.download='bawaslu-officer-pilot-worksheet-'+period+'.csv';
+     document.body.appendChild(anchor);anchor.click();anchor.remove();
+     setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }catch(e){setError(String(e.message||e))}
+   finally{setExporting(false)}
  }
 
  async function exportTemplate(kind){
@@ -243,7 +265,14 @@ export default function ManagementBriefings(){
    </section>
    {report.officer_pilot_readiness?.schema==='BAWASLU_OFFICER_PILOT_EVIDENCE_V1540'&&
     <section data-testid="briefing-officer-pilot-evidence" className="rounded-xl border border-[#dce5ec] bg-white p-4">
-     <h3 className="font-semibold">{t('Officer acceptance evidence','Bukti persiapan penerimaan petugas')}</h3>
+     <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 className="font-semibold">{t('Officer acceptance evidence','Bukti persiapan penerimaan petugas')}</h3>
+      <button data-testid="briefing-download-officer-pilot" className="intel-ghost text-xs" type="button"
+       disabled={busy||exporting} onClick={exportPilotWorksheet}>
+       <Download size={14} className="mr-1 inline"/>
+       {t('Download officer review worksheet (CSV)','Unduh lembar evaluasi petugas (CSV)')}
+      </button>
+     </div>
      <p className="mt-1 text-xs text-[#64748b]">{t('Audited workflow observations only, not a formal approval or an evaluation of source truth.','Hanya peristiwa alur kerja teraudit, bukan persetujuan resmi atau penilaian kebenaran sumber.')}</p>
      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
       {[
@@ -267,6 +296,36 @@ export default function ManagementBriefings(){
        <span className="ml-2">{label}</span>
       </div>)}
      </div>
+
+     {(report.officer_pilot_readiness.case_preview||[]).length>0&&
+      <div data-testid="briefing-officer-pilot-preview" className="mt-3 overflow-x-auto">
+       <p className="mb-2 text-xs font-semibold">{t('Case-level audit evidence (preview)','Bukti audit per kasus (pratinjau)')}</p>
+       <table className="w-full text-left text-xs">
+        <thead><tr className="border-b">
+         <th className="p-2">{t('Case','Kasus')}</th>
+         <th className="p-2">{t('Observed stages','Tahap teramati')}</th>
+         <th className="p-2">{t('Next check','Pemeriksaan berikutnya')}</th>
+         <th className="p-2">{t('Casework','Penugasan')}</th>
+        </tr></thead>
+        <tbody>{(report.officer_pilot_readiness.case_preview||[]).map(item=>
+         <tr key={item.case_id} className="border-b">
+          <td className="p-2 font-semibold">#{item.case_id}</td>
+          <td className="p-2 tabular-nums">{item.observed_stage_count}/5</td>
+          <td className="p-2">{item.next_unobserved_step?
+           (PILOT_STEPS[item.next_unobserved_step]||[item.next_unobserved_step,item.next_unobserved_step])[id?1:0]:
+           t('All five observed, human sign-off still required','Lima tahap tercatat, persetujuan manusia tetap diperlukan')}
+          </td>
+          <td className="p-2">{followupLink(item)?
+           <a className="text-[#116d85] underline" href={followupLink(item)} rel="noopener noreferrer">{t('Open in Inbox','Buka di Inbox')}</a>:
+           <span className="text-[#64748b]">{t('Unavailable','Tidak tersedia')}</span>}</td>
+         </tr>)}</tbody>
+       </table>
+      </div>}
+     {report.officer_pilot_readiness.case_preview_is_sample&&
+      <p data-testid="briefing-pilot-preview-sampled" className="mt-2 text-xs text-[#876532]">
+       {t('Only the first 12 authorized cases are displayed here. The worksheet contains the full authorized case cohort.','Hanya 12 kasus berizin pertama yang terlihat. Lembar evaluasi mencakup seluruh kasus yang berizin.')}
+      </p>}
+     <p className="mt-2 text-xs text-[#876532]">{t('The CSV is an unsigned review worksheet. Human assessment, reviewer identity, decision and date are blank for officers to complete outside this dashboard. No status is automatically approved.','CSV adalah lembar peninjauan tanpa tanda tangan. Penilaian manusia, identitas pemeriksa, keputusan dan tanggal dikosongkan untuk diisi petugas. Tidak ada status yang disetujui otomatis.')}</p>
      {!report.officer_pilot_readiness.real_casework_available_in_scope?
       <p data-testid="briefing-officer-pilot-no-real-cases" className="mt-3 text-xs text-[#876532]">
        {t('No real cases in this authorized reporting window. Pilot acceptance remains pending. Synthetic automated tests cannot substitute for an officer review.','Tidak ada kasus riil berizin pada periode pelaporan ini. Penerimaan uji petugas masih tertunda. Pengujian sintetis otomatis tidak menggantikan peninjauan petugas.')}

@@ -324,6 +324,9 @@ export default function ManagementBriefings(){
          <span>{t('Missing saved text','Teks tersimpan tidak tersedia')}: <strong>{pilotIntake.missing_saved_text_count??0}</strong></span>
          <span>{t('Missing original URL','URL sumber asli tidak tersedia')}: <strong>{pilotIntake.missing_saved_url_count??0}</strong></span>
          <span>{t('Existing cases in preview','Kasus yang sudah ada pada pratinjau')}: <strong>{pilotIntake.preview_existing_case_count??0}</strong></span>
+         <span>{t('Latest saved source eligible (preview)','Sumber tersimpan terbaru layak (pratinjau)')}: <strong>{pilotIntake.preview_latest_saved_eligible_count??0}</strong></span>
+         <span>{t('Latest assessment no longer relevant (preview)','Penilaian terbaru tidak lagi relevan (pratinjau)')}: <strong>{pilotIntake.preview_latest_irrelevant_count??0}</strong></span>
+         <span>{t('Source now unavailable in scope (preview)','Sumber kini tidak tersedia dalam cakupan akses (pratinjau)')}: <strong>{pilotIntake.preview_now_unavailable_count??0}</strong></span>
         </div>
         {(pilotIntake.items||[]).length>0?
          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
@@ -337,7 +340,11 @@ export default function ManagementBriefings(){
             <span className="ml-1">{item.platform}</span>
             {item.incident_jurisdiction_verified&&<span className="block text-[#64748b]">{item.verified_incident_province}</span>}</td>
            <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}</td>
-           <td className="p-2">{item.case_already_exists_in_visible_scope?
+           <td className="p-2">{item.latest_saved_eligibility==='SOURCE_NOT_IN_AUTHORIZED_SCOPE'?
+            t('Source no longer available in your permission scope','Sumber tidak lagi tersedia dalam cakupan izin Anda'):
+            item.latest_saved_eligibility==='LATEST_ASSESSMENT_NOT_RELEVANT'?
+            t('Latest assessment is no longer relevant; check Inbox','Penilaian terbaru tidak lagi relevan; periksa Inbox'):
+            item.case_already_exists_in_visible_scope?
             t('Existing case: recheck original source before continuing','Kasus tersedia: periksa kembali sumber asli sebelum melanjutkan'):
             item.source_recovery_reason==='MISSING_TEXT_AND_URL'?
             t('Recover saved text and original URL','Pulihkan teks tersimpan dan URL sumber asli'):

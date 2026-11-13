@@ -183,6 +183,14 @@ def test_cached_saved_inbox_pilot_reuses_case_even_after_more_than_250_active_re
     db=dataset()
     try:
         _patch(monkeypatch,[finding(posts=[post(11,90),post(12,90)])])
+        # The current source check must find a real saved campaign link for
+        # both records, rather than a synthetic post existing only in a mock.
+        from app.models import SocialListeningResult,CampaignEvidence,EvidenceAssessment
+        db.add(SocialListeningResult(id=12,run_id=2,platform="instagram",
+            text_content="Saved source 12",canonical_url="https://example.test/post/12"))
+        db.add(CampaignEvidence(campaign_id=90,result_id=12))
+        db.add(EvidenceAssessment(campaign_id=90,result_id=12,
+            assessment_version=1,relevance_label="RELEVANT"))
         db.add_all([_case(11) for _ in range(260)]+[_case(12)])
         db.commit()
         result=pilot_intake(db.get(User,1),db)

@@ -475,6 +475,40 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["requires_officer_permission"]="add_intelligence"
     result["permission_checked_at_request"]=True
     result["inbox_source_rescoped_on_action"]=True
+    # Recheck the displayed shortlist against current saved source and role
+    # access; the permission-scoped Inbox snapshot may have become stale.
+    from .jurisdiction_review import scoped_post
+    counts={"LATEST_SAVED_ELIGIBLE":0,"LATEST_ASSESSMENT_NOT_RELEVANT":0,
+            "SOURCE_NOT_IN_AUTHORIZED_SCOPE":0}
+    for item in result["items"]:
+        try:
+            _,_,relevant=scoped_post(db,p,item["campaign_id"],item["source_id"])
+            state="LATEST_SAVED_ELIGIBLE" if relevant else "LATEST_ASSESSMENT_NOT_RELEVANT"
+        except (PermissionError,ValueError):
+            state="SOURCE_NOT_IN_AUTHORIZED_SCOPE"
+        item["latest_saved_eligibility"]=state
+        item["latest_saved_eligibility_checked"]=True
+        item["source_truth_verified"]=False
+        counts[state]+=1
+        if state!="LATEST_SAVED_ELIGIBLE":
+            item["casework_link"]=None
+            item["review_step"]="RECHECK_SAVED_SOURCE"
+            if state=="SOURCE_NOT_IN_AUTHORIZED_SCOPE":
+                item["source_link"]=None
+                item["visible_open_case_id"]=None
+                item["case_already_exists_in_visible_scope"]=False
+    result["preview_latest_saved_eligible_count"]=counts["LATEST_SAVED_ELIGIBLE"]
+    result["preview_latest_irrelevant_count"]=counts["LATEST_ASSESSMENT_NOT_RELEVANT"]
+    result["preview_now_unavailable_count"]=counts["SOURCE_NOT_IN_AUTHORIZED_SCOPE"]
+    result["preview_latest_saved_recheck_count"]=sum(counts.values())
+    result["preview_latest_recheck_is_not_full_cohort"]=True
+    result["latest_saved_eligibility_is_not_source_authenticity"]=True
+    result["preview_existing_case_count"]=sum(int(
+        item["case_already_exists_in_visible_scope"]) for item in result["items"])
+    result["preview_new_source_review_count"]=sum(int(
+        item["review_step"]=="REVIEW_IN_INBOX") for item in result["items"])
+    result["preview_source_recovery_count"]=sum(int(
+        item["review_step"]=="RECOVER_SOURCE_EVIDENCE") for item in result["items"])
     return result
 
 

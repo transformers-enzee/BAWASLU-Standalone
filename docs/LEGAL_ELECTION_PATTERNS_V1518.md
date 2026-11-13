@@ -1,0 +1,1 @@
+# v151.8 election type hint regression\n\nCorrect word boundary escaping in the v151.7 Pemilu/Pilkada lexical detector and add direct pattern checks for both terms, false positives, title conflicts and matched titles. Classification remains an unverified routing hint only.\n

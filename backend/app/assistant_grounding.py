@@ -17,8 +17,8 @@ _LEGAL_DOC_TYPES={"REGULATION","SOP","GUIDANCE"}
 
 # These words are routing hints, not a determination that a particular law applies.
 _ELECTION_TYPE_HINTS={
-    "PEMILU":re.compile(r"\\b(?:pemilu|general elections?|legislative elections?|presidential elections?)\\b",re.I),
-    "PILKADA":re.compile(r"\\b(?:pilkada|pemilihan kepala daerah|regional head elections?|local head elections?)\\b",re.I),
+    "PEMILU":re.compile(r"\b(?:pemilu|general elections?|legislative elections?|presidential elections?)\b",re.I),
+    "PILKADA":re.compile(r"\b(?:pilkada|pemilihan kepala daerah|regional head elections?|local head elections?)\b",re.I),
 }
 
 def _election_types(text):

@@ -55,6 +55,8 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
             if not sid or not cid:continue
             has_text=bool(str(post.get("message_original") or "").strip())
             has_url=_original_url_available(post.get("source_url"))
+            missing_fields=([ "ORIGINAL_TEXT" ] if not has_text else []) + (
+                [ "ORIGINAL_URL" ] if not has_url else [])
             # Never let a flagged but unusable campaign version hide a
             # separately authorized version with both text and a safe URL.
             rank=(not (has_text and has_url), _RANK[kind], int(sid), int(cid))
@@ -67,6 +69,11 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
                     "saved_assessment_only":True,
                     "source_text_available":has_text,
                     "original_source_url_available":has_url,
+                    "missing_saved_evidence_fields":missing_fields,
+                    "source_recovery_reason":("MISSING_TEXT_AND_URL" if len(missing_fields)==2
+                                              else "MISSING_ORIGINAL_TEXT" if not has_text
+                                              else "MISSING_ORIGINAL_URL" if not has_url
+                                              else "NO_RECOVERY_NEEDED"),
                     "original_source_verified":False,
                     "incident_jurisdiction_verified":bool(
                         post.get("verified_incident_province")),
@@ -113,8 +120,21 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
             row["casework_link"]="/inbox?"+urlencode({
                 "casework":"1","case_id":existing,"tab":"reports"})
             row["review_step"]="CONTINUE_VISIBLE_CASEWORK"
+    preview=rows[:limit]
+    preview_existing=sum(int(row["case_already_exists_in_visible_scope"]) for row in preview)
     return {
         "schema":"BAWASLU_OFFICER_PILOT_INTAKE_V1544",
+        "preview_existing_case_count":preview_existing,
+        "preview_new_source_review_count":sum(int(
+            row["review_step"]=="REVIEW_IN_INBOX") for row in preview),
+        "preview_source_recovery_count":sum(int(
+            row["review_step"]=="RECOVER_SOURCE_EVIDENCE") for row in preview),
+        "missing_saved_text_count":sum(int(
+            not row["source_text_available"]) for row in rows),
+        "missing_saved_url_count":sum(int(
+            not row["original_source_url_available"]) for row in rows),
+        "readiness_counts_cover_authorized_window":True,
+        "existing_case_count_preview_only":True,
         "observed_authorized_unique_sources":len(rows),
         "source_prefill_available_count":source_prefill_available,
         "source_recovery_required_count":len(rows)-source_prefill_available,

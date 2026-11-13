@@ -256,3 +256,42 @@ def test_case_matching_remains_scoped_to_exact_campaign_when_newer_case_exists()
     matching=Obj(id=21,source_type="SOCIAL",source_id="11",campaign_id=90,status="OPEN")
     row=list_rows([finding()],visible=[other,matching])["items"][0]
     assert row["visible_open_case_id"]==21
+
+
+def test_recovery_reasons_are_distinct_and_do_not_claim_original_verification():
+    rows=list_rows([finding(posts=[
+        post(11,90,text="",url=""),
+        post(12,90,text="",url="https://example.invalid/12"),
+        post(13,90,text="Present",url=""),
+        post(14,90,text="Present",url="https://example.invalid/14")
+    ])])
+    reasons={item["source_id"]:item["source_recovery_reason"] for item in rows["items"]}
+    assert reasons=={"11":"MISSING_TEXT_AND_URL","12":"MISSING_ORIGINAL_TEXT",
+                     "13":"MISSING_ORIGINAL_URL","14":"NO_RECOVERY_NEEDED"}
+    assert rows["missing_saved_text_count"]==2
+    assert rows["missing_saved_url_count"]==2
+    assert rows["source_recovery_required_count"]==3
+    assert rows["source_prefill_available_count"]==1
+    assert all(item["original_source_verified"] is False for item in rows["items"])
+
+def test_existing_case_counts_only_preview_and_does_not_change_cohort_totals():
+    findings=[finding(posts=[post(i,90)]) for i in range(1,17)]
+    existing=[Obj(id=300,source_type="SOCIAL",source_id="1",campaign_id=90,status="OPEN"),
+              Obj(id=301,source_type="SOCIAL",source_id="16",campaign_id=90,status="OPEN")]
+    data=list_rows(findings,visible=existing,limit=12)
+    assert data["observed_authorized_unique_sources"]==16
+    assert data["preview_existing_case_count"]==1
+    assert data["existing_case_count_preview_only"] is True
+    assert data["preview_new_source_review_count"]==11
+    assert data["preview_source_recovery_count"]==0
+    assert data["readiness_counts_cover_authorized_window"] is True
+
+def test_existing_case_can_be_opened_without_treating_missing_url_as_verified():
+    existing=Obj(id=17,source_type="SOCIAL",source_id="11",campaign_id=90,status="OPEN")
+    data=list_rows([finding(posts=[post(url="")])],visible=[existing])
+    row=data["items"][0]
+    assert row["casework_link"]=="/inbox?casework=1&case_id=17&tab=reports"
+    assert row["original_source_url_available"] is False
+    assert row["original_source_verified"] is False
+    assert data["preview_existing_case_count"]==1
+    assert data["preview_new_source_review_count"]==0

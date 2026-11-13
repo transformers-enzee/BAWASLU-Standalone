@@ -321,6 +321,9 @@ export default function ManagementBriefings(){
         <div className="mb-2 flex flex-wrap gap-3 text-xs text-[#64748b]" data-testid="briefing-pilot-evidence-availability">
          <span>{t('Saved source links usable for review','Tautan sumber tersimpan untuk ditinjau')}: <strong>{pilotIntake.source_prefill_available_count??0}</strong></span>
          <span>{t('Need source recovery','Memerlukan pemulihan sumber')}: <strong>{pilotIntake.source_recovery_required_count??0}</strong></span>
+         <span>{t('Missing saved text','Teks tersimpan tidak tersedia')}: <strong>{pilotIntake.missing_saved_text_count??0}</strong></span>
+         <span>{t('Missing original URL','URL sumber asli tidak tersedia')}: <strong>{pilotIntake.missing_saved_url_count??0}</strong></span>
+         <span>{t('Existing cases in preview','Kasus yang sudah ada pada pratinjau')}: <strong>{pilotIntake.preview_existing_case_count??0}</strong></span>
         </div>
         {(pilotIntake.items||[]).length>0?
          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
@@ -334,9 +337,15 @@ export default function ManagementBriefings(){
             <span className="ml-1">{item.platform}</span>
             {item.incident_jurisdiction_verified&&<span className="block text-[#64748b]">{item.verified_incident_province}</span>}</td>
            <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}</td>
-           <td className="p-2">{item.source_text_available&&item.original_source_url_available?
-            t('Saved text and URL present, original not verified','Teks dan URL tersedia, sumber asli belum diverifikasi'):
-            t('Recover or verify original text / URL first','Temukan atau periksa teks dan URL asli lebih dahulu')}</td>
+           <td className="p-2">{item.case_already_exists_in_visible_scope?
+            t('Existing case: recheck original source before continuing','Kasus tersedia: periksa kembali sumber asli sebelum melanjutkan'):
+            item.source_recovery_reason==='MISSING_TEXT_AND_URL'?
+            t('Recover saved text and original URL','Pulihkan teks tersimpan dan URL sumber asli'):
+            item.source_recovery_reason==='MISSING_ORIGINAL_TEXT'?
+            t('Recover saved source text','Pulihkan teks sumber tersimpan'):
+            item.source_recovery_reason==='MISSING_ORIGINAL_URL'?
+            t('Recover original source URL','Pulihkan URL sumber asli'):
+            t('Saved text and URL present, original not verified','Teks dan URL tersedia, sumber asli belum diverifikasi')}</td>
            <td className="p-2">{pilotIntakeLink(item)?
             <a href={pilotIntakeLink(item)} className="text-[#116d85] underline" rel="noopener noreferrer">
              {item.case_already_exists_in_visible_scope?

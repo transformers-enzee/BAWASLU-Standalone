@@ -40,6 +40,9 @@ class KnowledgePDF(Base):
     active:Mapped[bool]=mapped_column(default=True,nullable=False)
     document_type:Mapped[str]=mapped_column(String(24),default="OTHER",nullable=False)
     issuer:Mapped[str]=mapped_column(String(220),default="",nullable=False)
+    legal_version_label:Mapped[str]=mapped_column(String(120),default="",nullable=False)
+    legal_effective_date:Mapped[str]=mapped_column(String(10),default="",nullable=False)
+    legal_election_type:Mapped[str]=mapped_column(String(20),default="UNSPECIFIED",nullable=False)
     review_status:Mapped[str]=mapped_column(String(24),default="UNREVIEWED",nullable=False)
     review_notes:Mapped[str]=mapped_column(Text,default="",nullable=False)
     reviewed_by:Mapped[int | None]=mapped_column(Integer,ForeignKey("users.id"),nullable=True)
@@ -124,6 +127,9 @@ def _view(doc):
         "extracted_chars":doc.extracted_chars,"uploaded_at":doc.uploaded_at.isoformat() if doc.uploaded_at else "",
         "uploaded_by":doc.uploaded_by,"active":doc.active,
         "document_type":doc.document_type,"issuer":doc.issuer,
+            "legal_version_label":doc.legal_version_label,
+            "legal_effective_date":doc.legal_effective_date,
+            "legal_election_type":doc.legal_election_type,
         "review_status":doc.review_status,"review_notes":doc.review_notes,
         "reviewed_at":doc.reviewed_at.isoformat() if doc.reviewed_at else None,
         "embedding_status":doc.embedding_status,"embedding_model":doc.embedding_model,
@@ -205,6 +211,9 @@ def list_knowledge(user:User=Depends(current_user),db:Session=Depends(get_db)):
 class ReviewBody(BaseModel):
     document_type:str
     issuer:str=""
+    legal_version_label:str=Field(default="",max_length=120)
+    legal_effective_date:str=Field(default="",max_length=10)
+    legal_election_type:str="UNSPECIFIED"
     notes:str=Field(default="",max_length=1500)
     reviewed:bool=False
 
@@ -219,17 +228,30 @@ def review_pdf(document_id:int,body:ReviewBody,user:User=Depends(current_user),
         raise HTTPException(403,"Officer review permission is required")
     if body.document_type not in DOCUMENT_TYPES or len(body.issuer)>220:
         raise HTTPException(422,"Invalid document metadata")
+    if body.legal_election_type not in {"UNSPECIFIED","PEMILU","PILKADA","BOTH"}:
+        raise HTTPException(422,"Invalid legal election type")
+    if body.legal_effective_date:
+        try:
+            datetime.strptime(body.legal_effective_date,"%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(422,"Effective date must use YYYY-MM-DD") from exc
     if body.reviewed and len(body.notes.strip())<12:
         raise HTTPException(422,"Provide review notes (at least 12 characters)")
     row.document_type=body.document_type
     row.issuer=body.issuer.strip()
+    row.legal_version_label=body.legal_version_label.strip()
+    row.legal_effective_date=body.legal_effective_date
+    row.legal_election_type=body.legal_election_type
     row.review_status="OFFICER_REVIEWED" if body.reviewed else "UNREVIEWED"
     row.review_notes=body.notes.strip()
     row.reviewed_by=user.id if body.reviewed else None
     row.reviewed_at=datetime.now(timezone.utc) if body.reviewed else None
     _audit(db,p,row.id,"KNOWLEDGE_DOCUMENT_REVIEW",{
         "review_status":row.review_status,"issuer":row.issuer,
-        "document_type":row.document_type,"review_notes":row.review_notes})
+        "document_type":row.document_type,"review_notes":row.review_notes,
+        "legal_version_label":row.legal_version_label,
+        "legal_effective_date":row.legal_effective_date,
+        "legal_election_type":row.legal_election_type})
     db.commit()
     return {"document":_view(row),"legal_currentness_verified":False}
 
@@ -377,6 +399,9 @@ def retrieve_exact_pdf_pages(db,p,question,limit=6):
             "source_url":f"/api/assistant-knowledge/{doc.id}/download",
             "scope":doc.scope,"province":doc.province,
             "document_type":doc.document_type,"issuer":doc.issuer,
+            "legal_version_label":doc.legal_version_label,
+            "legal_effective_date":doc.legal_effective_date,
+            "legal_election_type":doc.legal_election_type,
             "review_status":doc.review_status,
             "legal_currentness_verified":False,
             "verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION",
@@ -439,6 +464,9 @@ def _document_overview(db,p,limit):
             "source_url":f"/api/assistant-knowledge/{doc.id}/download",
             "scope":doc.scope,"province":doc.province,
             "document_type":doc.document_type,"issuer":doc.issuer,
+            "legal_version_label":doc.legal_version_label,
+            "legal_effective_date":doc.legal_effective_date,
+            "legal_election_type":doc.legal_election_type,
             "review_status":doc.review_status,
             "legal_currentness_verified":False,
             "verification_status":"UPLOADED_DOCUMENT_NOT_LEGAL_VALIDATION",

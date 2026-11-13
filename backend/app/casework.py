@@ -595,13 +595,18 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
     # Duplicate detection runs AFTER authorization and source revalidation.
     # Reuse only an active, currently VISIBLE case linked to the exact
     # saved source/campaign, never return an unrelated hidden case ID.
-    active_candidates=(_authorized_cases_query(db,p,user.id)
+    # SQL applies the same geographic visibility rules as _visible.
+    # Fetch only the newest authorized active assignment; the old 50-row
+    # cap risked missing reusable work and transferred unnecessary records.
+    existing=(_authorized_cases_query(db,p,user.id)
         .filter(CaseAssignment.source_type==source["source_type"],
                 CaseAssignment.source_id==source["source_id"],
                 CaseAssignment.campaign_id==source["campaign_id"],
                 CaseAssignment.status!="CLOSED")
-        .order_by(CaseAssignment.id.desc()).limit(50).all())
-    existing=next((case for case in active_candidates if _visible(case,p,user.id)),None)
+        .order_by(CaseAssignment.id.desc()).first())
+    # Preserve a second permission check before revealing an existing ID.
+    if existing is not None and not _visible(existing,p,user.id):
+        existing=None
     if existing is not None:
         requested_matches=(
             existing.target_scope==body.target_scope and

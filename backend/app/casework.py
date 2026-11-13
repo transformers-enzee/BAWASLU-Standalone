@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, and_, or_
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from .db import Base, get_db
-from .models import (User, AccessGrant, IntelligenceItem, EvidenceAssessment)
+from .models import (User, AccessGrant, IntelligenceItem, EvidenceAssessment, CampaignEvidence)
 from .auth import current_user
 from .access import profile, has, allowed, audit
 
@@ -526,6 +526,32 @@ def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)
             "queue_is_sample":len(visible)==300,
             "paid_provider_called":False}
 
+def _assignment_source_lock_query(db, source):
+    """Lock the common saved-source row, not the individual initiating user.
+
+    PostgreSQL SELECT FOR UPDATE serializes case creation for the same
+    social campaign link across DIFFERENT officers and worker instances.
+    SQLite ignores the lock in isolated tests, so compile the query for
+    PostgreSQL in regression QA as well.
+    """
+    if source["source_type"]=="SOCIAL":
+        return (db.query(CampaignEvidence.id)
+            .filter(CampaignEvidence.campaign_id==source["campaign_id"],
+                    CampaignEvidence.result_id==int(source["source_id"]))
+            .with_for_update())
+    if source["source_type"]=="INTELLIGENCE":
+        return (db.query(IntelligenceItem.id)
+            .filter(IntelligenceItem.intelligence_id==source["source_id"])
+            .with_for_update())
+    raise HTTPException(422,"Unsupported casework source type")
+
+
+def _lock_assignment_source(db, source):
+    """Fail closed if an already-validated saved source disappeared."""
+    if _assignment_source_lock_query(db,source).first() is None:
+        raise HTTPException(403,"Saved source unavailable in authorized scope")
+
+
 @router.post("/cases")
 def create_case(body: NewCase, user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile(db,user)
@@ -535,10 +561,10 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
     source = _source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)
     dest_province = _validate_route(source,p,body.target_scope,body.target_province)
     assignee = _assignee(db,body.target_scope,dest_province,body.assignee_id)
-    # Lock the initiating user's row (Postgres SELECT FOR UPDATE) so two
-    # simultaneous clicks by this officer cannot each create the same
-    # assignment. SQLite ignores this lock during isolated tests.
-    db.query(User).filter(User.id==user.id).with_for_update().first()
+    # A source-level row lock is shared across every officer. The earlier
+    # per-user lock did not prevent cross-officer simultaneous duplicates.
+    # Both the saved source and officer authorization have been revalidated.
+    _lock_assignment_source(db,source)
     # Duplicate detection runs AFTER authorization and source revalidation.
     # Reuse only an active, currently VISIBLE case linked to the exact
     # saved source/campaign, never return an unrelated hidden case ID.
@@ -550,7 +576,17 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
         .order_by(CaseAssignment.id.desc()).limit(50).all())
     existing=next((case for case in active_candidates if _visible(case,p,user.id)),None)
     if existing is not None:
-        return {**_case_view(existing),"existing":True,"assignment_created":False}
+        requested_matches=(
+            existing.target_scope==body.target_scope and
+            (existing.target_province or "")==(dest_province or "") and
+            existing.target_department==body.department and
+            (existing.assignee_id or None)==(assignee or None))
+        # Repeated intake never reroutes or overwrites an authorized case.
+        # Explicitly signal when the new request chose a different team or
+        # assignee so the officer knows to use the separate audited route.
+        return {**_case_view(existing),"existing":True,"assignment_created":False,
+                "requested_route_matches_existing":requested_matches,
+                "route_change_requires_separate_audited_action":True}
     origin_scope,origin_province = _team(p)
     item = CaseAssignment(
         title=_clean(body.title,240) or source["title"] or "Casework item",
@@ -568,7 +604,9 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
     db.flush()
     _record_event(db,item,user.id,"CREATED",{"scope":body.target_scope,"department":body.department,"assignee_id":assignee})
     audit(db,p,"CaseAssignment",item.id,"CASE_CREATED",{"target_scope":body.target_scope,"department":body.department})
-    return {**_case_view(item),"existing":False,"assignment_created":True}
+    return {**_case_view(item),"existing":False,"assignment_created":True,
+            "requested_route_matches_existing":True,
+            "route_change_requires_separate_audited_action":False}
 
 @router.get("/cases/{case_id}")
 def case_detail(case_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):

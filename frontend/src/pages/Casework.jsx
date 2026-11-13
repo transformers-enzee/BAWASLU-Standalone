@@ -103,8 +103,10 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
   previewAttempted.current=true;
   previewSource();
  }},[embedded,sourceId,showNew,options?.can_create]);
- async function createCase(){let reused=false;await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});reused=created.existing===true;setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab(initialTab==='reports'?'reports':'assignments')},()=>reused?
- tr('Existing active assignment opened. No duplicate was created.','Penugasan aktif yang sudah ada dibuka. Tidak ada duplikat dibuat.'):
+ async function createCase(){let reused=false,routeMismatch=false;await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});reused=created.existing===true;routeMismatch=reused&&created.requested_route_matches_existing===false;setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab(initialTab==='reports'?'reports':'assignments')},()=>reused?
+ (routeMismatch?
+  tr('Existing assignment opened. The requested destination was not changed. Use the separate Route action to make an audited transfer.','Penugasan yang ada dibuka. Tim tujuan yang diminta tidak diubah. Gunakan tindakan Alihkan untuk perubahan yang tercatat dalam audit.'):
+  tr('Existing active assignment opened. No duplicate was created.','Penugasan aktif yang sudah ada dibuka. Tidak ada duplikat dibuat.')):
  tr('Assignment created. Review the evidence and prepare the report.','Penugasan dibuat. Periksa bukti dan siapkan laporan.'))}
  async function recordSourceReview(){
   if(!selected||busy)return;

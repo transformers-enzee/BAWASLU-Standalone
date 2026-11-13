@@ -472,6 +472,8 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["visible_case_lookup_basis"]="LATEST_ACTIVE_VISIBLE_CASE_PER_SOURCE_AND_CAMPAIGN"
     result["visible_case_lookup_pairs_limit"]=12
     result["visible_case_lookup_arbitrary_case_cap_removed"]=True
+    # Read audit evidence only for already-visible cases. A source that later
+    # fails the fresh eligibility check cannot receive an audit trace.
     result["requires_officer_permission"]="add_intelligence"
     result["permission_checked_at_request"]=True
     result["inbox_source_rescoped_on_action"]=True
@@ -586,6 +588,13 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["preview_latest_saved_recheck_count"]=sum(counts.values())
     result["preview_latest_recheck_is_not_full_cohort"]=True
     result["latest_saved_eligibility_is_not_source_authenticity"]=True
+    from .officer_pilot_audit import observed_casework_stages
+    authorized_case_ids={
+        int(row["visible_open_case_id"]) for row in result["items"]
+        if row.get("visible_open_case_id") and
+        row.get("latest_saved_eligibility")=="LATEST_SAVED_ELIGIBLE"}
+    audit_traces=observed_casework_stages(
+        db,[case for case in visible if case.id in authorized_case_ids])
     # One deterministic officer next action per displayed source. This is
     # an operational triage hint, not a legal severity/routing decision.
     action_counts={}
@@ -618,10 +627,24 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
             "latest_report_submitted":"Officer submits an evidence-based report",
             "independent_report_approval":"Independent authorized reviewer checks the report",
         }
+        trace=audit_traces.get(int(item["visible_open_case_id"])) if (
+            item.get("visible_open_case_id") and
+            item.get("latest_saved_eligibility")=="LATEST_SAVED_ELIGIBLE") else None
+        verified_stages=(trace or {}).get("observed_stages",{})
         item["acceptance_workflow_checklist"]=[
             {"key":key,"instruction":stage_context[key],
-             "status":"REQUIRES_AUTHORIZED_CASEWORK_VERIFICATION",
-             "completed":False} for key in _STAGES]
+             "status":("OBSERVED_IN_BOUNDED_CASE_AUDIT" if verified_stages.get(key)
+                       else "NOT_OBSERVED_IN_BOUNDED_CASE_AUDIT" if trace
+                       else "REQUIRES_AUTHORIZED_CASEWORK_VERIFICATION"),
+             "completed":False,
+             "audit_observed":bool(verified_stages.get(key,False))}
+            for key in _STAGES]
+        item["acceptance_audit_observed_stage_count"]=sum(int(
+            bool(verified_stages.get(key))) for key in _STAGES)
+        item["acceptance_case_audit_evidence_available"]=trace is not None
+        item["acceptance_audit_window_limited"]=bool(
+            (trace or {}).get("audit_event_window_limited",False))
+        item["acceptance_casework_audit_is_not_formal_acceptance"]=True
         item["acceptance_saved_source_reference"]={
             "source_type":"SOCIAL",
             "source_id":item["source_id"],
@@ -637,6 +660,8 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["acceptance_checklist_stage_count"]=5
     result["acceptance_checklist_is_unsigned"]=True
     result["acceptance_checklist_is_preparatory"]=True
+    result["acceptance_case_audit_preview_only"]=True
+    result["acceptance_audit_evidence_is_not_human_signoff"]=True
     result["pilot_next_action_not_legal_determination"]=True
     result["preview_existing_case_count"]=sum(int(
         item["case_already_exists_in_visible_scope"]) for item in result["items"])

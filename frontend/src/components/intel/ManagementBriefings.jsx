@@ -378,9 +378,17 @@ export default function ManagementBriefings(){
              <ol className="mt-1 list-decimal pl-4">
               {item.acceptance_workflow_checklist.map(stage=><li key={stage.key} className="my-1">
                {(PILOT_ACCEPTANCE_STAGES[stage.key]||[stage.instruction,stage.instruction])[id?1:0]}
-               <span className="block text-[#876532]">{t('Requires verified casework evidence','Memerlukan bukti penanganan kasus yang diverifikasi')}</span>
+               <span className={"block "+(stage.audit_observed?'text-[#146b56]':'text-[#876532]')}>{stage.audit_observed?
+                 t('Observed in bounded casework audit (not formal acceptance)','Teramati pada audit kasus terbatas (bukan penerimaan resmi)'):
+                 item.acceptance_case_audit_evidence_available?
+                 t('Not observed in available casework audit','Tidak teramati pada audit kasus yang tersedia'):
+                 t('Requires verified casework evidence','Memerlukan bukti penanganan kasus yang diverifikasi')}</span>
               </li>)}
              </ol>
+             {item.acceptance_case_audit_evidence_available&&<p className="mt-1 text-[#64748b]">
+              {t('Observed audit stages','Tahap audit teramati')}: {item.acceptance_audit_observed_stage_count??0}/5
+             </p>}
+             {item.acceptance_audit_window_limited&&<p className="mt-1 text-[#876532]">{t('Audit history truncated; missing stages may exist outside the retrieved window.','Riwayat audit terpotong; tahap yang hilang mungkin berada di luar rentang yang diambil.')}</p>}
              <p className="mt-1 text-[#876532]">{t('Unsigned preparation only. Completion and approval must be verified by authorized officers in casework.','Hanya persiapan tanpa tanda tangan. Penyelesaian dan persetujuan harus diverifikasi petugas berwenang dalam penanganan kasus.')}</p>
             </details>}</td>
            <td className="p-2">{item.latest_saved_eligibility==='SOURCE_NOT_IN_AUTHORIZED_SCOPE'?

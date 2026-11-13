@@ -34,11 +34,14 @@ def _rows(*pairs):
 
 def test_empty_source_pairs_avoid_database_queries():
     db=dataset()
+    # Evaluate the normal authenticated role lookup BEFORE instrumenting
+    # the lookup's own SQL. Empty pairs must require no casework query.
+    principal=profile(db,db.get(User,1))
     queries=[]
     def record(conn,cursor,statement,params,ctx,many):queries.append(statement)
     event.listen(db.get_bind(),"before_cursor_execute",record)
     try:
-        assert _pilot_visible_active_cases(db,profile(db,db.get(User,1)),1,[])==[]
+        assert _pilot_visible_active_cases(db,principal,1,[])==[]
         assert queries==[]
     finally:
         event.remove(db.get_bind(),"before_cursor_execute",record)

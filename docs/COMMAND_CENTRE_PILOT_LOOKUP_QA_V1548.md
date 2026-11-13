@@ -1,0 +1,3 @@
+# v154.8: Pilot lookup QA isolation correction
+
+The v154.7 build had 884 backend tests passing and one failing new regression: the test for an empty shortlist installed a SQL listener before fetching the logged-in User and permissions. Those two normal authentication/profile SELECT queries were wrongly counted as queries performed by the empty shortlist helper. v154.8 obtains the principal before enabling SQL instrumentation and retains the assertion that an empty source pair set causes **zero additional casework SQL queries**. Existing v154.7 lookup and input-validation improvements are unchanged. Mandatory backend/frontend regression suite reruns in full. No live casework writes or DB migration.

@@ -221,6 +221,10 @@ export default function IntelligenceAssistant(){
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
           {(m.grounding.cited_count??0)===0&&(m.grounding.source_card_count??0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Kartu sumber hanya konteks, bukan bukti yang dikutip.':'Source cards are context, not cited evidence.'}</p>}
+          {(m.grounding.grounding_audit.legal_review_reason_count||0)>1&&
+           <p data-testid="assistant-combined-legal-review" className="mt-1 font-medium text-[#91652e]">{(m.answer_language||'id')==='id'?'Beberapa masalah independen memerlukan tinjauan petugas; sumber, kesimpulan hukum dan tindakan belum disahkan.':'Multiple independent issues require officer review; sources, legal conclusions and actions are not approved.'}</p>}
+          {(m.grounding.grounding_audit.omitted_excess_citation_count||0)>0&&
+           <p data-testid="assistant-citation-limit-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Beberapa kutipan melebihi batas 12 sumber unik dan telah dihilangkan. Periksa sumber yang tersisa.':'Some citations exceeded the 12-unique-source limit and were removed. Review the remaining references.'}</p>}
           {m.grounding.grounding_audit.legal_categorical_outcome_needs_officer_review&&
            <p data-testid="assistant-categorical-legal-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Jawaban menyatakan pelanggaran, kesalahan, atau sanksi sebagai sudah pasti. Periksa putusan dan sumber resmi sebelum bertindak.':'This answer presents a violation, guilt, or penalty as established. Verify official decisions and records before acting.'}</p>}
           {m.grounding.grounding_audit.legal_enforcement_recommendation_needs_officer_review&&

@@ -66,6 +66,10 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
     elif not cited:
         checks.append(_status("citation_grounding",REVIEW,
             "Selected evidence is not cited within the visible answer."))
+    elif grounding.get("omitted_excess_citation_count",0):
+        checks.append(_status("citation_grounding",REVIEW,
+            "Some unique source references exceeded the visible citation limit and were removed; inspect the surviving citations.",
+            omitted_excess_citation_count=grounding["omitted_excess_citation_count"]))
     elif grounding.get("rejected_unavailable_citations",0):
         checks.append(_status("citation_grounding",REVIEW,
             "Unselected references were removed; inspect the affected claim.",

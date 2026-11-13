@@ -168,6 +168,26 @@ _CONFIRMED_GUILT_ID=re.compile(
 _CONFIRMED_OUTCOME_ID=re.compile(
     r"\b(?:telah\s+(?:didiskualifikasi|dipidana|dihukum|didenda)|"
     r"sanksi\s+(?:telah\s+)?dijatuhkan|hak\s+(?:dipilih|politik)\s+(?:telah\s+)?dicabut)\b",re.I)
+_CONCESSION_OPEN=re.compile(r"^\s*(?:although|even\s+though|while|meskipun|walaupun)\b",re.I)
+
+def _legal_claim_clauses(answer):
+    """Split a concessive lead-in from the independent legal assertion.
+
+    A single sentence may say 'Although the allegation is unverified,
+    the candidate is guilty.' Uncertainty about the allegation must not
+    suppress the independent assertion. Do not split reported speech
+    ('According to reports, ...') into a false affirmative claim.
+    """
+    for clause in _CLAUSE_BOUNDARY.split(str(answer or "")):
+        if _CONCESSION_OPEN.search(clause) and "," in clause:
+            lead,main=clause.split(",",1)
+            yield lead
+            if main.strip():
+                yield main
+        else:
+            yield clause
+
+
 _UNCERTAIN_OUTCOME=re.compile(
     r"\b(?:alleged(?:ly)?|allegation|suspected|potential(?:ly)?|"
     r"may|might|could|unverified|unconfirmed|reportedly|"
@@ -184,7 +204,7 @@ def _asserted_legal_outcomes(answer):
     cannot certify wrongdoing. Result categories are *detection labels* only.
     """
     flags=[]
-    for clause in _CLAUSE_BOUNDARY.split(str(answer or "")):
+    for clause in _legal_claim_clauses(answer):
         clause=clause.strip()
         if not clause or clause.endswith("?") or _QUOTED_ATTRIBUTION.search(clause):
             continue
@@ -224,6 +244,9 @@ def _message(language, key):
         "categorical_verdict":{
             "id":"Peringatan kepastian hukum: Jawaban ini menyampaikan pelanggaran, kesalahan, atau sanksi sebagai hal yang sudah pasti. Bukti tersimpan dan kutipan PDF saja tidak membuktikan putusan atau status hukum. Petugas berwenang harus memverifikasi sumber dan status resmi.",
             "en":"Legal certainty caution: The answer presents a violation, guilt, or penalty as an established outcome. Saved evidence and PDF references alone do not confirm a legal ruling or status. An authorized officer must verify official records."},
+        "citation_overflow":{
+            "id":"Catatan kutipan: Sebagian rujukan melebihi batas 12 ID unik dan dihilangkan. Jawaban ini tidak boleh dianggap telah didukung sepenuhnya oleh sumber. Periksa kembali rujukan yang ditampilkan.",
+            "en":"Citation limit caution: References beyond the first 12 unique IDs were removed. Do not treat this answer as fully source-supported; inspect the remaining citations."},
     }
     return choices[key].get(language,choices[key]["en"])
 
@@ -245,20 +268,26 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     raw=str(answer or "")
     displayed=[]
     rejected=[]
+    excess=[]
+    citation_limit=12
     def valid_ref(match):
         ref=match.group(1)
         if ref not in allowed:
             rejected.append(ref)
             return ""
-        if ref not in displayed:
-            displayed.append(ref)
+        if ref in displayed:
+            return match.group(0)
+        if len(displayed)>=citation_limit:
+            excess.append(ref)
+            return ""
+        displayed.append(ref)
         return match.group(0)
     text=_SOURCE_REF.sub(valid_ref,raw)
     # Remove spaces before punctuation left by rejected references only.
-    if rejected:
+    if rejected or excess:
         text=re.sub(r"[ \t]+([,.;:!?])",r"\1",text)
         text=re.sub(r"[ \t]{2,}"," ",text)
-    cited=displayed[:12]
+    cited=displayed
     structured={ref for ref in (model_cited_ids or [])
                 if isinstance(ref,str) and ref in allowed}
     doc_refs=[records[ref] for ref in cited if
@@ -297,11 +326,24 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         notes.append(_message(language,"enforcement"))
     if categorical_outcome_flags:
         notes.append(_message(language,"categorical_verdict"))
+    if excess:
+        notes.append(_message(language,"citation_overflow"))
     if records and not cited and not pdf_guidance:
         notes.append(_message(language,"uncited"))
     for note in notes:
         if note not in text:
             text=text.rstrip()+"\n\n"+note
+    review_reasons=[]
+    if categorical_outcome_flags:
+        review_reasons.append("CATEGORICAL_LEGAL_OUTCOME")
+    if enforcement_flags:
+        review_reasons.append("ENFORCEMENT_RECOMMENDATION")
+    if missing_article_ids or local_article_mismatches or unattributed_articles:
+        review_reasons.append("LEGAL_ARTICLE_ATTRIBUTION")
+    if unreviewed:
+        review_reasons.append("CITED_UNREVIEWED_PDF")
+    if excess or rejected:
+        review_reasons.append("CITATION_INTEGRITY")
     metadata={
         "audit_version":"ASSISTANT_GROUNDING_V1483",
         "scope":"ONLY_CURRENTLY_AUTHORIZED_SELECTED_RECORDS",
@@ -310,6 +352,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "displayed_citation_ids":cited,
         "model_cited_but_not_displayed":len(structured-set(cited)),
         "rejected_unavailable_citations":len(rejected),
+        "omitted_excess_citation_count":len(excess),
+        "omitted_excess_citation_ids":list(dict.fromkeys(excess)),
+        "citation_reference_limit":citation_limit,
         "citation_ids_valid":True,  # only after deterministic filtering
         "cited_pdf_pages":len(doc_refs),
         "cited_unreviewed_pdf_pages":len(unreviewed),
@@ -336,6 +381,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_categorical_outcome_classification_basis":"HEURISTIC_ONLY_NOT_LEGAL_VERDICT",
         "legal_currentness_verified":False,
         "legal_verdict_confirmed":False,
+        "legal_review_reason_codes":review_reasons,
+        "legal_review_reason_count":len(review_reasons),
+        "legal_action_ready":False,
         "source_truth_verified":False,
         "source_cards_are_citations":False,
         "claims_semantically_verified":False,
@@ -343,6 +391,6 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_reference_limit_added":bool(pdf_guidance and needs_legal_warning
                                            and not legally_reviewed),
         "audit_used_paid_provider":False,
-        "human_review_required":bool(records or categorical_outcome_flags or enforcement_flags),
+        "human_review_required":bool(records or categorical_outcome_flags or enforcement_flags or excess),
     }
     return text,cited,metadata

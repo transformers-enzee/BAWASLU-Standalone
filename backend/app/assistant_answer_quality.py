@@ -185,12 +185,13 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
             checks.append(_status("legal_uncertainty",REVIEW,
                 "Assertive legal enforcement or penalty language requires authorized officer review, irrespective of cited PDF review status. No legal conclusion is verified.",
                 enforcement_directive_flags=grounding.get("legal_enforcement_directive_flags") or []))
-        elif missing_articles or local_mismatches or unattributed:
+        elif missing_articles or local_mismatches or unattributed or grounding.get("prescriptive_legal_claims_without_local_legal_citation_count",0):
             checks.append(_status("legal_uncertainty",REVIEW,
                 "A named legal article is missing from cited excerpts, attributed to the wrong page, or lacks a sentence-level PDF reference.",
                 unmatched_article_count=len(missing_articles),
                 claim_citation_mismatch_count=len(local_mismatches),
-                unattributed_article_count=len(unattributed)))
+                unattributed_article_count=len(unattributed),
+                unattributed_prescriptive_claim_count=int(grounding.get("prescriptive_legal_claims_without_local_legal_citation_count") or 0)))
         elif unreviewed_legal:
             checks.append(_status("legal_uncertainty",REVIEW,
                 "At least one cited legal-reference page is not officer-reviewed. A reviewed page cannot approve another unreviewed source.",

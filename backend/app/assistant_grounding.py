@@ -125,6 +125,49 @@ def _uncited_article_claims(answer,records):
     return list(dict.fromkeys(results))
 
 
+
+# The detector is intentionally narrow: it checks local citation presence
+# for explicit legal prescriptions, not their truth or semantic entailment.
+_LEGAL_OBLIGATION=re.compile(
+    r"\b(?:must|shall|is required to|are required to|is prohibited from|"
+    r"are prohibited from|wajib|diwajibkan|dilarang|harus|tidak boleh)\b",re.I)
+_CLAIM_SPANS=re.compile(r"(?<=[.!?;])\s+|\n+")
+
+def _prescriptive_claim_citations(answer,records):
+    """Find prescriptive statement spans lacking cited legal-reference pages.
+
+    A report, social record, out-of-scope ID, or citation in a different
+    sentence cannot satisfy legal attribution. A standalone next-line
+    legal-page citation is allowed, mirroring article citation behavior.
+    Punctuation/question headings are not legal assertions.
+    """
+    spans=_CLAIM_SPANS.split(str(answer or ""))
+    flagged=[]
+    checked=0
+    for i,span in enumerate(spans):
+        plain=_SOURCE_REF.sub("",span).strip()
+        if not plain or plain.endswith("?") or _QUOTED_ATTRIBUTION.search(plain):
+            continue
+        if not _LEGAL_OBLIGATION.search(plain):
+            continue
+        # Negations often reverse prescriptions: do not infer a recommendation,
+        # but still require a source for an affirmative normative statement.
+        refs=list(dict.fromkeys(_SOURCE_REF.findall(span)))
+        if not refs and i+1<len(spans):
+            nxt=spans[i+1].strip()
+            next_refs=_SOURCE_REF.findall(nxt)
+            if next_refs and not _SOURCE_REF.sub("",nxt).strip():
+                refs=list(dict.fromkeys(next_refs))
+        legal=[ref for ref in refs if ref in records
+               and records[ref].get("record_type")=="PDF_KNOWLEDGE"
+               and records[ref].get("document_type") in _LEGAL_DOC_TYPES]
+        checked+=1
+        if not legal:
+            flagged.append({"claim_index":checked,
+                            "cited_reference_ids":[ref for ref in refs if ref in records],
+                            "reason":"NO_LOCAL_ELIGIBLE_LEGAL_PDF_CITATION"})
+    return checked,flagged
+
 # Constrained safety triage for assertive enforcement prescriptions. This is a
 # language-pattern flag only; it cannot verify legal intent or consequences.
 _ENFORCEMENT_EN=re.compile(
@@ -277,6 +320,9 @@ def _message(language, key):
         "categorical_verdict":{
             "id":"Peringatan kepastian hukum: Jawaban ini menyampaikan pelanggaran, kesalahan, atau sanksi sebagai hal yang sudah pasti. Bukti tersimpan dan kutipan PDF saja tidak membuktikan putusan atau status hukum. Petugas berwenang harus memverifikasi sumber dan status resmi.",
             "en":"Legal certainty caution: The answer presents a violation, guilt, or penalty as an established outcome. Saved evidence and PDF references alone do not confirm a legal ruling or status. An authorized officer must verify official records."},
+        "claim_unattributed":{
+            "id":"Peringatan klaim hukum: Ada pernyataan kewajiban atau larangan yang belum memiliki kutipan halaman peraturan, SOP, atau panduan pada klaim tersebut. Petugas harus memeriksa rujukannya.",
+            "en":"Legal claim caution: At least one obligation or prohibition statement lacks a locally attributed regulation, SOP, or guidance page. An officer must inspect its source."},
         "citation_overflow":{
             "id":"Catatan kutipan: Sebagian rujukan melebihi batas 12 ID unik dan dihilangkan. Jawaban ini tidak boleh dianggap telah didukung sepenuhnya oleh sumber. Periksa kembali rujukan yang ditampilkan.",
             "en":"Citation limit caution: References beyond the first 12 unique IDs were removed. Do not treat this answer as fully source-supported; inspect the remaining citations."},
@@ -307,6 +353,8 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
         add("RECHECK_MISSING_OR_OMITTED_REFERENCES",cited)
     if "LEGAL_ARTICLE_ATTRIBUTION" in reasons:
         add("MATCH_CITED_LEGAL_PASSAGES",legal_pdf)
+    if "LEGAL_CLAIM_LOCAL_CITATION" in reasons:
+        add("TRACE_EACH_PRESCRIPTIVE_LEGAL_CLAIM",legal_pdf)
     if "CITED_UNREVIEWED_PDF" in reasons:
         add("REQUEST_DOCUMENT_REVIEW",[
             ref for ref in pdf if records[ref].get("review_status")!="OFFICER_REVIEWED"])
@@ -393,6 +441,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     article_ids,missing_article_ids=_legal_article_presence(raw,legal_doc_refs)
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
     unattributed_articles=_uncited_article_claims(raw,records)
+    checked_normative_claims,unattributed_normative_claims=_prescriptive_claim_citations(text,records)
     enforcement_flags=_assertive_enforcement_recommendations(raw)
     categorical_outcome_flags=_asserted_legal_outcomes(raw)
     needs_legal_warning=bool(_LEGAL_QUESTION.search(str(question or "")) or article_ids
@@ -411,6 +460,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         notes.append(_message(language,"article_mismatch"))
     if unattributed_articles:
         notes.append(_message(language,"article_unattributed"))
+    if unattributed_normative_claims and needs_legal_warning:
+        notes.append(_message(language,"claim_unattributed"))
     if enforcement_flags:
         notes.append(_message(language,"enforcement"))
     if categorical_outcome_flags:
@@ -429,6 +480,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         review_reasons.append("ENFORCEMENT_RECOMMENDATION")
     if missing_article_ids or local_article_mismatches or unattributed_articles:
         review_reasons.append("LEGAL_ARTICLE_ATTRIBUTION")
+    if unattributed_normative_claims and needs_legal_warning:
+        review_reasons.append("LEGAL_CLAIM_LOCAL_CITATION")
     if unreviewed:
         review_reasons.append("CITED_UNREVIEWED_PDF")
     if len(requested_election_types)==1 and scope_review_ids:
@@ -502,6 +555,10 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_article_claims_without_local_pdf_citation":unattributed_articles,
         "legal_article_claims_without_local_pdf_citation_count":len(unattributed_articles),
         "legal_article_excerpt_text_check":"LEXICAL_ONLY_NOT_LEGAL_VALIDATION",
+        "prescriptive_legal_claims_checked":checked_normative_claims if needs_legal_warning else 0,
+        "prescriptive_legal_claims_without_local_legal_citation":unattributed_normative_claims if needs_legal_warning else [],
+        "prescriptive_legal_claims_without_local_legal_citation_count":len(unattributed_normative_claims) if needs_legal_warning else 0,
+        "legal_claim_semantic_support_verified":False,
         "legal_article_reference_needs_review":bool(
             missing_article_ids or local_article_mismatches or unattributed_articles),
         "legal_article_semantic_support_verified":False,

@@ -245,6 +245,7 @@ export default function IntelligenceAssistant(){
                 VERIFY_ORIGINAL_POST_CONTEXT:id?'Periksa postingan asli, konteks, dan waktu publikasi.':'Inspect the original post, context, and publication time.',
                 TRACE_FORMAL_EVIDENCE_CHAIN:id?'Telusuri catatan intelijen formal, asal bukti dan jejak tinjauan petugas.':'Trace the formal intelligence record, source evidence and officer review history.',
                 RECHECK_MISSING_OR_OMITTED_REFERENCES:id?'Periksa rujukan yang tidak tersedia atau terpotong.':'Recheck missing or omitted source references.',
+                TRACE_EACH_PRESCRIPTIVE_LEGAL_CLAIM:id?'Periksa rujukan PDF hukum untuk setiap pernyataan kewajiban atau larangan.':'Trace a legal PDF reference for each obligation or prohibition statement.',
                 MATCH_CITED_LEGAL_PASSAGES:id?'Cocokkan setiap pasal dengan halaman PDF yang dirujuk.':'Match each legal article to its cited PDF page.',
                 REQUEST_DOCUMENT_REVIEW:id?'Minta penelaahan dokumen yang belum ditinjau petugas.':'Request officer review of unreviewed documents.',
                 VERIFY_ELECTION_TYPE_APPLICABILITY:id?'Periksa kecocokan jenis pemilihan antara pertanyaan dan naskah hukum resmi.':'Verify the election type and applicability against the official legal text.',
@@ -267,6 +268,8 @@ export default function IntelligenceAssistant(){
            <p data-testid="assistant-categorical-legal-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Jawaban menyatakan pelanggaran, kesalahan, atau sanksi sebagai sudah pasti. Periksa putusan dan sumber resmi sebelum bertindak.':'This answer presents a violation, guilt, or penalty as established. Verify official decisions and records before acting.'}</p>}
           {m.grounding.grounding_audit.legal_enforcement_recommendation_needs_officer_review&&
            <p data-testid="assistant-legal-enforcement-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Arahan penegakan atau sanksi dalam jawaban memerlukan penilaian petugas berwenang. Kutipan PDF tidak membuktikan kewenangan atau dasar hukum.':'An enforcement or penalty recommendation requires authorized officer review. PDF citations do not prove legal authority or applicability.'}</p>}
+          {(m.grounding.grounding_audit.prescriptive_legal_claims_without_local_legal_citation_count||0)>0&&
+           <p data-testid="assistant-unattributed-prescriptive-legal-claim" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Ada pernyataan kewajiban atau larangan tanpa kutipan halaman peraturan, SOP atau panduan pada klaim tersebut. Petugas perlu memeriksa rujukannya.':'A legal obligation or prohibition statement lacks a citation to a regulation, SOP or guidance page on that claim. Officer source review is required.'}</p>}
           {(m.grounding.grounding_audit.legal_article_claims_without_local_pdf_citation_count||0)>0&&
            <p data-testid="assistant-unattributed-article-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Ada pernyataan pasal tanpa kutipan halaman PDF pada kalimat yang sama. Periksa rujukannya.':'An article-level statement lacks a PDF page citation in the same sentence. Check its source.'}</p>}
           {m.grounding.grounding_audit.mixed_review_status_cited_pdf_pages&&

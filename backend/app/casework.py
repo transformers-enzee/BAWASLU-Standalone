@@ -607,9 +607,36 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
             action="REVIEW_SOURCE_IN_INBOX"
         item["pilot_next_action"]=action
         item["pilot_action_is_preliminary"]=True
+        # Review instructions only. Existing case stage observations are
+        # available in the independently permission-scoped casework report.
+        # Never turn a shortlist suggestion into an audit completion or signoff.
+        from .officer_pilot_readiness import _STAGES
+        stage_context={
+            "source_linked":"Confirm this saved source and campaign are correct",
+            "receiving_officer_accepted":"Receiving officer accepts the assignment",
+            "original_source_checked":"Officer checks original post provenance and content",
+            "latest_report_submitted":"Officer submits an evidence-based report",
+            "independent_report_approval":"Independent authorized reviewer checks the report",
+        }
+        item["acceptance_workflow_checklist"]=[
+            {"key":key,"instruction":stage_context[key],
+             "status":"REQUIRES_AUTHORIZED_CASEWORK_VERIFICATION",
+             "completed":False} for key in _STAGES]
+        item["acceptance_saved_source_reference"]={
+            "source_type":"SOCIAL",
+            "source_id":item["source_id"],
+            "campaign_id":item["campaign_id"],
+            "visible_case_id":item.get("visible_open_case_id")}
+        item["acceptance_workflow_stages_not_observed_here"]=True
+        item["acceptance_requires_real_officer_review"]=True
+        item["acceptance_source_authenticity_unverified"]=True
+        item["acceptance_legal_approval_not_granted"]=True
         action_counts[action]=action_counts.get(action,0)+1
     result["pilot_next_action_counts"]=action_counts
     result["pilot_next_action_counts_preview_only"]=True
+    result["acceptance_checklist_stage_count"]=5
+    result["acceptance_checklist_is_unsigned"]=True
+    result["acceptance_checklist_is_preparatory"]=True
     result["pilot_next_action_not_legal_determination"]=True
     result["preview_existing_case_count"]=sum(int(
         item["case_already_exists_in_visible_scope"]) for item in result["items"])

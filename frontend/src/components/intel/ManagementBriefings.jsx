@@ -50,6 +50,13 @@ const PILOT_NEXT_ACTIONS={
  CONTINUE_EXISTING_CASE:['Continue existing case','Lanjutkan kasus tersedia'],
  REVIEW_SOURCE_IN_INBOX:['Review saved source in Inbox','Periksa sumber tersimpan di Inbox']
 };
+const PILOT_ACCEPTANCE_STAGES={
+ source_linked:['Source linked to the correct campaign','Sumber terhubung ke kampanye yang tepat'],
+ receiving_officer_accepted:['Receiving officer accepts assignment','Petugas penerima menerima penugasan'],
+ original_source_checked:['Officer checks original source','Petugas memeriksa sumber asli'],
+ latest_report_submitted:['Officer submits supporting report','Petugas mengirim laporan pendukung'],
+ independent_report_approval:['Independent reviewer approves report','Peninjau independen menyetujui laporan']
+};
 const PILOT_INTAKE_SIGNALS={
  SAVED_SOURCE_FLAG_REVIEW:['Saved source flag for officer review','Tanda sumber tersimpan untuk pemeriksaan petugas'],
  SAVED_PUBLIC_CONCERN_DISCUSSION:['Saved public-concern discussion','Pembahasan keluhan publik tersimpan'],
@@ -363,7 +370,19 @@ export default function ManagementBriefings(){
             {item.incident_jurisdiction_verified&&<span className="block text-[#64748b]">{item.verified_incident_province}</span>}</td>
            <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}
             {item.pilot_next_action&&<span data-testid="pilot-source-next-action" className="mt-1 block font-semibold text-[#116d85]">
-             {(PILOT_NEXT_ACTIONS[item.pilot_next_action]||[item.pilot_next_action,item.pilot_next_action])[id?1:0]}</span>}</td>
+             {(PILOT_NEXT_ACTIONS[item.pilot_next_action]||[item.pilot_next_action,item.pilot_next_action])[id?1:0]}</span>}
+            {item.acceptance_workflow_checklist&&<details data-testid="pilot-acceptance-checklist" className="mt-2">
+             <summary className="cursor-pointer text-[#116d85]">{t('Officer acceptance checklist','Senarai semak penerimaan petugas')}</summary>
+             <p className="mt-1 text-[#64748b]">{t('Source','Sumber')} #{item.acceptance_saved_source_reference?.source_id}, {t('campaign','kampanye')} #{item.acceptance_saved_source_reference?.campaign_id}
+              {item.acceptance_saved_source_reference?.visible_case_id?(' | '+t('Case','Kasus')+' #'+item.acceptance_saved_source_reference.visible_case_id):''}</p>
+             <ol className="mt-1 list-decimal pl-4">
+              {item.acceptance_workflow_checklist.map(stage=><li key={stage.key} className="my-1">
+               {(PILOT_ACCEPTANCE_STAGES[stage.key]||[stage.instruction,stage.instruction])[id?1:0]}
+               <span className="block text-[#876532]">{t('Requires verified casework evidence','Memerlukan bukti penanganan kasus yang diverifikasi')}</span>
+              </li>)}
+             </ol>
+             <p className="mt-1 text-[#876532]">{t('Unsigned preparation only. Completion and approval must be verified by authorized officers in casework.','Hanya persiapan tanpa tanda tangan. Penyelesaian dan persetujuan harus diverifikasi petugas berwenang dalam penanganan kasus.')}</p>
+            </details>}</td>
            <td className="p-2">{item.latest_saved_eligibility==='SOURCE_NOT_IN_AUTHORIZED_SCOPE'?
             t('Source no longer available in your permission scope','Sumber tidak lagi tersedia dalam cakupan izin Anda'):
             item.latest_saved_eligibility==='LATEST_ASSESSMENT_NOT_RELEVANT'?

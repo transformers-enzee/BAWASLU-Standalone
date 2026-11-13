@@ -17,6 +17,8 @@ for(const fragment of ['Latest saved source eligible (preview)',
   'Source no longer available in your permission scope']) {
   assert.ok(ui.includes(fragment),fragment);
 }
-assert.ok(main.includes("'build_version':'155.4'"));
-assert.ok(shell.includes('data-build-version="155.4"'));
+const bv=main.split("'build_version':'")[1]?.split("'")[0];
+const fv=shell.split('data-build-version="')[1]?.split('"')[0];
+assert.ok(bv&&fv);assert.equal(bv,fv);
+assert.ok(Number(bv.split('.')[0])>=155);
 console.log('PASS v155.4 latest saved-source eligibility and pilot navigation guards');

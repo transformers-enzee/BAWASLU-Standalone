@@ -221,6 +221,8 @@ export default function IntelligenceAssistant(){
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
           {m.grounding.grounding_audit.evidence_citation_coverage==='LEGAL_REFERENCE_NOT_CITED'&&
            <p data-testid="assistant-legal-source-missing" className="mt-1 font-medium text-[#91652e]">{(m.answer_language||'id')==='id'?'Belum ada halaman PDF hukum yang dikutip. Petugas harus memeriksa rujukan resmi sebelum menyimpulkan.':'No legal PDF page is cited. An officer must check the official reference before reaching a conclusion.'}</p>}
+          {m.grounding.grounding_audit.evidence_citation_coverage==='LEGAL_REFERENCE_NONLEGAL_PDF_ONLY'&&
+           <p data-testid="assistant-nonlegal-pdf-caution" className="mt-1 font-medium text-[#91652e]">{(m.answer_language||'id')==='id'?'Halaman PDF yang dikutip bukan berjenis peraturan, SOP atau panduan hukum. Petugas harus mencari rujukan resmi yang sesuai.':'The cited PDFs are not classified as regulations, SOPs or guidance. An officer must locate an appropriate official legal reference.'}</p>}
           {m.grounding.grounding_audit.evidence_citation_coverage==='SELECTED_EVIDENCE_NOT_CITED'&&
            <p data-testid="assistant-selected-sources-uncited" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Bukti tersedia tetapi tidak dikutip dalam jawaban.':'Evidence was available but was not cited in the answer.'}</p>}
           {(m.grounding.grounding_audit.officer_review_steps||[]).length>0&&

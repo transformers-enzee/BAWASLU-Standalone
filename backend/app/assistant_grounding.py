@@ -260,6 +260,8 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
     social=[ref for ref in cited if records[ref].get("record_type")=="SOCIAL_LISTENING"]
     formal=[ref for ref in cited if records[ref].get("record_type")=="FORMAL_INTELLIGENCE"]
     pdf=[ref for ref in cited if records[ref].get("record_type")=="PDF_KNOWLEDGE"]
+    legal_pdf=[ref for ref in pdf
+               if records[ref].get("document_type") in _LEGAL_DOC_TYPES]
     steps=[]
     def add(code,refs):
         steps.append({"code":code,"source_ids":refs[:12],"status":"NOT_STARTED",
@@ -271,16 +273,16 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
     if "CITATION_INTEGRITY" in reasons:
         add("RECHECK_MISSING_OR_OMITTED_REFERENCES",cited)
     if "LEGAL_ARTICLE_ATTRIBUTION" in reasons:
-        add("MATCH_CITED_LEGAL_PASSAGES",pdf)
+        add("MATCH_CITED_LEGAL_PASSAGES",legal_pdf)
     if "CITED_UNREVIEWED_PDF" in reasons:
         add("REQUEST_DOCUMENT_REVIEW",[
             ref for ref in pdf if records[ref].get("review_status")!="OFFICER_REVIEWED"])
-    if (legal_question or has_legal_flags) and not pdf:
+    if (legal_question or has_legal_flags) and not legal_pdf:
         add("LOCATE_AUTHORIZED_LEGAL_REFERENCE",[])
     if "CATEGORICAL_LEGAL_OUTCOME" in reasons:
-        add("VERIFY_OFFICIAL_LEGAL_OUTCOME",formal+pdf)
+        add("VERIFY_OFFICIAL_LEGAL_OUTCOME",formal+legal_pdf)
     if "ENFORCEMENT_RECOMMENDATION" in reasons:
-        add("CONFIRM_AUTHORITY_BEFORE_ANY_ACTION",formal+pdf)
+        add("CONFIRM_AUTHORITY_BEFORE_ANY_ACTION",formal+legal_pdf)
     return steps
 
 
@@ -331,10 +333,13 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                 if doc.get("review_status")!="OFFICER_REVIEWED"]
     selected_unreviewed=[doc for doc in all_doc_refs
                          if doc.get("review_status")!="OFFICER_REVIEWED"]
-    legally_reviewed=[doc for doc in doc_refs
-                      if doc.get("review_status")=="OFFICER_REVIEWED" and
-                      doc.get("document_type") in _LEGAL_DOC_TYPES]
-    article_ids,missing_article_ids=_legal_article_presence(raw,doc_refs)
+    legal_doc_refs=[doc for doc in doc_refs
+                    if doc.get("document_type") in _LEGAL_DOC_TYPES]
+    legally_reviewed=[doc for doc in legal_doc_refs
+                      if doc.get("review_status")=="OFFICER_REVIEWED"]
+    # The page may be context or an internal report, not a legal authority.
+    # Never count articles in a nonlegal PDF as legal-reference coverage.
+    article_ids,missing_article_ids=_legal_article_presence(raw,legal_doc_refs)
     local_article_mismatches=_claim_level_article_mismatches(raw,records)
     unattributed_articles=_uncited_article_claims(raw,records)
     enforcement_flags=_assertive_enforcement_recommendations(raw)
@@ -385,7 +390,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     # as ready simply because a neutral AI answer omitted an enforcement verb.
     if needs_legal_warning and not doc_refs:
         citation_coverage="LEGAL_REFERENCE_NOT_CITED"
-    elif needs_legal_warning and doc_refs:
+    elif needs_legal_warning and not legal_doc_refs:
+        citation_coverage="LEGAL_REFERENCE_NONLEGAL_PDF_ONLY"
+    elif needs_legal_warning and legal_doc_refs:
         citation_coverage="LEGAL_REFERENCE_CITED_UNVERIFIED"
     elif records and not cited:
         citation_coverage="SELECTED_EVIDENCE_NOT_CITED"
@@ -406,6 +413,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "citation_reference_limit":citation_limit,
         "citation_ids_valid":True,  # only after deterministic filtering
         "cited_pdf_pages":len(doc_refs),
+        "cited_legal_reference_pages":len(legal_doc_refs),
+        "cited_nonlegal_pdf_pages":len(doc_refs)-len(legal_doc_refs),
+        "legal_document_type_eligibility_verified":False,
         "cited_unreviewed_pdf_pages":len(unreviewed),
         "mixed_review_status_cited_pdf_pages":bool(unreviewed and legally_reviewed),
         "selected_unreviewed_pdf_pages":len(selected_unreviewed),

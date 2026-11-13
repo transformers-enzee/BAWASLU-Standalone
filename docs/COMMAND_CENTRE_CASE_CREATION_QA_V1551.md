@@ -1,0 +1,3 @@
+# v155.1: Correct release contract after v155.0 casework query refactor
+
+The v155.0 backend passed 891 tests, but frontend-build failed an outdated source-string assertion in test-officer-pilot-intake-v1544.mjs. That test expected the old Python variable "case" and no longer recognized the equivalent explicit second visibility guard "if existing is not None and not _visible(existing,p,user.id)". Updated the contract to assert the new visibility check plus exact active-status filtering and newest-first SQL single-record selection. No change to casework business behavior or Supabase schema. Re-run full frontend/backend build and verify Render live.

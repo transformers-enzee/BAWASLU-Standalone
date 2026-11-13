@@ -6,6 +6,7 @@ import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
 import AssistantKnowledgeLibrary from '@/components/intel/AssistantKnowledgeLibrary';
+import AssistantLegalReviewSummary from '@/components/intel/AssistantLegalReviewSummary';
 import AssistantReviewConsolidation from '@/components/intel/AssistantReviewConsolidation';
 import AssistantHumanScoring from '@/components/intel/AssistantHumanScoring';
 import AssistantEvaluationSampler from '@/components/intel/AssistantEvaluationSampler';
@@ -219,6 +220,10 @@ export default function IntelligenceAssistant(){
         {m.grounding?.grounding_audit&&!showQa&&<div data-testid="assistant-source-caution"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
+          <AssistantLegalReviewSummary summary={m.grounding?.answer_quality?.legal_review_summary} language={m.answer_language||'id'}/>
+          <details data-testid="assistant-legal-detailed-warnings" open={!m.grounding?.answer_quality?.legal_review_summary?.applicable} className="mt-2">
+           <summary className="cursor-pointer text-[#52657a] font-semibold">{(m.answer_language||'id')==='id'?'Rincian peringatan dan langkah pemeriksaan':'Detailed warnings and officer review steps'}</summary>
+           <div className="mt-2 space-y-1">
           {m.grounding.grounding_audit.evidence_citation_coverage==='LEGAL_REFERENCE_NOT_CITED'&&
            <p data-testid="assistant-legal-source-missing" className="mt-1 font-medium text-[#91652e]">{(m.answer_language||'id')==='id'?'Belum ada halaman PDF hukum yang dikutip. Petugas harus memeriksa rujukan resmi sebelum menyimpulkan.':'No legal PDF page is cited. An officer must check the official reference before reaching a conclusion.'}</p>}
           {m.grounding.grounding_audit.legal_question&&m.grounding.grounding_audit.legal_source_review_state==='REVIEW_PENDING'&&
@@ -283,6 +288,8 @@ export default function IntelligenceAssistant(){
            <p data-testid="assistant-legal-article-caution" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Nomor pasal dalam jawaban tidak ditemukan pada kutipan halaman PDF yang dirujuk. Periksa naskah hukum resmi.':'An article number in this answer was not found in its cited PDF page excerpts. Verify the official legal text.'}</p>}
           {(m.grounding.grounding_audit.cited_unreviewed_pdf_pages||0)>0&&
            <p className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'PDF yang dikutip belum ditinjau petugas dan keberlakuan hukumnya belum diverifikasi.':'Cited PDF is not officer-reviewed, and legal currentness is unverified.'}</p>}
+           </div>
+          </details>
          </div>}
          {showQa&&m.grounding?.grounding_audit&&<div data-testid="assistant-grounding-integrity" className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
          <p className="font-semibold">{(m.answer_language||'id')==='id'?'Integritas rujukan jawaban':'Answer citation integrity'}</p>

@@ -42,6 +42,22 @@ const sourceView=row=>({
   review_status:asText(row.review_status,60),
   verification_status:asText(row.verification_status,70)
 });
+const legalReviewSnapshot=(raw,cited)=>{
+  if(!raw?.applicable)return null;
+  const authorized=new Set(Array.isArray(cited)?cited.map(x=>String(x)):[]);
+  const allowedCodes=new Set(['LEGAL_OUTCOME_OR_ACTION','ELIGIBLE_LEGAL_SOURCE_MISSING','CITATION_INTEGRITY',
+    'ARTICLE_OR_CLAIM_ATTRIBUTION','PASSAGE_POLARITY','NUMERIC_OR_DATE','ELECTION_SCOPE',
+    'DOCUMENT_REVIEW_PENDING','SOURCE_RELEVANCE','VERSION_OR_EFFECTIVE_DATE']);
+  const issues=(Array.isArray(raw.issues)?raw.issues:[]).filter(x=>allowedCodes.has(x?.code)).slice(0,10).map(x=>({
+    code:x.code,priority:['P1','P2','P3'].includes(x.priority)?x.priority:'P3',
+    source_ids:(Array.isArray(x.source_ids)?x.source_ids:[]).map(x=>asText(x,120)).filter(x=>authorized.has(x)).slice(0,12),
+    signal_count:Number.isInteger(x.signal_count)?Math.max(0,Math.min(99,x.signal_count)):0
+  }));
+  return {schema:'BAWASLU_LEGAL_REVIEW_SUMMARY_V1529',
+    officer_review_required:true,legal_findings_confirmed:false,
+    legal_currentness_verified:false,source_truth_verified:false,
+    review_priority_is_legal_severity:false,issues};
+};
 const csvEscape=value=>{
   let s=String(value??'');
   // Prevent Excel/Sheets CSV formula injection from source or answer text.
@@ -94,6 +110,7 @@ export function buildAssistantReviewPacket({question,answer,buildVersion='unknow
       source_access_basis:'ALREADY_VISIBLE_AUTHORIZED_ASSISTANT_CHAT',
       source_refs_are_not_officer_approved:true
     },
+    legal_review_snapshot:legalReviewSnapshot(response.grounding?.answer_quality?.legal_review_summary,cited),
     automated_checks:{
       framework:asText(response.grounding?.answer_quality?.framework,80),
       diagnostic_only:true,

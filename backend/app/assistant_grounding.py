@@ -340,6 +340,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
                     if doc.get("document_type") in _LEGAL_DOC_TYPES]
     legally_reviewed=[doc for doc in legal_doc_refs
                       if doc.get("review_status")=="OFFICER_REVIEWED"]
+    legal_unreviewed=[doc for doc in legal_doc_refs
+                      if doc.get("review_status")!="OFFICER_REVIEWED"]
     # The page may be context or an internal report, not a legal authority.
     # Never count articles in a nonlegal PDF as legal-reference coverage.
     article_ids,missing_article_ids=_legal_article_presence(raw,legal_doc_refs)
@@ -418,6 +420,12 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "cited_pdf_pages":len(doc_refs),
         "cited_legal_reference_pages":len(legal_doc_refs),
         "cited_nonlegal_pdf_pages":len(doc_refs)-len(legal_doc_refs),
+        "cited_unreviewed_legal_pages":len(legal_unreviewed),
+        "cited_reviewed_legal_pages":len(legally_reviewed),
+        "legal_source_review_state":("NO_ELIGIBLE_LEGAL_REFERENCE" if not legal_doc_refs
+                                      else "REVIEW_PENDING" if legal_unreviewed
+                                      else "OFFICER_REVIEWED_NOT_LEGALLY_VERIFIED"),
+        "legal_source_review_is_approval":False,
         "legal_document_type_eligibility_verified":False,
         "cited_unreviewed_pdf_pages":len(unreviewed),
         "mixed_review_status_cited_pdf_pages":bool(unreviewed and legally_reviewed),

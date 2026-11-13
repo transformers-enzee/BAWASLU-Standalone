@@ -114,6 +114,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         local_mismatches=grounding.get("legal_article_claim_citation_mismatches") or []
         unattributed=grounding.get("legal_article_claims_without_local_pdf_citation") or []
         unreviewed_cited=int(grounding.get("cited_unreviewed_pdf_pages") or 0)
+        unreviewed_legal=int(grounding.get("cited_unreviewed_legal_pages") or 0)
         enforcement=bool(grounding.get("legal_enforcement_recommendation_needs_officer_review"))
         categorical=grounding.get("legal_categorical_outcome_flags") or []
         if categorical:
@@ -131,9 +132,14 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
                 unmatched_article_count=len(missing_articles),
                 claim_citation_mismatch_count=len(local_mismatches),
                 unattributed_article_count=len(unattributed)))
+        elif unreviewed_legal:
+            checks.append(_status("legal_uncertainty",REVIEW,
+                "At least one cited legal-reference page is not officer-reviewed. A reviewed page cannot approve another unreviewed source.",
+                cited_unreviewed_legal_pages=unreviewed_legal,
+                cited_officer_reviewed_legal_pages=valid_legal))
         elif unreviewed_cited:
             checks.append(_status("legal_uncertainty",REVIEW,
-                "At least one cited PDF page is not officer-reviewed, even though another cited page may be reviewed.",
+                "A cited contextual PDF has not been officer-reviewed; legal source currentness and applicability remain unverified.",
                 cited_unreviewed_pdf_pages=unreviewed_cited,
                 cited_officer_reviewed_legal_pages=valid_legal))
         elif valid_legal==0:

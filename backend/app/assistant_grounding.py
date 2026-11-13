@@ -374,6 +374,14 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     metadata_scope_conflicts=[doc.get("record_id") for doc in legal_doc_refs
         if len(requested_election_types)==1 and doc.get("legal_election_type") in {"PEMILU","PILKADA"}
         and doc.get("legal_election_type")!=requested_election_types[0]]
+    # Structured officer-entered scope takes precedence over title-only hints.
+    # A BOTH document can discuss one election type in its title without being
+    # incorrectly flagged as incompatible. Scope still is not legal validation.
+    title_conflicts_unresolved=[ref for ref in election_scope_conflicts
+        if records[ref].get("legal_election_type") not in {"PEMILU","PILKADA","BOTH"}]
+    scope_review_ids=list(dict.fromkeys(metadata_scope_conflicts+title_conflicts_unresolved+
+        [ref for ref in election_scope_unknown
+         if records[ref].get("legal_election_type") not in {"PEMILU","PILKADA","BOTH"}]))
     version_missing=[doc.get("record_id") for doc in legal_doc_refs if not str(doc.get("legal_version_label") or "").strip()]
     effective_date_missing=[doc.get("record_id") for doc in legal_doc_refs if not str(doc.get("legal_effective_date") or "").strip()]
     legally_reviewed=[doc for doc in legal_doc_refs
@@ -423,7 +431,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         review_reasons.append("LEGAL_ARTICLE_ATTRIBUTION")
     if unreviewed:
         review_reasons.append("CITED_UNREVIEWED_PDF")
-    if len(requested_election_types)==1 and (election_scope_conflicts or election_scope_unknown or metadata_scope_conflicts):
+    if len(requested_election_types)==1 and scope_review_ids:
         review_reasons.append("LEGAL_ELECTION_SCOPE")
     if excess or rejected:
         review_reasons.append("CITATION_INTEGRITY")
@@ -471,6 +479,9 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_document_version_missing_ids":version_missing,
         "legal_document_effective_date_missing_ids":effective_date_missing,
         "legal_election_type_metadata_conflict_ids":metadata_scope_conflicts,
+        "legal_election_type_unresolved_title_conflict_ids":title_conflicts_unresolved,
+        "legal_election_type_scope_review_ids":scope_review_ids,
+        "legal_election_scope_comparison_is_legal_validation":False,
         "legal_document_version_verified":False,
         "legal_document_effective_date_verified":False,
         "legal_question_election_type_hints":requested_election_types,

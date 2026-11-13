@@ -228,6 +228,10 @@ def review_pdf(document_id:int,body:ReviewBody,user:User=Depends(current_user),
         raise HTTPException(403,"Officer review permission is required")
     if body.document_type not in DOCUMENT_TYPES or len(body.issuer)>220:
         raise HTTPException(422,"Invalid document metadata")
+    if body.document_type not in {"REGULATION","SOP","GUIDANCE"} and (
+        body.legal_version_label.strip() or body.legal_effective_date or
+        body.legal_election_type!="UNSPECIFIED"):
+        raise HTTPException(422,"Legal scope metadata is reserved for legal-reference documents")
     if body.legal_election_type not in {"UNSPECIFIED","PEMILU","PILKADA","BOTH"}:
         raise HTTPException(422,"Invalid legal election type")
     if body.legal_effective_date:

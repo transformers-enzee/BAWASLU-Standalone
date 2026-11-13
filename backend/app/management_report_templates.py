@@ -469,7 +469,7 @@ def render_pdf(template):
         fontSize=8,textColor=colors.HexColor("#657586")))
     styles.add(ParagraphStyle(name="BAWTag",parent=styles["BAWBody"],
         textColor=colors.HexColor("#801B24"),fontName="Helvetica-Bold"))
-    para=lambda txt,style="BAWBody":Paragraph(escape(_clean(txt,3000)),styles[style])
+    para=lambda txt,style="BAWBody",limit=3000:Paragraph(escape(_clean(txt,limit)),styles[style])
     doc_buffer=BytesIO()
     document=SimpleDocTemplate(doc_buffer,pagesize=A4,
         leftMargin=20*mm,rightMargin=20*mm,topMargin=22*mm,bottomMargin=20*mm,
@@ -481,7 +481,7 @@ def render_pdf(template):
         para(template["window_start_utc"]+"  -  "+template["window_end_utc"],"BAWMuted"),
         para(t("Topik: ","Topic: ")+(template["topic"] or t("Semua penugasan","All assignments")),"BAWMuted"),
         para(t("01  Ringkasan Eksekutif","01  Executive Summary"),"BAWSection"),
-        para(template["executive_summary"])
+        para(template["executive_summary"],limit=6000)
     ]
     score=[[_clean(t("Indikator","Indicator")),_clean(t("Jumlah","Count"))]]
     score += [[x["label"],str(x["value"])] for x in template["scorecard"]]

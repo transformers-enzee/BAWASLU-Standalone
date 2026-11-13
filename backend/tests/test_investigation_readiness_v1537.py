@@ -220,7 +220,12 @@ def test_existing_pdf_word_xlsx_exports_preserve_readiness_summary():
         word=Document(BytesIO(render_docx(t)))
         assert "Investigation follow-up across authorized assignments" in " ".join(p.text for p in word.paragraphs)
         pdf=PdfReader(BytesIO(render_pdf(t)))
-        assert "Investigation follow-up across authorized assignments" in " ".join(page.extract_text() or "" for page in pdf.pages)
+        # PDF text extraction may wrap words and hyphenated phrases at line
+        # boundaries; test the rendered semantic wording, not exact spacing.
+        import re
+        pdf_text=" ".join(" ".join(page.extract_text() or "" for page in pdf.pages).split())
+        assert re.search(r"Investigation\s+follow-?\s*up\s+across\s+authorized\s+assignments",pdf_text)
+        assert re.search(r"groups\s+do\s+not\s+validate\s+facts",pdf_text)
         book=load_workbook(BytesIO(render_xlsx(t)),read_only=True)
         content=" ".join(str(x) for row in book["Report Summary"].values for x in row if x is not None)
         assert "Investigation follow-up across authorized assignments" in content

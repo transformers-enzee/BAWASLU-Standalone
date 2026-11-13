@@ -1,0 +1,3 @@
+# v153.8 PDF management-summary continuity and QA gate
+
+v153.7's full backend suite recorded 722 passed and one failed PDF text-extraction assertion. Review found the exporter uses a 3,000-character paragraph cap that can silently truncate a growing executive summary. This release allows up to 6,000 characters for the executive summary only, leaving the ordinary paragraph limit and existing draft/approval state unchanged. It also validates extracted PDF text with whitespace/hyphen wrapping tolerance rather than assuming PDF line breaks produce one continuous string. Mandatory backend and frontend regression suites rerun. No Supabase migration, casework changes, model calls or legal determinations.

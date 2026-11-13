@@ -318,6 +318,10 @@ export default function ManagementBriefings(){
        {pilotIntake&&<div data-testid="briefing-pilot-intake-results" className="mt-3">
         <p className="mb-2 text-xs text-[#64748b]">{t('Unique sources in available authorized Inbox window','Sumber unik pada jendela Inbox berizin yang tersedia')}: <strong>{pilotIntake.observed_authorized_unique_sources}</strong>.
          {' '}{t('This is not a count of all collected posts or confirmed violations.','Ini bukan jumlah semua unggahan atau pelanggaran terkonfirmasi.')}</p>
+        <div className="mb-2 flex flex-wrap gap-3 text-xs text-[#64748b]" data-testid="briefing-pilot-evidence-availability">
+         <span>{t('Saved source links usable for review','Tautan sumber tersimpan untuk ditinjau')}: <strong>{pilotIntake.source_prefill_available_count??0}</strong></span>
+         <span>{t('Need source recovery','Memerlukan pemulihan sumber')}: <strong>{pilotIntake.source_recovery_required_count??0}</strong></span>
+        </div>
         {(pilotIntake.items||[]).length>0?
          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
           <thead><tr className="border-b"><th className="p-2">{t('Saved source','Sumber tersimpan')}</th>

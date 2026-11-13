@@ -33,8 +33,8 @@ def _positive_id(value):
     return ""
 
 def officer_pilot_candidates(findings,visible_cases=(),limit=12):
-    """Deduplicate by original post ID, retaining the strongest authorized
-    campaign-linked saved signal. Never rank by legal severity."""
+    """Deduplicate by original post ID. Prefer a complete available source
+    before the saved signal rank; never rank by legal severity."""
     found={}
     for finding in findings or []:
         if not isinstance(finding,dict):continue
@@ -49,7 +49,9 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
             if not sid or not cid:continue
             has_text=bool(str(post.get("message_original") or "").strip())
             has_url=_original_url_available(post.get("source_url"))
-            rank=(_RANK[kind], not (has_text and has_url), int(sid), int(cid))
+            # Never let a flagged but unusable campaign version hide a
+            # separately authorized version with both text and a safe URL.
+            rank=(not (has_text and has_url), _RANK[kind], int(sid), int(cid))
             current=found.get(sid)
             if current is None or rank<current[0]:
                 found[sid]=(rank,{
@@ -80,6 +82,8 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
                     "automatic_assignment_created":False,
                 })
     rows=[value[1] for value in sorted(found.values(),key=lambda x:x[0])]
+    source_prefill_available=sum(int(row["source_text_available"] and
+        row["original_source_url_available"]) for row in rows)
     visible={}
     for case in visible_cases or ():
         if str(getattr(case,"source_type","")).upper()!="SOCIAL" or getattr(case,"status","")=="CLOSED":
@@ -100,6 +104,9 @@ def officer_pilot_candidates(findings,visible_cases=(),limit=12):
     return {
         "schema":"BAWASLU_OFFICER_PILOT_INTAKE_V1544",
         "observed_authorized_unique_sources":len(rows),
+        "source_prefill_available_count":source_prefill_available,
+        "source_recovery_required_count":len(rows)-source_prefill_available,
+        "selection_basis":"USABLE_SOURCE_FIRST_THEN_SAVED_REVIEW_SIGNAL",
         "returned_count":min(len(rows),limit),
         "preview_limit":limit,
         "preview_is_sample":len(rows)>limit,

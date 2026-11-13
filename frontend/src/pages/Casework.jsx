@@ -97,13 +97,15 @@ export default function Casework({embedded=false,initialSource=null,initialCaseI
   ['received_from_other_team',tr('Incoming handoffs','Penugasan masuk'),ArrowRightLeft],
   ['sent_by_me',tr('Sent by me','Dikirim oleh saya'),Send]
  ];
- async function act(fn,message){setBusy(true);setError('');setNotice('');try{await fn();setNotice(message);await reload();if(selected){const d=await request('/cases/'+selected);setDetail(d)}}catch(e){setError(e.message)}finally{setBusy(false)}}
+ async function act(fn,message){setBusy(true);setError('');setNotice('');try{await fn();setNotice(typeof message==='function'?message():message);await reload();if(selected){const d=await request('/cases/'+selected);setDetail(d)}}catch(e){setError(e.message)}finally{setBusy(false)}}
  async function previewSource(){setBusy(true);setError('');try{const q=new URLSearchParams({source_type:sourceType,source_id:sourceId,...(sourceType==='SOCIAL'?{campaign_id:campaignId}:{})});const p=await request('/preview?'+q.toString());setPreview(p);setNewTitle(p.title);if(p.recommended_department&&options?.departments?.includes(p.recommended_department))setDepartment(p.recommended_department);if(p.verified_province&&options?.user_scope==='PROVINCE'){setScope('PROVINCE');setProvince(p.verified_province)}else{setScope('NATIONAL');setProvince('')}}catch(e){setError(e.message)}finally{setBusy(false)}}
  useEffect(()=>{if(embedded&&sourceId&&showNew&&options?.can_create&&!preview&&!previewAttempted.current){
   previewAttempted.current=true;
   previewSource();
  }},[embedded,sourceId,showNew,options?.can_create]);
- async function createCase(){await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab(initialTab==='reports'?'reports':'assignments')},tr('Assignment created. Review the evidence and prepare the report.','Penugasan dibuat. Periksa bukti dan siapkan laporan.'))}
+ async function createCase(){let reused=false;await act(async()=>{const created=await request('/cases','POST',{source_type:sourceType,source_id:sourceId,campaign_id:sourceType==='SOCIAL'?Number(campaignId):null,title:newTitle,department,target_scope:scope,target_province:scope==='PROVINCE'?province:'',assignee_id:assignee?Number(assignee):null,notes:note});reused=created.existing===true;setShowNew(false);setPreview(null);setSelected(created.id);setDetail(await request('/cases/'+created.id));setTab(initialTab==='reports'?'reports':'assignments')},()=>reused?
+ tr('Existing active assignment opened. No duplicate was created.','Penugasan aktif yang sudah ada dibuka. Tidak ada duplikat dibuat.'):
+ tr('Assignment created. Review the evidence and prepare the report.','Penugasan dibuat. Periksa bukti dan siapkan laporan.'))}
  async function recordSourceReview(){
   if(!selected||busy)return;
   await act(async()=>{

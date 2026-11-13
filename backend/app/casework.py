@@ -535,6 +535,22 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
     source = _source(db,p,body.source_type.upper(),body.source_id,body.campaign_id)
     dest_province = _validate_route(source,p,body.target_scope,body.target_province)
     assignee = _assignee(db,body.target_scope,dest_province,body.assignee_id)
+    # Lock the initiating user's row (Postgres SELECT FOR UPDATE) so two
+    # simultaneous clicks by this officer cannot each create the same
+    # assignment. SQLite ignores this lock during isolated tests.
+    db.query(User).filter(User.id==user.id).with_for_update().first()
+    # Duplicate detection runs AFTER authorization and source revalidation.
+    # Reuse only an active, currently VISIBLE case linked to the exact
+    # saved source/campaign, never return an unrelated hidden case ID.
+    active_candidates=(_authorized_cases_query(db,p,user.id)
+        .filter(CaseAssignment.source_type==source["source_type"],
+                CaseAssignment.source_id==source["source_id"],
+                CaseAssignment.campaign_id==source["campaign_id"],
+                CaseAssignment.status!="CLOSED")
+        .order_by(CaseAssignment.id.desc()).limit(50).all())
+    existing=next((case for case in active_candidates if _visible(case,p,user.id)),None)
+    if existing is not None:
+        return {**_case_view(existing),"existing":True,"assignment_created":False}
     origin_scope,origin_province = _team(p)
     item = CaseAssignment(
         title=_clean(body.title,240) or source["title"] or "Casework item",
@@ -552,7 +568,7 @@ def create_case(body: NewCase, user: User = Depends(current_user), db: Session =
     db.flush()
     _record_event(db,item,user.id,"CREATED",{"scope":body.target_scope,"department":body.department,"assignee_id":assignee})
     audit(db,p,"CaseAssignment",item.id,"CASE_CREATED",{"target_scope":body.target_scope,"department":body.department})
-    return _case_view(item)
+    return {**_case_view(item),"existing":False,"assignment_created":True}
 
 @router.get("/cases/{case_id}")
 def case_detail(case_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):

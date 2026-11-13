@@ -421,6 +421,36 @@ class SourceReviewAction(BaseModel):
     note: str = Field(min_length=20,max_length=1500)
     original_source_opened: bool = False
 
+@router.get("/pilot-intake")
+def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """On-demand, read-only officer intake suggestions from existing Inbox.
+
+    No crawling, new AI inference, case assignment, human sign-off or mutation.
+    Every source link opens the existing casework preview, which rechecks
+    original source authorization and jurisdiction at action time.
+    """
+    from .inbox_radar import live_inbox_findings
+    from .officer_pilot_intake import officer_pilot_candidates
+    p=profile(db,user)
+    _require(p,"add_intelligence")
+    findings,_=live_inbox_findings(db,p)
+    preview=officer_pilot_candidates(findings,limit=12)
+    source_ids=[row["source_id"] for row in preview["items"]]
+    visible=[]
+    if source_ids:
+        candidates=(_authorized_cases_query(db,p,user.id)
+            .filter(CaseAssignment.source_type=="SOCIAL",
+                    CaseAssignment.source_id.in_(source_ids))
+            .order_by(CaseAssignment.id.desc()).limit(250).all())
+        visible=[case for case in candidates if _visible(case,p,user.id)]
+    result=officer_pilot_candidates(findings,visible,limit=12)
+    result["visible_case_lookup_limit"]=250
+    result["requires_officer_permission"]="add_intelligence"
+    result["permission_checked_at_request"]=True
+    result["inbox_source_rescoped_on_action"]=True
+    return result
+
+
 @router.get("/options")
 def options(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile(db,user)

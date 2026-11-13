@@ -41,6 +41,20 @@ const PILOT_STEPS={
  latest_report_submitted:['Current report submission','Pengajuan laporan terbaru'],
  independent_report_approval:['Independent report approval','Persetujuan laporan independen']
 };
+const PILOT_INTAKE_SIGNALS={
+ SAVED_SOURCE_FLAG_REVIEW:['Saved source flag for officer review','Tanda sumber tersimpan untuk pemeriksaan petugas'],
+ SAVED_PUBLIC_CONCERN_DISCUSSION:['Saved public-concern discussion','Pembahasan keluhan publik tersimpan'],
+ SAVED_EMERGING_NARRATIVE:['Saved narrative signal','Sinyal narasi tersimpan'],
+ SAVED_RELEVANT_INBOX_SOURCE:['Relevant saved Inbox source','Sumber Inbox relevan tersimpan']
+};
+function pilotIntakeLink(item){
+ const link=String(item?.casework_link||'');
+ return /^\/inbox\?casework=1&(?:case_id=[1-9]\d*&tab=reports|source_type=SOCIAL&source_id=[1-9]\d*&campaign_id=[1-9]\d*&tab=assignments)$/.test(link)?link:null;
+}
+function pilotOriginalInboxLink(item){
+ const link=String(item?.source_link||'');
+ return /^\/inbox\?campaign_id=[1-9]\d*&result_id=[1-9]\d*$/.test(link)?link:null;
+}
 const API='/api/management-reporting';
 const auth=()=>({Authorization:'Bearer '+(window.localStorage.getItem('bawaslu_access_token')||'')});
 const entries=o=>Object.entries(o||{}).sort((a,b)=>b[1]-a[1]);
@@ -53,6 +67,7 @@ export default function ManagementBriefings(){
  const [includeMonitoring,setIncludeMonitoring]=useState(false);
  const [followupPriority,setFollowupPriority]=useState('ALL');
  const [readinessGroup,setReadinessGroup]=useState('ALL');
+ const [pilotIntake,setPilotIntake]=useState(null),[intakeLoading,setIntakeLoading]=useState(false),[intakeError,setIntakeError]=useState('');
  const [report,setReport]=useState(null),[busy,setBusy]=useState(true),[exporting,setExporting]=useState(false);
  const [error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  const params=new URLSearchParams({period,topic,language:id?'id':'en',include_monitoring:String(includeMonitoring)}).toString();
@@ -73,6 +88,18 @@ export default function ManagementBriefings(){
      const link=document.createElement('a');link.href=url;link.download='bawaslu-casework-'+period+'.csv';
      document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
    }catch(e){setError(e.message)}finally{setExporting(false)}
+ }
+
+ async function loadPilotIntake(){
+   setIntakeLoading(true);setIntakeError('');
+   try{
+     const response=await fetch('/api/casework/pilot-intake',{headers:auth(),cache:'no-store'});
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw Error(data.detail||('Pilot source lookup unavailable ('+response.status+')'));
+     if(data.schema!=='BAWASLU_OFFICER_PILOT_INTAKE_V1544')throw Error('Unrecognized officer pilot response');
+     setPilotIntake(data);
+   }catch(e){setPilotIntake(null);setIntakeError(String(e.message||e))}
+   finally{setIntakeLoading(false)}
  }
 
  async function exportPilotWorksheet(){
@@ -274,6 +301,55 @@ export default function ManagementBriefings(){
       </button>
      </div>
      <p className="mt-1 text-xs text-[#64748b]">{t('Audited workflow observations only, not a formal approval or an evaluation of source truth.','Hanya peristiwa alur kerja teraudit, bukan persetujuan resmi atau penilaian kebenaran sumber.')}</p>
+     {report.can_create_casework&&
+      <div data-testid="briefing-pilot-intake" className="mt-3 rounded-lg border border-[#dce5ec] bg-[#f8fafc] p-3">
+       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+         <strong className="text-sm">{t('Prepare pilot from existing Inbox evidence','Siapkan uji coba dari bukti Inbox tersimpan')}</strong>
+         <p className="mt-1 text-xs text-[#64748b]">{t('On-demand search within relevant, permission-scoped saved posts. Nothing is assigned or approved automatically.','Pencarian berdasarkan unggahan relevan tersimpan sesuai izin akses. Tidak ada penugasan atau persetujuan otomatis.')}</p>
+        </div>
+        <button data-testid="briefing-load-pilot-candidates" className="intel-ghost text-xs"
+         type="button" disabled={busy||intakeLoading} onClick={loadPilotIntake}>
+         {intakeLoading?t('Checking saved evidence…','Memeriksa bukti tersimpan…'):
+          t('Find sources for officer pilot','Temukan sumber untuk uji petugas')}
+        </button>
+       </div>
+       {intakeError&&<p role="alert" className="mt-2 text-xs text-[#b91c1c]">{intakeError}</p>}
+       {pilotIntake&&<div data-testid="briefing-pilot-intake-results" className="mt-3">
+        <p className="mb-2 text-xs text-[#64748b]">{t('Unique sources in available authorized Inbox window','Sumber unik pada jendela Inbox berizin yang tersedia')}: <strong>{pilotIntake.observed_authorized_unique_sources}</strong>.
+         {' '}{t('This is not a count of all collected posts or confirmed violations.','Ini bukan jumlah semua unggahan atau pelanggaran terkonfirmasi.')}</p>
+        {(pilotIntake.items||[]).length>0?
+         <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+          <thead><tr className="border-b"><th className="p-2">{t('Saved source','Sumber tersimpan')}</th>
+           <th className="p-2">{t('Reason for review','Alasan pemeriksaan')}</th>
+           <th className="p-2">{t('Evidence readiness','Kesiapan bukti')}</th>
+           <th className="p-2">{t('Officer action','Tindakan petugas')}</th>
+          </tr></thead>
+          <tbody>{(pilotIntake.items||[]).map(item=><tr key={item.source_id} className="border-b">
+           <td className="p-2"><strong>#{item.source_id}</strong>
+            <span className="ml-1">{item.platform}</span>
+            {item.incident_jurisdiction_verified&&<span className="block text-[#64748b]">{item.verified_incident_province}</span>}</td>
+           <td className="p-2">{(PILOT_INTAKE_SIGNALS[item.review_signal]||[item.review_signal,item.review_signal])[id?1:0]}</td>
+           <td className="p-2">{item.source_text_available&&item.original_source_url_available?
+            t('Saved text and URL present, original not verified','Teks dan URL tersedia, sumber asli belum diverifikasi'):
+            t('Recover or verify original text / URL first','Temukan atau periksa teks dan URL asli lebih dahulu')}</td>
+           <td className="p-2">{pilotIntakeLink(item)?
+            <a href={pilotIntakeLink(item)} className="text-[#116d85] underline" rel="noopener noreferrer">
+             {item.case_already_exists_in_visible_scope?
+              t('Continue existing case','Lanjutkan kasus tersedia'):
+              t('Review in Inbox casework','Tinjau di penugasan Inbox')}</a>:
+            pilotOriginalInboxLink(item)?
+             <a href={pilotOriginalInboxLink(item)} className="text-[#116d85] underline" rel="noopener noreferrer">
+              {t('Inspect saved source','Periksa sumber tersimpan')}</a>:
+             <span className="text-[#64748b]">{t('Review unavailable','Pemeriksaan tidak tersedia')}</span>}</td>
+          </tr>)}</tbody>
+         </table></div>:
+         <p data-testid="briefing-no-pilot-candidates" className="text-xs text-[#64748b]">{t('No relevant saved Inbox sources were available in your authorized window. Nothing has been created.','Tidak ada sumber Inbox relevan yang tersedia sesuai izin. Tidak ada kasus yang dibuat.')}</p>}
+        {pilotIntake.preview_is_sample&&<p className="mt-2 text-xs text-[#876532]">{t('Only the first 12 saved sources are shown. This is not a complete evidence inventory.','Hanya 12 sumber tersimpan pertama ditampilkan. Ini bukan inventaris bukti lengkap.')}</p>}
+        <p className="mt-2 text-xs text-[#876532]">{t('All signals are preliminary. Officers must independently open the source, confirm jurisdiction and choose the department before saving a case. Links recheck authorization.','Semua sinyal bersifat awal. Petugas harus membuka sumber secara mandiri, mengonfirmasi yurisdiksi dan memilih unit sebelum menyimpan kasus. Izin diperiksa ulang saat membuka tautan.')}</p>
+       </div>}
+      </div>}
+
      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
       {[
        [t('Authorized cases in period','Kasus berizin dalam periode'),report.officer_pilot_readiness.authorized_case_count],

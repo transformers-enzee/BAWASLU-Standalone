@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from .auth import current_user
 from .db import get_db
 from .models import User
-from .access import profile
+from .access import profile, has
 from .casework import CaseAssignment, CaseReport, CaseTransition, _require, _visible
 from .management_report_templates import build_interim_template, render_pdf, render_docx, render_xlsx
 from .management_followup_queue import management_followup_queue
@@ -409,6 +409,8 @@ def build_briefing(db: Session, access: dict, user_id: int,
         ],
         "disclaimer": DISCLAIMER,
         "data_basis": "AUTHORIZED_OFFICER_CASEWORK",
+        "can_create_casework":has(access,"add_intelligence"),
+        "pilot_intake_requires_explicit_request":True,
         "counts_complete_for_window": True,
         "query_scope": "SQL_AND_CASEWORK_VISIBILITY",
         "generated_by_ai": False,

@@ -531,7 +531,10 @@ def case_detail(case_id: int, user: User = Depends(current_user), db: Session = 
     case = db.get(CaseAssignment,case_id)
     if not case or not _visible(case,p,user.id):
         raise HTTPException(404,"Case not found")
-    transitions = db.query(CaseTransition).filter_by(case_id=case_id).order_by(CaseTransition.id.asc()).limit(200).all()
+    # Read the latest 200 audit events, not the oldest 200. Re-sort the
+    # selected window into chronological order for _acceptance_trace.
+    transitions = list(reversed(db.query(CaseTransition).filter_by(case_id=case_id)
+        .order_by(CaseTransition.id.desc()).limit(200).all()))
     reports = db.query(CaseReport).filter_by(case_id=case_id).order_by(
         CaseReport.created_at.desc(),CaseReport.id.desc()).limit(50).all()
     report_views=[]

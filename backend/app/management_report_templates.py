@@ -108,6 +108,19 @@ def build_interim_template(snapshot, language="id"):
         summary += _t(language,
             f" Dalam casework yang berizin, {checked} penugasan memiliki pemeriksaan sumber asli yang tercatat pada periode ini, sedangkan {not_observed} tidak memiliki catatan pemeriksaan sumber dalam periode. Tidak tercatat bukan berarti belum pernah diperiksa.",
             f" Within authorized casework, {checked} assignments have an audited original-source check in this reporting window; {not_observed} have no source-review event observed in the window. Absence is not proof that no earlier review occurred.")
+    pilot=snapshot.get("officer_pilot_readiness") or {}
+    pilot_enabled=pilot.get("schema")=="BAWASLU_OFFICER_PILOT_EVIDENCE_V1540"
+    if pilot_enabled:
+        selected_count=int(pilot.get("authorized_case_count") or 0)
+        complete=int(pilot.get("five_stage_observed_case_count") or 0)
+        if selected_count:
+            summary+=_t(language,
+                f" Bukti persiapan uji petugas: {complete} dari {selected_count} penugasan berizin memiliki kelima tahap alur kerja tercatat dalam periode ini. Ini belum merupakan penerimaan resmi; petugas dan pemeriksa harus memberikan persetujuan terpisah.",
+                f" Officer-pilot evidence: {complete} of {selected_count} authorized cases have all five workflow stages recorded in this period. This is not formal acceptance; authorized officers and reviewers must sign off separately.")
+        else:
+            summary+=_t(language,
+                " Tidak ada penugasan petugas riil dalam cakupan periode ini untuk evaluasi penerimaan. Keberhasilan uji otomatis tidak membuktikan penerimaan resmi.",
+                " No real officer casework is available in this reporting scope for acceptance evaluation. Automated test success does not constitute formal officer acceptance.")
     readiness=snapshot.get("investigation_readiness") or {}
     readiness_enabled=readiness.get("schema")=="BAWASLU_INVESTIGATION_READINESS_V1537"
     if readiness_enabled:
@@ -129,6 +142,15 @@ def build_interim_template(snapshot, language="id"):
             f" Among assignments created in this reporting window, {total} have suggested operational follow-up, including {urgent} P1 review items. P1 is review order, not violation severity.")
     followup_labels={"RECEIVING_TEAM_ACCEPTANCE":["Konfirmasi penerimaan oleh tim petugas","Confirm receiving-team acceptance"],"CASE_INFORMATION_FOLLOWUP":["Lengkapi informasi kasus yang masih dibutuhkan","Complete missing case information"],"SOURCE_REVIEW_RECHECK":["Periksa ulang catatan sumber dan bukti asli","Recheck original-source review record"],"CHECK_HISTORICAL_SOURCE_REVIEW":["Periksa riwayat audit untuk verifikasi sumber sebelumnya","Inspect audit history for earlier source review"],"SUBMIT_OR_REVISE_LATEST_REPORT":["Lengkapi atau ajukan ulang versi laporan terbaru","Complete or resubmit latest report version"],"CREATE_OFFICER_REPORT":["Susun laporan petugas berdasarkan sumber yang ditinjau","Prepare officer report based on reviewed source"],"INDEPENDENT_REPORT_REVIEW":["Minta telaah independen atas laporan yang diajukan","Request independent review of submitted report"],"RECONCILE_CASE_REPORT_STATUS":["Selaraskan status kasus dan persetujuan laporan yang tidak konsisten","Reconcile conflicting case and report approval states"]}
     actions = []
+    if pilot_enabled:
+        if not pilot.get("real_casework_available_in_scope"):
+            actions.append(_t(language,
+                "Sebelum persetujuan formal, pilih kasus riil yang sah dan berizin untuk dievaluasi oleh petugas penerima dan pemeriksa independen.",
+                "Before formal acceptance, select an authorized real case for receiving-officer and independent-reviewer evaluation."))
+        elif int(pilot.get("five_stage_observed_case_count") or 0)<int(pilot.get("authorized_case_count") or 0):
+            actions.append(_t(language,
+                "Tinjau langkah audit yang belum tercatat pada kasus berizin, kemudian minta penerimaan manusia yang terpisah. Catatan pada periode sebelumnya mungkin tetap berlaku.",
+                "Review absent audit stages in authorized cases, then obtain separate human acceptance. Earlier-period audit records may exist."))
     if readiness_enabled:
         counts=readiness.get("group_counts") or {}
         if int(counts.get("EVIDENCE_RECHECK") or 0):
@@ -227,8 +249,13 @@ def build_interim_template(snapshot, language="id"):
         # Follow-up text is a read-only management aid. Records outside the
         # reporting cohort and earlier review events are not established absent.
         pass
+    if pilot_enabled:
+        caveats_note=_t(language,
+            "Kesiapan uji petugas dihitung dari peristiwa audit yang tercatat dalam periode UTC terpilih; bukan riwayat seumur hidup, bukan bukti keaslian sumber, dan bukan persetujuan klien.",
+            "Officer-pilot readiness reflects audit events observed in the selected UTC window; it is not lifetime casework history, evidence-authenticity proof, or client approval.")
     caveats = [
         coverage_note,
+        *([caveats_note] if pilot_enabled else []),
         _t(language,
            "Status laporan yang dihitung berasal dari versi laporan terbaru pada setiap penugasan; versi lama tetap dalam jejak audit tetapi tidak menggandakan KPI.",
            "Report-status KPIs use the latest report version per assignment; older versions remain in the audit trail but do not inflate KPIs."),
@@ -303,6 +330,14 @@ def build_interim_template(snapshot, language="id"):
                                     key=lambda x:(-x[1],x[0]))],
         "findings": findings,
         "recommended_actions": actions,
+        "officer_pilot_evidence":({
+            "schema":"BAWASLU_OFFICER_PILOT_EVIDENCE_V1540",
+            "authorized_case_count":int(pilot.get("authorized_case_count") or 0),
+            "five_stage_observed_case_count":int(pilot.get("five_stage_observed_case_count") or 0),
+            "automated_pilot_acceptance_granted":False,
+            "authorized_human_signoff_received":False,
+            "window_only_not_lifetime_casework":True,
+        } if pilot_enabled else None),
         "investigation_readiness_summary":({
             "schema":"BAWASLU_INVESTIGATION_READINESS_V1537",
             "authorized_case_count":int(readiness.get("authorized_case_count") or 0),

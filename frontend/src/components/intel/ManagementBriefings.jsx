@@ -241,6 +241,38 @@ export default function ManagementBriefings(){
     <ol className="ml-5 mt-3 list-decimal space-y-2 text-sm text-[#405366]">{(template.recommended_actions||[]).map((action,index)=><li key={index}>{action}</li>)}</ol>
     <p className="mt-3 text-xs text-[#8a6944]">{t('Recommendations are procedural prompts; no assignments, takedowns, or approvals were created.','Rekomendasi ini hanya panduan prosedur; tidak ada penugasan, takedown, atau persetujuan yang dibuat.')}</p>
    </section>
+   {report.officer_pilot_readiness?.schema==='BAWASLU_OFFICER_PILOT_EVIDENCE_V1540'&&
+    <section data-testid="briefing-officer-pilot-evidence" className="rounded-xl border border-[#dce5ec] bg-white p-4">
+     <h3 className="font-semibold">{t('Officer acceptance evidence','Bukti persiapan penerimaan petugas')}</h3>
+     <p className="mt-1 text-xs text-[#64748b]">{t('Audited workflow observations only, not a formal approval or an evaluation of source truth.','Hanya peristiwa alur kerja teraudit, bukan persetujuan resmi atau penilaian kebenaran sumber.')}</p>
+     <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+      {[
+       [t('Authorized cases in period','Kasus berizin dalam periode'),report.officer_pilot_readiness.authorized_case_count],
+       [t('Cases with all five observed stages','Kasus dengan lima tahap teramati'),report.officer_pilot_readiness.five_stage_observed_case_count],
+       [t('Cases needing audit follow-up','Kasus perlu tindak lanjut audit'),report.officer_pilot_readiness.cases_without_complete_observed_trace]
+      ].map(([label,count])=><div className="rounded-lg bg-[#f7f9fb] p-3" key={label}>
+       <strong className="block text-lg tabular-nums">{count??0}</strong>
+       <p className="mt-1 text-xs">{label}</p>
+      </div>)}
+     </div>
+     <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {[
+       ['source_linked',t('Source linked','Sumber terhubung')],
+       ['receiving_officer_accepted',t('Receiving officer accepted','Petugas penerima menyetujui')],
+       ['original_source_checked',t('Original source reviewed','Sumber asli ditinjau')],
+       ['latest_report_submitted',t('Latest report submitted','Laporan terbaru diajukan')],
+       ['independent_report_approval',t('Independent reviewer approved','Pemeriksa independen menyetujui')]
+      ].map(([key,label])=><div key={key} className="rounded-md border border-[#e6ebef] p-2 text-xs">
+       <strong className="tabular-nums">{report.officer_pilot_readiness.stage_counts?.[key]??0}</strong>
+       <span className="ml-2">{label}</span>
+      </div>)}
+     </div>
+     {!report.officer_pilot_readiness.real_casework_available_in_scope?
+      <p data-testid="briefing-officer-pilot-no-real-cases" className="mt-3 text-xs text-[#876532]">
+       {t('No real cases in this authorized reporting window. Pilot acceptance remains pending. Synthetic automated tests cannot substitute for an officer review.','Tidak ada kasus riil berizin pada periode pelaporan ini. Penerimaan uji petugas masih tertunda. Pengujian sintetis otomatis tidak menggantikan peninjauan petugas.')}
+      </p>:
+      <p className="mt-3 text-xs text-[#876532]">{t('Counts reflect distinct authorized cases and only audit events observed in the selected period. Older events may exist. A full observed trace is not client sign-off.','Angka menghitung kasus berizin yang unik dan hanya peristiwa audit dalam periode ini. Peristiwa lebih lama mungkin ada. Lima tahap teramati bukan persetujuan klien.')}</p>}
+    </section>}
    {report.management_consistency?.schema==='BAWASLU_MANAGEMENT_CASEWORK_RECONCILIATION_V1539'&&
     <section data-testid="briefing-casework-reconciliation" className="rounded-xl border border-[#dce5ec] bg-white p-4">
      {report.management_consistency.real_casework_sample_available?

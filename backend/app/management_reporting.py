@@ -22,6 +22,7 @@ from .casework import CaseAssignment, CaseReport, CaseTransition, _require, _vis
 from .management_report_templates import build_interim_template, render_pdf, render_docx, render_xlsx
 from .management_followup_queue import management_followup_queue
 from .management_investigation_readiness import investigation_readiness_board
+from .officer_pilot_readiness import officer_pilot_readiness
 
 router = APIRouter(prefix="/api/management-reporting", tags=["management-reporting"])
 PERIOD_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
@@ -327,6 +328,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     followup_queue=management_followup_queue(cases,latest_by_case,transitions)
     investigation_readiness=investigation_readiness_board(cases,latest_by_case,transitions)
+    officer_pilot=officer_pilot_readiness(cases,latest_by_case,transitions)
     # Compare complete authorization-scoped totals, never the 12-row previews.
     # An empty case table means there is no human casework sample to evaluate.
     management_consistency={
@@ -372,6 +374,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "casework_progress":casework_progress,
         "followup_queue":followup_queue,
         "investigation_readiness":investigation_readiness,
+        "officer_pilot_readiness":officer_pilot,
         "management_consistency":management_consistency,
         "report_status_basis": "LATEST_REPORT_PER_AUTHORIZED_ASSIGNMENT",
         "report_coverage": {

@@ -266,6 +266,8 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
                       "officer_action_only":True})
     if social:
         add("VERIFY_ORIGINAL_POST_CONTEXT",social)
+    if formal:
+        add("TRACE_FORMAL_EVIDENCE_CHAIN",formal)
     if "CITATION_INTEGRITY" in reasons:
         add("RECHECK_MISSING_OR_OMITTED_REFERENCES",cited)
     if "LEGAL_ARTICLE_ATTRIBUTION" in reasons:
@@ -378,6 +380,19 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     review_steps=_officer_review_steps(
         cited,records,review_reasons,needs_legal_warning,
         bool(enforcement_flags or categorical_outcome_flags))
+    # Readiness refers only to citation availability, never factual or legal
+    # correctness. Legal questions without cited PDF text must not be treated
+    # as ready simply because a neutral AI answer omitted an enforcement verb.
+    if needs_legal_warning and not doc_refs:
+        citation_coverage="LEGAL_REFERENCE_NOT_CITED"
+    elif needs_legal_warning and doc_refs:
+        citation_coverage="LEGAL_REFERENCE_CITED_UNVERIFIED"
+    elif records and not cited:
+        citation_coverage="SELECTED_EVIDENCE_NOT_CITED"
+    elif cited:
+        citation_coverage="CITED_EVIDENCE_UNVERIFIED"
+    else:
+        citation_coverage="NO_CITED_EVIDENCE"
     metadata={
         "audit_version":"ASSISTANT_GROUNDING_V1483",
         "scope":"ONLY_CURRENTLY_AUTHORIZED_SELECTED_RECORDS",
@@ -420,6 +435,8 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "officer_review_steps":review_steps,
         "officer_review_steps_are_advisory":True,
         "officer_review_steps_auto_completed":False,
+        "evidence_citation_coverage":citation_coverage,
+        "evidence_citation_coverage_is_truth_verification":False,
         "legal_action_ready":False,
         "source_truth_verified":False,
         "source_cards_are_citations":False,
@@ -428,6 +445,6 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "legal_reference_limit_added":bool(pdf_guidance and needs_legal_warning
                                            and not legally_reviewed),
         "audit_used_paid_provider":False,
-        "human_review_required":bool(records or categorical_outcome_flags or enforcement_flags or excess),
+        "human_review_required":bool(records or review_steps or categorical_outcome_flags or enforcement_flags or excess),
     }
     return text,cited,metadata

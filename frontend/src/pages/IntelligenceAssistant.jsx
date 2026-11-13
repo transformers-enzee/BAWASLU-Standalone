@@ -219,6 +219,10 @@ export default function IntelligenceAssistant(){
         {m.grounding?.grounding_audit&&!showQa&&<div data-testid="assistant-source-caution"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>
+          {m.grounding.grounding_audit.evidence_citation_coverage==='LEGAL_REFERENCE_NOT_CITED'&&
+           <p data-testid="assistant-legal-source-missing" className="mt-1 font-medium text-[#91652e]">{(m.answer_language||'id')==='id'?'Belum ada halaman PDF hukum yang dikutip. Petugas harus memeriksa rujukan resmi sebelum menyimpulkan.':'No legal PDF page is cited. An officer must check the official reference before reaching a conclusion.'}</p>}
+          {m.grounding.grounding_audit.evidence_citation_coverage==='SELECTED_EVIDENCE_NOT_CITED'&&
+           <p data-testid="assistant-selected-sources-uncited" className="mt-1 text-[#91652e]">{(m.answer_language||'id')==='id'?'Bukti tersedia tetapi tidak dikutip dalam jawaban.':'Evidence was available but was not cited in the answer.'}</p>}
           {(m.grounding.grounding_audit.officer_review_steps||[]).length>0&&
            <details data-testid="assistant-officer-review-steps" className="mt-2">
              <summary className="cursor-pointer font-semibold text-[#52657a]">{(m.answer_language||'id')==='id'?'Langkah pemeriksaan petugas':'Officer review steps'} · {m.grounding.grounding_audit.officer_review_steps.length}</summary>
@@ -227,6 +231,7 @@ export default function IntelligenceAssistant(){
                const id=(m.answer_language||'id')==='id';
                const labels={
                 VERIFY_ORIGINAL_POST_CONTEXT:id?'Periksa postingan asli, konteks, dan waktu publikasi.':'Inspect the original post, context, and publication time.',
+                TRACE_FORMAL_EVIDENCE_CHAIN:id?'Telusuri catatan intelijen formal, asal bukti dan jejak tinjauan petugas.':'Trace the formal intelligence record, source evidence and officer review history.',
                 RECHECK_MISSING_OR_OMITTED_REFERENCES:id?'Periksa rujukan yang tidak tersedia atau terpotong.':'Recheck missing or omitted source references.',
                 MATCH_CITED_LEGAL_PASSAGES:id?'Cocokkan setiap pasal dengan halaman PDF yang dirujuk.':'Match each legal article to its cited PDF page.',
                 REQUEST_DOCUMENT_REVIEW:id?'Minta penelaahan dokumen yang belum ditinjau petugas.':'Request officer review of unreviewed documents.',

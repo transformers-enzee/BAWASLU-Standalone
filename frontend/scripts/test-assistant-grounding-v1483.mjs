@@ -26,6 +26,10 @@ assert.ok(api.includes('audit_assistant_answer(')&&
 assert.ok(api.includes("'cited_count':len(cited)")&&
   api.includes("'source_card_count':len(support)"),
   'Cards and citations must have different denominators');
+assert.ok(audit.includes('TRACE_FORMAL_EVIDENCE_CHAIN')&&
+  audit.includes('"evidence_citation_coverage_is_truth_verification":False')&&
+  page.includes('data-testid="assistant-legal-source-missing"'),
+  'Formal intelligence provenance and missing legal source must be explicit');
 assert.ok(audit.includes('def _officer_review_steps')&&
   audit.includes('"officer_review_steps_auto_completed":False')&&
   page.includes('data-testid="assistant-officer-review-steps"'),

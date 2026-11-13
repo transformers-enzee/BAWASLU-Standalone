@@ -199,7 +199,9 @@ def build_interim_template(snapshot, language="id"):
             f"Konfirmasi kewenangan dan lokasi kejadian untuk {unknown_province} penugasan yang ditampilkan tanpa provinsi kejadian terverifikasi.",
             f"Confirm jurisdiction and incident location for {unknown_province} displayed assignments lacking a verified incident province."))
     if not assigned:
-        actions.append(_t(language,
+        # Preserve the established no-data recommendation as the first
+        # action; pilot acceptance notes follow rather than masking it.
+        actions.insert(0,_t(language,
             "Tidak ada penugasan tersimpan dalam cakupan dan periode ini; periksa cakupan pengumpulan dan antrian Inbox sebelum menyimpulkan tidak ada isu.",
             "No saved assignments in this scope and window. Check collection coverage and the Inbox before inferring that no issues exist."))
     if not actions:

@@ -236,6 +236,19 @@ def test_no_casework_no_false_acceptance_or_success_in_english_and_indonesian():
         assert "select an authorized real case" in " ".join(en["template"]["recommended_actions"])
     finally:db.close()
 
+def test_no_casework_preserves_existing_no_saved_assignments_first_action():
+    db=report_dataset()
+    try:
+        db.query(CaseTransition).delete()
+        db.query(CaseReport).delete()
+        db.query(CaseAssignment).delete()
+        db.commit()
+        output=snapshot(db,1,"en")["template"]
+        assert output["recommended_actions"][0].startswith("No saved assignments")
+        assert any("Before formal acceptance" in item for item in output["recommended_actions"][1:])
+        assert output["approval_state"]=="DRAFT_NOT_APPROVED"
+    finally:db.close()
+
 def test_management_exports_preserve_officer_acceptance_caveat():
     db=report_dataset()
     try:

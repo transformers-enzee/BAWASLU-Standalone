@@ -329,6 +329,8 @@ export default function ManagementBriefings(){
          <span>{t('Source now unavailable in scope (preview)','Sumber kini tidak tersedia dalam cakupan akses (pratinjau)')}: <strong>{pilotIntake.preview_now_unavailable_count??0}</strong></span>
          <span>{t('Saved evidence availability changed (preview)','Ketersediaan bukti tersimpan berubah (pratinjau)')}: <strong>{pilotIntake.preview_source_availability_changed_count??0}</strong></span>
          <span>{t('New assessment version (preview)','Versi penilaian terbaru (pratinjau)')}: <strong>{pilotIntake.preview_assessment_version_changed_count??0}</strong></span>
+         <span>{t('Flag signals needing renewed review (preview)','Sinyal tanda perlu peninjauan ulang (pratinjau)')}: <strong>{pilotIntake.preview_flag_signal_recheck_count??0}</strong></span>
+         <span>{t('Jurisdiction verification changed (preview)','Verifikasi yurisdiksi berubah (pratinjau)')}: <strong>{pilotIntake.preview_jurisdiction_verification_changed_count??0}</strong></span>
         </div>
         {(pilotIntake.items||[]).length>0?
          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
@@ -356,7 +358,9 @@ export default function ManagementBriefings(){
             t('Recover original source URL','Pulihkan URL sumber asli'):
             t('Saved text and URL present, original not verified','Teks dan URL tersedia, sumber asli belum diverifikasi')}
             {item.assessment_version_changed_since_inbox===true&&<span className="block text-[#876532]">{t('Saved assessment updated since Inbox snapshot','Penilaian tersimpan diperbarui sejak cuplikan Inbox')}</span>}
-            {item.source_availability_changed_since_inbox===true&&<span className="block text-[#876532]">{t('Source availability updated since Inbox snapshot','Ketersediaan sumber diperbarui sejak cuplikan Inbox')}</span>}</td>
+            {item.source_availability_changed_since_inbox===true&&<span className="block text-[#876532]">{t('Source availability updated since Inbox snapshot','Ketersediaan sumber diperbarui sejak cuplikan Inbox')}</span>}
+            {item.flag_review_recheck_required===true&&<span className="block text-[#876532]">{t('Saved flag requires review against the latest assessment','Tanda tersimpan perlu ditinjau sesuai penilaian terbaru')}</span>}
+            {item.jurisdiction_verification_changed_since_inbox===true&&<span className="block text-[#876532]">{t('Incident jurisdiction verification changed; reconfirm before routing','Verifikasi yurisdiksi kejadian berubah; konfirmasi ulang sebelum meneruskan')}</span>}</td>
            <td className="p-2">{pilotIntakeLink(item)?
             <a href={pilotIntakeLink(item)} className="text-[#116d85] underline" rel="noopener noreferrer">
              {item.case_already_exists_in_visible_scope?

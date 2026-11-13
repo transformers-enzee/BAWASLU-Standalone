@@ -484,6 +484,8 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
             "SOURCE_NOT_IN_AUTHORIZED_SCOPE":0}
     changed_availability=0
     changed_assessment=0
+    jurisdiction_recheck_count=0
+    flag_signal_recheck_count=0
     for item in result["items"]:
         post=None
         try:
@@ -510,6 +512,26 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
                 if snapshot_version is not None and latest_version is not None else None)
             if item["assessment_version_changed_since_inbox"] is True:
                 changed_assessment+=1
+            # A flag shown by a cached Inbox assessment must not be presented
+            # as a current officer-review decision after its version changes.
+            item["flag_review_recheck_required"]=bool(
+                item["assessment_version_changed_since_inbox"] is True
+                and item["review_signal"]=="SAVED_SOURCE_FLAG_REVIEW")
+            if item["flag_review_recheck_required"]:
+                flag_signal_recheck_count+=1
+            from .jurisdiction_review import jurisdiction_status
+            location=jurisdiction_status(db,campaign.id,post.id,post)
+            was_verified=bool(item.get("incident_jurisdiction_verified"))
+            old_province=str(item.get("verified_incident_province") or "")
+            is_verified=bool(location.get("incident_jurisdiction_verified"))
+            fresh_province=str(location.get("incident_province") or "") if is_verified else ""
+            item["incident_jurisdiction_verified"]=is_verified
+            item["verified_incident_province"]=fresh_province
+            item["latest_jurisdiction_review_state"]=str(location.get("decision") or "UNREVIEWED")
+            item["jurisdiction_verification_changed_since_inbox"]=(
+                was_verified!=is_verified or old_province!=fresh_province)
+            if item["jurisdiction_verification_changed_since_inbox"]:
+                jurisdiction_recheck_count+=1
             old_text=item["source_text_available"]
             old_url=item["original_source_url_available"]
             has_text=bool(str(post.text_content or "").strip())
@@ -550,6 +572,8 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["preview_latest_saved_eligible_count"]=counts["LATEST_SAVED_ELIGIBLE"]
     result["preview_source_availability_changed_count"]=changed_availability
     result["preview_assessment_version_changed_count"]=changed_assessment
+    result["preview_flag_signal_recheck_count"]=flag_signal_recheck_count
+    result["preview_jurisdiction_verification_changed_count"]=jurisdiction_recheck_count
     result["preview_current_saved_text_available_count"]=sum(int(
         item.get("source_text_available",False)) for item in result["items"]
         if item["latest_saved_eligibility"]!="SOURCE_NOT_IN_AUTHORIZED_SCOPE")

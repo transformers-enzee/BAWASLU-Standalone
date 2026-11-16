@@ -34,7 +34,8 @@ def evaluate_policy_boundary(question,evidence,answer,cited_ids,grounding=None):
     if not legal_refs:
         return base
     flags=[]
-    for i,span in enumerate(_SENTENCE.split(str(answer or ""))):
+    spans=_SENTENCE.split(str(answer or ""))
+    for i,span in enumerate(spans):
         clean=_CITE.sub("",span).strip()
         if not clean or clean.endswith("?") or _REPORTED.search(clean) or _UNCERTAIN.search(clean):
             continue
@@ -42,8 +43,15 @@ def evaluate_policy_boundary(question,evidence,answer,cited_ids,grounding=None):
             continue
         # A local displayed legal-PDF citation can give the misleading impression
         # that election-law documentation verifies a provider moderation ruling.
-        local=set(_CITE.findall(span))
         local_legal=[ref for ref in legal_refs if "["+ref+"]" in span]
+        if not local_legal and i+1<len(spans):
+            following=spans[i+1].strip()
+            # A standalone citation on the next line is claim-local, but a
+            # narrative sentence with a citation is not. Do not borrow from
+            # other paragraphs or from structured citations without display.
+            if following and not _CITE.sub("",following).strip():
+                local_legal=[ref for ref in legal_refs
+                             if "["+ref+"]" in following]
         if local_legal:
             flags.append({"claim_index":i+1,
                           "cited_legal_page_ids":sorted(local_legal)[:12],

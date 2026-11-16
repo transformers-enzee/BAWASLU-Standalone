@@ -301,6 +301,28 @@ def acceptance_readiness(response:Response,
     return result
 
 
+@router.get("/acceptance-evidence.csv")
+def acceptance_evidence_csv(
+    target:int=Query(default=24,ge=1,le=30),
+    user:User=Depends(current_user),
+    db:Session=Depends(get_db)
+):
+    """Admin-only CSV handoff of pending requirements, never signed approval."""
+    from .assistant_acceptance_evidence import (
+        build_evidence_register,render_evidence_register_csv)
+    prepared_response=Response()
+    readiness=acceptance_readiness(
+        response=prepared_response,target=target,user=user,db=db)
+    register=build_evidence_register(readiness)
+    csv_text=render_evidence_register_csv(register)
+    return Response(
+        content=csv_text,media_type="text/csv; charset=utf-8",
+        headers={"Cache-Control":"private, no-store",
+                 "Content-Disposition":"attachment; filename=bawaslu-acceptance-evidence-v1588.csv",
+                 "X-Evaluation-Generation":"NONE",
+                 "X-Acceptance-Status":"PENDING_HUMAN_REVIEW"})
+
+
 @router.get("/legal-benchmark")
 def legal_benchmark(response:Response,user:User=Depends(current_user),
                     db:Session=Depends(get_db)):

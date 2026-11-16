@@ -4,6 +4,8 @@ Counts are assignments created in a rolling UTC window, not social post
 counts or legally established electoral violations. No paid AI calls.
 """
 from collections import Counter
+import os
+import json
 from typing import Literal
 from datetime import datetime, timedelta, timezone
 import csv
@@ -637,6 +639,49 @@ def build_briefing(db: Session, access: dict, user_id: int,
                                   "reason":"NOT_REQUESTED_TO_KEEP_REPORT_FAST"}
     snapshot["template"] = build_interim_template(snapshot, language)
     return snapshot
+
+
+@router.get("/performance-sample")
+def management_performance_sample(period: str = "weekly",
+                                  user: User = Depends(current_user),
+                                  db: Session = Depends(get_db)):
+    """Explicit opt-in read-only server-side diagnostic for administrators.
+
+    Returns timing and volume metadata only. No content, identities, report
+    narratives, legal claims, or source URLs are returned or logged.
+    """
+    if os.getenv("BAWASLU_REPORT_PERF_ENABLED","")!="1":
+        raise HTTPException(404,"Performance diagnostics are disabled")
+    access=profile(db,user)
+    if access.get("role")!="National Administrator" or (
+            access.get("geographic_scope")!="Nationwide") or not has(
+            access,"view_intelligence"):
+        raise HTTPException(403,"Administrator permission required")
+    from .management_perf import measure_sql
+    with measure_sql(db) as metrics:
+        snapshot=build_briefing(db,access,user.id,period=period,
+            topic="",language="en",include_monitoring=False)
+    output_bytes=len(json.dumps(snapshot,ensure_ascii=False,
+        default=str).encode("utf-8"))
+    return {
+        "schema":"BAWASLU_MANAGEMENT_PERFORMANCE_PROBE_V1583",
+        "environment":"RUNNING_BACKEND_DATABASE",
+        "measurement":"SINGLE_READ_ONLY_SAMPLE_NOT_P95",
+        "period":period,
+        "scope":"AUTHORIZED_NATIONAL_ADMINISTRATOR",
+        "case_cohort_size":snapshot["metrics"]["assignments"],
+        "audit_activity_case_count":snapshot[
+            "period_audit_activity"]["authorized_cases_with_observed_activity"],
+        "query_count":metrics["query_count"],
+        "db_driver_elapsed_ms":metrics["db_driver_elapsed_ms"],
+        "total_service_elapsed_ms":metrics["total_elapsed_ms"],
+        "non_db_elapsed_ms":metrics["non_db_elapsed_ms"],
+        "serialized_report_bytes":output_bytes,
+        "query_count_includes_profile_lookup":False,
+        "production_p95_established":False,
+        "contains_case_or_report_text":False,
+        "writes_or_approvals_created":False,
+    }
 
 
 @router.get("/briefing")

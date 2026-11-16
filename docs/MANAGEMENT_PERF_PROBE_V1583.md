@@ -1,0 +1,7 @@
+# v158.3 — Opt-in staging performance sample
+
+Purpose: obtain an actual backend-and-database observation on the running Render environment, instead of mislabeling synthetic in-memory SQLite results as production performance.
+
+The **GET /api/management-reporting/performance-sample?period=weekly** endpoint is disabled unless **BAWASLU_REPORT_PERF_ENABLED=1** is configured at Render. Requests require an authenticated **National Administrator** with nationwide scope and view_intelligence permission. It executes one normal read-only management briefing with social monitoring disabled, does not create or approve any casework records, and returns only aggregated measurements (case count, activity-case count, driver execution time, total service computation time, query count and report JSON bytes). No case titles, source links, identities, report text, audit notes or query SQL are returned or logged.
+
+The performance listener is bound to the SQLAlchemy Connection for that request only, not the global Engine, avoiding contamination by unrelated simultaneous requests. The profile lookup is deliberately outside the measured section and the response documents that exclusion. SQL driver execution time is not full network/database duration and one request is not a p95 or load test. The endpoint remains disabled in normal staging without an explicit operator enablement. Disable after controlled diagnostic measurements. Automated SQLite tests cover opt-in gate, admin permissions, safe data fields, malformed periods and listener cleanup.

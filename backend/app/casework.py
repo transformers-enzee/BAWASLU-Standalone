@@ -920,9 +920,12 @@ def record_source_review(case_id: int, body: SourceReviewAction,
         raise HTTPException(422,"Invalid source review state")
     if len(body.note.strip())<20:
         raise HTTPException(422,"Explain the source review in at least 20 characters")
-    if body.status=="SOURCE_CHECKED" and (
-        not body.original_source_opened or not case.source_url.startswith(("https://","http://"))):
-        raise HTTPException(422,"Open the saved original source URL before attesting a source check")
+    if body.status=="SOURCE_CHECKED":
+        from .officer_pilot_intake import _original_url_available
+        # A malformed or credential-bearing link is not reviewable source
+        # evidence. A user checkbox never proves the claim or provenance.
+        if not body.original_source_opened or not _original_url_available(case.source_url):
+            raise HTTPException(422,"Open a valid saved original source URL before attesting a source check")
     details={
         "status":body.status,"note":body.note.strip(),
         "original_source_opened":bool(body.original_source_opened),

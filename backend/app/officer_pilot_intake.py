@@ -22,7 +22,7 @@ def _original_url_available(value):
     try:
         p=urlsplit(str(value or "").strip())
         return bool(p.scheme in ("http","https") and p.hostname
-                    and not p.username and not p.password)
+                    and not p.username and not p.password and "@" not in p.netloc)
     except ValueError:
         return False
 

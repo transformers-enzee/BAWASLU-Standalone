@@ -35,6 +35,8 @@ def test_two_hundred_event_window_never_diagnoses_missing_stage():
         case=_case(11);db.add(case);db.flush()
         events=[CaseTransition(case_id=case.id,actor_id=1,action="NOTE",
                                details_json="{}") for _ in range(200)]
+        db.add_all(events)
+        db.flush()
         result=officer_pilot_readiness([case],{},events)
         row=result["case_preview"][0]
         assert row["audit_event_window_limited"] is True

@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 from .auth import current_user
 from .db import get_db
 from .models import User
@@ -54,7 +54,20 @@ def scoped_cases(db: Session, access: dict, user_id: int, period: str, topic: st
     start,end,topic=_activity_period_window(access,period,topic,now)
     # Narrow SQL at the database first, not after fetching every province's cases.
     # This predicate mirrors casework._visible; retain that guard as defense in depth.
-    query = db.query(CaseAssignment).filter(
+    # Management KPIs do not need large internal notes/tag JSON or update
+    # bookkeeping. Keep every authorization and topic-filter column loaded
+    # to avoid follow-up lazy reads after the cohort is retrieved.
+    query = db.query(CaseAssignment).options(load_only(
+        CaseAssignment.id,CaseAssignment.title,
+        CaseAssignment.source_type,CaseAssignment.source_id,
+        CaseAssignment.campaign_id,CaseAssignment.source_url,
+        CaseAssignment.source_excerpt,CaseAssignment.verified_province,
+        CaseAssignment.originating_scope,CaseAssignment.originating_province,
+        CaseAssignment.target_scope,CaseAssignment.target_province,
+        CaseAssignment.target_department,CaseAssignment.assignee_id,
+        CaseAssignment.created_by,CaseAssignment.status,
+        CaseAssignment.created_at,
+    )).filter(
         CaseAssignment.created_at >= start, CaseAssignment.created_at <= end)
     geographic_scope = access.get("geographic_scope")
     province = access.get("province") or ""

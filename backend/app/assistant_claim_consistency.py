@@ -9,11 +9,17 @@ import re
 _SOURCE=re.compile(r"\[(DOC-[0-9]+-P[0-9]+)\]")
 _SPANS=re.compile(r"(?<=[.!?;])\s+|\n+")
 _EN=re.compile(r"\b(?P<modal>must not|shall not|may not|must|shall|may)\s+(?P<action>report|submit|register|disclose|publish|vote|campaign)\b",re.I)
-_ID=re.compile(r"\b(?P<modal>tidak wajib|wajib|dilarang|diperbolehkan)\s+(?P<action>melapor|mengunggah|mendaftar|mengumumkan|berkampanye|memilih)\b",re.I)
+# Order multiword negations before shorter positive forms; a phrase must not be
+# detected as both permission and prohibition. The verb vocabulary is strictly
+# bounded to avoid presenting this lexical check as full language understanding.
+_ID=re.compile(r"\b(?P<modal>tidak diperbolehkan|tidak diizinkan|tidak boleh|tidak harus|tidak wajib|diperbolehkan|diizinkan|dilarang|harus|wajib|boleh)\s+(?P<action>melapor|mengunggah|mendaftar|mengumumkan|berkampanye|memilih)\b",re.I)
 # May/shall have distinct meanings; only same-action strong positive vs
 # explicit negative is triaged. "May" is never treated as mandatory.
-_POSITIVE={"must","shall","wajib","diperbolehkan"}
-_NEGATIVE={"must not","shall not","may not","tidak wajib","dilarang"}
+_POSITIVE={"must","shall","wajib","harus"}
+_NEGATIVE={"must not","shall not","may not","dilarang","tidak boleh",
+           "tidak diperbolehkan","tidak diizinkan" }
+_PERMITTED={"diperbolehkan","diizinkan","boleh"}
+_NOT_REQUIRED={"tidak wajib","tidak harus"}
 _EXACT_VERBS={"report":"melapor","register":"mendaftar","campaign":"berkampanye","vote":"memilih"}
 
 def _patterns(value):
@@ -26,9 +32,10 @@ def _patterns(value):
             # translated concepts. English 'may' has no assertive polarity.
             if modal=="may":
                 continue
-            polarity="POSITIVE" if modal in _POSITIVE else "NEGATIVE"
-            if modal=="diperbolehkan": polarity="PERMITTED"
-            if modal=="tidak wajib": polarity="NOT_REQUIRED"
+            polarity=("POSITIVE" if modal in _POSITIVE else
+                      "NEGATIVE" if modal in _NEGATIVE else "UNKNOWN")
+            if modal in _PERMITTED: polarity="PERMITTED"
+            if modal in _NOT_REQUIRED: polarity="NOT_REQUIRED"
             if polarity not in {"POSITIVE","NEGATIVE","NOT_REQUIRED","PERMITTED"}:
                 continue
             key=(action,polarity)

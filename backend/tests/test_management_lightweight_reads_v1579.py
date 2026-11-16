@@ -39,8 +39,9 @@ def test_management_report_sql_excludes_large_body_columns_and_reviewer_identity
         for sql in projection:
             select=sql.split(" from case_reports",1)[0]
             for column in ("executive_summary","verification_notes","recommendations",
-                           "findings","source_snapshot_json","review_comment","reviewed_by"):
+                           "findings","source_snapshot_json","review_comment"):
                 assert column not in select,column
+        assert any("reviewed_by" in s and "created_by" in s for s in projection)
         transitions=[s for s in captured if
             "from case_transitions" in s and "case_transitions.case_id in" in s]
         assert transitions

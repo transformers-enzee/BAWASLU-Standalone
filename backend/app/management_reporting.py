@@ -322,8 +322,9 @@ def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
     cases,start,end,topic=scoped_cases(db,access,user_id,period,topic,now)
     ids=[row.id for row in cases]
     # Read only metadata used by management metrics and approval workflow.
-    # Report bodies, review comments, report source snapshots, actor identities
-    # and unrelated transition columns must not be fetched for a scorecard.
+    # Report bodies, review comments, report source snapshots and unrelated
+    # audit-event columns must not be fetched for a scorecard. Reviewer and
+    # author IDs are necessary to verify independent report approval.
     # Bounded IN clauses avoid enormous bind sets on larger reporting cohorts.
     reports=[]
     transitions=[]
@@ -331,7 +332,8 @@ def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
         batch=ids[offset:offset+400]
         reports.extend(db.query(
             CaseReport.id,CaseReport.case_id,
-            CaseReport.status,CaseReport.created_at
+            CaseReport.status,CaseReport.created_at,
+            CaseReport.created_by,CaseReport.reviewed_by
         ).filter(CaseReport.case_id.in_(batch)).all())
         transitions.extend(db.query(
             CaseTransition.id,CaseTransition.case_id,

@@ -73,7 +73,11 @@ def review_evidence(evidence_id:int,payload:EvidenceReview,response:Response,
     _admin(db,user)
     if payload.action not in _REVIEW_ACTIONS or evidence_id<=0:
         raise HTTPException(422,"Invalid review action or evidence ID")
-    entry=db.get(AssistantAcceptanceEvidence,evidence_id)
+    # Lock the parent submission for the duration of the review transaction.
+    # PostgreSQL serializes concurrent reviewers on this row; after acquiring
+    # the lock, the second reviewer sees the committed first decision.
+    entry=db.query(AssistantAcceptanceEvidence).filter(
+        AssistantAcceptanceEvidence.id==evidence_id).with_for_update().one_or_none()
     if not entry:
         raise HTTPException(404,"Submission not found")
     if entry.submitted_by==user.id:

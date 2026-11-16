@@ -276,6 +276,23 @@ export default function ManagementBriefings(){
     <h3 className="font-semibold text-[#24384c]">{t('Coverage and report status integrity','Cakupan dan integritas status laporan')}</h3>
     <p className="mt-2 text-[#52657a]">{t('Full authorized casework in this period:','Seluruh penugasan sesuai hak akses dalam periode ini:')} <strong>{coverage.assignments_in_period??m.assignments??0}</strong>. {t('Recent list shows','Daftar terbaru menampilkan')} <strong>{coverage.preview_rows??recent.length}</strong> / {coverage.preview_limit??12}; {t('report appendix shows','lampiran laporan menampilkan')} <strong>{coverage.template_rows??template.findings?.length??0}</strong> / {coverage.template_limit??8}.</p>
     <p className="mt-2 text-[#52657a]">{t('Assignments with a report:','Penugasan dengan laporan:')} <strong>{m.assignments_with_reports??0}</strong> · {t('Without a report:','Tanpa laporan:')} <strong>{m.assignments_without_reports??0}</strong> · {t('Stored report versions:','Versi laporan tersimpan:')} <strong>{m.report_versions_recorded??0}</strong>.</p>
+    {report?.report_version_integrity&&<div data-testid="briefing-report-version-integrity" className="mt-3 rounded-lg border border-[#e6ebf0] bg-[#f8fafc] p-3">
+      <h4 className="font-semibold text-[#24384c]">{t('Report revision history (not additional approvals)','Riwayat revisi laporan (bukan persetujuan tambahan)')}</h4>
+      <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-3">
+       {[
+        [t('Historical versions','Versi historis'),report.report_version_integrity.superseded_versions],
+        [t('Historical returned reports','Laporan dikembalikan historis'),report.report_version_integrity.superseded_returned_versions],
+        [t('Cases with multiple versions','Kasus dengan beberapa versi'),report.report_version_integrity.cases_with_multiple_versions],
+        [t('Latest approved after a return','Versi terbaru disetujui setelah dikembalikan'),report.report_version_integrity.latest_approved_after_return],
+        [t('Revised draft awaiting submission','Draf revisi menunggu pengajuan'),report.report_version_integrity.latest_draft_after_return],
+        [t('Returned awaiting revision','Dikembalikan menunggu revisi'),report.report_version_integrity.latest_returned_awaiting_revision]
+       ].map(([label,value])=><div key={label} className="rounded-md border border-[#e0e6ed] bg-white p-2">
+        <div className="text-lg font-semibold tabular-nums">{value??0}</div>
+        <div className="text-xs text-[#64748b]">{label}</div>
+       </div>)}
+      </div>
+      <p className="mt-2 text-xs text-[#866b43]">{t('Counts cover all authorized cases in this report period. Historical returned or approved versions are retained for audit, not counted as current approvals.','Jumlah mencakup semua kasus yang diizinkan dalam periode ini. Versi lama yang dikembalikan atau disetujui disimpan untuk audit, bukan dihitung sebagai persetujuan terkini.')}</p>
+    </div>}
     <p className="mt-2 text-xs text-[#866b43]">{t('Approval and submission KPIs use only the latest saved report version per assignment. Previous versions remain audit history. Preview rows are samples, not the denominator of the KPIs.',
       'KPI persetujuan dan pengajuan hanya menghitung versi laporan terbaru per penugasan. Versi sebelumnya tetap berada dalam riwayat audit. Daftar temuan hanya sampel, bukan dasar jumlah KPI.')}</p>
    </section>

@@ -323,6 +323,48 @@ def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
     return cases,start,end,topic,reports,transitions,latest
 
 
+def _report_version_integrity(cases,reports,latest_by_case):
+    """Report-version audit summary for full authorized casework cohort.
+
+    Latest version determines all actionable workflow KPIs. Older versions
+    remain historical context, never a second approval or submission.
+    No additional SQL queries or disclosure of report contents.
+    """
+    authorized={case.id for case in cases}
+    by_case={}
+    for report in reports:
+        if report.case_id in authorized:
+            by_case.setdefault(report.case_id,[]).append(report)
+    superseded=[report for report in reports
+        if report.case_id in authorized
+        and report.case_id in latest_by_case
+        and report.id!=latest_by_case[report.case_id].id]
+    return {
+        "schema":"BAWASLU_MANAGEMENT_REPORT_VERSION_INTEGRITY_V1571",
+        "authorized_cases":len(authorized),
+        "case_count_with_report":len(latest_by_case),
+        "total_stored_versions":len(reports),
+        "superseded_versions":len(superseded),
+        "superseded_returned_versions":sum(r.status=="RETURNED" for r in superseded),
+        "superseded_approved_versions":sum(r.status=="APPROVED" for r in superseded),
+        "cases_with_multiple_versions":sum(len(rows)>1 for rows in by_case.values()),
+        "latest_approved_after_return":sum(
+            latest.status=="APPROVED" and any(
+                r.status=="RETURNED" and r.id!=latest.id for r in by_case.get(cid,[]))
+            for cid,latest in latest_by_case.items()),
+        "latest_draft_after_return":sum(
+            latest.status=="DRAFT" and any(
+                r.status=="RETURNED" and r.id!=latest.id for r in by_case.get(cid,[]))
+            for cid,latest in latest_by_case.items()),
+        "latest_returned_awaiting_revision":sum(
+            latest.status=="RETURNED" for latest in latest_by_case.values()),
+        "latest_versions_are_kpi_denominator":True,
+        "historical_versions_are_not_approvals":True,
+        "report_workflow_is_not_legal_clearance":True,
+        "scope":"FULL_AUTHORIZED_CASEWORK_COHORT_CREATED_IN_SELECTED_UTC_PERIOD",
+    }
+
+
 def build_briefing(db: Session, access: dict, user_id: int,
                    period: str = "weekly", topic: str = "", now=None, language="id",
                    include_monitoring=False):
@@ -331,6 +373,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
     statuses = Counter(row.status for row in cases)
     latest_reports = {case_id: report.status for case_id, report in latest_by_case.items()}
     report_counts = Counter(latest_reports.values())
+    report_version_integrity=_report_version_integrity(cases,reports,latest_by_case)
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     followup_queue=management_followup_queue(cases,latest_by_case,transitions)
     investigation_readiness=investigation_readiness_board(cases,latest_by_case,transitions)
@@ -377,6 +420,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         },
         "case_status_counts": dict(statuses),
         "report_status_counts": dict(report_counts),
+        "report_version_integrity":report_version_integrity,
         "casework_progress":casework_progress,
         "followup_queue":followup_queue,
         "investigation_readiness":investigation_readiness,

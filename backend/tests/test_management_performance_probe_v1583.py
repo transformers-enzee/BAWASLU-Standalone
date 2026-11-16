@@ -30,6 +30,12 @@ def test_enabled_probe_has_only_safe_aggregate_metadata(monkeypatch):
         assert result["non_db_elapsed_ms"]>=0
         assert result["total_service_elapsed_ms"]>=result["db_driver_elapsed_ms"]
         assert result["serialized_report_bytes"]>0
+        assert result["serialization_elapsed_ms"]>=0
+        assert result["max_query_elapsed_ms"]>=0
+        assert result["average_query_elapsed_ms"]>=0
+        assert result["max_query_elapsed_ms"]<=result["db_driver_elapsed_ms"]+0.002
+        assert result["total_instrumented_elapsed_ms"]>=result["total_service_elapsed_ms"]
+        assert result["total_instrumented_elapsed_ms"]>=result["serialization_elapsed_ms"]
         assert not result["production_p95_established"]
         assert not result["contains_case_or_report_text"]
         result_text=json.dumps(result)
@@ -68,4 +74,32 @@ def test_db_listener_is_connection_scoped_removed_after_sample():
         with measure_sql(db) as another:
             db.execute(__import__("sqlalchemy").text("SELECT 2"))
         assert another["query_count"]==1
+    finally:db.close()
+
+
+def test_zero_query_sample_has_zero_query_aggregates():
+    db=dataset()
+    try:
+        with measure_sql(db) as result:
+            pass
+        assert result["query_count"]==0
+        assert result["max_query_elapsed_ms"]==0
+        assert result["average_query_elapsed_ms"]==0
+        assert result["db_driver_elapsed_ms"]==0
+    finally:db.close()
+
+
+def test_multiple_queries_have_aggregates_and_listener_cleanup():
+    from sqlalchemy import text
+    db=dataset()
+    try:
+        with measure_sql(db) as sample:
+            for _ in range(3):
+                db.execute(text("SELECT 1"))
+        assert sample["query_count"]==3
+        assert sample["average_query_elapsed_ms"]>=0
+        assert sample["max_query_elapsed_ms"]>=0
+        with measure_sql(db) as next_sample:
+            db.execute(text("SELECT 1"))
+        assert next_sample["query_count"]==1
     finally:db.close()

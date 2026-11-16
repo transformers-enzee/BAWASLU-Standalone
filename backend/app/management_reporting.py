@@ -8,6 +8,7 @@ import os
 import json
 from typing import Literal
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 import csv
 import io
 import re
@@ -661,8 +662,11 @@ def management_performance_sample(period: str = "weekly",
     with measure_sql(db) as metrics:
         snapshot=build_briefing(db,access,user.id,period=period,
             topic="",language="en",include_monitoring=False)
+    serialization_started=perf_counter()
     output_bytes=len(json.dumps(snapshot,ensure_ascii=False,
         default=str).encode("utf-8"))
+    serialization_elapsed_ms=round(
+        (perf_counter()-serialization_started)*1000,3)
     return {
         "schema":"BAWASLU_MANAGEMENT_PERFORMANCE_PROBE_V1583",
         "environment":"RUNNING_BACKEND_DATABASE",
@@ -674,8 +678,13 @@ def management_performance_sample(period: str = "weekly",
             "period_audit_activity"]["authorized_cases_with_observed_activity"],
         "query_count":metrics["query_count"],
         "db_driver_elapsed_ms":metrics["db_driver_elapsed_ms"],
+        "max_query_elapsed_ms":metrics["max_query_elapsed_ms"],
+        "average_query_elapsed_ms":metrics["average_query_elapsed_ms"],
         "total_service_elapsed_ms":metrics["total_elapsed_ms"],
         "non_db_elapsed_ms":metrics["non_db_elapsed_ms"],
+        "serialization_elapsed_ms":serialization_elapsed_ms,
+        "total_instrumented_elapsed_ms":round(
+            metrics["total_elapsed_ms"]+serialization_elapsed_ms,3),
         "serialized_report_bytes":output_bytes,
         "query_count_includes_profile_lookup":False,
         "production_p95_established":False,

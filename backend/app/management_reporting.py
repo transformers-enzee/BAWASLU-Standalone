@@ -321,12 +321,27 @@ def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
     management views and the officer's downloadable review worksheet."""
     cases,start,end,topic=scoped_cases(db,access,user_id,period,topic,now)
     ids=[row.id for row in cases]
-    reports=(db.query(CaseReport).filter(CaseReport.case_id.in_(ids)).all()
-             if ids else [])
-    transitions=(db.query(CaseTransition)
-        .filter(CaseTransition.case_id.in_(ids),
-                CaseTransition.happened_at >= start,
-                CaseTransition.happened_at <= end).all() if ids else [])
+    # Read only metadata used by management metrics and approval workflow.
+    # Report bodies, review comments, report source snapshots, actor identities
+    # and unrelated transition columns must not be fetched for a scorecard.
+    # Bounded IN clauses avoid enormous bind sets on larger reporting cohorts.
+    reports=[]
+    transitions=[]
+    for offset in range(0,len(ids),400):
+        batch=ids[offset:offset+400]
+        reports.extend(db.query(
+            CaseReport.id,CaseReport.case_id,
+            CaseReport.status,CaseReport.created_at
+        ).filter(CaseReport.case_id.in_(batch)).all())
+        transitions.extend(db.query(
+            CaseTransition.id,CaseTransition.case_id,
+            CaseTransition.action,CaseTransition.details_json,
+            CaseTransition.happened_at
+        ).filter(
+            CaseTransition.case_id.in_(batch),
+            CaseTransition.happened_at>=start,
+            CaseTransition.happened_at<=end
+        ).all())
     latest={}
     for report in sorted(reports,key=lambda row:(row.created_at,row.id)):
         latest[report.case_id]=report

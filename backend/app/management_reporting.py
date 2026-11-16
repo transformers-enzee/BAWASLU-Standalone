@@ -494,17 +494,27 @@ def _safe_csv_cell(value):
 @router.get("/briefing.csv")
 def briefing_csv(period: str = "weekly", topic: str = "",
                  user: User = Depends(current_user), db: Session = Depends(get_db)):
-    cases, _, _, _ = scoped_cases(db, profile(db, user), user.id, period, topic)
+    access=profile(db,user)
+    cases,_,_,_,reports,_,latest=_scoped_casework_window(
+        db,access,user.id,period,topic)
+    version_counts=Counter(r.case_id for r in reports)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["Case ID", "Created UTC", "Status", "Department",
                      "Verified incident province", "Source type", "Source ID",
-                     "Campaign ID", "Source URL", "Case title"])
+                     "Campaign ID", "Source URL", "Case title",
+                     "Latest report status", "Latest report ID",
+                     "Stored report versions", "Superseded report versions"])
     for row in cases:
+        current=latest.get(row.id)
+        total=version_counts[row.id]
         writer.writerow([_safe_csv_cell(v) for v in (
             row.id, row.created_at.isoformat(), row.status, row.target_department,
             row.verified_province, row.source_type, row.source_id,
-            row.campaign_id, row.source_url, row.title)])
+            row.campaign_id, row.source_url, row.title,
+            current.status if current else "NO_REPORT",
+            current.id if current else "",
+            total,max(0,total-1))])
     return Response(content="\ufeff" + buffer.getvalue(),
                     media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="bawaslu-casework-briefing.csv"',

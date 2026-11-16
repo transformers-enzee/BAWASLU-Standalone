@@ -297,12 +297,26 @@ def build_interim_template(snapshot, language="id"):
         caveats.append(_t(language,
             "Daftar tindak lanjut menunjukkan maksimal 12 kasus dalam cakupan yang dibuat pada periode ini. Kasus lama tidak ikut dalam populasi; catatan sumber yang tidak terlihat dalam periode bisa ada pada riwayat sebelumnya. Petunjuk tidak melakukan penugasan atau persetujuan otomatis.",
             "Follow-up preview shows at most 12 authorized cases created in this period. Older cases are outside the cohort and earlier source-review events may exist. Suggestions do not assign, approve, or close cases."))
+    revision_integrity=snapshot.get("report_version_integrity") or {}
     scorecard = [
         {"label": _t(language,"Penugasan","Assignments"), "value":assigned},
         {"label": _t(language,"Sumber unik","Unique sources"),"value":linked},
         {"label": _t(language,"Masih aktif","Active cases"),"value":active},
         {"label": _t(language,"Laporan disetujui","Reports approved"),"value":approved},
+        {"label": _t(language,"Versi laporan tersimpan","Stored report versions"),
+         "value":int(revision_integrity.get("total_stored_versions") or 0)},
+        {"label": _t(language,"Versi historis (bukan persetujuan)","Historical report versions (not approvals)"),
+         "value":int(revision_integrity.get("superseded_versions") or 0)},
+        {"label": _t(language,"Versi dikembalikan historis","Historical returned versions"),
+         "value":int(revision_integrity.get("superseded_returned_versions") or 0)},
+        {"label": _t(language,"Kasus disetujui setelah revisi","Cases approved after a return"),
+         "value":int(revision_integrity.get("latest_approved_after_return") or 0)},
+        {"label": _t(language,"Laporan terbaru menunggu revisi","Latest reports awaiting revision"),
+         "value":int(revision_integrity.get("latest_returned_awaiting_revision") or 0)},
     ]
+    caveats.append(_t(language,
+        "Versi laporan historis tetap tersimpan untuk audit dan tidak dihitung kembali sebagai persetujuan saat ini. KPI persetujuan menggunakan hanya versi laporan terbaru setiap penugasan. Status persetujuan bukan keputusan hukum.",
+        "Historical report versions remain available for audit and are never counted again as current approvals. Approval KPIs use only the latest report version per assignment. Approval is not a legal determination."))
     if monitoring_enabled:
         scorecard.extend([
             {"label": _t(language,"Unggahan terpantau (sampel)","Observed Inbox posts (sample)"),
@@ -325,6 +339,7 @@ def build_interim_template(snapshot, language="id"):
         "window_end_utc": snapshot["window_end_utc"],
         "executive_summary": summary,
         "scorecard": scorecard,
+        "report_version_integrity":revision_integrity,
         "monitoring_summary": monitoring if monitoring_enabled else {"enabled":False},
         "operational_breakdown": [
             {"label":_clean(key,120),"value":int(value)}

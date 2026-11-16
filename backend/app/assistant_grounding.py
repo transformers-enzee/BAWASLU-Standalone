@@ -74,7 +74,7 @@ def _claim_level_article_mismatches(answer,records):
     """
     failures=[]
     spans=re.split(r"(?<=[.!?;])\s+|\n+",str(answer or ""))
-    for span in spans:
+    for i,span in enumerate(spans):
         articles=_article_ids(span)
         if not articles:
             continue
@@ -83,6 +83,17 @@ def _claim_level_article_mismatches(answer,records):
                    ref in records and
                    records[ref].get("record_type")=="PDF_KNOWLEDGE" and
                    records[ref].get("document_type") in _LEGAL_DOC_TYPES]
+        if not citations and i+1<len(spans):
+            # Standalone adjacent citations are allowed for attribution, but
+            # must ALSO pass the same cited-page article-number presence check.
+            # Never borrow a page cited in a later narrative sentence.
+            next_span=spans[i+1].strip()
+            next_refs=_SOURCE_REF.findall(next_span)
+            if next_refs and not _SOURCE_REF.sub("",next_span).strip():
+                citations=[ref for ref in dict.fromkeys(next_refs)
+                           if ref.startswith("DOC-") and ref in records
+                           and records[ref].get("record_type")=="PDF_KNOWLEDGE"
+                           and records[ref].get("document_type") in _LEGAL_DOC_TYPES]
         if not citations:
             continue  # no local PDF claim citation, handled by global check
         available=set()

@@ -11,7 +11,7 @@ _CODES={
     "LEGAL_OUTCOME_OR_ACTION","ELIGIBLE_LEGAL_SOURCE_MISSING","CITATION_INTEGRITY",
     "ARTICLE_OR_CLAIM_ATTRIBUTION","PASSAGE_POLARITY","NUMERIC_OR_DATE",
     "ELECTION_SCOPE","DOCUMENT_REVIEW_PENDING","SOURCE_RELEVANCE",
-    "VERSION_OR_EFFECTIVE_DATE",
+    "VERSION_OR_EFFECTIVE_DATE","PLATFORM_POLICY_BOUNDARY",
 }
 
 def build_legal_review_summary(evidence,cited_ids,grounding,quality):
@@ -71,6 +71,12 @@ def build_legal_review_summary(evidence,cited_ids,grounding,quality):
     if consistency.get("possible_reversal_count"):
         refs=[x.get("cited_page_id") for x in consistency.get("possible_reversals") or []]
         add("PASSAGE_POLARITY","P1",refs,consistency["possible_reversal_count"],["CLAIM"])
+    boundary=(quality or {}).get("platform_policy_legal_boundary") or {}
+    if boundary.get("possible_platform_policy_verdicts"):
+        refs=[r for item in boundary.get("review_items") or []
+              for r in item.get("cited_legal_page_ids",[])]
+        add("PLATFORM_POLICY_BOUNDARY","P2",refs,
+            boundary["possible_platform_policy_verdicts"],["CLAIM"])
     numeric=(quality or {}).get("legal_numeric_claim_source_alignment") or {}
     if numeric.get("unsupported_detail_count"):
         details=numeric.get("unsupported_details") or []

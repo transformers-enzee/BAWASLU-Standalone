@@ -7,6 +7,7 @@ import re
 from .assistant_legal_review_summary import build_legal_review_summary
 from .assistant_numeric_claims import evaluate_legal_numeric_claims
 from .assistant_claim_consistency import evaluate_legal_claim_consistency
+from .assistant_policy_boundary import evaluate_policy_boundary
 
 PASS="PASS"
 REVIEW="REVIEW_REQUIRED"
@@ -257,10 +258,12 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
     legal_alignment=_legal_reference_alignment(question,rows,cited,grounding)
     legal_consistency=evaluate_legal_claim_consistency(question,evidence,answer,cited,grounding)
     numeric_consistency=evaluate_legal_numeric_claims(question,evidence,answer,cited,grounding)
+    policy_boundary=evaluate_policy_boundary(question,evidence,answer,cited,grounding)
     legal_review_summary=build_legal_review_summary(evidence,cited,grounding,{
         "legal_source_alignment":legal_alignment,
         "legal_claim_passage_consistency":legal_consistency,
-        "legal_numeric_claim_source_alignment":numeric_consistency})
+        "legal_numeric_claim_source_alignment":numeric_consistency,
+        "platform_policy_legal_boundary":policy_boundary})
     needs=[x["id"] for x in checks if x["status"]==REVIEW]
     return {
         "framework":"ASSISTANT_ANSWER_READINESS_V1484",
@@ -268,6 +271,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "legal_source_alignment":legal_alignment,
         "legal_claim_passage_consistency":legal_consistency,
         "legal_numeric_claim_source_alignment":numeric_consistency,
+        "platform_policy_legal_boundary":policy_boundary,
         "legal_review_summary":legal_review_summary,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),

@@ -11,7 +11,7 @@ for (const s of ['limit(101)','AssistantAcceptanceEvidenceEvent.evidence_id.in_'
  assert.ok(api.includes(s),s);
 }
 for(const s of ['Acceptance requirements — evidence coverage only',
- 'Formal sign-off: not verified','Older submissions are outside the 100-record window',
+ 'Formal sign-off: not verified','Older submissions are available on the next page',
  'result.track_progress?.[code]'])assert.ok(ui.includes(s),s);
 const v=main.split("'build_version':'")[1]?.split("'")[0];
 assert.ok(Number(v.replace('.',''))>=1596);

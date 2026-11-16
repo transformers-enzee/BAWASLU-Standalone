@@ -134,6 +134,21 @@ export default function AcceptanceReview(){
         </div>
         <button className={button} onClick={refresh} disabled={busy}>{busy?'Loading…':'Refresh'}</button>
       </div>
+      {result&&<section className="mx-5 mt-4 rounded-xl border border-slate-200 p-4 space-y-3" aria-label="Acceptance requirements by track">
+        <div><h3 className="font-semibold text-sm">Acceptance requirements — evidence coverage only</h3>
+          <p className="text-xs text-slate-500 mt-1">Reviewed submissions are not formal acceptance. Counts reflect the most recent 100 entries, not an approval or a full historical audit.</p>
+        </div>
+        {result.historical_records_may_be_excluded&&<p role="status" className="text-xs text-amber-800">Older submissions are outside the 100-record window. Do not interpret these counts as all-time totals.</p>}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {TRACKS.map(([code,label])=>{const item=result.track_progress?.[code]||{};
+            return <div key={code} className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs font-semibold">{label}</p>
+              <p className="mt-1 text-xs text-slate-600">{item.awaiting_review||0} awaiting review · {item.evidence_reviewed_not_formally_approved||0} evidence reviewed · {item.revision_requested||0} revisions requested</p>
+              <p className="mt-1 text-xs font-medium text-amber-800">Formal sign-off: not verified</p>
+            </div>;
+          })}
+        </div>
+      </section>}
       {result&&<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 px-5 pt-4">
         {[['SUBMITTED_UNVERIFIED','Awaiting review'],['REVIEWED','Evidence reviewed'],['REVISION_REQUESTED','Revisions requested']].map(([value,label])=><div className="rounded-lg bg-slate-50 p-3" key={value}>
           <div className="text-xs text-slate-600">{label}</div><div className="text-2xl font-semibold">{result.status_counts?.[value]||0}</div>

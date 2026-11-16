@@ -1,0 +1,5 @@
+# v159.6 — Bounded acceptance evidence coverage
+
+Administration > Acceptance Review now displays a read-only, per-requirement summary of submission status (awaiting review, evidence reviewed, revision requested). Every requirement remains expressly **not formally signed off**, including FORMAL_CLIENT_ACCEPTANCE and LEGAL_REFERENCE_SIGNOFF; the count of reviewed evidence must never be represented as a client approval or legal verification.
+
+The existing submission listing fetches only the latest 101 submissions, returns at most 100, and discloses whether older submissions exist. Event histories for those submissions are loaded in one batched query rather than one query per row. `counts_scope` explicitly states MOST_RECENT_100_SUBMISSIONS_ONLY. This improves bounded Supabase workload and avoids false total-history claims. No migration or data writes in this release; QA uses isolated SQLite records. The live multi-administrator acceptance UAT and independent legal and AI review remain pending.

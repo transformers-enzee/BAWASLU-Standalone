@@ -33,10 +33,11 @@ def _admin(db,user):
         raise HTTPException(403,"National Administrator access required")
     return access
 
-def _row(db,entry):
-    events=db.query(AssistantAcceptanceEvidenceEvent).filter(
-        AssistantAcceptanceEvidenceEvent.evidence_id==entry.id).order_by(
-        AssistantAcceptanceEvidenceEvent.id.asc()).all()
+def _row(db,entry,events=None):
+    if events is None:
+        events=db.query(AssistantAcceptanceEvidenceEvent).filter(
+            AssistantAcceptanceEvidenceEvent.evidence_id==entry.id).order_by(
+            AssistantAcceptanceEvidenceEvent.id.asc()).all()
     actions=[e.action for e in events]
     state=("REVIEWED" if actions and actions[-1]=="EVIDENCE_REVIEWED"
            else "REVISION_REQUESTED" if actions and actions[-1]=="REVISION_REQUESTED"
@@ -98,12 +99,38 @@ def list_evidence(response:Response,user:User=Depends(current_user),
                   db:Session=Depends(get_db)):
     _admin(db,user)
     entries=db.query(AssistantAcceptanceEvidence).order_by(
-        AssistantAcceptanceEvidence.id.desc()).limit(100).all()
-    data=[_row(db,e) for e in entries]
+        AssistantAcceptanceEvidence.id.desc()).limit(101).all()
+    truncated=len(entries)>100
+    entries=entries[:100]
+    grouped={entry.id:[] for entry in entries}
+    if entries:
+        # One bounded history query replaces a separate DB read per submission.
+        events=db.query(AssistantAcceptanceEvidenceEvent).filter(
+            AssistantAcceptanceEvidenceEvent.evidence_id.in_(list(grouped))).order_by(
+            AssistantAcceptanceEvidenceEvent.evidence_id.asc(),
+            AssistantAcceptanceEvidenceEvent.id.asc()).all()
+        for event in events:
+            grouped[event.evidence_id].append(event)
+    data=[_row(db,e,grouped[e.id]) for e in entries]
     counts=dict(Counter(r["status"] for r in data))
+    tracks={}
+    for track in TRACK_REQUIREMENTS:
+        matching=[r for r in data if r["track"]==track]
+        track_counts=Counter(r["status"] for r in matching)
+        tracks[track]={
+            "visible_submissions":len(matching),
+            "awaiting_review":track_counts["SUBMITTED_UNVERIFIED"],
+            "evidence_reviewed_not_formally_approved":track_counts["REVIEWED"],
+            "revision_requested":track_counts["REVISION_REQUESTED"],
+            "has_formal_approval":False
+        }
     response.headers["Cache-Control"]="private, no-store"
-    return {"schema":"BAWASLU_ACCEPTANCE_SUBMISSION_REGISTER_V1592",
-            "entries":data,"visible_limit":100,"status_counts":counts,
+    return {"schema":"BAWASLU_ACCEPTANCE_SUBMISSION_REGISTER_V1596",
+            "entries":data,"visible_limit":100,
+            "historical_records_may_be_excluded":truncated,
+            "counts_scope":"MOST_RECENT_100_SUBMISSIONS_ONLY",
+            "status_counts":counts,"track_progress":tracks,
+            "external_acceptance_tracks_pending":True,
             "formal_legal_signoff_verified":False,
             "formal_client_acceptance_verified":False,
             "independent_evidence_review_is_not_formal_signoff":True}

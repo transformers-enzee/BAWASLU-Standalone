@@ -357,6 +357,10 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
     totals={action:sum(item["actions"].get(action,0) for item in rows)
             for action in actions}
     older=[item for item in rows if item["case"].created_at<start]
+    distinct={action:sum(item["actions"].get(action,0)>0 for item in rows)
+              for action in actions}
+    older_distinct={action:sum(item["actions"].get(action,0)>0 for item in older)
+                    for action in actions}
     summary={
         "schema":"BAWASLU_MANAGEMENT_PERIOD_AUDIT_ACTIVITY_V1574",
         "basis":"AUDIT_ACTIONS_OBSERVED_IN_SELECTED_UTC_PERIOD",
@@ -370,6 +374,13 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
         "report_approved_events":totals["REPORT_APPROVED"],
         "revision_drafted_events":totals["REPORT_REVISION_DRAFTED"],
         "source_review_events":totals["SOURCE_REVIEW_RECORDED"],
+        "distinct_cases_with_submission":distinct["REPORT_SUBMITTED"],
+        "distinct_cases_with_return":distinct["REPORT_RETURNED"],
+        "distinct_cases_with_approval":distinct["REPORT_APPROVED"],
+        "distinct_cases_with_revision":distinct["REPORT_REVISION_DRAFTED"],
+        "distinct_cases_with_source_review":distinct["SOURCE_REVIEW_RECORDED"],
+        "distinct_older_cases_with_approval":older_distinct["REPORT_APPROVED"],
+        "distinct_counts_do_not_prove_latest_report_status":True,
         "approved_events_on_older_cases":sum(
             item["actions"].get("REPORT_APPROVED",0) for item in older),
         "event_counts_are_not_distinct_reports":True,
@@ -595,7 +606,10 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
                      "Source type","Source ID","Case title",
                      "Report submitted audit events","Report returned audit events",
                      "Report approved audit events","Revision draft audit events",
-                     "Source review audit events","Observation basis"])
+                     "Source review audit events","Observation basis",
+                     "Distinct approved case indicator",
+                     "Distinct returned case indicator",
+                     "Distinct revised case indicator"])
     for item in rows:
         case=item["case"]
         counts=item["actions"]
@@ -607,7 +621,10 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
             counts.get("REPORT_APPROVED",0),
             counts.get("REPORT_REVISION_DRAFTED",0),
             counts.get("SOURCE_REVIEW_RECORDED",0),
-            "AUDIT_ACTIONS_IN_SELECTED_UTC_PERIOD_NOT_LEGAL_FINDINGS")])
+            "AUDIT_ACTIONS_IN_SELECTED_UTC_PERIOD_NOT_LEGAL_FINDINGS",
+            "YES" if counts.get("REPORT_APPROVED",0)>0 else "NO",
+            "YES" if counts.get("REPORT_RETURNED",0)>0 else "NO",
+            "YES" if counts.get("REPORT_REVISION_DRAFTED",0)>0 else "NO")])
     return Response(content="\ufeff"+output.getvalue(),
        media_type="text/csv; charset=utf-8",
        headers={"Content-Disposition":

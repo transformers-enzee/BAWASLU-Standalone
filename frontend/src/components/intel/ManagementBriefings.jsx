@@ -295,7 +295,11 @@ export default function ManagementBriefings(){
       [t('Approval events on older cases','Peristiwa persetujuan kasus lama'),report.period_audit_activity.approved_events_on_older_cases],
       [t('Report return events','Peristiwa pengembalian laporan'),report.period_audit_activity.report_returned_events],
       [t('Report submission events','Peristiwa pengajuan laporan'),report.period_audit_activity.report_submitted_events],
-      [t('Revision draft events','Peristiwa draf revisi'),report.period_audit_activity.revision_drafted_events]
+      [t('Revision draft events','Peristiwa draf revisi'),report.period_audit_activity.revision_drafted_events],
+      [t('Distinct cases with approval activity','Kasus unik dengan aktivitas persetujuan'),report.period_audit_activity.distinct_cases_with_approval],
+      [t('Distinct cases with returned reports','Kasus unik dengan laporan dikembalikan'),report.period_audit_activity.distinct_cases_with_return],
+      [t('Distinct cases with revisions','Kasus unik dengan revisi'),report.period_audit_activity.distinct_cases_with_revision],
+      [t('Older distinct cases with approval activity','Kasus lama unik dengan persetujuan'),report.period_audit_activity.distinct_older_cases_with_approval]
     ].map(([label,value])=><div key={label} className="rounded-md border p-2"><div className="text-lg font-semibold">{value??0}</div><div className="text-xs text-[#64748b]">{label}</div></div>)}
     </div>
    </section>}

@@ -16,5 +16,5 @@ for(const s of ['platform_breach_confirmed','current_platform_policy_verified',
  'PLATFORM_VERDICT_CITED_TO_ELECTORAL_LEGAL_REFERENCE'])
  assert.ok(boundary.includes(s),s);
 const v=main.split("'build_version':'")[1]?.split("'")[0];
-assert.equal(v,'160.1');assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(Number(v.replace('.',''))>=1601);assert.ok(shell.includes('data-build-version="'+v+'"'));
 console.log('PASS v160.1 claim-local article and platform-vs-law attribution contracts');

@@ -374,6 +374,15 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
     actions=("REPORT_SUBMITTED","REPORT_RETURNED","REPORT_APPROVED",
              "REPORT_REVISION_DRAFTED","SOURCE_REVIEW_RECORDED")
     grouped=(_authorized_cases_query(db,access,user_id)
+        .options(load_only(
+            CaseAssignment.id,CaseAssignment.title,
+            CaseAssignment.source_type,CaseAssignment.source_id,
+            CaseAssignment.source_excerpt,CaseAssignment.created_at,
+            CaseAssignment.target_department,CaseAssignment.created_by,
+            CaseAssignment.assignee_id,CaseAssignment.verified_province,
+            CaseAssignment.originating_scope,CaseAssignment.originating_province,
+            CaseAssignment.target_scope,CaseAssignment.target_province,
+        ))
         .join(CaseTransition,CaseTransition.case_id==CaseAssignment.id)
         .filter(CaseTransition.happened_at>=start,
                 CaseTransition.happened_at<=end,

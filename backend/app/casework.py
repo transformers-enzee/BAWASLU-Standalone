@@ -1069,6 +1069,25 @@ def update_report(report_id: int,body: ReportDraft,user:User=Depends(current_use
         .order_by(CaseReport.created_at.desc(),CaseReport.id.desc()).first())
     if latest and int(latest[0])!=report.id:
         raise HTTPException(409,"A newer report exists; edit the latest report instead")
+    if report.status=="RETURNED":
+        # A returned report is immutable review evidence; save corrections
+        # as a NEW latest draft version, preserving the reviewer feedback.
+        revised=CaseReport(
+            case_id=report.case_id,title=body.title,
+            executive_summary=body.executive_summary,findings=body.findings,
+            verification_notes=body.verification_notes,
+            recommendations=body.recommendations,
+            source_snapshot_json=report.source_snapshot_json,
+            status="DRAFT",created_by=user.id,reviewed_by=None,
+            review_comment="")
+        db.add(revised)
+        db.flush()
+        _record_event(db,case,user.id,"REPORT_REVISION_DRAFTED",{
+            "report_id":revised.id,"revised_from_report_id":report.id,
+            "previous_status":"RETURNED"})
+        audit(db,p,"CaseReport",revised.id,"REPORT_REVISION_DRAFTED",{
+            "case_id":case.id,"revised_from_report_id":report.id})
+        return _report_view(revised)
     report.title=body.title
     report.executive_summary=body.executive_summary
     report.findings=body.findings
@@ -1091,8 +1110,8 @@ def transition_report(report_id:int,body:ReportAction,user:User=Depends(current_
         raise HTTPException(409,"A newer report exists; open the latest report for review")
     action=body.status
     if action=="SUBMITTED":
-        if not _editable(case,p,user.id) or report.status not in ("DRAFT","RETURNED"):
-            raise HTTPException(403,"Only an authorized officer can submit a draft")
+        if not _editable(case,p,user.id) or report.status!="DRAFT":
+            raise HTTPException(403,"Only an authorized officer can submit a saved draft revision")
         if not report.findings.strip() or not report.verification_notes.strip():
             raise HTTPException(422,"Findings and verification notes are required before submission")
     elif action in ("RETURNED","APPROVED"):

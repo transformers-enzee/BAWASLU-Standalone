@@ -1,0 +1,5 @@
+# v156.6 Returned report revision versioning
+
+Following the staging UAT report-return exercise, we identified that updating a RETURNED report overwrote the prior review record and direct resubmission did not require a saved revised draft. This release preserves the RETURNED report with its reviewer, feedback and original content. Saving corrections creates a new DRAFT report version with a fresh author and audit event REPORT_REVISION_DRAFTED linking the previous report ID. Only that draft can be submitted; old returned versions are read-only history. The UI requires save-as-new-version for returned reports and hides direct submission until a draft exists.
+
+The implementation preserves existing authorization, casework visibility, latest-report-only review semantics, and mandatory independent approval. Isolated SQLite regression tests cover preservation, resubmission restriction, successful draft submission, stale versions, and unauthorized edit. No Supabase schema changes or live officer writes.

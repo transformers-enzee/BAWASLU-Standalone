@@ -276,6 +276,31 @@ def human_review_packet(
     return build_human_review_packet(plan)
 
 
+@router.get("/acceptance-readiness")
+def acceptance_readiness(response:Response,
+                         target:int=Query(default=24,ge=1,le=30),
+                         user:User=Depends(current_user),
+                         db:Session=Depends(get_db)):
+    """Admin-only count-based acceptance prep, never an approval decision."""
+    principal=profile(db,user)
+    if not has(principal,"administration") or not has(principal,"view_intelligence"):
+        raise HTTPException(403,"Administrator intelligence QA access required")
+    from .inbox_radar import live_inbox_findings
+    try:
+        findings,_=live_inbox_findings(db,principal)
+    except PermissionError:
+        raise HTTPException(403,"Saved Inbox source access denied")
+    from .assistant_human_review import build_human_review_packet
+    from .assistant_acceptance_readiness import build_acceptance_readiness
+    from .assistant_legal_benchmark import run_legal_signal_benchmark
+    plan=build_evaluation_question_plan(findings,target)
+    packet=build_human_review_packet(plan)
+    result=build_acceptance_readiness(packet,run_legal_signal_benchmark())
+    response.headers["Cache-Control"]="private, no-store"
+    response.headers["X-Evaluation-Generation"]="NONE"
+    return result
+
+
 @router.get("/legal-benchmark")
 def legal_benchmark(response:Response,user:User=Depends(current_user),
                     db:Session=Depends(get_db)):

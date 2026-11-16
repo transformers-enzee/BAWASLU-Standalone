@@ -1,0 +1,5 @@
+# v156.3 Management-ready officer acceptance packet
+
+The officer pilot CSV and management summary now show the same next-review categories for the full authorized reporting-window case cohort. These actions explicitly separate truncated audit evidence, unobserved stages needing a full-history check, and five stages observed with formal human acceptance still pending. Neither an event's absence within the selected UTC period nor 200 bounded events proves a stage never happened outside the window. The worksheet includes a scope disclaimer, recommended reviewer action, explicit missing-stage-not-confirmed flag, and pending human signoff. Human-entry columns remain blank until reviewers fill them.
+
+The existing source permissions, report approvals, management export filters and standard audit stage taxonomy are unchanged. No migrations, active case mutations, paid provider calls or generated approvals. The next step after automated QA is a real-record officer acceptance pilot with authorized humans.

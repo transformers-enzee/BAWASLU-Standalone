@@ -491,6 +491,8 @@ def officer_pilot_csv(period: str = "weekly", topic: str = "",
         "Latest report submitted (window audit)",
         "Independent reviewer approved (window audit)",
         "Observed stages (of 5)","Next audit check","Audit window truncated",
+        "Recommended reviewer action","Observation scope",
+        "Missing stage confirmed absent","Formal human acceptance",
         "Inbox casework link (permission rechecked)",
         "Officer assessment (human entry)","Officer reviewer (human entry)",
         "Independent reviewer (human entry)","Acceptance decision (human entry)",
@@ -507,6 +509,9 @@ def officer_pilot_csv(period: str = "weekly", topic: str = "",
                *audit,row["observed_stage_count"],
                row["next_unobserved_step"] or "",
                "YES" if row["audit_event_window_limited"] else "NO",
+               row["recommended_reviewer_action"],
+               "SELECTED_UTC_PERIOD_ONLY_NOT_LIFETIME",
+               "NO","PENDING_AUTHORIZED_HUMAN_REVIEW",
                row["casework_url"],"","","","","",""]
         writer.writerow([_safe_csv_cell(v) for v in cells])
     return Response(
@@ -519,6 +524,7 @@ def officer_pilot_csv(period: str = "weekly", topic: str = "",
             "X-Pilot-Case-Count":str(len(rows)),
             "X-Pilot-Approval":"AWAITING_HUMAN_REVIEW",
             "X-Pilot-Data-Basis":"AUTHORIZED_CASEWORK_WINDOW_AUDIT",
+            "X-Pilot-History-Scope":"PERIOD_ONLY_NOT_LIFETIME",
         })
 
 

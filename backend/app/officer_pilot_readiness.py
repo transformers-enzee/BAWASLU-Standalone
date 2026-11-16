@@ -31,6 +31,15 @@ def officer_pilot_case_rows(cases,latest_by_case,transitions):
                 if step["key"] in _STAGES}
         stages={key:stages.get(key,False) for key in _STAGES}
         missing=[key for key in _STAGES if not stages[key]]
+        # The management packet covers a selected reporting window, not the
+        # lifetime audit trail. Even a nontruncated window cannot establish
+        # that a stage never happened outside this time period.
+        if trace["event_window_limited"]:
+            review_action="INSPECT_TRUNCATED_WINDOW_AND_FULL_CASE_HISTORY"
+        elif not missing:
+            review_action="HUMAN_CONFIRM_FIVE_OBSERVED_STAGES"
+        else:
+            review_action="VERIFY_UNOBSERVED_STAGES_AGAINST_FULL_CASE_HISTORY"
         rows.append({
             "case_id":case_id,
             "case_status":str(case.status or "UNKNOWN")[:48],
@@ -39,6 +48,11 @@ def officer_pilot_case_rows(cases,latest_by_case,transitions):
             "observed_stage_count":sum(stages.values()),
             "all_five_stages_observed":not missing,
             "next_unobserved_step":missing[0] if missing else None,
+            "recommended_reviewer_action":review_action,
+            "next_step_is_window_observation_only":True,
+            "full_case_lifetime_audit_reviewed":False,
+            "missing_stage_confirmed_absent":False,
+            "formal_human_acceptance_pending":True,
             "audit_event_window_limited":bool(trace["event_window_limited"]),
             "historical_events_outside_period_may_exist":True,
             "casework_url":f"/inbox?casework=1&case_id={case_id}&tab=reports",
@@ -59,6 +73,11 @@ def officer_pilot_readiness(cases,latest_by_case,transitions):
     counts={key:sum(int(row["observed_stages"][key]) for row in rows)
             for key in _STAGES}
     full_trace_cases=sum(int(row["all_five_stages_observed"]) for row in rows)
+    review_action_counts={action:sum(int(row["recommended_reviewer_action"]==action)
+        for row in rows) for action in (
+        "INSPECT_TRUNCATED_WINDOW_AND_FULL_CASE_HISTORY",
+        "VERIFY_UNOBSERVED_STAGES_AGAINST_FULL_CASE_HISTORY",
+        "HUMAN_CONFIRM_FIVE_OBSERVED_STAGES")}
     return {
         "schema":"BAWASLU_OFFICER_PILOT_EVIDENCE_V1540",
         "authorized_case_count":size,
@@ -66,6 +85,10 @@ def officer_pilot_readiness(cases,latest_by_case,transitions):
         "stage_counts":counts,
         "five_stage_observed_case_count":full_trace_cases,
         "cases_without_complete_observed_trace":size-full_trace_cases,
+        "reviewer_action_counts":review_action_counts,
+        "reviewer_action_counts_full_authorized_window":True,
+        "pilot_packet_review_status":"HUMAN_ACCEPTANCE_PENDING",
+        "missing_stages_are_window_observations_not_confirmed_absence":True,
         "potentially_incomplete_event_window_count":sum(
             int(row["audit_event_window_limited"]) for row in rows),
         "case_preview":rows[:12],

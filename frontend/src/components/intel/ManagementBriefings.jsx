@@ -317,6 +317,7 @@ export default function ManagementBriefings(){
       </button>
      </div>
      <p className="mt-1 text-xs text-[#64748b]">{t('Audited workflow observations only, not a formal approval or an evaluation of source truth.','Hanya peristiwa alur kerja teraudit, bukan persetujuan resmi atau penilaian kebenaran sumber.')}</p>
+     <p data-testid="pilot-packet-period-caveat" className="mt-1 text-xs text-[#876532]">{t('Management worksheet covers the selected reporting period only; unobserved stages may have occurred outside this period.','Lembar manajemen hanya mencakup periode pelaporan yang dipilih; tahap yang tidak teramati mungkin terjadi di luar periode ini.')}</p>
      {report.can_create_casework&&
       <div data-testid="briefing-pilot-intake" className="mt-3 rounded-lg border border-[#dce5ec] bg-[#f8fafc] p-3">
        <div className="flex flex-wrap items-center justify-between gap-3">
@@ -435,6 +436,16 @@ export default function ManagementBriefings(){
        </div>}
       </div>}
 
+     <div data-testid="pilot-packet-review-actions" className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+      {[
+       [t('Inspect truncated history','Periksa riwayat terpotong'),report.officer_pilot_readiness.reviewer_action_counts?.INSPECT_TRUNCATED_WINDOW_AND_FULL_CASE_HISTORY],
+       [t('Verify unobserved stages in full history','Verifikasi tahap tidak teramati dalam riwayat penuh'),report.officer_pilot_readiness.reviewer_action_counts?.VERIFY_UNOBSERVED_STAGES_AGAINST_FULL_CASE_HISTORY],
+       [t('Human confirmation required','Konfirmasi manusia diperlukan'),report.officer_pilot_readiness.reviewer_action_counts?.HUMAN_CONFIRM_FIVE_OBSERVED_STAGES]
+      ].map(([label,count])=><div key={label} className="rounded-lg border border-[#e6ebef] bg-[#f8fafc] p-3">
+       <strong className="block text-lg tabular-nums">{count??0}</strong>
+       <p className="mt-1 text-xs">{label}</p>
+      </div>)}
+     </div>
      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
       {[
        [t('Authorized cases in period','Kasus berizin dalam periode'),report.officer_pilot_readiness.authorized_case_count],
@@ -472,9 +483,12 @@ export default function ManagementBriefings(){
          <tr key={item.case_id} className="border-b">
           <td className="p-2 font-semibold">#{item.case_id}</td>
           <td className="p-2 tabular-nums">{item.observed_stage_count}/5</td>
-          <td className="p-2">{item.next_unobserved_step?
-           (PILOT_STEPS[item.next_unobserved_step]||[item.next_unobserved_step,item.next_unobserved_step])[id?1:0]:
-           t('All five observed, human sign-off still required','Lima tahap tercatat, persetujuan manusia tetap diperlukan')}
+          <td className="p-2">{item.recommended_reviewer_action==='INSPECT_TRUNCATED_WINDOW_AND_FULL_CASE_HISTORY'?
+           t('Inspect truncated audit and full history','Periksa audit terpotong serta riwayat lengkap'):
+           item.recommended_reviewer_action==='HUMAN_CONFIRM_FIVE_OBSERVED_STAGES'?
+           t('Five stages observed in period; human confirmation pending','Lima tahap tercatat dalam periode; menunggu konfirmasi manusia'):
+           t('Verify the first unobserved stage against full history','Verifikasi tahap pertama yang tidak teramati dengan riwayat lengkap')}
+           {item.next_unobserved_step&&<span className="block text-[#64748b]">{(PILOT_STEPS[item.next_unobserved_step]||[item.next_unobserved_step,item.next_unobserved_step])[id?1:0]}</span>}
           </td>
           <td className="p-2">{followupLink(item)?
            <a className="text-[#116d85] underline" href={followupLink(item)} rel="noopener noreferrer">{t('Open in Inbox','Buka di Inbox')}</a>:

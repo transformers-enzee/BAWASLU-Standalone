@@ -263,6 +263,19 @@ def evaluation_questions(
     response.headers["X-Evaluation-Generation"]="NONE"
     return build_evaluation_question_plan(findings,target=target)
 
+@router.get("/review-packet")
+def human_review_packet(
+    response:Response,
+    target:int=Query(default=24,ge=1,le=30),
+    user:User=Depends(current_user),
+    db:Session=Depends(get_db)
+):
+    """Permission-scoped unscored worksheet; no generated model answers."""
+    plan=evaluation_questions(response,target=target,user=user,db=db)
+    from .assistant_human_review import build_human_review_packet
+    return build_human_review_packet(plan)
+
+
 @router.get("/legal-benchmark")
 def legal_benchmark(response:Response,user:User=Depends(current_user),
                     db:Session=Depends(get_db)):

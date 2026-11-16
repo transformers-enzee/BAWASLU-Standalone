@@ -1,0 +1,7 @@
+# v158.6 — Human AI-answer evaluation preparation
+
+The existing `GET /api/assistant-evaluation/questions` creates permission-scoped convenience-sampled questions using saved Inbox evidence. The new `GET /api/assistant-evaluation/review-packet?target=24` reuses exactly the same access and source selection, adding a consistent **unscored** reviewer worksheet. It does not call the Assistant, access new external posts, execute AI, score responses or store records. Users with `view_intelligence` permission may retrieve their own authorized source-linked packet.
+
+Human reviewers must separately run each prepared question in the AI Assistant, verify the **original source** and score (PASS / FAIL / NOT_ASSESSABLE) citation-ID accuracy, factual claim support, uncertainty/jurisdiction, legal-vs-platform policy boundaries and appropriateness of next steps. The missing-source negative control must not be answered by substituting invented or unrelated content. Keep the actual generated answer and reviewer evidence in an approved review process; this endpoint saves none.
+
+The packet intentionally reports zero completed reviews and no measured real-model accuracy. It does not establish formal legal source sign-off, independent human quality acceptance, sample representativeness, or client acceptance. Do not promote synthetic legal benchmark assertions into real legal accuracy. If fewer than 24 suitable records exist, the packet reports the shortfall rather than manufacturing questions.

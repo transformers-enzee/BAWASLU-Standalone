@@ -13,5 +13,5 @@ for(const item of ['synthetic_checks_are_human_approval',
  'csv.DictWriter','lstrip().startswith'])assert.ok(register.includes(item),item);
 const v=main.split("'build_version':'")[1]?.split("'")[0];
 assert.ok(Number(v.replace('.',''))>=1588);
-assert.ok(shell.includes('data-build-version="158.8"'));
+assert.ok(shell.includes('data-build-version="'+v+'"'));
 console.log('PASS v158.8 acceptance evidence CSV and no-approval contract');

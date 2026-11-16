@@ -46,6 +46,11 @@ export default function Administration(){
   </section>}
   {mayManage&&edit&&<AccessAssignmentForm key={edit.id} edit={edit} setEdit={setEdit} adminRole={adminRole} adminProvince={adminProvince} users={users} roles={roles} labels={labels} busy={busy} onSave={save} onCancel={()=>setEdit(null)}/>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<div className="rounded-xl border bg-white p-4"><h2 className="text-lg font-semibold">{T("Data Integration & Readiness","Integrasi Data & Kesiapan")}</h2><p className="text-sm text-slate-600 mt-1">{T("Review evidence gaps and authorize an explicitly previewed source-ID repair.","Tinjau kekurangan bukti dan izinkan perbaikan ID sumber setelah melihat pratinjaunya.")}</p><Link className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm" to="/administration/integration">{T("Open integration console","Buka konsol integrasi")}</Link></div>}
+  {!window.__BAWASLU_DEMO_REPLICA__&&access.role==='National Administrator'&&access.geographic_scope==='Nationwide'&&access.permissions?.administration===true&&access.permissions?.view_intelligence===true&&<section className="rounded-xl border bg-white p-4">
+    <h2 className="text-lg font-semibold">{T("Acceptance Review","Tinjauan Penerimaan")}</h2>
+    <p className="text-sm text-slate-600 mt-1">{T("Submit acceptance evidence references, request independent review, and inspect the audit history. Evidence review does not grant formal client or legal approval.","Daftarkan referensi bukti penerimaan, minta peninjauan independen, dan periksa riwayat audit. Peninjauan bukti tidak berarti persetujuan resmi klien atau hukum.")}</p>
+    <Link className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm" to="/administration/acceptance-review">{T("Open Acceptance Review","Buka Tinjauan Penerimaan")}</Link>
+  </section>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<DemoFeedbackAdmin/>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<RelevanceGateManager/>}
   <CategoryManager categories={categories} refresh={refresh} authorized={access.role==='National Administrator'&&access.permissions?.administration===true}/>

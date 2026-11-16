@@ -347,6 +347,8 @@ export default function ManagementBriefings(){
          <span>{t('New assessment version (preview)','Versi penilaian terbaru (pratinjau)')}: <strong>{pilotIntake.preview_assessment_version_changed_count??0}</strong></span>
          <span>{t('Flag signals needing renewed review (preview)','Sinyal tanda perlu peninjauan ulang (pratinjau)')}: <strong>{pilotIntake.preview_flag_signal_recheck_count??0}</strong></span>
          <span>{t('Jurisdiction verification changed (preview)','Verifikasi yurisdiksi berubah (pratinjau)')}: <strong>{pilotIntake.preview_jurisdiction_verification_changed_count??0}</strong></span>
+         <span>{t('Audit history potentially incomplete (preview)','Riwayat audit mungkin tidak lengkap (pratinjau)')}: <strong>{pilotIntake.acceptance_preview_incomplete_audit_count??0}</strong></span>
+         <span>{t('Next unobserved audit stage identified (preview)','Tahap audit berikutnya yang belum teramati (pratinjau)')}: <strong>{pilotIntake.acceptance_preview_next_missing_stage_count??0}</strong></span>
         </div>
         {(pilotIntake.items||[]).length>0&&
          <div data-testid="briefing-pilot-next-actions" className="mb-3 rounded-lg border border-[#dce5ec] bg-white p-3">
@@ -380,11 +382,19 @@ export default function ManagementBriefings(){
                {(PILOT_ACCEPTANCE_STAGES[stage.key]||[stage.instruction,stage.instruction])[id?1:0]}
                <span className={"block "+(stage.audit_observed?'text-[#146b56]':'text-[#876532]')}>{stage.audit_observed?
                  t('Observed in bounded casework audit (not formal acceptance)','Teramati pada audit kasus terbatas (bukan penerimaan resmi)'):
+                 item.acceptance_audit_window_limited?
+                 t('Not observed in bounded window; older evidence may exist','Tidak teramati dalam rentang terbatas; bukti terdahulu mungkin ada'):
                  item.acceptance_case_audit_evidence_available?
                  t('Not observed in available casework audit','Tidak teramati pada audit kasus yang tersedia'):
                  t('Requires verified casework evidence','Memerlukan bukti penanganan kasus yang diverifikasi')}</span>
               </li>)}
              </ol>
+             {item.acceptance_next_audit_action_status==='NEXT_UNOBSERVED_STAGE_IN_AVAILABLE_AUDIT'&&item.acceptance_next_audit_stage&&
+              <p data-testid="pilot-next-audit-stage" className="mt-2 font-semibold text-[#116d85]">{t('Next stage needing casework evidence','Tahap berikutnya yang memerlukan bukti penanganan kasus')}: {(PILOT_ACCEPTANCE_STAGES[item.acceptance_next_audit_stage]||[item.acceptance_next_audit_stage,item.acceptance_next_audit_stage])[id?1:0]}</p>}
+             {item.acceptance_next_audit_action_status==='HISTORY_INCOMPLETE_REVIEW_FULL_AUDIT'&&
+              <p data-testid="pilot-audit-history-incomplete" className="mt-2 font-semibold text-[#876532]">{t('Audit history incomplete: inspect full casework audit before identifying the next stage','Riwayat audit tidak lengkap: periksa audit kasus menyeluruh sebelum menentukan tahap berikutnya')}</p>}
+             {item.acceptance_next_audit_action_status==='ALL_FIVE_STAGES_OBSERVED_AWAIT_HUMAN_ACCEPTANCE'&&
+              <p data-testid="pilot-audit-all-observed" className="mt-2 font-semibold text-[#146b56]">{t('All five audit stages observed; human acceptance is still required','Kelima tahap audit teramati; penerimaan manusia masih diperlukan')}</p>}
              {item.acceptance_case_audit_evidence_available&&<p className="mt-1 text-[#64748b]">
               {t('Observed audit stages','Tahap audit teramati')}: {item.acceptance_audit_observed_stage_count??0}/5
              </p>}

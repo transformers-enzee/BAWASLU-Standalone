@@ -42,10 +42,21 @@ def observed_casework_stages(db,cases):
     for case_id,case in visible.items():
         report=latest.get(case_id)
         trace=_acceptance_trace(case,grouped[case_id],[report] if report else [])
+        observed={s["key"]:bool(s["done"]) for s in trace["steps"]
+                  if s["key"] in _STAGES}
+        missing=next((key for key in _STAGES if not observed.get(key)),None)
+        incomplete=bool(trace["event_window_limited"])
         output[case_id]={
-            "observed_stages":{s["key"]:bool(s["done"]) for s in trace["steps"]
-                               if s["key"] in _STAGES},
-            "audit_event_window_limited":bool(trace["event_window_limited"]),
+            "observed_stages":observed,
+            # If the bounded 200-event window may omit older evidence, an
+            # unobserved stage is NOT confirmed absent. Do not prescribe a
+            # "next missing stage" from potentially incomplete history.
+            "next_unobserved_stage":None if incomplete else missing,
+            "next_stage_evidence_status":(
+                "HISTORY_INCOMPLETE_REVIEW_FULL_AUDIT" if incomplete else
+                "ALL_FIVE_STAGES_OBSERVED_AWAIT_HUMAN_ACCEPTANCE" if missing is None
+                else "NEXT_UNOBSERVED_STAGE_IN_AVAILABLE_AUDIT"),
+            "audit_event_window_limited":incomplete,
             "source_authenticity_verified":False,
             "legal_approval_granted":False,
             "human_pilot_signoff_received":False,

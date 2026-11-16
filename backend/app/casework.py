@@ -645,6 +645,15 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
         item["acceptance_audit_window_limited"]=bool(
             (trace or {}).get("audit_event_window_limited",False))
         item["acceptance_casework_audit_is_not_formal_acceptance"]=True
+        item["acceptance_next_audit_stage"]=(
+            trace.get("next_unobserved_stage") if trace else None)
+        item["acceptance_next_audit_action_status"]=(
+            trace["next_stage_evidence_status"] if trace else
+            "NO_VISIBLE_CASE_AUDIT_AVAILABLE")
+        item["acceptance_missing_audit_evidence_not_confirmed_absent"]=bool(
+            (trace or {}).get("audit_event_window_limited",False))
+        item["acceptance_casework_audit_window_scope"]="LATEST_200_TRANSITIONS_PER_VISIBLE_CASE"
+        item["acceptance_formal_signoff_still_required"]=True
         item["acceptance_saved_source_reference"]={
             "source_type":"SOCIAL",
             "source_id":item["source_id"],
@@ -662,6 +671,15 @@ def pilot_intake(user: User = Depends(current_user), db: Session = Depends(get_d
     result["acceptance_checklist_is_preparatory"]=True
     result["acceptance_case_audit_preview_only"]=True
     result["acceptance_audit_evidence_is_not_human_signoff"]=True
+    result["acceptance_preview_incomplete_audit_count"]=sum(int(
+        row["acceptance_audit_window_limited"]) for row in result["items"])
+    result["acceptance_preview_next_missing_stage_count"]=sum(int(
+        row["acceptance_next_audit_stage"] is not None) for row in result["items"])
+    result["acceptance_preview_all_stages_observed_count"]=sum(int(
+        row["acceptance_next_audit_action_status"]==
+        "ALL_FIVE_STAGES_OBSERVED_AWAIT_HUMAN_ACCEPTANCE")
+        for row in result["items"])
+    result["acceptance_audit_counts_are_preview_only"]=True
     result["pilot_next_action_not_legal_determination"]=True
     result["preview_existing_case_count"]=sum(int(
         item["case_already_exists_in_visible_scope"]) for item in result["items"])

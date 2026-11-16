@@ -115,7 +115,11 @@ def test_monitoring_opt_in_preserves_fast_casework_default_and_scoped_sources(mo
         assert scoped["data_basis"]=="AUTHORIZED_OFFICER_CASEWORK_AND_SAVED_INBOX_MONITORING_SAMPLE"
         assert scoped["metrics"]==baseline["metrics"]
         assert scoped["template"]["approval_state"]=="DRAFT_NOT_APPROVED"
-        assert len(scoped["template"]["scorecard"])==6
+        assert len(scoped["template"]["scorecard"])>=6
+        assert any(row["label"]=="Observed Inbox posts (sample)" and row["value"]==2
+                   for row in scoped["template"]["scorecard"])
+        assert any(row["label"]=="Historical returned versions"
+                   for row in scoped["template"]["scorecard"])
         assert scoped["template"]["monitoring_summary"]["published_in_period"]==2
         assert "not the total number of captured posts" in scoped["template"]["executive_summary"]
         assert "Inbox window of up to 300 links per campaign" in " ".join(scoped["template"]["methodology"])

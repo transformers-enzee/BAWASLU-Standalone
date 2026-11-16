@@ -45,6 +45,8 @@ export default function AcceptanceReview(){
   const {access}=useOutletContext();
   const permitted=allowed(access);
   const [result,setResult]=useState(null);
+  const [beforeId,setBeforeId]=useState(null);
+  const [cursorTrail,setCursorTrail]=useState([]);
   const [track,setTrack]=useState(TRACKS[0][0]);
   const [reference,setReference]=useState('');
   const [busy,setBusy]=useState(false);
@@ -53,12 +55,15 @@ export default function AcceptanceReview(){
   const [expanded,setExpanded]=useState({});
   const [confirm,setConfirm]=useState(null);
   const [currentUserId,setCurrentUserId]=useState(null);
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(cursor=null)=>{
     setBusy(true);setError('');
     try{
-      const data=await api(ROOT);
+      const path=ROOT+(cursor!=null?'?before_id='+encodeURIComponent(cursor):'');
+      const data=await api(path);
       setResult(data);
-    }catch(e){setResult(null);setError(e.message);}
+      setBeforeId(cursor);
+      return true;
+    }catch(e){setResult(null);setError(e.message);return false;}
     finally{setBusy(false);}
   },[]);
   useEffect(()=>{
@@ -82,7 +87,7 @@ export default function AcceptanceReview(){
     try{
       await api(ROOT,{method:'POST',body:JSON.stringify({track,reference:reference.trim()})});
       setReference('');setMessage('Evidence reference submitted. Independent review is still required.');
-      const data=await api(ROOT);setResult(data);
+      const data=await api(ROOT);setResult(data);setBeforeId(null);setCursorTrail([]);
     }catch(ex){setError(ex.message);}finally{setBusy(false);}
   }
   async function review(){
@@ -92,12 +97,22 @@ export default function AcceptanceReview(){
       await api(ROOT+'/'+encodeURIComponent(confirm.id)+'/review',{
         method:'POST',body:JSON.stringify({action:confirm.action})
       });
-      const data=await api(ROOT);
+      const data=await api(ROOT+(beforeId!=null?'?before_id='+encodeURIComponent(beforeId):''));
       setResult(data);setMessage('Review action recorded. This is not legal or client acceptance.');
       setConfirm(null);
     }catch(ex){setError(ex.message);setConfirm(null);}finally{setBusy(false);}
   }
-  return <div data-acceptance-review="v159.3" className="space-y-6">
+  async function older(){
+    if(busy||!result?.next_before_id)return;
+    const next=result.next_before_id;
+    if(await refresh(next))setCursorTrail(x=>[...x,beforeId]);
+  }
+  async function newer(){
+    if(busy||!cursorTrail.length)return;
+    const previous=cursorTrail[cursorTrail.length-1];
+    if(await refresh(previous))setCursorTrail(x=>x.slice(0,-1));
+  }
+  return <div data-acceptance-review="v159.7" className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-widest text-[#9a7e49]">Administration / Governance</p>
         <h1 className="intel-heading mt-2">Acceptance Review</h1>
@@ -130,15 +145,15 @@ export default function AcceptanceReview(){
     <section className="intel-card overflow-hidden">
       <div className="flex flex-wrap justify-between items-center gap-2 p-5 border-b">
         <div><h2 className="font-semibold">Submitted evidence and review history</h2>
-          <p className="text-xs text-slate-500 mt-1">Most recent 100 submissions. Pending and reviewed entries may require further external approval.</p>
+          <p className="text-xs text-slate-500 mt-1">Up to 100 submissions per page. Older records can be opened without loading the full history. Pending and reviewed entries may require external approval.</p>
         </div>
-        <button className={button} onClick={refresh} disabled={busy}>{busy?'Loading…':'Refresh'}</button>
+        <button className={button} onClick={()=>refresh(beforeId)} disabled={busy}>{busy?'Loading…':'Refresh'}</button>
       </div>
       {result&&<section className="mx-5 mt-4 rounded-xl border border-slate-200 p-4 space-y-3" aria-label="Acceptance requirements by track">
         <div><h3 className="font-semibold text-sm">Acceptance requirements — evidence coverage only</h3>
-          <p className="text-xs text-slate-500 mt-1">Reviewed submissions are not formal acceptance. Counts reflect the most recent 100 entries, not an approval or a full historical audit.</p>
+          <p className="text-xs text-slate-500 mt-1">Reviewed submissions are not formal acceptance. Counts reflect only the currently displayed page, not an approval or an all-time total.</p>
         </div>
-        {result.historical_records_may_be_excluded&&<p role="status" className="text-xs text-amber-800">Older submissions are outside the 100-record window. Do not interpret these counts as all-time totals.</p>}
+        {result.historical_records_may_be_excluded&&<p role="status" className="text-xs text-amber-800">Older submissions are available on the next page. Do not interpret these counts as all-time totals.</p>}
         <div className="grid gap-2 sm:grid-cols-2">
           {TRACKS.map(([code,label])=>{const item=result.track_progress?.[code]||{};
             return <div key={code} className="rounded-lg bg-slate-50 p-3">
@@ -154,7 +169,12 @@ export default function AcceptanceReview(){
           <div className="text-xs text-slate-600">{label}</div><div className="text-2xl font-semibold">{result.status_counts?.[value]||0}</div>
         </div>)}
       </div>}
-      {result&&!entries.length&&<p className="p-5 text-sm text-slate-600">No acceptance evidence submitted yet.</p>}
+      {result&&<div className="flex flex-wrap items-center gap-3 px-5 py-3 text-xs text-slate-600" aria-label="Acceptance history pagination">
+        <span>Showing {entries.length} records on this page{beforeId!=null?' (older history)':' (latest history)'}. Counts are page-scoped.</span>
+        <button type="button" className={button} disabled={busy||!cursorTrail.length} onClick={newer}>Newer records</button>
+        <button type="button" className={button} disabled={busy||!result.more_older_records} onClick={older}>Older records</button>
+      </div>}
+            {result&&!entries.length&&<p className="p-5 text-sm text-slate-600">No acceptance evidence submitted yet.</p>}
       <div className="divide-y">
         {entries.map(entry=>{
           const self=String(entry.submitted_by_user_id)===String(currentUserId);

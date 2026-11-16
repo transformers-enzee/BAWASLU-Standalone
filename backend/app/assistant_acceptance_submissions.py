@@ -96,10 +96,15 @@ def review_evidence(evidence_id:int,payload:EvidenceReview,response:Response,
 
 @router.get("")
 def list_evidence(response:Response,user:User=Depends(current_user),
-                  db:Session=Depends(get_db)):
+                  db:Session=Depends(get_db),before_id:int|None=None):
     _admin(db,user)
-    entries=db.query(AssistantAcceptanceEvidence).order_by(
-        AssistantAcceptanceEvidence.id.desc()).limit(101).all()
+    if before_id is not None and (not isinstance(before_id,int) or before_id<=0):
+        raise HTTPException(422,"Positive numeric before_id cursor required")
+    query=db.query(AssistantAcceptanceEvidence)
+    if before_id is not None:
+        # Keyset pagination never loads the full historical set into memory.
+        query=query.filter(AssistantAcceptanceEvidence.id<before_id)
+    entries=query.order_by(AssistantAcceptanceEvidence.id.desc()).limit(101).all()
     truncated=len(entries)>100
     entries=entries[:100]
     grouped={entry.id:[] for entry in entries}
@@ -128,7 +133,11 @@ def list_evidence(response:Response,user:User=Depends(current_user),
     return {"schema":"BAWASLU_ACCEPTANCE_SUBMISSION_REGISTER_V1596",
             "entries":data,"visible_limit":100,
             "historical_records_may_be_excluded":truncated,
-            "counts_scope":"MOST_RECENT_100_SUBMISSIONS_ONLY",
+            "more_older_records":truncated,
+            "next_before_id":entries[-1].id if truncated and entries else None,
+            "requested_before_id":before_id,
+            "counts_scope":("MOST_RECENT_100_SUBMISSIONS_ONLY" if before_id is None
+                            else "PAGE_OF_UP_TO_100_SUBMISSIONS_ONLY"),
             "status_counts":counts,"track_progress":tracks,
             "external_acceptance_tracks_pending":True,
             "formal_legal_signoff_verified":False,

@@ -1,0 +1,5 @@
+# BAWASLU v159.7 — bounded acceptance history navigation
+
+The restricted Acceptance Review now supports Older records / Newer records navigation through the previously capped acceptance evidence history. The API uses `before_id` as a positive integer keyset cursor and returns no more than 100 submissions plus a lookahead item; audit events are still retrieved in a batched second query. Its output includes `next_before_id`, `more_older_records`, and `requested_before_id`.
+
+Counts and per-track metrics are **per displayed page**, not global acceptance totals; every page explicitly remains without formal legal or client signoff. This avoids the old problem where records older than the latest 100 could not be reviewed through the UI. Older pages are read-only browsing until an independent administrator explicitly reviews a selected item. No new database schema, UAT submissions, fake user accounts, or human approval records are created by deployment. Automated QA verifies 215-record paging in isolated SQLite and does not establish real two-administrator UAT.

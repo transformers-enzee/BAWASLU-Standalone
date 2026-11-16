@@ -380,6 +380,14 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
         for case_id,status in db.query(ranked.c.case_id,ranked.c.status).filter(
                 ranked.c.position==1).all():
             latest_status[case_id]=status
+    # Attach current status to the same authorized case rows used by the
+    # Activity CSV; no second independent/possibly divergent read.
+    for item in rows:
+        cid=item["case"].id
+        if item["actions"].get("REPORT_APPROVED",0)>0:
+            item["latest_report_status_at_snapshot"]=latest_status.get(cid,"NO_REPORT")
+        else:
+            item["latest_report_status_at_snapshot"]="NOT_CHECKED_NO_APPROVAL_EVENT"
     approval_cases_still_approved=sum(
         latest_status.get(cid)=="APPROVED" for cid in approval_case_ids)
     approval_cases_now_not_approved=sum(
@@ -409,6 +417,9 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
         "approval_activity_cases_latest_approved":approval_cases_still_approved,
         "approval_activity_cases_latest_not_approved":approval_cases_now_not_approved,
         "approval_activity_cases_without_saved_report":approval_cases_without_report,
+        "approval_activity_reconciliation_totals_match":(
+            approval_cases_still_approved+approval_cases_now_not_approved+
+            approval_cases_without_report==distinct["REPORT_APPROVED"]),
         "approval_activity_latest_status_reconciled":True,
         "approval_activity_latest_status_is_snapshot_not_historical":True,
         "distinct_counts_do_not_prove_latest_report_status":True,
@@ -640,7 +651,9 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
                      "Source review audit events","Observation basis",
                      "Distinct approved case indicator",
                      "Distinct returned case indicator",
-                     "Distinct revised case indicator"])
+                     "Distinct revised case indicator",
+                     "Latest report status at export (approval activity only)",
+                     "Current approval reconciliation"])
     for item in rows:
         case=item["case"]
         counts=item["actions"]
@@ -655,7 +668,13 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
             "AUDIT_ACTIONS_IN_SELECTED_UTC_PERIOD_NOT_LEGAL_FINDINGS",
             "YES" if counts.get("REPORT_APPROVED",0)>0 else "NO",
             "YES" if counts.get("REPORT_RETURNED",0)>0 else "NO",
-            "YES" if counts.get("REPORT_REVISION_DRAFTED",0)>0 else "NO")])
+            "YES" if counts.get("REPORT_REVISION_DRAFTED",0)>0 else "NO",
+            item["latest_report_status_at_snapshot"],
+            ("STILL_APPROVED" if item["latest_report_status_at_snapshot"]=="APPROVED"
+             else "NO_SAVED_REPORT" if item["latest_report_status_at_snapshot"]=="NO_REPORT"
+             else "SUPERSEDED_OR_NOT_APPROVED"
+               if counts.get("REPORT_APPROVED",0)>0
+             else "NOT_APPLICABLE_NO_APPROVAL_EVENT"))])
     return Response(content="\ufeff"+output.getvalue(),
        media_type="text/csv; charset=utf-8",
        headers={"Content-Disposition":

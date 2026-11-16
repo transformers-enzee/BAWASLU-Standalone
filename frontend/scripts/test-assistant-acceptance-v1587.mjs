@@ -14,5 +14,5 @@ for(const term of ['PREPARATION_ONLY_NOT_FORMAL_ACCEPTANCE',
 }
 const bv=main.split("'build_version':'")[1]?.split("'")[0];
 assert.equal(bv,shell.split('data-build-version="')[1]?.split('"')[0]);
-assert.equal(bv,'158.7');
+assert.ok(Number(bv.replace('.',''))>=1587);
 console.log('PASS v158.7 legal and Assistant acceptance readiness safeguards');

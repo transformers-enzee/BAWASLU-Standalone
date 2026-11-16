@@ -62,7 +62,7 @@ def test_admin_only_csv_and_no_store(monkeypatch):
         monkeypatch.setattr(inbox_radar,"live_inbox_findings",
             lambda connection,principal:(findings(4),{}))
         monkeypatch.setattr(assistant_eval_sampling,"profile",
-            lambda conn,user:{"role":"National Administrator",
+            lambda conn,user:{"role":"National Administrator","status":"Active",
                               "permissions":{"administration":True,"view_intelligence":True}})
         response=acceptance_evidence_csv(target=24,user=db.get(User,1),db=db)
         assert response.status_code==200
@@ -71,7 +71,7 @@ def test_admin_only_csv_and_no_store(monkeypatch):
         assert b"EVALUATION_SAMPLE_SHORTFALL" in response.body
         assert b"PRIVATE_RAW_MESSAGE" not in response.body
         monkeypatch.setattr(assistant_eval_sampling,"profile",
-            lambda conn,user:{"role":"Viewer",
+            lambda conn,user:{"role":"Viewer","status":"Active",
                               "permissions":{"administration":False,"view_intelligence":True}})
         with pytest.raises(HTTPException) as error:
             acceptance_evidence_csv(target=24,user=db.get(User,2),db=db)

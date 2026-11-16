@@ -1,0 +1,3 @@
+# v158.9 — Acceptance evidence release regression fixes
+
+The v158.8 build failed on two test-only defects: the new acceptance CSV test's mock administrator profile omitted the mandatory `status: Active`, correctly triggering `has()` denial; and the earlier v158.7 frontend contract check incorrectly required exactly `158.7`, blocking subsequent sequential versions. Corrected the fixture to represent an active grant while preserving the denied-role check, and changed the older frontend contract to enforce a minimum build version. No changes to officer records, grants, live access policy, or approval status.

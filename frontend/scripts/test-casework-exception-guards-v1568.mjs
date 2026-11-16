@@ -17,5 +17,5 @@ for(const marker of ['test_invalid_original_urls_cannot_be_attested_as_checked',
  assert.ok(tests.includes(marker),marker);
 const back=main.split("'build_version':'")[1]?.split("'")[0];
 const front=shell.split('data-build-version="')[1]?.split('"')[0];
-assert.equal(back,'156.8');assert.equal(back,front);
+assert.ok(Number(back.replace('.',''))>=1568,'Build must not regress below v156.8');assert.equal(back,front);
 console.log('PASS v156.8 original URL safeguards, role gates and jurisdiction negative QA');

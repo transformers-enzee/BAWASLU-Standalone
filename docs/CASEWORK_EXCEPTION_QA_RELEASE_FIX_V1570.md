@@ -1,0 +1,3 @@
+# v157.0 — Stable QA contracts for sequential releases
+
+The v156.9 backend test suite passed 954 cases, but a new v156.8 frontend contract test also pinned build_version to an exact 156.8 number. It failed solely when a later sequential build was attempted. The contract now checks a minimum version and still requires backend and frontend version parity. The earlier v156.7 contract has likewise been corrected. These changes are QA-contract corrections, not casework behavior changes. The v156.8 source-link and reviewer safeguards remain present and must pass the entire automated build before a LIVE claim. No live Supabase mutations.

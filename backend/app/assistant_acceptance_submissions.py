@@ -94,6 +94,20 @@ def review_evidence(evidence_id:int,payload:EvidenceReview,response:Response,
     response.headers["Cache-Control"]="private, no-store"
     return _row(db,entry)
 
+@router.get("/{evidence_id}")
+def get_evidence(evidence_id:int,response:Response,
+                 user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Targeted fresh, no-store status before an irreversible human action."""
+    _admin(db,user)
+    response.headers["Cache-Control"]="private, no-store"
+    if evidence_id<=0:
+        raise HTTPException(422,"Positive evidence ID required")
+    entry=db.get(AssistantAcceptanceEvidence,evidence_id)
+    if entry is None:
+        raise HTTPException(404,"Submission not found")
+    return _row(db,entry)
+
+
 @router.get("")
 def list_evidence(response:Response,user:User=Depends(current_user),
                   db:Session=Depends(get_db),before_id:int|None=None):

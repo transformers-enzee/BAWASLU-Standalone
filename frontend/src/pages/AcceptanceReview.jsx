@@ -32,10 +32,14 @@ async function api(path,options={}){
     headers:{Authorization:'Bearer '+auth,...(options.body?{'Content-Type':'application/json'}:{})}
   });
   const body=await reply.json().catch(()=>({}));
-  if(!reply.ok)throw new Error(
-    typeof body.detail==='string'?body.detail:
-    reply.status===403?'National Administrator access required.':
-    'Acceptance review request failed ('+reply.status+').');
+  if(!reply.ok){
+    const error=new Error(
+      typeof body.detail==='string'?body.detail:
+      reply.status===403?'National Administrator access required.':
+      'Acceptance review request failed ('+reply.status+').');
+    error.status=reply.status;
+    throw error;
+  }
   return body;
 }
 const pill={SUBMITTED_UNVERIFIED:'bg-amber-50 text-amber-800',
@@ -54,6 +58,7 @@ export default function AcceptanceReview(){
   const [message,setMessage]=useState('');
   const [expanded,setExpanded]=useState({});
   const [confirm,setConfirm]=useState(null);
+  const [checkingReview,setCheckingReview]=useState(false);
   const [currentUserId,setCurrentUserId]=useState(null);
   const refresh=useCallback(async(cursor=null)=>{
     setBusy(true);setError('');
@@ -90,29 +95,59 @@ export default function AcceptanceReview(){
       const data=await api(ROOT);setResult(data);setBeforeId(null);setCursorTrail([]);
     }catch(ex){setError(ex.message);}finally{setBusy(false);}
   }
+  async function prepareReview(entry,action){
+    if(busy||checkingReview)return;
+    setCheckingReview(true);setError('');setConfirm(null);
+    try{
+      // Recheck the original submission before exposing an irreversible choice.
+      const fresh=await api(ROOT+'/'+encodeURIComponent(entry.id));
+      if(fresh.status!=='SUBMITTED_UNVERIFIED'){
+        setError('Another administrator has already reviewed this submission. Refreshing the current page.');
+        await refresh(beforeId);
+        return;
+      }
+      if(currentUserId==null||String(fresh.submitted_by_user_id)===String(currentUserId)){
+        setError('Independent administrator review is required.');
+        return;
+      }
+      setConfirm({id:entry.id,action,reference:fresh.reference,
+                  submitted_by_user_id:fresh.submitted_by_user_id});
+    }catch(ex){setError(ex.message);await refresh(beforeId);}
+    finally{setCheckingReview(false);}
+  }
   async function review(){
-    if(!confirm||busy)return;
+    if(!confirm||busy||checkingReview)return;
     setBusy(true);setError('');setMessage('');
+    let recorded=false;
     try{
       await api(ROOT+'/'+encodeURIComponent(confirm.id)+'/review',{
         method:'POST',body:JSON.stringify({action:confirm.action})
       });
-      const data=await api(ROOT+(beforeId!=null?'?before_id='+encodeURIComponent(beforeId):''));
-      setResult(data);setMessage('Review action recorded. This is not legal or client acceptance.');
+      recorded=true;
+      setMessage('Review action recorded. It is not formal legal or client acceptance.');
+    }catch(ex){
+      setError(ex.status===409?'Review conflict: this submission is already reviewed or requires another administrator.':'Review not recorded: '+ex.message);
+    }finally{
       setConfirm(null);
-    }catch(ex){setError(ex.message);setConfirm(null);}finally{setBusy(false);}
+      // Always refresh after any attempt; no stale action buttons or ghost dialog.
+      // A read failure following a successful POST must never imply POST failed.
+      const path=ROOT+(beforeId!=null?'?before_id='+encodeURIComponent(beforeId):'');
+      try{const data=await api(path);setResult(data);}
+      catch(ex){setError((recorded?'Review recorded, but unable to reload the list: ':'Could not reload the list: ')+ex.message);setResult(null);}
+      setBusy(false);
+    }
   }
   async function older(){
-    if(busy||!result?.next_before_id)return;
+    if(busy||checkingReview||!result?.next_before_id)return;
     const next=result.next_before_id;
     if(await refresh(next))setCursorTrail(x=>[...x,beforeId]);
   }
   async function newer(){
-    if(busy||!cursorTrail.length)return;
+    if(busy||checkingReview||!cursorTrail.length)return;
     const previous=cursorTrail[cursorTrail.length-1];
     if(await refresh(previous))setCursorTrail(x=>x.slice(0,-1));
   }
-  return <div data-acceptance-review="v159.7" className="space-y-6">
+  return <div data-acceptance-review="v159.9" className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-widest text-[#9a7e49]">Administration / Governance</p>
         <h1 className="intel-heading mt-2">Acceptance Review</h1>
@@ -178,7 +213,7 @@ export default function AcceptanceReview(){
       <div className="divide-y">
         {entries.map(entry=>{
           const self=String(entry.submitted_by_user_id)===String(currentUserId);
-          const canReview=entry.status==='SUBMITTED_UNVERIFIED'&&currentUserId!=null&&!self;
+          const canReview=entry.status==='SUBMITTED_UNVERIFIED'&&currentUserId!=null&&!self&&!checkingReview;
           return <article className="p-5 space-y-3" key={entry.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0"><p className="text-sm font-semibold">{TRACKS.find(t=>t[0]===entry.track)?.[1]||entry.track}</p>
@@ -191,8 +226,8 @@ export default function AcceptanceReview(){
               <button className={button} type="button" onClick={()=>setExpanded(x=>({...x,[entry.id]:!x[entry.id]}))}>
                 {expanded[entry.id]?'Hide audit history':'View audit history'} ({entry.history?.length||0})
               </button>
-              {canReview&&<><button className={button} disabled={busy} type="button" onClick={()=>setConfirm({id:entry.id,action:'EVIDENCE_REVIEWED'})}>Mark evidence reviewed</button>
-                <button className={button} disabled={busy} type="button" onClick={()=>setConfirm({id:entry.id,action:'REVISION_REQUESTED'})}>Request revision</button></>}
+              {canReview&&<><button className={button} disabled={busy} type="button" onClick={()=>prepareReview(entry,'EVIDENCE_REVIEWED')}>Mark evidence reviewed</button>
+                <button className={button} disabled={busy} type="button" onClick={()=>prepareReview(entry,'REVISION_REQUESTED')}>Request revision</button></>}
               {self&&entry.status==='SUBMITTED_UNVERIFIED'&&<span className="text-xs text-slate-500">Independent administrator required</span>}
             </div>
             {expanded[entry.id]&&<ol className="space-y-2 rounded-lg border bg-slate-50 p-3 text-xs">
@@ -207,9 +242,9 @@ export default function AcceptanceReview(){
     {confirm&&<div role="dialog" aria-modal="true" aria-labelledby="acceptance-confirm-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-4 shadow-xl">
         <h2 id="acceptance-confirm-title" className="font-semibold">Confirm independent evidence review</h2>
-        <p className="text-sm text-slate-700">Record <strong>{confirm.action==='EVIDENCE_REVIEWED'?'Evidence Reviewed':'Revision Requested'}</strong> for submission #{confirm.id}? This action is audited and cannot be undone. It is not formal legal or client sign-off.</p>
+        <p className="text-sm text-slate-700">Record <strong>{confirm.action==='EVIDENCE_REVIEWED'?'Evidence Reviewed':'Revision Requested'}</strong> for submission #{confirm.id} (reference: {confirm.reference})? This action is audited and cannot be undone. It is not formal legal or client sign-off.</p>
         <div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={()=>setConfirm(null)}>Cancel</button>
-          <button className="intel-button" disabled={busy} onClick={review}>Confirm action</button></div>
+          <button className="intel-button" disabled={busy||checkingReview} onClick={review}>Confirm action</button></div>
       </div>
     </div>}
   </div>;

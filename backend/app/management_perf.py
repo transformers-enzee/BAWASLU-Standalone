@@ -17,15 +17,10 @@ def measure_sql(db):
         state["query_count"]+=1
         state["db_driver_elapsed_ms"]+=(
             perf_counter()-starts.pop())*1000
-    # Track failures as attempted queries, including DBAPI failures.
-    def error(context):
-        if starts:
-            state["query_count"]+=1
-            state["db_driver_elapsed_ms"]+=(
-                perf_counter()-starts.pop())*1000
+    # SQLAlchemy handle_error is a dialect-wide event, not connection-local.
+    # Do not register it here: avoid cross-request contamination.
     event.listen(conn,"before_cursor_execute",before)
     event.listen(conn,"after_cursor_execute",after)
-    event.listen(conn,"handle_error",error)
     beginning=perf_counter()
     try:
         yield state
@@ -33,7 +28,7 @@ def measure_sql(db):
         elapsed=(perf_counter()-beginning)*1000
         for name,fn in (
                 ("before_cursor_execute",before),
-                ("after_cursor_execute",after),("handle_error",error)):
+                ("after_cursor_execute",after)):
             event.remove(conn,name,fn)
         db_time=round(state["db_driver_elapsed_ms"],3)
         state["db_driver_elapsed_ms"]=db_time

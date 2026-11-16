@@ -106,6 +106,18 @@ export default function ManagementBriefings(){
    }catch(e){setError(e.message)}finally{setExporting(false)}
  }
 
+ async function exportActivityCsv(){
+   setExporting(true);setError('');
+   try{
+     const response=await fetch(API+'/briefing-activity.csv?'+new URLSearchParams({period,topic}),{headers:auth(),cache:'no-store'});
+     if(!response.ok)throw Error('Period activity export unavailable ('+response.status+')');
+     const url=URL.createObjectURL(await response.blob());
+     const a=document.createElement('a');a.href=url;a.download='bawaslu-activity-'+period+'.csv';
+     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }catch(e){setError(String(e.message||e))}
+   finally{setExporting(false)}
+ }
+
  async function loadPilotIntake(){
    setIntakeLoading(true);setIntakeError('');
    try{
@@ -165,6 +177,7 @@ export default function ManagementBriefings(){
     <button className="intel-ghost text-sm" type="button" disabled={!report||busy||exporting} onClick={()=>exportTemplate('docx')}><Download size={15} className="mr-1 inline"/>Word (.docx)</button>
     <button className="intel-ghost text-sm" type="button" disabled={!report||busy||exporting} onClick={()=>exportTemplate('xlsx')}><Download size={15} className="mr-1 inline"/>Excel (.xlsx)</button>
     <button className="intel-ghost text-sm" type="button" disabled={!report||busy||exporting} onClick={exportCsv}><Download size={15} className="mr-1 inline"/>CSV</button>
+    <button className="intel-ghost text-sm" type="button" disabled={!report||busy||exporting} onClick={exportActivityCsv}><Download size={15} className="mr-1 inline"/>{t('Activity CSV','CSV Aktivitas')}</button>
     <button className="intel-button text-sm" type="button" disabled={!report||busy||exporting} onClick={()=>exportTemplate('pdf')}><Download size={15} className="mr-1 inline"/>PDF</button>
     <button className="intel-ghost text-sm" type="button" disabled={!report||busy} onClick={()=>window.print()}><Printer size={15} className="mr-1 inline"/>{t('Print','Cetak')}</button>
    </div>
@@ -271,6 +284,20 @@ export default function ManagementBriefings(){
     <p className="mt-3 text-xs text-[#866b43]">{t('Window: up to 300 links per authorized campaign. Publication time unknown or outside the period:',
       'Jendela: maksimal 300 tautan per kampanye yang diizinkan. Waktu publikasi tidak diketahui atau di luar periode:')} {monitoring.publication_date_unknown??0} / {monitoring.published_outside_period??0}.
       {' '}{t('Completeness cannot be inferred from a zero count.','Jumlah nol tidak berarti seluruh unggahan sudah tercakup.')}</p>
+   </section>}
+   {report?.period_audit_activity&&<section data-testid="briefing-period-audit-activity" className="rounded-xl border bg-white p-4 text-sm">
+    <h3 className="font-semibold">{t('Casework activity during selected period','Aktivitas penanganan dalam periode terpilih')}</h3>
+    <p className="mt-1 text-xs text-[#866b43]">{t('Separate audit-event cohort: cases created before this period may still have new report approvals or revisions. These are events, not unique approved reports.','Kelompok peristiwa audit terpisah: kasus lama dapat memiliki persetujuan atau revisi baru. Ini adalah peristiwa, bukan jumlah laporan unik yang disetujui.')}</p>
+    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+    {[
+      [t('Cases with audit activity','Kasus dengan aktivitas'),report.period_audit_activity.authorized_cases_with_observed_activity],
+      [t('Older cases with activity','Kasus lama dengan aktivitas'),report.period_audit_activity.older_cases_with_observed_activity],
+      [t('Approval events on older cases','Peristiwa persetujuan kasus lama'),report.period_audit_activity.approved_events_on_older_cases],
+      [t('Report return events','Peristiwa pengembalian laporan'),report.period_audit_activity.report_returned_events],
+      [t('Report submission events','Peristiwa pengajuan laporan'),report.period_audit_activity.report_submitted_events],
+      [t('Revision draft events','Peristiwa draf revisi'),report.period_audit_activity.revision_drafted_events]
+    ].map(([label,value])=><div key={label} className="rounded-md border p-2"><div className="text-lg font-semibold">{value??0}</div><div className="text-xs text-[#64748b]">{label}</div></div>)}
+    </div>
    </section>}
    <section data-testid="briefing-data-coverage" className="rounded-xl border border-[#dce5ec] bg-white p-4 text-sm">
     <h3 className="font-semibold text-[#24384c]">{t('Coverage and report status integrity','Cakupan dan integritas status laporan')}</h3>

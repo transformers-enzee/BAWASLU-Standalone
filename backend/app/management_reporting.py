@@ -323,6 +323,63 @@ def _scoped_casework_window(db, access, user_id, period, topic="", now=None):
     return cases,start,end,topic,reports,transitions,latest
 
 
+def _casework_activity_window(db,access,user_id,start,end,topic=""):
+    """Separate period-AUDIT activity from cases CREATED in the period.
+
+    Group in SQL behind the same jurisdiction predicates as casework. Never
+    expose event notes, report text, or officer identities through this view.
+    """
+    from sqlalchemy import func
+    from .casework import _authorized_cases_query
+    actions=("REPORT_SUBMITTED","REPORT_RETURNED","REPORT_APPROVED",
+             "REPORT_REVISION_DRAFTED","SOURCE_REVIEW_RECORDED")
+    grouped=(_authorized_cases_query(db,access,user_id)
+        .join(CaseTransition,CaseTransition.case_id==CaseAssignment.id)
+        .filter(CaseTransition.happened_at>=start,
+                CaseTransition.happened_at<=end,
+                CaseTransition.action.in_(actions))
+        .with_entities(CaseAssignment,CaseTransition.action,func.count(CaseTransition.id))
+        .group_by(CaseAssignment.id,CaseTransition.action).all())
+    per_case={}
+    needle=topic.casefold() if topic else ""
+    for case,action,count in grouped:
+        if not _visible(case,access,user_id):
+            continue
+        if needle and needle not in " ".join([
+            case.title or "",case.source_excerpt or "",
+            case.target_department or ""]).casefold():
+            continue
+        if case.id not in per_case:
+            per_case[case.id]={"case":case,"actions":{}}
+        per_case[case.id]["actions"][action]=int(count)
+    rows=sorted(per_case.values(),
+        key=lambda item:(item["case"].created_at,item["case"].id),reverse=True)
+    totals={action:sum(item["actions"].get(action,0) for item in rows)
+            for action in actions}
+    older=[item for item in rows if item["case"].created_at<start]
+    summary={
+        "schema":"BAWASLU_MANAGEMENT_PERIOD_AUDIT_ACTIVITY_V1574",
+        "basis":"AUDIT_ACTIONS_OBSERVED_IN_SELECTED_UTC_PERIOD",
+        "case_creation_kpis_remain_separate":True,
+        "authorized_cases_with_observed_activity":len(rows),
+        "older_cases_with_observed_activity":len(older),
+        "newer_cases_with_observed_activity":len(rows)-len(older),
+        "total_matching_audit_events":sum(totals.values()),
+        "report_submitted_events":totals["REPORT_SUBMITTED"],
+        "report_returned_events":totals["REPORT_RETURNED"],
+        "report_approved_events":totals["REPORT_APPROVED"],
+        "revision_drafted_events":totals["REPORT_REVISION_DRAFTED"],
+        "source_review_events":totals["SOURCE_REVIEW_RECORDED"],
+        "approved_events_on_older_cases":sum(
+            item["actions"].get("REPORT_APPROVED",0) for item in older),
+        "event_counts_are_not_distinct_reports":True,
+        "activity_events_are_not_legal_findings":True,
+        "historical_events_outside_period_not_included":True,
+        "no_automatic_casework_action":True,
+    }
+    return summary,rows
+
+
 def _report_version_integrity(cases,reports,latest_by_case):
     """Report-version audit summary for full authorized casework cohort.
 
@@ -374,6 +431,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
     latest_reports = {case_id: report.status for case_id, report in latest_by_case.items()}
     report_counts = Counter(latest_reports.values())
     report_version_integrity=_report_version_integrity(cases,reports,latest_by_case)
+    period_audit_activity,_=_casework_activity_window(db,access,user_id,start,end,topic)
     casework_progress=_casework_evidence_progress(cases,transitions,latest_by_case)
     followup_queue=management_followup_queue(cases,latest_by_case,transitions)
     investigation_readiness=investigation_readiness_board(cases,latest_by_case,transitions)
@@ -421,6 +479,7 @@ def build_briefing(db: Session, access: dict, user_id: int,
         "case_status_counts": dict(statuses),
         "report_status_counts": dict(report_counts),
         "report_version_integrity":report_version_integrity,
+        "period_audit_activity":period_audit_activity,
         "casework_progress":casework_progress,
         "followup_queue":followup_queue,
         "investigation_readiness":investigation_readiness,
@@ -520,6 +579,41 @@ def briefing_csv(period: str = "weekly", topic: str = "",
                     headers={"Content-Disposition": 'attachment; filename="bawaslu-casework-briefing.csv"',
                              "Cache-Control": "private, no-store",
                              "X-Report-Source": "AUTHORIZED_OFFICER_CASEWORK"})
+
+
+@router.get("/briefing-activity.csv")
+def briefing_activity_csv(period: str = "weekly",topic: str = "",
+                          user: User = Depends(current_user),
+                          db: Session = Depends(get_db)):
+    """Separate event-window activity export, including older casework."""
+    access=profile(db,user)
+    _,start,end,topic=scoped_cases(db,access,user.id,period,topic)
+    _,rows=_casework_activity_window(db,access,user.id,start,end,topic)
+    output=io.StringIO()
+    writer=csv.writer(output)
+    writer.writerow(["Case ID","Case created UTC","Created in selected window",
+                     "Source type","Source ID","Case title",
+                     "Report submitted audit events","Report returned audit events",
+                     "Report approved audit events","Revision draft audit events",
+                     "Source review audit events","Observation basis"])
+    for item in rows:
+        case=item["case"]
+        counts=item["actions"]
+        writer.writerow([_safe_csv_cell(v) for v in (
+            case.id,case.created_at.isoformat(),
+            "YES" if start<=case.created_at<=end else "NO",
+            case.source_type,case.source_id,case.title,
+            counts.get("REPORT_SUBMITTED",0),counts.get("REPORT_RETURNED",0),
+            counts.get("REPORT_APPROVED",0),
+            counts.get("REPORT_REVISION_DRAFTED",0),
+            counts.get("SOURCE_REVIEW_RECORDED",0),
+            "AUDIT_ACTIONS_IN_SELECTED_UTC_PERIOD_NOT_LEGAL_FINDINGS")])
+    return Response(content="\ufeff"+output.getvalue(),
+       media_type="text/csv; charset=utf-8",
+       headers={"Content-Disposition":
+          'attachment; filename="bawaslu-casework-period-activity.csv"',
+          "Cache-Control":"private, no-store",
+          "X-Report-Source":"AUTHORIZED_CASEWORK_PERIOD_AUDIT"})
 
 
 @router.get("/officer-pilot.csv")

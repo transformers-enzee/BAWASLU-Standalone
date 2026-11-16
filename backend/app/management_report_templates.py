@@ -298,6 +298,7 @@ def build_interim_template(snapshot, language="id"):
             "Daftar tindak lanjut menunjukkan maksimal 12 kasus dalam cakupan yang dibuat pada periode ini. Kasus lama tidak ikut dalam populasi; catatan sumber yang tidak terlihat dalam periode bisa ada pada riwayat sebelumnya. Petunjuk tidak melakukan penugasan atau persetujuan otomatis.",
             "Follow-up preview shows at most 12 authorized cases created in this period. Older cases are outside the cohort and earlier source-review events may exist. Suggestions do not assign, approve, or close cases."))
     revision_integrity=snapshot.get("report_version_integrity") or {}
+    period_activity=snapshot.get("period_audit_activity") or {}
     scorecard = [
         {"label": _t(language,"Penugasan","Assignments"), "value":assigned},
         {"label": _t(language,"Sumber unik","Unique sources"),"value":linked},
@@ -314,6 +315,20 @@ def build_interim_template(snapshot, language="id"):
         {"label": _t(language,"Laporan terbaru menunggu revisi","Latest reports awaiting revision"),
          "value":int(revision_integrity.get("latest_returned_awaiting_revision") or 0)},
     ]
+    scorecard.extend([
+        {"label":_t(language,"Kasus dengan aktivitas audit pada periode",
+          "Cases with audit activity in period"),
+         "value":int(period_activity.get("authorized_cases_with_observed_activity") or 0)},
+        {"label":_t(language,"Kasus lama dengan aktivitas baru",
+          "Older cases with activity in period"),
+         "value":int(period_activity.get("older_cases_with_observed_activity") or 0)},
+        {"label":_t(language,"Peristiwa persetujuan pada kasus lama",
+          "Approval audit events on older cases"),
+         "value":int(period_activity.get("approved_events_on_older_cases") or 0)}
+    ])
+    caveats.append(_t(language,
+        "Aktivitas audit dalam periode dihitung terpisah dari KPI berdasarkan tanggal pembuatan kasus. Peristiwa persetujuan dapat berasal dari kasus lama dan tidak berarti jumlah laporan unik atau keputusan hukum.",
+        "Audit activity in the selected period is a separate cohort from case-creation KPIs. Approval events may concern older cases and are not counts of distinct current approved reports or legal verdicts."))
     caveats.append(_t(language,
         "Versi laporan historis tetap tersimpan untuk audit dan tidak dihitung kembali sebagai persetujuan saat ini. KPI persetujuan menggunakan hanya versi laporan terbaru setiap penugasan. Status persetujuan bukan keputusan hukum.",
         "Historical report versions remain available for audit and are never counted again as current approvals. Approval KPIs use only the latest report version per assignment. Approval is not a legal determination."))
@@ -340,6 +355,7 @@ def build_interim_template(snapshot, language="id"):
         "executive_summary": summary,
         "scorecard": scorecard,
         "report_version_integrity":revision_integrity,
+        "period_audit_activity":period_activity,
         "monitoring_summary": monitoring if monitoring_enabled else {"enabled":False},
         "operational_breakdown": [
             {"label":_clean(key,120),"value":int(value)}

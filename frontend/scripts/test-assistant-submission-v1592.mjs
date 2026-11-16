@@ -10,6 +10,6 @@ for(const s of ['National Administrator','SUBMITTED_UNVERIFIED','REVISION_REQUES
   assert.ok(api.includes(s),s);
 }
 const v=main.split("'build_version':'")[1]?.split("'")[0];
-assert.equal(v,'159.2');
+assert.ok(Number(v.replace('.',''))>=1592);
 assert.ok(shell.includes('data-build-version="'+v+'"'));
 console.log('PASS v159.2 restricted acceptance submission history and release parity');

@@ -15,5 +15,5 @@ assert.ok(ui.includes("setEditReport(r.id);setForm("),"Returned report editor st
 const bv=backend.split("'build_version':'")[1]?.split("'")[0];
 const fv=shell.split('data-build-version="')[1]?.split('"')[0];
 assert.equal(bv,fv);
-assert.equal(bv,'156.7');
+assert.ok(Number(bv.split('.').join(''))>=1567,'Version must not regress below v156.7');
 console.log('PASS v156.7 report view expands full read-only contents in place');

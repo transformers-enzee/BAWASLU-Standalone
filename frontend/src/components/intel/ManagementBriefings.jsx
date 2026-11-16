@@ -299,9 +299,13 @@ export default function ManagementBriefings(){
       [t('Distinct cases with approval activity','Kasus unik dengan aktivitas persetujuan'),report.period_audit_activity.distinct_cases_with_approval],
       [t('Distinct cases with returned reports','Kasus unik dengan laporan dikembalikan'),report.period_audit_activity.distinct_cases_with_return],
       [t('Distinct cases with revisions','Kasus unik dengan revisi'),report.period_audit_activity.distinct_cases_with_revision],
-      [t('Older distinct cases with approval activity','Kasus lama unik dengan persetujuan'),report.period_audit_activity.distinct_older_cases_with_approval]
+      [t('Older distinct cases with approval activity','Kasus lama unik dengan persetujuan'),report.period_audit_activity.distinct_older_cases_with_approval],
+      [t('Approval-activity cases still approved','Kasus dengan aktivitas persetujuan yang masih disetujui'),report.period_audit_activity.approval_activity_cases_latest_approved],
+      [t('Approval-activity cases no longer approved','Kasus dengan aktivitas persetujuan yang tidak lagi disetujui'),report.period_audit_activity.approval_activity_cases_latest_not_approved],
+      [t('Approval activity without a saved report','Aktivitas persetujuan tanpa laporan tersimpan'),report.period_audit_activity.approval_activity_cases_without_saved_report]
     ].map(([label,value])=><div key={label} className="rounded-md border p-2"><div className="text-lg font-semibold">{value??0}</div><div className="text-xs text-[#64748b]">{label}</div></div>)}
     </div>
+    <p className="mt-2 text-xs text-[#866b43]">{t('Reconciled with the latest saved report per case as of this snapshot. These figures are not approval totals for the case-creation cohort or legal findings.','Dicocokkan dengan laporan tersimpan terbaru per kasus pada saat ringkasan ini. Angka ini bukan jumlah persetujuan kelompok kasus yang baru dibuat atau temuan hukum.')}</p>
    </section>}
    <section data-testid="briefing-data-coverage" className="rounded-xl border border-[#dce5ec] bg-white p-4 text-sm">
     <h3 className="font-semibold text-[#24384c]">{t('Coverage and report status integrity','Cakupan dan integritas status laporan')}</h3>

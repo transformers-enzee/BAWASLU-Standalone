@@ -333,7 +333,13 @@ def build_interim_template(snapshot, language="id"):
          "value":int(period_activity.get("distinct_cases_with_return") or 0)},
         {"label":_t(language,"Kasus unik dengan revisi",
           "Distinct cases with revision activity"),
-         "value":int(period_activity.get("distinct_cases_with_revision") or 0)}
+         "value":int(period_activity.get("distinct_cases_with_revision") or 0)},
+        {"label":_t(language,"Kasus dengan aktivitas persetujuan dan laporan terkini disetujui",
+          "Approval-activity cases still approved"),
+         "value":int(period_activity.get("approval_activity_cases_latest_approved") or 0)},
+        {"label":_t(language,"Kasus dengan aktivitas persetujuan tetapi laporan terkini tidak disetujui",
+          "Approval-activity cases no longer approved"),
+         "value":int(period_activity.get("approval_activity_cases_latest_not_approved") or 0)}
     ])
     caveats.append(_t(language,
         "Aktivitas audit dalam periode dihitung terpisah dari KPI berdasarkan tanggal pembuatan kasus. Peristiwa persetujuan dapat berasal dari kasus lama dan tidak berarti jumlah laporan unik atau keputusan hukum.",

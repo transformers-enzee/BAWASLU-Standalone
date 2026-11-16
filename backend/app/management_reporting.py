@@ -361,6 +361,32 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
               for action in actions}
     older_distinct={action:sum(item["actions"].get(action,0)>0 for item in older)
                     for action in actions}
+    # Read only the latest report for cases WITH an approval event in this
+    # period. Use a SQL row_number window rather than downloading every
+    # historical report version, and chunk IDs for SQLite/Postgres limits.
+    approval_case_ids=[item["case"].id for item in rows
+                       if item["actions"].get("REPORT_APPROVED",0)>0]
+    latest_status={}
+    for start_at in range(0,len(approval_case_ids),400):
+        ids=approval_case_ids[start_at:start_at+400]
+        ranked=db.query(
+            CaseReport.case_id.label("case_id"),
+            CaseReport.status.label("status"),
+            func.row_number().over(
+                partition_by=CaseReport.case_id,
+                order_by=(CaseReport.created_at.desc(),CaseReport.id.desc())
+            ).label("position")
+        ).filter(CaseReport.case_id.in_(ids)).subquery()
+        for case_id,status in db.query(ranked.c.case_id,ranked.c.status).filter(
+                ranked.c.position==1).all():
+            latest_status[case_id]=status
+    approval_cases_still_approved=sum(
+        latest_status.get(cid)=="APPROVED" for cid in approval_case_ids)
+    approval_cases_now_not_approved=sum(
+        cid in latest_status and latest_status[cid]!="APPROVED"
+        for cid in approval_case_ids)
+    approval_cases_without_report=sum(
+        cid not in latest_status for cid in approval_case_ids)
     summary={
         "schema":"BAWASLU_MANAGEMENT_PERIOD_AUDIT_ACTIVITY_V1574",
         "basis":"AUDIT_ACTIONS_OBSERVED_IN_SELECTED_UTC_PERIOD",
@@ -380,6 +406,11 @@ def _casework_activity_window(db,access,user_id,start,end,topic=""):
         "distinct_cases_with_revision":distinct["REPORT_REVISION_DRAFTED"],
         "distinct_cases_with_source_review":distinct["SOURCE_REVIEW_RECORDED"],
         "distinct_older_cases_with_approval":older_distinct["REPORT_APPROVED"],
+        "approval_activity_cases_latest_approved":approval_cases_still_approved,
+        "approval_activity_cases_latest_not_approved":approval_cases_now_not_approved,
+        "approval_activity_cases_without_saved_report":approval_cases_without_report,
+        "approval_activity_latest_status_reconciled":True,
+        "approval_activity_latest_status_is_snapshot_not_historical":True,
         "distinct_counts_do_not_prove_latest_report_status":True,
         "approved_events_on_older_cases":sum(
             item["actions"].get("REPORT_APPROVED",0) for item in older),

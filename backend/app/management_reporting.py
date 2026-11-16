@@ -33,15 +33,25 @@ DISCLAIMER = (
 )
 
 
-def scoped_cases(db: Session, access: dict, user_id: int, period: str, topic: str = "", now=None):
+def _activity_period_window(access,period,topic,now=None):
+    """Validate an audit-event reporting period without fetching creation-cohort cases.
+
+    The SQL activity query applies the authorized case predicates itself.
+    Keeping the period validation separate avoids an unnecessary read of all
+    cases CREATED in the same reporting period on every CSV download.
+    """
     if period not in PERIOD_DAYS:
-        raise HTTPException(422, "Period must be daily, weekly or monthly")
-    topic = " ".join(str(topic or "").split())
-    if len(topic) > 120:
-        raise HTTPException(422, "Topic filter is too long")
+        raise HTTPException(422,"Period must be daily, weekly or monthly")
+    topic=" ".join(str(topic or "").split())
+    if len(topic)>120:
+        raise HTTPException(422,"Topic filter is too long")
     _require(access)
-    end = now or datetime.utcnow()
-    start = end - timedelta(days=PERIOD_DAYS[period])
+    end=now or datetime.utcnow()
+    return end-timedelta(days=PERIOD_DAYS[period]),end,topic
+
+
+def scoped_cases(db: Session, access: dict, user_id: int, period: str, topic: str = "", now=None):
+    start,end,topic=_activity_period_window(access,period,topic,now)
     # Narrow SQL at the database first, not after fetching every province's cases.
     # This predicate mirrors casework._visible; retain that guard as defense in depth.
     query = db.query(CaseAssignment).filter(
@@ -640,7 +650,7 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
                           db: Session = Depends(get_db)):
     """Separate event-window activity export, including older casework."""
     access=profile(db,user)
-    _,start,end,topic=scoped_cases(db,access,user.id,period,topic)
+    start,end,topic=_activity_period_window(access,period,topic)
     _,rows=_casework_activity_window(db,access,user.id,start,end,topic)
     output=io.StringIO()
     writer=csv.writer(output)
@@ -653,7 +663,9 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
                      "Distinct returned case indicator",
                      "Distinct revised case indicator",
                      "Latest report status at export (approval activity only)",
-                     "Current approval reconciliation"])
+                     "Current approval reconciliation",
+                     "Audit window start UTC","Audit window end UTC",
+                     "Latest report status observed UTC"])
     for item in rows:
         case=item["case"]
         counts=item["actions"]
@@ -674,13 +686,16 @@ def briefing_activity_csv(period: str = "weekly",topic: str = "",
              else "NO_SAVED_REPORT" if item["latest_report_status_at_snapshot"]=="NO_REPORT"
              else "SUPERSEDED_OR_NOT_APPROVED"
                if counts.get("REPORT_APPROVED",0)>0
-             else "NOT_APPLICABLE_NO_APPROVAL_EVENT"))])
+             else "NOT_APPLICABLE_NO_APPROVAL_EVENT"),
+            start.isoformat()+"Z",end.isoformat()+"Z",end.isoformat()+"Z")])
     return Response(content="\ufeff"+output.getvalue(),
        media_type="text/csv; charset=utf-8",
        headers={"Content-Disposition":
           'attachment; filename="bawaslu-casework-period-activity.csv"',
           "Cache-Control":"private, no-store",
-          "X-Report-Source":"AUTHORIZED_CASEWORK_PERIOD_AUDIT"})
+          "X-Report-Source":"AUTHORIZED_CASEWORK_PERIOD_AUDIT",
+          "X-Report-Window-Start-UTC":start.isoformat()+"Z",
+          "X-Report-Window-End-UTC":end.isoformat()+"Z"})
 
 
 @router.get("/officer-pilot.csv")

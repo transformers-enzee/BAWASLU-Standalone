@@ -532,3 +532,23 @@ class DemoFeedback(Base):
     visitor_hash: Mapped[str] = mapped_column(String(64),nullable=False,index=True)
     network_hash: Mapped[str] = mapped_column(String(64),nullable=False,default='',index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow,index=True)
+
+
+class AssistantAcceptanceEvidence(Base):
+    """Metadata-only acceptance evidence; never legal or client approval."""
+    __tablename__="assistant_acceptance_evidence"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    track: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    reference: Mapped[str] = mapped_column(String(160), nullable=False)
+    submitted_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+class AssistantAcceptanceEvidenceEvent(Base):
+    """Append-only submission and independent review history."""
+    __tablename__="assistant_acceptance_evidence_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    evidence_id: Mapped[int] = mapped_column(
+        ForeignKey("assistant_acceptance_evidence.id"), nullable=False, index=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

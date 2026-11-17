@@ -16,6 +16,9 @@ export default function SavedReplyReviewWorksheet({results=[]}){
  const [saved,setSaved]=useState({});
  const [canSave,setCanSave]=useState(false);
  const [saving,setSaving]=useState(false);
+ const [summary,setSummary]=useState(null);
+ const [history,setHistory]=useState({});
+ const [historyLoading,setHistoryLoading]=useState('');
  async function server(body){
   const token=window.localStorage.getItem('bawaslu_access_token')||'';
   if(!token)throw Error('Authorized session required');
@@ -33,7 +36,7 @@ export default function SavedReplyReviewWorksheet({results=[]}){
   server().then(data=>{
    if(!active)return;
    setSaved(Object.fromEntries((data.records||[]).map(x=>[auditReplyKey(x),x])));
-   setCanSave(true);
+   setSummary(data);setCanSave(true);
   }).catch(()=>{if(active)setCanSave(false)});
   return ()=>{active=false};
  },[]);
@@ -50,8 +53,27 @@ export default function SavedReplyReviewWorksheet({results=[]}){
     review_state:state,evidence_checked:evidence,expected_version:saved[key]?.version||0
    });
    setSaved(previous=>({...previous,[key]:response.record}));
+   setHistory(previous=>({...previous,[key]:null}));
+   const refreshed=await server();
+   setSaved(Object.fromEntries((refreshed.records||[]).map(x=>[auditReplyKey(x),x])));
+   setSummary(refreshed);
    setNotice('Review progress saved under your authenticated account. No legal approval given.');
   }catch(e){setError(e.message||'Save failed')}finally{setSaving(false)}
+ }
+ async function loadHistory(item){
+  const key=auditReplyKey(item);
+  setError('');setHistoryLoading(key);
+  try{
+   const token=window.localStorage.getItem('bawaslu_access_token')||'';
+   if(!token)throw Error('Authorized session required');
+   const url='/api/assistant-evaluation/saved-reply-reviews/'+
+    encodeURIComponent(item.thread_id)+'/'+item.answer_message_index+'/history';
+   const response=await fetch(url,{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(data.detail||'History unavailable');
+   setHistory(previous=>({...previous,[key]:data.events||[]}));
+  }catch(e){setError(e.message||'Unable to inspect history')}
+  finally{setHistoryLoading('')}
  }
  if(!results.length)return null;
  const rows=results.slice(0,5);
@@ -78,6 +100,10 @@ export default function SavedReplyReviewWorksheet({results=[]}){
   <p className="text-xs font-semibold">Officer evidence-review worksheet</p>
   <p className="text-[11px] text-[#60748a]">Review original authorized sources before attesting. Eligible reviewers can save progress to their own account. This is operational progress, not formal legal sign-off or an accuracy score.</p>
   {!canSave&&<p className="text-xs text-amber-800">Persistent review requires an active reviewer grant. Local export remains available.</p>}
+  {canSave&&summary&&<div data-testid="saved-reply-review-summary" className="text-xs text-[#60748a]">
+   My saved reviews: {summary.review_count||0} · current evidence-checked: {summary.completed_current_count||0} · changed/needs recheck: {summary.stale_review_count||0}.
+   These are operational progress counts, not model accuracy.
+  </div>}
   {rows.map(item=>{
    const key=auditReplyKey(item),state=decisions[key]||saved[key]?.review_state||'PENDING_REVIEW';
    const hasEvidence=Object.hasOwn(checked,key)?!!checked[key]:!!saved[key]?.evidence_checked;
@@ -85,7 +111,8 @@ export default function SavedReplyReviewWorksheet({results=[]}){
     <p className="text-xs font-medium">Saved thread {item.thread_id.slice(0,8)} · reply {item.answer_message_index+1}</p>
     <p className="text-[11px] text-[#60748a]">{item.status} · suggested: {(item.review_route||'').replaceAll('_',' ').toLowerCase()}</p>
     {saved[key]&&<p className="text-xs text-[#60748a]">Saved: {saved[key].review_state.replaceAll('_',' ')} · v{saved[key].version} · reviewer #{saved[key].reviewer_id}</p>}
-    {saved[key]?.saved_reply_changed&&<p className="text-xs text-amber-800">Saved reply changed; review cannot be updated until revalidated.</p>}
+    {saved[key]?.saved_reply_changed&&<p className="text-xs text-amber-800">Saved reply changed or became ineligible. Prior evidence-checked status is no longer current; this review cannot be updated until separately reconciled.</p>}
+    {saved[key]&&!saved[key]?.saved_reply_changed&&<p className="text-xs text-[#60748a]">Effective state: {(saved[key].effective_review_state||saved[key].review_state).replaceAll('_',' ').toLowerCase()}</p>}
     <label className="flex gap-2 items-start text-xs">
      <input type="checkbox" checked={hasEvidence} disabled={item.status!=='AUDITED'}
       onChange={e=>{
@@ -107,6 +134,13 @@ export default function SavedReplyReviewWorksheet({results=[]}){
      data-testid="save-persistent-saved-reply-review"
      disabled={!canSave||saving||!!saved[key]?.saved_reply_changed}
      onClick={()=>saveProgress(item)}>{saving?'Saving…':'Save progress to account'}</button>
+    {saved[key]&&<button type="button" className="intel-ghost text-xs"
+     data-testid="open-saved-reply-review-history" disabled={historyLoading===key}
+     onClick={()=>loadHistory(item)}>{historyLoading===key?'Loading…':'View review history'}</button>}
+    {Array.isArray(history[key])&&<div data-testid="saved-reply-review-event-history" className="text-[11px] text-[#60748a]">
+     {history[key].length===0?'No recorded events':history[key].map((event,i)=>
+      <p key={event.version+':'+i}>Version {event.version}: {event.from_state.replaceAll('_',' ')} → {event.to_state.replaceAll('_',' ')} · reviewer #{event.actor_user_id}</p>)}
+    </div>
    </div>;
   })}
   <button type="button" className="intel-ghost text-xs" data-testid="export-saved-reply-review-worksheet" onClick={exportLocal}>Export sanitized review worksheet</button>

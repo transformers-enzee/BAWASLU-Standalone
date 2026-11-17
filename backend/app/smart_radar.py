@@ -20,7 +20,7 @@ from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
 from .smart_radar_geography import attach_geo_to_findings
 from .monitoring_count_integrity import inbox_window_integrity
-from .monitoring_metric_reconciliation import radar_metric_integrity
+from .monitoring_metric_reconciliation import radar_metric_integrity, radar_source_rollup
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -251,18 +251,17 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         logging.getLogger(__name__).warning(
             "RADAR_EMPTY_AUTHORIZED_FEED user_id=%s inbox_records=%s campaign_count=%s",
             user.id,len(inbox.get('findings') or []),len(inbox.get('campaigns') or []))
-    posts=[post for finding in findings for post in finding["posts"]]
+    # All top-level metrics share the same unique original source-ID
+    # population. Grouped topic findings may be displayed multiple times,
+    # but that never creates additional posts, sentiment or actor mentions.
+    source_rollup=radar_source_rollup(findings)
+    posts=source_rollup["posts"]
     recent_integrity=inbox_window_integrity(inbox.get("findings") or [],findings)
-    platforms=Counter(post["platform"] for post in posts)
-    candidates=Counter()
-    sentiments=Counter()
-    geo_mentions=Counter()
-    verified_locations=Counter()
-    for finding in findings:
-        candidates.update(finding.get("actor_mentions") or {})
-        sentiments.update(finding.get("sentiment_counts") or {})
-        geo_mentions.update(finding.get("geo_signal_counts") or {})
-        verified_locations.update(finding.get("verified_incident_counts") or {})
+    platforms=source_rollup["platform_counts"]
+    candidates=source_rollup["candidate_mentions"]
+    sentiments=source_rollup["sentiment_counts"]
+    geo_mentions=source_rollup["geo_signal_counts"]
+    verified_locations=source_rollup["verified_incident_counts"]
     recent_metrics=radar_metric_integrity(findings,platforms,sentiments,len(posts))
     # Keyword cloud is derived from the main keywords saved for each permitted
     # campaign, counted against actual relevant saved post text (not topic labels).
@@ -280,12 +279,19 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         except (ValueError,TypeError): values=[]
         main_by_campaign[campaign.id]=[
             str(v).strip() for v in values if isinstance(v,str) and len(v.strip())>=3][:600]
+    # The same source may be linked to several authorized campaigns.
+    # Count each (original source, normalized keyword) once, not per link.
+    counted_keywords=set()
     for record in inbox.get('findings',[]):
         cid=int(record.get('campaign_id') or 0)
+        sid=str(record.get('id') or '').strip()
         source=str(record.get('text_content') or '').casefold()
-        if not source:continue
+        if not sid.isdigit() or not source:continue
         for word in main_by_campaign.get(cid,[]):
+            pair=(sid,word.casefold())
+            if pair in counted_keywords:continue
             if re.search(r'(?<!\w)'+re.escape(word.casefold())+r'(?!\w)',source):
+                counted_keywords.add(pair)
                 keyword_counts[word]+=1
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})

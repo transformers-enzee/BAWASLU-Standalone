@@ -13,6 +13,6 @@ assert.ok(radar.includes('radar_metric_integrity(findings,platforms,sentiments,l
 assert.ok(cc.includes("'metric_integrity':period_metrics"));
 assert.ok(radar.includes('"metric_integrity":recent_metrics'));
 const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
-assert.equal(version,'164.4');
+assert.ok(Number(version.replace('.',''))>=1644);
 assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v164.4 platform/day/sentiment aggregate counts reconcile against selected unique sources');

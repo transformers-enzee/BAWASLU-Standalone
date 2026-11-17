@@ -827,6 +827,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'can_correct':_editable(p,campaign)})
         return {'assessments':output[:100],'paid_provider_called':False}
     if action=='campaignAIWorkerReadiness':
+        from .campaign_assessment_coverage import campaign_link_assessment_coverage
         import os
         from .models import AIBudgetReservation
         selected=str(id or (data or {}).get('campaign_id') or '')
@@ -853,14 +854,20 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'per_run_request_limit':per_run,'daily_reserved':used_today,
                 'lifetime_reserved':used_lifetime,
                 'ready_to_process':bool(worker and enabled and dialect=='postgresql' and daily and lifetime and per_run and os.getenv('OPENAI_API_KEY','').strip()),
+                'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id),
                 'paid_provider_called':False}
     if action=='campaignAssessmentJobReconcile':
         from .auto_relevance import enqueue_campaign_evidence
+        from .campaign_assessment_coverage import campaign_link_assessment_coverage
         campaign_id=str(id or (data or {}).get('campaign_id') or '')
         if not campaign_id.isdigit():raise ValueError('Select a campaign')
         campaign=db.get(MonitoringCampaign,int(campaign_id))
         if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
         if not _editable(p,campaign):raise PermissionError('Only a campaign editor may reconcile job records')
+        if (data or {}).get('dry_run') is True:
+            return {'campaign_id':str(campaign.id),
+                    'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id),
+                    'paid_provider_called':False,'database_writes':0,'socialcrawl_credits':0}
         created=enqueue_campaign_evidence(campaign.id)
         return {'created_pending_jobs':created,'paid_provider_called':False,'socialcrawl_credits':0}
     if action=='campaignClassificationBatchPreview':

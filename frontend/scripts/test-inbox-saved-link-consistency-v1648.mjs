@@ -11,6 +11,7 @@ for(const token of ['def inbox_saved_link_consistency',
 assert.ok(radar.includes('saved_link_consistency=inbox_saved_link_consistency(inbox.get("findings") or [])'));
 assert.ok(radar.includes('"saved_link_consistency":saved_link_consistency'));
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(main.includes("'build_version':'164.8'"));
-assert.ok(shell.includes('data-build-version="164.8"'));
+const version=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1648);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
 console.log('PASS v164.8 cross-campaign saved assessment conflicts visible pre-dedup without raw evidence');

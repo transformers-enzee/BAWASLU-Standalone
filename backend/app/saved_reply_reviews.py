@@ -1,6 +1,7 @@
 """Persistent owned Assistant review progress, separate from legal acceptance."""
 import json, hashlib
 from datetime import datetime
+from collections import Counter
 from fastapi import APIRouter,Depends,HTTPException,Response
 from pydantic import BaseModel,Field
 from sqlalchemy import Integer,String,DateTime,Boolean,ForeignKey,UniqueConstraint,update
@@ -71,19 +72,40 @@ def _output(x,stale=False):
  "review_state":x.review_state,"evidence_checked":x.evidence_checked,
  "reviewer_id":x.reviewer_id,"review_route":x.review_route,
  "version":x.version,"updated_at":x.updated_at.isoformat(),"saved_reply_changed":stale,
+ "effective_review_state":"RECHECK_SAVED_REPLY" if stale else x.review_state,
+ "evidence_check_current":bool(x.evidence_checked and not stale),
  "human_accuracy":None,"legal_signoff":False,"client_acceptance":False}
 
 @router.get("")
 def list_reviews(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
  _gate(db,user)
  rows=db.query(SavedReplyReview).filter(SavedReplyReview.owner_id==user.id).order_by(SavedReplyReview.updated_at.desc()).limit(120).all()
+ # Owned threads are fetched once for this request, with no global cache.
+ ids=list({row.thread_id for row in rows})
+ owned={row.id:row for row in (db.query(AssistantThread).filter(
+  AssistantThread.user_id==user.id,AssistantThread.id.in_(ids)).all() if ids else [])}
  out=[]
  for r in rows:
-  try:_,_,fingerprint=_owned(db,user,r.thread_id,r.answer_message_index)
-  except HTTPException:fingerprint=None
-  out.append(_output(r,fingerprint!=r.reply_fingerprint))
+  stamp=None
+  thread=owned.get(r.thread_id)
+  if thread is not None:
+   try:
+    messages=_read_messages(thread)
+    scope=_reply_scope(messages,r.answer_message_index)
+    if scope["eligible"]:
+     pair=messages[r.answer_message_index-1:r.answer_message_index+1]
+     stamp=hashlib.sha256(json.dumps(pair,sort_keys=True,
+      ensure_ascii=False,separators=(",",":")).encode()).hexdigest()
+   except HTTPException:
+    pass
+  out.append(_output(r,stamp!=r.reply_fingerprint))
+ counts=dict(sorted(Counter(x["effective_review_state"] for x in out).items()))
  response.headers["Cache-Control"]="private, no-store"
  return {"schema":"BAWASLU_PERSISTENT_REPLY_REVIEWS_V1630","records":out,
+ "review_progress_counts":counts,"review_count":len(out),
+ "stale_review_count":counts.get("RECHECK_SAVED_REPLY",0),
+ "completed_current_count":sum(counts.get(s,0) for s in COMPLETE),
+ "counts_are_owned_operational_progress_only":True,
  "model_accuracy_measured":False,"formal_client_acceptance":False}
 
 @router.post("")
@@ -118,16 +140,18 @@ def save_review(payload:ReviewSave,response:Response,user:User=Depends(current_u
  else:
   if old.version!=payload.expected_version or old.reply_fingerprint!=fingerprint:
    raise HTTPException(409,"Review version or saved reply changed; reload")
+  previous_state=old.review_state
   changed=db.execute(update(SavedReplyReview).where(
    SavedReplyReview.id==old.id,SavedReplyReview.owner_id==user.id,
    SavedReplyReview.version==payload.expected_version,
    SavedReplyReview.reply_fingerprint==fingerprint).values(
     review_state=payload.review_state,evidence_checked=payload.evidence_checked,
-    reviewer_id=user.id,review_route=route,version=payload.expected_version+1,updated_at=now))
+    reviewer_id=user.id,review_route=route,version=payload.expected_version+1,updated_at=now),
+    execution_options={"synchronize_session":False})
   if changed.rowcount!=1:
    db.rollback()
    raise HTTPException(409,"Concurrent review; reload")
-  db.add(SavedReplyReviewEvent(review_id=old.id,actor_id=user.id,from_state=old.review_state,
+  db.add(SavedReplyReviewEvent(review_id=old.id,actor_id=user.id,from_state=previous_state,
    to_state=payload.review_state,version=payload.expected_version+1,at=now))
  db.commit()
  result=db.query(SavedReplyReview).filter(SavedReplyReview.owner_id==user.id,
@@ -146,6 +170,7 @@ def history(thread_id:str,index:int,response:Response,user:User=Depends(current_
  if r is None:raise HTTPException(404,"Review unavailable")
  events=db.query(SavedReplyReviewEvent).filter(SavedReplyReviewEvent.review_id==r.id).order_by(SavedReplyReviewEvent.id).limit(100).all()
  response.headers["Cache-Control"]="private, no-store"
- return {"record":_output(r),"events":[{"actor_user_id":e.actor_id,
+ _,_,fingerprint=_owned(db,user,thread_id,index)
+ return {"record":_output(r,fingerprint!=r.reply_fingerprint),"events":[{"actor_user_id":e.actor_id,
    "from_state":e.from_state,"to_state":e.to_state,"version":e.version,
    "at":e.at.isoformat()} for e in events],"legal_signoff":False,"client_acceptance":False}

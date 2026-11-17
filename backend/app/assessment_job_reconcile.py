@@ -4,6 +4,7 @@ Call only after an authorized campaign editor invokes reconciliation, or an
 already-guarded AI worker invokes its existing enqueue step. No provider call,
 no automatic retry of FAILED/COMPLETED jobs and no watchlist-account work.
 """
+from datetime import datetime
 from sqlalchemy import and_, func, or_
 from .models import CampaignEvidence, EvidenceAssessment, AIAssessmentJob
 
@@ -40,8 +41,13 @@ def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
         .order_by(CampaignEvidence.id.asc()).limit(limit).all())
     ids=[int(rid) for (rid,) in candidate_rows]
     if not ids:return 0
+    # Explicit values are required for reconciliation SQL paths: some existing
+    # PostgreSQL installations have NOT NULL columns without server defaults.
+    # Never depend on ORM-only defaults for bulk insertion.
+    now=datetime.utcnow()
     values=[{"campaign_id":cid,"result_id":rid,"state":"PENDING",
-             "attempts":0} for rid in ids]
+             "attempts":0,"last_error":"","created_at":now,"updated_at":now}
+            for rid in ids]
     dialect=db.bind.dialect.name
     if dialect=="postgresql":
         from sqlalchemy.dialects.postgresql import insert

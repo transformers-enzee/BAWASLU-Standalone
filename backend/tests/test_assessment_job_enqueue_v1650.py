@@ -87,3 +87,15 @@ def test_no_provider_network_activity_or_assessment_mutation():
         assert before==[(a.id,a.relevance_label,a.assessment_version)
                         for a in db.query(EvidenceAssessment).all()]
     finally:db.close();engine.dispose()
+
+def test_new_pending_jobs_populate_required_fields_without_server_defaults():
+    engine,db=fixture()
+    try:
+        link(db,12,4242,labels=("UNASSESSED",))
+        assert enqueue_unassessed_campaign_jobs(db,12)==1
+        job=db.query(AIAssessmentJob).filter_by(campaign_id=12,result_id=4242).one()
+        assert job.state=="PENDING" and job.attempts==0
+        assert job.last_error==""
+        assert job.created_at is not None and job.updated_at is not None
+        assert enqueue_unassessed_campaign_jobs(db,12)==0
+    finally:db.close();engine.dispose()

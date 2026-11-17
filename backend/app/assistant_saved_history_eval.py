@@ -243,6 +243,12 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             "unavailable":totals["UNAVAILABLE"]+totals["SOURCE_UNAVAILABLE"],
             "unavailable_source":totals["SOURCE_UNAVAILABLE"],
             "results":output,
+            "reason_code_counts":dict(sorted(Counter(
+                x["reason_code"] for x in output if x["status"]!="AUDITED"
+            ).items())),
+            "selection_method":"EXPLICIT_USER_SELECTED_REPLIES",
+            "selected_reply_count":len(selections),
+            "batch_is_representative":False,
             "issue_category_occurrences":dict(sorted(issue_categories.items())),
             "issue_counts_are_unverified_diagnostic_occurrences":True,
             "selection_not_random_or_representative":True,

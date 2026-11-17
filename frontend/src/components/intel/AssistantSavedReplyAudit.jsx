@@ -4,6 +4,7 @@ import {addAnswerAuditFindings,exportAnswerAuditIssueRegister} from '@/lib/assis
 export default function AssistantSavedReplyAudit({disabled=false}){
  const [items,setItems]=useState([]);
  const [selected,setSelected]=useState('');
+ const [batchSelected,setBatchSelected]=useState([]);
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState('');
  const [audit,setAudit]=useState(null);
@@ -23,7 +24,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   return data;
  }
  async function load(){
-  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');
+  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');setBatchSelected([]);
   try{
    const data=await request('saved-reply-candidates');
    if(data.schema!=='BAWASLU_SAVED_REPLY_CANDIDATES_V1616')throw Error('Unknown reply inventory format');
@@ -31,8 +32,18 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   }catch(e){setError(e.message||'Could not load owned replies')}
   finally{setLoading(false)}
  }
+ function toggleBatch(item){
+  const key=item.thread_id+':'+item.answer_message_index;
+  setBatchSelected(previous=>{
+   if(previous.includes(key))return previous.filter(x=>x!==key);
+   if(previous.length>=5)return previous;
+   return [...previous,key];
+  });
+  setBatch(null);setNotice('');
+ }
  async function runBatch(){
-  const selections=items.filter(x=>x.eligible).slice(0,5)
+  const selections=batchSelected.map(key=>items.find(x=>x.thread_id+':'+x.answer_message_index===key))
+   .filter(Boolean)
    .map(x=>({thread_id:x.thread_id,answer_message_index:x.answer_message_index}));
   if(!selections.length||loading)return;
   setLoading(true);setError('');setBatch(null);setNotice('');
@@ -102,14 +113,27 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    onClick={load}>{loading?'Checking…':'Find my saved replies'}</button>
   {items.length>0&&<div className="space-y-2">
    <p className="text-[11px] text-[#60748a]">
-    Bulk audit uses up to five eligible saved replies from the list. Each is
-    rechecked under current access rights; unavailable sources remain failures
-    rather than being skipped as passing answers.
+    Choose up to five saved replies for the batch ({batchSelected.length}/5 selected).
+    An ineligible reply can be included to document its reason code; it will not
+    bypass evidence authorization. No answers are generated and no accuracy score is inferred.
    </p>
+   <div data-testid="assistant-batch-selection" className="max-h-44 overflow-auto space-y-1 rounded-md border border-[#d9e2e9] bg-white p-2">
+    {items.map(x=>{
+     const key=x.thread_id+':'+x.answer_message_index;
+     const checked=batchSelected.includes(key);
+     return <label key={key} className="flex items-start gap-2 text-xs">
+      <input type="checkbox" checked={checked}
+       disabled={disabled||loading||(!checked&&batchSelected.length>=5)}
+       onChange={()=>toggleBatch(x)}/>
+      <span>{x.thread_id.slice(0,8)} · reply {x.answer_message_index+1} ·
+       {' '}{x.saved_source_count} saved sources · {x.eligible?'Eligible for recheck':x.reason_code}</span>
+     </label>;
+    })}
+   </div>
    <button type="button" className="intel-ghost text-xs"
     data-testid="assistant-run-saved-reply-batch"
-    disabled={disabled||loading||!items.some(x=>x.eligible)}
-    onClick={runBatch}>{loading?'Checking…':'Audit up to five saved replies'}</button>
+    disabled={disabled||loading||batchSelected.length===0}
+    onClick={runBatch}>{loading?'Checking…':'Audit '+batchSelected.length+' selected saved replies'}</button>
    <label htmlFor="assistant-saved-reply-choice" className="block text-xs font-semibold">
     Saved reply to audit
    </label>
@@ -137,6 +161,9 @@ export default function AssistantSavedReplyAudit({disabled=false}){
     className="rounded-md border border-[#d9e2e9] bg-white p-2 space-y-2">
    <p className="text-xs font-semibold">Batch review: {batch.audited} audited,
     {' '}{batch.ineligible} ineligible, {batch.unavailable} unavailable</p>
+   <p className="text-[11px] text-[#60748a]">{batch.selected_reply_count} explicitly selected replies. No random or representative sampling.</p>
+   {Object.entries(batch.reason_code_counts||{}).map(([code,count])=>
+    <p className="text-xs text-amber-800" key={code}>{code.replaceAll('_',' ')}: {count} reply(s)</p>)}
    <p className="text-[11px] text-[#876532]">
     Counts refer only to this bounded, self-selected session; warnings are not
     verified AI errors, legal conclusions or a representative accuracy score.

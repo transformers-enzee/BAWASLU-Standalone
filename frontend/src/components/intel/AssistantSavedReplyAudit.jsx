@@ -196,7 +196,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    {audit.historical_citation_coverage&&<p className="text-xs text-amber-800">
     Historical citation coverage: {audit.historical_citation_coverage.replaceAll('_',' ').toLowerCase()}.
     This is an attribution-format finding, not a factual-accuracy verdict.
-   </p>
+   </p>}
    {audit.cited_only_source_count>0&&<p className="text-xs text-[#876532]">
     {audit.cited_only_source_count} cited source(s) were missing from the historical cards and individually reauthorized for review.
    </p>}

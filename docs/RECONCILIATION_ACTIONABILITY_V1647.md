@@ -1,0 +1,7 @@
+# v164.7 — Distinguish presentation repetition from actionable count discrepancies
+
+The same social source can legitimately appear in multiple thematic findings. v164.3–v164.6 correctly deduplicated displayed totals, but marked any such duplicate presentation as a failed reconciliation—even when source-level totals matched perfectly. v164.7 corrects that false alarm. Both Inbox count-integrity and Radar metric-integrity retain original duplicate occurrence counters and diagnostics for transparency, but distinguish `PRESENTATION_REPEAT_ONLY` from actual mismatches. Repeats without other problems now pass internal count reconciliation.
+
+Missing or unexpected selected sources still fail; repeated copies with disagreement in saved platform, sentiment, actor or incident-location metadata still fail; wrong platform, sentiment or source totals still fail. New stable `reconciliation_state`, `actionable_*_discrepancies`, and concise officer next-check guidance use existing permission-filtered, in-memory records. No automatic rewriting of officer sentiment or verification status. No additional database reads, AI/provider calls, migration or new developer-only UI.
+
+Regression tests verify benign duplicates, conflicting duplicates, genuinely wrong totals, missing/unexpected sources, clean and empty authorized scopes. Passing arithmetic is not evidence of factual verification or client acceptance.

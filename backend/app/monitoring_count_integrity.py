@@ -47,6 +47,9 @@ def inbox_window_integrity(raw_rows,grouped_findings):
     unique=set(grouped)
     missing=eligible-unique
     unexpected=unique-eligible
+    actionable=[]
+    if missing:actionable.append("MISSING_ELIGIBLE_GROUPED_SOURCES")
+    if unexpected:actionable.append("UNEXPECTED_GROUPED_SOURCES")
     return {
       "scope":"AUTHORIZED_RECENT_INBOX_RELEVANT_ONLY",
       "eligible_distinct_saved_sources":len(eligible),
@@ -55,7 +58,12 @@ def inbox_window_integrity(raw_rows,grouped_findings):
       "source_duplicate_occurrences":len(grouped)-len(unique),
       "missing_eligible_sources":len(missing),
       "unexpected_grouped_sources":len(unexpected),
-      "internal_count_reconciliation_passed":not missing and not unexpected and len(grouped)==len(unique),
+      "internal_count_reconciliation_passed":not actionable,
+      "actionable_count_discrepancies":actionable,
+      "reconciliation_state":("MISSING_OR_UNEXPECTED_SOURCE" if actionable
+                            else "PRESENTATION_REPEAT_ONLY" if len(grouped)>len(unique)
+                            else "CONSISTENT"),
+      "presentation_duplicate_occurrences":len(grouped)-len(unique),
       "all_campaign_captured_period_directly_comparable":False,
       "window_is_exhaustive":False,
       "different_denominators_must_not_be_subtracted":True,

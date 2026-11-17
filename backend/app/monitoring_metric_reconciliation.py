@@ -134,6 +134,9 @@ def radar_metric_integrity(findings,platform_counts,sentiment_counts,source_tota
     actual_sentiment=Counter({str(k):int(v) for k,v in (sentiment_counts or {}).items()})
     mismatches=[]
     source_conflicts=radar_source_conflicts(findings)
+    # Repetition across finding groups can be a legitimate presentation
+    # relationship. Report it, but never classify it as a count failure if
+    # source-level aggregates already use distinct IDs.
     if duplicates:mismatches.append("SOURCES_REPEATED_ACROSS_FINDINGS")
     if source_conflicts["metadata_conflicts_detected"]:
         mismatches.append("REPEATED_SOURCE_METADATA_CONFLICT")
@@ -142,6 +145,19 @@ def radar_metric_integrity(findings,platform_counts,sentiment_counts,source_tota
         mismatches.append("PLATFORM_COUNTS_DIFFER_FROM_SOURCE_INVENTORY")
     if dict(+actual_sentiment)!=dict(+expected_sentiment):
         mismatches.append("SENTIMENT_COUNTS_DIFFER_FROM_SOURCE_INVENTORY")
+    actionable=[code for code in mismatches if code!="SOURCES_REPEATED_ACROSS_FINDINGS"]
+    status=("METRIC_MISMATCH" if any(code.endswith("_DIFFER_FROM_SOURCE_INVENTORY") or
+            code=="SOURCE_TOTAL_DIFFERS_FROM_DISTINCT_IDS" for code in actionable)
+            else "METADATA_CONFLICT" if actionable
+            else "PRESENTATION_REPEAT_ONLY" if duplicates else "CONSISTENT")
+    next_check=(
+       "Inspect distinct source totals and aggregator input for the same authorized Inbox window."
+       if status=="METRIC_MISMATCH" else
+       "Inspect saved assessment versions and officer overrides for the conflicting source metadata."
+       if status=="METADATA_CONFLICT" else
+       "No counting correction indicated; repeated source presentation is already deduplicated."
+       if status=="PRESENTATION_REPEAT_ONLY" else
+       "No source-count discrepancy detected in the selected window.")
     return {
       "scope":"AUTHORIZED_RECENT_INBOX_RELEVANT_ONLY",
       "distinct_source_count":len(unique),
@@ -149,8 +165,12 @@ def radar_metric_integrity(findings,platform_counts,sentiment_counts,source_tota
       "repeated_source_metadata":source_conflicts,
       "platform_sum":sum(actual_platform.values()),
       "sentiment_sum":sum(actual_sentiment.values()),
-      "internal_metric_reconciliation_passed":not mismatches,
+      "internal_metric_reconciliation_passed":not actionable,
       "internal_metric_discrepancies":mismatches,
+      "actionable_metric_discrepancies":actionable,
+      "reconciliation_state":status,
+      "recommended_next_check":next_check,
+      "presentation_duplicate_occurrences":duplicates,
       "sentiment_classification_accuracy_verified":False,
       "all_campaign_captured_period_directly_comparable":False,
       "additional_database_queries":0,

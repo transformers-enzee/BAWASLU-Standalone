@@ -42,8 +42,10 @@ def test_inbox_integrity_flags_duplicate_or_missing_groups():
     source={"canonical_source_id":"social:5"}
     findings=[{"posts":[source,dict(source)]}]
     result=inbox_window_integrity(rows,findings)
-    assert not result["internal_count_reconciliation_passed"]
+    assert result["internal_count_reconciliation_passed"]
     assert result["source_duplicate_occurrences"]==1
+    assert result["reconciliation_state"]=="PRESENTATION_REPEAT_ONLY"
+    assert result["actionable_count_discrepancies"]==[]
     missing=inbox_window_integrity(rows,[])
     assert missing["missing_eligible_sources"]==1
     assert not missing["internal_count_reconciliation_passed"]

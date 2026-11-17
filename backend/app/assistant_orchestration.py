@@ -674,9 +674,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     request = {
         "model": model, "store": False,
         "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus+
-                            ("
-
-"+assessment_focus if assessment_focus else "")},
+                            ("\n\n"+assessment_focus if assessment_focus else "")},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},

@@ -164,9 +164,13 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    <p className="text-[11px] text-[#60748a]">{batch.selected_reply_count} explicitly selected replies. No random or representative sampling.</p>
    {Object.entries(batch.reason_code_counts||{}).map(([code,count])=>
     <p className="text-xs text-amber-800" key={code}>{code.replaceAll('_',' ')}: {count} reply(s)</p>)}
-   {batch.saved_cards_without_displayed_citations>0&&<p className="text-xs text-amber-800">
-    {batch.saved_cards_without_displayed_citations} audited historical reply/replies had saved cards without displayed citations; verify attribution manually.
-   </p>}
+   {Object.entries(batch.citation_coverage_counts||{}).map(([code,count])=>
+    <p className="text-xs text-amber-800" key={code}>
+     {count} audited reply/replies: {code.replaceAll('_',' ').toLowerCase()} — attribution format review only.
+    </p>)}
+   {batch.source_unavailable_review_count>0&&<p className="text-xs text-amber-800">
+    {batch.source_unavailable_review_count} reply/replies could not be checked using current accessible evidence; this is not a confirmed answer error.
+   </p>
    <p className="text-[11px] text-[#876532]">
     Counts refer only to this bounded, self-selected session; warnings are not
     verified AI errors, legal conclusions or a representative accuracy score.
@@ -189,9 +193,10 @@ export default function AssistantSavedReplyAudit({disabled=false}){
     {audit.fresh_source_scope_count} current sources reauthorized · {audit.audit.cited_authorized_ids?.length||0} cited
    </p>
    <p className="text-xs">Automated warning candidates: {audit.audit.issue_triage?.issue_candidate_count||0}</p>
-   {audit.historical_citation_coverage==='SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS'&&<p className="text-xs text-amber-800">
-    Saved source cards exist, but no source citation IDs were displayed in the historical answer. Verify attribution manually.
-   </p>}
+   {audit.historical_citation_coverage&&<p className="text-xs text-amber-800">
+    Historical citation coverage: {audit.historical_citation_coverage.replaceAll('_',' ').toLowerCase()}.
+    This is an attribution-format finding, not a factual-accuracy verdict.
+   </p>
    {audit.cited_only_source_count>0&&<p className="text-xs text-[#876532]">
     {audit.cited_only_source_count} cited source(s) were missing from the historical cards and individually reauthorized for review.
    </p>}

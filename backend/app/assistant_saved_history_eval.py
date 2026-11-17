@@ -106,6 +106,19 @@ def _reply_scope(messages,index):
             "cited_only_source_count":len(cited_only),
             "replay_scope":"SAVED_CARDS_PLUS_EXPLICIT_CITATIONS"}
 
+def _historical_citation_coverage(scope):
+    """Attribution format diagnostic only, never an accuracy verdict."""
+    cards=scope.get("contextual_card_count",0)
+    cited=scope.get("cited_count",0)
+    cited_only=scope.get("cited_only_source_count",0)
+    if cards and not cited:
+        return "SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
+    if cited_only and cards:
+        return "DISPLAYED_CITATIONS_MISSING_FROM_SAVED_CARDS"
+    if cited_only:
+        return "DISPLAYED_CITATIONS_WITHOUT_SAVED_CARDS"
+    return "DISPLAYED_CITATIONS_WITH_SAVED_CARDS"
+
 def _no_store(response):
     response.headers["Cache-Control"]="private, no-store"
     response.headers["X-Evaluation-Generation"]="NONE"
@@ -180,9 +193,7 @@ def saved_reply_audit(
         "all_saved_source_ids_reauthorized":True,
         "fresh_source_scope_count":len(evidence),
         "cited_only_source_count":scope.get("cited_only_source_count",0),
-        "historical_citation_coverage":("SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
-             if scope.get("contextual_card_count",0)>0 and scope["cited_count"]==0
-             else "EXPLICIT_CITATIONS_PRESENT_OR_NO_CARDS"),
+        "historical_citation_coverage":_historical_citation_coverage(scope),
         "audit":result,
         "human_accuracy":None,"factual_accuracy_verified":False,
         "legal_signoff_verified":False,"client_acceptance_verified":False,
@@ -247,9 +258,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         reason_code="DETERMINISTIC_SOURCE_REVIEW_ONLY",
                         source_count=len(sources),
                         cited_only_source_count=scope.get("cited_only_source_count",0),
-                        historical_citation_coverage=("SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
-                            if scope.get("contextual_card_count",0)>0 and scope["cited_count"]==0
-                            else "EXPLICIT_CITATIONS_PRESENT_OR_NO_CARDS"),
+                        historical_citation_coverage=_historical_citation_coverage(scope),
                         cited_count=len(result["cited_authorized_ids"]),
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],
@@ -287,6 +296,12 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             "saved_cards_without_displayed_citations":sum(
                 x.get("historical_citation_coverage")=="SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
                 for x in output if x["status"]=="AUDITED"),
+            "citation_coverage_counts":dict(sorted(Counter(
+                x["historical_citation_coverage"] for x in output
+                if x["status"]=="AUDITED"
+            ).items())),
+            "source_unavailable_review_count":totals["SOURCE_UNAVAILABLE"],
+            "citation_coverage_is_format_diagnostic_only":True,
             "batch_scoped_evidence_cache_only":True,
             "issue_counts_are_unverified_diagnostic_occurrences":True,
             "selection_not_random_or_representative":True,

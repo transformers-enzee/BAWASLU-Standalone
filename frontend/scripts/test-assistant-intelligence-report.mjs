@@ -38,7 +38,7 @@ assert.ok(page.includes("'CROSS_MODULE_REVIEW'")&&page.includes('formal_selected
 assert.ok(page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights"),
   'only sentiment/social analysis should show the numerical dashboard');
 assert.ok(records.includes("t('sources_heading')"),'visual source gallery present');
-assert.ok(records.includes('featured?.length?featured:records||[]'),'historical social evidence remains visible');
+assert.ok(records.includes('mergeSocialCards(records||[],featured||[])'), 'all retrieved social evidence remains visible, with featured cards deduplicated');
 assert.ok(dashboard.includes('Every chart uses the same')&&dashboard.includes('snapshot.matched_pool_count'),
   'the social dashboard and AI narrative use one clearly disclosed set of posts');
 assert.ok(dashboard.includes('data-advanced-social-metrics'),

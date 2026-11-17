@@ -1,0 +1,3 @@
+# v161.7 — finalize actual saved Assistant reply replay
+
+The v161.6 backend test suite passed 1,196 tests, but the frontend build was interrupted by the older v161.3 contract expecting build label exactly 161.5. The v161.3 and v161.6 contracts now assert minimum versions and exact frontend/backend parity, allowing sequential releases without weakening the source-authorization or privacy checks. The substantive v161.6 feature remains: user-owned saved Assistant replies and their original saved evidence cards are reauthorized against current source permissions and audited read-only; no new model call is made and no human accuracy claim is generated.

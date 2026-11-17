@@ -19,6 +19,7 @@ for(const s of ['assistant-load-saved-replies','assistant-run-saved-reply-audit'
  'assistant-saved-reply-audit-result','assistant-record-saved-reply-candidates'])
  assert.ok(ui.includes(s),s);
 assert.ok(sampler.includes('<AssistantSavedReplyAudit disabled={disabled||loading}/>'));
-assert.ok(main.includes("'build_version':'161.6'"));
-assert.ok(shell.includes('data-build-version="161.6"'));
+const current=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(current.replace('.',''))>=1616);
+assert.ok(shell.includes('data-build-version="'+current+'"'));
 console.log('PASS v161.6 owned answer replay, no source substitution, zero credits and privacy');

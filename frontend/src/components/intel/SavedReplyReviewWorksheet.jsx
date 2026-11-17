@@ -140,7 +140,7 @@ export default function SavedReplyReviewWorksheet({results=[]}){
     {Array.isArray(history[key])&&<div data-testid="saved-reply-review-event-history" className="text-[11px] text-[#60748a]">
      {history[key].length===0?'No recorded events':history[key].map((event,i)=>
       <p key={event.version+':'+i}>Version {event.version}: {event.from_state.replaceAll('_',' ')} → {event.to_state.replaceAll('_',' ')} · reviewer #{event.actor_user_id}</p>)}
-    </div>
+    </div>}
    </div>;
   })}
   <button type="button" className="intel-ghost text-xs" data-testid="export-saved-reply-review-worksheet" onClick={exportLocal}>Export sanitized review worksheet</button>

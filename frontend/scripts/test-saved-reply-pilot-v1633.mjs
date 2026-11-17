@@ -8,6 +8,7 @@ for(const code of ['def pilot_queue','BAWASLU_OWNED_SAVED_REPLY_PILOT_QUEUE_V163
  assert.ok(backend.includes(code),code);
 for(const code of ['assistant-load-pilot-review-queue','assistant-pilot-review-summary',
  'assistant-select-pilot-batch','selectPilotBatch','slice(0,5)'])assert.ok(ui.includes(code),code);
-assert.ok(read('../backend/app/main.py').includes("'build_version':'163.3'"));
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="163.3"'));
+const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1633);
+assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v163.3 owned pilot review inventory and bounded selection');

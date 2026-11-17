@@ -160,6 +160,8 @@ def pilot_queue(response:Response,user:User=Depends(current_user),db:Session=Dep
     "cited_only_source_count":scoped.get("cited_only_source_count",0),
     "pilot_review_state":state,
     "review_version":old.version if old else 0,
+    "reviewer_id":old.reviewer_id if old else None,
+    "last_review_at":old.updated_at.isoformat() if old else None,
     "review_action_required":(
       "INSPECT_HISTORY_FORMAT_MANUALLY" if state=="INELIGIBLE_FOR_AUDIT"
       else "CONTINUE_REVIEW" if state=="NOT_STARTED" else _attention(state)),
@@ -187,6 +189,58 @@ def pilot_queue(response:Response,user:User=Depends(current_user),db:Session=Dep
   "source_permission_rechecked_at_listing":False,
   "human_accuracy":None,"legal_signoff":False,
   "formal_client_acceptance":False,"database_writes":0}
+
+# Read-only handoff metadata. No answers, evidence text, or client decisions.
+_HANDOFF_BUCKETS={
+ "NOT_STARTED":"AWAITING_REVIEW",
+ "PENDING_REVIEW":"AWAITING_REVIEW",
+ "EVIDENCE_CHECK_IN_PROGRESS":"UNDER_REVIEW",
+ "REVIEW_BLOCKED":"BLOCKED",
+ "RECHECK_SAVED_REPLY":"STALE_RECHECK_REQUIRED",
+ "INELIGIBLE_FOR_AUDIT":"INELIGIBLE",
+ "EVIDENCE_CHECKED_FOLLOWUP_NEEDED":"FOLLOWUP_REQUIRED",
+ "EVIDENCE_CHECKED_NO_FURTHER_ACTION":"EVIDENCE_CHECKED_NO_ACTION_PROPOSED",
+}
+
+@router.get("/pilot-handoff")
+def pilot_handoff(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
+ snapshot=pilot_queue(Response(),user,db)
+ records=[{
+  "thread_id":item["thread_id"],
+  "answer_message_index":item["answer_message_index"],
+  "handoff_bucket":_HANDOFF_BUCKETS[item["pilot_review_state"]],
+  "pilot_review_state":item["pilot_review_state"],
+  "eligible":item["eligible"],
+  "review_version":item["review_version"],
+  "reviewer_id":item["reviewer_id"],
+  "last_review_at":item["last_review_at"],
+  "evidence_checked_current":item["evidence_checked_current"],
+  "review_action_required":item["review_action_required"],
+ } for item in snapshot["candidates"]]
+ counts=dict(sorted(Counter(item["handoff_bucket"] for item in records).items()))
+ followups=counts.get("FOLLOWUP_REQUIRED",0)
+ blocked=counts.get("BLOCKED",0)+counts.get("STALE_RECHECK_REQUIRED",0)+counts.get("INELIGIBLE",0)
+ response.headers["Cache-Control"]="private, no-store"
+ return {
+  "schema":"BAWASLU_OWNED_PILOT_HANDOFF_V1634",
+  "owner_user_id":user.id,
+  "scope":"CURRENT_USER_40_LATEST_THREADS_MAX_120_REPLIES",
+  "inventory_count":len(records),
+  "handoff_bucket_counts":counts,
+  "followup_required_count":followups,
+  "blocked_or_recheck_count":blocked,
+  "evidence_checked_no_action_count":counts.get("EVIDENCE_CHECKED_NO_ACTION_PROPOSED",0),
+  "rows":records,
+  "bounded_inventory_not_all_historical_replies":True,
+  "source_authorization_at_export":False,
+  "answer_text_included":False,
+  "source_excerpts_included":False,
+  "human_accuracy":None,
+  "legal_signoff":False,
+  "formal_client_acceptance":False,
+  "model_generation_verified":False,
+  "database_writes":0,
+ }
 
 @router.post("")
 def save_review(payload:ReviewSave,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):

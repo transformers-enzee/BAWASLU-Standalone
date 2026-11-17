@@ -13,6 +13,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
  const [batch,setBatch]=useState(null);
  const [notice,setNotice]=useState('');
  const [pilot,setPilot]=useState(null);
+ const [handoff,setHandoff]=useState(null);
  async function request(path,body){
   const token=window.localStorage.getItem('bawaslu_access_token')||'';
   if(!token)throw Error('An authorized session is required');
@@ -25,8 +26,24 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'Could not inspect saved answers.');
   return data;
  }
+ async function exportPilotHandoff(){
+  setError('');setNotice('');setLoading(true);
+  try{
+   const data=await request('saved-reply-reviews/pilot-handoff');
+   if(data.schema!=='BAWASLU_OWNED_PILOT_HANDOFF_V1634')
+    throw Error('Unknown handoff format');
+   setHandoff(data);
+   const contents=JSON.stringify(data,null,2);
+   const blob=new Blob([contents],{type:'application/json;charset=utf-8'});
+   const url=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=url;a.download='BAWASLU-owned-pilot-handoff-v1634.json';a.click();
+   setTimeout(()=>URL.revokeObjectURL(url),10000);
+   setNotice('Sanitized owner-scoped pilot handoff exported. No accuracy or legal sign-off was inferred.');
+  }catch(e){setError(e.message||'Pilot handoff unavailable')}
+  finally{setLoading(false)}
+ }
  async function loadPilot(){
-  setLoading(true);setError('');setNotice('');setAudit(null);setBatch(null);
+  setLoading(true);setError('');setNotice('');setAudit(null);setBatch(null);setHandoff(null);
   try{
    const data=await request('saved-reply-reviews/pilot-queue');
    if(data.schema!=='BAWASLU_OWNED_SAVED_REPLY_PILOT_QUEUE_V1633')
@@ -47,7 +64,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   setBatch(null);
  }
  async function load(){
-  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');setBatchSelected([]);setPilot(null);
+  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');setBatchSelected([]);setPilot(null);setHandoff(null);
   try{
    const data=await request('saved-reply-candidates');
    if(data.schema!=='BAWASLU_SAVED_REPLY_CANDIDATES_V1616')throw Error('Unknown reply inventory format');
@@ -141,10 +158,16 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    {Object.entries(pilot.pilot_state_counts||{}).map(([state,count])=>
     <p key={state}>{state.replaceAll('_',' ').toLowerCase()}: {count}</p>)}
    <p>No cross-officer inventory, factual accuracy score, or fresh source authorization at listing time.</p>
+   <button type="button" className="intel-ghost text-xs" data-testid="assistant-export-pilot-handoff"
+    disabled={loading||disabled} onClick={exportPilotHandoff}>Export sanitized pilot handoff</button>
+   <p>Handoff includes only a bounded inventory of your own saved reply metadata; it is not all historical replies and does not verify model accuracy or legal acceptance.</p>
    <button type="button" className="intel-ghost text-xs" data-testid="assistant-select-pilot-batch"
     disabled={loading||disabled||!pilot.recommended_next_batch_count}
     onClick={selectPilotBatch}>Select next eligible batch (up to 5)</button>
   </div>}
+  {handoff&&<p data-testid="assistant-pilot-handoff-summary" className="text-xs text-[#60748a]">
+   Exported {handoff.inventory_count} owned reply statuses · {handoff.followup_required_count} follow-up required · {handoff.blocked_or_recheck_count} blocked/recheck · {handoff.evidence_checked_no_action_count} evidence-checked no-action proposed.
+  </p>}
   {items.length>0&&<div className="space-y-2">
    <p className="text-[11px] text-[#60748a]">
     Choose up to five saved replies for the batch ({batchSelected.length}/5 selected).

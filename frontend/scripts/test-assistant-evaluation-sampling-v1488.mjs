@@ -25,8 +25,8 @@ assert.ok(assistant.includes('exact_ids=exact_social_source_ids(question)')&&
  assistant.includes('exact_social_selection_complete(question,chosen,limit)')&&
  assistant.includes('return chosen[:limit],len(exact)'),
  'Explicit saved source IDs cannot drift to unrelated posts');
-assert.ok(api.includes('explicit_social_id=bool(explicit_social_ids)')&&
- api.includes("not evidence and requested=='AUTO' and not explicit_social_id")&&
+assert.ok(api.includes('explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)')&&
+ api.includes("not evidence and requested=='AUTO' and not explicit_saved_id")&&
  api.includes('selected_formal=[]')&&api.includes('context_pdf=[]'),
  'An inaccessible exact source must not trigger GPT general fallback');
 assert.ok(panel.includes('assistant-evaluation-sampler-result')&&

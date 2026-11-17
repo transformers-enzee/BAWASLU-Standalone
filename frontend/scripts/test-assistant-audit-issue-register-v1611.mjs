@@ -11,7 +11,10 @@ assert.equal(addAnswerAuditFindings(rows,fixture).length,1);
 const exportText=exportAnswerAuditIssueRegister(rows);
 assert.equal(JSON.parse(exportText).observed_model_accuracy,null);
 assert.equal(JSON.parse(exportText).human_verified_findings,0);
-assert.ok(!exportText.includes('source_excerpt'));
+assert.deepEqual(Object.keys(JSON.parse(exportText).entries[0]).sort(),
+ ['client_accepted','human_verified','issue_candidates','issue_count','source_ids']);
+assert.equal(JSON.parse(exportText).contains_source_excerpt,false);
+assert.equal(JSON.parse(exportText).contains_raw_answer,false);
 assert.throws(()=>addAnswerAuditFindings([],{...fixture,source_record_ids:['SOCIAL-0']}));
 assert.throws(()=>addAnswerAuditFindings([],{...fixture,issue_triage:{
  ...fixture.issue_triage,issue_candidates:[{category:'LEGAL_SCOPE_REVIEW',code:'=BAD()',human_confirmed:false}]

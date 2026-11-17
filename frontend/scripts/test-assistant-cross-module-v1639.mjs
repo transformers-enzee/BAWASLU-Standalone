@@ -11,6 +11,7 @@ for(const x of ['def cross_module_inventory','explicit_source_links',
 assert.ok(mapping.includes("'origin_source_id':item.source_id"));
 assert.ok(model.includes('"cross_module_inventory":cross_module_inventory(evidence)'));
 assert.ok(model.includes('module_focus=cross_module_instruction(response_profile)'));
-assert.ok(read('../backend/app/main.py').includes("'build_version':'163.9'"));
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="163.9"'));
+const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1639);
+assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v163.9 current selected social vs Inbox source identity, no false corroboration');

@@ -4,6 +4,7 @@ import httpx
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .domain import human_approved_triage, geography_mismatch, triage_review_status
 from .source_retrieval import clean_article_text
+from .assistant_evidence_relevance import formal_source_term_score
 
 class AssistantProviderError(RuntimeError):
     def __init__(self, code, message=''):
@@ -218,12 +219,11 @@ def select_assistant_records(question, rows, limit=12):
             continue
 
         approved=_approved_values(item)
-        hay=' '.join([
-          item.title or '', item.original_content or '', item.province or '', item.regency_city or '',
-          item.platform or '', item.author or '', item.source_name or '', item.review_status or '',
-          item.verification_status or '', json.dumps(approved,ensure_ascii=False)
-        ]).lower()
-        matched=sum(2 for t in tokens if t in hay)
+        # Whole topical terms only: workflow status is NOT source relevance.
+        matched=formal_source_term_score(
+            tokens,item.title or '',item.original_content or '',
+            ' '.join(x for x in (item.province,item.regency_city,item.platform) if x),
+            ' '.join(x for x in (item.author,item.source_name) if x),approved)
         if tokens and matched==0:
             continue
 

@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react';
-import {addAnswerAuditFindings,exportAnswerAuditIssueRegister} from '@/lib/assistantAuditIssueRegister';
+import {addAnswerAuditFindings,exportAnswerAuditIssueRegister,
+ summarizeAnswerAuditIssueRegister,exportAnswerAuditIssueCsv} from '@/lib/assistantAuditIssueRegister';
 
 export default function AssistantSavedAnswerAudit({item,disabled=false}){
  const [answer,setAnswer]=useState('');
@@ -37,11 +38,13 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
   try{setRegister(old=>addAnswerAuditFindings(old,result));setRegisterError('')}
   catch(ex){setRegisterError(ex.message||'Cannot register audit')}
  }
- function exportRegister(){
+ function exportRegister(format='json'){
   try{
-   const blob=new Blob([exportAnswerAuditIssueRegister(register)],{type:'application/json;charset=utf-8'});
+   const csv=format==='csv';
+   const output=csv?exportAnswerAuditIssueCsv(register):exportAnswerAuditIssueRegister(register);
+   const blob=new Blob([output],{type:csv?'text/csv;charset=utf-8':'application/json;charset=utf-8'});
    const url=URL.createObjectURL(blob),a=document.createElement('a');
-   a.href=url;a.download='BAWASLU-AI-QA-issue-candidates-v1611.json';a.click();
+   a.href=url;a.download='BAWASLU-AI-QA-issue-candidates-v1613.'+(csv?'csv':'json');a.click();
    setTimeout(()=>URL.revokeObjectURL(url),10000);setRegisterError('');
   }catch(ex){setRegisterError(ex.message||'Cannot export issue register')}
  }
@@ -106,14 +109,21 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
   </div>}
   <div data-testid="assistant-qa-issue-register" className="border-t border-[#d9e2e9] pt-2 space-y-2">
    <p className="text-xs font-semibold">Session-only QA register · {register.length}/30</p>
-   <p className="text-[11px] text-[#64748b]">Entries are deduplicated by source IDs and issue codes. They are lost on page refresh; no answer or source text is stored.</p>
+   <p className="text-[11px] text-[#64748b]">Repeated warnings are counted per audit; these are not independent answer failures or accuracy measurements. Records disappear on page refresh.</p>
+   {register.length>0&&<div data-testid="assistant-audit-category-summary" className="rounded-md bg-white border border-[#d9e2e9] p-2 space-y-1">
+    <p className="text-xs font-semibold">{summarizeAnswerAuditIssueRegister(register).total_audit_occurrences} audit occurrences, {summarizeAnswerAuditIssueRegister(register).distinct_issue_categories} issue categories</p>
+    {summarizeAnswerAuditIssueRegister(register).next_checks.map(x=><p key={x.category} className="text-[11px]">
+     <strong>{x.category.replaceAll('_',' ')}:</strong> {x.review_instruction}
+    </p>)}
+   </div>}
    {registerError&&<p role="alert" className="text-xs text-red-700">{registerError}</p>}
    {register.length>0&&<div className="flex flex-wrap gap-2">
-    <button type="button" className="intel-ghost text-xs" data-testid="assistant-export-qa-issue-register" onClick={exportRegister}>Export sanitized issue list (.json)</button>
+    <button type="button" className="intel-ghost text-xs" data-testid="assistant-export-qa-issue-register" onClick={()=>exportRegister('json')}>Export sanitized JSON</button>
+    <button type="button" className="intel-ghost text-xs" data-testid="assistant-export-qa-issue-csv" onClick={()=>exportRegister('csv')}>Export sanitized CSV</button>
     <button type="button" className="intel-ghost text-xs" onClick={()=>setRegister([])}>Clear register</button>
    </div>}
    {register.slice(-5).map(x=><p className="text-xs text-[#52647a]" key={x.key}>
-    {x.source_ids.join(', ')} · {x.issue_count} candidate(s)</p>)}
+    {x.source_ids.join(', ')} · {x.issue_count} candidate(s) · {x.occurrences} audit occurrence(s)</p>)}
   </div>
  </div>
 }

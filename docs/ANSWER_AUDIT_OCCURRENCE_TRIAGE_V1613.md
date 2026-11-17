@@ -1,0 +1,5 @@
+# BAWASLU v161.3 — recurring QA warning triage
+
+The existing v161.2 answer-audit register deduplicated repeated identical warning sets without indicating recurrence. This release records bounded occurrence counts for the same source-ID/issue-code fingerprint, separates unique entries from audit attempts, and gives per-category unique-entry and occurrence totals. A fixed review guidance dictionary recommends what an officer should verify for each diagnostic category. All issues remain **automated candidates**, not verified errors, human accuracy or a legal ruling.
+
+The in-memory register now exports sanitized JSON and CSV with exact source IDs, warning types, occurrence counts and generic next steps. CSV escapes cells and guards formula-leading content; input is validated by allowlisted source IDs and issue codes. No model output, question, source excerpt, source URLs or reviewer identity are saved or exported. No database writes, crawling, AI inference, provider credits or Supabase schema changes. Users still need to perform independent evidence review and score original Assistant answers separately.

@@ -10,6 +10,7 @@ import AssistantLegalReviewSummary from '@/components/intel/AssistantLegalReview
 import AssistantReviewConsolidation from '@/components/intel/AssistantReviewConsolidation';
 import AssistantHumanScoring from '@/components/intel/AssistantHumanScoring';
 import AssistantEvaluationSampler from '@/components/intel/AssistantEvaluationSampler';
+import AssistantSavedReplyAudit from '@/components/intel/AssistantSavedReplyAudit';
 import AssistantLegalBenchmark from '@/components/intel/AssistantLegalBenchmark';
 import {textFor} from '@/lib/assistantResponseLocale';
 import AssistantIntelligenceReport from '@/components/intel/AssistantIntelligenceReport';
@@ -176,6 +177,7 @@ export default function IntelligenceAssistant(){
      onPrepare={prompt=>{setQuestion(prompt);setAnalysisMode('DATA');setError('')}}/>
     <AssistantHumanScoring incomingPacket={scoringPacket}/>
     <AssistantReviewConsolidation/>
+    <AssistantSavedReplyAudit disabled={busy||historyBusy}/>
    </div>}
   </section>}
   <div className="flex flex-wrap gap-2">

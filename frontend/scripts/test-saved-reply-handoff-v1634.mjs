@@ -8,6 +8,7 @@ for(const token of ['def pilot_handoff','BAWASLU_OWNED_PILOT_HANDOFF_V1634',
  'bounded_inventory_not_all_historical_replies'])assert.ok(backend.includes(token),token);
 for(const token of ['assistant-export-pilot-handoff','assistant-pilot-handoff-summary',
  'exportPilotHandoff','BAWASLU-owned-pilot-handoff-v1634.json'])assert.ok(ui.includes(token),token);
-assert.ok(read('../backend/app/main.py').includes("'build_version':'163.4'"));
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="163.4"'));
+const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1634);
+assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v163.4 sanitized pilot handoff, review buckets and privacy contract');

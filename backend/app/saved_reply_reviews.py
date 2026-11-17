@@ -121,6 +121,73 @@ def list_reviews(response:Response,user:User=Depends(current_user),db:Session=De
  "counts_are_owned_operational_progress_only":True,
  "model_accuracy_measured":False,"formal_client_acceptance":False}
 
+# Pilot inventory is a bounded, owner-scoped review queue, not an accuracy sample.
+# Reuses saved history and current persisted review state, with no AI generation.
+@router.get("/pilot-queue")
+def pilot_queue(response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
+ _gate(db,user)
+ threads=db.query(AssistantThread).filter(
+  AssistantThread.user_id==user.id).order_by(
+  AssistantThread.updated_at.desc()).limit(40).all()
+ all_reviews=db.query(SavedReplyReview).filter(
+  SavedReplyReview.owner_id==user.id).limit(120).all()
+ existing={(r.thread_id,r.answer_message_index):r for r in all_reviews}
+ records=[]
+ for thread in threads:
+  try:messages=_read_messages(thread)
+  except HTTPException:continue
+  for index,msg in enumerate(messages):
+   if not isinstance(msg,dict) or msg.get("role")!="assistant":continue
+   scoped=_reply_scope(messages,index)
+   old=existing.get((thread.id,index))
+   changed=False
+   if old:
+    if not scoped["eligible"]:
+     changed=True
+    else:
+     pair=messages[index-1:index+1]
+     current=hashlib.sha256(json.dumps(pair,sort_keys=True,
+       ensure_ascii=False,separators=(",",":")).encode()).hexdigest()
+     changed=current!=old.reply_fingerprint
+   if old and changed:state="RECHECK_SAVED_REPLY"
+   elif not scoped["eligible"]:state="INELIGIBLE_FOR_AUDIT"
+   elif old:state=old.review_state
+   else:state="NOT_STARTED"
+   records.append({"thread_id":thread.id,"answer_message_index":index,
+    "eligible":scoped["eligible"],"reason_code":scoped["reason_code"],
+    "saved_source_count":len(scoped["source_ids"]),
+    "displayed_citation_count":scoped["cited_count"],
+    "cited_only_source_count":scoped.get("cited_only_source_count",0),
+    "pilot_review_state":state,
+    "review_version":old.version if old else 0,
+    "review_action_required":(
+      "INSPECT_HISTORY_FORMAT_MANUALLY" if state=="INELIGIBLE_FOR_AUDIT"
+      else "CONTINUE_REVIEW" if state=="NOT_STARTED" else _attention(state)),
+    "evidence_checked_current":bool(old and old.evidence_checked and not changed
+      and scoped["eligible"]),
+    "source_permission_rechecked_at_listing":False})
+   if len(records)>=120:break
+  if len(records)>=120:break
+ priority={"RECHECK_SAVED_REPLY":0,"EVIDENCE_CHECKED_FOLLOWUP_NEEDED":1,
+  "REVIEW_BLOCKED":2,"EVIDENCE_CHECK_IN_PROGRESS":3,"PENDING_REVIEW":4,
+  "NOT_STARTED":5,"INELIGIBLE_FOR_AUDIT":6,
+  "EVIDENCE_CHECKED_NO_FURTHER_ACTION":7}
+ # Stable ties preserve updated-thread order, not a claim about importance.
+ records.sort(key=lambda x:priority.get(x["pilot_review_state"],6))
+ counts=dict(sorted(Counter(x["pilot_review_state"] for x in records).items()))
+ response.headers["Cache-Control"]="private, no-store"
+ return {"schema":"BAWASLU_OWNED_SAVED_REPLY_PILOT_QUEUE_V1633",
+  "candidates":records,"candidate_count":len(records),
+  "eligible_count":sum(x["eligible"] for x in records),
+  "pilot_state_counts":counts,
+  "recommended_next_batch_count":min(5,sum(
+   x["eligible"] and x["pilot_review_state"] not in
+   {"EVIDENCE_CHECKED_NO_FURTHER_ACTION"} for x in records)),
+  "inventory_is_bounded":True,"selection_is_not_representative":True,
+  "source_permission_rechecked_at_listing":False,
+  "human_accuracy":None,"legal_signoff":False,
+  "formal_client_acceptance":False,"database_writes":0}
+
 @router.post("")
 def save_review(payload:ReviewSave,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
  principal=_gate(db,user)

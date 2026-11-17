@@ -12,6 +12,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
  const [register,setRegister]=useState([]);
  const [batch,setBatch]=useState(null);
  const [notice,setNotice]=useState('');
+ const [pilot,setPilot]=useState(null);
  async function request(path,body){
   const token=window.localStorage.getItem('bawaslu_access_token')||'';
   if(!token)throw Error('An authorized session is required');
@@ -24,8 +25,29 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'Could not inspect saved answers.');
   return data;
  }
+ async function loadPilot(){
+  setLoading(true);setError('');setNotice('');setAudit(null);setBatch(null);
+  try{
+   const data=await request('saved-reply-reviews/pilot-queue');
+   if(data.schema!=='BAWASLU_OWNED_SAVED_REPLY_PILOT_QUEUE_V1633')
+    throw Error('Unknown pilot inventory format');
+   setPilot(data);setItems(data.candidates||[]);
+   setSelected('');setBatchSelected([]);
+   setNotice('Pilot queue loaded for your account. Source permissions will be rechecked during audit.');
+  }catch(e){setError(e.message||'Pilot queue unavailable')}
+  finally{setLoading(false)}
+ }
+ function selectPilotBatch(){
+  if(!pilot)return;
+  const eligible=items.filter(x=>x.eligible&&![
+   'EVIDENCE_CHECKED_NO_FURTHER_ACTION','INELIGIBLE_FOR_AUDIT'
+  ].includes(x.pilot_review_state)).slice(0,5);
+  setBatchSelected(eligible.map(x=>x.thread_id+':'+x.answer_message_index));
+  setNotice('Selected up to five eligible replies by pilot workflow status. This is not random sampling.');
+  setBatch(null);
+ }
  async function load(){
-  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');setBatchSelected([]);
+  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');setBatchSelected([]);setPilot(null);
   try{
    const data=await request('saved-reply-candidates');
    if(data.schema!=='BAWASLU_SAVED_REPLY_CANDIDATES_V1616')throw Error('Unknown reply inventory format');
@@ -112,6 +134,17 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   <button type="button" className="intel-ghost text-xs"
    data-testid="assistant-load-saved-replies" disabled={disabled||loading}
    onClick={load}>{loading?'Checking…':'Find my saved replies'}</button>
+  <button type="button" className="intel-ghost text-xs" data-testid="assistant-load-pilot-review-queue"
+   disabled={disabled||loading} onClick={loadPilot}>Load my pilot review queue</button>
+  {pilot&&<div className="text-xs text-[#60748a]" data-testid="assistant-pilot-review-summary">
+   <p className="font-semibold">Pilot readiness: {pilot.candidate_count} owned saved replies, {pilot.eligible_count} eligible for audit.</p>
+   {Object.entries(pilot.pilot_state_counts||{}).map(([state,count])=>
+    <p key={state}>{state.replaceAll('_',' ').toLowerCase()}: {count}</p>)}
+   <p>No cross-officer inventory, factual accuracy score, or fresh source authorization at listing time.</p>
+   <button type="button" className="intel-ghost text-xs" data-testid="assistant-select-pilot-batch"
+    disabled={loading||disabled||!pilot.recommended_next_batch_count}
+    onClick={selectPilotBatch}>Select next eligible batch (up to 5)</button>
+  </div>}
   {items.length>0&&<div className="space-y-2">
    <p className="text-[11px] text-[#60748a]">
     Choose up to five saved replies for the batch ({batchSelected.length}/5 selected).
@@ -127,7 +160,8 @@ export default function AssistantSavedReplyAudit({disabled=false}){
        disabled={disabled||loading||(!checked&&batchSelected.length>=5)}
        onChange={()=>toggleBatch(x)}/>
       <span>{x.thread_id.slice(0,8)} · reply {x.answer_message_index+1} ·
-       {' '}{x.saved_source_count} replay sources · {x.cited_only_source_count||0} cited-only · {x.eligible?'Eligible for recheck':x.reason_code}</span>
+       {' '}{x.saved_source_count} replay sources · {x.cited_only_source_count||0} cited-only · {x.eligible?'Eligible for recheck':x.reason_code}
+       {x.pilot_review_state&&' · Pilot: '+x.pilot_review_state.replaceAll('_',' ').toLowerCase()}</span>
      </label>;
     })}
    </div>

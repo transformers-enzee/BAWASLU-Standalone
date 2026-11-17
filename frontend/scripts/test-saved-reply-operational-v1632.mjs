@@ -8,7 +8,8 @@ for(const s of ['review_action_counts','needs_attention_count','last_owner_revie
 for(const s of ['refresh-saved-review-progress','saved-review-history-truncated',
  'review_action_required','summary.review_action_counts'])assert.ok(ui.includes(s),s);
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(main.includes("'build_version':'163.2'"));
-assert.ok(shell.includes('data-build-version="163.2"'));
-assert.ok(shell.includes('aria-label="Build version">v163.2'));
+const version=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1632);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(shell.includes('aria-label="Build version">v'+version));
 console.log('PASS v163.2 operational reviewer activity, stale history, last-50 window');

@@ -1,0 +1,5 @@
+# v163.3 — Owned Assistant pilot queue
+
+The existing saved-reply evaluation panel gains an opt-in, owner-scoped pilot queue for up to 40 owned threads / 120 saved reply turns. Only active intelligence users with the existing AI-review permission can load it. A read-only server join against up to 120 persisted own review records classifies each historical answer as NOT_STARTED, an existing review state, RECHECK_SAVED_REPLY (fingerprint mismatch), or INELIGIBLE_FOR_AUDIT. Summaries distinguish pending, blocked, stale, follow-up, and completed workflow states. Pilot selection chooses up to five eligible candidates by deterministic workflow priority; no randomly representative sample is asserted.
+
+This is an inventory of user-editable history and saved reviewer progress, NOT verified AI generation provenance or an accuracy result. Source permission is not presumed from saved cards: the existing individual or batch audit reauthorizes each source before any evaluation. No answer excerpts, cross-user records, database writes, new AI calls, legal signoff or client acceptance are added. Remaining real-session and evidence-level QA are outstanding.

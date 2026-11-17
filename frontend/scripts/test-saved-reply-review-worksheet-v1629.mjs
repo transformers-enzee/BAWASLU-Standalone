@@ -21,5 +21,7 @@ const parent=read('src/components/intel/AssistantSavedReplyAudit.jsx');
 for(const s of ['self-attestation','export-saved-reply-review-worksheet','EVIDENCE_CHECKED_'])
  assert.ok(ui.includes(s),s);
 assert.ok(parent.includes('SavedReplyReviewWorksheet'));
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="162.9"'));
+const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1629);
+assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v162.9 local review worksheet: attestation, boundaries, sanitized export');

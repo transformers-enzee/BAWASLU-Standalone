@@ -119,6 +119,23 @@ def _historical_citation_coverage(scope):
         return "DISPLAYED_CITATIONS_WITHOUT_SAVED_CARDS"
     return "DISPLAYED_CITATIONS_WITH_SAVED_CARDS"
 
+def _historical_review_route(status,coverage=None,issue_count=0):
+    """Officer guidance only: never assign accuracy, legal or acceptance status."""
+    if status=="SOURCE_UNAVAILABLE":
+        return "RECHECK_CURRENT_EVIDENCE_ACCESS"
+    if status=="UNAVAILABLE":
+        return "VERIFY_OWNED_HISTORY_SELECTION"
+    if status=="INELIGIBLE":
+        return "INSPECT_HISTORY_FORMAT_MANUALLY"
+    if status!="AUDITED":
+        return "NO_AUTOMATED_REVIEW_ROUTE"
+    if coverage!="DISPLAYED_CITATIONS_WITH_SAVED_CARDS":
+        return "REVIEW_CITATION_ATTRIBUTION"
+    if issue_count>0:
+        return "REVIEW_FLAGGED_CLAIMS_WITH_SOURCES"
+    return "HUMAN_EVIDENCE_SPOT_CHECK"
+
+
 def _no_store(response):
     response.headers["Cache-Control"]="private, no-store"
     response.headers["X-Evaluation-Generation"]="NONE"
@@ -194,6 +211,10 @@ def saved_reply_audit(
         "fresh_source_scope_count":len(evidence),
         "cited_only_source_count":scope.get("cited_only_source_count",0),
         "historical_citation_coverage":_historical_citation_coverage(scope),
+        "review_route":_historical_review_route(
+            "AUDITED",_historical_citation_coverage(scope),
+            result["issue_triage"]["issue_candidate_count"]),
+        "review_route_is_suggestion_only":True,
         "audit":result,
         "human_accuracy":None,"factual_accuracy_verified":False,
         "legal_signoff_verified":False,"client_acceptance_verified":False,
@@ -277,6 +298,9 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                                 reason_code="SOURCE_CONSISTENCY_OR_INPUT")
                 else:
                     raise
+        item["review_route"]=_historical_review_route(
+            item["status"],item.get("historical_citation_coverage"),
+            item.get("issue_candidate_count",0))
         totals[item["status"]]+=1
         output.append(item)
     return {"schema":"BAWASLU_SAVED_REPLY_BATCH_AUDIT_V1618",
@@ -302,6 +326,9 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             ).items())),
             "source_unavailable_review_count":totals["SOURCE_UNAVAILABLE"],
             "citation_coverage_is_format_diagnostic_only":True,
+            "review_route_counts":dict(sorted(Counter(
+                x["review_route"] for x in output).items())),
+            "review_routes_are_unverified_suggestions":True,
             "batch_scoped_evidence_cache_only":True,
             "issue_counts_are_unverified_diagnostic_occurrences":True,
             "selection_not_random_or_representative":True,

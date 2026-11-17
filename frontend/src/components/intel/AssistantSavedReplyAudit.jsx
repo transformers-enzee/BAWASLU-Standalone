@@ -164,6 +164,10 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    <p className="text-[11px] text-[#60748a]">{batch.selected_reply_count} explicitly selected replies. No random or representative sampling.</p>
    {Object.entries(batch.reason_code_counts||{}).map(([code,count])=>
     <p className="text-xs text-amber-800" key={code}>{code.replaceAll('_',' ')}: {count} reply(s)</p>)}
+   {Object.entries(batch.review_route_counts||{}).map(([code,count])=>
+    <p className="text-xs text-[#60748a]" key={code}>
+     {count} reply/replies assigned review step: {code.replaceAll('_',' ').toLowerCase()} (suggested only).
+    </p>)}
    {Object.entries(batch.citation_coverage_counts||{}).map(([code,count])=>
     <p className="text-xs text-amber-800" key={code}>
      {count} audited reply/replies: {code.replaceAll('_',' ').toLowerCase()} — attribution format review only.
@@ -181,6 +185,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    {(batch.results||[]).map(x=><p className="text-xs" key={x.thread_id+':'+x.answer_message_index}>
     Saved thread {x.thread_id.slice(0,8)}, reply {x.answer_message_index+1}:
     {' '}{x.status==='AUDITED'?x.issue_candidate_count+' warning candidate(s) · '+(x.cited_only_source_count||0)+' cited-only sources rechecked':x.reason_code}
+    {' · Suggested review: '+(x.review_route||'not available').replaceAll('_',' ').toLowerCase()}
    </p>)}
    {batch.results?.some(x=>x.status==='AUDITED'&&x.issue_candidate_count>0)&&
     <button type="button" className="intel-ghost text-xs"
@@ -193,6 +198,9 @@ export default function AssistantSavedReplyAudit({disabled=false}){
     {audit.fresh_source_scope_count} current sources reauthorized · {audit.audit.cited_authorized_ids?.length||0} cited
    </p>
    <p className="text-xs">Automated warning candidates: {audit.audit.issue_triage?.issue_candidate_count||0}</p>
+   {audit.review_route&&<p className="text-xs text-[#60748a]">
+    Suggested officer step: {audit.review_route.replaceAll('_',' ').toLowerCase()}. This is not an accuracy finding.
+   </p>}
    {audit.historical_citation_coverage&&<p className="text-xs text-amber-800">
     Historical citation coverage: {audit.historical_citation_coverage.replaceAll('_',' ').toLowerCase()}.
     This is an attribution-format finding, not a factual-accuracy verdict.

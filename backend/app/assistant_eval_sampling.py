@@ -431,18 +431,32 @@ def resolve_mixed_audit_sources(db,principal,request:MixedAnswerAuditRequest):
     wanted_formal=[x for x in ids if x.startswith("INT-")]
     wanted_pdf=[x for x in ids if x.startswith("DOC-")]
     resolved={}
+    # The batch cache belongs only to this authenticated request and principal.
+    # Each selected ID still must occur in the authorized source inventory.
+    cache=principal.get("_assistant_eval_batch_cache") if isinstance(principal,dict) else None
     if wanted_social:
         from .inbox_radar import live_inbox_findings
-        try:
-            findings,_=live_inbox_findings(db,principal)
-        except PermissionError:
-            raise HTTPException(403,"Saved Inbox source access denied")
+        if cache is not None and "scoped_findings" in cache:
+            findings=cache["scoped_findings"]
+        else:
+            try:
+                findings,_=live_inbox_findings(db,principal)
+            except PermissionError:
+                raise HTTPException(403,"Saved Inbox source access denied")
+            if cache is not None:
+                cache["scoped_findings"]=findings
         rows=_authorized_saved_social_rows(findings,wanted_social)
         resolved.update({row["record_id"]:row for row in rows})
     if wanted_formal:
         # Existing domain reader enforces jurisdiction and the recent-500 window.
         # Out-of-window records are unavailable, never silently substituted.
-        for item in list_intelligence(db,principal):
+        if cache is not None and "scoped_formal" in cache:
+            formal=cache["scoped_formal"]
+        else:
+            formal=list_intelligence(db,principal)
+            if cache is not None:
+                cache["scoped_formal"]=formal
+        for item in formal:
             if item.intelligence_id in wanted_formal:
                 row=assistant_evidence_record(item)
                 if row["record_id"] in resolved:

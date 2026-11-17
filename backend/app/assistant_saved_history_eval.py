@@ -180,6 +180,9 @@ def saved_reply_audit(
         "all_saved_source_ids_reauthorized":True,
         "fresh_source_scope_count":len(evidence),
         "cited_only_source_count":scope.get("cited_only_source_count",0),
+        "historical_citation_coverage":("SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
+             if scope.get("contextual_card_count",0)>0 and scope["cited_count"]==0
+             else "EXPLICIT_CITATIONS_PRESENT_OR_NO_CARDS"),
         "audit":result,
         "human_accuracy":None,"factual_accuracy_verified":False,
         "legal_signoff_verified":False,"client_acceptance_verified":False,
@@ -204,6 +207,8 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
         AssistantThread.user_id==user_id,
         AssistantThread.id.in_(thread_ids)).all()
     own={row.id:row for row in rows}
+    # Per-request scoped inventory, not a cross-user or persistent cache.
+    batch_principal={**principal,"_assistant_eval_batch_cache":{}} if isinstance(principal,dict) else principal
     output=[]
     totals=Counter()
     issue_categories=Counter()
@@ -225,7 +230,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         source_ids=scope["source_ids"],
                         question=messages[selection.answer_message_index-1]["text"],
                         answer=messages[selection.answer_message_index]["text"])
-                    sources=resolve_mixed_audit_sources(db,principal,audit)
+                    sources=resolve_mixed_audit_sources(db,batch_principal,audit)
                     result=build_mixed_answer_audit(sources,audit)
                     triage=result["issue_triage"]
                     cats=triage.get("issue_category_counts") or {}
@@ -242,6 +247,9 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         reason_code="DETERMINISTIC_SOURCE_REVIEW_ONLY",
                         source_count=len(sources),
                         cited_only_source_count=scope.get("cited_only_source_count",0),
+                        historical_citation_coverage=("SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
+                            if scope.get("contextual_card_count",0)>0 and scope["cited_count"]==0
+                            else "EXPLICIT_CITATIONS_PRESENT_OR_NO_CARDS"),
                         cited_count=len(result["cited_authorized_ids"]),
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],
@@ -276,6 +284,10 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             "selected_reply_count":len(selections),
             "batch_is_representative":False,
             "issue_category_occurrences":dict(sorted(issue_categories.items())),
+            "saved_cards_without_displayed_citations":sum(
+                x.get("historical_citation_coverage")=="SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS"
+                for x in output if x["status"]=="AUDITED"),
+            "batch_scoped_evidence_cache_only":True,
             "issue_counts_are_unverified_diagnostic_occurrences":True,
             "selection_not_random_or_representative":True,
             "real_model_generation_provenance_verified":False,

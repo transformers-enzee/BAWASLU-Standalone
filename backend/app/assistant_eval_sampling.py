@@ -359,7 +359,7 @@ def saved_answer_audit(
 
 class MixedAnswerAuditRequest(BaseModel):
     """Bounded source IDs; never allow the client to send its own evidence."""
-    source_ids:list[str]=Field(min_length=1,max_length=12)
+    source_ids:list[str]=Field(min_length=1,max_length=20)
     question:str=Field(min_length=3,max_length=1200)
     answer:str=Field(min_length=3,max_length=10000)
 

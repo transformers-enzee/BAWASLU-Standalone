@@ -17,7 +17,7 @@ function vetted(entries){
  if(!Array.isArray(entries)||entries.length>30)throw Error('Invalid issue register');
  return entries.map(entry=>{
   if(!Array.isArray(entry?.source_ids)||!entry.source_ids.length||
-     entry.source_ids.length>8||entry.source_ids.some(x=>typeof x!=='string'||!ID.test(x)))
+     entry.source_ids.length>20||entry.source_ids.some(x=>typeof x!=='string'||!ID.test(x)))
    throw Error('Invalid source references');
   if(!Array.isArray(entry.issue_candidates)||entry.issue_candidates.length>24)
    throw Error('Invalid issue list');
@@ -37,7 +37,7 @@ export function captureAnswerAuditFindings(result){
  const triage=result?.issue_triage,refs=result?.source_record_ids;
  if(triage?.schema!=='BAWASLU_ANSWER_AUDIT_CANDIDATES_V1611')
   throw Error('Unknown audit issue format');
- if(!Array.isArray(refs)||!refs.length||refs.length>8||
+ if(!Array.isArray(refs)||!refs.length||refs.length>20||
     refs.some(x=>typeof x!=='string'||!ID.test(x)))
   throw Error('Invalid source IDs');
  const issues=triage.issue_candidates;

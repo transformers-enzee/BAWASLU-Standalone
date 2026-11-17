@@ -13,7 +13,7 @@ for(const s of ['AssistantThread.user_id==user.id','resolve_mixed_audit_sources(
  'model_calls":0','MAX_SOURCE_CARDS=12','"X-Evaluation-Generation"]="NONE"'])
  assert.ok(api.includes(s),s);
 assert.ok(main.includes('app.include_router(saved_history_eval_router)'));
-assert.ok(audit.includes('max_length=12'));
+assert.ok(audit.includes('max_length=20'));
 assert.ok(audit.includes('retrieve_exact_pdf_pages(db,principal,question,limit=12)'));
 for(const s of ['assistant-load-saved-replies','assistant-run-saved-reply-audit',
  'assistant-saved-reply-audit-result','assistant-record-saved-reply-candidates'])

@@ -21,6 +21,7 @@ router=APIRouter(prefix="/api/assistant-evaluation",tags=["assistant-evaluation"
 _EXACT_REF=re.compile(r"^(?:SOCIAL-[1-9][0-9]{0,11}|INT-[A-Za-z0-9:_-]{1,80}|DOC-[1-9][0-9]{0,11}-P[1-9][0-9]{0,7})$")
 _DISPLAY_REF=re.compile(r"\[((?:SOCIAL|INT)-[A-Za-z0-9:_-]+|DOC-[0-9]+-P[0-9]+)\]")
 MAX_SOURCE_CARDS=12
+MAX_REPLAY_SOURCE_IDS=20
 
 class SavedReplyAuditRequest(BaseModel):
     thread_id:str=Field(min_length=36,max_length=36)
@@ -68,20 +69,42 @@ def _reply_scope(messages,index):
     if not isinstance(text,str) or not isinstance(question,str) or not (3<=len(text)<=10000) or not (3<=len(question)<=1200):
         return {"eligible":False,"reason_code":"ANSWER_OR_QUESTION_LENGTH_UNSUPPORTED","source_ids":[],"cited_count":0}
     cards=answer.get("records")
-    if not isinstance(cards,list) or not cards:
-        return {"eligible":False,"reason_code":"NO_SAVED_EVIDENCE_CARDS","source_ids":[],"cited_count":len(_DISPLAY_REF.findall(text))}
-    if len(cards)>12:
-        return {"eligible":False,"reason_code":"SAVED_EVIDENCE_SCOPE_EXCEEDS_LIMIT","source_ids":[],"cited_count":len(_DISPLAY_REF.findall(text))}
+    displayed=list(dict.fromkeys(_DISPLAY_REF.findall(text)))
+    if cards is not None and not isinstance(cards,list):
+        return {"eligible":False,"reason_code":"INVALID_SAVED_EVIDENCE_CARDS",
+                "source_ids":[],"cited_count":len(displayed)}
+    cards=cards or []
+    if len(cards)>MAX_SOURCE_CARDS:
+        return {"eligible":False,"reason_code":"SAVED_EVIDENCE_SCOPE_EXCEEDS_LIMIT",
+                "source_ids":[],"cited_count":len(displayed)}
     identifiers=[]
     for card in cards:
         identifier=_source_id(card)
         if not identifier:
-            return {"eligible":False,"reason_code":"UNSUPPORTED_SAVED_SOURCE_IDENTIFIER","source_ids":[],"cited_count":len(_DISPLAY_REF.findall(text))}
+            return {"eligible":False,"reason_code":"UNSUPPORTED_SAVED_SOURCE_IDENTIFIER",
+                    "source_ids":[],"cited_count":len(displayed)}
         if identifier not in identifiers:identifiers.append(identifier)
-    if len(identifiers)>MAX_SOURCE_CARDS:
-        return {"eligible":False,"reason_code":"SAVED_EVIDENCE_SCOPE_EXCEEDS_LIMIT","source_ids":[],"cited_count":len(_DISPLAY_REF.findall(text))}
+    # Saved source cards are a contextual shortlist and may omit a valid
+    # source ID that the answer explicitly cites. We must reauthorize EVERY
+    # displayed ID, never call an omitted cited ID forged without checking it.
+    # Malformed references are also rejected; an answer cannot silently
+    # escape source authorization through an invalid citation spelling.
+    if any(not _EXACT_REF.fullmatch(ref) for ref in displayed):
+        return {"eligible":False,"reason_code":"INVALID_DISPLAYED_SOURCE_REFERENCE",
+                "source_ids":[],"cited_count":len(displayed)}
+    cited_only=[ref for ref in displayed if ref not in identifiers]
+    identifiers.extend(cited_only)
+    if not identifiers:
+        return {"eligible":False,"reason_code":"NO_SAVED_EVIDENCE_CARDS_OR_CITATIONS",
+                "source_ids":[],"cited_count":0}
+    if len(identifiers)>MAX_REPLAY_SOURCE_IDS:
+        return {"eligible":False,"reason_code":"COMBINED_SOURCE_SCOPE_EXCEEDS_LIMIT",
+                "source_ids":[],"cited_count":len(displayed)}
     return {"eligible":True,"reason_code":"AUTHORIZATION_RECHECK_REQUIRED",
-            "source_ids":identifiers,"cited_count":len(set(_DISPLAY_REF.findall(text)))}
+            "source_ids":identifiers,"cited_count":len(displayed),
+            "contextual_card_count":len(cards),
+            "cited_only_source_count":len(cited_only),
+            "replay_scope":"SAVED_CARDS_PLUS_EXPLICIT_CITATIONS"}
 
 def _no_store(response):
     response.headers["Cache-Control"]="private, no-store"
@@ -109,6 +132,7 @@ def saved_reply_candidates(
                 "thread_updated_at":row.updated_at.isoformat(),
                 "saved_source_count":len(scoped["source_ids"]),
                 "displayed_citation_count":scoped["cited_count"],
+                "cited_only_source_count":scoped.get("cited_only_source_count",0),
                 "eligible":scoped["eligible"],"reason_code":scoped["reason_code"],
                 "current_source_permissions_rechecked":False})
             if len(candidates)>=120:break
@@ -155,6 +179,7 @@ def saved_reply_audit(
         "history_content_user_editable":True,
         "all_saved_source_ids_reauthorized":True,
         "fresh_source_scope_count":len(evidence),
+        "cited_only_source_count":scope.get("cited_only_source_count",0),
         "audit":result,
         "human_accuracy":None,"factual_accuracy_verified":False,
         "legal_signoff_verified":False,"client_acceptance_verified":False,
@@ -216,6 +241,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                     item.update(status="AUDITED",
                         reason_code="DETERMINISTIC_SOURCE_REVIEW_ONLY",
                         source_count=len(sources),
+                        cited_only_source_count=scope.get("cited_only_source_count",0),
                         cited_count=len(result["cited_authorized_ids"]),
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],

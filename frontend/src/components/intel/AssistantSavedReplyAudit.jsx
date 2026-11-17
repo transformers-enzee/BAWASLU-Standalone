@@ -126,7 +126,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
        disabled={disabled||loading||(!checked&&batchSelected.length>=5)}
        onChange={()=>toggleBatch(x)}/>
       <span>{x.thread_id.slice(0,8)} · reply {x.answer_message_index+1} ·
-       {' '}{x.saved_source_count} saved sources · {x.eligible?'Eligible for recheck':x.reason_code}</span>
+       {' '}{x.saved_source_count} replay sources · {x.cited_only_source_count||0} cited-only · {x.eligible?'Eligible for recheck':x.reason_code}</span>
      </label>;
     })}
    </div>
@@ -173,7 +173,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
      {' '}{count} automated warning occurrence(s)</p>)}
    {(batch.results||[]).map(x=><p className="text-xs" key={x.thread_id+':'+x.answer_message_index}>
     Saved thread {x.thread_id.slice(0,8)}, reply {x.answer_message_index+1}:
-    {' '}{x.status==='AUDITED'?x.issue_candidate_count+' warning candidate(s)':x.reason_code}
+    {' '}{x.status==='AUDITED'?x.issue_candidate_count+' warning candidate(s) · '+(x.cited_only_source_count||0)+' cited-only sources rechecked':x.reason_code}
    </p>)}
    {batch.results?.some(x=>x.status==='AUDITED'&&x.issue_candidate_count>0)&&
     <button type="button" className="intel-ghost text-xs"
@@ -186,6 +186,9 @@ export default function AssistantSavedReplyAudit({disabled=false}){
     {audit.fresh_source_scope_count} current sources reauthorized · {audit.audit.cited_authorized_ids?.length||0} cited
    </p>
    <p className="text-xs">Automated warning candidates: {audit.audit.issue_triage?.issue_candidate_count||0}</p>
+   {audit.cited_only_source_count>0&&<p className="text-xs text-[#876532]">
+    {audit.cited_only_source_count} cited source(s) were missing from the historical cards and individually reauthorized for review.
+   </p>
    {(audit.audit.issue_triage?.issue_candidates||[]).map((x,i)=>
     <p key={x.code+i} className="text-xs">{x.category.replaceAll('_',' ')}: {x.code.replaceAll('_',' ')}</p>)}
    {(audit.audit.issue_triage?.issue_candidate_count||0)>0&&<button type="button"

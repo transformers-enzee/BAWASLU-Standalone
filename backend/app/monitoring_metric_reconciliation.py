@@ -71,6 +71,57 @@ def radar_source_conflicts(findings):
        "no_source_text_or_identifiers_exposed":True,
     }
 
+def inbox_saved_link_consistency(rows):
+    """Detect contradictory saved assessments BEFORE finding-group dedupe.
+
+    Operates only on the already-authorized, relevance-filtered Inbox rows.
+    Counts distinct original source IDs, never exposes IDs or post contents.
+    This deliberately cannot measure all campaign links or unassessed links.
+    """
+    by_source={}
+    inspected=0
+    for row in rows or []:
+        if not isinstance(row,dict):continue
+        # The feed is limited to relevant saved Inbox assessments. Recheck
+        # relevance here so accidental broader callers do not alter scope.
+        relevance=str(row.get("relevance_label") or "").upper()
+        if relevance not in {"RELEVANT","HIGHLY_RELEVANT"}:continue
+        sid=str(row.get("id") or "").strip()
+        cid=str(row.get("campaign_id") or "").strip()
+        if not sid.isdigit() or not cid.isdigit():continue
+        inspected+=1
+        source=by_source.setdefault(sid,{})
+        try:version=int(row.get("assessment_version") or 0)
+        except (TypeError,ValueError):version=0
+        sentiment=_normalized_sentiment(row.get("sentiment"))
+        previous=source.get(cid)
+        if previous is None or (version,int(row.get("assessment_id") or 0))>(previous[0],previous[2]):
+            source[cid]=(version,sentiment,int(row.get("assessment_id") or 0))
+    shared_sources=0
+    conflicting_sources=0
+    for source in by_source.values():
+        if len(source)<2:continue
+        shared_sources+=1
+        if len({saved[1] for saved in source.values()})>1:
+            conflicting_sources+=1
+    return {
+        "scope":"AUTHORIZED_RECENT_INBOX_RELEVANT_SAVED_LINKS_ONLY",
+        "examined_relevant_links":inspected,
+        "distinct_relevant_sources":len(by_source),
+        "multi_campaign_sources":shared_sources,
+        "cross_campaign_sentiment_conflict_sources":conflicting_sources,
+        "reconciliation_state":("REVIEW_SAVED_SENTIMENT_DISAGREEMENT" if conflicting_sources else "NO_CONFLICT_IN_SELECTED_FEED"),
+        "recommended_next_check":(
+           "Inspect permission-authorized campaign assessments and officer sentiment overrides for these sources."
+           if conflicting_sources else "No disagreement detected among assessed sources returned in this bounded feed."
+        ),
+        "all_campaign_assessments_examined":False,
+        "unassessed_links_covered":False,
+        "source_truth_verified":False,
+        "source_ids_or_text_exposed":False,
+        "additional_database_queries":0,
+    }
+
 def radar_source_rollup(findings):
     """Return one metric contribution per distinct original saved Inbox source.
 

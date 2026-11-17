@@ -20,7 +20,7 @@ from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
 from .smart_radar_geography import attach_geo_to_findings
 from .monitoring_count_integrity import inbox_window_integrity
-from .monitoring_metric_reconciliation import radar_metric_integrity, radar_source_rollup, keyword_cloud_source_counts
+from .monitoring_metric_reconciliation import radar_metric_integrity, radar_source_rollup, keyword_cloud_source_counts, inbox_saved_link_consistency
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -263,6 +263,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     geo_mentions=source_rollup["geo_signal_counts"]
     verified_locations=source_rollup["verified_incident_counts"]
     recent_metrics=radar_metric_integrity(findings,platforms,sentiments,len(posts))
+    saved_link_consistency=inbox_saved_link_consistency(inbox.get("findings") or [])
     # Keyword cloud is derived from the main keywords saved for each permitted
     # campaign, counted against actual relevant saved post text (not topic labels).
     # No additional source-row reads; the Inbox payload is already authorized.
@@ -285,6 +286,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     payload={"batch_id":None,"source_total":len(posts),
         "count_integrity":recent_integrity,
         "metric_integrity":recent_metrics,
+        "saved_link_consistency":saved_link_consistency,
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),

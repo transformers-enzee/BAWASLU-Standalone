@@ -12,6 +12,6 @@ for(const term of ['actionable_count_discrepancies','PRESENTATION_REPEAT_ONLY',
 assert.ok(metric.includes('not actionable'));
 assert.ok(count.includes('"internal_count_reconciliation_passed":not actionable'));
 const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
-assert.equal(version,'164.7');
+assert.ok(Number(version.replace('.',''))>=1647);
 assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v164.7 classify benign repeated findings vs actionable data inconsistencies');

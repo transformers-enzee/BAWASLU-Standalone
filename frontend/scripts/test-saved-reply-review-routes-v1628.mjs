@@ -8,6 +8,8 @@ for(const token of ['_historical_review_route','review_route_counts','review_rou
  assert.ok(py.includes(token),token);
 for(const token of ['batch.review_route_counts','x.review_route','audit.review_route'])
  assert.ok(ui.includes(token),token);
-assert.ok(shell.includes('data-build-version="162.8"'));
-assert.ok(shell.includes('aria-label="Build version">v162.8'));
+const ver=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(ver.replace('.',''))>=1628);
+assert.ok(shell.includes('data-build-version="'+ver+'"'));
+assert.ok(shell.includes('aria-label="Build version">v'+ver));
 console.log('PASS v162.8 historical audit reviewer next-step routing guards');

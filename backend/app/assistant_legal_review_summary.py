@@ -12,11 +12,16 @@ _CODES={
     "ARTICLE_OR_CLAIM_ATTRIBUTION","PASSAGE_POLARITY","NUMERIC_OR_DATE",
     "ELECTION_SCOPE","DOCUMENT_REVIEW_PENDING","SOURCE_RELEVANCE",
     "VERSION_OR_EFFECTIVE_DATE","PLATFORM_POLICY_BOUNDARY",
+    "FORMAL_OUTCOME_SOCIAL_ONLY",
 }
 
 def build_legal_review_summary(evidence,cited_ids,grounding,quality):
+    boundary=(quality or {}).get("platform_policy_legal_boundary") or {}
+    provenance=(quality or {}).get("formal_outcome_source_provenance") or {}
     base={"schema":"BAWASLU_LEGAL_REVIEW_SUMMARY_V1529",
-          "applicable":bool((grounding or {}).get("legal_question")),
+          "applicable":bool((grounding or {}).get("legal_question") or
+                            boundary.get("possible_platform_policy_verdicts") or
+                            provenance.get("review_required_count")),
           "status":"OFFICER_REVIEW_REQUIRED",
           "priority_is_legal_severity":False,
           "automated_legal_approval":False,
@@ -71,7 +76,11 @@ def build_legal_review_summary(evidence,cited_ids,grounding,quality):
     if consistency.get("possible_reversal_count"):
         refs=[x.get("cited_page_id") for x in consistency.get("possible_reversals") or []]
         add("PASSAGE_POLARITY","P1",refs,consistency["possible_reversal_count"],["CLAIM"])
-    boundary=(quality or {}).get("platform_policy_legal_boundary") or {}
+    if provenance.get("review_required_count"):
+        social_refs=[ref for item in provenance.get("review_items") or []
+                     for ref in item.get("cited_social_ids",[])]
+        add("FORMAL_OUTCOME_SOCIAL_ONLY","P1",social_refs,
+            provenance["review_required_count"],["CLAIM"])
     if boundary.get("possible_platform_policy_verdicts"):
         refs=[r for item in boundary.get("review_items") or []
               for r in item.get("cited_legal_page_ids",[])]

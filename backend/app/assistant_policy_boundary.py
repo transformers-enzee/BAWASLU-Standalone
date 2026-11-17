@@ -24,8 +24,9 @@ def evaluate_policy_boundary(question,evidence,answer,cited_ids,grounding=None):
           "electoral_law_breach_confirmed":False,
           "current_platform_policy_verified":False,
           "model_calls":0}
-    if not (grounding or {}).get("legal_question"):
-        return base
+    # Even a platform-only question can receive a misleading election-law
+    # PDF citation. The warning concerns the displayed claim-source pairing,
+    # not whether the user's question contained the word "law".
     selected={str(r.get("record_id")):r for r in evidence or []
               if isinstance(r,dict) and r.get("record_id")}
     cited=set(str(r) for r in cited_ids or [] if str(r) in selected)

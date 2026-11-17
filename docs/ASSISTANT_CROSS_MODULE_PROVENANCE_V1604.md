@@ -1,0 +1,7 @@
+# v160.4 — Legal/platform boundary and social-only formal decision warnings
+
+The existing v160.3 platform-policy warning inadvertently required the user's question to be classified as "legal". This made a platform-only prompt blind to definitive claims that a provider's rules had been breached when the local supporting citation was an electoral-law PDF. The warning now depends on the displayed claim and eligible citation, not the question wording. It remains a deterministic review cue, not a policy finding or legal verdict.
+
+A new source-provenance check flags narrow explicit assertions that BAWASLU formally confirmed or established a violation when the *local citations* contain exclusively authorized social-listening posts. Selected formal intelligence and social evidence in the same clause are not automatically verified or flagged as social-only; they still require source-truth and authorization review. Each claim has its own bounded IDs. A standalone next-line citation is local only when that entire line consists of citation IDs. Unselected references, reported speech and hedged wording are not treated as definitive. Existing legal review summary groups social-only formal-decision concerns as P1 officer triage; priority is not legal severity.
+
+All safeguards run offline without paid AI, DB writes, or external official policy validation. Test cases are synthetic and do not establish real-world AI accuracy or BAWASLU client acceptance.

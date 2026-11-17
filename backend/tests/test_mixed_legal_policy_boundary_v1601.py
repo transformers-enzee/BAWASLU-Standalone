@@ -75,10 +75,12 @@ def test_unselected_citation_is_not_legal_support():
     assert a["rejected_unavailable_citations"]==1
     assert q["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
 
-def test_no_legal_question_does_not_invent_legal_boundary_review():
+def test_platform_only_question_still_reviews_election_pdf_misattribution():
     _,q=evaluate("Instagram violates platform policy [DOC-1-P1]",
         question="Summarize these records")
-    assert q["platform_policy_legal_boundary"]["status"]=="NOT_APPLICABLE"
+    assert q["platform_policy_legal_boundary"]["status"]=="REVIEW_REQUIRED"
+    assert q["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==1
+    assert q["platform_policy_legal_boundary"]["platform_breach_confirmed"] is False
 
 def test_human_accuracy_remains_unmeasured():
     _,q=evaluate("Instagram violates platform policy [DOC-1-P1].")

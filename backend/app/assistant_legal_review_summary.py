@@ -59,7 +59,7 @@ def build_legal_review_summary(evidence,cited_ids,grounding,quality):
         add("LEGAL_OUTCOME_OR_ACTION","P1",legal,
             int(bool(g.get("legal_categorical_outcome_needs_officer_review")))+
             int(bool(g.get("legal_enforcement_recommendation_needs_officer_review"))))
-    if not legal:
+    if not legal and (g.get("legal_question") or boundary.get("possible_platform_policy_verdicts")):
         add("ELIGIBLE_LEGAL_SOURCE_MISSING","P1")
     if g.get("rejected_unavailable_citations") or g.get("omitted_excess_citation_count"):
         add("CITATION_INTEGRITY","P1",cited,

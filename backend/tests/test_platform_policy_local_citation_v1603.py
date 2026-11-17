@@ -67,10 +67,12 @@ def test_unselected_reference_cannot_trigger_review_or_count_as_support():
     qa=assess("Instagram violates platform policy.\n[DOC-999-P1]")
     assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
 
-def test_negative_legal_question_remains_out_of_scope():
+def test_platform_only_question_cannot_bypass_source_type_review():
     qa=assess("Instagram violates platform policy.\n[DOC-1-P1]",
               question="Summarize these uploaded posts.")
-    assert qa["platform_policy_legal_boundary"]["status"]=="NOT_APPLICABLE"
+    assert qa["platform_policy_legal_boundary"]["status"]=="REVIEW_REQUIRED"
+    assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==1
+    assert qa["platform_policy_legal_boundary"]["platform_breach_confirmed"] is False
 
 def test_multiple_sources_only_eligible_displayed_legal_pages():
     qa=assess("Instagram violates platform policy.\n[DOC-1-P1] [DOC-2-P1]",

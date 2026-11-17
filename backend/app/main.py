@@ -18,6 +18,7 @@ from .smart_radar import router as smart_radar_router
 from .issue_distribution import router as issue_distribution_router
 from .assistant_history import router as assistant_history_router
 from .assistant_saved_history_eval import router as saved_history_eval_router
+from .saved_reply_reviews import router as saved_reply_reviews_router
 from .assistant_eval_sampling import router as assistant_eval_sampling_router
 from .assistant_acceptance_submissions import router as assistant_acceptance_submissions_router
 from .integration_readiness import router as integration_readiness_router
@@ -51,6 +52,7 @@ app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
 app.include_router(saved_history_eval_router)
+app.include_router(saved_reply_reviews_router)
 app.include_router(assistant_eval_sampling_router)
 app.include_router(assistant_acceptance_submissions_router)
 app.include_router(integration_readiness_router)
@@ -146,7 +148,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'162.9','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'163.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

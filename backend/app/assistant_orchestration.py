@@ -13,7 +13,7 @@ import httpx
 from .assistant_language import language_directive, effective_language
 from .assistant_assessment_focus import assessment_scope, assessment_instruction, assessment_authority_inventory
 from .assistant_cross_module_inventory import cross_module_inventory, cross_module_instruction
-from .assistant_evidence_relevance import retrieval_scope_note
+from .assistant_evidence_relevance import retrieval_scope_note, social_source_term_score
 from .assistant_tags import TAG_SCHEMA, UI_SCHEMA, UI_KEYS, combined_tags, validate_ui_labels
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .intelligence_assistant import (
@@ -189,26 +189,21 @@ def _social_select(rows, question, limit=18):
         content = str(row.get("text_content") or "").strip()
         if not content:
             continue
-        hay = " ".join([content, str(row.get("campaign_name") or ""),
-                        str(row.get("author_name") or ""),
-                        json.dumps(row.get("topic_labels") or [], ensure_ascii=False),
-                        json.dumps(row.get("candidate_signals") or [], ensure_ascii=False)]).casefold()
-        # Prefer posts actually discussing the subject over generic hashtag hits;
-        # keep old records available for explicit historical questions.
-        body=content.casefold()
-        direct_hits=sum(1 for t in terms if re.search(r"(?<!\w)"+re.escape(t.casefold())+r"(?!\w)",body))
-        metadata_hits=sum(1 for t in terms if t.casefold() in hay)
-        if terms and not metadata_hits:
+        # Prefer actual original post text. Topic/actor metadata is a smaller
+        # supporting signal; campaign names alone cannot match the query.
+        topical_score=social_source_term_score(
+            terms,content,row.get("topic_labels") or [],
+            [row.get("author_name") or "",row.get("candidate_signals") or []])
+        if terms and topical_score==0:
             continue
-        score=direct_hits*10 + max(0,metadata_hits-direct_hits)*2 + min(4,len(content)//250)
+        score=topical_score
         if not re.search(r"\b(?:19|20)\d{2}\b",str(question or "")):
             published=str(row.get("published_at") or "")[:10]
             try:
                 age=(date.today()-date.fromisoformat(published)).days
-                if 0<=age<=45:score+=14
-                elif 0<=age<=180:score+=9
-                elif 0<=age<=365:score+=4
-                elif age>730:score-=5
+                if 0<=age<=45:score+=3
+                elif 0<=age<=180:score+=2
+                elif 0<=age<=365:score+=1
             except ValueError:
                 pass
         # Deduplicate source posts linked to multiple campaigns.

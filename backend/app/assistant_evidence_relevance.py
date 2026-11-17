@@ -29,6 +29,22 @@ def formal_source_term_score(terms,title,body,geography="",actors="",approved=No
     secondary+=sum(2 for t in q if t in approved_words)
     return primary+secondary
 
+def social_source_term_score(terms,body,topics=None,actors=None):
+    """Whole-token relevance; original text outweighs secondary metadata.
+
+    Campaign names are excluded, as campaign-scoped retrieval already enforces
+    their context; a shared label is not evidence about an individual post.
+    """
+    q={str(t).casefold() for t in (terms or []) if len(str(t))>=3}
+    if not q:return 0
+    content=_words(body)
+    topic_words=_words(topics)
+    actor_words=_words(actors)
+    direct=sum(20 for t in q if t in content)
+    secondary=sum(3 for t in q if t in topic_words)
+    secondary+=sum(3 for t in q if t in actor_words)
+    return direct+secondary
+
 _INT_ID=re.compile(r"(?<![\w-])INT-[0-9]{4}-[0-9]{6}(?![\w-])",re.I)
 
 def exact_formal_source_ids(question):

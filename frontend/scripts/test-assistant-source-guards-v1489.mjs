@@ -10,7 +10,8 @@ assert.ok(selection.includes('def exact_social_source_ids(question):')&&
  selection.includes('if not exact_social_selection_complete(question,chosen,limit):')&&
  selection.includes('return [],0'),
  'Explicit source queries must fail closed when a named ID is missing');
-assert.ok(api.includes('general=not explicit_social_ids and')&&
+assert.ok(api.includes('general=not explicit_formal_ids and not explicit_social_ids and')&&
+ api.includes('explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)')&&
  api.includes('not exact_social_selection_complete(q,chosen_social,limit=20)')&&
  api.includes('selected_formal=[]')&&api.includes('context_pdf=[]'),
  'Formal/PDF evidence must never substitute a missing exact social source');

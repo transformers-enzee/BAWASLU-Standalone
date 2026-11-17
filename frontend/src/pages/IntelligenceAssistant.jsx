@@ -364,7 +364,11 @@ export default function IntelligenceAssistant(){
         {['CASE_REVIEW','CROSS_MODULE_REVIEW'].includes(m.response_profile)&&m.grounding?.formal_selected_count===0&&<p className="my-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Tidak ditemukan catatan Intelligence Inbox yang relevan dengan pertanyaan dalam cakupan akses ini. Bukti Social Listening tetap merupakan informasi awal yang perlu diverifikasi.</p>}
         {m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels} compact={m.response_profile==='SOCIAL_ANALYSIS'}/>}
-        <AssistantRecords records={m.records} featured={m.featured_sources} language={m.answer_language||'id'} labels={m.presentation_labels} compactPdf={m.response_profile==='PDF_GUIDANCE'} allowAssignments={m.response_profile==='ACTION_REQUEST'}/></>}
+        <AssistantRecords records={m.records} featured={m.featured_sources}
+          citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}
+          language={m.answer_language||'id'} labels={m.presentation_labels}
+          compactPdf={m.response_profile==='PDF_GUIDANCE'}
+          allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'}/></>}
       </div>
      </div>)}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}

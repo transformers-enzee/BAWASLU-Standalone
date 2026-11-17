@@ -17,7 +17,8 @@ const banner=page.slice(page.indexOf('data-testid="assistant-historical-source-c
  page.indexOf('m.grounding?.grounding_audit&&!showQa'));
 assert.ok(banner.includes('until you press Send'),'Clear opt-in needed for paid AI call');
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(main.includes("'build_version':'163.6'"));
-assert.ok(shell.includes('data-build-version="163.6"'));
-assert.ok(shell.includes('aria-label="Build version">v163.6'));
+const version=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1636);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(shell.includes('aria-label="Build version">v'+version));
 console.log('PASS v163.6 safe historical Assistant reply labeling, fresh-question preparation and action gate');

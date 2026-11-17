@@ -22,7 +22,7 @@ assert.equal(json.contains_source_excerpt,false);
 assert.deepEqual(Object.keys(json.entries[0]).sort(),
  ['client_accepted','human_verified','issue_candidates','issue_count','occurrences','source_ids']);
 const csv=exportAnswerAuditIssueCsv(twice);
-assert.ok(csv.includes('"SOCIAL-7 | INT-2026-000001"'));
+assert.ok(csv.includes('"INT-2026-000001 | SOCIAL-7"'));
 assert.ok(csv.includes('"2"'));
 assert.ok(csv.includes('review_instruction'));
 assert.ok(csv.includes('Check the omitted module'));
@@ -37,6 +37,6 @@ for(const key of ['assistant-export-qa-issue-csv','assistant-audit-category-summ
  'summarizeAnswerAuditIssueRegister'])assert.ok(ui.includes(key),key);
 const main=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'utf8');
 const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
-assert.ok(main.includes("'build_version':'161.4'"));
-assert.ok(shell.includes('data-build-version="161.4"'));
+assert.ok(main.includes("'build_version':'161.5'"));
+assert.ok(shell.includes('data-build-version="161.5"'));
 console.log('PASS v161.3 recurring warning aggregation, safe CSV/JSON, human verification boundaries');

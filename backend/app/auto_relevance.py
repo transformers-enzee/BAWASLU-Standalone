@@ -162,6 +162,21 @@ def reserve_automatic_ai_request(db,campaign_id):
         log.exception('AI quota reservation refused')
         return False
 
+def release_unbilled_claim(db,job,reanalysis=False):
+    """Restore a job claim when reservation fails BEFORE any provider request.
+
+    A denied or unavailable budget must not consume a retry or quarantine the
+    source as failed. The claimed PROCESSING row is owned by this worker.
+    """
+    if job.state!='PROCESSING':
+        raise ValueError('Only an unbilled in-flight job can be released')
+    job.state='COMPLETED' if reanalysis else 'PENDING'
+    job.attempts=max(0,int(job.attempts or 0)-1)
+    job.last_error='AI budget reservation unavailable; no provider request sent'
+    job.updated_at=datetime.utcnow()
+    db.commit()
+
+
 def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
@@ -234,11 +249,11 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             db.commit()
             if claimed.rowcount!=1:continue
             db.refresh(job)
-            if (requested_limit is None or target_result_id is not None) and not reserve_automatic_ai_request(db,campaign.id):
-                # Never bill after a failed reservation; do not leave an ambiguous PROCESSING row.
-                job.state='COMPLETED' if reanalysis else ('FAILED' if target_result_id is not None or job.attempts>=3 else 'PENDING')
-                job.last_error='Automatic AI budget reservation unavailable'
-                job.updated_at=datetime.utcnow();db.commit()
+            # Every path (scheduled, explicitly requested batch, and targeted
+            # pilot) must reserve quotas before the first provider request.
+            # A requested_limit is NOT permission to bypass daily/lifetime caps.
+            if not reserve_automatic_ai_request(db,campaign.id):
+                release_unbilled_claim(db,job,reanalysis=reanalysis)
                 break
             used+=1
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy,'relevance_gates':[{'id':q.id,'question':q.question,'required_answer':q.required_answer} for q in active_gates]}

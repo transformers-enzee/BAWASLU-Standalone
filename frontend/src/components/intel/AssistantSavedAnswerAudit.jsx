@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {addAnswerAuditFindings,exportAnswerAuditIssueRegister} from '@/lib/assistantAuditIssueRegister';
 
 export default function AssistantSavedAnswerAudit({item,disabled=false}){
  const [answer,setAnswer]=useState('');
@@ -7,6 +8,8 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
  const [error,setError]=useState('');
  const [mixed,setMixed]=useState(false);
  const [additionalIds,setAdditionalIds]=useState('');
+ const [register,setRegister]=useState([]);
+ const [registerError,setRegisterError]=useState('');
  useEffect(()=>{setAnswer('');setResult(null);setError('');setAdditionalIds('');setMixed(false)},[item?.source_record_id]);
  async function run(){
   if(busy||disabled||!item?.source_record_id||!answer.trim())return;
@@ -29,6 +32,18 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
    setResult(data);
   }catch(e){setError(e.message||'Could not audit the submitted answer.')}
   finally{setBusy(false)}
+ }
+ function addToRegister(){
+  try{setRegister(old=>addAnswerAuditFindings(old,result));setRegisterError('')}
+  catch(ex){setRegisterError(ex.message||'Cannot register audit')}
+ }
+ function exportRegister(){
+  try{
+   const blob=new Blob([exportAnswerAuditIssueRegister(register)],{type:'application/json;charset=utf-8'});
+   const url=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=url;a.download='BAWASLU-AI-QA-issue-candidates-v1611.json';a.click();
+   setTimeout(()=>URL.revokeObjectURL(url),10000);setRegisterError('');
+  }catch(ex){setRegisterError(ex.message||'Cannot export issue register')}
  }
  if(!item)return null;
  return <div data-testid="assistant-saved-answer-audit"
@@ -74,6 +89,13 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
    {result.rejected_unavailable_citation_count>0&&<p className="text-xs text-amber-800">
     {result.rejected_unavailable_citation_count} citation(s) were unavailable in the selected evidence.
    </p>}
+   {result.issue_triage&&<div data-testid="assistant-audit-issue-triage" className="rounded-md border border-[#e5d8bb] bg-white p-2 space-y-1">
+    <p className="font-semibold text-xs">Automated issue candidates: {result.issue_triage.issue_candidate_count}</p>
+    <p className="text-[11px] text-[#64748b]">These candidates are not independently confirmed errors.</p>
+    {result.issue_triage.issue_candidates.map((issue,i)=><p key={issue.category+issue.code+i} className="text-xs">{issue.category.replaceAll('_',' ')}: {issue.code.replaceAll('_',' ')}</p>)}
+    {result.issue_triage.issue_candidate_count>0&&<button type="button" className="intel-ghost text-xs"
+     data-testid="assistant-add-audit-register" onClick={addToRegister}>Add candidates to session register</button>}
+   </div>}
    {(result.checks||[]).map(c=><p key={c.id} className="text-xs">
     <strong>{c.id.replaceAll('_',' ')} — {c.status}</strong>: {c.reason}
    </p>)}
@@ -82,5 +104,16 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
     The source's original claims remain unverified; independent officer assessment is required.
    </p>
   </div>}
+  <div data-testid="assistant-qa-issue-register" className="border-t border-[#d9e2e9] pt-2 space-y-2">
+   <p className="text-xs font-semibold">Session-only QA register · {register.length}/30</p>
+   <p className="text-[11px] text-[#64748b]">Entries are deduplicated by source IDs and issue codes. They are lost on page refresh; no answer or source text is stored.</p>
+   {registerError&&<p role="alert" className="text-xs text-red-700">{registerError}</p>}
+   {register.length>0&&<div className="flex flex-wrap gap-2">
+    <button type="button" className="intel-ghost text-xs" data-testid="assistant-export-qa-issue-register" onClick={exportRegister}>Export sanitized issue list (.json)</button>
+    <button type="button" className="intel-ghost text-xs" onClick={()=>setRegister([])}>Clear register</button>
+   </div>}
+   {register.slice(-5).map(x=><p className="text-xs text-[#52647a]" key={x.key}>
+    {x.source_ids.join(', ')} · {x.issue_count} candidate(s)</p>)}
+  </div>
  </div>
 }

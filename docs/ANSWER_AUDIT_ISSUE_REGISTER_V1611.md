@@ -1,0 +1,5 @@
+# v161.1 — Structured QA candidates and private session issue register
+
+Both saved-source and mixed-source audit results now contain deterministic, warning-only categories for citation integrity, missing source-type citations, formal decision provenance, platform policy authority, legal scope and source relevance. These are issue candidates for human triage, never confirmed errors, formal legal determinations or a model accuracy estimate.
+
+The AI Assistant audit panel lets a reviewer capture those candidates in a session-only list (up to 30 entries), deduplicate by exact source IDs and issue codes, export a sanitized local JSON issue list, and clear the register. No answer text, question text, original source excerpts, source URLs, user identity or reviewer claims are included in the register. Nothing is uploaded, persisted, or added to the database by this feature. The original separate human-scoring workflow remains the only way to collect actual independent review judgments. All tests use isolated fixtures and do not consume AI credits.

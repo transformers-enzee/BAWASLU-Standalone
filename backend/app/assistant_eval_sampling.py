@@ -307,8 +307,11 @@ def build_saved_answer_audit(findings, request:SavedAnswerAuditRequest):
     # contain question tokens; never export raw source text or pasted answers.
     checks=[{"id":c["id"],"status":c["status"],"reason":c["reason"]}
             for c in qa["checks"]]
+    from .assistant_audit_issue_register import classify_answer_audit
+    triage=classify_answer_audit(qa,ground,cited,{row["record_id"]:row["record_type"] for row in evidence})
     return {
         "schema":"BAWASLU_SAVED_ANSWER_AUDIT_V1608",
+        "issue_triage":triage,
         "evaluation_type":"READ_ONLY_DETERMINISTIC_REVIEW_NOT_HUMAN_ACCURACY",
         "sample_scope":"CURRENT_PERMISSION_SCOPED_SAVED_INBOX_WINDOW",
         "source_record_ids":identifiers,
@@ -380,8 +383,11 @@ def build_mixed_answer_audit(evidence,request:MixedAnswerAuditRequest):
     quality=evaluate_answer_quality(request.question,evidence,visible,cited,
                                    profile=selected_profile,grounding=ground)
     issues=(quality.get("legal_review_summary") or {}).get("issues") or []
+    from .assistant_audit_issue_register import classify_answer_audit
+    triage=classify_answer_audit(quality,ground,cited,kinds)
     return {
         "schema":"BAWASLU_MIXED_ANSWER_AUDIT_V1609",
+        "issue_triage":triage,
         "evaluation_type":"AUTHORIZED_SAVED_EVIDENCE_DETERMINISTIC_REVIEW",
         "profile":selected_profile,
         "source_record_ids":list(ids),

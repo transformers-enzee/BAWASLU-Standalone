@@ -14,7 +14,7 @@ assert.ok(campaigns.includes("created=enqueue_campaign_evidence(campaign.id)"));
 assert.ok(campaigns.includes("'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id)"));
 const api=read('../backend/app/main.py');
 const shell=read('src/components/intel/Shell.jsx');
-const version=api.match(/'build_version':'(\\d+\\.\\d+)'/)?.[1];
+const version=api.match(/'build_version':'(\d+\.\d+)'/)?.[1];
 assert.ok(version,'API build version must be declared');
 assert.ok(shell.includes('data-build-version="'+version+'"'));
 assert.ok(shell.includes('>v'+version+'</footer>'));

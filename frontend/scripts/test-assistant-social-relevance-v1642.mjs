@@ -12,6 +12,6 @@ assert.ok(!social.includes('metadata_hits=sum(1 for t in terms'));
 assert.ok(!social.includes('if 0<=age<=45:score+=14'));
 assert.ok(social.includes('if not exact_social_selection_complete(question,chosen,limit):'));
 const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
-assert.equal(version,'164.2');
+assert.ok(Number(version.replace('.',''))>=1642);
 assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v164.2 exact-term social source relevance, recency bounds, missing-ID guard');

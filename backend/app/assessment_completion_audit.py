@@ -4,6 +4,7 @@ An AI usage row can belong to an older assessment version; manual review and
 sentiment-only updates may append later versions. An absent usage-backed
 classification is an audit discrepancy, not permission to retry provider calls.
 """
+from datetime import datetime, timedelta
 from sqlalchemy import and_, case, func, exists
 from .models import AIAssessmentJob, EvidenceAssessment, AssessmentAIUsage, CampaignEvidence
 
@@ -57,6 +58,35 @@ def campaign_completion_audit(db,campaign_id):
     (jobs,complete,good,missing_assessment,invalid_label,missing_usage,
      usage_without_valid_label,zero_attempts,pending,processing,failed)=map(int,counts)
     discrepancies=complete-good
+    # A PROCESSING job older than the interrupted-call grace window is a
+    # historical review signal, NOT a safe instruction to replay provider work.
+    stale_cutoff=datetime.utcnow()-timedelta(minutes=10)
+    stale_processing=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                AIAssessmentJob.state=='PROCESSING',
+                AIAssessmentJob.updated_at<stale_cutoff).scalar()) or 0
+    # Scope the source-side usage audit by both assessment and usage campaign.
+    # A mismatched campaign ID must not be silently considered verified usage.
+    total_usage,mismatched,unreported,negative_tokens,missing_model=(db.query(
+        func.count(AssessmentAIUsage.id),
+        func.coalesce(func.sum(case((
+            AssessmentAIUsage.campaign_id!=EvidenceAssessment.campaign_id,1
+        ),else_=0)),0),
+        func.coalesce(func.sum(case((
+            AssessmentAIUsage.usage_reported==False,1
+        ),else_=0)),0),
+        func.coalesce(func.sum(case((
+            (AssessmentAIUsage.input_tokens<0)|(AssessmentAIUsage.output_tokens<0),1
+        ),else_=0)),0),
+        func.coalesce(func.sum(case((
+            func.length(func.trim(func.coalesce(AssessmentAIUsage.provider_model,'')))==0,1
+        ),else_=0)),0))
+        .join(EvidenceAssessment,EvidenceAssessment.id==AssessmentAIUsage.assessment_id)
+        .filter(EvidenceAssessment.campaign_id==cid).one())
     # Historical gaps are not safe to replay. Read only aggregates, never
     # source IDs or individual job metadata. A later edited version can be
     # the latest model even when earlier work is the original assessment.
@@ -125,6 +155,18 @@ def campaign_completion_audit(db,campaign_id):
             'manual_provenance_review_required':int(gap_jobs)>0,
             'automatic_reprocessing_permitted':False,
         },
+        'usage_lineage_quality':{
+            'assessment_linked_usage_rows':int(total_usage),
+            'campaign_id_mismatch':int(mismatched),
+            'provider_usage_not_reported':int(unreported),
+            'negative_token_counts':int(negative_tokens),
+            'provider_model_missing':int(missing_model),
+            'quality_checks_passed':not (mismatched or unreported or negative_tokens or missing_model),
+            'usage_records_repaired':0,
+        },
+        'stale_processing_jobs':int(stale_processing),
+        'stale_processing_requires_history_review':int(stale_processing)>0,
+        'stale_processing_automatically_retried':False,
         'pending_jobs':pending,'processing_jobs':processing,'failed_jobs':failed,
         'completion_reconciled':complete==good,
         'counts_reconciled':jobs==complete+pending+processing+failed,

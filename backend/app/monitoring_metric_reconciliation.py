@@ -4,12 +4,72 @@ Read-only presentation diagnostics, never a claim of data accuracy, source truth
 complete monitoring coverage or a comparison of unlike date populations.
 """
 from collections import Counter
+import re
 
 _VALID_SENTIMENT=("POSITIVE","NEGATIVE","NEUTRAL","UNCLASSIFIED")
 
 def _normalized_sentiment(value):
     val=str(value or "UNCLASSIFIED").upper()
     return val if val in _VALID_SENTIMENT else "UNCLASSIFIED"
+
+def keyword_cloud_source_counts(rows,by_campaign):
+    """Distinct source-keyword counts across authorized campaign links.
+
+    Preserve a readable first-occurring keyword label while counting
+    case-insensitively and never counting the same original source twice.
+    """
+    counts=Counter()
+    display={}
+    seen=set()
+    for row in rows or []:
+        sid=str(row.get("id") or "").strip()
+        cid=str(row.get("campaign_id") or "").strip()
+        content=str(row.get("text_content") or "").casefold()
+        if not sid.isdigit() or not cid.isdigit() or not content:continue
+        for word in by_campaign.get(int(cid),[]):
+            label=str(word).strip()
+            norm=label.casefold()
+            pair=(sid,norm)
+            if len(norm)<3 or pair in seen:continue
+            if re.search(r"(?<!\w)"+re.escape(norm)+r"(?!\w)",content):
+                seen.add(pair)
+                display.setdefault(norm,label)
+                counts[norm]+=1
+    return Counter({display[k]:v for k,v in counts.items()})
+
+def radar_source_conflicts(findings):
+    """Anonymized flags when repeated source cards disagree on key metadata."""
+    fields=("platform","sentiment","verified_incident_province",
+            "candidate_names","geographic_mentions_unverified")
+    first={}
+    conflicting=set()
+    by_field=Counter()
+    for finding in findings or []:
+        for row in finding.get("posts") or []:
+            sid=str(row.get("canonical_source_id") or "").strip()
+            if not sid:continue
+            signature={
+              "platform":str(row.get("platform") or "Unknown").strip().casefold(),
+              "sentiment":_normalized_sentiment(row.get("sentiment")),
+              "verified_incident_province":str(row.get("verified_incident_province") or "").strip().casefold(),
+              "candidate_names":tuple(sorted({str(x).strip().casefold() for x in row.get("candidate_names") or [] if str(x).strip()})),
+              "geographic_mentions_unverified":tuple(sorted({str(x).strip().casefold() for x in row.get("geographic_mentions_unverified") or [] if str(x).strip()})),
+            }
+            if sid not in first:
+                first[sid]=signature
+                continue
+            for field in fields:
+                if signature[field]!=first[sid][field]:
+                    key=(sid,field)
+                    if key not in conflicting:
+                        conflicting.add(key)
+                        by_field[field]+=1
+    return {
+       "conflicting_distinct_sources":len({sid for sid,_ in conflicting}),
+       "conflicting_fields":dict(by_field),
+       "metadata_conflicts_detected":bool(conflicting),
+       "no_source_text_or_identifiers_exposed":True,
+    }
 
 def radar_source_rollup(findings):
     """Return one metric contribution per distinct original saved Inbox source.
@@ -73,7 +133,10 @@ def radar_metric_integrity(findings,platform_counts,sentiment_counts,source_tota
     actual_platform=Counter({str(k):int(v) for k,v in (platform_counts or {}).items()})
     actual_sentiment=Counter({str(k):int(v) for k,v in (sentiment_counts or {}).items()})
     mismatches=[]
+    source_conflicts=radar_source_conflicts(findings)
     if duplicates:mismatches.append("SOURCES_REPEATED_ACROSS_FINDINGS")
+    if source_conflicts["metadata_conflicts_detected"]:
+        mismatches.append("REPEATED_SOURCE_METADATA_CONFLICT")
     if int(source_total)!=len(unique):mismatches.append("SOURCE_TOTAL_DIFFERS_FROM_DISTINCT_IDS")
     if dict(+actual_platform)!=dict(+expected_platform):
         mismatches.append("PLATFORM_COUNTS_DIFFER_FROM_SOURCE_INVENTORY")
@@ -83,6 +146,7 @@ def radar_metric_integrity(findings,platform_counts,sentiment_counts,source_tota
       "scope":"AUTHORIZED_RECENT_INBOX_RELEVANT_ONLY",
       "distinct_source_count":len(unique),
       "duplicate_source_occurrences":duplicates,
+      "repeated_source_metadata":source_conflicts,
       "platform_sum":sum(actual_platform.values()),
       "sentiment_sum":sum(actual_sentiment.values()),
       "internal_metric_reconciliation_passed":not mismatches,

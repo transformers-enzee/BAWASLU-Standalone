@@ -20,7 +20,7 @@ from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
 from .smart_radar_geography import attach_geo_to_findings
 from .monitoring_count_integrity import inbox_window_integrity
-from .monitoring_metric_reconciliation import radar_metric_integrity, radar_source_rollup
+from .monitoring_metric_reconciliation import radar_metric_integrity, radar_source_rollup, keyword_cloud_source_counts
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -268,7 +268,6 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     # No additional source-row reads; the Inbox payload is already authorized.
     from .models import MonitoringCampaign
     from .access import allowed
-    keyword_counts=Counter()
     linked_campaigns={int(r['campaign_id']) for r in inbox.get('findings',[])
                       if str(r.get('campaign_id') or '').isdigit()}
     configs=db.query(MonitoringCampaign).filter(MonitoringCampaign.id.in_(linked_campaigns)).all() if linked_campaigns else []
@@ -279,20 +278,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         except (ValueError,TypeError): values=[]
         main_by_campaign[campaign.id]=[
             str(v).strip() for v in values if isinstance(v,str) and len(v.strip())>=3][:600]
-    # The same source may be linked to several authorized campaigns.
-    # Count each (original source, normalized keyword) once, not per link.
-    counted_keywords=set()
-    for record in inbox.get('findings',[]):
-        cid=int(record.get('campaign_id') or 0)
-        sid=str(record.get('id') or '').strip()
-        source=str(record.get('text_content') or '').casefold()
-        if not sid.isdigit() or not source:continue
-        for word in main_by_campaign.get(cid,[]):
-            pair=(sid,word.casefold())
-            if pair in counted_keywords:continue
-            if re.search(r'(?<!\w)'+re.escape(word.casefold())+r'(?!\w)',source):
-                counted_keywords.add(pair)
-                keyword_counts[word]+=1
+    keyword_counts=keyword_cloud_source_counts(inbox.get('findings') or [],main_by_campaign)
     from .registry import registry_action
     watchlist=registry_action(db,principal,'watchlistSummary',{})
     assembled_ms=(time.perf_counter()-inbox_started)*1000-inbox_ms

@@ -59,6 +59,7 @@ def test_keyword_cloud_dedup_contract_uses_original_ids_and_casefold():
     from pathlib import Path
     module=Path(__file__).resolve().parents[1]/"app"/"smart_radar.py"
     code=module.read_text()
-    assert "counted_keywords=set()" in code
-    assert "pair=(sid,word.casefold())" in code
-    assert "if pair in counted_keywords:continue" in code
+    assert "keyword_counts=keyword_cloud_source_counts(" in code
+    helper=(Path(__file__).resolve().parents[1]/"app"/"monitoring_metric_reconciliation.py").read_text()
+    assert "pair=(sid,norm)" in helper
+    assert "if len(norm)<3 or pair in seen:continue" in helper

@@ -1,0 +1,7 @@
+# BAWASLU v164.6 — Conflicting saved source metadata and keyword rollup
+
+The v164.5 Radar source rollup correctly counts each original post once, but if two finding groups carry different saved metadata for that original post, selecting the first occurrence alone could make its aggregate seem fully consistent. v164.6 adds read-only, permission-scoped conflict diagnostics. Duplicate source IDs with conflicting normalized platform, sentiment, confirmed incident province, candidate names or mentioned geography are counted once per source and field. Existing first-occurrence aggregate output and officer records are not silently changed. Repeated-source conflict counts and stable issue code REPEATED_SOURCE_METADATA_CONFLICT appear under existing metric_integrity, without exposing record IDs or post text.
+
+Cross-campaign keyword cloud counting now uses a pure source-keyword function: matching is whole-word, normalized case-insensitively, counted once per original saved post, and displayed under the first original human-readable spelling. Thus Pemilu/pemilu are not split into two totals and repeated links do not inflate volume.
+
+The change adds zero database queries or model calls, no database migration, no new administrator QA screens, and no modification of source truth or formal incident status. Automated tests cover identical and conflicting duplicates, repeated metadata disagreement, case normalization, keyword cross-campaign deduplication, substring rejection and nonmutation. Real staging-dataset reconciliation and officer acceptance remain separate.

@@ -11,10 +11,12 @@ assert.ok(radar.includes('posts=source_rollup["posts"]'));
 for(const key of ['platform_counts','sentiment_counts','candidate_mentions',
   'geo_signal_counts','verified_incident_counts'])
  assert.ok(radar.includes('source_rollup["'+key+'"]'),key);
-assert.ok(radar.includes('pair=(sid,word.casefold())'));
-assert.ok(radar.includes('if pair in counted_keywords:continue'));
+assert.ok(radar.includes('keyword_counts=keyword_cloud_source_counts('));
+assert.ok(helper.includes('pair=(sid,norm)'));
+assert.ok(helper.includes('if len(norm)<3 or pair in seen:continue'));
 assert.ok(radar.includes('recent_metrics=radar_metric_integrity(findings,platforms,sentiments,len(posts))'));
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(api.includes("'build_version':'164.5'"));
-assert.ok(shell.includes('data-build-version="164.5"'));
+const version=api.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1645);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
 console.log('PASS v164.5 unique saved-source Radar aggregates and campaign keyword deduplication');

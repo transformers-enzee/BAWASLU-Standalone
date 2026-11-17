@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {ClipboardList,ChevronDown,RefreshCw,FileDown} from 'lucide-react';
+import AssistantSavedAnswerAudit from './AssistantSavedAnswerAudit';
 
 const LABELS={
  POTENTIAL_VIOLATION_SIGNAL:'Potential violation signal',
@@ -18,9 +19,10 @@ export default function AssistantEvaluationSampler({onPrepare,disabled=false}){
  const [data,setData]=useState(null);
  const [error,setError]=useState('');
  const [prepared,setPrepared]=useState('');
+ const [auditItem,setAuditItem]=useState(null);
  async function preparePlan(){
   if(loading||disabled)return;
-  setLoading(true);setError('');setData(null);setPrepared('');
+  setLoading(true);setError('');setData(null);setPrepared('');setAuditItem(null);
   try{
    const token=window.__BAWASLU_DEMO_REPLICA__?'DEMO-SNAPSHOT':
     (window.localStorage.getItem('bawaslu_access_token')||'');
@@ -42,6 +44,7 @@ export default function AssistantEvaluationSampler({onPrepare,disabled=false}){
   if(disabled)return;
   onPrepare(item.question);
   setPrepared(item.source_record_id);
+  setAuditItem(item.not_a_real_source?null:item);
  }
  function exportPlan(){
   if(!data)return;
@@ -133,6 +136,7 @@ export default function AssistantEvaluationSampler({onPrepare,disabled=false}){
          className="mt-1 inline-block text-[11px] text-[#801b24] underline">Open original source</a>
        </div>)}
      </div>
+     {auditItem&&<AssistantSavedAnswerAudit item={auditItem} disabled={disabled||loading}/>}
      {data.negative_control&&<div className="rounded-lg border border-dashed border-amber-300 p-3">
       <p className="text-xs font-semibold text-[#84642c]">Separate no-evidence control — excluded from real case counts</p>
       <p className="mt-1 text-[11px] text-[#64748b]">{data.negative_control.question}</p>

@@ -7,6 +7,7 @@ population sample and never a substitute for officer selection.
 """
 from collections import Counter
 from urllib.parse import urlsplit
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from .access import has, profile
@@ -242,6 +243,115 @@ def build_evaluation_question_plan(findings, target=24):
         "database_writes":0,
         "status":"PREPARED_FOR_EXPLICIT_OFFICER_REVIEW",
     }
+
+
+
+class SavedAnswerAuditRequest(BaseModel):
+    """A reviewer-supplied answer; never generated, retained or scored as truth."""
+    source_ids:list[str]=Field(min_length=1,max_length=8)
+    question:str=Field(min_length=3,max_length=1200)
+    answer:str=Field(min_length=3,max_length=10000)
+
+
+def build_saved_answer_audit(findings, request:SavedAnswerAuditRequest):
+    """Audit against permission-filtered, already saved Inbox post excerpts.
+
+    All source IDs must be exact, unique and readable in this user's current
+    Inbox scope. Fail the whole request rather than dropping unauthorized IDs.
+    Never include source text or the supplied answer in the response.
+    """
+    import re
+    from .assistant_grounding import audit_assistant_answer
+    from .assistant_answer_quality import evaluate_answer_quality
+
+    identifiers=request.source_ids
+    if len(set(identifiers))!=len(identifiers) or any(
+        re.fullmatch(r"SOCIAL-[1-9][0-9]{0,11}",ref) is None for ref in identifiers
+    ):
+        raise HTTPException(422,"Distinct valid saved SOCIAL source IDs required")
+    wanted=set(identifiers)
+    found={}
+    for finding in findings or []:
+        if not isinstance(finding,dict):
+            continue
+        for post in finding.get("posts") or []:
+            if not isinstance(post,dict):
+                continue
+            rid=str(post.get("result_id") or "")
+            source_id="SOCIAL-"+rid
+            if source_id not in wanted or post.get("canonical_source_id")!="social:"+rid:
+                continue
+            excerpt=str(post.get("message_original") or "").strip()[:5000]
+            if not excerpt:
+                continue
+            # Source inclusion is tied to the permission-scoped saved Inbox.
+            # Deduplicate the same original post across campaign links.
+            row={"record_id":source_id,"record_type":"SOCIAL_LISTENING",
+                 "source_excerpt":excerpt,
+                 "sentiment":str(post.get("sentiment") or "UNCLASSIFIED").upper(),
+                 "source_verification_status":"SAVED_INBOX_ASSESSMENT_UNVERIFIED"}
+            previous=found.get(source_id)
+            if previous is None:
+                found[source_id]=row
+            elif previous["sentiment"]!=row["sentiment"]:
+                # Conflicting saved labels must not be quietly treated as fact.
+                raise HTTPException(409,"Conflicting saved source versions; review the Inbox record")
+    if set(found)!=wanted:
+        raise HTTPException(404,"One or more saved sources are unavailable in the authorized Inbox scope")
+    evidence=[found[key] for key in identifiers]
+    visible,cited,ground=audit_assistant_answer(
+        request.question,evidence,request.answer,profile="SOCIAL_ANALYSIS",language="en")
+    qa=evaluate_answer_quality(
+        request.question,evidence,visible,cited,
+        profile="SOCIAL_ANALYSIS",grounding=ground)
+    # Return a deliberately minimal whitelist. Diagnostic internals can
+    # contain question tokens; never export raw source text or pasted answers.
+    checks=[{"id":c["id"],"status":c["status"],"reason":c["reason"]}
+            for c in qa["checks"]]
+    return {
+        "schema":"BAWASLU_SAVED_ANSWER_AUDIT_V1608",
+        "evaluation_type":"READ_ONLY_DETERMINISTIC_REVIEW_NOT_HUMAN_ACCURACY",
+        "sample_scope":"CURRENT_PERMISSION_SCOPED_SAVED_INBOX_WINDOW",
+        "source_record_ids":identifiers,
+        "source_count":len(evidence),
+        "cited_authorized_ids":cited,
+        "cited_count":len(cited),
+        "rejected_unavailable_citation_count":int(ground.get("rejected_unavailable_citations") or 0),
+        "checks":checks,
+        "review_required_checks":qa["review_required_checks"],
+        "human_accuracy":None,
+        "source_truth_verified":False,
+        "claimed_answer_is_original_model_output_verified":False,
+        "pasted_answer_stored":False,
+        "raw_source_text_included":False,
+        "legal_signoff_verified":False,
+        "formal_client_acceptance_verified":False,
+        "database_writes":0,"paid_ai_calls":0,
+        "status":"OFFICER_SOURCE_VERIFICATION_PENDING",
+    }
+
+
+@router.post("/saved-answer-audit")
+def saved_answer_audit(
+    request:SavedAnswerAuditRequest,response:Response,
+    user:User=Depends(current_user),db:Session=Depends(get_db)
+):
+    """Real saved-evidence comparison of an answer pasted by an officer.
+
+    No model calls or source crawler requests; no DB mutations.
+    """
+    principal=profile(db,user)
+    if not has(principal,"view_intelligence"):
+        raise HTTPException(403,"Intelligence evaluation requires view permission")
+    from .inbox_radar import live_inbox_findings
+    try:
+        findings,_=live_inbox_findings(db,principal)
+    except PermissionError:
+        raise HTTPException(403,"Saved Inbox source access denied")
+    response.headers["Cache-Control"]="private, no-store"
+    response.headers["X-Evaluation-Generation"]="NONE"
+    response.headers["X-Acceptance-Status"]="PENDING_HUMAN_REVIEW"
+    return build_saved_answer_audit(findings,request)
 
 @router.get("/questions")
 def evaluation_questions(

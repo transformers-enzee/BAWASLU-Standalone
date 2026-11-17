@@ -810,6 +810,13 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'secondary_keywords':_safe_json_list(campaign.secondary_keywords_json),
                     'can_correct':_editable(p,campaign)})
         return {'assessments':output[:100],'paid_provider_called':False}
+    if action=='campaignAssessmentCompletionAudit':
+        from .assessment_completion_audit import campaign_completion_audit
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        if not selected.isdigit():raise ValueError('Select a campaign')
+        campaign=db.get(MonitoringCampaign,int(selected))
+        if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
+        return campaign_completion_audit(db,campaign.id)
     if action=='campaignAIWorkerReadiness':
         from .campaign_ai_readiness import campaign_ai_worker_readiness
         from .campaign_assessment_coverage import campaign_link_assessment_coverage

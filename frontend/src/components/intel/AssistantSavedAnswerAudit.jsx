@@ -14,7 +14,7 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
   try{
    const token=window.localStorage.getItem('bawaslu_access_token')||'';
    if(!token)throw Error('An authorized session is required.');
-   const refs=[item.source_record_id,...(mixed?additionalIds.split(/[\\s,]+/).map(x=>x.trim()).filter(Boolean):[])];
+   const refs=[item.source_record_id,...(mixed?additionalIds.split(/[\s,]+/).map(x=>x.trim()).filter(Boolean):[])];
    const response=await fetch(mixed?
     '/api/assistant-evaluation/mixed-answer-audit':
     '/api/assistant-evaluation/saved-answer-audit',{
@@ -70,7 +70,7 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
   {result&&<div data-testid="assistant-saved-answer-audit-result" className="space-y-2">
    <p className="text-xs font-semibold">Audit: {result.review_required_checks} checks need review · {(result.cited_count??result.cited_authorized_ids?.length??0)} authorized citation(s)</p>
    {mixed&&result.missing_cited_source_kinds?.length>0&&<p className="text-xs text-amber-800">Selected source types not cited in the answer: {result.missing_cited_source_kinds.join(', ')}</p>}
-   {mixed&&result.legal_review_issue_codes?.length>0&&<p className="text-xs text-amber-800">Review signals: {result.legal_review_issue_codes.join(', ')}</p>
+   {mixed&&result.legal_review_issue_codes?.length>0&&<p className="text-xs text-amber-800">Review signals: {result.legal_review_issue_codes.join(', ')}</p>}
    {result.rejected_unavailable_citation_count>0&&<p className="text-xs text-amber-800">
     {result.rejected_unavailable_citation_count} citation(s) were unavailable in the selected evidence.
    </p>}

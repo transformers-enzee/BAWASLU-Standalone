@@ -1,0 +1,7 @@
+# BAWASLU v160.9 — mixed-source actual-answer audit
+
+Extends the v160.8 officer-triggered pasted-answer audit to explicitly selected permission-scoped SOCIAL, INT, and DOC-page sources. All requested IDs must resolve without substitution. SOCIAL records reuse cached jurisdiction-filtered Inbox findings; INT records are selected from the existing visibility-restricted recent formal-intelligence reader; DOC-page references reuse the exact authorized PDF page retrieval with no semantic provider call. Missing, out-of-window, inactive, inaccessible and unindexed sources are all unavailable for the audit, rather than replaced by another record. No new data store or schema migration is introduced.
+
+The browser provides an optional cross-module mode, accepts additional exact source IDs, and clearly displays selected-but-uncited source types and consolidated legal-review signal names. Responses include only whitelisted IDs, counts, statuses and issue codes; never source excerpts, pasted answer text, or hidden-source details. Every request is authenticated and requires view_intelligence; responses disable caching.
+
+This is a deterministic source attribution diagnostic and must NOT be reported as measured real-model accuracy, verified legal applicability, platform moderation determination, human acceptance or client signoff. The officer explicitly generates an answer separately at their discretion; the audit never uses AI credits, crawls posts or writes database records. Synthetic QA tests cover authorized source combinations and fail-closed behavior.

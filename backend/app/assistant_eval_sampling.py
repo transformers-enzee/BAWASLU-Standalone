@@ -253,18 +253,9 @@ class SavedAnswerAuditRequest(BaseModel):
     answer:str=Field(min_length=3,max_length=10000)
 
 
-def build_saved_answer_audit(findings, request:SavedAnswerAuditRequest):
-    """Audit against permission-filtered, already saved Inbox post excerpts.
-
-    All source IDs must be exact, unique and readable in this user's current
-    Inbox scope. Fail the whole request rather than dropping unauthorized IDs.
-    Never include source text or the supplied answer in the response.
-    """
+def _authorized_saved_social_rows(findings,identifiers):
+    """Fail closed on every requested Social Listening source; no source drift."""
     import re
-    from .assistant_grounding import audit_assistant_answer
-    from .assistant_answer_quality import evaluate_answer_quality
-
-    identifiers=request.source_ids
     if len(set(identifiers))!=len(identifiers) or any(
         re.fullmatch(r"SOCIAL-[1-9][0-9]{0,11}",ref) is None for ref in identifiers
     ):
@@ -298,7 +289,15 @@ def build_saved_answer_audit(findings, request:SavedAnswerAuditRequest):
                 raise HTTPException(409,"Conflicting saved source versions; review the Inbox record")
     if set(found)!=wanted:
         raise HTTPException(404,"One or more saved sources are unavailable in the authorized Inbox scope")
-    evidence=[found[key] for key in identifiers]
+    return [found[key] for key in identifiers]
+
+
+def build_saved_answer_audit(findings, request:SavedAnswerAuditRequest):
+    """Read-only single-source answer review, without retaining response text."""
+    from .assistant_grounding import audit_assistant_answer
+    from .assistant_answer_quality import evaluate_answer_quality
+    identifiers=request.source_ids
+    evidence=_authorized_saved_social_rows(findings,identifiers)
     visible,cited,ground=audit_assistant_answer(
         request.question,evidence,request.answer,profile="SOCIAL_ANALYSIS",language="en")
     qa=evaluate_answer_quality(
@@ -352,6 +351,117 @@ def saved_answer_audit(
     response.headers["X-Evaluation-Generation"]="NONE"
     response.headers["X-Acceptance-Status"]="PENDING_HUMAN_REVIEW"
     return build_saved_answer_audit(findings,request)
+
+
+
+class MixedAnswerAuditRequest(BaseModel):
+    """Bounded source IDs; never allow the client to send its own evidence."""
+    source_ids:list[str]=Field(min_length=1,max_length=8)
+    question:str=Field(min_length=3,max_length=1200)
+    answer:str=Field(min_length=3,max_length=10000)
+
+
+def build_mixed_answer_audit(evidence,request:MixedAnswerAuditRequest):
+    """Pure post-retrieval QA: no claim truth, source leaks or signed approval."""
+    from .assistant_grounding import audit_assistant_answer
+    from .assistant_answer_quality import evaluate_answer_quality
+    from collections import Counter as _Counter
+
+    ids=request.source_ids
+    if len(ids)!=len(evidence) or [row["record_id"] for row in evidence]!=ids:
+        raise HTTPException(404,"One or more selected evidence records are unavailable")
+    kinds={row["record_id"]:row["record_type"] for row in evidence}
+    requested_kinds=sorted(set(kinds.values()))
+    selected_profile=("CROSS_MODULE_REVIEW" if {"SOCIAL_LISTENING","FORMAL_INTELLIGENCE"}.issubset(set(requested_kinds))
+                      else "PDF_GUIDANCE" if "PDF_KNOWLEDGE" in requested_kinds
+                      else "SOCIAL_ANALYSIS")
+    visible,cited,ground=audit_assistant_answer(
+        request.question,evidence,request.answer,profile=selected_profile,language="en")
+    quality=evaluate_answer_quality(request.question,evidence,visible,cited,
+                                   profile=selected_profile,grounding=ground)
+    issues=(quality.get("legal_review_summary") or {}).get("issues") or []
+    return {
+        "schema":"BAWASLU_MIXED_ANSWER_AUDIT_V1609",
+        "evaluation_type":"AUTHORIZED_SAVED_EVIDENCE_DETERMINISTIC_REVIEW",
+        "profile":selected_profile,
+        "source_record_ids":list(ids),
+        "selected_source_count":len(evidence),
+        "selected_source_kinds":dict(_Counter(kinds.values())),
+        "cited_authorized_ids":list(cited),
+        "cited_source_kinds":dict(_Counter(kinds[x] for x in cited if x in kinds)),
+        "missing_cited_source_kinds":sorted(set(requested_kinds)-{kinds[x] for x in cited if x in kinds}),
+        "rejected_unavailable_citation_count":int(ground.get("rejected_unavailable_citations") or 0),
+        "checks":[{"id":x["id"],"status":x["status"],"reason":x["reason"]}
+                  for x in quality["checks"]],
+        "review_required_checks":quality["review_required_checks"],
+        "legal_review_issue_codes":sorted({str(x["code"]) for x in issues}),
+        "legal_review_issue_count":len(issues),
+        "human_accuracy":None,"source_truth_verified":False,
+        "real_model_provenance_verified":False,
+        "legal_applicability_verified":False,"platform_policy_currentness_verified":False,
+        "pasted_answer_stored":False,"raw_source_text_included":False,
+        "legal_signoff_verified":False,"formal_client_acceptance_verified":False,
+        "database_writes":0,"paid_ai_calls":0,
+        "status":"OFFICER_FACT_AND_LEGAL_REVIEW_PENDING",
+    }
+
+
+def resolve_mixed_audit_sources(db,principal,request:MixedAnswerAuditRequest):
+    """Authorize all exact IDs before evaluating; never substitute sources."""
+    import re
+    from .domain import list_intelligence
+    from .intelligence_assistant import assistant_evidence_record
+    from .assistant_knowledge import retrieve_exact_pdf_pages
+
+    ids=request.source_ids
+    formats=(r"SOCIAL-[1-9][0-9]{0,11}|INT-[A-Za-z0-9:_-]{1,80}|DOC-[1-9][0-9]{0,11}-P[1-9][0-9]{0,7}")
+    if len(set(ids))!=len(ids) or any(re.fullmatch(formats,x) is None for x in ids):
+        raise HTTPException(422,"Distinct valid SOCIAL, INT or DOC-page source IDs required")
+    wanted_social=[x for x in ids if x.startswith("SOCIAL-")]
+    wanted_formal=[x for x in ids if x.startswith("INT-")]
+    wanted_pdf=[x for x in ids if x.startswith("DOC-")]
+    resolved={}
+    if wanted_social:
+        from .inbox_radar import live_inbox_findings
+        try:
+            findings,_=live_inbox_findings(db,principal)
+        except PermissionError:
+            raise HTTPException(403,"Saved Inbox source access denied")
+        rows=_authorized_saved_social_rows(findings,wanted_social)
+        resolved.update({row["record_id"]:row for row in rows})
+    if wanted_formal:
+        # Existing domain reader enforces jurisdiction and the recent-500 window.
+        # Out-of-window records are unavailable, never silently substituted.
+        for item in list_intelligence(db,principal):
+            if item.intelligence_id in wanted_formal:
+                row=assistant_evidence_record(item)
+                if row["record_id"] in resolved:
+                    raise HTTPException(409,"Conflicting source identities")
+                resolved[row["record_id"]]=row
+    if wanted_pdf:
+        # Existing exact page method enforces doc visibility, active status and
+        # page presence, and returns [] for *any* missing requested page.
+        question=" ".join(wanted_pdf)
+        pages=retrieve_exact_pdf_pages(db,principal,question,limit=8)
+        resolved.update({row["record_id"]:row for row in pages})
+    if set(resolved)!=set(ids):
+        raise HTTPException(404,"One or more selected evidence records are unavailable")
+    return [resolved[key] for key in ids]
+
+
+@router.post("/mixed-answer-audit")
+def mixed_answer_audit(
+    request:MixedAnswerAuditRequest,response:Response,
+    user:User=Depends(current_user),db:Session=Depends(get_db)
+):
+    principal=profile(db,user)
+    if not has(principal,"view_intelligence"):
+        raise HTTPException(403,"Intelligence evaluation requires view permission")
+    response.headers["Cache-Control"]="private, no-store"
+    response.headers["X-Evaluation-Generation"]="NONE"
+    response.headers["X-Acceptance-Status"]="PENDING_HUMAN_REVIEW"
+    return build_mixed_answer_audit(
+        resolve_mixed_audit_sources(db,principal,request),request)
 
 @router.get("/questions")
 def evaluation_questions(

@@ -5,22 +5,27 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
  const [busy,setBusy]=useState(false);
  const [result,setResult]=useState(null);
  const [error,setError]=useState('');
- useEffect(()=>{setAnswer('');setResult(null);setError('')},[item?.source_record_id]);
+ const [mixed,setMixed]=useState(false);
+ const [additionalIds,setAdditionalIds]=useState('');
+ useEffect(()=>{setAnswer('');setResult(null);setError('');setAdditionalIds('');setMixed(false)},[item?.source_record_id]);
  async function run(){
   if(busy||disabled||!item?.source_record_id||!answer.trim())return;
   setBusy(true);setError('');setResult(null);
   try{
    const token=window.localStorage.getItem('bawaslu_access_token')||'';
    if(!token)throw Error('An authorized session is required.');
-   const response=await fetch('/api/assistant-evaluation/saved-answer-audit',{
+   const refs=[item.source_record_id,...(mixed?additionalIds.split(/[\\s,]+/).map(x=>x.trim()).filter(Boolean):[])];
+   const response=await fetch(mixed?
+    '/api/assistant-evaluation/mixed-answer-audit':
+    '/api/assistant-evaluation/saved-answer-audit',{
     method:'POST',cache:'no-store',
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-    body:JSON.stringify({source_ids:[item.source_record_id],
-                         question:item.question,answer})
+    body:JSON.stringify({source_ids:refs,question:item.question,answer})
    });
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'Source audit failed.');
-   if(data.schema!=='BAWASLU_SAVED_ANSWER_AUDIT_V1608')throw Error('Unknown audit response schema.');
+   if(data.schema!==(mixed?'BAWASLU_MIXED_ANSWER_AUDIT_V1609':'BAWASLU_SAVED_ANSWER_AUDIT_V1608'))
+    throw Error('Unknown audit response schema.');
    setResult(data);
   }catch(e){setError(e.message||'Could not audit the submitted answer.')}
   finally{setBusy(false)}
@@ -34,6 +39,20 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
    This compares citation IDs and lexical readiness with the saved source you can access.
    It neither generates an answer nor verifies factual truth; the pasted text is not stored.
   </p>
+  <label className="flex gap-2 items-center text-xs">
+   <input type="checkbox" checked={mixed} onChange={e=>{setMixed(e.target.checked);setResult(null)}}/>
+   Cross-module audit (include authorized Inbox INT IDs and/or exact PDF page IDs)
+  </label>
+  {mixed&&<div className="space-y-1">
+   <label htmlFor="mixed-audit-additional-ids" className="block text-xs font-semibold">
+    Additional exact source IDs (comma or space separated; maximum 8 total)
+   </label>
+   <input id="mixed-audit-additional-ids" data-testid="mixed-audit-additional-ids"
+    className="w-full rounded-md border border-[#ccd7df] bg-white px-3 py-2 text-xs"
+    value={additionalIds} onChange={e=>{setAdditionalIds(e.target.value);setResult(null)}}
+    maxLength={500} placeholder="INT-2026-000001, DOC-1-P2"/>
+   <p className="text-[11px] text-[#876532]">An inaccessible source fails the entire audit. The selected PDF page and formal Inbox record must already be available to your account. No legal conclusion is verified.</p>
+  </div>}
   <label htmlFor="saved-answer-audit-text" className="block text-xs font-semibold">
    Actual Assistant answer to inspect
   </label>
@@ -45,11 +64,13 @@ export default function AssistantSavedAnswerAudit({item,disabled=false}){
   <button type="button" className="intel-button text-xs"
    disabled={disabled||busy||answer.trim().length<3} onClick={run}
    data-testid="assistant-run-saved-answer-audit">
-   {busy?'Checking…':'Check against saved source (no AI call)'}
+   {busy?'Checking…':mixed?'Check mixed sources (no AI call)':'Check against saved source (no AI call)'}
   </button>
   {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
   {result&&<div data-testid="assistant-saved-answer-audit-result" className="space-y-2">
-   <p className="text-xs font-semibold">Audit: {result.review_required_checks} checks need review · {result.cited_count} authorized citation(s)</p>
+   <p className="text-xs font-semibold">Audit: {result.review_required_checks} checks need review · {(result.cited_count??result.cited_authorized_ids?.length??0)} authorized citation(s)</p>
+   {mixed&&result.missing_cited_source_kinds?.length>0&&<p className="text-xs text-amber-800">Selected source types not cited in the answer: {result.missing_cited_source_kinds.join(', ')}</p>}
+   {mixed&&result.legal_review_issue_codes?.length>0&&<p className="text-xs text-amber-800">Review signals: {result.legal_review_issue_codes.join(', ')}</p>
    {result.rejected_unavailable_citation_count>0&&<p className="text-xs text-amber-800">
     {result.rejected_unavailable_citation_count} citation(s) were unavailable in the selected evidence.
    </p>}

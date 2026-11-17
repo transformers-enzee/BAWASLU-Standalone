@@ -8,6 +8,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
  const [error,setError]=useState('');
  const [audit,setAudit]=useState(null);
  const [register,setRegister]=useState([]);
+ const [batch,setBatch]=useState(null);
  const [notice,setNotice]=useState('');
  async function request(path,body){
   const token=window.localStorage.getItem('bawaslu_access_token')||'';
@@ -22,13 +23,41 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   return data;
  }
  async function load(){
-  setError('');setAudit(null);setLoading(true);setSelected('');
+  setError('');setAudit(null);setBatch(null);setLoading(true);setSelected('');
   try{
    const data=await request('saved-reply-candidates');
    if(data.schema!=='BAWASLU_SAVED_REPLY_CANDIDATES_V1616')throw Error('Unknown reply inventory format');
    setItems(data.candidates||[]);
   }catch(e){setError(e.message||'Could not load owned replies')}
   finally{setLoading(false)}
+ }
+ async function runBatch(){
+  const selections=items.filter(x=>x.eligible).slice(0,5)
+   .map(x=>({thread_id:x.thread_id,answer_message_index:x.answer_message_index}));
+  if(!selections.length||loading)return;
+  setLoading(true);setError('');setBatch(null);setNotice('');
+  try{
+   const data=await request('saved-reply-batch-audit',{selections});
+   if(data.schema!=='BAWASLU_SAVED_REPLY_BATCH_AUDIT_V1618')
+    throw Error('Unknown batch audit response format');
+   setBatch(data);
+  }catch(e){setError(e.message||'Batch audit unavailable')}
+  finally{setLoading(false)}
+ }
+ function keepBatch(){
+  try{
+   setRegister(previous=>{
+    let rows=previous;
+    for(const result of batch.results||[]){
+     if(result.status!=='AUDITED'||!(result.issue_candidate_count>0))continue;
+     rows=addAnswerAuditFindings(rows,{
+      source_record_ids:result.source_record_ids,
+      issue_triage:result.issue_triage});
+    }
+    return rows;
+   });
+   setNotice('Unverified warning candidates added to the session register.');
+  }catch(e){setError(e.message||'Cannot capture batch candidates')}
  }
  async function run(){
   const row=items.find(x=>x.thread_id+':'+x.answer_message_index===selected);
@@ -71,7 +100,16 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   <button type="button" className="intel-ghost text-xs"
    data-testid="assistant-load-saved-replies" disabled={disabled||loading}
    onClick={load}>{loading?'Checking…':'Find my saved replies'}</button>
-  {items.length>0&&<div className="space-y-1">
+  {items.length>0&&<div className="space-y-2">
+   <p className="text-[11px] text-[#60748a]">
+    Bulk audit uses up to five eligible saved replies from the list. Each is
+    rechecked under current access rights; unavailable sources remain failures
+    rather than being skipped as passing answers.
+   </p>
+   <button type="button" className="intel-ghost text-xs"
+    data-testid="assistant-run-saved-reply-batch"
+    disabled={disabled||loading||!items.some(x=>x.eligible)}
+    onClick={runBatch}>{loading?'Checking…':'Audit up to five saved replies'}</button>
    <label htmlFor="assistant-saved-reply-choice" className="block text-xs font-semibold">
     Saved reply to audit
    </label>
@@ -95,6 +133,27 @@ export default function AssistantSavedReplyAudit({disabled=false}){
   </div>}
   {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
   {notice&&<p role="status" className="text-xs text-[#146347]">{notice}</p>}
+  {batch&&<div data-testid="assistant-saved-reply-batch-result"
+    className="rounded-md border border-[#d9e2e9] bg-white p-2 space-y-2">
+   <p className="text-xs font-semibold">Batch review: {batch.audited} audited,
+    {' '}{batch.ineligible} ineligible, {batch.unavailable} unavailable</p>
+   <p className="text-[11px] text-[#876532]">
+    Counts refer only to this bounded, self-selected session; warnings are not
+    verified AI errors, legal conclusions or a representative accuracy score.
+   </p>
+   {Object.entries(batch.issue_category_occurrences||{}).map(([category,count])=>
+    <p className="text-xs" key={category}>{category.replaceAll('_',' ')}:
+     {' '}{count} automated warning occurrence(s)</p>)}
+   {(batch.results||[]).map(x=><p className="text-xs" key={x.thread_id+':'+x.answer_message_index}>
+    Saved thread {x.thread_id.slice(0,8)}, reply {x.answer_message_index+1}:
+    {' '}{x.status==='AUDITED'?x.issue_candidate_count+' warning candidate(s)':x.reason_code}
+   </p>)}
+   {batch.results?.some(x=>x.status==='AUDITED'&&x.issue_candidate_count>0)&&
+    <button type="button" className="intel-ghost text-xs"
+     data-testid="assistant-save-batch-audit-candidates" onClick={keepBatch}>
+     Add batch warnings to session issue register
+    </button>}
+  </div>}
   {audit&&<div data-testid="assistant-saved-reply-audit-result" className="space-y-2">
    <p className="text-xs font-semibold">
     {audit.fresh_source_scope_count} current sources reauthorized · {audit.audit.cited_authorized_ids?.length||0} cited

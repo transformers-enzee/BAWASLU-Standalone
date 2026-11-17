@@ -6,6 +6,7 @@ independent evidence or human accuracy.
 """
 import json
 import re
+from collections import Counter
 from fastapi import APIRouter,Depends,HTTPException,Response,Query
 from pydantic import BaseModel,Field
 from sqlalchemy.orm import Session
@@ -24,6 +25,9 @@ MAX_SOURCE_CARDS=12
 class SavedReplyAuditRequest(BaseModel):
     thread_id:str=Field(min_length=36,max_length=36)
     answer_message_index:int=Field(ge=1,le=59)
+
+class BatchSavedReplyAuditRequest(BaseModel):
+    selections:list[SavedReplyAuditRequest]=Field(min_length=1,max_length=5)
 
 def _access(db,user):
     principal=profile(db,user)
@@ -156,3 +160,107 @@ def saved_reply_audit(
         "legal_signoff_verified":False,"client_acceptance_verified":False,
         "saved_thread_modified":False,"model_calls":0,"database_writes":0
     }
+
+
+def audit_owned_saved_reply_batch(db,principal,user_id,selections):
+    """Bounded, exact, permission-checked replay; no persisted QA scores.
+
+    Every result is explicit: audited, ineligible, or source unavailable.
+    Fail an unauthorized thread as unavailable, without exposing whether a
+    thread belonging to somebody else actually exists.
+    """
+    if not selections or len(selections)>5:
+        raise HTTPException(422,"Select between one and five saved replies")
+    keys=[(item.thread_id,item.answer_message_index) for item in selections]
+    if len(set(keys))!=len(keys):
+        raise HTTPException(422,"Duplicate saved reply selection")
+    thread_ids=list(dict.fromkeys(item.thread_id for item in selections))
+    rows=db.query(AssistantThread).filter(
+        AssistantThread.user_id==user_id,
+        AssistantThread.id.in_(thread_ids)).all()
+    own={row.id:row for row in rows}
+    output=[]
+    totals=Counter()
+    issue_categories=Counter()
+    for selection in selections:
+        item={"thread_id":selection.thread_id,
+              "answer_message_index":selection.answer_message_index}
+        row=own.get(selection.thread_id)
+        if row is None:
+            item.update(status="UNAVAILABLE",
+                        reason_code="SAVED_CONVERSATION_UNAVAILABLE")
+        else:
+            try:
+                messages=_read_messages(row)
+                scope=_reply_scope(messages,selection.answer_message_index)
+                if not scope["eligible"]:
+                    item.update(status="INELIGIBLE",reason_code=scope["reason_code"])
+                else:
+                    audit=MixedAnswerAuditRequest(
+                        source_ids=scope["source_ids"],
+                        question=messages[selection.answer_message_index-1]["text"],
+                        answer=messages[selection.answer_message_index]["text"])
+                    sources=resolve_mixed_audit_sources(db,principal,audit)
+                    result=build_mixed_answer_audit(sources,audit)
+                    triage=result["issue_triage"]
+                    cats=triage.get("issue_category_counts") or {}
+                    issue_categories.update({k:int(v) for k,v in cats.items()
+                                             if k in (
+                                                 "CITATION_INTEGRITY",
+                                                 "CROSS_MODULE_COVERAGE",
+                                                 "SOURCE_RELEVANCE",
+                                                 "LEGAL_SCOPE_REVIEW",
+                                                 "PLATFORM_POLICY_AUTHORITY",
+                                                 "FORMAL_DECISION_PROVENANCE",
+                                                 "HUMAN_EVIDENCE_VERIFICATION")})
+                    item.update(status="AUDITED",
+                        reason_code="DETERMINISTIC_SOURCE_REVIEW_ONLY",
+                        source_count=len(sources),
+                        cited_count=len(result["cited_authorized_ids"]),
+                        missing_source_types=result["missing_cited_source_kinds"],
+                        issue_candidate_count=triage["issue_candidate_count"],
+                        issue_category_counts=cats,
+                        source_record_ids=result["source_record_ids"],
+                        # A reduced, allowlisted result supports intentional local
+                        # issue-register capture without exporting original content.
+                        issue_triage=triage)
+            except HTTPException as exc:
+                # Not exposing authorization differences between hidden sources.
+                if exc.status_code in (403,404):
+                    item.update(status="SOURCE_UNAVAILABLE",
+                                reason_code="CURRENT_SOURCE_ACCESS_OR_PRESENCE")
+                elif exc.status_code in (409,422):
+                    item.update(status="INELIGIBLE",
+                                reason_code="SOURCE_CONSISTENCY_OR_INPUT")
+                else:
+                    raise
+        totals[item["status"]]+=1
+        output.append(item)
+    return {"schema":"BAWASLU_SAVED_REPLY_BATCH_AUDIT_V1618",
+            "requested":len(selections),
+            "audited":totals["AUDITED"],
+            "ineligible":totals["INELIGIBLE"],
+            "unavailable":totals["UNAVAILABLE"]+totals["SOURCE_UNAVAILABLE"],
+            "unavailable_source":totals["SOURCE_UNAVAILABLE"],
+            "results":output,
+            "issue_category_occurrences":dict(sorted(issue_categories.items())),
+            "issue_counts_are_unverified_diagnostic_occurrences":True,
+            "selection_not_random_or_representative":True,
+            "real_model_generation_provenance_verified":False,
+            "source_truth_verified":False,
+            "human_accuracy":None,"human_verified_errors":0,
+            "legal_signoff_verified":False,
+            "formal_client_acceptance_verified":False,
+            "answers_generated":0,"database_writes":0,
+            "saved_replies_modified":False}
+
+
+@router.post("/saved-reply-batch-audit")
+def saved_reply_batch_audit(
+    request:BatchSavedReplyAuditRequest,response:Response,
+    user:User=Depends(current_user),db:Session=Depends(get_db)
+):
+    principal=_access(db,user)
+    _no_store(response)
+    return audit_owned_saved_reply_batch(
+        db,principal,user.id,request.selections)

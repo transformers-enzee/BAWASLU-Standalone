@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {addAnswerAuditFindings,exportAnswerAuditIssueRegister} from '@/lib/assistantAuditIssueRegister';
+import SavedReplyReviewWorksheet from './SavedReplyReviewWorksheet';
 
 export default function AssistantSavedReplyAudit({disabled=false}){
  const [items,setItems]=useState([]);
@@ -193,6 +194,8 @@ export default function AssistantSavedReplyAudit({disabled=false}){
      Add batch warnings to session issue register
     </button>}
   </div>}
+  {batch&&<SavedReplyReviewWorksheet key={'batch:'+batch.results.map(x=>x.thread_id+':'+x.answer_message_index).join('|')} results={batch.results||[]}/>}
+  {audit&&<SavedReplyReviewWorksheet key={'single:'+audit.thread_id+':'+audit.answer_message_index} results={[{thread_id:audit.thread_id,answer_message_index:audit.answer_message_index,status:'AUDITED',review_route:audit.review_route}]}/>}
   {audit&&<div data-testid="assistant-saved-reply-audit-result" className="space-y-2">
    <p className="text-xs font-semibold">
     {audit.fresh_source_scope_count} current sources reauthorized · {audit.audit.cited_authorized_ids?.length||0} cited

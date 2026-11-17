@@ -57,6 +57,52 @@ def campaign_completion_audit(db,campaign_id):
     (jobs,complete,good,missing_assessment,invalid_label,missing_usage,
      usage_without_valid_label,zero_attempts,pending,processing,failed)=map(int,counts)
     discrepancies=complete-good
+    # Historical gaps are not safe to replay. Read only aggregates, never
+    # source IDs or individual job metadata. A later edited version can be
+    # the latest model even when earlier work is the original assessment.
+    from sqlalchemy.orm import aliased
+    latest_id=(db.query(EvidenceAssessment.id)
+        .filter(EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
+                EvidenceAssessment.result_id==AIAssessmentJob.result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).limit(1)
+        .correlate(AIAssessmentJob).scalar_subquery())
+    latest=aliased(EvidenceAssessment)
+    versions=(db.query(func.count(EvidenceAssessment.id))
+        .filter(EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
+                EvidenceAssessment.result_id==AIAssessmentJob.result_id)
+        .correlate(AIAssessmentJob).scalar_subquery())
+    is_gap=and_(completed,valid_assessment,~usage_link)
+    history=(db.query(
+        func.count(AIAssessmentJob.id),
+        amount(and_(is_gap,AIAssessmentJob.attempts>0)),
+        amount(and_(is_gap,versions>1)),
+        func.min(case((is_gap,AIAssessmentJob.created_at),else_=None)),
+        func.max(case((is_gap,AIAssessmentJob.created_at),else_=None)))
+        .outerjoin(latest,latest.id==latest_id)
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                is_gap).one())
+    gap_jobs,attempted_gaps,multi_version_gaps,earliest_gap,latest_gap=history
+    # Count by the latest saved model *label*. This is a grouping clue, not
+    # evidence of which historical request incurred an AI provider charge.
+    model_rows=(db.query(
+        func.coalesce(func.nullif(latest.model_version,''),'UNSPECIFIED'),
+        func.count(AIAssessmentJob.id))
+        .outerjoin(latest,latest.id==latest_id)
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                is_gap)
+        .group_by(func.coalesce(func.nullif(latest.model_version,''),'UNSPECIFIED'))
+        .order_by(func.count(AIAssessmentJob.id).desc()).limit(10).all())
+    model_buckets=[{'latest_model':str(name)[:100],'jobs':int(n)}
+                   for name,n in model_rows]
     return {
         'scope':'AUTHORIZED_CAMPAIGN_ORDINARY_ASSESSMENT_JOBS',
         'campaign_id':str(cid),'ordinary_jobs':jobs,
@@ -67,6 +113,18 @@ def campaign_completion_audit(db,campaign_id):
         'completed_usage_without_valid_relevance':usage_without_valid_label,
         'completed_zero_attempts':zero_attempts,
         'completed_requiring_manual_history_review':discrepancies,
+        'historical_missing_usage_triage':{
+            'completed_valid_relevance_without_usage':int(gap_jobs),
+            'with_recorded_attempts':int(attempted_gaps),
+            'with_multiple_assessment_versions':int(multi_version_gaps),
+            'earliest_job_created_date':earliest_gap.date().isoformat() if earliest_gap else None,
+            'latest_job_created_date':latest_gap.date().isoformat() if latest_gap else None,
+            'latest_saved_model_distribution':model_buckets,
+            'latest_model_is_not_original_call_proof':True,
+            'cause_of_missing_usage':'UNDETERMINED',
+            'manual_provenance_review_required':int(gap_jobs)>0,
+            'automatic_reprocessing_permitted':False,
+        },
         'pending_jobs':pending,'processing_jobs':processing,'failed_jobs':failed,
         'completion_reconciled':complete==good,
         'counts_reconciled':jobs==complete+pending+processing+failed,

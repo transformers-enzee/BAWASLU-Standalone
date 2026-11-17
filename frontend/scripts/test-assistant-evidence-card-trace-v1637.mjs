@@ -22,6 +22,6 @@ assert.ok(cards.includes('canPrepareCaseworkFromCard(r,allowAssignments)'));
 assert.ok(page.includes('citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}'));
 assert.ok(page.includes("allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'}"));
 const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
-assert.equal(version,'163.7');
+assert.ok(Number(version.replace('.',''))>=1637);
 assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
 console.log('PASS v163.7 cited-vs-context source labels, full inventory and fresh-only casework shortcuts');

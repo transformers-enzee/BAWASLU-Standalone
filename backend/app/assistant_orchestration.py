@@ -11,6 +11,7 @@ from datetime import date
 from collections import Counter
 import httpx
 from .assistant_language import language_directive, effective_language
+from .assistant_assessment_focus import assessment_scope, assessment_instruction, assessment_authority_inventory
 from .assistant_tags import TAG_SCHEMA, UI_SCHEMA, UI_KEYS, combined_tags, validate_ui_labels
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .intelligence_assistant import (
@@ -577,6 +578,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
         "response_depth": response_depth,
         "response_profile": response_profile,
+        "operational_assessment_scope":assessment_scope(question),
+        "operational_assessment_authority_inventory":assessment_authority_inventory(evidence),
         "response_language_rule": language["rule"],
         "response_language_hint": language["hint"],
         "instruction": (
@@ -667,9 +670,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "charts or post-population extrapolations unless explicitly requested. "
         "Do not mistake officer validation of relevance for verified legal fact."
         if response_profile=="CROSS_MODULE_REVIEW" else "")
+    assessment_focus=assessment_instruction(question,response_profile)
     request = {
         "model": model, "store": False,
-        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus},
+        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus+
+                            ("
+
+"+assessment_focus if assessment_focus else "")},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},

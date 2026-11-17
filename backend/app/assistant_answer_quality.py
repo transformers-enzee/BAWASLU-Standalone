@@ -238,16 +238,28 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
             duplicates.setdefault(identifier,[]).append(str(row.get("sentiment") or "UNKNOWN").upper())
     conflicts=[sid for sid,values in duplicates.items() if len(set(values))>1]
     if profile=="CROSS_MODULE_REVIEW":
-        if conflicts or not formal or not social:
+        # A selected but uncited record is not evidence attributed to an answer.
+        # Cross-module completeness requires at least one displayed citation
+        # from EACH kind; this remains a readiness check, not claim truth.
+        formal_cited=sorted(formal.intersection(cited))
+        social_cited=sorted(social.intersection(cited))
+        if conflicts or not formal_cited or not social_cited:
             checks.append(_status("cross_module_consistency",REVIEW,
-                "Both source types are needed for a two-module comparison; conflicting duplicate social classifications require review.",
+                "A cross-module answer needs displayed citations from both formal Inbox and saved Social Listening evidence; selected-but-uncited records do not qualify.",
                 formal_selected=len(formal),social_selected=len(social),
-                duplicate_sentiment_conflicts=len(conflicts)))
+                formal_cited=len(formal_cited),social_cited=len(social_cited),
+                missing_citation_kinds=[
+                    kind for kind,seen in (("FORMAL_INTELLIGENCE",formal_cited),
+                                           ("SOCIAL_LISTENING",social_cited)) if not seen],
+                duplicate_sentiment_conflicts=len(conflicts),
+                source_truth_verified=False))
         else:
             checks.append(_status("cross_module_consistency",PASS,
-                "Formal and social evidence both selected; consistency of factual claims still requires officer review.",
+                "Formal and social source IDs are both displayed; factual consistency and source truth still require independent review.",
                 formal_selected=len(formal),social_selected=len(social),
-                duplicate_sentiment_conflicts=0))
+                formal_cited=len(formal_cited),social_cited=len(social_cited),
+                missing_citation_kinds=[],duplicate_sentiment_conflicts=0,
+                source_truth_verified=False))
     elif conflicts:
         checks.append(_status("cross_module_consistency",REVIEW,
             "The same selected social source has conflicting sentiment labels.",

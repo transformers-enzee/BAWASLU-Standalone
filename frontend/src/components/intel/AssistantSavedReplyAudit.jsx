@@ -188,7 +188,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
    <p className="text-xs">Automated warning candidates: {audit.audit.issue_triage?.issue_candidate_count||0}</p>
    {audit.cited_only_source_count>0&&<p className="text-xs text-[#876532]">
     {audit.cited_only_source_count} cited source(s) were missing from the historical cards and individually reauthorized for review.
-   </p>
+   </p>}
    {(audit.audit.issue_triage?.issue_candidates||[]).map((x,i)=>
     <p key={x.code+i} className="text-xs">{x.category.replaceAll('_',' ')}: {x.code.replaceAll('_',' ')}</p>)}
    {(audit.audit.issue_triage?.issue_candidate_count||0)>0&&<button type="button"

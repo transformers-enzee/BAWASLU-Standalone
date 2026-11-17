@@ -15,6 +15,7 @@ for(const s of ['MAX_REPLAY_SOURCE_IDS=20','cited_only=[ref for ref in displayed
 assert.ok(sampling.includes('source_ids:list[str]=Field(min_length=1,max_length=20)'));
 assert.ok(register.includes('refs.length>20')&&register.includes('entry.source_ids.length>20'));
 assert.ok(web.includes('cited-only sources rechecked'));
+assert.ok(web.includes('</p>}\n    {(audit.audit.issue_triage'));
 for(const s of ['test_batch_missing_cited_source_fails_not_fake_pass',
  'test_combined_card_and_citation_scope_safely_supports_historical_sizes'])
  assert.ok(qa.includes(s),s);

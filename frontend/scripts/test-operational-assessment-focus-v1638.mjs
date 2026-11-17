@@ -10,6 +10,7 @@ for(const t of ['operational_assessment_scope','operational_assessment_authority
 'assessment_focus=assessment_instruction','assessment_focus if assessment_focus else'])
  assert.ok(gen.includes(t),t);
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(api.includes("'build_version':'163.8'"));
-assert.ok(shell.includes('data-build-version="163.8"'));
+const version=api.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1638);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
 console.log('PASS v163.8 differentiated legal/platform assessment question instructions');

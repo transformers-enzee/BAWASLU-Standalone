@@ -12,6 +12,7 @@ from collections import Counter
 import httpx
 from .assistant_language import language_directive, effective_language
 from .assistant_assessment_focus import assessment_scope, assessment_instruction, assessment_authority_inventory
+from .assistant_cross_module_inventory import cross_module_inventory, cross_module_instruction
 from .assistant_tags import TAG_SCHEMA, UI_SCHEMA, UI_KEYS, combined_tags, validate_ui_labels
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .intelligence_assistant import (
@@ -573,6 +574,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
         "formal_record_count":formal_evidence_count(evidence),
+        "cross_module_inventory":cross_module_inventory(evidence)
+            if response_profile in ("CASE_REVIEW","CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None,
         "potential_duplicate_groups":(duplicate_groups or [])[:6],
         "report_sample_statistics":(evidence_snapshot([r for r in evidence
             if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
@@ -671,10 +674,12 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "Do not mistake officer validation of relevance for verified legal fact."
         if response_profile=="CROSS_MODULE_REVIEW" else "")
     assessment_focus=assessment_instruction(question,response_profile)
+    module_focus=cross_module_instruction(response_profile)
     request = {
         "model": model, "store": False,
         "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus+
-                            ("\n\n"+assessment_focus if assessment_focus else "")},
+                            ("\n\n"+assessment_focus if assessment_focus else "")+
+                            ("\n\n"+module_focus if module_focus else "")},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},

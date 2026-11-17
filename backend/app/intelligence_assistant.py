@@ -251,6 +251,7 @@ def assistant_evidence_record(item):
     return {
       'record_id':item.intelligence_id,
       'record_type':'FORMAL_INTELLIGENCE',
+      'origin_source_id':item.source_id if isinstance(item.source_id,str) and item.source_id.lower().startswith('social:') else '',
       'title':item.title or '',
       'publication_date':item.publication_date or '',
       'publication_datetime':item.publication_datetime or '',

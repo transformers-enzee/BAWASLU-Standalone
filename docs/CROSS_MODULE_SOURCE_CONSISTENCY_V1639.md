@@ -1,0 +1,5 @@
+# v163.9 — Operational cross-module evidence consistency
+
+An explicit Inbox origin source such as `social:7` can link to currently selected `SOCIAL-7` without implying two independent witnesses. Identical titles, hashtags, external links, or source IDs without the social: prefix are insufficient. Selected Social Listening, Inbox and PDF counts remain separate; unlinked Inbox records do not imply independent verification. A zero selected Inbox count does not mean no cases exist.
+
+The bounded metadata is supplied only to CASE_REVIEW, CROSS_MODULE_REVIEW and EXECUTIVE_REPORT responses in the existing single model request. The prompt asks the Assistant to distinguish review_status from verification_status, cite selected source IDs, avoid double-counting and give appropriate officer corroboration steps. It does not change officer records, authorize unavailable evidence, add model calls or expose cross-user data. Automated regression checks linkage, negative controls, truncation and scope gating.

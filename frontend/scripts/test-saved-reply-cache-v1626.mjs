@@ -8,7 +8,7 @@ for(const s of ['"_assistant_eval_batch_cache"','"scoped_findings"','"scoped_for
  assert.ok(core.includes(s),s);
 for(const s of ['batch_principal={**principal','saved_cards_without_displayed_citations','SAVED_CARDS_WITHOUT_DISPLAYED_CITATIONS'])
  assert.ok(hist.includes(s),s);
-assert.ok(ui.includes('batch.saved_cards_without_displayed_citations'));
+assert.ok(ui.includes('batch.citation_coverage_counts'));
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
 const ver=main.split("'build_version':'")[1]?.split("'")[0];
 assert.ok(Number(ver.replace('.',''))>=1626);

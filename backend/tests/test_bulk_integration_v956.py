@@ -125,10 +125,15 @@ def test_relevance_backlog_counts_sentiment_only_and_uses_bounded_batch(monkeypa
             relevance_label='UNASSESSED',sentiment='NEUTRAL',sentiment_model='test'))
         db.commit()
         p=campaign_action(db,officer(),'campaignAssessmentBacklogPreview',{},'91')
-        assert p['unassessed']==21 and p['batch_limit']==10
+        # Existing unassessed records are not billable until a durable queue
+        # job exists; SQLite also lacks the required PostgreSQL quota locks.
+        assert p['unassessed']==0 and p['batch_limit']==0
         assert not p['paid_ai_executed']
-        assert campaign_action(db,officer(),'campaignAssessmentBacklogPreview',
-            {'sample_limit':20},'91')['batch_limit']==20
+        expanded=campaign_action(db,officer(),'campaignAssessmentBacklogPreview',
+            {'sample_limit':20},'91')
+        assert expanded['batch_limit']==0
+        assert expanded['database_supports_reservations'] is False
+        assert expanded['requested_sample_limit']==20
         with pytest.raises(ValueError,match='between 1 and 20'):
             campaign_action(db,officer(),'campaignAssessmentBacklogPreview',
                 {'sample_limit':21},'91')

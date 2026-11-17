@@ -117,8 +117,11 @@ def test_account_collection_does_not_inflate_dashboard_queues_or_command_centre(
     assert dashboard['sentiment_pending_count']==3
     assert dashboard['topics_and_themes']['pending_assessment_mentions']==3
     assert action(db,p,'campaignSentimentBatchPreview',{},cid)['eligible_total']==3
-    assert action(db,p,'campaignAssessmentBacklogPreview',
-        {'sample_limit':20},cid)['unassessed']==3
+    preview=action(db,p,'campaignAssessmentBacklogPreview',{'sample_limit':20},cid)
+    # Monitoring evidence can be unassessed without having executable jobs.
+    assert preview['eligible_queued_unassessed']==0
+    assert preview['batch_limit']==0 and preview['estimated_ai_requests']==0
+    assert preview['paid_ai_executed'] is False
     from app.prism_discover import action as prism_action
     assert prism_action(db,p,'campaignCandidateSuggestions',{},cid)['candidates']==[]
     cc=build_command_center(db,p,{'period':'all'})

@@ -7,6 +7,8 @@ from app import models  # noqa: F401
 from app import casework  # noqa: F401 - register casework models for migrations
 from app import officer_sentiment  # noqa: F401
 from app import assistant_knowledge  # noqa: F401
+from app import assistant_history  # noqa: F401
+from app import saved_reply_reviews  # noqa: F401
 config = context.config
 if config.config_file_name is not None: fileConfig(config.config_file_name)
 database_url = DATABASE_URL

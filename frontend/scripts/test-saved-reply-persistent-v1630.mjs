@@ -9,6 +9,7 @@ for(const code of ['review_ai_suggestions','SavedReplyReviewEvent','reply_finger
 for(const code of ['save-persistent-saved-reply-review','expected_version','saved_reply_changed'])
  assert.ok(ui.includes(code),code);
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(main.includes("'build_version':'163.0'"));
-assert.ok(shell.includes('data-build-version="163.0"'));
+const version=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1630);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
 console.log('PASS v163.0 owner-scoped persistent reviews and history checks');

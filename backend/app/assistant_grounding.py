@@ -381,7 +381,7 @@ def _officer_review_steps(cited, records, reasons, legal_question, has_legal_fla
 
 
 def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
-                           profile="SOCIAL_ANALYSIS", language="id"):
+                           profile="SOCIAL_ANALYSIS", language="id", citation_limit=12):
     """Reconcile cited IDs against the ACTUAL displayed answer.
 
     - Discard invented bracketed source references in answer text.
@@ -398,7 +398,10 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
     displayed=[]
     rejected=[]
     excess=[]
-    citation_limit=12
+    # Ordinary responses retain their 12-unique-reference budget. Only the
+    # explicitly read-only historical audit may opt into inspecting up to 20
+    # existing references; do not let a caller expand beyond that bound.
+    citation_limit=max(1,min(int(citation_limit),20))
     def valid_ref(match):
         ref=match.group(1)
         if ref not in allowed:

@@ -379,7 +379,8 @@ def build_mixed_answer_audit(evidence,request:MixedAnswerAuditRequest):
                       else "PDF_GUIDANCE" if "PDF_KNOWLEDGE" in requested_kinds
                       else "SOCIAL_ANALYSIS")
     visible,cited,ground=audit_assistant_answer(
-        request.question,evidence,request.answer,profile=selected_profile,language="en")
+        request.question,evidence,request.answer,profile=selected_profile,language="en",
+        citation_limit=20)
     quality=evaluate_answer_quality(request.question,evidence,visible,cited,
                                    profile=selected_profile,grounding=ground)
     issues=(quality.get("legal_review_summary") or {}).get("issues") or []
@@ -392,6 +393,9 @@ def build_mixed_answer_audit(evidence,request:MixedAnswerAuditRequest):
         "profile":selected_profile,
         "source_record_ids":list(ids),
         "selected_source_count":len(evidence),
+        "audit_citation_reference_limit":20,
+        "normal_assistant_citation_reference_limit":12,
+        "audit_does_not_rewrite_original_answer":True,
         "selected_source_kinds":dict(_Counter(kinds.values())),
         "cited_authorized_ids":list(cited),
         "cited_source_kinds":dict(_Counter(kinds[x] for x in cited if x in kinds)),

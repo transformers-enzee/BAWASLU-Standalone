@@ -67,6 +67,13 @@ def _owned(db,user,thread,index):
  stamp=hashlib.sha256(json.dumps(pair,sort_keys=True,ensure_ascii=False,separators=(",",":")).encode()).hexdigest()
  return pair,scope,stamp
 
+def _attention(state):
+ if state=="RECHECK_SAVED_REPLY":return "RECHECK_CHANGED_ANSWER"
+ if state=="EVIDENCE_CHECKED_FOLLOWUP_NEEDED":return "FOLLOW_UP_REQUIRED"
+ if state=="EVIDENCE_CHECKED_NO_FURTHER_ACTION":return "NO_FURTHER_ACTION_PROPOSED"
+ if state=="REVIEW_BLOCKED":return "RESOLVE_REVIEW_BLOCKER"
+ return "CONTINUE_REVIEW"
+
 def _output(x,stale=False):
  return {"thread_id":x.thread_id,"answer_message_index":x.answer_message_index,
  "review_state":x.review_state,"evidence_checked":x.evidence_checked,
@@ -74,6 +81,7 @@ def _output(x,stale=False):
  "version":x.version,"updated_at":x.updated_at.isoformat(),"saved_reply_changed":stale,
  "effective_review_state":"RECHECK_SAVED_REPLY" if stale else x.review_state,
  "evidence_check_current":bool(x.evidence_checked and not stale),
+ "review_action_required":_attention("RECHECK_SAVED_REPLY" if stale else x.review_state),
  "human_accuracy":None,"legal_signoff":False,"client_acceptance":False}
 
 @router.get("")
@@ -100,11 +108,16 @@ def list_reviews(response:Response,user:User=Depends(current_user),db:Session=De
     pass
   out.append(_output(r,stamp!=r.reply_fingerprint))
  counts=dict(sorted(Counter(x["effective_review_state"] for x in out).items()))
+ action_counts=dict(sorted(Counter(x["review_action_required"] for x in out).items()))
  response.headers["Cache-Control"]="private, no-store"
  return {"schema":"BAWASLU_PERSISTENT_REPLY_REVIEWS_V1630","records":out,
  "review_progress_counts":counts,"review_count":len(out),
  "stale_review_count":counts.get("RECHECK_SAVED_REPLY",0),
  "completed_current_count":sum(counts.get(s,0) for s in COMPLETE),
+ "review_action_counts":action_counts,
+ "needs_attention_count":sum(v for k,v in action_counts.items()
+  if k!="NO_FURTHER_ACTION_PROPOSED"),
+ "last_owner_review_activity_at":rows[0].updated_at.isoformat() if rows else None,
  "counts_are_owned_operational_progress_only":True,
  "model_accuracy_measured":False,"formal_client_acceptance":False}
 
@@ -164,13 +177,23 @@ def save_review(payload:ReviewSave,response:Response,user:User=Depends(current_u
 @router.get("/{thread_id}/{index}/history")
 def history(thread_id:str,index:int,response:Response,user:User=Depends(current_user),db:Session=Depends(get_db)):
  _gate(db,user)
- _owned(db,user,thread_id,index)
  r=db.query(SavedReplyReview).filter(SavedReplyReview.owner_id==user.id,
    SavedReplyReview.thread_id==thread_id,SavedReplyReview.answer_message_index==index).first()
  if r is None:raise HTTPException(404,"Review unavailable")
- events=db.query(SavedReplyReviewEvent).filter(SavedReplyReviewEvent.review_id==r.id).order_by(SavedReplyReviewEvent.id).limit(100).all()
+ # An owned review trail remains inspectable when the saved reply changed,
+ # became ineligible, or was deleted. No historical answer text is returned.
+ try:
+  _,_,fingerprint=_owned(db,user,thread_id,index)
+ except HTTPException:
+  fingerprint=None
+ recent=db.query(SavedReplyReviewEvent).filter(
+  SavedReplyReviewEvent.review_id==r.id).order_by(
+  SavedReplyReviewEvent.id.desc()).limit(50).all()
+ events=list(reversed(recent))
  response.headers["Cache-Control"]="private, no-store"
- _,_,fingerprint=_owned(db,user,thread_id,index)
- return {"record":_output(r,fingerprint!=r.reply_fingerprint),"events":[{"actor_user_id":e.actor_id,
-   "from_state":e.from_state,"to_state":e.to_state,"version":e.version,
-   "at":e.at.isoformat()} for e in events],"legal_signoff":False,"client_acceptance":False}
+ return {"record":_output(r,fingerprint!=r.reply_fingerprint),
+  "events":[{"actor_user_id":e.actor_id,"from_state":e.from_state,
+    "to_state":e.to_state,"version":e.version,"at":e.at.isoformat()} for e in events],
+  "events_returned":len(events),"history_window":"MOST_RECENT_50",
+  "history_truncated":r.version>len(events),"total_recorded_versions":r.version,
+  "legal_signoff":False,"client_acceptance":False}

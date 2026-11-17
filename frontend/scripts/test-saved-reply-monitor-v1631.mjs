@@ -8,7 +8,8 @@ for(const token of ['RECHECK_SAVED_REPLY','completed_current_count','review_prog
 for(const token of ['saved-reply-review-summary','open-saved-reply-review-history',
  'saved-reply-review-event-history','saved_reply_changed']) assert.ok(ui.includes(token),token);
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-assert.ok(main.includes("'build_version':'163.1'"));
-assert.ok(shell.includes('data-build-version="163.1"'));
-assert.ok(shell.includes('aria-label="Build version">v163.1'));
+const version=main.split("'build_version':'")[1]?.split("'")[0];
+assert.ok(Number(version.replace('.',''))>=1631);
+assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(shell.includes('aria-label="Build version">v'+version));
 console.log('PASS v163.1 owner-scoped progress, stale status and event integrity');

@@ -612,44 +612,28 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'next_cursor':last_cursor,'has_more':has_more,
                 'paid_provider_called':bool(entries),'socialcrawl_credits':0}
     if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):
-        from .models import EvidenceAssessment
-        from .socialcrawl import _result_in_scope
-        from .models import SocialListeningResult
-        from .openai_triage import openai_triage_configured
+        from .campaign_ai_readiness import campaign_manual_batch_preview
         campaign_id=str(id or (data or {}).get('campaign_id') or '')
-        if not campaign_id.isdigit(): raise ValueError('Select one campaign')
+        if not campaign_id.isdigit():raise ValueError('Select one campaign')
         c=db.get(MonitoringCampaign,int(campaign_id))
-        if not c or not allowed(p,c): raise ValueError('Campaign not available')
-        if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
-        from .sentiment_processing import relevance_is_assessed
-        links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
-            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
-        pending=0
-        for link in links:
-            item=db.get(SocialListeningResult,link.result_id)
-            if not item or not _result_in_scope(db,p,item):
-                continue
-            if not relevance_is_assessed(_current_assessment(db,c.id,item.id)):
-                pending+=1
-        try:
-            requested_limit=int((data or {}).get('sample_limit',10))
-        except (ValueError,TypeError):raise ValueError('Choose an integer batch size')
-        if not 1<=requested_limit<=20:raise ValueError('Choose between 1 and 20 posts')
-        try:
-            import os
-            configured_limit=max(0,min(20,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
-        except ValueError:configured_limit=12
-        maximum=min(requested_limit,configured_limit,pending)
-        preview={'campaign_id':str(c.id),'unassessed':pending,'batch_limit':maximum,
-                 'requested_sample_limit':requested_limit,
-                 'ai_key_configured':openai_triage_configured(),
-                 'socialcrawl_credits':0,'estimated_ai_requests':maximum,
-                 'ai_token_cost_estimate':'Variable; provider token pricing applies',
-                 'paid_ai_executed':False}
+        if not c or not allowed(p,c):raise ValueError('Campaign not available')
+        if not _editable(p,c):
+            raise PermissionError('Only campaign owner or national administrator may initiate AI backlog processing')
+        requested=(data or {}).get('sample_limit',10)
+        if type(requested) is not int or not 1<=requested<=20:
+            raise ValueError('Choose an integer batch size between 1 and 20')
+        preview=campaign_manual_batch_preview(db,c.id,requested)
         if action=='campaignAssessmentBacklogPreview':return preview
-        if (data or {}).get('confirm_ai_cost') is not True:raise ValueError('Explicit AI cost confirmation required')
-        if not preview['ai_key_configured']:raise ValueError('AI key is not configured')
-        if not maximum:raise ValueError('No pending AI assessments or processing limit is zero')
+        if (data or {}).get('confirm_ai_cost') is not True:
+            raise ValueError('Explicit AI cost confirmation required')
+        if not preview['ai_key_configured']:
+            raise ValueError('AI key is not configured')
+        if not preview['database_supports_reservations']:
+            raise ValueError('PostgreSQL budget reservations are required')
+        if not preview['batch_limit']:
+            raise ValueError('No eligible queued evidence or remaining AI request budget')
+        # The existing authenticated FastAPI route schedules the bounded task;
+        # the worker rechecks and atomically reserves each request before billing.
         return {**preview,'assessment_job_accepted':True}
     if action=='campaignManualFlag':
         from .models import EvidenceAssessment, EvidenceReview, SocialListeningResult, IssueCategory

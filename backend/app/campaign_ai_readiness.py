@@ -82,3 +82,71 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
         'paid_provider_called':False,
         'database_writes':0,
     }
+
+def campaign_manual_batch_preview(db,campaign_id,requested_limit,env=None):
+    """No-cost read of eligible queued evidence and quota for explicit approval.
+
+    Manual approval is separate from AUTO screening flags. The worker's
+    budget reservation remains authoritative at execution time.
+    """
+    from .models import EvidenceAssessment
+    from sqlalchemy import or_
+    settings=os.environ if env is None else env
+    if type(requested_limit) is not int or not 1<=requested_limit<=20:
+        raise ValueError('Choose an integer batch size between 1 and 20')
+    cid=int(campaign_id)
+    try:
+        run_limit=max(0,min(25,int(settings.get('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
+        daily=max(0,min(100,int(settings.get('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        lifetime=max(0,min(500,int(settings.get('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    except (ValueError,TypeError):
+        run_limit=daily=lifetime=0
+    today=datetime.utcnow().strftime('%Y-%m-%d')
+    reserved=(db.query(AIBudgetReservation.budget_period,
+                       AIBudgetReservation.reserved_requests)
+        .filter(AIBudgetReservation.campaign_id==cid,
+                AIBudgetReservation.budget_period.in_([today,'lifetime'])).all())
+    daily_used=sum(int(x.reserved_requests) for x in reserved if x.budget_period==today)
+    life_used=sum(int(x.reserved_requests) for x in reserved if x.budget_period=='lifetime')
+    # Latest assessment controls whether a historical source remains unassessed.
+    latest_id=(db.query(EvidenceAssessment.id)
+        .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+                EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).limit(1)
+        .correlate(CampaignEvidence).scalar_subquery())
+    label=func.upper(func.coalesce(EvidenceAssessment.relevance_label,''))
+    eligible=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                AIAssessmentJob.state=='PENDING',
+                AIAssessmentJob.attempts<3,
+                func.length(func.trim(func.coalesce(SocialListeningResult.text_content,'')))>0,
+                or_(EvidenceAssessment.id.is_(None),
+                    label.in_(['','UNASSESSED']))).scalar()) or 0
+    postgres=db.bind.dialect.name=='postgresql'
+    configured=bool(str(settings.get('OPENAI_API_KEY','')).strip())
+    cap=min(int(eligible),requested_limit,run_limit,
+            max(0,daily-daily_used),max(0,lifetime-life_used))
+    if not configured or not postgres:cap=0
+    return {
+       'campaign_id':str(cid),'unassessed':int(eligible),
+       'eligible_queued_unassessed':int(eligible),
+       'batch_limit':cap,'requested_sample_limit':requested_limit,
+       'ai_key_configured':configured,'database_supports_reservations':postgres,
+       'daily_request_limit':daily,'lifetime_request_limit':lifetime,
+       'daily_reserved':daily_used,'lifetime_reserved':life_used,
+       'daily_remaining':max(0,daily-daily_used),
+       'lifetime_remaining':max(0,lifetime-life_used),
+       'per_run_request_limit':run_limit,
+       'socialcrawl_credits':0,'estimated_ai_requests':cap,
+       'ai_token_cost_estimate':'Variable; provider token pricing applies',
+       'paid_ai_executed':False,'paid_provider_called':False,'database_writes':0,
+       'preview_is_authorization':False,
+       'historical_window_limit_applied':False,
+    }

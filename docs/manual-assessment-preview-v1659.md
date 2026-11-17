@@ -1,0 +1,7 @@
+# v165.9 — Budgeted manual assessment preview integrity
+
+A review of the authorized campaignAssessmentBacklogPreview / Start flow found the old preview relied on the latest 300 campaign evidence links, ignored queued-job states, and presented a sample size without accounting for already reserved daily and lifetime requests. The HTTP endpoint does already schedule the accepted batch as a background task, and the v165.8 worker reserves requests atomically, but these readiness inaccuracies made the user confirmation less informative.
+
+The replacement preview counts eligible PENDING jobs across all historical links, excluding watchlist-only links, completed/failed jobs, records with current assessed relevance, exhausted retry caps and blank original source text. It reports current daily and lifetime reservations and remaining limits, configured per-run cap, database reservation support and conservative maximum requests. The explicit start still requires editor permission, confirm_ai_cost=true, a configured provider and PostgreSQL; no operation is scheduled when remaining eligibility or budget is zero. The actual worker rechecks reservations before each paid call. Preview remains strictly read-only and reports no billing.
+
+This batch does not run assessments automatically or change campaign-2's 29 pending jobs; separate explicit campaign authorization and cost confirmation are still required for paid processing.

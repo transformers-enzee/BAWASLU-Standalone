@@ -221,7 +221,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             if job and (job.state=='PROCESSING' or (job.state=='COMPLETED' and not reanalysis)):continue
             if job and job.attempts>=3 and not reanalysis:continue
             item=db.get(SocialListeningResult,link.result_id)
-            if not item:continue
+            if not item or not (item.text_content or '').strip():continue
             if not job:continue
             # Manual calls still need a pending reservation row; automatic calls are separately budgeted.
             # Atomic state transition prevents a second process from claiming the same row.

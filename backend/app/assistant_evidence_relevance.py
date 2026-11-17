@@ -6,7 +6,7 @@ authority or a full-population statistic. No IO, model calls or mutations.
 import json
 import re
 from collections import Counter
-_WORD=re.compile(r"(?u)\b[\w]+(?:[-'][\w]+)*\b")
+_WORD=re.compile(r"(?u)\b[\w]+\b")
 
 def _words(value):
     if isinstance(value,(dict,list,tuple)):
@@ -28,6 +28,19 @@ def formal_source_term_score(terms,title,body,geography="",actors="",approved=No
     secondary=sum(3 for t in q if t in geo_words)+sum(3 for t in q if t in actor_words)
     secondary+=sum(2 for t in q if t in approved_words)
     return primary+secondary
+
+_INT_ID=re.compile(r"(?<![\w-])INT-[0-9]{4}-[0-9]{6}(?![\w-])",re.I)
+
+def exact_formal_source_ids(question):
+    """Named saved Inbox IDs are identity selectors, not relevance keywords."""
+    return {m.group(0).upper() for m in _INT_ID.finditer(str(question or ""))}
+
+def exact_formal_selection_complete(question,selected,limit=12):
+    requested=exact_formal_source_ids(question)
+    if not requested:return True
+    if len(requested)>limit:return False
+    actual={str(getattr(row,"intelligence_id","")).upper() for row in selected or []}
+    return requested==actual
 
 def retrieval_scope_note(question,formal_count,social_count):
     """Description of selected, authorized sources, not corpus coverage."""

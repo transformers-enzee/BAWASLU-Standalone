@@ -148,7 +148,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'164.0','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'164.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -726,8 +726,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
+    from .assistant_evidence_relevance import exact_formal_source_ids,exact_formal_selection_complete
+    explicit_formal_ids=exact_formal_source_ids(q)
     explicit_social_ids=exact_social_source_ids(q)
-    general=not explicit_social_ids and not explicit_pdf_ids and (requested=='GENERAL' or (
+    general=not explicit_formal_ids and not explicit_social_ids and not explicit_pdf_ids and (requested=='GENERAL' or (
         requested=='AUTO' and response_profile!=PDF_GUIDANCE and
         is_conceptual(q) and not pdf_evidence))
     source_warning=''
@@ -762,9 +764,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         context_pdf=select_case_reference_pages(q,context_pdf)
     if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) and not question_mentions_pdf(q):
         context_pdf=[]
-    if explicit_social_ids and not exact_social_selection_complete(q,chosen_social,limit=20):
-        # A missing or unauthorized named source cannot be replaced with a
-        # different formal record or an unrelated PDF, even in a comparison.
+    if (explicit_social_ids and not exact_social_selection_complete(q,chosen_social,limit=20)) or (
+            explicit_formal_ids and not exact_formal_selection_complete(q,selected_formal,limit=10)):
+        # Missing or unauthorized named sources cannot be substituted by
+        # an unrelated Inbox record, social post, PDF or general GPT answer.
         selected_formal=[]
         chosen_social=[]
         context_pdf=[]
@@ -795,8 +798,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                              'reference_page_count':0,'limited':True}}
     # An explicitly named saved post is an exact-source question. Never
     # substitute GPT general context when the ID was not authorized/found.
-    explicit_social_id=bool(explicit_social_ids)
-    if general or (not evidence and requested=='AUTO' and not explicit_social_id):
+    explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)
+    if general or (not evidence and requested=='AUTO' and not explicit_saved_id):
         try:
             text,provider=generate_general_openai_answer(q,previous)
         except AssistantProviderError as exc:
@@ -823,7 +826,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                 'grounding':{'accessible_count':len(accessible),
                     'selected_count':0,'supporting_count':0,'scope':'GPT_GENERAL_NO_PRIVATE_RECORDS',
                     'source_types':[],'matched_social':0,'limited':True}}
-    if (requested=='DATA' or explicit_social_id) and not evidence:
+    if (requested=='DATA' or explicit_saved_id) and not evidence:
         no_match={
             'id':'Tidak ditemukan catatan BAWASLU yang sesuai dalam cakupan akses Anda. Saya tidak akan menebak dari pengetahuan umum pada mode bukti tersimpan.',
             'en':'No matching BAWASLU records were found in your authorized scope. I will not substitute unsupported general knowledge for saved evidence.',

@@ -4,7 +4,7 @@ import httpx
 from .openai_triage import openai_triage_model, OPENAI_DEFAULT_BASE_URL
 from .domain import human_approved_triage, geography_mismatch, triage_review_status
 from .source_retrieval import clean_article_text
-from .assistant_evidence_relevance import formal_source_term_score
+from .assistant_evidence_relevance import formal_source_term_score, exact_formal_source_ids, exact_formal_selection_complete
 
 class AssistantProviderError(RuntimeError):
     def __init__(self, code, message=''):
@@ -202,6 +202,8 @@ def select_assistant_records(question, rows, limit=12):
     today=datetime.now(timezone.utc).date()
     start=today-timedelta(days=6)
     wants_priority=('highest-priority' in q or 'highest priority' in q or 'high priority' in q or 'priority' in q or 'prioritas' in q)
+    explicit=exact_formal_source_ids(question)
+    if explicit and len(explicit)>limit:return []
 
     scored=[]
     for item in rows:
@@ -210,6 +212,8 @@ def select_assistant_records(question, rows, limit=12):
         if semantics['requires_validated'] and item.review_status!='Validated as Relevant Intelligence':
             continue
         if semantics['requires_unverified'] and item.verification_status!='UNVERIFIED':
+            continue
+        if explicit and str(getattr(item,'intelligence_id','')).upper() not in explicit:
             continue
 
         basis_date=_basis_date(item,semantics['date_basis'])
@@ -224,7 +228,9 @@ def select_assistant_records(question, rows, limit=12):
             tokens,item.title or '',item.original_content or '',
             ' '.join(x for x in (item.province,item.regency_city,item.platform) if x),
             ' '.join(x for x in (item.author,item.source_name) if x),approved)
-        if tokens and matched==0:
+        # Explicit identity outranks topic terms in the surrounding request.
+        # Authorization, status filters and date windows still apply.
+        if tokens and matched==0 and not explicit:
             continue
 
         score=matched
@@ -242,7 +248,10 @@ def select_assistant_records(question, rows, limit=12):
         scored.append((score,recency,item))
 
     scored.sort(key=lambda x:(x[0],x[1],getattr(x[2],'id',0)),reverse=True)
-    return [x[2] for x in scored[:limit]]
+    selected=[x[2] for x in scored[:limit]]
+    if explicit and not exact_formal_selection_complete(question,selected,limit):
+        return []
+    return selected
 
 def assistant_evidence_record(item):
     approved=human_approved_triage(item) or {}

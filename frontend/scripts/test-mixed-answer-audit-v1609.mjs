@@ -6,7 +6,7 @@ const ui=read('src/components/intel/AssistantSavedAnswerAudit.jsx');
 const qa=read('../backend/tests/test_mixed_answer_audit_v1609.py');
 const main=read('../backend/app/main.py');
 const shell=read('src/components/intel/Shell.jsx');
-for(const token of ['@router.post("/mixed-answer-audit")','retrieve_exact_pdf_pages(db,principal,question,limit=8)',
+for(const token of ['@router.post("/mixed-answer-audit")','retrieve_exact_pdf_pages(db,principal,question,limit=12)',
  'set(resolved)!=set(ids)','list_intelligence(db,principal)',
  'build_mixed_answer_audit','"human_accuracy":None',
  '"raw_source_text_included":False','"pasted_answer_stored":False'])

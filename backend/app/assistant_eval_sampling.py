@@ -359,7 +359,7 @@ def saved_answer_audit(
 
 class MixedAnswerAuditRequest(BaseModel):
     """Bounded source IDs; never allow the client to send its own evidence."""
-    source_ids:list[str]=Field(min_length=1,max_length=8)
+    source_ids:list[str]=Field(min_length=1,max_length=12)
     question:str=Field(min_length=3,max_length=1200)
     answer:str=Field(min_length=3,max_length=10000)
 
@@ -448,7 +448,7 @@ def resolve_mixed_audit_sources(db,principal,request:MixedAnswerAuditRequest):
         # Existing exact page method enforces doc visibility, active status and
         # page presence, and returns [] for *any* missing requested page.
         question=" ".join(wanted_pdf)
-        pages=retrieve_exact_pdf_pages(db,principal,question,limit=8)
+        pages=retrieve_exact_pdf_pages(db,principal,question,limit=12)
         resolved.update({row["record_id"]:row for row in pages})
     if set(resolved)!=set(ids):
         raise HTTPException(404,"One or more selected evidence records are unavailable")

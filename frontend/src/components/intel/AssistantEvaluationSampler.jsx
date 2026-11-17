@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {ClipboardList,ChevronDown,RefreshCw,FileDown} from 'lucide-react';
 import AssistantSavedAnswerAudit from './AssistantSavedAnswerAudit';
+import AssistantSavedReplyAudit from './AssistantSavedReplyAudit';
 
 const LABELS={
  POTENTIAL_VIOLATION_SIGNAL:'Potential violation signal',
@@ -137,6 +138,7 @@ export default function AssistantEvaluationSampler({onPrepare,disabled=false}){
        </div>)}
      </div>
      {auditItem&&<AssistantSavedAnswerAudit item={auditItem} disabled={disabled||loading}/>}
+     <AssistantSavedReplyAudit disabled={disabled||loading}/>
      {data.negative_control&&<div className="rounded-lg border border-dashed border-amber-300 p-3">
       <p className="text-xs font-semibold text-[#84642c]">Separate no-evidence control — excluded from real case counts</p>
       <p className="mt-1 text-[11px] text-[#64748b]">{data.negative_control.question}</p>

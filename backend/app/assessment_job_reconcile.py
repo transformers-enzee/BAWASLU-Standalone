@@ -54,3 +54,23 @@ def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
     result=db.execute(stmt)
     db.commit()
     return max(0,int(result.rowcount or 0))
+
+def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
+    """Return only queued, claimable ordinary evidence, oldest first.
+
+    Read-only. Unlike the former latest-300-link scan, this selects directly
+    from durable pending jobs, including evidence outside the UI window.
+    Failed/completed/processing jobs and WATCHLIST_ACCOUNT matches are excluded.
+    """
+    cid=int(campaign_id)
+    if type(limit) is not int or not 1<=limit<=BATCH_LIMIT:
+        raise ValueError("Choose 1-200 queued assessment jobs per batch")
+    return (db.query(CampaignEvidence)
+        .join(AIAssessmentJob,and_(
+            AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,
+            AIAssessmentJob.result_id==CampaignEvidence.result_id))
+        .filter(CampaignEvidence.campaign_id==cid,
+                CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
+                AIAssessmentJob.state=="PENDING",
+                AIAssessmentJob.attempts<3)
+        .order_by(CampaignEvidence.id.asc()).limit(limit).all())

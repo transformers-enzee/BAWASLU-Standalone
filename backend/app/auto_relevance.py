@@ -187,8 +187,17 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         active_gates=db.query(RelevanceGateQuestion).filter(RelevanceGateQuestion.active==True).order_by(RelevanceGateQuestion.id).limit(20).all()
         if target_result_id is None:
             enqueue_campaign_evidence(campaign.id)
-            links=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign.id,
-                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').order_by(CampaignEvidence.id.desc()).limit(300).all()
+            if reanalysis:
+                # Preserve the existing explicit reanalysis path and its scope.
+                links=db.query(CampaignEvidence).filter(
+                    CampaignEvidence.campaign_id==campaign.id,
+                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'
+                ).order_by(CampaignEvidence.id.desc()).limit(300).all()
+            else:
+                # Read durable pending jobs, not an arbitrary latest-link window.
+                # This includes queued sources older than the latest 300 links.
+                from .assessment_job_reconcile import pending_campaign_job_links
+                links=pending_campaign_job_links(db,campaign.id)
         else:
             # Paid pilot must use ONLY the explicitly approved evidence ID, even
             # when it falls outside the latest 300 links; never auto-enqueue unrelated posts.

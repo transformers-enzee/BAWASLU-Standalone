@@ -170,7 +170,7 @@ export default function AssistantSavedReplyAudit({disabled=false}){
     </p>)}
    {batch.source_unavailable_review_count>0&&<p className="text-xs text-amber-800">
     {batch.source_unavailable_review_count} reply/replies could not be checked using current accessible evidence; this is not a confirmed answer error.
-   </p>
+   </p>}
    <p className="text-[11px] text-[#876532]">
     Counts refer only to this bounded, self-selected session; warnings are not
     verified AI errors, legal conclusions or a representative accuracy score.

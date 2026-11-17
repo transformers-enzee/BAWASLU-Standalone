@@ -20,6 +20,7 @@ from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
 from .smart_radar_geography import attach_geo_to_findings
 from .monitoring_count_integrity import inbox_window_integrity
+from .monitoring_metric_reconciliation import radar_metric_integrity
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -262,6 +263,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
         sentiments.update(finding.get("sentiment_counts") or {})
         geo_mentions.update(finding.get("geo_signal_counts") or {})
         verified_locations.update(finding.get("verified_incident_counts") or {})
+    recent_metrics=radar_metric_integrity(findings,platforms,sentiments,len(posts))
     # Keyword cloud is derived from the main keywords saved for each permitted
     # campaign, counted against actual relevant saved post text (not topic labels).
     # No additional source-row reads; the Inbox payload is already authorized.
@@ -290,6 +292,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     assembled_ms=(time.perf_counter()-inbox_started)*1000-inbox_ms
     payload={"batch_id":None,"source_total":len(posts),
         "count_integrity":recent_integrity,
+        "metric_integrity":recent_metrics,
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),

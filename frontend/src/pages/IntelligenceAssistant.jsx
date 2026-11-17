@@ -95,6 +95,22 @@ export default function IntelligenceAssistant(){
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
+ function prepareFreshSourceCheck(index){
+  if(busy||historyBusy)return;
+  const prompt=messages[index-1]?.role==='user'?String(messages[index-1].text||'').trim():'';
+  if(!prompt)return;
+  // A saved answer cannot authorize a new case action. Start a separate
+  // conversation without carrying older answer text or source cards forward.
+  setActive(null);
+  setMessages([]);
+  setReviewableIndexes(new Set());
+  setScoringPacket(null);
+  setQuestion(prompt.slice(0,1000));
+  setAnalysisMode('DATA');
+  setError('');
+  setHistoryError('');
+  document.querySelector('[aria-label="Assistant answer source"]')?.scrollIntoView({behavior:'smooth',block:'end'});
+ }
  function scoreThisAnswer(index){
   try{
    if(!reviewableIndexes.has(index))
@@ -216,11 +232,26 @@ export default function IntelligenceAssistant(){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<>
-        {i===messages.length-1&&m.response_profile==='ACTION_REQUEST'&&
+        {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
        </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>
+        {!reviewableIndexes.has(i)&&<div data-testid="assistant-historical-source-caution"
+         className="mt-3 rounded-lg border border-[#e8d6bf] bg-[#fffaf2] px-3 py-3 text-xs text-[#765c39]">
+         <p className="font-semibold">{(m.answer_language||'id')==='id'?'Jawaban tersimpan — sumber mungkin berubah':'Saved answer — source access or evidence may have changed'}</p>
+         <p className="mt-1">{(m.answer_language||'id')==='id'
+          ?'Analisis ini adalah arsip percakapan, bukan pemeriksaan ulang sumber saat ini. Untuk menyiapkan penugasan atau laporan berdasarkan analisis baru, jalankan pertanyaan ulang.'
+          :'This is a saved conversation snapshot, not a fresh check of source permissions or current evidence. Refresh the question before preparing new casework.'}</p>
+         {messages[i-1]?.role==='user'&&<button type="button" className="intel-ghost mt-2 text-xs"
+          data-testid="assistant-prepare-fresh-source-check" disabled={busy||historyBusy}
+          onClick={()=>prepareFreshSourceCheck(i)}>
+          {(m.answer_language||'id')==='id'?'Siapkan pemeriksaan ulang sumber':'Prepare fresh source check'}
+         </button>}
+         <p className="mt-1 text-[11px]">{(m.answer_language||'id')==='id'
+          ?'Tombol hanya menyiapkan pertanyaan baru; permintaan AI dikirim setelah Anda menekan Kirim.'
+          :'This prepares a new question without using AI credits until you press Send.'}</p>
+        </div>}
         {m.grounding?.grounding_audit&&!showQa&&<div data-testid="assistant-source-caution"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs text-[#52657a]">
           <p>{(m.answer_language||'id')==='id'?'Sumber pendukung perlu diverifikasi petugas.':'Supporting sources require officer verification.'}</p>

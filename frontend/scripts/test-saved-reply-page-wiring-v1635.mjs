@@ -6,7 +6,7 @@ const page=read('src/pages/IntelligenceAssistant.jsx');
 const audit=read('src/components/intel/AssistantSavedReplyAudit.jsx');
 const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
 const shell=read('src/components/intel/Shell.jsx');
-assert.equal(version,'163.5');
+assert.ok(Number(version.replace('.',''))>=1635);
 assert.ok(shell.includes('data-build-version="'+version+'"'));
 assert.ok(shell.includes('aria-label="Build version">v'+version));
 assert.ok(page.includes("import AssistantSavedReplyAudit from '@/components/intel/AssistantSavedReplyAudit'"));

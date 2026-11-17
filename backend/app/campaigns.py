@@ -869,7 +869,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id),
                     'paid_provider_called':False,'database_writes':0,'socialcrawl_credits':0}
         created=enqueue_campaign_evidence(campaign.id)
-        return {'created_pending_jobs':created,'paid_provider_called':False,'socialcrawl_credits':0}
+        return {'created_pending_jobs':created,
+                'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id),
+                'paid_provider_called':False,'socialcrawl_credits':0}
     if action=='campaignClassificationBatchPreview':
         # Complete saved-evidence coverage, including unassessed source rows.
         # Read only: no paid provider call, no regional authorization expansion.

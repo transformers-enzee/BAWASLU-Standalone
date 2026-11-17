@@ -74,19 +74,14 @@ def normalize_relevance_label(output):
     return label if label in VALID_RELEVANCE else 'UNCERTAIN'
 
 def enqueue_campaign_evidence(campaign_id):
-    """Create durable pending rows; never calls an AI provider."""
+    """Queue missing eligible jobs, idempotently, without provider requests."""
+    from .assessment_job_reconcile import enqueue_unassessed_campaign_jobs
     db=SessionLocal()
     try:
-        linked=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==campaign_id,
-            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').limit(500).all()
-        added=0
-        for link in linked:
-            latest=db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=link.result_id).order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first()
-            if latest and str(latest.relevance_label or '').upper() not in ('UNASSESSED',''):continue
-            if db.query(AIAssessmentJob.id).filter_by(campaign_id=campaign_id,result_id=link.result_id).first():continue
-            db.add(AIAssessmentJob(campaign_id=campaign_id,result_id=link.result_id,state='PENDING'));added+=1
-        db.commit()
-        return added
+        return enqueue_unassessed_campaign_jobs(db,campaign_id)
+    except Exception:
+        db.rollback()
+        raise
     finally:db.close()
 
 def recover_stale_jobs(campaign_id=None):

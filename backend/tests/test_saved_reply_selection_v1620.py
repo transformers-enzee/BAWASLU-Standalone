@@ -44,7 +44,7 @@ def test_ineligible_selected_turn_is_counted_without_evidence_lookup(session,mon
                         lambda *args:called.append(args))
     result=audit_owned_saved_reply_batch(
         session,{"status":"Active","permissions":{"view_intelligence":True}},3,
-        request((OWNED,0)).selections)
+        request((OWNED,2)).selections)
     assert result["ineligible"]==1
     assert result["reason_code_counts"]=={"INVALID_ANSWER_TURN":1}
     assert not called

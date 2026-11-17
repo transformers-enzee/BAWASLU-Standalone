@@ -38,14 +38,19 @@ def test_owned_batch_one_reply_source_auth_and_privacy(session,monkeypatch):
 
 def test_other_user_thread_not_audited_or_disclosed(session,monkeypatch):
     called=[]
-    monkeypatch.setattr(module,"resolve_mixed_audit_sources",
-                        lambda *a:called.append(a))
+    def authorized_only(db,principal,selection):
+        called.append(list(selection.source_ids))
+        assert selection.source_ids==["SOCIAL-7"]
+        return [{"record_id":"SOCIAL-7","record_type":"SOCIAL_LISTENING",
+                 "source_excerpt":"Authorized original source"}]
+    monkeypatch.setattr(module,"resolve_mixed_audit_sources",authorized_only)
     data=saved_reply_batch_audit(
         request((OWNED,1),(OTHER,1)),Response(),current(),session)
-    assert data["unavailable"]>=1
+    assert data["audited"]==1
+    assert data["unavailable"]==1
     assert data["results"][1]["reason_code"]=="SAVED_CONVERSATION_UNAVAILABLE"
     assert "Other answer" not in str(data)
-    assert called==[]
+    assert called==[["SOCIAL-7"]]
 
 def test_nonexistent_thread_has_same_denial_as_other_user(session):
     data=saved_reply_batch_audit(

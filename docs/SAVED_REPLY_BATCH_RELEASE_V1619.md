@@ -1,0 +1,3 @@
+# v161.9 — Complete bounded saved Assistant reply batch audit
+
+The v161.8 backend suite produced 1,203 passes and one failing regression fixture: the cross-user test returned `None` as evidence for the *authorized* reply, causing the quality audit to fail before reaching its intended assertion. The negative test now returns a valid authorized evidence record, records its exact source-ID lookup, and verifies the inaccessible thread is reported as unavailable without any source fetch or data disclosure. No audit authorization or source-retrieval policy is weakened. Build version advanced sequentially to v161.9; full Render QA and staging activation required.

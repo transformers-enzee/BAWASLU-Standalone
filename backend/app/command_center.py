@@ -19,6 +19,7 @@ from .models import (MonitoringCampaign, CampaignEvidence, EvidenceAssessment,
     EvidenceReview, SocialListeningResult, IssueCategory, IssueCategoryPhrase,
     WatchlistItem, SourceAccount, WatchlistAccountEvidence, WatchlistAccountSync, IntelligenceItem)
 from .socialcrawl import _result_in_scope
+from .monitoring_count_integrity import command_period_integrity
 
 def _as_list(raw):
     try:
@@ -325,6 +326,7 @@ def build_command_center(db,p,data=None):
                   for n in range((date.fromisoformat(end)-date.fromisoformat(start)).days+1)] if preset!='all' else []
     assessed_coverage=len(captured_ids.intersection(assessed_ids))
     unassessed_coverage=len(captured_ids)-assessed_coverage
+    period_integrity=command_period_integrity(captured_ids,assessed_ids,relevant,alerts_by_post)
 
     alerts=list(alerts_by_post.values())
     alerts.sort(key=lambda a:(a['priority_order'],a['detected_at'] or ''),reverse=True)
@@ -609,6 +611,7 @@ def build_command_center(db,p,data=None):
                         'distinct_campaigns_in_scope':len(campaigns_by_id),
                         'potential_alerts_basis':'ALL_PERIOD_SCOPED_AUTHORIZED_UNDISMISSED_DISTINCT_POSTS',
                         'warning':'Potential alert counts and alert previews use the same authorized publication period. Publication-date counts and newly collected counts are different measures. AI relevance and potential alerts require stored assessments. Province indicates campaign monitoring scope, not verified author location.'},
+            'count_integrity':period_integrity,
             'capabilities':{'emerging_issues':False,'ai_generated_new_summary':False,
                             'cross_module_assistant':False},
             'paid_provider_called':False}

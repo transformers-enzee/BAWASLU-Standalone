@@ -1,0 +1,7 @@
+# v164.3 — Operational count integrity and incompatible denominator protection
+
+The Command Centre already has a permission-scoped all-captured publication-period inventory. Its captured, assessed, relevant and undismissed-flag counts should use distinct original social post IDs. v164.3 adds read-only reconciliation derived from the existing in-memory ID sets, checking the subset relationships: assessed within captured; relevant within assessed; active alerts within relevant. Any discrepancy is surfaced as a named data-integrity indicator rather than silently treated as a valid zero.
+
+The Smart Radar/Inbox-derived summary has a different population: up to 300 saved links per authorized campaign in a recent, relevance-filtered Inbox feed, not all monitored posts over the Command Centre publication period. Its new count-integrity field compares unique eligible saved source IDs from the already authorized Inbox response with the grouped source IDs used for dashboard metrics. It flags missing, unexpected and duplicate group occurrences without rereading evidence. The two inventories are explicitly identified as not directly comparable.
+
+These are source-count checks only: they do not prove sentiment/issue classification accuracy, incident verification, exhaustive retrieval or legal wrongdoing. No database migration, additional query, model call, new admin controls or officer record writes. Regression tests verify deduplication, counts, scope distinction and fail-visible disagreement.

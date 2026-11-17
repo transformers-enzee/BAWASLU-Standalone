@@ -19,6 +19,7 @@ from .models import User
 from .access import profile, has
 from .smart_radar_intelligence import build_topic_findings
 from .smart_radar_geography import attach_geo_to_findings
+from .monitoring_count_integrity import inbox_window_integrity
 
 """AI-assisted summaries are used only after a dedicated, cached topic synthesis
     job; source-grounded editorial insight templates are used for the initial
@@ -250,6 +251,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
             "RADAR_EMPTY_AUTHORIZED_FEED user_id=%s inbox_records=%s campaign_count=%s",
             user.id,len(inbox.get('findings') or []),len(inbox.get('campaigns') or []))
     posts=[post for finding in findings for post in finding["posts"]]
+    recent_integrity=inbox_window_integrity(inbox.get("findings") or [],findings)
     platforms=Counter(post["platform"] for post in posts)
     candidates=Counter()
     sentiments=Counter()
@@ -287,6 +289,7 @@ def dashboard(response:Response,user:User=Depends(current_user),db:Session=Depen
     watchlist=registry_action(db,principal,'watchlistSummary',{})
     assembled_ms=(time.perf_counter()-inbox_started)*1000-inbox_ms
     payload={"batch_id":None,"source_total":len(posts),
+        "count_integrity":recent_integrity,
         "source_unique_urls":len({post["source_url"] for post in posts if post["source_url"]}),
         "findings":[{k:v for k,v in finding.items() if k!="posts"} for finding in findings],
         "platform_counts":dict(platforms),"candidate_mentions":candidates.most_common(10),

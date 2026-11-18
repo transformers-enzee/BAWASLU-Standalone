@@ -71,11 +71,12 @@ export default function AssessmentOperationsPanel({campaignId}){
         <strong>{item.code.replaceAll('_',' ')}</strong> ({fmt(item.affected_count)}; {item.group.toLowerCase()})
         <p>Next: {item.investigation_or_action}</p>
         <p className="text-slate-600">Clear when: {item.clearance_criterion}</p>
-        {item.existing_read_only_preview_action&&<p className="text-slate-500">Available read-only preview: {item.existing_read_only_preview_action}</p>}
+        {item.existing_read_only_preview_action&&<p className="text-slate-500">Available read-only preview: {item.existing_read_only_preview_action}{item.read_only_preview_payload?.dry_run?' (requires dry_run: true; omitting this performs a write)':''}</p>}
        </li>)}
       </ol>
       <p className="text-slate-500">Guidance only; access checks and explicit confirmation apply to any subsequent write action. No remediation is run here.</p>
     </div>}
+    <p className="text-xs text-slate-600">Cross-check: {data.snapshot_consistency?.all_consistent?'Consistent across operational reads':'Counts differ — refresh and investigate if persistent'}. {data.snapshot_consistency?.failed_checks?.length>0&&'Differences: '+data.snapshot_consistency.failed_checks.join(', ')} Independent snapshots can change while jobs run.</p>
     <p className="text-xs text-slate-600">Assessment state: {String(data.lifecycle_status||'UNKNOWN').replaceAll('_',' ').toLowerCase()} · Checked {data.generated_at_utc?new Date(data.generated_at_utc).toLocaleString('en-GB'):'on request'}. Counts are independent readings, not an atomic snapshot.</p>
     <p className="text-xs text-slate-700">Worker: {remaining.worker_enabled?'Enabled':'Disabled'} · Automatic screening: {remaining.automatic_screening_enabled?'Enabled':'Disabled'} · Daily requests remaining: {fmt(remaining.daily_remaining)} · Lifetime requests remaining: {fmt(remaining.lifetime_remaining)}. These numbers do not authorize paid processing.</p>
     <p className="text-xs text-slate-600">Superseded (not AI-completed): {fmt(q.superseded_assessed)} · Superseded with changed/missing classification requiring review: {fmt(data.already_assessed_queue_reconciliation?.superseded_without_current_classification)}.</p>

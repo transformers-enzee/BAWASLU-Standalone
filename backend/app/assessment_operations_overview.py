@@ -6,6 +6,7 @@ from .assessment_completion_audit import campaign_completion_audit
 from .assessment_interrupted_recovery import interrupted_campaign_preview
 from .assessment_superseded_reconcile import superseded_preview
 from .assessment_operational_acceptance import assess_operational_acceptance
+from .assessment_snapshot_consistency import assessment_snapshot_consistency
 
 def campaign_assessment_operations_overview(db,campaign_id):
     cid=int(campaign_id)
@@ -14,7 +15,12 @@ def campaign_assessment_operations_overview(db,campaign_id):
     completion=campaign_completion_audit(db,cid)
     interrupted=interrupted_campaign_preview(db,cid)
     superseded=superseded_preview(db,cid)
+    consistency=assessment_snapshot_consistency(readiness,completion,interrupted,superseded)
     issues=[]
+    if not consistency['all_consistent']:
+        issues.append({'code':'SNAPSHOT_AGGREGATE_DRIFT',
+            'count':len(consistency['failed_checks']),
+            'next_step':'Refresh read-only counts; investigate only if differences persist across refreshed snapshots.'})
     if coverage['pending_monitoring_without_job']>0:
         issues.append({'code':'UNQUEUED_EVIDENCE',
             'count':coverage['pending_monitoring_without_job'],
@@ -75,6 +81,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
     acceptance=assess_operational_acceptance(readiness,issues)
     return {
         'operational_acceptance':acceptance,
+        'snapshot_consistency':consistency,
         'generated_at_utc':datetime.now(timezone.utc).isoformat(),
         'snapshot_is_atomic':False,
         'lifecycle_status':lifecycle_status,

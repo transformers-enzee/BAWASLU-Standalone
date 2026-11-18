@@ -6,7 +6,8 @@ Pending manual work and unattended worker readiness are kept separate.
 _HISTORICAL=('STALE_PROCESSING','INTERRUPTED_HISTORY_REVIEW',
     'COMPLETION_PROVENANCE_GAP','SENTIMENT_USAGE_NOT_CLASSIFICATION_PROOF',
     'COMPLETED_LATEST_CLASSIFICATION_REVIEW','CLASSIFICATION_USAGE_LIFECYCLE_CONFLICT',
-    'USAGE_INTEGRITY_WARNING','SUPERSEDED_CLASSIFICATION_CHANGED')
+    'USAGE_INTEGRITY_WARNING','SUPERSEDED_CLASSIFICATION_CHANGED',
+    'SNAPSHOT_AGGREGATE_DRIFT')
 _QUEUE=('UNQUEUED_EVIDENCE','PENDING_ALREADY_ASSESSED','INVENTORY_RECONCILIATION_WARNING')
 
 # Each recommended action is advisory. Availability and authorization of the
@@ -38,6 +39,8 @@ _RESOLUTIONS={
         'Reaudit usage integrity from original records; never synthesize provider usage',None),
     'SUPERSEDED_CLASSIFICATION_CHANGED':('HISTORY','Review newer assessment versions against superseded queue history',
         'Resolve latest classification inconsistencies without automatically reopening paid work',None),
+    'SNAPSHOT_AGGREGATE_DRIFT':('HISTORY','Refresh the on-demand status; independently compare queue and audit aggregates if inconsistent',
+        'Verify the aggregate count differences disappear or identify a persistent data issue',None),
 }
 
 def assessment_resolution_plan(issues):
@@ -54,6 +57,8 @@ def assessment_resolution_plan(issues):
         active.append({'code':code,'group':group,'affected_count':count,
             'investigation_or_action':action,'clearance_criterion':criterion,
             'existing_read_only_preview_action':preview,
+            'read_only_preview_payload':{'dry_run':True} if code=='UNQUEUED_EVIDENCE' else {},
+            'preview_action_is_not_implicitly_read_only':code=='UNQUEUED_EVIDENCE',
             'requires_separate_permissions_and_confirmation':True,
             'automated_remediation_authorized':False})
     # History comes first, then no-credit queue reconciliation. Preserve

@@ -153,7 +153,7 @@ def test_location_briefing_compiles_captured_activity_and_flagged_review_work():
     assert any(a['kind']=='ASSESSMENT_COVERAGE' for a in out['attention_actions'])
     assert 'Jawa Barat' in out['briefing']['text']
     assert '2 distinct social posts were captured' in out['briefing']['text']
-    assert {x['platform']:x['count'] for x in out['activity']['top_platforms']}=={'instagram':1,'tiktok':1}
+    assert {x['platform']:x['count'] for x in out['activity']['top_platforms']}=={'Instagram':1,'TikTok':1}
     assert len(out['activity']['daily'])==7
     assert sum(x['count'] for x in out['activity']['daily'])==2
     assert out['regions'][0]['count']==2

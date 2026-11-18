@@ -175,6 +175,11 @@ def build_command_center(db,p,data=None):
         # completed relevance assessment and must not inflate coverage, alerts,
         # candidate/issue inventories or executive briefings.
         if assessment.model_version=='PRISM_PENDING_OPENAI':continue
+        # UNASSESSED and unfamiliar relevance values are not completed
+        # relevance decisions even if a placeholder assessment row exists.
+        valid_label=str(assessment.relevance_label or '').upper()
+        if valid_label not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):
+            continue
         evidence_checked+=1
         assessed_ids.add(post.id)
         if source_updated is None or post.collected_at and post.collected_at>source_updated:

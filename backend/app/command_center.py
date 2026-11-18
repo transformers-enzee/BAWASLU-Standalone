@@ -7,7 +7,7 @@ import json
 import re
 from collections import defaultdict, Counter
 from datetime import date, datetime, timedelta
-from sqlalchemy import and_, func, case
+from sqlalchemy import and_, func
 from .access import allowed, has
 from .geography import province_code_for, province_name_for, regency_code_for, REGENCY_BY_CODE, PROVINCES, INDONESIAN_PROVINCE_ALIASES
 
@@ -124,19 +124,14 @@ def build_command_center(db,p,data=None):
     # Latest version per (campaign, source), avoiding inflation from reassessment.
     assessed_rows=[]
     if campaigns_ids:
-        # Match Inbox precedence: completed evidence first, then highest
-        # assessment version and row id. A window partition guarantees one
-        # effective assessment per campaign/source in SQLite and PostgreSQL.
-        preliminary=case(
-            (EvidenceAssessment.model_version.in_(
-                ['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
-            else_=0)
+        # Match the actual Inbox query: newest assessment version and row ID
+        # decide eligibility, even when the newest row is preliminary.
+        # Exactly one row per campaign/source prevents duplicated indicators.
         ranked=(db.query(
             EvidenceAssessment.id.label('assessment_id'),
             func.row_number().over(
                 partition_by=(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id),
-                order_by=(preliminary.asc(),
-                          EvidenceAssessment.assessment_version.desc(),
+                order_by=(EvidenceAssessment.assessment_version.desc(),
                           EvidenceAssessment.id.desc())).label('rank'))
             .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
             .subquery())
@@ -183,7 +178,7 @@ def build_command_center(db,p,data=None):
         # Match Inbox eligibility: a preliminary provider label is not a
         # completed relevance assessment and must not inflate coverage, alerts,
         # candidate/issue inventories or executive briefings.
-        if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
+        if assessment.model_version in ('PRISM_PENDING_OPENAI',):continue
         # UNASSESSED and unfamiliar relevance values are not completed
         # relevance decisions even if a placeholder assessment row exists.
         valid_label=str(assessment.relevance_label or '').upper()
@@ -253,7 +248,7 @@ def build_command_center(db,p,data=None):
           .limit(300).all())
         seen_recent=set()
         for assessment,post in all_recent:
-            if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
+            if assessment.model_version in ('PRISM_PENDING_OPENAI',):continue
             if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):continue
             if post.id in seen_recent or not _result_in_scope(db,p,post):continue
             campaign=campaigns_by_id.get(assessment.campaign_id)
@@ -374,7 +369,7 @@ def build_command_center(db,p,data=None):
         geo_rows=assessed_rows
         for assessment,post in geo_rows:
             if not _result_in_scope(db,p,post):continue
-            if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
+            if assessment.model_version in ('PRISM_PENDING_OPENAI',):continue
             if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):continue
             codes=set()
             for signal in _as_list(assessment.geographic_signals_json):

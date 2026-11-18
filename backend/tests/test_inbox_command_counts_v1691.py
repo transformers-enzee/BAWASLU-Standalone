@@ -83,11 +83,11 @@ def test_irrelevant_latest_revision_removes_source_from_both_modules():
     finally:db.close();e.dispose()
 
 
-def test_equal_version_latest_id_wins_inbox_command_and_coverage():
+def test_latest_version_revision_wins_inbox_command_and_coverage():
     e,db,p=fixture()
     try:
         db.add(EvidenceAssessment(campaign_id=31,result_id=1,
-            assessment_version=1,relevance_label='IRRELEVANT',sentiment='NEUTRAL'))
+            assessment_version=2,relevance_label='IRRELEVANT',sentiment='NEUTRAL'))
         db.commit()
         inbox,command=view(db,p)
         assert {x['id'] for x in inbox['findings']}=={'3'}
@@ -106,14 +106,14 @@ def test_later_pending_provider_row_does_not_replace_completed_classification():
             model_version='PRISM_PENDING_OPENAI'))
         db.commit()
         inbox,command=view(db,p)
-        assert {x['id'] for x in inbox['findings']}=={'1','3'}
-        assert command['indicators']['relevant_mentions']==2
-        assert command['coverage']['assessed_pairs_in_period']==3
+        assert {x['id'] for x in inbox['findings']}=={'3'}
+        assert command['indicators']['relevant_mentions']==1
+        assert command['coverage']['assessed_pairs_in_period']==2
         assert command['paid_provider_called'] is False
     finally:db.close();e.dispose()
 
 
-def test_topic_classifier_preliminary_cannot_become_completed_intelligence():
+def test_topic_classifier_saved_label_matches_inbox_eligibility():
     e,db,p=fixture()
     try:
         db.add(SocialListeningResult(id=8,run_id=1,platform='x',
@@ -125,10 +125,10 @@ def test_topic_classifier_preliminary_cannot_become_completed_intelligence():
             model_version='PRISM_OPENAI_TOPIC_CLASSIFIER'))
         db.commit()
         inbox,command=view(db,p)
-        assert '8' not in {x['id'] for x in inbox['findings']}
-        assert command['indicators']['relevant_mentions']==2
+        assert '8' in {x['id'] for x in inbox['findings']}
+        assert command['indicators']['relevant_mentions']==3
         assert command['coverage']['captured_posts_in_period']==5
-        assert command['coverage']['assessed_posts_in_period']==3
+        assert command['coverage']['assessed_posts_in_period']==4
         assert command['paid_provider_called'] is False
     finally:db.close();e.dispose()
 

@@ -1170,6 +1170,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 EvidenceAssessment.result_id.in_(ids),
                 EvidenceAssessment.id==newest_id).all()) if ids else []
             assessment_by_id={row.result_id:row for row in latest}
+            from .officer_sentiment import latest_corrections
+            sentiment_corrections=latest_corrections(db,[(campaign.id,result_id) for result_id in ids])
             # Batch relevant officer-review decisions, instead of querying
             # each relevant source individually on every dashboard request.
             from collections import defaultdict
@@ -1263,10 +1265,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                     'source_provinces':__import__('app.inbox_provinces',fromlist=[
                         'matching_source_provinces']).matching_source_provinces(
                             item.text_content,assessment.geographic_signals_json),
-                    'sentiment':str(assessment.sentiment or 'UNKNOWN').upper(),
-                    'sentiment_confidence':assessment.sentiment_confidence or '',
-                    'sentiment_explanation':assessment.sentiment_explanation or '',
-                    'sentiment_model':assessment.sentiment_model or '',
+                    'sentiment':(sentiment_corrections[(campaign.id,item.id)].sentiment if (campaign.id,item.id) in sentiment_corrections else str(assessment.sentiment or 'UNKNOWN').upper()),
+                    'sentiment_confidence':('HUMAN_REVIEWED' if (campaign.id,item.id) in sentiment_corrections else assessment.sentiment_confidence or ''),
+                    'sentiment_explanation':(sentiment_corrections[(campaign.id,item.id)].rationale if (campaign.id,item.id) in sentiment_corrections else assessment.sentiment_explanation or ''),
+                    'sentiment_model':('OFFICER_CORRECTION' if (campaign.id,item.id) in sentiment_corrections else assessment.sentiment_model or ''),
+                    'ai_sentiment_original':str(assessment.sentiment or 'UNKNOWN').upper(),
+                    'sentiment_origin':('OFFICER_CORRECTION' if (campaign.id,item.id) in sentiment_corrections else 'SAVED_ASSESSMENT'),
                     'relevance_label':assessment.relevance_label,'relevance_confidence':assessment.relevance_confidence,
                     'explanation':assessment.explanation,'location_signals':parse_list(assessment.geographic_signals_json),
                     'candidate_signals':parse_list(assessment.candidate_signals_json),

@@ -4,7 +4,9 @@ All evidence is synthetic and loaded in isolated SQLite. No provider calls,
 casework mutations or production Supabase changes.
 """
 from datetime import datetime
-from app.models import SocialListeningResult,EvidenceAssessment,CampaignEvidence,MonitoringCampaign
+import json
+from app.models import SocialListeningResult,EvidenceAssessment,CampaignEvidence,MonitoringCampaign,IssueCategory,EvidenceReview
+from app.officer_sentiment import OfficerSentimentCorrection
 from app.campaigns import campaign_action
 from app.command_center import build_command_center
 from app.inbox_radar import compile_inbox_findings
@@ -139,5 +141,63 @@ def test_recent_feed_preserves_completed_legacy_null_model_version():
         command=build_command_center(db,p,{'period':'all'})
         ids={x.get('result_id') for x in command['latest_intelligence']}
         assert ids & {'1','2','3'}
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()
+
+
+def test_inbox_effective_sentiment_preserves_original_ai_label():
+    e,db,p=fixture()
+    try:
+        db.add(OfficerSentimentCorrection(campaign_id=31,result_id=1,
+            sentiment='NEUTRAL',rationale='Source context verified',actor_id=1))
+        db.commit()
+        inbox,command=view(db,p)
+        row=next(x for x in inbox['findings'] if x['id']=='1')
+        assert row['sentiment']=='NEUTRAL'
+        assert row['sentiment_origin']=='OFFICER_CORRECTION'
+        assert row['ai_sentiment_original']=='NEGATIVE'
+        assert row['sentiment_confidence']=='HUMAN_REVIEWED'
+        assert row['sentiment_model']=='OFFICER_CORRECTION'
+        assert db.query(EvidenceAssessment).filter_by(campaign_id=31,result_id=1).first().sentiment=='NEGATIVE'
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()
+
+
+def test_inbox_latest_officer_sentiment_override_wins():
+    e,db,p=fixture()
+    try:
+        db.add(OfficerSentimentCorrection(campaign_id=31,result_id=1,
+            sentiment='POSITIVE',rationale='Old correction',actor_id=1))
+        db.add(OfficerSentimentCorrection(campaign_id=31,result_id=1,
+            sentiment='NEUTRAL',rationale='New correction',actor_id=1))
+        db.commit()
+        inbox,_=view(db,p)
+        row=next(x for x in inbox['findings'] if x['id']=='1')
+        assert row['sentiment']=='NEUTRAL'
+        assert row['sentiment_explanation']=='New correction'
+    finally:db.close();e.dispose()
+
+
+def test_saved_issue_alert_and_officer_dismissal_match_both_modules():
+    e,db,p=fixture()
+    try:
+        db.add(IssueCategory(id=88,name='Synthetic issue',active=True))
+        assessment=db.query(EvidenceAssessment).filter_by(campaign_id=31,result_id=1,assessment_version=1).first()
+        assessment.potential_issue_signals_json=json.dumps([{
+            'category_id':88,'signal_type':'POTENTIAL_VIOLATION',
+            'evidence_quote':'Daftar pemilih tetap perlu diverifikasi di TPS',
+            'explanation':'Source allegation requiring review'}])
+        db.commit()
+        inbox,command=view(db,p)
+        assert next(x for x in inbox['findings'] if x['id']=='1')['is_flagged']
+        assert command['indicators']['potential_alerts']==1
+        db.add(EvidenceReview(assessment_id=assessment.id,reviewer_id='synthetic',
+            decision='FLAG_DISMISSED',rationale='Not substantiated'))
+        db.commit()
+        inbox,command=view(db,p)
+        row=next(x for x in inbox['findings'] if x['id']=='1')
+        assert row['is_flagged'] is False
+        assert row['flag_review_status']=='FLAG_DISMISSED'
+        assert command['indicators']['potential_alerts']==0
         assert command['paid_provider_called'] is False
     finally:db.close();e.dispose()

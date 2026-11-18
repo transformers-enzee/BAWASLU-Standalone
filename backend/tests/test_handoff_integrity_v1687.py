@@ -60,7 +60,7 @@ def test_orphan_promotion_detected_without_source_content():
 def test_casework_reporting_links_checked_and_orphans_flagged():
     e,db=seeded()
     try:
-        db.add(CaseReport(case_id=925,created_by=1))
+        db.add(CaseReport(case_id=925,created_by=1,title='Synthetic report'))
         db.flush()
         r=module_acceptance_evidence(db)
         assert r['counts']['orphan_case_reports']==1
@@ -71,7 +71,7 @@ def test_casework_reporting_links_checked_and_orphans_flagged():
 def test_knowledge_chunks_link_to_existing_document():
     e,db=seeded()
     try:
-        db.add(KnowledgeChunk(document_id=950,page_number=1,text_content='Synthetic corpus'))
+        db.add(KnowledgeChunk(document_id=950,page=1,sequence=1,text_content='Synthetic corpus'))
         db.flush()
         r=module_acceptance_evidence(db)
         assert r['counts']['orphan_knowledge_chunks']==1

@@ -49,8 +49,9 @@ export default function AssessmentOperationsPanel({campaignId}){
  const remaining=data?.worker_readiness||{};
  const triage=data?.queue_triage||null;
  const breakdown=triage?.pending_breakdown||{};
+ const provenance=triage?.completion_provenance||{};
  const categories=partitionTriage(triage);
- const snapshotUnreliable=Boolean(triage&&(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS'||data?.snapshot_consistency?.all_consistent===false));
+ const snapshotUnreliable=Boolean(triage&&(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.completion_snapshot_reconciled===false||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS'||data?.snapshot_consistency?.all_consistent===false));
  return <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Assessment operations status">
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div><h4 className="font-semibold text-slate-800">Assessment operations</h4>
@@ -108,6 +109,13 @@ export default function AssessmentOperationsPanel({campaignId}){
         </div>)}
        </div>
        <p className="text-slate-500">Only nonzero categories are displayed. The ordinary-job total above includes zero-count categories and remains authoritative only when the snapshots reconcile.</p>
+      </div>
+      <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-completion-provenance">
+       <p className="font-semibold">Completion provenance · historical usage</p>
+       <p>Completed: {fmt(provenance.completed_jobs)} · Usage-backed: {fmt(provenance.usage_backed_completed)} · Historical usage gaps: {fmt(provenance.requires_historical_usage_review)}</p>
+       <p>Latest classification needs review: {fmt(provenance.latest_classification_review)}. Historical usage does not prove the latest saved label.</p>
+       {(Number(provenance.requires_historical_usage_review)>0||Number(provenance.latest_classification_review)>0)&&<p role="status" className="text-amber-900">History review required. Do not automatically retry provider calls.</p>}
+       {triage.completion_snapshot_reconciled===false&&<p role="alert" className="text-amber-900">Completion counts differ across independent snapshots; refresh before acting.</p>}
       </div>
       <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-pending-breakdown">
        <p className="font-semibold">Pending breakdown ({fmt(breakdown.pending_total)})</p>

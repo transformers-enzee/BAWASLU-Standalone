@@ -16,6 +16,10 @@ def campaign_assessment_operations_overview(db,campaign_id):
         issues.append({'code':'UNQUEUED_EVIDENCE',
             'count':coverage['pending_monitoring_without_job'],
             'next_step':'Review no-cost job reconciliation. No AI request is started.'})
+    if readiness.get('pending_already_assessed_excluded_from_ai',0)>0:
+        issues.append({'code':'PENDING_ALREADY_ASSESSED',
+            'count':readiness['pending_already_assessed_excluded_from_ai'],
+            'next_step':'Review queue state versus saved relevance; do not resend an already-assessed source.'})
     if interrupted['stale_processing_jobs']>0:
         issues.append({'code':'STALE_PROCESSING',
             'count':interrupted['stale_processing_jobs'],

@@ -5,8 +5,8 @@ must atomically claim a job and reserve quota before calling the provider.
 """
 from datetime import datetime
 import os
-from sqlalchemy import and_, case, func
-from .models import AIAssessmentJob, AIBudgetReservation, CampaignEvidence, SocialListeningResult
+from sqlalchemy import and_, case, func, or_
+from .models import AIAssessmentJob, AIBudgetReservation, CampaignEvidence, SocialListeningResult, EvidenceAssessment
 
 def campaign_ai_worker_readiness(db,campaign_id,env=None):
     settings=os.environ if env is None else env
@@ -35,13 +35,25 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
     pending=and_(AIAssessmentJob.state=='PENDING',AIAssessmentJob.attempts<3)
     text_exists=and_(SocialListeningResult.id.is_not(None),
             func.length(func.trim(func.coalesce(SocialListeningResult.text_content,'')))>0)
+    # Match the authoritative manually-confirmed batch preview: an older PENDING
+    # job may already have been assessed through another route. It must not
+    # inflate the next-run estimate or be sent to the provider again.
+    latest_id=(db.query(EvidenceAssessment.id)
+        .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+                EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).limit(1)
+        .correlate(CampaignEvidence).scalar_subquery())
+    unassessed=or_(EvidenceAssessment.id.is_(None),
+       func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(['','UNASSESSED']))
+    assessed=~unassessed
     def amount(condition):
         return func.coalesce(func.sum(case((condition,1),else_=0)),0)
     counts=(db.query(
         func.count(AIAssessmentJob.id),
         amount(AIAssessmentJob.state=='PENDING'),
-        amount(and_(pending,text_exists)),
-        amount(and_(pending,~text_exists)),
+        amount(and_(pending,text_exists,unassessed)),
+        amount(and_(pending,~text_exists,unassessed)),
         amount(and_(AIAssessmentJob.state=='PENDING',AIAssessmentJob.attempts>=3)),
         amount(AIAssessmentJob.state=='PROCESSING'),
         amount(AIAssessmentJob.state=='COMPLETED'),
@@ -50,9 +62,18 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
             CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
             CampaignEvidence.result_id==AIAssessmentJob.result_id))
         .outerjoin(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
         .filter(AIAssessmentJob.campaign_id==cid,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').one())
     total,pending_count,claimable,missing_text,attempt_cap,processing,completed,failed=map(int,counts)
+    preassessed_pending=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .join(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                AIAssessmentJob.state=='PENDING',assessed).scalar()) or 0
     capacity=min(claimable,per_run,daily_remaining,lifetime_remaining)
     reasons=[]
     if not worker:reasons.append('WORKER_DISABLED')
@@ -74,6 +95,7 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
             'pending_missing_source_or_text':missing_text,
             'pending_attempts_exhausted':attempt_cap,
             'processing':processing,'completed':completed,'failed':failed},
+        'pending_already_assessed_excluded_from_ai':int(preassessed_pending),
         'estimated_max_requests_next_run':capacity if not reasons else 0,
         'ready_to_process':not reasons,
         'readiness_blockers':reasons,

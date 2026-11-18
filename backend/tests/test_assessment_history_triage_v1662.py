@@ -20,7 +20,9 @@ def put(db,cid,rid,attempts=1,state='COMPLETED',kind='KEYWORD',models=('LEGACY_M
                              model_version=model,relevance_label='RELEVANT')
         db.add(a);db.flush()
         if usage and version==1:
-            db.add(AssessmentAIUsage(assessment_id=a.id,campaign_id=cid))
+            db.add(AssessmentAIUsage(assessment_id=a.id,campaign_id=cid,
+                request_kind='RELEVANCE_AND_CLASSIFICATION',provider_model='LEGACY_MODEL',
+                input_tokens=1,output_tokens=1,usage_reported=True))
     db.flush()
 
 def test_multi_version_legacy_history_is_not_authorization_to_retry():

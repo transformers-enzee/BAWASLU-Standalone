@@ -2,7 +2,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from app.db import Base
-from app.models import CampaignEvidence, AIAssessmentJob
+from app.models import CampaignEvidence, AIAssessmentJob, EvidenceAssessment
 from app.assessment_job_reconcile import pending_campaign_job_links
 
 def _setup():
@@ -66,5 +66,58 @@ def test_invalid_limits_rejected_without_writes():
             else:
                 assert False,limit
         assert db.query(AIAssessmentJob).count()==0
+    finally:
+        db.close();engine.dispose()
+
+
+def test_pending_selector_filters_already_assessed_before_applying_limit():
+    """A blocked early job must not starve later unassessed evidence."""
+    engine,db=_setup()
+    try:
+        for rid in range(1,9):
+            _link(db,41,rid,state="PENDING")
+        db.add(EvidenceAssessment(campaign_id=41,result_id=1,
+            assessment_version=1,relevance_label="RELEVANT"))
+        db.add(EvidenceAssessment(campaign_id=41,result_id=2,
+            assessment_version=1,relevance_label="IRRELEVANT"))
+        db.add(EvidenceAssessment(campaign_id=41,result_id=3,
+            assessment_version=1,relevance_label="UNCERTAIN"))
+        db.add(EvidenceAssessment(campaign_id=41,result_id=4,
+            assessment_version=1,relevance_label="HIGHLY_RELEVANT"))
+        db.flush()
+        assert [x.result_id for x in pending_campaign_job_links(db,41,limit=2)]==[5,6]
+        assert [x.result_id for x in pending_campaign_job_links(db,41,limit=4)]==[5,6,7,8]
+        assert db.query(AIAssessmentJob).filter_by(campaign_id=41,state="PENDING").count()==8
+    finally:
+        db.close();engine.dispose()
+
+
+def test_newest_assessment_revision_controls_queue_eligibility():
+    engine,db=_setup()
+    try:
+        for rid in (1,2,3):
+            _link(db,42,rid,state="PENDING")
+        for rid,labels in ((1,["RELEVANT","UNASSESSED"]),
+                           (2,["UNASSESSED","RELEVANT"]),
+                           (3,["IRRELEVANT",""])):
+            for version,label in enumerate(labels,1):
+                db.add(EvidenceAssessment(campaign_id=42,result_id=rid,
+                    assessment_version=version,relevance_label=label))
+        db.flush()
+        assert [x.result_id for x in pending_campaign_job_links(db,42)]==[1,3]
+    finally:
+        db.close();engine.dispose()
+
+
+def test_pending_queue_selector_never_reopens_superseded_or_failed_jobs():
+    engine,db=_setup()
+    try:
+        _link(db,43,1,state="SUPERSEDED_ASSESSED")
+        _link(db,43,2,state="FAILED")
+        _link(db,43,3,state="PENDING",attempts=3)
+        _link(db,43,4,method="WATCHLIST_ACCOUNT",state="PENDING")
+        _link(db,43,5,state="PENDING")
+        assert [x.result_id for x in pending_campaign_job_links(db,43)]==[5]
+        assert db.query(AIAssessmentJob).count()==5
     finally:
         db.close();engine.dispose()

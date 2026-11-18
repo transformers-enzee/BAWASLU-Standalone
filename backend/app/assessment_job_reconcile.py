@@ -66,17 +66,31 @@ def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
 
     Read-only. Unlike the former latest-300-link scan, this selects directly
     from durable pending jobs, including evidence outside the UI window.
-    Failed/completed/processing jobs and WATCHLIST_ACCOUNT matches are excluded.
+    Failed/completed/processing jobs, previously assessed sources, and\n    WATCHLIST_ACCOUNT matches are excluded. The worker retains its final\n    atomic claim and saved-assessment recheck before any provider call.
     """
     cid=int(campaign_id)
     if type(limit) is not int or not 1<=limit<=BATCH_LIMIT:
         raise ValueError("Choose 1-200 queued assessment jobs per batch")
+    # Match readiness and the worker's final assessed-label guard BEFORE
+    # LIMIT. Otherwise a page of already-completed pending jobs can crowd out
+    # genuinely unassessed, claimable evidence older in the durable queue.
+    latest_id=(db.query(EvidenceAssessment.id)
+        .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+                EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).limit(1)
+        .correlate(CampaignEvidence).scalar_subquery())
+    unassessed=or_(EvidenceAssessment.id.is_(None),
+        func.upper(func.coalesce(EvidenceAssessment.relevance_label,""))
+            .in_(["","UNASSESSED"]))
     return (db.query(CampaignEvidence)
         .join(AIAssessmentJob,and_(
             AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,
             AIAssessmentJob.result_id==CampaignEvidence.result_id))
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
         .filter(CampaignEvidence.campaign_id==cid,
                 CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
                 AIAssessmentJob.state=="PENDING",
-                AIAssessmentJob.attempts<3)
+                AIAssessmentJob.attempts<3,
+                unassessed)
         .order_by(CampaignEvidence.id.asc()).limit(limit).all())

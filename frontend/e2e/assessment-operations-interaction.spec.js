@@ -23,9 +23,11 @@ test.beforeEach(async ({page},info)=>{
       window.__assessmentResolvers.push({resolve,reject,id:payload.id});
     });
   };
-  window.__assessmentRoot=ReactDOM.createRoot(document.querySelector('#assessment-test-root'));
+  const createRoot=ReactDOM.createRoot||ReactDOM.default?.createRoot;
+  if(!createRoot)throw Error('ReactDOM client root export unavailable');
+  window.__assessmentRoot=createRoot(document.querySelector('#assessment-test-root'));
   window.__renderAssessment=(campaignId)=>window.__assessmentRoot.render(
-    React.createElement(Panel,{campaignId}));
+    (React.createElement||React.default?.createElement)(Panel,{campaignId}));
  });
 });
 const snapshot=(cid,kind='PENDING_WORK')=>({

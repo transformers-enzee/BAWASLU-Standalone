@@ -1151,13 +1151,24 @@ def campaign_action(db:Session,p,action,data,id=None):
                     SocialListeningResult.id.in_(missing)).all():
                     post_by_id[row.id]=row
             ids={link.result_id for link in links}
-            latest=db.query(EvidenceAssessment).filter(
+            # A DISTINCT(result_id) with ORDER BY version only behaves as
+            # DISTINCT ON in PostgreSQL; SQLite silently treats it as ordinary
+            # DISTINCT, returning multiple versions that then overwrite the
+            # newest row in the map. Select the newest version explicitly on
+            # both engines so the authorized Inbox and Radar never resurrect
+            # a source after a newer irrelevant/uncertain human correction.
+            from sqlalchemy.orm import aliased
+            candidate_assessment=aliased(EvidenceAssessment)
+            newest_id=(db.query(candidate_assessment.id)
+                .filter(candidate_assessment.campaign_id==EvidenceAssessment.campaign_id,
+                        candidate_assessment.result_id==EvidenceAssessment.result_id)
+                .order_by(candidate_assessment.assessment_version.desc(),
+                          candidate_assessment.id.desc())
+                .limit(1).correlate(EvidenceAssessment).scalar_subquery())
+            latest=(db.query(EvidenceAssessment).filter(
                 EvidenceAssessment.campaign_id==campaign.id,
-                EvidenceAssessment.result_id.in_(ids)).distinct(
-                EvidenceAssessment.result_id).order_by(
-                EvidenceAssessment.result_id,
-                EvidenceAssessment.assessment_version.desc(),
-                EvidenceAssessment.id.desc()).all() if ids else []
+                EvidenceAssessment.result_id.in_(ids),
+                EvidenceAssessment.id==newest_id).all()) if ids else []
             assessment_by_id={row.result_id:row for row in latest}
             # Batch relevant officer-review decisions, instead of querying
             # each relevant source individually on every dashboard request.

@@ -93,3 +93,19 @@ def test_casework_reporting_scoped_counts_never_infer_legal_outcome():
         assert not report['management_consistency']['legal_verdict_confirmed']
         assert module_acceptance_evidence(db)['counts']['orphan_case_reports']==0
     finally:db.close();e.dispose()
+
+def test_equal_version_latest_assessment_id_wins_inbox_and_radar():
+    e,db,p=fixture()
+    try:
+        db.add(EvidenceAssessment(campaign_id=31,result_id=1,assessment_version=2,
+            relevance_label='IRRELEVANT'))
+        db.add(EvidenceAssessment(campaign_id=31,result_id=2,assessment_version=3,
+            relevance_label='RELEVANT'))
+        db.commit()
+        # Distinct version-2 revisions are both valid records; the latest
+        # assessment version must decide whether the source is surfaced.
+        out=campaign_action(db,p,'campaignIntelligenceInbox',{'campaign_id':'31'},'31')
+        assert {x['id'] for x in out['findings']}=={'2','3'}
+        assert {src for g in compile_inbox_findings(out['findings'])
+            for src in g['source_ids']}=={'social:2','social:3'}
+    finally:db.close();e.dispose()

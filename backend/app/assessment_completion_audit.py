@@ -20,7 +20,7 @@ def campaign_completion_audit(db,campaign_id):
     valid_assessment=exists().where(and_(
         EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
         EvidenceAssessment.result_id==AIAssessmentJob.result_id,
-        func.upper(func.coalesce(EvidenceAssessment.relevance_label,'' )).in_(_VALID_LABELS)))
+        func.upper(func.trim(func.coalesce(EvidenceAssessment.relevance_label,''))).in_(_VALID_LABELS)))
     usage_link=exists().where(and_(
         EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
         EvidenceAssessment.result_id==AIAssessmentJob.result_id,
@@ -32,7 +32,7 @@ def campaign_completion_audit(db,campaign_id):
     verified=exists().where(and_(
         EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
         EvidenceAssessment.result_id==AIAssessmentJob.result_id,
-        func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(_VALID_LABELS),
+        func.upper(func.trim(func.coalesce(EvidenceAssessment.relevance_label,''))).in_(_VALID_LABELS),
         AssessmentAIUsage.assessment_id==EvidenceAssessment.id,
         AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id,
         AssessmentAIUsage.request_kind=='RELEVANCE_AND_CLASSIFICATION'))

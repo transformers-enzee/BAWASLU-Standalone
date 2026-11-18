@@ -193,6 +193,17 @@ def readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
     result["paid_requests"]=0
     return result
 
+@router.get("/module-acceptance")
+def module_acceptance(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Administrator-only aggregate cross-module acceptance evidence."""
+    require_admin(db,user)
+    from .module_acceptance_evidence import module_acceptance_evidence
+    try:
+        return module_acceptance_evidence(db)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(503,"Cross-module acceptance query unavailable") from exc
+
 class BackfillRequest(BaseModel):
     confirm: bool = False
     expected_missing: int = Field(default=0, ge=0, le=1000)

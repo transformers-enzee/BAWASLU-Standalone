@@ -10,7 +10,8 @@ def samples():
         'completed_jobs':3,'failed_jobs':1,'superseded_assessed_jobs':0,
         'counts_reconciled':True},{
         'total_ordinary_jobs':8,'pending_jobs':3,'processing_not_stale':1,
-        'completed_jobs':3,'other_failed_jobs':1,'superseded_assessed_jobs':0},
+        'completed_jobs':3,'other_failed_jobs':1,'superseded_assessed_jobs':0,
+        'stale_processing_jobs':0,'already_quarantined_for_manual_review':0},
         {'superseded_assessed_jobs':0})
 
 def test_parity_healthy_and_no_extra_queries():
@@ -25,7 +26,9 @@ def test_stale_independent_aggregates_are_flagged_not_called_corruption():
     c['completed_jobs']=4
     d['superseded_assessed_jobs']=1
     result=assessment_snapshot_consistency(a,b,c,d)
-    assert result['failed_checks']==['superseded_count_alignment','worker_vs_interrupted_per_state']
+    assert result['failed_checks']==['completion_vs_interrupted_per_state',
+        'interrupted_internal_state_total','superseded_count_alignment',
+        'worker_vs_interrupted_per_state']
     assert result['recheck_required']
     assert result['database_corruption_proven'] is False
 

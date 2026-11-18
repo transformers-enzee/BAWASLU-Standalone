@@ -74,8 +74,8 @@ def campaign_assessment_operations_overview(db,campaign_id):
     # Report this explicitly rather than implying atomicity across subqueries.
     lifecycle_status=(
         'REVIEW_REQUIRED' if issues else
-        'AWAITING_PROCESSING' if readiness['queue_counts']['pending'] else
         'PROCESSING' if readiness['queue_counts']['processing'] else
+        'AWAITING_PROCESSING' if readiness['queue_counts']['pending'] else
         'NO_EXCEPTIONS'
     )
     acceptance=assess_operational_acceptance(readiness,issues)

@@ -30,6 +30,15 @@ MODULE_COUNTS_SQL="""SELECT
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='COMPLETED') AS completed_ai_jobs,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='SUPERSEDED_ASSESSED') AS superseded_ai_jobs,
  (SELECT COUNT(*) FROM campaign_evidence ce
+   WHERE ce.match_method!='WATCHLIST_ACCOUNT'
+   AND EXISTS (SELECT 1 FROM evidence_assessments ea
+      WHERE ea.campaign_id=ce.campaign_id AND ea.result_id=ce.result_id
+        AND ea.id=(SELECT last.id FROM evidence_assessments last
+          WHERE last.campaign_id=ce.campaign_id AND last.result_id=ce.result_id
+          ORDER BY last.assessment_version DESC,last.id DESC LIMIT 1)
+        AND UPPER(COALESCE(ea.relevance_label,'')) IN ('RELEVANT','HIGHLY_RELEVANT')
+        AND COALESCE(ea.model_version,'')!='PRISM_PENDING_OPENAI')) AS eligible_saved_inbox_links,
+ (SELECT COUNT(*) FROM campaign_evidence ce
   WHERE ce.match_method!='WATCHLIST_ACCOUNT'
    AND NOT EXISTS (SELECT 1 FROM evidence_assessments ea WHERE
     ea.campaign_id=ce.campaign_id AND ea.result_id=ce.result_id
@@ -37,7 +46,7 @@ MODULE_COUNTS_SQL="""SELECT
       WHERE last.campaign_id=ce.campaign_id AND last.result_id=ce.result_id
       ORDER BY last.assessment_version DESC,last.id DESC LIMIT 1)
     AND UPPER(COALESCE(ea.relevance_label,'')) IN
-     ('RELEVANT','IRRELEVANT','UNCERTAIN'))) AS monitoring_links_without_valid_latest_relevance
+     ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'))) AS monitoring_links_without_valid_latest_relevance
 """
 
 def module_acceptance_evidence(db):
@@ -80,9 +89,9 @@ def module_acceptance_evidence(db):
             'Check crawl coverage, provider source integrity, campaign filters and cadence through authenticated UAT'),
         row('Candidate Watchlist',counts['active_candidate_registry_entries'],[],
             'Global candidate registry count is not the per-campaign two-slot watchlist limit'),
-        row('Intelligence Inbox',counts['intelligence_items'],[],
-            'Intelligence entries are not equivalent to all relevance-filtered social evidence'),
-        row('Command Center',counts['ordinary_campaign_links'],[],
+        row('Intelligence Inbox',counts['eligible_saved_inbox_links'],[],
+            'Saved relevant campaign links are Inbox candidates; published Inbox totals also enforce jurisdiction and permissions'),
+        row('Command Center',counts['eligible_saved_inbox_links'],[],
             'Saved evidence does not prove indicator accuracy, chart freshness or AI summary quality'),
         row('AI Assistant',counts['assistant_threads'],[
             ('NO_ACTIVE_KNOWLEDGE_PDFS',counts['assistant_threads']>0 and not counts['active_knowledge_pdfs'])],
@@ -102,6 +111,8 @@ def module_acceptance_evidence(db):
       'cross_module_link_checks_run':len(handoffs),
       'cross_module_link_checks_passed':sum(x['integrity']=='CONSISTENT' for x in handoffs),
       'cross_module_link_integrity_is_not_functional_uat':True,
+      'inbox_candidate_count_basis':'LATEST_RELEVANT_OR_HIGHLY_RELEVANT_NONPRELIMINARY_MONITORING_LINKS',
+      'inbox_candidate_count_is_not_authorized_user_scope':True,
       'completion_percentages_supported':False,
       'release_readiness_certified':False,'formal_client_acceptance_recorded':False,
       'validation_gaps':[

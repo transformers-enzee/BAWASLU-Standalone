@@ -1,4 +1,5 @@
 """Campaign-scoped operational status without activating processing or billing."""
+from datetime import datetime, timezone
 from .campaign_ai_readiness import campaign_ai_worker_readiness
 from .campaign_assessment_coverage import campaign_link_assessment_coverage
 from .assessment_completion_audit import campaign_completion_audit
@@ -36,7 +37,18 @@ def campaign_assessment_operations_overview(db,campaign_id):
     if not coverage['link_count_reconciled'] or not completion['counts_reconciled']:
         issues.append({'code':'INVENTORY_RECONCILIATION_WARNING',
             'count':1,'next_step':'Investigate inconsistent campaign-link or job counts.'})
+    # Independent read-only aggregates are not one transactional snapshot.
+    # Report this explicitly rather than implying atomicity across subqueries.
+    lifecycle_status=(
+        'REVIEW_REQUIRED' if issues else
+        'AWAITING_PROCESSING' if readiness['queue_counts']['pending'] else
+        'PROCESSING' if readiness['queue_counts']['processing'] else
+        'NO_EXCEPTIONS'
+    )
     return {
+        'generated_at_utc':datetime.now(timezone.utc).isoformat(),
+        'snapshot_is_atomic':False,
+        'lifecycle_status':lifecycle_status,
         'campaign_id':str(cid),
         'scope':'ONE_AUTHORIZED_CAMPAIGN_READ_ONLY_OPERATIONS',
         'assessment_link_coverage':coverage,

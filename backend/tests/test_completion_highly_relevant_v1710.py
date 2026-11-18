@@ -41,3 +41,29 @@ def test_highly_relevant_is_valid_only_with_linked_classification_usage():
     finally:
         db.close()
         engine.dispose()
+
+def test_completed_provenance_snapshot_mismatch_fails_closed():
+    from app.assessment_queue_triage import assessment_queue_triage
+    readiness={'queue_counts':{},'pending_already_assessed_excluded_from_ai':0}
+    recovery={'total_ordinary_jobs':2,'completed_jobs':2}
+    audit={'completed_jobs':2,'verified_usage_backed_completed_jobs':1,
+           'completed_requiring_manual_history_review':0}
+    result=assessment_queue_triage(readiness,recovery,{},audit)
+    assert result['status']=='RECHECK_INDEPENDENT_SNAPSHOTS'
+    assert not result['completion_snapshot_reconciled']
+    assert result['paid_provider_called'] is False
+    assert result['completion_provenance']['automatic_reassessment_permitted'] is False
+
+def test_latest_invalid_classification_requires_review_without_retry():
+    from app.assessment_queue_triage import assessment_queue_triage
+    readiness={'queue_counts':{},'pending_already_assessed_excluded_from_ai':0}
+    recovery={'total_ordinary_jobs':1,'completed_jobs':1}
+    audit={'completed_jobs':1,'verified_usage_backed_completed_jobs':1,
+           'completed_requiring_manual_history_review':0,
+           'latest_completion_classification_review':{
+               'completed_latest_unclassified_or_invalid':1}}
+    result=assessment_queue_triage(readiness,recovery,{},audit)
+    assert result['status']=='HOLD_FOR_HISTORY_REVIEW'
+    assert result['completion_snapshot_reconciled']
+    assert result['completion_provenance']['latest_classification_review']==1
+    assert result['paid_provider_called'] is False

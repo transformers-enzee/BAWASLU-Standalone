@@ -36,6 +36,29 @@ def assessment_queue_triage(readiness,recovery,superseded,completion=None):
     latest=audit.get('latest_completion_classification_review') or {}
     latest_issues=sum(max(0,int(latest.get(k,0))) for k in
         ('completed_missing_latest_assessment','completed_latest_unclassified_or_invalid'))
+    usage_quality=audit.get('usage_lineage_quality') or {}
+    lifecycle_quality=audit.get('classification_usage_lifecycle_quality') or {}
+    usage_flags={k:max(0,int(usage_quality.get(k,0))) for k in (
+        'campaign_id_mismatch','provider_usage_not_reported',
+        'negative_token_counts','provider_model_missing')}
+    lifecycle_flags={k:max(0,int(lifecycle_quality.get(k,0))) for k in (
+        'noncompleted_jobs_with_classification_usage',
+        'assessments_with_duplicate_classification_usage')}
+    quality_available=(completion is not None and
+        'usage_lineage_quality' in audit and
+        'classification_usage_lifecycle_quality' in audit)
+    flagged=any(usage_flags.values()) or any(lifecycle_flags.values())
+    integrity={
+        'status':('AUDIT_UNAVAILABLE' if not quality_available else
+                  'REVIEW_REQUIRED' if flagged else 'NO_RECORDED_ISSUES'),
+        'usage_rows':max(0,int(usage_quality.get('assessment_linked_usage_rows',0))),
+        'usage_flags':usage_flags,
+        'lifecycle_flags':lifecycle_flags,
+        'flag_counts_may_overlap':True,
+        'not_evidence_of_provider_charges':True,
+        'read_only':True,
+        'automatic_retry_permitted':False,
+    }
     completion_provenance={
         'completed_jobs':completed,
         'usage_backed_completed':verified,
@@ -69,7 +92,7 @@ def assessment_queue_triage(readiness,recovery,superseded,completion=None):
         'status':('RECHECK_INDEPENDENT_SNAPSHOTS' if not consistent else
                   'HOLD_FOR_HISTORY_REVIEW' if
                   (by['STALE_PROCESSING'] or by['QUARANTINED_INTERRUPTED'] or
-                   by['FAILED_OTHER'] or history_gaps or latest_issues) else
+                   by['FAILED_OTHER'] or history_gaps or latest_issues or flagged) else
                   'QUEUE_RECONCILIATION' if
                   (assessed or missing or exhausted or
                    int(superseded.get('superseded_without_current_classification',0))) else
@@ -77,6 +100,7 @@ def assessment_queue_triage(readiness,recovery,superseded,completion=None):
                   'PENDING_WORK' if pending else 'NO_ACTIVE_WORK'),
         'buckets':buckets,
         'completion_provenance':completion_provenance,
+        'provider_usage_integrity':integrity,
         'completion_snapshot_reconciled':completion_snapshot_reconciled,
         'ordinary_job_total':total,
         'bucket_total':partition_total,

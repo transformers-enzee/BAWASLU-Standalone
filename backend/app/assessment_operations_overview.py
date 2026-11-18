@@ -7,6 +7,7 @@ from .assessment_interrupted_recovery import interrupted_campaign_preview
 from .assessment_superseded_reconcile import superseded_preview
 from .assessment_operational_acceptance import assess_operational_acceptance
 from .assessment_snapshot_consistency import assessment_snapshot_consistency
+from .assessment_queue_triage import assessment_queue_triage
 
 def campaign_assessment_operations_overview(db,campaign_id):
     cid=int(campaign_id)
@@ -16,6 +17,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
     interrupted=interrupted_campaign_preview(db,cid)
     superseded=superseded_preview(db,cid)
     consistency=assessment_snapshot_consistency(readiness,completion,interrupted,superseded)
+    queue_triage=assessment_queue_triage(readiness,interrupted,superseded)
     issues=[]
     if not consistency['all_consistent']:
         issues.append({'code':'SNAPSHOT_AGGREGATE_DRIFT',
@@ -82,6 +84,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
     return {
         'operational_acceptance':acceptance,
         'snapshot_consistency':consistency,
+        'queue_triage':queue_triage,
         'generated_at_utc':datetime.now(timezone.utc).isoformat(),
         'snapshot_is_atomic':False,
         'lifecycle_status':lifecycle_status,

@@ -99,6 +99,28 @@ def campaign_completion_audit(db,campaign_id):
                   EvidenceAssessment.id.desc()).limit(1)
         .correlate(AIAssessmentJob).scalar_subquery())
     latest=aliased(EvidenceAssessment)
+    # A verified historical provider call need not be the latest assessment
+    # version. Relevance revisions are legitimate, but a completed job whose
+    # latest version is UNASSESSED or missing needs a distinct review signal.
+    latest_label=func.upper(func.trim(func.coalesce(latest.relevance_label,'')))
+    latest_rows=(db.query(
+        func.count(AIAssessmentJob.id),
+        func.coalesce(func.sum(case((and_(
+            completed,latest.id.is_(None)),1),else_=0)),0),
+        func.coalesce(func.sum(case((and_(
+            completed,latest.id.is_not(None),
+            ~latest_label.in_(_VALID_LABELS)),1),else_=0)),0),
+        func.coalesce(func.sum(case((and_(
+            completed,verified,
+            ~latest_label.in_(_VALID_LABELS)),1),else_=0)),0))
+        .outerjoin(latest,latest.id==latest_id)
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                completed).one())
+    _,latest_missing,latest_invalid,verified_historical_with_invalid_latest=latest_rows
     versions=(db.query(func.count(EvidenceAssessment.id))
         .filter(EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
                 EvidenceAssessment.result_id==AIAssessmentJob.result_id)
@@ -143,6 +165,14 @@ def campaign_completion_audit(db,campaign_id):
         'completed_valid_relevance_missing_linked_usage':missing_usage,
         'completed_usage_without_valid_relevance':usage_without_valid_label,
         'completed_zero_attempts':zero_attempts,
+        'latest_completion_classification_review':{
+            'completed_missing_latest_assessment':int(latest_missing),
+            'completed_latest_unclassified_or_invalid':int(latest_invalid),
+            'historically_usage_verified_but_latest_invalid':int(verified_historical_with_invalid_latest),
+            'requires_manual_review':bool(latest_missing or latest_invalid),
+            'does_not_invalidate_historical_usage':True,
+            'automatic_reassessment_permitted':False,
+        },
         'completed_requiring_manual_history_review':discrepancies,
         'historical_missing_usage_triage':{
             'completed_valid_relevance_without_usage':int(gap_jobs),

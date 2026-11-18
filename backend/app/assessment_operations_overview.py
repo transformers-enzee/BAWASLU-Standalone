@@ -38,6 +38,12 @@ def campaign_assessment_operations_overview(db,campaign_id):
         issues.append({'code':'COMPLETION_PROVENANCE_GAP',
             'count':completion['completed_requiring_manual_history_review'],
             'next_step':'Review saved classifications and original provider usage lineage.'})
+    if completion['latest_completion_classification_review']['requires_manual_review']:
+        latest_review=completion['latest_completion_classification_review']
+        issues.append({'code':'COMPLETED_LATEST_CLASSIFICATION_REVIEW',
+            'count':latest_review['completed_missing_latest_assessment']+
+                    latest_review['completed_latest_unclassified_or_invalid'],
+            'next_step':'Review the latest classification without erasing historical provider-usage evidence.'})
     if not completion['usage_lineage_quality']['quality_checks_passed']:
         issues.append({'code':'USAGE_INTEGRITY_WARNING',
             'count':sum(completion['usage_lineage_quality'][k] for k in (

@@ -97,6 +97,26 @@ def campaign_completion_audit(db,campaign_id):
         ),else_=0)),0))
         .join(EvidenceAssessment,EvidenceAssessment.id==AssessmentAIUsage.assessment_id)
         .filter(EvidenceAssessment.campaign_id==cid).one())
+    # A provider request must not be inferred from a job's current state.
+    # Detect paid-classification lineage on non-COMPLETED rows, and repeated
+    # usage rows for one assessment, without changing either history.
+    noncompleted_usage=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==cid,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                AIAssessmentJob.state!='COMPLETED',usage_link).scalar()) or 0
+    repeated_usage=(db.query(AssessmentAIUsage.assessment_id)
+        .join(EvidenceAssessment,EvidenceAssessment.id==AssessmentAIUsage.assessment_id)
+        .filter(EvidenceAssessment.campaign_id==cid,
+                AssessmentAIUsage.campaign_id==cid,
+                AssessmentAIUsage.request_kind=='RELEVANCE_AND_CLASSIFICATION')
+        .group_by(AssessmentAIUsage.assessment_id)
+        .having(func.count(AssessmentAIUsage.id)>1)
+        .subquery())
+    duplicate_assessments=(db.query(func.count())
+        .select_from(repeated_usage).scalar()) or 0
     # Historical gaps are not safe to replay. Read only aggregates, never
     # source IDs or individual job metadata. A later edited version can be
     # the latest model even when earlier work is the original assessment.
@@ -205,6 +225,13 @@ def campaign_completion_audit(db,campaign_id):
             'provider_model_missing':int(missing_model),
             'quality_checks_passed':not (mismatched or unreported or negative_tokens or missing_model),
             'usage_records_repaired':0,
+        },
+        'classification_usage_lifecycle_quality':{
+            'noncompleted_jobs_with_classification_usage':int(noncompleted_usage),
+            'assessments_with_duplicate_classification_usage':int(duplicate_assessments),
+            'requires_manual_review':bool(noncompleted_usage or duplicate_assessments),
+            'automatic_job_state_reconciliation':False,
+            'automatic_usage_deduplication':False,
         },
         'stale_processing_jobs':int(stale_processing),
         'stale_processing_requires_history_review':int(stale_processing)>0,

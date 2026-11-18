@@ -48,6 +48,12 @@ def campaign_assessment_operations_overview(db,campaign_id):
             'count':latest_review['completed_missing_latest_assessment']+
                     latest_review['completed_latest_unclassified_or_invalid'],
             'next_step':'Review the latest classification without erasing historical provider-usage evidence.'})
+    lifecycle_quality=completion['classification_usage_lifecycle_quality']
+    if lifecycle_quality['requires_manual_review']:
+        issues.append({'code':'CLASSIFICATION_USAGE_LIFECYCLE_CONFLICT',
+            'count':lifecycle_quality['noncompleted_jobs_with_classification_usage']+
+                    lifecycle_quality['assessments_with_duplicate_classification_usage'],
+            'next_step':'Investigate job state and recorded provider calls; do not replay or delete usage automatically.'})
     if not completion['usage_lineage_quality']['quality_checks_passed']:
         issues.append({'code':'USAGE_INTEGRITY_WARNING',
             'count':sum(completion['usage_lineage_quality'][k] for k in (

@@ -19,6 +19,7 @@ COPY frontend/src/api/base44Client.js ./frontend/src/api/base44Client.js
 COPY frontend/public/ui-freeze/watchlist-live.js ./frontend/public/ui-freeze/watchlist-live.js
 COPY frontend/public/ui-freeze/watchlist-v2_2.html ./frontend/public/ui-freeze/watchlist-v2_2.html
 COPY frontend/src/components/intel/CampaignPanel.jsx ./frontend/src/components/intel/CampaignPanel.jsx
+COPY frontend/src/components/intel/AssessmentOperationsPanel.jsx ./frontend/src/components/intel/AssessmentOperationsPanel.jsx
 COPY frontend/src/components/QAPromptWorkbench.jsx ./frontend/src/components/QAPromptWorkbench.jsx
 COPY frontend/src/pages/WatchlistPosts.jsx ./frontend/src/pages/WatchlistPosts.jsx
 COPY frontend/public/ui-freeze/bawaslu-interface-locale.js ./frontend/public/ui-freeze/bawaslu-interface-locale.js

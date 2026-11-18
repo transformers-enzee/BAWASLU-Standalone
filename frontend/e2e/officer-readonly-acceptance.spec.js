@@ -62,7 +62,7 @@ test('staging-like health metadata matches displayed shell build version',async 
   expect(response.ok()).toBeTruthy();
   const health=await response.json();
   expect(health.ok).toBe(true);
-  expect(health.build_version).toBe('169.9');
+  expect(health.build_version).toBe('170.0');
   await signIn(page);
-  await expect(page.locator('aside')).toContainText('Build 169.9');
+  await expect(page.locator('aside')).toContainText('Build 170.0');
 });

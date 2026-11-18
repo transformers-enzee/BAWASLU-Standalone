@@ -248,13 +248,13 @@ def build_command_center(db,p,data=None):
           .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
                 CampaignEvidence.result_id==EvidenceAssessment.result_id,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
-          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids),
-                  EvidenceAssessment.model_version.notin_(
-                      ['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']))
+          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
           .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc())
           .limit(300).all())
         seen_recent=set()
         for assessment,post in all_recent:
+            if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
+            if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):continue
             if post.id in seen_recent or not _result_in_scope(db,p,post):continue
             campaign=campaigns_by_id.get(assessment.campaign_id)
             if not campaign:continue

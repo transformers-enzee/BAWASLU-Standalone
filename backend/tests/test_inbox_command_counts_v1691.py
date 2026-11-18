@@ -131,3 +131,13 @@ def test_topic_classifier_preliminary_cannot_become_completed_intelligence():
         assert command['coverage']['assessed_posts_in_period']==3
         assert command['paid_provider_called'] is False
     finally:db.close();e.dispose()
+
+
+def test_recent_feed_preserves_completed_legacy_null_model_version():
+    e,db,p=fixture()
+    try:
+        command=build_command_center(db,p,{'period':'all'})
+        ids={x.get('result_id') for x in command['latest_intelligence']}
+        assert ids & {'1','2','3'}
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()

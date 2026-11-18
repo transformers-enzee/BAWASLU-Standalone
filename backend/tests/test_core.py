@@ -1033,7 +1033,7 @@ def test_intelligence_assistant_provider_receives_only_human_approved_triage(mon
         return {'answer_summary':'Grounded answer','key_observations':[f'[{rid}] Approved evidence used.'],'evidence_status':['Source status retained.'],'limitations':[],'cited_record_ids':[rid]}, {'mode':'OPENAI_GROUNDED','model':'gpt-test','usage':{'total_tokens':10}}
     monkeypatch.setenv('OPENAI_API_KEY','test-key')
     monkeypatch.setattr(ia,'generate_openai_assistant_answer',fake_provider)
-    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What does the approved evidence say?'},headers=h)
+    r=client.post('/api/functions/intelligenceAssistant',json={'question':'What did Bawaslu request about clarification in the election supervision issue?'},headers=h)
     assert r.status_code==200, r.text
     record=captured['records'][0]
     assert record['human_approved_triage']['summary']=='Approved factual summary'

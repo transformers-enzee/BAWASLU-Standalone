@@ -154,12 +154,21 @@ def test_campaign_backlog_uses_linked_source_rows_not_orm_unpacking():
     from app import campaigns
     code=Path(campaigns.__file__).read_text(encoding="utf-8")
     block=code.split("if action in ('campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart'):",1)[1].split("if action=='campaignManualFlag':",1)[0]
-    assert "for link in links:" in block
-    assert "db.get(SocialListeningResult,link.result_id)" in block
-    assert "_result_in_scope(db,p,item)" in block
-    assert "matched_fields,run_id,published_at" not in block
-    assert "estimated_ai_requests" in block
-    assert "confirm_ai_cost" in block
+    # The new no-cost preview computes authorization-scoped eligibility in
+    # campaign_manual_batch_preview. It no longer walks ORM link tuples.
+    assert "campaign_manual_batch_preview(db,c.id,requested)" in block
+    assert "if not c or not allowed(p,c)" in block
+    assert "if not _editable(p,c)" in block
+    assert "if action=='campaignAssessmentBacklogPreview':return preview" in block
+    assert "get('confirm_ai_cost') is not True" in block
+    assert "if not preview['database_supports_reservations']" in block
+    assert "if not preview['batch_limit']" in block
+    assert "'assessment_job_accepted':True" in block
+    # Paid execution is still scheduled separately by the authenticated route.
+    from app import main
+    route=Path(main.__file__).read_text(encoding="utf-8")
+    assert "campaignAssessmentBacklogStart" in route
+    assert "background_tasks.add_task(" in route
 
 def test_integration_readiness_reports_campaign_pipeline_separately():
     from app import integration_readiness

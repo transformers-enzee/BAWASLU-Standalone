@@ -18,11 +18,11 @@ def test_mixed_unreviewed_social_pdf_and_enforcement_steps_are_ordered_and_autho
     _,cited,meta=run([social("SOCIAL-1"),pdf("DOC-2-P3","UNREVIEWED")],
         "The officer must arrest the person [SOCIAL-1]. Pasal 21 explains the procedure [DOC-2-P3].")
     assert codes(meta)==[
-        "VERIFY_ORIGINAL_POST_CONTEXT","REQUEST_DOCUMENT_REVIEW",
-        "CONFIRM_AUTHORITY_BEFORE_ANY_ACTION"]
+        "VERIFY_ORIGINAL_POST_CONTEXT","TRACE_EACH_PRESCRIPTIVE_LEGAL_CLAIM",
+        "REQUEST_DOCUMENT_REVIEW","CONFIRM_AUTHORITY_BEFORE_ANY_ACTION"]
     assert meta["officer_review_steps"][0]["source_ids"]==["SOCIAL-1"]
-    assert meta["officer_review_steps"][1]["source_ids"]==["DOC-2-P3"]
     assert meta["officer_review_steps"][2]["source_ids"]==["DOC-2-P3"]
+    assert meta["officer_review_steps"][3]["source_ids"]==["DOC-2-P3"]
     assert meta["legal_action_ready"] is False
     assert meta["officer_review_steps_auto_completed"] is False
     assert all(x["status"]=="NOT_STARTED" and x["officer_action_only"] for x in meta["officer_review_steps"])

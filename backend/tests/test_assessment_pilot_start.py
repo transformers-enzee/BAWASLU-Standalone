@@ -20,7 +20,11 @@ def test_targeted_pilot_never_auto_enqueues_other_posts():
     from pathlib import Path
     source=(Path(__file__).resolve().parents[1] / "app" / "auto_relevance.py").read_text()
     assert "CampaignEvidence.result_id==int(target_result_id)" in source
-    assert "(requested_limit is None or target_result_id is not None) and not reserve_automatic_ai_request" in source
+    # Every path reserves quotas; a manually approved limit is not permission to bypass billing guards.
+    assert "if not reserve_automatic_ai_request(db,campaign.id):" in source
+    assert "release_unbilled_claim(db,job,reanalysis=reanalysis)" in source
+    assert "if target_result_id is None:" in source
+    assert "CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'" in source
     assert "job.state='FAILED'" in source
     assert "accidentally charging a second time" in source
 

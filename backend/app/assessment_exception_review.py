@@ -54,7 +54,33 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
     history_verified=False
     queue_review_clear=next(g['active_categories'] for g in groups if g['group']=='QUEUE')==0
     queue_has_no_active_work=triage.get('status')=='NO_ACTIVE_WORK'
+    # The legacy acceptance preflight evaluates its own exception list. This
+    # consolidated gate also accounts for independently observed audit absence,
+    # cross-snapshot drift and unknown future exception codes. It cannot grant
+    # authorization; its only role is to block misleading UI approval hints.
+    blockers=[]
+    if not snapshot_valid: blockers.append('UNRECONCILED_SNAPSHOT')
+    if missing_audits: blockers.append('MISSING_DIAGNOSTIC_AUDITS')
+    if unknown: blockers.append('UNRECOGNIZED_EXCEPTION')
+    if history_flags: blockers.append('HISTORICAL_EXCEPTION')
+    if not queue_review_clear: blockers.append('QUEUE_RECONCILIATION_REQUIRED')
+    original_status=str((acceptance or {}).get('status') or 'UNKNOWN')
+    capacity=max(0,int((acceptance or {}).get('manual_request_capacity_if_separately_approved') or 0))
+    if original_status!='ELIGIBLE_FOR_SEPARATE_MANUAL_APPROVAL':
+        blockers.append('LEGACY_PREFLIGHT_NOT_ELIGIBLE')
+    if capacity==0: blockers.append('NO_SEPARATELY_APPROVABLE_CAPACITY')
+    review_gate={
+        'status':'BLOCKED' if blockers else 'PREFLIGHT_ONLY',
+        'blockers':blockers,
+        'legacy_preflight_status':original_status,
+        'legacy_preflight_capacity':capacity,
+        'displayable_capacity_if_all_checks_clear':capacity if not blockers else 0,
+        'separate_explicit_approval_required':True,
+        'never_authorizes_paid_processing':True,
+        'no_provider_requests':True,
+    }
     return {
+        'manual_approval_review_gate':review_gate,
         'groups':groups,
         'review_order':['SNAPSHOT','HISTORY','QUEUE'],
         'active_exception_categories':sum(g['active_categories'] for g in groups),

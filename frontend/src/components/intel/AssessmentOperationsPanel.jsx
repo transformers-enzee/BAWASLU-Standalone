@@ -76,7 +76,7 @@ export default function AssessmentOperationsPanel({campaignId}){
     </div>
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
      <p className="font-semibold text-slate-800">Operational acceptance: {String(data.operational_acceptance?.status||'UNKNOWN').replaceAll('_',' ')}</p>
-     <p>Eligible unassessed jobs: {fmt(data.operational_acceptance?.eligible_unassessed_jobs)} · Manual batch capacity only after separate approval: {fmt(data.operational_acceptance?.manual_request_capacity_if_separately_approved)}</p>
+     <p>Eligible unassessed jobs: {fmt(data.operational_acceptance?.eligible_unassessed_jobs)} · Raw legacy capacity (not an authorization): {fmt(data.operational_acceptance?.manual_request_capacity_if_separately_approved)}. Use consolidated safeguards below.</p>
      <p>Historical review: {(data.operational_acceptance?.historical_review_codes||[]).join(', ')||'None'} · Queue reconciliation: {(data.operational_acceptance?.queue_reconciliation_codes||[]).join(', ')||'None'}</p>
      <p>Manual configuration blockers: {(data.operational_acceptance?.manual_configuration_blockers||[]).join(', ')||'None'}. This preflight never authorizes AI charges.</p>
     </div>
@@ -147,6 +147,13 @@ export default function AssessmentOperationsPanel({campaignId}){
      <h5 className="font-semibold text-slate-900">Administrator investigation order · read-only</h5>
      <p>Review snapshot consistency, then original provider history, then eligible queue reconciliation. Categories and flag counts may overlap; they are not distinct jobs.</p>
      <p data-testid="exception-review-next-step">Next review step: {String(data.exception_review.next_review_step||'UNKNOWN').replaceAll('_',' ')}</p>
+     {data.exception_review.manual_approval_review_gate&&<div className="rounded border border-slate-200 bg-slate-50 p-2 space-y-1" data-testid="manual-approval-review-gate">
+      <p className="font-semibold">Manual processing preflight · {data.exception_review.manual_approval_review_gate.status==='BLOCKED'?'Blocked':'Review only'}</p>
+      <p>Reviewable capacity after all diagnostic checks: {fmt(data.exception_review.manual_approval_review_gate.displayable_capacity_if_all_checks_clear)}. Separate administrator approval, quota reservation and worker authorization are still required.</p>
+      {data.exception_review.manual_approval_review_gate.blockers?.length>0&&<p role="status" data-testid="manual-approval-blockers">Unresolved conditions: {data.exception_review.manual_approval_review_gate.blockers.join(', ').replaceAll('_',' ')}</p>}
+      <p className="text-slate-500">This display cannot start or authorize paid AI requests. Older preflight capacity figures do not override these safeguards.</p>
+     </div>}
+
      {data.exception_review.snapshot_reconciled===false&&<p role="alert" className="text-amber-900" data-testid="exception-snapshot-warning">Independent queue or campaign aggregates do not reconcile. Refresh before any remediation.</p>}
      {data.exception_review.missing_audits?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-missing-audits">Audit details unavailable: {data.exception_review.missing_audits.join(', ').replaceAll('_',' ')}. No verified historical usage conclusion is possible.</p>}
      <p className="text-slate-600" data-testid="exception-audit-coverage">Provider usage audit: {data.exception_review.usage_audit_available?'Available':'Unavailable'} · Completion audit: {data.exception_review.completion_audit_available?'Available':'Unavailable'} · Snapshots: {data.exception_review.snapshot_reconciled?'Reconciled':'Need recheck'}</p>

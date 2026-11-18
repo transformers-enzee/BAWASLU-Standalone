@@ -7,13 +7,23 @@ MODULE_COUNTS_SQL="""SELECT
  (SELECT COUNT(*) FROM monitoring_campaigns) AS campaigns,
  (SELECT COUNT(*) FROM campaign_evidence WHERE match_method!='WATCHLIST_ACCOUNT') AS ordinary_campaign_links,
  (SELECT COUNT(*) FROM campaign_evidence WHERE match_method='WATCHLIST_ACCOUNT') AS watchlist_links,
+ (SELECT COUNT(*) FROM campaign_evidence ce
+  WHERE NOT EXISTS(SELECT 1 FROM social_listening_results s WHERE s.id=ce.result_id)) AS orphan_campaign_source_links,
+ (SELECT COUNT(*) FROM social_listening_results s WHERE s.promoted_intelligence_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM intelligence_items i WHERE i.id=s.promoted_intelligence_id)) AS orphan_inbox_promotions,
+ (SELECT COUNT(*) FROM social_listening_results s WHERE s.promoted_intelligence_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM intelligence_items i WHERE i.id=s.promoted_intelligence_id)) AS linked_inbox_promotions,
  (SELECT COUNT(*) FROM watchlist_items WHERE LOWER(type)='candidate' AND status='Active') AS active_candidate_registry_entries,
  (SELECT COUNT(*) FROM intelligence_items) AS intelligence_items,
  (SELECT COUNT(*) FROM assistant_knowledge_pdfs WHERE active=TRUE) AS active_knowledge_pdfs,
  (SELECT COUNT(*) FROM assistant_threads) AS assistant_threads,
+ (SELECT COUNT(*) FROM assistant_knowledge_chunks k WHERE
+    NOT EXISTS (SELECT 1 FROM assistant_knowledge_pdfs p WHERE p.id=k.document_id)) AS orphan_knowledge_chunks,
  (SELECT COUNT(*) FROM case_assignments) AS officer_cases,
  (SELECT COUNT(*) FROM case_reports) AS officer_reports,
  (SELECT COUNT(*) FROM case_reports WHERE status='APPROVED') AS approved_reports,
+ (SELECT COUNT(*) FROM case_reports r WHERE
+    NOT EXISTS (SELECT 1 FROM case_assignments c WHERE c.id=r.case_id)) AS orphan_case_reports,
  (SELECT COUNT(*) FROM case_assignments WHERE status='CLOSED') AS closed_officer_cases,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='PENDING') AS pending_ai_jobs,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='PROCESSING') AS processing_ai_jobs,
@@ -38,6 +48,31 @@ def module_acceptance_evidence(db):
                 'attention_codes':[code for code,active in checks if active],
                 'acceptance_state':'REQUIRES_INDEPENDENT_UAT',
                 'verification_scope':notes,'client_signoff_recorded':False}
+    # Cross-module handoff integrity is independently observable in the
+    # connected database. An intact FK is not proof of correct business
+    # classification, authoritative approval or user-visible rendering.
+    handoffs=[
+      {'workflow':'Social Listening → Campaign Evidence',
+       'checked_records':counts['ordinary_campaign_links']+counts['watchlist_links'],
+       'broken_links':counts['orphan_campaign_source_links'],
+       'integrity':'CONSISTENT' if not counts['orphan_campaign_source_links'] else 'REVIEW_REQUIRED',
+       'does_not_establish_client_acceptance':True},
+      {'workflow':'Social Listening → Intelligence Inbox',
+       'checked_records':counts['linked_inbox_promotions']+counts['orphan_inbox_promotions'],
+       'broken_links':counts['orphan_inbox_promotions'],
+       'integrity':'CONSISTENT' if not counts['orphan_inbox_promotions'] else 'REVIEW_REQUIRED',
+       'does_not_establish_client_acceptance':True},
+      {'workflow':'AI Assistant → Knowledge Corpus',
+       'checked_records':counts['active_knowledge_pdfs'],
+       'broken_links':counts['orphan_knowledge_chunks'],
+       'integrity':'CONSISTENT' if not counts['orphan_knowledge_chunks'] else 'REVIEW_REQUIRED',
+       'does_not_establish_client_acceptance':True},
+      {'workflow':'Officer Casework → Management Reporting',
+       'checked_records':counts['officer_reports'],
+       'broken_links':counts['orphan_case_reports'],
+       'integrity':'CONSISTENT' if not counts['orphan_case_reports'] else 'REVIEW_REQUIRED',
+       'does_not_establish_client_acceptance':True},
+    ]
     modules=[
         row('Social Listening',counts['collected_posts'],[
             ('SOURCE_TEXT_GAPS',counts['missing_post_text']>0),
@@ -63,6 +98,10 @@ def module_acceptance_evidence(db):
             'Job state and latest relevance do not establish human-label accuracy or authorize paid processing')]
     return {'scope':'MAIN_DATABASE_AGGREGATE_ACCEPTANCE_EVIDENCE',
       'modules':modules,'module_count':len(modules),'counts':counts,
+      'cross_module_link_integrity':handoffs,
+      'cross_module_link_checks_run':len(handoffs),
+      'cross_module_link_checks_passed':sum(x['integrity']=='CONSISTENT' for x in handoffs),
+      'cross_module_link_integrity_is_not_functional_uat':True,
       'completion_percentages_supported':False,
       'release_readiness_certified':False,'formal_client_acceptance_recorded':False,
       'validation_gaps':[

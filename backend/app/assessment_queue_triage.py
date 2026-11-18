@@ -21,7 +21,7 @@ _BUCKETS=(
 )
 
 
-def assessment_queue_triage(readiness,recovery,superseded):
+def assessment_queue_triage(readiness,recovery,superseded,completion=None):
     """Return a complete, non-overlapping ordinary-job partition.
 
     Staleness and quarantine are subsets of PROCESSING/FAILED respectively,
@@ -29,6 +29,22 @@ def assessment_queue_triage(readiness,recovery,superseded):
     subsets and must not be added to the total.
     """
     counts=recovery
+    audit=completion or {}
+    completed=max(0,int(audit.get('completed_jobs',0)))
+    verified=max(0,int(audit.get('verified_usage_backed_completed_jobs',0)))
+    history_gaps=max(0,int(audit.get('completed_requiring_manual_history_review',0)))
+    latest=audit.get('latest_completion_classification_review') or {}
+    latest_issues=sum(max(0,int(latest.get(k,0))) for k in
+        ('completed_missing_latest_assessment','completed_latest_unclassified_or_invalid'))
+    completion_provenance={
+        'completed_jobs':completed,
+        'usage_backed_completed':verified,
+        'requires_historical_usage_review':history_gaps,
+        'latest_classification_review':latest_issues,
+        'completed_partition_reconciled':completed==verified+history_gaps,
+        'historical_usage_is_not_latest_classification_proof':True,
+        'automatic_reassessment_permitted':False,
+    }
     buckets=[{'code':code,'count':max(0,int(counts.get(key,0))),
               'priority':priority,'next_step':guidance}
              for code,key,priority,guidance in _BUCKETS]
@@ -45,19 +61,23 @@ def assessment_queue_triage(readiness,recovery,superseded):
     # The four groups are disjoint by the existing readiness query. If
     # counts race across independent snapshots, report drift rather than
     # fabricate a residual category or approve provider work.
-    consistent=(partition_total==total and pending_known==pending)
+    completion_snapshot_reconciled=(completion is None or
+        (completed==by['COMPLETED'] and completion_provenance['completed_partition_reconciled']))
+    consistent=(partition_total==total and pending_known==pending and completion_snapshot_reconciled)
     return {
         'scope':'ONE_AUTHORIZED_CAMPAIGN_ORDINARY_JOBS',
         'status':('RECHECK_INDEPENDENT_SNAPSHOTS' if not consistent else
                   'HOLD_FOR_HISTORY_REVIEW' if
                   (by['STALE_PROCESSING'] or by['QUARANTINED_INTERRUPTED'] or
-                   by['FAILED_OTHER']) else
+                   by['FAILED_OTHER'] or history_gaps or latest_issues) else
                   'QUEUE_RECONCILIATION' if
                   (assessed or missing or exhausted or
                    int(superseded.get('superseded_without_current_classification',0))) else
                   'ACTIVE_PROCESSING' if by['PROCESSING_ACTIVE'] else
                   'PENDING_WORK' if pending else 'NO_ACTIVE_WORK'),
         'buckets':buckets,
+        'completion_provenance':completion_provenance,
+        'completion_snapshot_reconciled':completion_snapshot_reconciled,
         'ordinary_job_total':total,
         'bucket_total':partition_total,
         'buckets_partition_all_jobs':partition_total==total,

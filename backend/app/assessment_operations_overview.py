@@ -4,6 +4,7 @@ from .campaign_ai_readiness import campaign_ai_worker_readiness
 from .campaign_assessment_coverage import campaign_link_assessment_coverage
 from .assessment_completion_audit import campaign_completion_audit
 from .assessment_interrupted_recovery import interrupted_campaign_preview
+from .assessment_superseded_reconcile import superseded_preview
 
 def campaign_assessment_operations_overview(db,campaign_id):
     cid=int(campaign_id)
@@ -11,6 +12,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
     coverage=campaign_link_assessment_coverage(db,cid)
     completion=campaign_completion_audit(db,cid)
     interrupted=interrupted_campaign_preview(db,cid)
+    superseded=superseded_preview(db,cid)
     issues=[]
     if coverage['pending_monitoring_without_job']>0:
         issues.append({'code':'UNQUEUED_EVIDENCE',
@@ -59,6 +61,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
         'worker_readiness':readiness,
         'completion_audit':completion,
         'interrupted_recovery':interrupted,
+        'already_assessed_queue_reconciliation':superseded,
         'review_required':bool(issues),
         'issues':issues,
         'automatic_ai_authorized':False,

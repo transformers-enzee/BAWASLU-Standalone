@@ -49,14 +49,15 @@ def campaign_completion_audit(db,campaign_id):
         amount(and_(completed,AIAssessmentJob.attempts==0)),
         amount(AIAssessmentJob.state=='PENDING'),
         amount(AIAssessmentJob.state=='PROCESSING'),
-        amount(AIAssessmentJob.state=='FAILED'))
+        amount(AIAssessmentJob.state=='FAILED'),
+        amount(AIAssessmentJob.state=='SUPERSEDED_ASSESSED'))
         .join(CampaignEvidence,and_(
             CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
             CampaignEvidence.result_id==AIAssessmentJob.result_id))
         .filter(AIAssessmentJob.campaign_id==cid,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').one())
     (jobs,complete,good,missing_assessment,invalid_label,missing_usage,
-     usage_without_valid_label,zero_attempts,pending,processing,failed)=map(int,counts)
+     usage_without_valid_label,zero_attempts,pending,processing,failed,superseded)=map(int,counts)
     discrepancies=complete-good
     # A PROCESSING job older than the interrupted-call grace window is a
     # historical review signal, NOT a safe instruction to replay provider work.
@@ -168,8 +169,9 @@ def campaign_completion_audit(db,campaign_id):
         'stale_processing_requires_history_review':int(stale_processing)>0,
         'stale_processing_automatically_retried':False,
         'pending_jobs':pending,'processing_jobs':processing,'failed_jobs':failed,
+        'superseded_assessed_jobs':superseded,
         'completion_reconciled':complete==good,
-        'counts_reconciled':jobs==complete+pending+processing+failed,
+        'counts_reconciled':jobs==complete+pending+processing+failed+superseded,
         'missing_usage_requires_manual_history_review':True,
         'automatically_retry_missing_usage':False,
         'relevance_is_not_legal_determination':True,

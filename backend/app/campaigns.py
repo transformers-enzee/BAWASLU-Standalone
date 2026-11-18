@@ -832,6 +832,20 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign=db.get(MonitoringCampaign,int(selected))
         if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
         return campaign_completion_audit(db,campaign.id)
+    if action in ('campaignAssessmentSupersededPreview','campaignAssessmentSupersededApply'):
+        from .assessment_superseded_reconcile import (
+            superseded_preview, apply_superseded_reconciliation)
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        if not selected.isdigit():raise ValueError('Select a campaign')
+        campaign=db.get(MonitoringCampaign,int(selected))
+        if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
+        if action=='campaignAssessmentSupersededPreview':
+            return superseded_preview(db,campaign.id)
+        if not _editable(p,campaign):
+            raise PermissionError('Only a campaign editor may reconcile already-assessed pending jobs')
+        if (data or {}).get('confirm_no_credit_supersede') is not True:
+            raise ValueError('Explicit no-credit queue reconciliation confirmation required')
+        return apply_superseded_reconciliation(db,campaign.id)
     if action=='campaignAssessmentOperationsOverview':
         from .assessment_operations_overview import campaign_assessment_operations_overview
         selected=str(id or (data or {}).get('campaign_id') or '')

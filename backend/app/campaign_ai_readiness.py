@@ -57,7 +57,8 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
         amount(and_(AIAssessmentJob.state=='PENDING',AIAssessmentJob.attempts>=3)),
         amount(AIAssessmentJob.state=='PROCESSING'),
         amount(AIAssessmentJob.state=='COMPLETED'),
-        amount(AIAssessmentJob.state=='FAILED'))
+        amount(AIAssessmentJob.state=='FAILED'),
+        amount(AIAssessmentJob.state=='SUPERSEDED_ASSESSED'))
         .join(CampaignEvidence,and_(
             CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
             CampaignEvidence.result_id==AIAssessmentJob.result_id))
@@ -65,7 +66,7 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
         .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
         .filter(AIAssessmentJob.campaign_id==cid,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').one())
-    total,pending_count,claimable,missing_text,attempt_cap,processing,completed,failed=map(int,counts)
+    total,pending_count,claimable,missing_text,attempt_cap,processing,completed,failed,superseded=map(int,counts)
     preassessed_pending=(db.query(func.count(AIAssessmentJob.id))
         .join(CampaignEvidence,and_(
             CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
@@ -94,7 +95,8 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
             'claimable_pending_with_text':claimable,
             'pending_missing_source_or_text':missing_text,
             'pending_attempts_exhausted':attempt_cap,
-            'processing':processing,'completed':completed,'failed':failed},
+            'processing':processing,'completed':completed,'failed':failed,
+            'superseded_assessed':superseded},
         'pending_already_assessed_excluded_from_ai':int(preassessed_pending),
         'estimated_max_requests_next_run':capacity if not reasons else 0,
         'ready_to_process':not reasons,

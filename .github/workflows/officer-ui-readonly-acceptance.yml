@@ -4,6 +4,7 @@ on:
     branches: [architecture-v2-foundation-20261015]
     paths:
       - 'frontend/e2e/officer-readonly-acceptance.spec.js'
+      - 'frontend/e2e/assessment-operations-interaction.spec.js'
       - 'frontend/playwright.config.js'
       - 'frontend/src/App.jsx'
       - 'frontend/src/components/intel/**'
@@ -40,7 +41,7 @@ jobs:
         working-directory: frontend
         env:
           CI: 'true'
-        run: npm run test:e2e:officer-readonly
+        run: npm run test:e2e:officer-readonly && npm run test:e2e:assessment-operations
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

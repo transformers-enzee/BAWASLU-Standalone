@@ -57,7 +57,7 @@ export default function AssessmentOperationsPanel({campaignId}){
     <p className="text-xs text-slate-500">Read-only queue, completion and budget diagnostics. No provider calls.</p></div>
    <div className="flex flex-wrap gap-2">
     {open&&<button type="button" className="intel-ghost text-xs" onClick={load} disabled={busy}>{busy?'Checking…':'Refresh status'}</button>}
-    <button type="button" className="intel-ghost text-xs" aria-expanded={open} onClick={()=>{if(!open&&!data)void load();setOpen(!open);}}>{open?'Hide details':'View status'}</button>
+    <button type="button" className="intel-ghost text-xs" aria-expanded={open} onClick={()=>{if(open){requestToken.current+=1;setBusy(false);setData(null);setError('');}else if(!data)void load();setOpen(!open);}}>{open?'Hide details':'View status'}</button>
    </div>
   </div>
   {open&&<div className="space-y-3">

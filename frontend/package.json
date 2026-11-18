@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:officer-readonly": "playwright test e2e/officer-readonly-acceptance.spec.js --project=chromium",
+    "test:e2e:assessment-operations": "playwright test e2e/assessment-operations-interaction.spec.js --project=chromium",
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {

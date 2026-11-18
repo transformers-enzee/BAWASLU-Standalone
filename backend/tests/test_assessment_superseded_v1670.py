@@ -33,7 +33,7 @@ def test_bounded_idempotent_reconciliation_does_not_forge_completion():
         assert apply_superseded_reconciliation(db,4)['superseded_jobs']==0
         assert db.query(EvidenceAssessment).count()==before
         assert db.query(AIAssessmentJob).filter_by(campaign_id=4,state='SUPERSEDED_ASSESSED').count()==2
-        assert db.query(AIAssessmentJob).filter_by(campaign_id=4,state='PENDING').count()==2
+        assert db.query(AIAssessmentJob).filter_by(campaign_id=4,state='PENDING').count()==3  # Two monitoring, one excluded watchlist
         assert campaign_ai_worker_readiness(db,4,env={})['queue_counts']['superseded_assessed']==2
         audit=campaign_completion_audit(db,4)
         assert audit['superseded_assessed_jobs']==2

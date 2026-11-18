@@ -46,7 +46,7 @@ def test_all_job_states_source_and_campaign_scope():
                    'claimable_pending_with_text':1,
                    'pending_missing_source_or_text':2,
                    'pending_attempts_exhausted':1,
-                   'processing':1,'completed':1,'failed':1}
+                   'processing':1,'completed':1,'failed':1,'superseded_assessed':0}
         assert not result['ready_to_process']  # SQLite must never authorize AI billing.
         assert 'POSTGRES_RESERVATION_REQUIRED' in result['readiness_blockers']
         assert result['estimated_max_requests_next_run']==0

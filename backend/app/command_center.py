@@ -7,7 +7,7 @@ import json
 import re
 from collections import defaultdict, Counter
 from datetime import date, datetime, timedelta
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, case
 from .access import allowed, has
 from .geography import province_code_for, province_name_for, regency_code_for, REGENCY_BY_CODE, PROVINCES, INDONESIAN_PROVINCE_ALIASES
 
@@ -124,16 +124,25 @@ def build_command_center(db,p,data=None):
     # Latest version per (campaign, source), avoiding inflation from reassessment.
     assessed_rows=[]
     if campaigns_ids:
-        latest=(db.query(EvidenceAssessment.campaign_id.label('cid'),
-                         EvidenceAssessment.result_id.label('rid'),
-                         func.max(EvidenceAssessment.assessment_version).label('ver'))
-                .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
-                .group_by(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id)
-                .subquery())
+        # Match Inbox precedence: completed evidence first, then highest
+        # assessment version and row id. A window partition guarantees one
+        # effective assessment per campaign/source in SQLite and PostgreSQL.
+        preliminary=case(
+            (EvidenceAssessment.model_version.in_(
+                ['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+            else_=0)
+        ranked=(db.query(
+            EvidenceAssessment.id.label('assessment_id'),
+            func.row_number().over(
+                partition_by=(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id),
+                order_by=(preliminary.asc(),
+                          EvidenceAssessment.assessment_version.desc(),
+                          EvidenceAssessment.id.desc())).label('rank'))
+            .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
+            .subquery())
         assessed_rows=(db.query(EvidenceAssessment,SocialListeningResult)
-            .join(latest,and_(EvidenceAssessment.campaign_id==latest.c.cid,
-                              EvidenceAssessment.result_id==latest.c.rid,
-                              EvidenceAssessment.assessment_version==latest.c.ver))
+            .join(ranked,and_(EvidenceAssessment.id==ranked.c.assessment_id,
+                              ranked.c.rank==1))
             .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
             .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
                                         CampaignEvidence.result_id==EvidenceAssessment.result_id,
@@ -174,7 +183,7 @@ def build_command_center(db,p,data=None):
         # Match Inbox eligibility: a preliminary provider label is not a
         # completed relevance assessment and must not inflate coverage, alerts,
         # candidate/issue inventories or executive briefings.
-        if assessment.model_version=='PRISM_PENDING_OPENAI':continue
+        if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
         # UNASSESSED and unfamiliar relevance values are not completed
         # relevance decisions even if a placeholder assessment row exists.
         valid_label=str(assessment.relevance_label or '').upper()
@@ -233,11 +242,15 @@ def build_command_center(db,p,data=None):
     latest_alerts=[]
     if campaigns_ids:
         all_recent=(db.query(EvidenceAssessment,SocialListeningResult)
+          .join(ranked,and_(EvidenceAssessment.id==ranked.c.assessment_id,
+                            ranked.c.rank==1))
           .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
           .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
                 CampaignEvidence.result_id==EvidenceAssessment.result_id,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
-          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
+          .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids),
+                  EvidenceAssessment.model_version.notin_(
+                      ['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']))
           .order_by(EvidenceAssessment.created_at.desc(),EvidenceAssessment.id.desc())
           .limit(300).all())
         seen_recent=set()
@@ -356,24 +369,13 @@ def build_command_center(db,p,data=None):
     # because its AI assessment was saved recently.
     regional_assessed=defaultdict(set)
     if campaigns_ids:
-        latest_geo=(db.query(EvidenceAssessment.campaign_id.label('cid'),
-                             EvidenceAssessment.result_id.label('rid'),
-                             func.max(EvidenceAssessment.assessment_version).label('ver'))
-            .filter(EvidenceAssessment.campaign_id.in_(campaigns_ids))
-            .group_by(EvidenceAssessment.campaign_id,EvidenceAssessment.result_id).subquery())
-        geo_rows=(db.query(EvidenceAssessment,SocialListeningResult)
-            .join(latest_geo,and_(EvidenceAssessment.campaign_id==latest_geo.c.cid,
-                 EvidenceAssessment.result_id==latest_geo.c.rid,
-                 EvidenceAssessment.assessment_version==latest_geo.c.ver))
-            .join(SocialListeningResult,SocialListeningResult.id==EvidenceAssessment.result_id)
-            .join(CampaignEvidence,and_(CampaignEvidence.campaign_id==EvidenceAssessment.campaign_id,
-                 CampaignEvidence.result_id==EvidenceAssessment.result_id,
-                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
-            .filter(func.substr(SocialListeningResult.published_at,1,10)>=start,
-                    func.substr(SocialListeningResult.published_at,1,10)<=end)
-            .all())
+        # Geographic assessment signals reuse the same authoritative rows,
+        # campaign permissions and publication period as headline indicators.
+        geo_rows=assessed_rows
         for assessment,post in geo_rows:
             if not _result_in_scope(db,p,post):continue
+            if assessment.model_version in ('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER'):continue
+            if str(assessment.relevance_label or '').upper() not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):continue
             codes=set()
             for signal in _as_list(assessment.geographic_signals_json):
                 value=signal if isinstance(signal,str) else (signal.get('province') or signal.get('name') or signal.get('value') or signal.get('regency_city') or '') if isinstance(signal,dict) else ''

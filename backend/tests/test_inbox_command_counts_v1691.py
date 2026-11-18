@@ -81,3 +81,53 @@ def test_irrelevant_latest_revision_removes_source_from_both_modules():
         assert module_acceptance_evidence(db)['counts']['eligible_saved_inbox_links']==1
         assert all(x['result_id']!='1' for x in command['alerts'])
     finally:db.close();e.dispose()
+
+
+def test_equal_version_latest_id_wins_inbox_command_and_coverage():
+    e,db,p=fixture()
+    try:
+        db.add(EvidenceAssessment(campaign_id=31,result_id=1,
+            assessment_version=1,relevance_label='IRRELEVANT',sentiment='NEUTRAL'))
+        db.commit()
+        inbox,command=view(db,p)
+        assert {x['id'] for x in inbox['findings']}=={'3'}
+        assert command['indicators']['relevant_mentions']==1
+        assert command['coverage']['assessed_pairs_in_period']==3
+        assert command['coverage']['relevant_distinct_posts']==1
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()
+
+
+def test_later_pending_provider_row_does_not_replace_completed_classification():
+    e,db,p=fixture()
+    try:
+        db.add(EvidenceAssessment(campaign_id=31,result_id=1,
+            assessment_version=10,relevance_label='IRRELEVANT',
+            model_version='PRISM_PENDING_OPENAI'))
+        db.commit()
+        inbox,command=view(db,p)
+        assert {x['id'] for x in inbox['findings']}=={'1','3'}
+        assert command['indicators']['relevant_mentions']==2
+        assert command['coverage']['assessed_pairs_in_period']==3
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()
+
+
+def test_topic_classifier_preliminary_cannot_become_completed_intelligence():
+    e,db,p=fixture()
+    try:
+        db.add(SocialListeningResult(id=8,run_id=1,platform='x',
+            text_content='Synthetic pending-only post',
+            published_at=datetime.utcnow().date().isoformat()+'T01:00:00Z'))
+        db.add(CampaignEvidence(campaign_id=31,result_id=8,match_method='KEYWORD'))
+        db.add(EvidenceAssessment(campaign_id=31,result_id=8,
+            assessment_version=1,relevance_label='RELEVANT',
+            model_version='PRISM_OPENAI_TOPIC_CLASSIFIER'))
+        db.commit()
+        inbox,command=view(db,p)
+        assert '8' not in {x['id'] for x in inbox['findings']}
+        assert command['indicators']['relevant_mentions']==2
+        assert command['coverage']['captured_posts_in_period']==5
+        assert command['coverage']['assessed_posts_in_period']==3
+        assert command['paid_provider_called'] is False
+    finally:db.close();e.dispose()

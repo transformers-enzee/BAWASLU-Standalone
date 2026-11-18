@@ -25,7 +25,8 @@ def campaign_completion_audit(db,campaign_id):
         EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
         EvidenceAssessment.result_id==AIAssessmentJob.result_id,
         AssessmentAIUsage.assessment_id==EvidenceAssessment.id,
-        AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id))
+        AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id,
+        AssessmentAIUsage.request_kind=='RELEVANCE_AND_CLASSIFICATION'))
     # A usage row only verifies completion when its own assessment has an
     # actual relevance label, rather than a sentiment-only UNASSESSED row.
     verified=exists().where(and_(
@@ -33,7 +34,14 @@ def campaign_completion_audit(db,campaign_id):
         EvidenceAssessment.result_id==AIAssessmentJob.result_id,
         func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(_VALID_LABELS),
         AssessmentAIUsage.assessment_id==EvidenceAssessment.id,
-        AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id))
+        AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id,
+        AssessmentAIUsage.request_kind=='RELEVANCE_AND_CLASSIFICATION'))
+    sentiment_usage=exists().where(and_(
+        EvidenceAssessment.campaign_id==AIAssessmentJob.campaign_id,
+        EvidenceAssessment.result_id==AIAssessmentJob.result_id,
+        AssessmentAIUsage.assessment_id==EvidenceAssessment.id,
+        AssessmentAIUsage.campaign_id==AIAssessmentJob.campaign_id,
+        AssessmentAIUsage.request_kind=='STANDALONE_SENTIMENT'))
     def amount(clause):
         return func.coalesce(func.sum(case((clause,1),else_=0)),0)
     completed=AIAssessmentJob.state=='COMPLETED'
@@ -47,6 +55,7 @@ def campaign_completion_audit(db,campaign_id):
         amount(and_(completed,valid_assessment,~usage_link)),
         amount(and_(completed,usage_link,~verified)),
         amount(and_(completed,AIAssessmentJob.attempts==0)),
+        amount(and_(completed,valid_assessment,~usage_link,sentiment_usage)),
         amount(AIAssessmentJob.state=='PENDING'),
         amount(AIAssessmentJob.state=='PROCESSING'),
         amount(AIAssessmentJob.state=='FAILED'),
@@ -57,7 +66,7 @@ def campaign_completion_audit(db,campaign_id):
         .filter(AIAssessmentJob.campaign_id==cid,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').one())
     (jobs,complete,good,missing_assessment,invalid_label,missing_usage,
-     usage_without_valid_label,zero_attempts,pending,processing,failed,superseded)=map(int,counts)
+     usage_without_valid_label,zero_attempts,sentiment_only,pending,processing,failed,superseded)=map(int,counts)
     discrepancies=complete-good
     # A PROCESSING job older than the interrupted-call grace window is a
     # historical review signal, NOT a safe instruction to replay provider work.
@@ -165,6 +174,8 @@ def campaign_completion_audit(db,campaign_id):
         'completed_valid_relevance_missing_linked_usage':missing_usage,
         'completed_usage_without_valid_relevance':usage_without_valid_label,
         'completed_zero_attempts':zero_attempts,
+        'completed_sentiment_usage_without_classification_usage':sentiment_only,
+        'classification_usage_request_kind_required':True,
         'latest_completion_classification_review':{
             'completed_missing_latest_assessment':int(latest_missing),
             'completed_latest_unclassified_or_invalid':int(latest_invalid),

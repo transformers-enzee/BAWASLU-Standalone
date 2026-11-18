@@ -1,0 +1,3 @@
+# v167.5 — Provider request-kind provenance
+
+Read-only completion auditing now requires a `RELEVANCE_AND_CLASSIFICATION` usage record, never merely a `STANDALONE_SENTIMENT` record, to verify a completed classification job. The separate aggregate for completed jobs with sentiment-only usage alerts officers without fabricating billing history or triggering reprocessing. Earlier classification usage remains valid even when a later sentiment assessment version exists. Supabase review observed 180 relevance and 110 standalone sentiment usage records; no completed jobs currently rely solely on sentiment usage. Synthetic QA covers mixed kinds and campaign isolation. No database mutations or paid requests.

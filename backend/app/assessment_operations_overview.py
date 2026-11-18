@@ -38,6 +38,10 @@ def campaign_assessment_operations_overview(db,campaign_id):
         issues.append({'code':'COMPLETION_PROVENANCE_GAP',
             'count':completion['completed_requiring_manual_history_review'],
             'next_step':'Review saved classifications and original provider usage lineage.'})
+    if completion['completed_sentiment_usage_without_classification_usage']>0:
+        issues.append({'code':'SENTIMENT_USAGE_NOT_CLASSIFICATION_PROOF',
+            'count':completion['completed_sentiment_usage_without_classification_usage'],
+            'next_step':'Review classification provenance; sentiment-only usage cannot verify completed relevance screening.'})
     if completion['latest_completion_classification_review']['requires_manual_review']:
         latest_review=completion['latest_completion_classification_review']
         issues.append({'code':'COMPLETED_LATEST_CLASSIFICATION_REVIEW',

@@ -82,3 +82,46 @@ def test_source_negative_control_does_not_substitute_formal_evidence(monkeypatch
         assert out["grounding"]["scope"]=="AUTHORIZED_EVIDENCE_NO_MATCH"
     finally:
         db.close()
+
+
+def test_exact_pdf_page_selection_requires_all_requested_authorized_pages():
+    from app.assistant_knowledge import exact_pdf_selection_complete
+    page=lambda ref: {'record_id':ref,'record_type':'PDF_KNOWLEDGE',
+                      'match_method':'EXACT_AUTHORIZED_PAGE_ID'}
+    question='Compare [DOC-3-P2] and [DOC-3-P4] with a social source'
+    assert exact_pdf_selection_complete(question,[page('DOC-3-P2'),page('DOC-3-P4')])
+    assert not exact_pdf_selection_complete(question,[page('DOC-3-P2')])
+    assert not exact_pdf_selection_complete(question,[page('DOC-3-P2'),page('DOC-2-P4')])
+    assert not exact_pdf_selection_complete(question,[page('DOC-3-P2'),
+        {'record_id':'DOC-3-P4','record_type':'SOCIAL_LISTENING'}])
+    assert not exact_pdf_selection_complete(question,[page('DOC-3-P2'),
+        {'record_id':'DOC-3-P4','record_type':'PDF_KNOWLEDGE',
+         'match_method':'DOCUMENT_OVERVIEW'}])
+
+
+def test_mixed_missing_exact_pdf_cannot_fall_back_to_other_saved_sources(monkeypatch):
+    from app import main,assistant_knowledge,intelligence_assistant,domain,campaigns
+    db=dataset()
+    try:
+        user=db.get(User,2)
+        monkeypatch.setattr(main,'profile',lambda *_:{
+            'status':'Active','permissions':{'view_intelligence':True},
+            'province':'Riau'})
+        monkeypatch.setattr(assistant_knowledge,'authorized_reference_catalog',lambda *_:[])
+        monkeypatch.setattr(assistant_knowledge,'retrieve_chat_knowledge',
+            lambda *_args,**_kwargs:[])
+        def fail(*args,**kwargs):
+            raise AssertionError('Unavailable explicit PDF must not trigger saved-source fallback or paid model')
+        monkeypatch.setattr(domain,'list_intelligence',fail)
+        monkeypatch.setattr(campaigns,'campaign_action',fail)
+        monkeypatch.setattr(intelligence_assistant,'generate_general_openai_answer',fail)
+        out=main.intelligence_assistant({
+            'question':'Compare [DOC-999-P2] with Social Listening activity',
+            'analysisMode':'AUTO','responseDepth':'DEEP'
+        },user=user,db=db)
+        assert out['provider']['fallback_code']=='no_matching_evidence'
+        assert out['records']==[]
+        assert out['grounding']['selected_count']==0
+        assert out['grounding']['scope']=='AUTHORIZED_EVIDENCE_NO_MATCH'
+    finally:
+        db.close()

@@ -362,6 +362,25 @@ def explicit_pdf_page_refs(question):
         for doc,page in _DOC_PAGE_REF.findall(str(question or ""))))
 
 
+def exact_pdf_selection_complete(question,selected,limit=6):
+    """Every explicitly named page must match a retrieved authorized PDF page.
+
+    The exact-page retriever is already all-or-nothing; this extra response
+    boundary prevents mixed-source questions from silently replacing a missing
+    PDF page with unrelated social/formal evidence or a general model answer.
+    """
+    requested=explicit_pdf_page_refs(question)
+    if not requested:
+        return True
+    if len(requested)>max(1,min(int(limit),12)):
+        return False
+    expected={f"DOC-{doc}-P{page}" for doc,page in requested}
+    actual={str(row.get("record_id") or "") for row in selected or []
+            if isinstance(row,dict) and row.get("record_type")=="PDF_KNOWLEDGE"
+            and row.get("match_method")=="EXACT_AUTHORIZED_PAGE_ID"}
+    return expected==actual
+
+
 def retrieve_exact_pdf_pages(db,p,question,limit=6):
     """All-or-nothing, already-authorized page selection (no semantic API calls).
 

@@ -148,7 +148,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'169.6','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'169.7','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -714,7 +714,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.
     from .assistant_knowledge import (
-        retrieve_chat_knowledge,authorized_reference_catalog,explicit_pdf_page_refs)
+        retrieve_chat_knowledge,authorized_reference_catalog,explicit_pdf_page_refs,
+        exact_pdf_selection_complete)
     history=body.get('conversationContext') or []
     history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
              for x in history[-6:] if isinstance(x,dict) and
@@ -723,6 +724,23 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     explicit_pdf_ids=explicit_pdf_page_refs(q)
     pdf_evidence=retrieve_chat_knowledge(
         db,p,q,previous,history,limit=6) if requested!='GENERAL' or explicit_pdf_ids else []
+    # A named PDF page is an exact-source constraint, including mixed
+    # Social Listening/PDF comparisons. Do not substitute another source.
+    if explicit_pdf_ids and not exact_pdf_selection_complete(q,pdf_evidence,limit=6):
+        message=('Satu atau lebih halaman PDF yang diminta tidak tersedia dalam akses Anda. '
+                 'Saya tidak akan mengganti rujukan tersebut dengan sumber lain.'
+                 if language=='id' else
+                 'One or more requested PDF pages are unavailable within your access. '
+                 'I will not substitute other evidence for those named pages.')
+        return {'answer':message,'records':[],
+                'provider':{'mode':'DETERMINISTIC_FALLBACK','model':'',
+                            'fallback_code':'no_matching_evidence'},
+                'answer_language':language,'detected_tags':[],
+                'presentation_labels':{},
+                'grounding':{'accessible_count':0,'selected_count':0,
+                             'supporting_count':0,'matched_social':0,
+                             'source_types':[],'scope':'AUTHORIZED_EVIDENCE_NO_MATCH',
+                             'limited':True}}
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)

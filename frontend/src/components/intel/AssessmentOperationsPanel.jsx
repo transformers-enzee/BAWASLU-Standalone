@@ -36,6 +36,8 @@ export default function AssessmentOperationsPanel({campaignId}){
  const done=data?.completion_audit||{};
  const recovery=data?.interrupted_recovery||{};
  const remaining=data?.worker_readiness||{};
+ const triage=data?.queue_triage||null;
+ const breakdown=triage?.pending_breakdown||{};
  return <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Assessment operations status">
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div><h4 className="font-semibold text-slate-800">Assessment operations</h4>
@@ -63,6 +65,32 @@ export default function AssessmentOperationsPanel({campaignId}){
      <p>Historical review: {(data.operational_acceptance?.historical_review_codes||[]).join(', ')||'None'} · Queue reconciliation: {(data.operational_acceptance?.queue_reconciliation_codes||[]).join(', ')||'None'}</p>
      <p>Manual configuration blockers: {(data.operational_acceptance?.manual_configuration_blockers||[]).join(', ')||'None'}. This preflight never authorizes AI charges.</p>
     </div>
+    <section aria-label="Assessment queue lifecycle triage" data-testid="assessment-queue-triage" className="rounded-lg border border-slate-200 p-3 space-y-3 text-xs">
+     <div>
+      <h5 className="font-semibold text-slate-900">Queue lifecycle · read-only</h5>
+      <p className="text-slate-600">Distinct ordinary assessment jobs, not social posts. No new assessments, retries or paid requests.</p>
+     </div>
+     {triage?<>
+      <p role="status" data-testid="assessment-triage-status" className="font-medium text-slate-800">Review status: {String(triage.status||'UNKNOWN').replaceAll('_',' ')}</p>
+      {(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS')&&
+       <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">Queue counts were read independently and do not reconcile. Refresh before acting; do not infer missing jobs or authorize paid processing from these figures.</p>}
+      <p className="font-medium text-slate-700">Ordinary jobs: {fmt(triage.ordinary_job_total)} · Categorized: {fmt(triage.bucket_total)}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+       {(triage.buckets||[]).map(item=><div key={item.code} className="rounded border border-slate-200 bg-slate-50 p-2 space-y-1" data-testid={'queue-bucket-'+item.code}>
+        <div className="flex items-center justify-between gap-2"><strong className="text-slate-800">{item.code.replaceAll('_',' ')}</strong><span className="tabular-nums font-semibold">{fmt(item.count)}</span></div>
+        <p className="text-slate-600">{item.next_step}</p>
+       </div>)}
+      </div>
+      <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-pending-breakdown">
+       <p className="font-semibold">Pending breakdown ({fmt(breakdown.pending_total)})</p>
+       <p>Eligible with text: {fmt(breakdown.eligible_with_text)} · Missing text: {fmt(breakdown.missing_source_or_text)}</p>
+       <p>Already assessed: {fmt(breakdown.already_assessed)} · Attempt limit exhausted: {fmt(breakdown.attempt_limit_exhausted)}</p>
+       <p>Breakdown total: {fmt(breakdown.breakdown_total)} · {breakdown.breakdown_reconciled?'Counts reconcile':'Counts need rechecking'}</p>
+       <p>Superseded classifications changed or missing: {fmt(triage.outdated_superseded_classifications)}. These require review, not automatic requeue.</p>
+      </div>
+      <p className="text-slate-500">Stalled means processing longer than {fmt(triage.stale_threshold_minutes)} minutes, not proof of provider failure. Completed is not proof of verified provider lineage. Refresh for a new snapshot; any queue remediation requires its own authorized action.</p>
+     </>:<p className="text-slate-500">Lifecycle detail is unavailable from this API version. Existing aggregate diagnostics remain available.</p>}
+    </section>
     {data.operational_acceptance?.resolution_plan?.length>0&&<div className="rounded-lg border border-amber-200 p-3 space-y-2 text-xs">
       <h5 className="font-semibold text-slate-900">Resolution checklist · {data.operational_acceptance.outstanding_resolution_categories} active categories</h5>
       <p className="text-slate-600">Review history first, then reconcile eligible queue records. Clear status only after refreshing the read-only audit.</p>

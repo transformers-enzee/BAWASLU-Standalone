@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, case, func, exists
 from .models import AIAssessmentJob, EvidenceAssessment, AssessmentAIUsage, CampaignEvidence
 
-_VALID_LABELS=('RELEVANT','IRRELEVANT','UNCERTAIN')
+_VALID_LABELS=('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN')
 
 def campaign_completion_audit(db,campaign_id):
     cid=int(campaign_id)

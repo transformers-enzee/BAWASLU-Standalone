@@ -13,10 +13,14 @@ GROUPS = (
     ('QUEUE', 'Queue reconciliation', ('UNQUEUED_EVIDENCE', 'PENDING_ALREADY_ASSESSED')),
 )
 
-def assessment_exception_review(issues, triage, acceptance):
+def assessment_exception_review(issues, triage, acceptance, snapshot_consistency=None):
     """Summarize aggregate exceptions without DB work or paid provider requests."""
-    issue_by_code = {str(item['code']): max(0, int(item.get('count', 0)))
-                     for item in issues if max(0, int(item.get('count', 0))) > 0}
+    issue_by_code = {}
+    for item in issues:
+        code = str(item.get('code', '')).strip()
+        count = max(0, int(item.get('count', 0)))
+        if code and count:
+            issue_by_code[code] = issue_by_code.get(code, 0) + count
     recognized = {code for _, _, codes in GROUPS for code in codes}
     unknown = sorted(set(issue_by_code) - recognized)
     groups = []
@@ -33,13 +37,20 @@ def assessment_exception_review(issues, triage, acceptance):
         })
     snapshot_valid=bool(triage.get('buckets_partition_all_jobs',False)
         and triage.get('pending_breakdown',{}).get('breakdown_reconciled',False)
-        and triage.get('completion_snapshot_reconciled',False))
+        and triage.get('completion_snapshot_reconciled',False)
+        and (snapshot_consistency is None or snapshot_consistency.get('all_consistent') is True))
     history_flags=next(g['active_categories'] for g in groups if g['group']=='HISTORY')
     usage=triage.get('provider_usage_integrity') or {}
     provenance=triage.get('completion_provenance') or {}
     # No exceptions in the provider-integrity subaudit is not a proof that
     # original invoices/provider history were independently verified.
     usage_audit_available=usage.get('status') in ('NO_RECORDED_ISSUES','REVIEW_REQUIRED')
+    completion_audit_available=bool(provenance) and all(k in provenance for k in (
+        'completed_jobs','usage_backed_completed','requires_historical_usage_review',
+        'completed_partition_reconciled'))
+    missing_audits=[]
+    if not usage_audit_available: missing_audits.append('PROVIDER_USAGE_INTEGRITY')
+    if not completion_audit_available: missing_audits.append('COMPLETION_PROVENANCE')
     history_verified=False
     queue_review_clear=next(g['active_categories'] for g in groups if g['group']=='QUEUE')==0
     queue_has_no_active_work=triage.get('status')=='NO_ACTIVE_WORK'
@@ -52,17 +63,24 @@ def assessment_exception_review(issues, triage, acceptance):
         'queue_exceptions_clear':queue_review_clear,
         'queue_has_no_active_work':queue_has_no_active_work,
         'usage_audit_available':usage_audit_available,
+        'completion_audit_available':completion_audit_available,
+        'missing_audits':missing_audits,
+        'history_verification_blocked_by_missing_audits':bool(missing_audits),
         'historical_provider_usage_independently_verified':history_verified,
-        'historical_usage_state':('REVIEW_REQUIRED' if history_flags else
+        'historical_usage_state':('AUDIT_UNAVAILABLE' if missing_audits else
+                                  'REVIEW_REQUIRED' if history_flags else
                                   'NOT_INDEPENDENTLY_VERIFIED'),
         'completion_counts_reconciled':bool(provenance.get('completed_partition_reconciled',False)),
         'no_issues_does_not_verify_provider_usage':True,
         'administrative_queue_clearance_is_not_provider_usage_proof':True,
         'next_review_step':('REFRESH_SNAPSHOT' if not snapshot_valid else
+                            'RESTORE_MISSING_AUDITS' if missing_audits else
                             'INVESTIGATE_PROVIDER_HISTORY' if history_flags else
                             'RECONCILE_QUEUE' if not queue_review_clear else
                             'VERIFY_HISTORICAL_USAGE_INDEPENDENTLY'),
         'read_only':True,
+        'counts_may_overlap_across_issue_codes':True,
+        'snapshot_readings_are_nonatomic':True,
         'requires_separate_authorization_for_remediation':True,
         'automatic_paid_ai_authorized':False,
         'database_writes':0,

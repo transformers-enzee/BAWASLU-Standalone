@@ -82,7 +82,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
         'NO_EXCEPTIONS'
     )
     acceptance=assess_operational_acceptance(readiness,issues)
-    exception_review=assessment_exception_review(issues,queue_triage,acceptance)
+    exception_review=assessment_exception_review(issues,queue_triage,acceptance,consistency)
     return {
         'operational_acceptance':acceptance,
         'exception_review':exception_review,

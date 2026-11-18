@@ -147,6 +147,9 @@ export default function AssessmentOperationsPanel({campaignId}){
      <h5 className="font-semibold text-slate-900">Administrator investigation order · read-only</h5>
      <p>Review snapshot consistency, then original provider history, then eligible queue reconciliation. Categories and flag counts may overlap; they are not distinct jobs.</p>
      <p data-testid="exception-review-next-step">Next review step: {String(data.exception_review.next_review_step||'UNKNOWN').replaceAll('_',' ')}</p>
+     {data.exception_review.snapshot_reconciled===false&&<p role="alert" className="text-amber-900" data-testid="exception-snapshot-warning">Independent queue or campaign aggregates do not reconcile. Refresh before any remediation.</p>}
+     {data.exception_review.missing_audits?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-missing-audits">Audit details unavailable: {data.exception_review.missing_audits.join(', ').replaceAll('_',' ')}. No verified historical usage conclusion is possible.</p>}
+     <p className="text-slate-600" data-testid="exception-audit-coverage">Provider usage audit: {data.exception_review.usage_audit_available?'Available':'Unavailable'} · Completion audit: {data.exception_review.completion_audit_available?'Available':'Unavailable'} · Snapshots: {data.exception_review.snapshot_reconciled?'Reconciled':'Need recheck'}</p>
      {data.exception_review.groups?.map(group=><div key={group.group} className="rounded border border-slate-200 p-2 space-y-1" data-testid={'exception-group-'+group.group}>
       <p className="font-medium">{group.investigation_order}. {group.title} · {fmt(group.active_categories)} active categories</p>
       {group.exceptions.length>0?<ul className="list-disc ml-4">{group.exceptions.map(item=><li key={item.code}>{item.code.replaceAll('_',' ')} · {fmt(item.flag_count)} flags</li>)}</ul>:<p>No recorded exceptions in this category.</p>}

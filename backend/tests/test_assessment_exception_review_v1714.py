@@ -6,7 +6,8 @@ def triage(status='NO_ACTIVE_WORK', usage_status='NO_RECORDED_ISSUES', reconcile
         'pending_breakdown':{'breakdown_reconciled':reconciled},
         'completion_snapshot_reconciled':reconciled,
         'provider_usage_integrity':{'status':usage_status},
-        'completion_provenance':{'completed_partition_reconciled':reconciled}}
+        'completion_provenance':{'completed_jobs':0,'usage_backed_completed':0,
+            'requires_historical_usage_review':0,'completed_partition_reconciled':reconciled}}
 
 def test_clean_queue_never_claims_external_provider_usage_verified():
     result=assessment_exception_review([],triage(),{})

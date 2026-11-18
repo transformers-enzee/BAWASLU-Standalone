@@ -8,6 +8,7 @@ from .assessment_superseded_reconcile import superseded_preview
 from .assessment_operational_acceptance import assess_operational_acceptance
 from .assessment_snapshot_consistency import assessment_snapshot_consistency
 from .assessment_queue_triage import assessment_queue_triage
+from .assessment_exception_review import assessment_exception_review
 
 def campaign_assessment_operations_overview(db,campaign_id):
     cid=int(campaign_id)
@@ -81,8 +82,10 @@ def campaign_assessment_operations_overview(db,campaign_id):
         'NO_EXCEPTIONS'
     )
     acceptance=assess_operational_acceptance(readiness,issues)
+    exception_review=assessment_exception_review(issues,queue_triage,acceptance)
     return {
         'operational_acceptance':acceptance,
+        'exception_review':exception_review,
         'snapshot_consistency':consistency,
         'queue_triage':queue_triage,
         'generated_at_utc':datetime.now(timezone.utc).isoformat(),

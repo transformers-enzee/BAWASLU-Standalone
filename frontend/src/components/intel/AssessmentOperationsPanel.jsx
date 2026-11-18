@@ -143,6 +143,18 @@ export default function AssessmentOperationsPanel({campaignId}){
       <p className="text-slate-500">Stalled means processing longer than {fmt(triage.stale_threshold_minutes)} minutes, not proof of provider failure. Completed is not proof of verified provider lineage. Refresh for a new snapshot; any queue remediation requires its own authorized action.</p>
      </>:<p className="text-slate-500">Lifecycle detail is unavailable from this API version. Existing aggregate diagnostics remain available.</p>}
     </section>
+    {data.exception_review&&<section className="rounded-lg border border-slate-200 p-3 space-y-2 text-xs" aria-label="Administrator exception investigation order" data-testid="assessment-exception-review">
+     <h5 className="font-semibold text-slate-900">Administrator investigation order · read-only</h5>
+     <p>Review snapshot consistency, then original provider history, then eligible queue reconciliation. Categories and flag counts may overlap; they are not distinct jobs.</p>
+     <p data-testid="exception-review-next-step">Next review step: {String(data.exception_review.next_review_step||'UNKNOWN').replaceAll('_',' ')}</p>
+     {data.exception_review.groups?.map(group=><div key={group.group} className="rounded border border-slate-200 p-2 space-y-1" data-testid={'exception-group-'+group.group}>
+      <p className="font-medium">{group.investigation_order}. {group.title} · {fmt(group.active_categories)} active categories</p>
+      {group.exceptions.length>0?<ul className="list-disc ml-4">{group.exceptions.map(item=><li key={item.code}>{item.code.replaceAll('_',' ')} · {fmt(item.flag_count)} flags</li>)}</ul>:<p>No recorded exceptions in this category.</p>}
+     </div>)}
+     {data.exception_review.unknown_codes?.length>0&&<p role="alert" className="text-amber-900">Unrecognized exception codes require investigation before any processing approval.</p>}
+     <p data-testid="exception-history-boundary" className="text-amber-900">Queue exceptions clear: {data.exception_review.queue_exceptions_clear?'Yes':'No'} · Historical provider usage independently verified: No. A cleared queue, reconciled counts, or zero recorded integrity warnings do not prove historic provider usage or charges.</p>
+     <p className="text-slate-500">Guidance only. Read-only diagnostics do not resolve jobs, change officer assessments, reserve budget, or initiate provider requests.</p>
+    </section>}
     {data.operational_acceptance?.resolution_plan?.length>0&&<div className="rounded-lg border border-amber-200 p-3 space-y-2 text-xs">
       <h5 className="font-semibold text-slate-900">Resolution checklist · {data.operational_acceptance.outstanding_resolution_categories} active categories</h5>
       <p className="text-slate-600">Review history first, then reconcile eligible queue records. Clear status only after refreshing the read-only audit.</p>

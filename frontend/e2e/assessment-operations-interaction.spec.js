@@ -160,3 +160,36 @@ test('missing classification lineage and audit snapshot drift demand manual revi
  expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
   .toEqual(['campaignAssessmentOperationsOverview']);
 });
+
+test('usage integrity flags are visible and never trigger provider operations',async({page})=>{
+ await mount(page,703);
+ const data=snapshot(703);
+ data.queue_triage.status='HOLD_FOR_HISTORY_REVIEW';
+ data.queue_triage.provider_usage_integrity={status:'REVIEW_REQUIRED',usage_rows:5,
+  usage_flags:{campaign_id_mismatch:1,provider_usage_not_reported:2,
+   negative_token_counts:1,provider_model_missing:1},
+  lifecycle_flags:{noncompleted_jobs_with_classification_usage:1,
+   assessments_with_duplicate_classification_usage:1}};
+ await respond(page,703,data);
+ const section=page.getByTestId('assessment-provider-usage-integrity');
+ await expect(section).toContainText('Provider history review required');
+ await expect(section).toContainText('Campaign mismatches: 1');
+ await expect(section).toContainText('Assessments with duplicate classification usage: 1');
+ await expect(section).toContainText('counts may overlap');
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});
+test('older read-only API omitting integrity diagnostics warns explicitly',async({page})=>{
+ await mount(page,704);
+ await respond(page,704,snapshot(704));
+ await expect(page.getByTestId('assessment-provider-usage-integrity'))
+  .toContainText('Usage integrity detail unavailable');
+});
+test('completed KPI uses completed before usage-backed counts',async({page})=>{
+ await mount(page,705);
+ const data=snapshot(705);
+ data.completion_audit={completed_jobs:9,verified_usage_backed_completed_jobs:4};
+ await respond(page,705,data);
+ const card=page.getByText('Completed / usage-backed').locator('..');
+ await expect(card).toContainText('9 / 4');
+});

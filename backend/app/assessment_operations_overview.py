@@ -17,7 +17,7 @@ def campaign_assessment_operations_overview(db,campaign_id):
     interrupted=interrupted_campaign_preview(db,cid)
     superseded=superseded_preview(db,cid)
     consistency=assessment_snapshot_consistency(readiness,completion,interrupted,superseded)
-    queue_triage=assessment_queue_triage(readiness,interrupted,superseded)
+    queue_triage=assessment_queue_triage(readiness,interrupted,superseded,completion)
     issues=[]
     if not consistency['all_consistent']:
         issues.append({'code':'SNAPSHOT_AGGREGATE_DRIFT',

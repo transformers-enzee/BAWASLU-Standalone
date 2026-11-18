@@ -88,3 +88,14 @@ def test_empty_sources_not_falsely_treated_as_accepted():
             assert result['modules'][0]['data_presence']=='NOT_OBSERVED'
             assert not result['release_readiness_certified']
     finally:app.dependency_overrides.pop(get_db,None);engine.dispose()
+
+def test_release_gaps_do_not_claim_cross_module_e2e_observed():
+    engine,factory,tokens=fixture()
+    try:
+        with factory() as db:
+            result=module_acceptance_evidence(db)
+            assert len(result['validation_gaps'])==6
+            assert not result['automatically_verified_cross_module_e2e']
+            assert not any(x['automatically_verified'] for x in result['validation_gaps'])
+            assert result['counts']['closed_officer_cases']==0
+    finally:app.dependency_overrides.pop(get_db,None);engine.dispose()

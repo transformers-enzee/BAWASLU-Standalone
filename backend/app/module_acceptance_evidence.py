@@ -14,6 +14,7 @@ MODULE_COUNTS_SQL="""SELECT
  (SELECT COUNT(*) FROM case_assignments) AS officer_cases,
  (SELECT COUNT(*) FROM case_reports) AS officer_reports,
  (SELECT COUNT(*) FROM case_reports WHERE status='APPROVED') AS approved_reports,
+ (SELECT COUNT(*) FROM case_assignments WHERE status='CLOSED') AS closed_officer_cases,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='PENDING') AS pending_ai_jobs,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='PROCESSING') AS processing_ai_jobs,
  (SELECT COUNT(*) FROM ai_assessment_jobs WHERE state='COMPLETED') AS completed_ai_jobs,
@@ -64,6 +65,14 @@ def module_acceptance_evidence(db):
       'modules':modules,'module_count':len(modules),'counts':counts,
       'completion_percentages_supported':False,
       'release_readiness_certified':False,'formal_client_acceptance_recorded':False,
+      'validation_gaps':[
+       {'workstream':'Social Listening → Inbox','criterion':'Verify eligible monitoring evidence appears in authorized Inbox scope','automatically_verified':False},
+       {'workstream':'Inbox → Command Center','criterion':'Verify saved evidence and sentiment/issue counts match operational charts','automatically_verified':False},
+       {'workstream':'Command Center → AI Assistant','criterion':'Verify answer source citations and legal-policy scope against saved evidence','automatically_verified':False},
+       {'workstream':'Inbox → Officer Casework','criterion':'Verify five-stage review and human-confirmed jurisdiction using authorized officer roles','automatically_verified':False},
+       {'workstream':'Officer Casework → Management Reports','criterion':'Verify reviewed case state and report exports match the requested reporting period','automatically_verified':False},
+       {'workstream':'Assessment processing','criterion':'Verify permissioned provider history and queues before any cost-authorized batch','automatically_verified':False}],
+      'automatically_verified_cross_module_e2e':False,
       'next_step':'Run authorized module-specific end-to-end UAT, keeping human acceptance separate from technical data presence.',
       'source_text_or_personal_identifiers_returned':False,
       'provider_requests':0,'database_writes':0}

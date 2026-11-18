@@ -57,6 +57,12 @@ export default function AssessmentOperationsPanel({campaignId}){
       ['Stale processing',recovery.stale_processing_jobs],
      ].map(([label,value])=><div key={label} className="rounded-lg bg-slate-50 border border-slate-200 p-3"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-lg tabular-nums">{typeof value==='number'?fmt(value):value}</p></div>)}
     </div>
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+     <p className="font-semibold text-slate-800">Operational acceptance: {String(data.operational_acceptance?.status||'UNKNOWN').replaceAll('_',' ')}</p>
+     <p>Eligible unassessed jobs: {fmt(data.operational_acceptance?.eligible_unassessed_jobs)} · Manual batch capacity only after separate approval: {fmt(data.operational_acceptance?.manual_request_capacity_if_separately_approved)}</p>
+     <p>Historical review: {(data.operational_acceptance?.historical_review_codes||[]).join(', ')||'None'} · Queue reconciliation: {(data.operational_acceptance?.queue_reconciliation_codes||[]).join(', ')||'None'}</p>
+     <p>Manual configuration blockers: {(data.operational_acceptance?.manual_configuration_blockers||[]).join(', ')||'None'}. This preflight never authorizes AI charges.</p>
+    </div>
     <p className="text-xs text-slate-600">Assessment state: {String(data.lifecycle_status||'UNKNOWN').replaceAll('_',' ').toLowerCase()} · Checked {data.generated_at_utc?new Date(data.generated_at_utc).toLocaleString('en-GB'):'on request'}. Counts are independent readings, not an atomic snapshot.</p>
     <p className="text-xs text-slate-700">Worker: {remaining.worker_enabled?'Enabled':'Disabled'} · Automatic screening: {remaining.automatic_screening_enabled?'Enabled':'Disabled'} · Daily requests remaining: {fmt(remaining.daily_remaining)} · Lifetime requests remaining: {fmt(remaining.lifetime_remaining)}. These numbers do not authorize paid processing.</p>
     <p className="text-xs text-slate-600">Superseded (not AI-completed): {fmt(q.superseded_assessed)} · Superseded with changed/missing classification requiring review: {fmt(data.already_assessed_queue_reconciliation?.superseded_without_current_classification)}.</p>

@@ -5,6 +5,7 @@ from .campaign_assessment_coverage import campaign_link_assessment_coverage
 from .assessment_completion_audit import campaign_completion_audit
 from .assessment_interrupted_recovery import interrupted_campaign_preview
 from .assessment_superseded_reconcile import superseded_preview
+from .assessment_operational_acceptance import assess_operational_acceptance
 
 def campaign_assessment_operations_overview(db,campaign_id):
     cid=int(campaign_id)
@@ -71,7 +72,9 @@ def campaign_assessment_operations_overview(db,campaign_id):
         'PROCESSING' if readiness['queue_counts']['processing'] else
         'NO_EXCEPTIONS'
     )
+    acceptance=assess_operational_acceptance(readiness,issues)
     return {
+        'operational_acceptance':acceptance,
         'generated_at_utc':datetime.now(timezone.utc).isoformat(),
         'snapshot_is_atomic':False,
         'lifecycle_status':lifecycle_status,

@@ -230,8 +230,10 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 .order_by(EvidenceAssessment.assessment_version.desc(),
                           EvidenceAssessment.id.desc()).first())
             already_relevant=relevance_is_assessed(previous)
-            from .activation_assessment import needs_full_assessment
-            if (already_relevant and not needs_full_assessment(previous) and not reanalysis) or (reanalysis and not already_relevant):continue
+            # A saved relevance label makes an ordinary pending job ineligible
+            # even when optional enrichment is incomplete. Extra AI work must
+            # use the separately authorized reanalysis path, not a pending job.
+            if (not reanalysis and already_relevant) or (reanalysis and not already_relevant):continue
             job=db.query(AIAssessmentJob).filter_by(campaign_id=campaign.id,result_id=link.result_id).first()
             if job and (job.state=='PROCESSING' or (job.state=='COMPLETED' and not reanalysis)):continue
             if job and job.attempts>=3 and not reanalysis:continue
@@ -240,10 +242,12 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             if not job:continue
             # Manual calls still need a pending reservation row; automatic calls are separately budgeted.
             # Atomic state transition prevents a second process from claiming the same row.
+            from .assessment_claim_guard import no_latest_relevance_classification
             claimed=db.execute(update(AIAssessmentJob).where(
                 AIAssessmentJob.id==job.id,
                 AIAssessmentJob.state==('COMPLETED' if reanalysis else 'PENDING'),
-                *(([AIAssessmentJob.attempts<3]) if not reanalysis else [])
+                *(([AIAssessmentJob.attempts<3,
+                     no_latest_relevance_classification(db)]) if not reanalysis else [])
             ).values(state='PROCESSING',attempts=AIAssessmentJob.attempts+1,
                      updated_at=datetime.utcnow()))
             db.commit()

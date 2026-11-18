@@ -74,7 +74,10 @@ def assess_operational_acceptance(readiness, issues):
     if not readiness['per_run_request_limit']:blockers.append('PER_RUN_CAP_ZERO')
     if not readiness['daily_remaining'] or not readiness['lifetime_remaining']:
         blockers.append('REQUEST_BUDGET_UNAVAILABLE')
-    status=('HOLD_FOR_HISTORY_REVIEW' if codes.intersection(_HISTORICAL)
+    unknown_codes=codes.difference(_HISTORICAL).difference(_QUEUE)
+    # An unfamiliar future exception must fail closed, never be described as
+    # eligible for paid processing just because the code is new to this module.
+    status=('HOLD_FOR_HISTORY_REVIEW' if codes.intersection(_HISTORICAL) or unknown_codes
         else 'HOLD_FOR_QUEUE_RECONCILIATION' if codes.intersection(_QUEUE)
         else 'NO_ELIGIBLE_WORK' if not claimable
         else 'CONFIGURATION_OR_BUDGET_BLOCKED' if blockers
@@ -85,7 +88,8 @@ def assess_operational_acceptance(readiness, issues):
         'outstanding_resolution_categories':len(plan),
         'all_exception_criteria_satisfied':not bool(plan),
         'status':status,
-        'historical_review_codes':sorted(codes.intersection(_HISTORICAL)),
+        'historical_review_codes':sorted(codes.intersection(_HISTORICAL).union(unknown_codes)),
+        'unrecognized_review_codes':sorted(unknown_codes),
         'queue_reconciliation_codes':sorted(codes.intersection(_QUEUE)),
         'manual_configuration_blockers':blockers,
         'eligible_unassessed_jobs':claimable,

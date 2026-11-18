@@ -28,6 +28,9 @@ def test_history_resolution_precedes_queue_with_specific_clearance_evidence():
 def test_unknown_issue_is_safely_unresolved_and_not_ignored():
     out=assess_operational_acceptance(readiness(),[{'code':'NEW_EXCEPTION','count':2}])
     assert out['outstanding_resolution_categories']==1
+    assert out['status']=='HOLD_FOR_HISTORY_REVIEW'
+    assert out['manual_request_capacity_if_separately_approved']==0
+    assert out['unrecognized_review_codes']==['NEW_EXCEPTION']
     assert out['resolution_plan'][0]['group']=='HISTORY'
     assert not out['all_exception_criteria_satisfied']
     assert out['is_paid_ai_authorization'] is False

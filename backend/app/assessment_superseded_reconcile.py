@@ -27,8 +27,35 @@ def _eligible(db,cid):
                 func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(_LABELS)))
 
 def superseded_preview(db,campaign_id):
+    # A superseded queue record can become inconsistent if its newest saved
+    # assessment is later reverted to UNASSESSED or its source is removed.
+    # Review that state without reactivating the job or calling a provider.
+    latest_id=_latest_id(db)
+    latest_classified=(db.query(EvidenceAssessment.id)
+        .filter(EvidenceAssessment.id==latest_id,
+                func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(_LABELS))
+        .correlate(AIAssessmentJob).exists())
+    superseded_count=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==int(campaign_id),
+                AIAssessmentJob.state==_STATE,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').scalar()) or 0
+    outdated_count=(db.query(func.count(AIAssessmentJob.id))
+        .join(CampaignEvidence,and_(
+            CampaignEvidence.campaign_id==AIAssessmentJob.campaign_id,
+            CampaignEvidence.result_id==AIAssessmentJob.result_id))
+        .filter(AIAssessmentJob.campaign_id==int(campaign_id),
+                AIAssessmentJob.state==_STATE,
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                ~latest_classified).scalar()) or 0
     return {'campaign_id':str(int(campaign_id)),
             'already_assessed_pending_jobs':_eligible(db,campaign_id).count(),
+            'superseded_assessed_jobs':int(superseded_count),
+            'superseded_without_current_classification':int(outdated_count),
+            'superseded_needing_manual_review':int(outdated_count)>0,
+            'superseded_automatically_reopened':False,
             'new_state':_STATE,'requested_ai_calls':0,
             'requires_explicit_confirmation':True,
             'already_assessed_is_not_new_ai_completion':True,

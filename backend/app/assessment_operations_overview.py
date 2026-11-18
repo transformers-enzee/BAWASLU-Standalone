@@ -22,6 +22,10 @@ def campaign_assessment_operations_overview(db,campaign_id):
         issues.append({'code':'PENDING_ALREADY_ASSESSED',
             'count':readiness['pending_already_assessed_excluded_from_ai'],
             'next_step':'Review queue state versus saved relevance; do not resend an already-assessed source.'})
+    if superseded['superseded_without_current_classification']>0:
+        issues.append({'code':'SUPERSEDED_CLASSIFICATION_CHANGED',
+            'count':superseded['superseded_without_current_classification'],
+            'next_step':'Review the newest saved assessment and prior usage before any new processing.'})
     if interrupted['stale_processing_jobs']>0:
         issues.append({'code':'STALE_PROCESSING',
             'count':interrupted['stale_processing_jobs'],

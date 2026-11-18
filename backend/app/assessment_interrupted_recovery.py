@@ -46,6 +46,7 @@ def interrupted_campaign_preview(db,campaign_id):
             'other_failed_jobs':max(0,by_state.get('FAILED',0)-quarantined),
             'pending_jobs':by_state.get('PENDING',0),
             'completed_jobs':by_state.get('COMPLETED',0),
+            'superseded_assessed_jobs':by_state.get('SUPERSEDED_ASSESSED',0),
             'total_ordinary_jobs':sum(by_state.values()),
             'grace_minutes':10,'quarantine_state':'FAILED',
             'provider_call_status':'UNKNOWN',

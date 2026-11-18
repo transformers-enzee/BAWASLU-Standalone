@@ -21,6 +21,7 @@ from .models import (MonitoringCampaign, CampaignEvidence, EvidenceAssessment,
 from .socialcrawl import _result_in_scope
 from .monitoring_count_integrity import command_period_integrity
 from .monitoring_metric_reconciliation import command_metric_integrity
+from .inbox_radar import _normalized_platform
 
 def _as_list(raw):
     try:
@@ -170,6 +171,10 @@ def build_command_center(db,p,data=None):
     for assessment,post in assessed_rows:
         campaign=campaigns_by_id[assessment.campaign_id]
         if not _result_in_scope(db,p,post):continue
+        # Match Inbox eligibility: a preliminary provider label is not a
+        # completed relevance assessment and must not inflate coverage, alerts,
+        # candidate/issue inventories or executive briefings.
+        if assessment.model_version=='PRISM_PENDING_OPENAI':continue
         evidence_checked+=1
         assessed_ids.add(post.id)
         if source_updated is None or post.collected_at and post.collected_at>source_updated:
@@ -284,10 +289,11 @@ def build_command_center(db,p,data=None):
             if post_id in captured_ids:
                 continue
             captured_ids.add(post_id)
-            platform_counts[str(platform or 'Unknown').strip() or 'Unknown']+=1
+            normalized_platform=_normalized_platform(platform)
+            platform_counts[normalized_platform]+=1
             day_counts[_day(published_at)]+=1
             latest_captured.append({
-                'result_id':str(post_id),'platform':platform or 'Unknown',
+                'result_id':str(post_id),'platform':normalized_platform,
                 'published_at':published_at})
     latest_captured.sort(key=lambda row:row['published_at'] or '',reverse=True)
     latest_captured=latest_captured[:3]

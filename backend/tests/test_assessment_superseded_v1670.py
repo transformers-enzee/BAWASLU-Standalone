@@ -55,3 +55,25 @@ def test_confirmation_and_invalid_limits():
             except ValueError:pass
             else:assert False,v
     finally:db.close();e.dispose()
+
+
+def test_highly_relevant_saved_classification_is_no_credit_supersession():
+    e,db=fixture()
+    try:
+        add(db,44,1,['HIGHLY_RELEVANT'])
+        add(db,44,2,['UNASSESSED','HIGHLY_RELEVANT'])
+        add(db,44,3,['HIGHLY_RELEVANT','UNASSESSED'])
+        add(db,44,4,['HIGHLY_RELEVANT'],kind='WATCHLIST_ACCOUNT')
+        add(db,44,5,['HIGHLY_RELEVANT'],state='COMPLETED')
+        preview=superseded_preview(db,44)
+        assert preview['already_assessed_pending_jobs']==2
+        assert preview['paid_provider_called'] is False
+        before=db.query(EvidenceAssessment).count()
+        result=apply_superseded_reconciliation(db,44)
+        assert result['superseded_jobs']==2
+        assert result['ai_requests']==0 and not result['paid_provider_called']
+        assert apply_superseded_reconciliation(db,44)['superseded_jobs']==0
+        assert db.query(EvidenceAssessment).count()==before
+        assert db.query(AIAssessmentJob).filter_by(campaign_id=44,state='SUPERSEDED_ASSESSED').count()==2
+        assert db.query(AIAssessmentJob).filter_by(campaign_id=44,state='PENDING').count()==2
+    finally:db.close();e.dispose()

@@ -55,3 +55,20 @@ def test_superseded_missing_assessment_is_not_automatically_resumed():
         assert p['recorded_provider_usage_unchanged'] is True
         assert db.query(AIAssessmentJob).first().state=='SUPERSEDED_ASSESSED'
     finally:db.close();engine.dispose()
+
+
+def test_highly_relevant_superseded_revision_requires_review_not_requeue():
+    engine,db=fixture()
+    try:
+        add(db,46,1,'HIGHLY_RELEVANT')
+        assert apply_superseded_reconciliation(db,46)['superseded_jobs']==1
+        db.add(EvidenceAssessment(campaign_id=46,result_id=1,
+            assessment_version=2,relevance_label='UNASSESSED'))
+        db.flush()
+        preview=superseded_preview(db,46)
+        assert preview['superseded_assessed_jobs']==1
+        assert preview['superseded_without_current_classification']==1
+        assert preview['superseded_automatically_reopened'] is False
+        assert db.query(AIAssessmentJob).filter_by(campaign_id=46).one().state=='SUPERSEDED_ASSESSED'
+        assert campaign_assessment_operations_overview(db,46)['issues'][0]['code']=='SUPERSEDED_CLASSIFICATION_CHANGED'
+    finally:db.close();engine.dispose()

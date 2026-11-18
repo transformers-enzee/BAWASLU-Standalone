@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import and_,func,update
 from .models import AIAssessmentJob,CampaignEvidence,EvidenceAssessment
 _STATE='SUPERSEDED_ASSESSED'
-_LABELS=('RELEVANT','IRRELEVANT','UNCERTAIN')
+_LABELS=('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN')
 _REASON='Already classified in saved evidence; queue superseded without provider call'
 
 def _latest_id(db):

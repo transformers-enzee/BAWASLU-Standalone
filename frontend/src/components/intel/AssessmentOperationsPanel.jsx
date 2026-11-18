@@ -50,6 +50,7 @@ export default function AssessmentOperationsPanel({campaignId}){
  const triage=data?.queue_triage||null;
  const breakdown=triage?.pending_breakdown||{};
  const provenance=triage?.completion_provenance||{};
+ const integrity=triage?.provider_usage_integrity||{};
  const categories=partitionTriage(triage);
  const snapshotUnreliable=Boolean(triage&&(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.completion_snapshot_reconciled===false||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS'||data?.snapshot_consistency?.all_consistent===false));
  return <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Assessment operations status">
@@ -69,7 +70,7 @@ export default function AssessmentOperationsPanel({campaignId}){
      {[
       ['Queued, claimable',q.claimable_pending_with_text],
       ['Unqueued evidence',c.pending_monitoring_without_job],
-      ['Completed / usage backed',fmt(done.verified_usage_backed_completed_jobs)+' / '+fmt(done.completed_jobs)],
+      ['Completed / usage-backed',fmt(done.completed_jobs)+' / '+fmt(done.verified_usage_backed_completed_jobs)],
       ['Stale processing',recovery.stale_processing_jobs],
      ].map(([label,value])=><div key={label} className="rounded-lg bg-slate-50 border border-slate-200 p-3"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-lg tabular-nums">{typeof value==='number'?fmt(value):value}</p></div>)}
     </div>
@@ -118,6 +119,19 @@ export default function AssessmentOperationsPanel({campaignId}){
        <p>Latest classification needs review: {fmt(provenance.latest_classification_review)}. Historical usage does not prove the latest saved label.</p>
        {(Number(provenance.requires_historical_usage_review)>0||Number(provenance.latest_classification_review)>0)&&<p role="status" className="text-amber-900">History review required. Do not automatically retry provider calls.</p>}
        {triage.completion_snapshot_reconciled===false&&<p role="alert" className="text-amber-900">Completion counts differ across independent snapshots; refresh before acting.</p>}
+      </div>
+      <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-provider-usage-integrity">
+       <p className="font-semibold">Provider usage integrity · read-only</p>
+       {integrity.status==='AUDIT_UNAVAILABLE'||!integrity.status?
+        <p role="status" className="text-amber-900">Usage integrity detail unavailable; refresh before interpreting provider lineage.</p>:
+        <>
+         <p>Status: {String(integrity.status).replaceAll('_',' ')} · Recorded usage rows: {fmt(integrity.usage_rows)}</p>
+         <p>Campaign mismatches: {fmt(integrity.usage_flags?.campaign_id_mismatch)} · Usage not reported: {fmt(integrity.usage_flags?.provider_usage_not_reported)}</p>
+         <p>Negative token counts: {fmt(integrity.usage_flags?.negative_token_counts)} · Missing provider models: {fmt(integrity.usage_flags?.provider_model_missing)}</p>
+         <p>Non-completed jobs with classification usage: {fmt(integrity.lifecycle_flags?.noncompleted_jobs_with_classification_usage)} · Assessments with duplicate classification usage: {fmt(integrity.lifecycle_flags?.assessments_with_duplicate_classification_usage)}</p>
+         {integrity.status==='REVIEW_REQUIRED'&&<p role="status" className="font-medium text-amber-900">Provider history review required; do not automatically replay requests.</p>}
+         <p className="text-slate-500">These counts may overlap; do not sum them into distinct jobs or infer provider charges. Review original usage records before any action.</p>
+        </>}
       </div>
       <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-pending-breakdown">
        <p className="font-semibold">Pending breakdown ({fmt(breakdown.pending_total)})</p>

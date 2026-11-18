@@ -2,6 +2,17 @@ import {useEffect,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
 
 const fmt=n=>Number(n||0).toLocaleString();
+const NEEDS_HISTORY=new Set(['URGENT_HISTORY_REVIEW','HISTORY_REVIEW']);
+const NEEDS_QUEUE=new Set(['QUEUE_REVIEW']);
+const priorityLabel=priority=>NEEDS_HISTORY.has(priority)?'History review':NEEDS_QUEUE.has(priority)?'Queue review':'Information';
+const priorityStyle=priority=>NEEDS_HISTORY.has(priority)?'border-amber-300 bg-amber-50':NEEDS_QUEUE.has(priority)?'border-sky-200 bg-sky-50':'border-slate-200 bg-slate-50';
+const partitionTriage=triage=>{
+ const rows=(triage?.buckets||[]).filter(row=>Number(row.count)>0);
+ return {
+  action:rows.filter(row=>NEEDS_HISTORY.has(row.priority)||NEEDS_QUEUE.has(row.priority)),
+  information:rows.filter(row=>!NEEDS_HISTORY.has(row.priority)&&!NEEDS_QUEUE.has(row.priority)),
+ };
+};
 export default function AssessmentOperationsPanel({campaignId}){
  const [open,setOpen]=useState(false);
  const [busy,setBusy]=useState(false);
@@ -38,6 +49,8 @@ export default function AssessmentOperationsPanel({campaignId}){
  const remaining=data?.worker_readiness||{};
  const triage=data?.queue_triage||null;
  const breakdown=triage?.pending_breakdown||{};
+ const categories=partitionTriage(triage);
+ const snapshotUnreliable=Boolean(triage&&(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS'||data?.snapshot_consistency?.all_consistent===false));
  return <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Assessment operations status">
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div><h4 className="font-semibold text-slate-800">Assessment operations</h4>
@@ -48,7 +61,7 @@ export default function AssessmentOperationsPanel({campaignId}){
    </div>
   </div>
   {open&&<div className="space-y-3">
-   {busy&&!data&&<p role="status" className="text-xs text-slate-500">Checking saved assessment records…</p>}
+   {busy&&<p role="status" className="text-xs text-slate-500">{data?'Refreshing assessment operations; previous results may be out of date…':'Checking saved assessment records…'}</p>}
    {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
    {data&&<>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
@@ -72,14 +85,29 @@ export default function AssessmentOperationsPanel({campaignId}){
      </div>
      {triage?<>
       <p role="status" data-testid="assessment-triage-status" className="font-medium text-slate-800">Review status: {String(triage.status||'UNKNOWN').replaceAll('_',' ')}</p>
-      {(!triage.buckets_partition_all_jobs||!breakdown.breakdown_reconciled||triage.status==='RECHECK_INDEPENDENT_SNAPSHOTS')&&
+      <p className="text-slate-600" data-testid="assessment-triage-read-time">Snapshot: {data.generated_at_utc&&!Number.isNaN(Date.parse(data.generated_at_utc))?new Date(data.generated_at_utc).toLocaleString('en-GB'):'Time unavailable'} · {busy?'Refreshing; displayed figures may be outdated.':'On-demand read only; refresh to recheck.'}</p>
+
+      {snapshotUnreliable&&
        <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">Queue counts were read independently and do not reconcile. Refresh before acting; do not infer missing jobs or authorize paid processing from these figures.</p>}
       <p className="font-medium text-slate-700">Ordinary jobs: {fmt(triage.ordinary_job_total)} · Categorized: {fmt(triage.bucket_total)}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-       {(triage.buckets||[]).map(item=><div key={item.code} className="rounded border border-slate-200 bg-slate-50 p-2 space-y-1" data-testid={'queue-bucket-'+item.code}>
-        <div className="flex items-center justify-between gap-2"><strong className="text-slate-800">{item.code.replaceAll('_',' ')}</strong><span className="tabular-nums font-semibold">{fmt(item.count)}</span></div>
-        <p className="text-slate-600">{item.next_step}</p>
-       </div>)}
+      <div className="space-y-2" data-testid="assessment-triage-categories">
+       <h6 className="font-semibold text-slate-800">Review / investigation · {fmt(categories.action.length)} categories</h6>
+       {categories.action.length===0&&<p className="text-slate-600">No active history or queue-review categories. This does not verify completed-job provenance.</p>}
+       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {categories.action.map(item=><div key={item.code} className={'rounded border p-2 space-y-1 '+priorityStyle(item.priority)} data-testid={'queue-bucket-'+item.code}>
+         <div className="flex items-center justify-between gap-2"><strong className="text-slate-800">{item.code.replaceAll('_',' ')}</strong><span className="tabular-nums font-semibold">{fmt(item.count)}</span></div>
+         <p className="font-medium text-slate-700">{priorityLabel(item.priority)}</p>
+         <p className="text-slate-600">{item.next_step}</p>
+        </div>)}
+       </div>
+       <h6 className="font-semibold text-slate-800">Informational states · {fmt(categories.information.length)} categories</h6>
+       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {categories.information.map(item=><div key={item.code} className={'rounded border p-2 space-y-1 '+priorityStyle(item.priority)} data-testid={'queue-bucket-'+item.code}>
+         <div className="flex items-center justify-between gap-2"><strong className="text-slate-800">{item.code.replaceAll('_',' ')}</strong><span className="tabular-nums font-semibold">{fmt(item.count)}</span></div>
+         <p className="text-slate-600">{item.next_step}</p>
+        </div>)}
+       </div>
+       <p className="text-slate-500">Only nonzero categories are displayed. The ordinary-job total above includes zero-count categories and remains authoritative only when the snapshots reconcile.</p>
       </div>
       <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-pending-breakdown">
        <p className="font-semibold">Pending breakdown ({fmt(breakdown.pending_total)})</p>

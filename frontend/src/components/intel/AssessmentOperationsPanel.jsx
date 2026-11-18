@@ -63,6 +63,19 @@ export default function AssessmentOperationsPanel({campaignId}){
      <p>Historical review: {(data.operational_acceptance?.historical_review_codes||[]).join(', ')||'None'} · Queue reconciliation: {(data.operational_acceptance?.queue_reconciliation_codes||[]).join(', ')||'None'}</p>
      <p>Manual configuration blockers: {(data.operational_acceptance?.manual_configuration_blockers||[]).join(', ')||'None'}. This preflight never authorizes AI charges.</p>
     </div>
+    {data.operational_acceptance?.resolution_plan?.length>0&&<div className="rounded-lg border border-amber-200 p-3 space-y-2 text-xs">
+      <h5 className="font-semibold text-slate-900">Resolution checklist · {data.operational_acceptance.outstanding_resolution_categories} active categories</h5>
+      <p className="text-slate-600">Review history first, then reconcile eligible queue records. Clear status only after refreshing the read-only audit.</p>
+      <ol className="space-y-2 list-decimal ml-4">
+       {data.operational_acceptance.resolution_plan.map(item=><li key={item.code}>
+        <strong>{item.code.replaceAll('_',' ')}</strong> ({fmt(item.affected_count)}; {item.group.toLowerCase()})
+        <p>Next: {item.investigation_or_action}</p>
+        <p className="text-slate-600">Clear when: {item.clearance_criterion}</p>
+        {item.existing_read_only_preview_action&&<p className="text-slate-500">Available read-only preview: {item.existing_read_only_preview_action}</p>}
+       </li>)}
+      </ol>
+      <p className="text-slate-500">Guidance only; access checks and explicit confirmation apply to any subsequent write action. No remediation is run here.</p>
+    </div>}
     <p className="text-xs text-slate-600">Assessment state: {String(data.lifecycle_status||'UNKNOWN').replaceAll('_',' ').toLowerCase()} · Checked {data.generated_at_utc?new Date(data.generated_at_utc).toLocaleString('en-GB'):'on request'}. Counts are independent readings, not an atomic snapshot.</p>
     <p className="text-xs text-slate-700">Worker: {remaining.worker_enabled?'Enabled':'Disabled'} · Automatic screening: {remaining.automatic_screening_enabled?'Enabled':'Disabled'} · Daily requests remaining: {fmt(remaining.daily_remaining)} · Lifetime requests remaining: {fmt(remaining.lifetime_remaining)}. These numbers do not authorize paid processing.</p>
     <p className="text-xs text-slate-600">Superseded (not AI-completed): {fmt(q.superseded_assessed)} · Superseded with changed/missing classification requiring review: {fmt(data.already_assessed_queue_reconciliation?.superseded_without_current_classification)}.</p>

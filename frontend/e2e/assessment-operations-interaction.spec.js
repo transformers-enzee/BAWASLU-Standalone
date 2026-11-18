@@ -120,3 +120,43 @@ test('inconsistent snapshot reports warning rather than treating totals as relia
  await respond(page,501,data);
  await expect(page.getByRole('alert')).toContainText('do not reconcile');
 });
+
+test('verified classification lineage stays informational and never dispatches provider work',async({page})=>{
+ await mount(page,601);
+ const data=snapshot(601);
+ data.queue_triage.status='NO_ACTIVE_WORK';
+ data.queue_triage.ordinary_job_total=2;
+ data.queue_triage.bucket_total=2;
+ data.queue_triage.buckets=[{code:'COMPLETED',count:2,priority:'COMPLETED_NOT_VERIFIED',
+  next_step:'Verify recorded classification usage'}];
+ data.queue_triage.pending_breakdown={pending_total:0,eligible_with_text:0,
+  missing_source_or_text:0,already_assessed:0,attempt_limit_exhausted:0,
+  breakdown_total:0,breakdown_reconciled:true};
+ data.queue_triage.completion_provenance={completed_jobs:2,usage_backed_completed:2,
+  requires_historical_usage_review:0,latest_classification_review:0};
+ data.queue_triage.completion_snapshot_reconciled=true;
+ await respond(page,601,data);
+ const result=page.getByTestId('assessment-completion-provenance');
+ await expect(result).toContainText('Usage-backed: 2');
+ await expect(result).toContainText('Historical usage gaps: 0');
+ await expect(result).not.toContainText('History review required');
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});
+test('missing classification lineage and audit snapshot drift demand manual review only',async({page})=>{
+ await mount(page,602);
+ const data=snapshot(602);
+ data.queue_triage.status='RECHECK_INDEPENDENT_SNAPSHOTS';
+ data.queue_triage.completion_provenance={completed_jobs:3,usage_backed_completed:1,
+  requires_historical_usage_review:2,latest_classification_review:1};
+ data.queue_triage.completion_snapshot_reconciled=false;
+ await respond(page,602,data);
+ const panel=page.getByTestId('assessment-completion-provenance');
+ await expect(panel).toContainText('Historical usage gaps: 2');
+ await expect(panel).toContainText('Latest classification needs review: 1');
+ await expect(panel).toContainText('History review required');
+ await expect(panel.getByRole('alert')).toContainText('Completion counts differ');
+ await expect(page.getByText(/Queue counts were read independently/)).toBeVisible();
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});

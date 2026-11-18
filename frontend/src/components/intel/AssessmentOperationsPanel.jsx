@@ -111,6 +111,8 @@ export default function AssessmentOperationsPanel({campaignId}){
        <p className="text-slate-500">Only nonzero categories are displayed. The ordinary-job total above includes zero-count categories and remains authoritative only when the snapshots reconcile.</p>
       </div>
       <div className="rounded border border-slate-200 p-2 space-y-1" data-testid="assessment-completion-provenance">
+       {!triage.completion_provenance&&<p role="status" className="text-amber-900">Completion audit detail unavailable in this snapshot; refresh status before interpreting completed-job verification.</p>}
+
        <p className="font-semibold">Completion provenance · historical usage</p>
        <p>Completed: {fmt(provenance.completed_jobs)} · Usage-backed: {fmt(provenance.usage_backed_completed)} · Historical usage gaps: {fmt(provenance.requires_historical_usage_review)}</p>
        <p>Latest classification needs review: {fmt(provenance.latest_classification_review)}. Historical usage does not prove the latest saved label.</p>

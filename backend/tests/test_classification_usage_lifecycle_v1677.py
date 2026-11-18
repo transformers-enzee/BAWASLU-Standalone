@@ -61,6 +61,7 @@ def test_database_rejects_duplicate_usage_per_assessment():
     e,db=fixture()
     try:
         put(db,4,1,state='COMPLETED')
+        db.commit()  # Commit the legitimate record before rejecting a later duplicate.
         a=db.query(EvidenceAssessment).one()
         db.add(AssessmentAIUsage(assessment_id=a.id,campaign_id=4,provider_model='test',
             request_kind='RELEVANCE_AND_CLASSIFICATION',input_tokens=1,output_tokens=1,

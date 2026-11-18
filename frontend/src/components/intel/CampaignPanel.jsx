@@ -10,6 +10,7 @@ import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
 import TopicThemes from '@/components/intel/TopicThemes';
 import AssessmentProgressDialog from '@/components/intel/AssessmentProgressDialog';
+import AssessmentOperationsPanel from '@/components/intel/AssessmentOperationsPanel';
 import DemoSocialListeningStats from '@/demo/DemoSocialListeningStats.jsx';
 
 const campaignPlatforms=['tiktok','instagram','youtube','facebook','twitter-ai-search','threads','online_news'];
@@ -631,6 +632,7 @@ export default function CampaignPanel({campaignId=null}){
     {[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
    </div>
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
+   <AssessmentOperationsPanel campaignId={selected.id} />
 
    <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">
     <summary className="cursor-pointer font-semibold text-teal-900">Admin · Import human-reviewed source posts (Social Listening → Inbox)</summary>

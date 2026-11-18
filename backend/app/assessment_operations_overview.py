@@ -1,0 +1,54 @@
+"""Campaign-scoped operational status without activating processing or billing."""
+from .campaign_ai_readiness import campaign_ai_worker_readiness
+from .campaign_assessment_coverage import campaign_link_assessment_coverage
+from .assessment_completion_audit import campaign_completion_audit
+from .assessment_interrupted_recovery import interrupted_campaign_preview
+
+def campaign_assessment_operations_overview(db,campaign_id):
+    cid=int(campaign_id)
+    readiness=campaign_ai_worker_readiness(db,cid)
+    coverage=campaign_link_assessment_coverage(db,cid)
+    completion=campaign_completion_audit(db,cid)
+    interrupted=interrupted_campaign_preview(db,cid)
+    issues=[]
+    if coverage['pending_monitoring_without_job']>0:
+        issues.append({'code':'UNQUEUED_EVIDENCE',
+            'count':coverage['pending_monitoring_without_job'],
+            'next_step':'Review no-cost job reconciliation. No AI request is started.'})
+    if interrupted['stale_processing_jobs']>0:
+        issues.append({'code':'STALE_PROCESSING',
+            'count':interrupted['stale_processing_jobs'],
+            'next_step':'Review provider history before confirmed quarantine; never replay automatically.'})
+    if interrupted['already_quarantined_for_manual_review']>0:
+        issues.append({'code':'INTERRUPTED_HISTORY_REVIEW',
+            'count':interrupted['already_quarantined_for_manual_review'],
+            'next_step':'Verify prior provider result or billing before any new AI request.'})
+    if completion['completed_requiring_manual_history_review']>0:
+        issues.append({'code':'COMPLETION_PROVENANCE_GAP',
+            'count':completion['completed_requiring_manual_history_review'],
+            'next_step':'Review saved classifications and original provider usage lineage.'})
+    if not completion['usage_lineage_quality']['quality_checks_passed']:
+        issues.append({'code':'USAGE_INTEGRITY_WARNING',
+            'count':sum(completion['usage_lineage_quality'][k] for k in (
+                'campaign_id_mismatch','provider_usage_not_reported',
+                'negative_token_counts','provider_model_missing')),
+            'next_step':'Inspect recorded usage history; do not infer provider charges.'})
+    if not coverage['link_count_reconciled'] or not completion['counts_reconciled']:
+        issues.append({'code':'INVENTORY_RECONCILIATION_WARNING',
+            'count':1,'next_step':'Investigate inconsistent campaign-link or job counts.'})
+    return {
+        'campaign_id':str(cid),
+        'scope':'ONE_AUTHORIZED_CAMPAIGN_READ_ONLY_OPERATIONS',
+        'assessment_link_coverage':coverage,
+        'worker_readiness':readiness,
+        'completion_audit':completion,
+        'interrupted_recovery':interrupted,
+        'review_required':bool(issues),
+        'issues':issues,
+        'automatic_ai_authorized':False,
+        'automatically_retries_jobs':False,
+        'provider_budget_reserved':False,
+        'paid_provider_called':False,
+        'socialcrawl_credits':0,
+        'database_writes':0,
+    }

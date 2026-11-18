@@ -832,6 +832,14 @@ def campaign_action(db:Session,p,action,data,id=None):
         campaign=db.get(MonitoringCampaign,int(selected))
         if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
         return campaign_completion_audit(db,campaign.id)
+    if action=='campaignAssessmentOperationsOverview':
+        from .assessment_operations_overview import campaign_assessment_operations_overview
+        selected=str(id or (data or {}).get('campaign_id') or '')
+        if not selected.isdigit():raise ValueError('Select a campaign')
+        campaign=db.get(MonitoringCampaign,int(selected))
+        if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')
+        # Aggregate read only; no editing rights, AI confirmation or provider call.
+        return campaign_assessment_operations_overview(db,campaign.id)
     if action=='campaignAIWorkerReadiness':
         from .campaign_ai_readiness import campaign_ai_worker_readiness
         from .campaign_assessment_coverage import campaign_link_assessment_coverage

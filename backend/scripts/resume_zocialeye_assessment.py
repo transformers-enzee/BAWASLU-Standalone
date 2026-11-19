@@ -10,7 +10,6 @@ requests, changes officer decisions, or bypasses existing provider limits.
 import argparse
 import json
 import os
-from sqlalchemy import func
 from app.db import SessionLocal
 from app.models import (
     AIAssessmentJob, CampaignEvidence, EvidenceAssessment,
@@ -32,6 +31,8 @@ def inspect_queue(db, run_id):
         raise ValueError("This tool only supports the BAWASLU campaign")
     if not metadata.get("cost_confirmed"):
         raise ValueError("Existing run must record paid-AI consent")
+    if metadata.get("source_batch_prefix") != PREFIX:
+        raise ValueError("Run consent does not cover the requested import prefix")
     original_ids = [int(v) for v in metadata.get("assessment_result_ids", [])]
     if len(original_ids) != 434 or len(set(original_ids)) != 434:
         raise ValueError("Expected the exact 434-record consented import run")
@@ -47,11 +48,27 @@ def inspect_queue(db, run_id):
         .filter(SocialListeningResult.id.in_(original_ids),
                 CampaignEvidence.match_method != "WATCHLIST_ACCOUNT").all())
     mapped = {int(row.id): row for row in rows}
-    if set(mapped) != set(original_ids):
+    if len(rows) != len(original_ids) or set(mapped) != set(original_ids):
         raise ValueError("Missing or duplicate campaign-assessment links")
     for row in mapped.values():
         if row.provider != "ZOCIALEYE" or not row.provider_request_id.startswith(PREFIX):
             raise ValueError("Run contains a post outside the authorized ZocialEye import")
+    # Verify the durable assessment and job states agree before allowing paid calls.
+    # A previously saved classification must never be re-billed via a stale pending job.
+    previous = (db.query(EvidenceAssessment)
+        .filter(EvidenceAssessment.campaign_id == CAMPAIGN_ID,
+                EvidenceAssessment.result_id.in_(original_ids))
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).all())
+    latest = {}
+    for assessment in previous:
+        latest.setdefault(assessment.result_id, assessment)
+    for rid, row in mapped.items():
+        classified = relevance_is_assessed(latest.get(rid))
+        if row.state == "COMPLETED" and not classified:
+            raise ValueError("Completed job lacks a saved relevance assessment")
+        if row.state == "PENDING" and classified:
+            raise ValueError("Pending job already has a saved assessment; manual reconciliation required")
     # Jobs must never be reset, and ambiguous/failed calls must not be retried.
     pending = [rid for rid in original_ids
                if mapped[rid].state == "PENDING" and int(mapped[rid].attempts or 0) < 3]

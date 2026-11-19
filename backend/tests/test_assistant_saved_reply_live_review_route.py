@@ -297,3 +297,31 @@ def test_source_snapshot_token_requires_exact_current_ids_and_excerpt():
         module._saved_reply_evidence_snapshot_token(
             "Question","Answer",["DOC-9-P2"],
             [{"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE"}])
+
+
+
+def test_same_excerpt_changed_sentiment_invalidates_source_review_snapshot():
+    base={"record_id":"SOCIAL-7","record_type":"SOCIAL_LISTENING",
+          "source_excerpt":"An authorized archived post excerpt"}
+    before=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["SOCIAL-7"],[{**base,"sentiment":"NEUTRAL"}])
+    after=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["SOCIAL-7"],[{**base,"sentiment":"NEGATIVE"}])
+    assert before!=after
+
+
+def test_arbitrary_private_fields_do_not_enter_snapshot_or_review_packet():
+    base={"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE",
+          "source_excerpt":"Authorized PDF excerpt",
+          "document_version":"2026-11-19","private_note":"VERY_PRIVATE_PERSON"}
+    before=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["DOC-9-P2"],[base])
+    changed={**base,"private_note":"ANOTHER_PRIVATE_PERSON"}
+    after=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["DOC-9-P2"],[changed])
+    assert before==after
+    assert "PRIVATE_PERSON" not in before
+    new_version=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["DOC-9-P2"],
+        [{**base,"document_version":"2026-11-20"}])
+    assert new_version!=before

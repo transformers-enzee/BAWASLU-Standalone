@@ -90,3 +90,32 @@ def test_duplicate_or_unknown_submission_is_rejected():
 def test_invalid_review_packet_is_not_accepted():
     with pytest.raises(ValueError):
         compile_human_review_scores({"schema":"UNAUTHORIZED","items":[]},[])
+
+
+
+@pytest.mark.parametrize("malformed",[
+    {"thread_id":["SECRET"]},
+    {"thread_id":{"private":"SECRET"}},
+    {"answer_message_index":["SECRET"]},
+    {"answer_message_index":True},
+])
+def test_unhashable_and_invalid_submission_identifiers_are_rejected(malformed):
+    with pytest.raises(ValueError,match="identifier"):
+        compile_human_review_scores(packet(),[submission(**malformed)])
+
+
+def test_malformed_packet_identifiers_are_rejected_without_crashing():
+    prepared=packet()
+    prepared["items"][0]["thread_id"]=["SECRET"]
+    with pytest.raises(ValueError,match="identifier"):
+        compile_human_review_scores(prepared,[])
+
+
+def test_nonrepresentative_sample_cannot_claim_release_acceptance():
+    ratings={name:"PASS" for name in DIMENSIONS}
+    report=compile_human_review_scores(packet(),[submission(ratings=ratings)])
+    assert report["review_sample_is_representative"] is False
+    assert report["release_approved"] is False
+    assert report["formal_client_acceptance"] is False
+    assert report["formal_legal_signoff"] is False
+    assert report["source_truth_verified_by_system"] is False

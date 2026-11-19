@@ -71,3 +71,22 @@ def test_saved_history_route_calls_authorized_packet_builder():
     assert 'result["human_review_packet"]=build_authorized_saved_reply_review_packet(result)' in code
     assert 'AssistantThread.user_id==user_id' in code
     assert 'resolve_mixed_audit_sources(db,batch_principal,audit)' in code
+
+
+
+def test_duplicate_or_invalid_uuid_of_audited_saved_replies_is_rejected():
+    with pytest.raises(ValueError,match="Duplicate"):
+        build(batch([row(),row()]))
+    invalid=row()
+    invalid["thread_id"]="AAAAAAAA-PRIV-ATEX-TTTT-123456789012"
+    with pytest.raises(ValueError,match="identifier"):
+        build(batch([invalid]))
+
+
+def test_unavailable_records_are_not_in_review_packet():
+    packet=build(batch([
+        row("INELIGIBLE"),row("SOURCE_UNAVAILABLE"),row("UNAVAILABLE")]))
+    assert packet["review_ready_replies"]==0
+    assert packet["ineligible_or_unavailable_replies"]==3
+    assert packet["items"]==[]
+    assert packet["human_review_completed"] is False

@@ -67,3 +67,52 @@ def summarize_authorized_saved_reply_audit(audit):
         "model_calls":0,
         "database_writes":0,
     }
+
+
+
+def summarize_authorized_saved_reply_batch(results):
+    """Redacted aggregate from the existing explicit, permission-scoped batch.
+
+    Missing or malformed triage is counted as UNASSESSED, never as a pass.
+    The caller must preserve the original per-selection availability statuses.
+    """
+    counts=Counter()
+    reason_counts=Counter()
+    for item in results or []:
+        if not isinstance(item,dict):
+            counts["UNASSESSED"]+=1
+            continue
+        status=item.get("status")
+        if status!="AUDITED":
+            counts["UNASSESSED"]+=1
+            continue
+        triage=item.get("response_quality_triage")
+        if not isinstance(triage,dict):
+            counts["UNASSESSED"]+=1
+            continue
+        state=triage.get("status")
+        if state=="REVIEW_FLAGS_PRESENT":
+            counts["REVIEW_FLAGS_PRESENT"]+=1
+            for reason in triage.get("readiness_review_ids") or []:
+                if reason in {"citation_grounding","source_relevance",
+                              "legal_uncertainty","cross_module_consistency"}:
+                    reason_counts[reason]+=1
+        elif state=="NO_DETERMINISTIC_FLAGS":
+            counts["NO_DETERMINISTIC_FLAGS"]+=1
+        else:
+            counts["UNASSESSED"]+=1
+    return {
+        "schema":"BAWASLU_SAVED_REPLY_BATCH_RESPONSE_TRIAGE_V17472",
+        "audited_with_review_flags":counts["REVIEW_FLAGS_PRESENT"],
+        "audited_without_detected_flags":counts["NO_DETERMINISTIC_FLAGS"],
+        "unassessed_or_unavailable":counts["UNASSESSED"],
+        "core_review_reason_occurrences":dict(sorted(reason_counts.items())),
+        "no_flags_is_not_a_quality_pass":True,
+        "selection_is_not_random_or_representative":True,
+        "human_accuracy":None,
+        "semantic_entailment_verified":False,
+        "historical_model_output_provenance_verified":False,
+        "human_acceptance_verified":False,
+        "paid_ai_calls":0,
+        "database_writes":0,
+    }

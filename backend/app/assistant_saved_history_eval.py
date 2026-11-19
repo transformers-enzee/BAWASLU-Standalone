@@ -16,6 +16,7 @@ from .models import User
 from .access import profile,has
 from .assistant_history import AssistantThread
 from .assistant_eval_sampling import MixedAnswerAuditRequest,resolve_mixed_audit_sources,build_mixed_answer_audit
+from .assistant_saved_reply_response_triage import summarize_authorized_saved_reply_audit
 
 router=APIRouter(prefix="/api/assistant-evaluation",tags=["assistant-evaluation"])
 _EXACT_REF=re.compile(r"^(?:SOCIAL-[1-9][0-9]{0,11}|INT-[A-Za-z0-9:_-]{1,80}|DOC-[1-9][0-9]{0,11}-P[1-9][0-9]{0,7})$")
@@ -216,6 +217,7 @@ def saved_reply_audit(
             result["issue_triage"]["issue_candidate_count"]),
         "review_route_is_suggestion_only":True,
         "audit":result,
+        "response_quality_triage":summarize_authorized_saved_reply_audit(result),
         "human_accuracy":None,"factual_accuracy_verified":False,
         "legal_signoff_verified":False,"client_acceptance_verified":False,
         "saved_thread_modified":False,"model_calls":0,"database_writes":0
@@ -287,7 +289,8 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         source_record_ids=result["source_record_ids"],
                         # A reduced, allowlisted result supports intentional local
                         # issue-register capture without exporting original content.
-                        issue_triage=triage)
+                        issue_triage=triage,
+                        response_quality_triage=summarize_authorized_saved_reply_audit(result))
             except HTTPException as exc:
                 # Not exposing authorization differences between hidden sources.
                 if exc.status_code in (403,404):

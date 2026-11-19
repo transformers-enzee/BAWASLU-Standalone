@@ -1,0 +1,1293 @@
+{
+  "schema": "BAWASLU_RESPONSE_BENCHMARK_V1",
+  "scope": "OFFLINE_SYNTHETIC_NOT_MODEL_ACCURACY",
+  "case_count": 50,
+  "categories": {
+    "INBOX": 15,
+    "SOCIAL": 15,
+    "CROSS": 10,
+    "FOLLOWUP": 10
+  },
+  "cases": [
+    {
+      "id": "RQA-051",
+      "category": "INBOX",
+      "topic": "allegation_vs_verification",
+      "language": "id",
+      "question": "Bagaimana membedakan dugaan dengan fakta terverifikasi?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-101",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Unggahan yang masuk Inbox adalah dugaan awal; verifikasi faktual dan otorisasi petugas diperlukan sebelum menyebut kejadian terbukti.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi faktual"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, verifikasi faktual [INT-101].",
+      "candidate_citation_ids": [
+        "INT-101"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-052",
+      "category": "INBOX",
+      "topic": "allegation_vs_verification",
+      "language": "id",
+      "question": "Bagaimana membedakan dugaan dengan fakta terverifikasi?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-101",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Unggahan yang masuk Inbox adalah dugaan awal; verifikasi faktual dan otorisasi petugas diperlukan sebelum menyebut kejadian terbukti.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi faktual"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, verifikasi faktual.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-053",
+      "category": "INBOX",
+      "topic": "allegation_vs_verification",
+      "language": "id",
+      "question": "Bagaimana membedakan dugaan dengan fakta terverifikasi?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-101",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Unggahan yang masuk Inbox adalah dugaan awal; verifikasi faktual dan otorisasi petugas diperlukan sebelum menyebut kejadian terbukti.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi faktual"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, verifikasi faktual [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-054",
+      "category": "INBOX",
+      "topic": "allegation_vs_verification",
+      "language": "id",
+      "question": "Bagaimana membedakan dugaan dengan fakta terverifikasi?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-101",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Unggahan yang masuk Inbox adalah dugaan awal; verifikasi faktual dan otorisasi petugas diperlukan sebelum menyebut kejadian terbukti.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi faktual"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [INT-101].",
+      "candidate_citation_ids": [
+        "INT-101"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-055",
+      "category": "INBOX",
+      "topic": "allegation_vs_verification",
+      "language": "id",
+      "question": "Bagaimana membedakan dugaan dengan fakta terverifikasi?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-101",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Unggahan yang masuk Inbox adalah dugaan awal; verifikasi faktual dan otorisasi petugas diperlukan sebelum menyebut kejadian terbukti.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi faktual"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [INT-101].",
+      "candidate_citation_ids": [
+        "INT-101"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-056",
+      "category": "INBOX",
+      "topic": "location_scope",
+      "language": "id",
+      "question": "Apakah provinsi disebut berarti lokasi kejadian?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-102",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Provinsi yang disebut dalam teks bukan otomatis lokasi kejadian; petugas harus meninjau bukti lokasi dan kewenangan wilayah.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan otomatis lokasi kejadian"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan otomatis lokasi kejadian [INT-102].",
+      "candidate_citation_ids": [
+        "INT-102"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-057",
+      "category": "INBOX",
+      "topic": "location_scope",
+      "language": "id",
+      "question": "Apakah provinsi disebut berarti lokasi kejadian?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-102",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Provinsi yang disebut dalam teks bukan otomatis lokasi kejadian; petugas harus meninjau bukti lokasi dan kewenangan wilayah.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan otomatis lokasi kejadian"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan otomatis lokasi kejadian.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-058",
+      "category": "INBOX",
+      "topic": "location_scope",
+      "language": "id",
+      "question": "Apakah provinsi disebut berarti lokasi kejadian?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-102",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Provinsi yang disebut dalam teks bukan otomatis lokasi kejadian; petugas harus meninjau bukti lokasi dan kewenangan wilayah.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan otomatis lokasi kejadian"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan otomatis lokasi kejadian [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-059",
+      "category": "INBOX",
+      "topic": "location_scope",
+      "language": "id",
+      "question": "Apakah provinsi disebut berarti lokasi kejadian?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-102",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Provinsi yang disebut dalam teks bukan otomatis lokasi kejadian; petugas harus meninjau bukti lokasi dan kewenangan wilayah.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan otomatis lokasi kejadian"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [INT-102].",
+      "candidate_citation_ids": [
+        "INT-102"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-060",
+      "category": "INBOX",
+      "topic": "location_scope",
+      "language": "id",
+      "question": "Apakah provinsi disebut berarti lokasi kejadian?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-102",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Provinsi yang disebut dalam teks bukan otomatis lokasi kejadian; petugas harus meninjau bukti lokasi dan kewenangan wilayah.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan otomatis lokasi kejadian"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [INT-102].",
+      "candidate_citation_ids": [
+        "INT-102"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-061",
+      "category": "INBOX",
+      "topic": "review_status",
+      "language": "id",
+      "question": "Apakah reviewed berarti berita benar?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-103",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Status relevansi yang telah ditinjau berbeda dari status kebenaran sumber; persetujuan relevansi tidak mengesahkan isi unggahan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak mengesahkan isi unggahan"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak mengesahkan isi unggahan [INT-103].",
+      "candidate_citation_ids": [
+        "INT-103"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-062",
+      "category": "INBOX",
+      "topic": "review_status",
+      "language": "id",
+      "question": "Apakah reviewed berarti berita benar?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-103",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Status relevansi yang telah ditinjau berbeda dari status kebenaran sumber; persetujuan relevansi tidak mengesahkan isi unggahan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak mengesahkan isi unggahan"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak mengesahkan isi unggahan.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-063",
+      "category": "INBOX",
+      "topic": "review_status",
+      "language": "id",
+      "question": "Apakah reviewed berarti berita benar?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-103",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Status relevansi yang telah ditinjau berbeda dari status kebenaran sumber; persetujuan relevansi tidak mengesahkan isi unggahan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak mengesahkan isi unggahan"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak mengesahkan isi unggahan [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-064",
+      "category": "INBOX",
+      "topic": "review_status",
+      "language": "id",
+      "question": "Apakah reviewed berarti berita benar?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-103",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Status relevansi yang telah ditinjau berbeda dari status kebenaran sumber; persetujuan relevansi tidak mengesahkan isi unggahan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak mengesahkan isi unggahan"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [INT-103].",
+      "candidate_citation_ids": [
+        "INT-103"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-065",
+      "category": "INBOX",
+      "topic": "review_status",
+      "language": "id",
+      "question": "Apakah reviewed berarti berita benar?",
+      "profile": "CASE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-103",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Status relevansi yang telah ditinjau berbeda dari status kebenaran sumber; persetujuan relevansi tidak mengesahkan isi unggahan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak mengesahkan isi unggahan"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [INT-103].",
+      "candidate_citation_ids": [
+        "INT-103"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-066",
+      "category": "SOCIAL",
+      "topic": "sentiment_uncertainty",
+      "language": "id",
+      "question": "Apa arti sentimen negatif untuk post ini?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-201",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Label sentimen negatif berasal dari penilaian model dan perlu dibedakan dari keputusan petugas; sentimen bukan pembuktian pelanggaran.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan pembuktian pelanggaran"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan pembuktian pelanggaran [SOCIAL-201].",
+      "candidate_citation_ids": [
+        "SOCIAL-201"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-067",
+      "category": "SOCIAL",
+      "topic": "sentiment_uncertainty",
+      "language": "id",
+      "question": "Apa arti sentimen negatif untuk post ini?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-201",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Label sentimen negatif berasal dari penilaian model dan perlu dibedakan dari keputusan petugas; sentimen bukan pembuktian pelanggaran.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan pembuktian pelanggaran"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan pembuktian pelanggaran.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-068",
+      "category": "SOCIAL",
+      "topic": "sentiment_uncertainty",
+      "language": "id",
+      "question": "Apa arti sentimen negatif untuk post ini?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-201",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Label sentimen negatif berasal dari penilaian model dan perlu dibedakan dari keputusan petugas; sentimen bukan pembuktian pelanggaran.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan pembuktian pelanggaran"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan pembuktian pelanggaran [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-069",
+      "category": "SOCIAL",
+      "topic": "sentiment_uncertainty",
+      "language": "id",
+      "question": "Apa arti sentimen negatif untuk post ini?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-201",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Label sentimen negatif berasal dari penilaian model dan perlu dibedakan dari keputusan petugas; sentimen bukan pembuktian pelanggaran.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan pembuktian pelanggaran"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [SOCIAL-201].",
+      "candidate_citation_ids": [
+        "SOCIAL-201"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-070",
+      "category": "SOCIAL",
+      "topic": "sentiment_uncertainty",
+      "language": "id",
+      "question": "Apa arti sentimen negatif untuk post ini?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-201",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Label sentimen negatif berasal dari penilaian model dan perlu dibedakan dari keputusan petugas; sentimen bukan pembuktian pelanggaran.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan pembuktian pelanggaran"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [SOCIAL-201].",
+      "candidate_citation_ids": [
+        "SOCIAL-201"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-071",
+      "category": "SOCIAL",
+      "topic": "sample_limits",
+      "language": "id",
+      "question": "Apakah lima unggahan berarti lima saksi?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-202",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Sampel memuat lima unggahan, bukan lima orang berbeda; unggahan ulang tidak boleh dihitung sebagai bukti independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan lima orang berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan lima orang berbeda [SOCIAL-202].",
+      "candidate_citation_ids": [
+        "SOCIAL-202"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-072",
+      "category": "SOCIAL",
+      "topic": "sample_limits",
+      "language": "id",
+      "question": "Apakah lima unggahan berarti lima saksi?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-202",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Sampel memuat lima unggahan, bukan lima orang berbeda; unggahan ulang tidak boleh dihitung sebagai bukti independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan lima orang berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan lima orang berbeda.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-073",
+      "category": "SOCIAL",
+      "topic": "sample_limits",
+      "language": "id",
+      "question": "Apakah lima unggahan berarti lima saksi?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-202",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Sampel memuat lima unggahan, bukan lima orang berbeda; unggahan ulang tidak boleh dihitung sebagai bukti independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan lima orang berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, bukan lima orang berbeda [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-074",
+      "category": "SOCIAL",
+      "topic": "sample_limits",
+      "language": "id",
+      "question": "Apakah lima unggahan berarti lima saksi?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-202",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Sampel memuat lima unggahan, bukan lima orang berbeda; unggahan ulang tidak boleh dihitung sebagai bukti independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan lima orang berbeda"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [SOCIAL-202].",
+      "candidate_citation_ids": [
+        "SOCIAL-202"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-075",
+      "category": "SOCIAL",
+      "topic": "sample_limits",
+      "language": "id",
+      "question": "Apakah lima unggahan berarti lima saksi?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-202",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Sampel memuat lima unggahan, bukan lima orang berbeda; unggahan ulang tidak boleh dihitung sebagai bukti independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "bukan lima orang berbeda"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [SOCIAL-202].",
+      "candidate_citation_ids": [
+        "SOCIAL-202"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-076",
+      "category": "SOCIAL",
+      "topic": "location_unknown",
+      "language": "id",
+      "question": "Dapatkah hashtag membuktikan lokasi kejadian?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-203",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Lokasi tidak dapat diverifikasi hanya dari hashtag; lokasi penulis dan lokasi kejadian harus dipisahkan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat diverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak dapat diverifikasi [SOCIAL-203].",
+      "candidate_citation_ids": [
+        "SOCIAL-203"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-077",
+      "category": "SOCIAL",
+      "topic": "location_unknown",
+      "language": "id",
+      "question": "Dapatkah hashtag membuktikan lokasi kejadian?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-203",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Lokasi tidak dapat diverifikasi hanya dari hashtag; lokasi penulis dan lokasi kejadian harus dipisahkan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat diverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak dapat diverifikasi.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-078",
+      "category": "SOCIAL",
+      "topic": "location_unknown",
+      "language": "id",
+      "question": "Dapatkah hashtag membuktikan lokasi kejadian?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-203",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Lokasi tidak dapat diverifikasi hanya dari hashtag; lokasi penulis dan lokasi kejadian harus dipisahkan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat diverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak dapat diverifikasi [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-079",
+      "category": "SOCIAL",
+      "topic": "location_unknown",
+      "language": "id",
+      "question": "Dapatkah hashtag membuktikan lokasi kejadian?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-203",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Lokasi tidak dapat diverifikasi hanya dari hashtag; lokasi penulis dan lokasi kejadian harus dipisahkan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat diverifikasi"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [SOCIAL-203].",
+      "candidate_citation_ids": [
+        "SOCIAL-203"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-080",
+      "category": "SOCIAL",
+      "topic": "location_unknown",
+      "language": "id",
+      "question": "Dapatkah hashtag membuktikan lokasi kejadian?",
+      "profile": "SOCIAL_ANALYSIS",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-203",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Lokasi tidak dapat diverifikasi hanya dari hashtag; lokasi penulis dan lokasi kejadian harus dipisahkan.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat diverifikasi"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [SOCIAL-203].",
+      "candidate_citation_ids": [
+        "SOCIAL-203"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-081",
+      "category": "CROSS",
+      "topic": "evidence_overlap",
+      "language": "id",
+      "question": "Bagaimana membandingkan dua modul tanpa menghitung ulang?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-301",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Rekaman Inbox dan Social Listening dapat merujuk URL yang sama; kecocokan URL tidak membuktikan dua sumber independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak membuktikan dua sumber independen"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak membuktikan dua sumber independen [INT-301].",
+      "candidate_citation_ids": [
+        "INT-301"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-082",
+      "category": "CROSS",
+      "topic": "evidence_overlap",
+      "language": "id",
+      "question": "Bagaimana membandingkan dua modul tanpa menghitung ulang?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-301",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Rekaman Inbox dan Social Listening dapat merujuk URL yang sama; kecocokan URL tidak membuktikan dua sumber independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak membuktikan dua sumber independen"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak membuktikan dua sumber independen.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-083",
+      "category": "CROSS",
+      "topic": "evidence_overlap",
+      "language": "id",
+      "question": "Bagaimana membandingkan dua modul tanpa menghitung ulang?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-301",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Rekaman Inbox dan Social Listening dapat merujuk URL yang sama; kecocokan URL tidak membuktikan dua sumber independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak membuktikan dua sumber independen"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, tidak membuktikan dua sumber independen [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-084",
+      "category": "CROSS",
+      "topic": "evidence_overlap",
+      "language": "id",
+      "question": "Bagaimana membandingkan dua modul tanpa menghitung ulang?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-301",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Rekaman Inbox dan Social Listening dapat merujuk URL yang sama; kecocokan URL tidak membuktikan dua sumber independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak membuktikan dua sumber independen"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [INT-301].",
+      "candidate_citation_ids": [
+        "INT-301"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-085",
+      "category": "CROSS",
+      "topic": "evidence_overlap",
+      "language": "id",
+      "question": "Bagaimana membandingkan dua modul tanpa menghitung ulang?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "INT-301",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "source_excerpt": "Rekaman Inbox dan Social Listening dapat merujuk URL yang sama; kecocokan URL tidak membuktikan dua sumber independen.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "tidak membuktikan dua sumber independen"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [INT-301].",
+      "candidate_citation_ids": [
+        "INT-301"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-086",
+      "category": "CROSS",
+      "topic": "status_distinction",
+      "language": "id",
+      "question": "Apakah sentimen dan assessment Inbox sama?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-302",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Status assessment di Inbox dan sentimen Social Listening menjawab pertanyaan berbeda; keduanya tidak boleh disatukan sebagai penetapan hukum.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "menjawab pertanyaan berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, menjawab pertanyaan berbeda [SOCIAL-302].",
+      "candidate_citation_ids": [
+        "SOCIAL-302"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-087",
+      "category": "CROSS",
+      "topic": "status_distinction",
+      "language": "id",
+      "question": "Apakah sentimen dan assessment Inbox sama?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-302",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Status assessment di Inbox dan sentimen Social Listening menjawab pertanyaan berbeda; keduanya tidak boleh disatukan sebagai penetapan hukum.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "menjawab pertanyaan berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, menjawab pertanyaan berbeda.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-088",
+      "category": "CROSS",
+      "topic": "status_distinction",
+      "language": "id",
+      "question": "Apakah sentimen dan assessment Inbox sama?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-302",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Status assessment di Inbox dan sentimen Social Listening menjawab pertanyaan berbeda; keduanya tidak boleh disatukan sebagai penetapan hukum.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "menjawab pertanyaan berbeda"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, menjawab pertanyaan berbeda [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-089",
+      "category": "CROSS",
+      "topic": "status_distinction",
+      "language": "id",
+      "question": "Apakah sentimen dan assessment Inbox sama?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-302",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Status assessment di Inbox dan sentimen Social Listening menjawab pertanyaan berbeda; keduanya tidak boleh disatukan sebagai penetapan hukum.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "menjawab pertanyaan berbeda"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [SOCIAL-302].",
+      "candidate_citation_ids": [
+        "SOCIAL-302"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-090",
+      "category": "CROSS",
+      "topic": "status_distinction",
+      "language": "id",
+      "question": "Apakah sentimen dan assessment Inbox sama?",
+      "profile": "CROSS_MODULE_REVIEW",
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-302",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "source_excerpt": "Status assessment di Inbox dan sentimen Social Listening menjawab pertanyaan berbeda; keduanya tidak boleh disatukan sebagai penetapan hukum.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "menjawab pertanyaan berbeda"
+      ],
+      "candidate_answer": "Tidak ada informasi khusus untuk menjawab pertanyaan ini [SOCIAL-302].",
+      "candidate_citation_ids": [
+        "SOCIAL-302"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-091",
+      "category": "FOLLOWUP",
+      "topic": "reference_context",
+      "language": "id",
+      "question": "Kalau begitu bagaimana penugasan provinsinya?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-21-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Dalam panduan simulasi, penugasan harus didasarkan pada lokasi kejadian terverifikasi dan batas kewenangan petugas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "lokasi kejadian terverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, lokasi kejadian terverifikasi [DOC-21-P2].",
+      "candidate_citation_ids": [
+        "DOC-21-P2"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-092",
+      "category": "FOLLOWUP",
+      "topic": "reference_context",
+      "language": "id",
+      "question": "Kalau begitu bagaimana penugasan provinsinya?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-21-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Dalam panduan simulasi, penugasan harus didasarkan pada lokasi kejadian terverifikasi dan batas kewenangan petugas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "lokasi kejadian terverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, lokasi kejadian terverifikasi.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-093",
+      "category": "FOLLOWUP",
+      "topic": "reference_context",
+      "language": "id",
+      "question": "Kalau begitu bagaimana penugasan provinsinya?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-21-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Dalam panduan simulasi, penugasan harus didasarkan pada lokasi kejadian terverifikasi dan batas kewenangan petugas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "lokasi kejadian terverifikasi"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, lokasi kejadian terverifikasi [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-094",
+      "category": "FOLLOWUP",
+      "topic": "reference_context",
+      "language": "id",
+      "question": "Kalau begitu bagaimana penugasan provinsinya?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-21-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Dalam panduan simulasi, penugasan harus didasarkan pada lokasi kejadian terverifikasi dan batas kewenangan petugas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "lokasi kejadian terverifikasi"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [DOC-21-P2].",
+      "candidate_citation_ids": [
+        "DOC-21-P2"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-095",
+      "category": "FOLLOWUP",
+      "topic": "reference_context",
+      "language": "id",
+      "question": "Kalau begitu bagaimana penugasan provinsinya?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-21-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Dalam panduan simulasi, penugasan harus didasarkan pada lokasi kejadian terverifikasi dan batas kewenangan petugas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "lokasi kejadian terverifikasi"
+      ],
+      "candidate_answer": "Sumber menyebut “semua petugas berhak menetapkan hukuman tanpa bukti” [DOC-21-P2].",
+      "candidate_citation_ids": [
+        "DOC-21-P2"
+      ],
+      "expected_detection": "QUOTE_NOT_IN_SOURCE",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-096",
+      "category": "FOLLOWUP",
+      "topic": "ambiguous_request",
+      "language": "id",
+      "question": "Bagaimana dengan kasus itu?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-22-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Prosedur simulasi meminta pemeriksaan bukti dan identitas kasus sebelum tindak lanjut. Jika pertanyaan kurang spesifik, petugas diminta memperjelas kasus yang dibahas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "memperjelas kasus"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, memperjelas kasus [DOC-22-P3].",
+      "candidate_citation_ids": [
+        "DOC-22-P3"
+      ],
+      "expected_detection": "SUPPORTED_CITED",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-097",
+      "category": "FOLLOWUP",
+      "topic": "ambiguous_request",
+      "language": "id",
+      "question": "Bagaimana dengan kasus itu?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-22-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Prosedur simulasi meminta pemeriksaan bukti dan identitas kasus sebelum tindak lanjut. Jika pertanyaan kurang spesifik, petugas diminta memperjelas kasus yang dibahas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "memperjelas kasus"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, memperjelas kasus.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-098",
+      "category": "FOLLOWUP",
+      "topic": "ambiguous_request",
+      "language": "id",
+      "question": "Bagaimana dengan kasus itu?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-22-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Prosedur simulasi meminta pemeriksaan bukti dan identitas kasus sebelum tindak lanjut. Jika pertanyaan kurang spesifik, petugas diminta memperjelas kasus yang dibahas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "memperjelas kasus"
+      ],
+      "candidate_answer": "Berdasarkan sumber terpilih, memperjelas kasus [INT-99999].",
+      "candidate_citation_ids": [
+        "INT-99999"
+      ],
+      "expected_detection": "UNKNOWN_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-099",
+      "category": "FOLLOWUP",
+      "topic": "ambiguous_request",
+      "language": "id",
+      "question": "Bagaimana dengan kasus itu?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-22-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Prosedur simulasi meminta pemeriksaan bukti dan identitas kasus sebelum tindak lanjut. Jika pertanyaan kurang spesifik, petugas diminta memperjelas kasus yang dibahas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "memperjelas kasus"
+      ],
+      "candidate_answer": "Sumber tersebut sebaiknya diperiksa lagi [DOC-22-P3].",
+      "candidate_citation_ids": [
+        "DOC-22-P3"
+      ],
+      "expected_detection": "ANSWER_OMITS_REQUIRED_POINT",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-100",
+      "category": "FOLLOWUP",
+      "topic": "ambiguous_request",
+      "language": "id",
+      "question": "Bagaimana dengan kasus itu?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-22-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "source_excerpt": "Prosedur simulasi meminta pemeriksaan bukti dan identitas kasus sebelum tindak lanjut. Jika pertanyaan kurang spesifik, petugas diminta memperjelas kasus yang dibahas.",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "required_answer_points": [
+        "memperjelas kasus"
+      ],
+      "candidate_answer": "Sumber menyebut “semua petugas berhak menetapkan hukuman tanpa bukti” [DOC-22-P3].",
+      "candidate_citation_ids": [
+        "DOC-22-P3"
+      ],
+      "expected_detection": "QUOTE_NOT_IN_SOURCE",
+      "synthetic_only": true
+    }
+  ]
+}

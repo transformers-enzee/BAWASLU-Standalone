@@ -68,12 +68,18 @@ def test_uncertain_or_quoted_platform_claim_not_treated_as_verdict(answer):
 def test_nonlegal_citation_cannot_be_election_law_support():
     _,q=evaluate("Instagram violates platform policy [DOC-2-P1].",
         [page("DOC-2-P1","Some uploaded report about Instagram","REPORT")])
-    assert q["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=q["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_WITHOUT_VERIFIED_PROVIDER_DECISION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 def test_unselected_citation_is_not_legal_support():
     a,q=evaluate("Instagram violates platform policy [DOC-999-P1].")
     assert a["rejected_unavailable_citations"]==1
-    assert q["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=q["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_NO_LOCAL_AUTHORIZED_CITATION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 def test_platform_only_question_still_reviews_election_pdf_misattribution():
     _,q=evaluate("Instagram violates platform policy [DOC-1-P1]",

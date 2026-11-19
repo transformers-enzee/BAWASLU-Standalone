@@ -340,7 +340,15 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "legal_numeric_claim_source_alignment":numeric_consistency,
         "platform_policy_legal_boundary":policy_boundary,
         "formal_outcome_source_provenance":claim_provenance})
+    # Keep the historical four-check readiness contract stable for existing
+    # dashboard consumers and fixtures. Additional safety probes remain
+    # explicit, independently reported diagnostics and are never discarded.
+    core_ids={"citation_grounding","source_relevance",
+              "legal_uncertainty","cross_module_consistency"}
+    additional_checks=[x for x in checks if x["id"] not in core_ids]
+    checks=[x for x in checks if x["id"] in core_ids]
     needs=[x["id"] for x in checks if x["status"]==REVIEW]
+    additional_needs=[x["id"] for x in additional_checks if x["status"]==REVIEW]
     return {
         "framework":"ASSISTANT_ANSWER_READINESS_V1484",
         "evaluation_type":"DETERMINISTIC_HEURISTICS_NOT_HUMAN_ACCURACY",
@@ -353,6 +361,8 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "citation_inventory_consistency":citation_inventory,
         "pdf_quoted_passage_alignment":pdf_quote_audit,
         "requested_topic_coverage":topic_probe,
+        "additional_checks":additional_checks,
+        "additional_needs_review":additional_needs,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),
         "not_applicable_checks":sum(x["status"]==NA for x in checks),

@@ -48,11 +48,22 @@ def evaluate_claim_provenance(evidence,answer,cited_ids):
             next_refs=_REF.findall(next_text)
             if next_refs and not _REF.sub("",next_text).strip():
                 refs=list(dict.fromkeys(r for r in next_refs if r in authorized))
-        if not refs:
-            continue # Other source-citation safeguards handle missing sources
+        # A definitive formal decision requires a claim-local formal record.
+        # Neither an uncited assertion, a social post, nor a general legal PDF
+        # can establish an actual completed adjudication. Even formal records
+        # are only candidate sources until an officer checks their contents.
         source_kinds={records[ref].get("record_type") for ref in refs}
-        if source_kinds=={"SOCIAL_LISTENING"}:
-            flagged.append({"claim_index":i+1,"cited_social_ids":refs[:12],
-                            "reason":"FORMAL_DECISION_CITED_ONLY_TO_SOCIAL_POSTS"})
+        formal_refs=[ref for ref in refs
+                     if records[ref].get("record_type")=="FORMAL_INTELLIGENCE"]
+        if not refs:
+            flagged.append({"claim_index":i+1,"cited_social_ids":[],
+                            "reason":"FORMAL_DECISION_NO_LOCAL_AUTHORIZED_CITATION"})
+        elif not formal_refs:
+            flagged.append({"claim_index":i+1,
+                            "cited_social_ids":[ref for ref in refs
+                                if records[ref].get("record_type")=="SOCIAL_LISTENING"][:12],
+                            "reason":("FORMAL_DECISION_CITED_ONLY_TO_SOCIAL_POSTS"
+                                      if source_kinds=={"SOCIAL_LISTENING"}
+                                      else "FORMAL_DECISION_MISSING_FORMAL_RECORD")})
     return {**base,"status":"REVIEW_REQUIRED" if flagged else "NOT_APPLICABLE",
             "review_required_count":len(flagged),"review_items":flagged[:12]}

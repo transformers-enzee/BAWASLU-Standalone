@@ -106,7 +106,7 @@ def pilot_readiness(db,campaign):
     def cap(name,maxval):
         try:return max(0,min(maxval,int(os.getenv(name,'0'))))
         except (TypeError,ValueError):return 0
-    daily=cap('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN',5000)
+    daily=cap('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN',1000)
     lifetime=cap('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN',5000)
     per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',50)
     reserved={x.budget_period:x.reserved_requests for x in db.query(AIBudgetReservation).filter(

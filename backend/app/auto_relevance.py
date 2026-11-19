@@ -111,7 +111,7 @@ def recover_stale_jobs(campaign_id=None):
 
 def campaign_daily_budget_remaining(db,campaign_id):
     """Conservative request-count ceiling, not a monetary cost estimate."""
-    try: ceiling=max(0,min(100,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    try: ceiling=max(0,min(5000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except ValueError:ceiling=0
     today=datetime.utcnow().replace(hour=0,minute=0,second=0,microsecond=0)
     billed=db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==int(campaign_id),
@@ -120,7 +120,7 @@ def campaign_daily_budget_remaining(db,campaign_id):
 
 def campaign_lifetime_budget_remaining(db,campaign_id):
     """Fail-closed lifetime attempt ceiling; avoids unlimited spending across UTC days."""
-    try: ceiling=max(0,min(500,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    try: ceiling=max(0,min(5000,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except ValueError:ceiling=0
     jobs=db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==int(campaign_id),
         AIAssessmentJob.attempts>0).all()
@@ -130,8 +130,8 @@ def reserve_automatic_ai_request(db,campaign_id):
     """Atomically reserve both quotas before any paid automatic provider request."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     try:
-        daily=max(0,min(100,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
-        lifetime=max(0,min(500,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        daily=max(0,min(5000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        lifetime=max(0,min(5000,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except (ValueError,TypeError):return False
     if not daily or not lifetime:return False
     period=datetime.utcnow().strftime('%Y-%m-%d')
@@ -182,7 +182,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
         return
-    try: limit=max(0,min(25,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
+    try: limit=max(0,min(50,int(os.getenv('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
     except ValueError: limit=12
     if requested_limit is not None: limit=min(limit,max(0,int(requested_limit)))
     if not limit:return

@@ -91,7 +91,7 @@ def test_missing_and_empty_model_versions_combine_in_distribution():
     try:
         # Only completed jobs with saved classification but no usage belong
         # in the historical-provenance model histogram.
-        job(db,9,1); a=assess(db,9,1,1,'RELEVANT');a.model_version=None
+        job(db,9,1); a=assess(db,9,1,1,'RELEVANT');a.model_version='UNSPECIFIED'
         job(db,9,2); b=assess(db,9,2,1,'RELEVANT');b.model_version=''
         job(db,9,3); c=assess(db,9,3,1,'RELEVANT');c.model_version='gpt-test'
         db.commit()

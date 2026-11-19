@@ -9,6 +9,8 @@ on:
       - '.github/workflows/bawaslu-option-b-image.yml'
       - 'Dockerfile'
       - 'backend/app/main.py'
+      - 'backend/app/assessment_completion_audit.py'
+      - 'backend/tests/test_assessment_completion_audit_v1661.py'
       - 'backend/tests/test_option_b_safe_startup.py'
   workflow_dispatch:
     inputs:

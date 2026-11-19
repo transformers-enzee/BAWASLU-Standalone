@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from app.assistant_grounding import audit_assistant_answer
 from app.assistant_answer_quality import evaluate_answer_quality
+from app.assistant_source_claim_requirements import check_source_claim_requirements
 from app.assistant_response_benchmark import check_required_answer_points
 
 ROOT=Path(__file__).parent / "fixtures"
@@ -37,6 +38,14 @@ def test_second_batch_candidate_answer_review(case):
     assert criterion["accuracy_score"] is None
     assert quality["claim_truth_verified"] is False
     if expected=="SUPPORTED_CITED":
+        requirements=[{"source_id":case["authorized_evidence"][0]["record_id"],
+                       "anchor":point}
+                      for point in case["required_answer_points"]]
+        support=check_source_claim_requirements(
+            answer,requirements,case["authorized_evidence"],cited)
+        assert support["status"]=="PASS_NARROW_LEXICAL_ONLY"
+        assert support["semantic_entailment_verified"] is False
+
         assert cited
         assert criterion["status"]=="PASS_LEXICAL_ONLY"
     elif expected=="MISSING_CITATION":

@@ -20,17 +20,29 @@ def compile_human_review_scores(packet,submissions):
         raise ValueError("Packet must contain one to five review tasks")
     if not isinstance(submissions,list) or len(submissions)>5:
         raise ValueError("Submissions must be a bounded list")
-    known={(item.get("thread_id"),item.get("answer_message_index"))
-           for item in tasks if isinstance(item,dict)}
-    if len(known)!=len(tasks):
-        raise ValueError("Duplicate or invalid packet tasks")
+    known=set()
+    for task in tasks:
+        if not isinstance(task,dict):
+            raise ValueError("Invalid packet task")
+        thread_id=task.get("thread_id")
+        index=task.get("answer_message_index")
+        if not isinstance(thread_id,str) or not isinstance(index,int) or isinstance(index,bool) or not 1<=index<=59:
+            raise ValueError("Invalid packet task identifier")
+        key=(thread_id,index)
+        if key in known:
+            raise ValueError("Duplicate packet task")
+        known.add(key)
     seen=set()
     outcomes=Counter()
     dimension_counts={name:Counter() for name in DIMENSIONS}
     for item in submissions:
         if not isinstance(item,dict):
             raise ValueError("Invalid reviewer submission")
-        key=(item.get("thread_id"),item.get("answer_message_index"))
+        thread_id=item.get("thread_id")
+        index=item.get("answer_message_index")
+        if not isinstance(thread_id,str) or not isinstance(index,int) or isinstance(index,bool):
+            raise ValueError("Invalid submitted selection identifier")
+        key=(thread_id,index)
         if key not in known or key in seen:
             raise ValueError("Submission outside selected packet or duplicated")
         seen.add(key)

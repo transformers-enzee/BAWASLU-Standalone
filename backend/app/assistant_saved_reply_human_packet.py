@@ -7,7 +7,7 @@ An audited result is a review candidate, not a correct or authentic model answer
 import re
 from collections import Counter
 
-_UUID=re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}
+_UUID=re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' + '$')
 
 DIMENSIONS=(
     "SOURCE_ID_ACCURACY",

@@ -86,7 +86,13 @@ def build_authorized_saved_reply_review_packet(batch):
         selected_keys.add(key)
         source_types,focus=_authorized_review_focus(
             item.get("selected_source_kinds"),triage)
+        token=item.get("answer_revision_token")
+        if not isinstance(token,str) or not re.fullmatch(r"[0-9a-f]{64}",token):
+            # A review packet without a saved-answer revision cannot be
+            # used for a completed human rating.
+            token=None
         tasks.append({
+            "answer_revision_token":token,
             "authorized_source_kinds":source_types,
             "manual_review_focus":focus,
             "thread_id":thread_id,
@@ -130,6 +136,7 @@ def build_authorized_saved_reply_review_packet(batch):
         "rating_options":list(_RATINGS),
         "actual_answer_text_included":False,
         "raw_evidence_text_included":False,
+        "review_token_binds_saved_answer_not_current_source_content":True,
         "human_ratings_prepopulated":False,
         "human_review_completed":False,
         "actual_model_accuracy_measured":False,

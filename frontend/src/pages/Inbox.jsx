@@ -26,6 +26,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [chosenLocation,setChosenLocation]=useState('');
  const [availableProvinces,setAvailableProvinces]=useState([]);
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
+ const [regencyReviewHistory,setRegencyReviewHistory]=useState(null),[regencyHistoryBusy,setRegencyHistoryBusy]=useState(false);
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
@@ -198,6 +199,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  }
 
  async function previewIncidentJurisdiction(){
+  setRegencyReviewHistory(null);
   if(!selected)return;
   setJurisdictionBusy(true);setJurisdictionMessage('');setJurisdictionPreview(null);
   try{
@@ -253,6 +255,7 @@ function SocialEvidenceInbox({onOpenCasework}){
       regency_city_code:candidate?.regency_city_code||'',
       rationale:rationale.trim(),
       expected_source_fingerprint:jurisdictionPreview.source_fingerprint,
+      expected_assessment_version:jurisdictionPreview.current_assessment_version,
       expected_review_event_id:jurisdictionPreview.latest_review?.regency_city_review?.review_event_id||0}});
    setJurisdictionPreview(r.data);
    const review=r.data.latest_review;
@@ -263,6 +266,17 @@ function SocialEvidenceInbox({onOpenCasework}){
    setJurisdictionMessage('Officer Kabupaten/Kota review saved in audit history; access permissions unchanged.');
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
+ }
+ async function loadRegencyReviewHistory(){
+  if(!selected)return;
+  setRegencyHistoryBusy(true);setJurisdictionMessage('');
+  try{
+   const r=await base44.functions.invoke('socialListening',{
+    action:'campaignRegencyReviewHistory',id:selected.campaign_id,
+    data:{result_id:selected.id}});
+   setRegencyReviewHistory(r.data);
+  }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
+  finally{setRegencyHistoryBusy(false)}
  }
  async function saveOfficerClassification(){
   if(!selected||correctionBusy)return;
@@ -582,6 +596,15 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
       <p data-testid="reviewed-regency-city"><strong>Human Kabupaten/Kota decision:</strong> {selected.incident_jurisdiction_review?.regency_city_review?.incident_regency_city_verified?selected.incident_jurisdiction_review.regency_city_review.incident_regency_city:'Not verified'} · {selected.incident_jurisdiction_review?.regency_city_review?.decision||'UNREVIEWED'} · Review is separate from regional access.</p>
+      <button type="button" className="intel-ghost text-xs" disabled={regencyHistoryBusy} onClick={loadRegencyReviewHistory}>View officer Kabupaten/Kota decision history</button>
+      {regencyReviewHistory&&<div data-testid="regency-review-history" className="rounded border border-slate-200 bg-white p-2 text-xs space-y-1">
+       <p>Append-only officer decision history (most recent first). Historical decisions are not current jurisdiction verification.</p>
+       {(regencyReviewHistory.history||[]).length===0?<p>No previous city reviews.</p>:(regencyReviewHistory.history||[]).map(item=><div key={item.event_id} className="border-b border-slate-100 py-1">
+        <p>{item.decision} · {item.regency_city||'No city confirmed'} · {item.reviewed_at_utc||'Time unavailable'} · Officer {item.reviewed_by}</p>
+        <p>Rationale: {item.rationale}</p>
+       </div>)}
+       {regencyReviewHistory.history_may_be_truncated&&<p>Only the latest decisions are shown.</p>}
+      </div>}
       <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={previewIncidentJurisdiction}>Preview source-grounded location (free)</button>
       {jurisdictionPreview&&<div className="space-y-1"><p>Source-grounded incident province candidates (unverified): {(jurisdictionPreview.source_context_provinces_unverified||[]).join(', ')||'None identified'} · Assessment relevant: {jurisdictionPreview.source_post_relevance_assessed?'Yes':'No'}</p>{jurisdictionPreview.incident_kabupaten_kota_preview&&<div data-testid="incident-regency-candidates" className="rounded border border-slate-200 bg-white p-2 space-y-1">
        <p><strong>Kabupaten/Kota incident candidates (unverified):</strong> {jurisdictionPreview.incident_kabupaten_kota_preview.candidate_count||0} matched from explicit source wording.</p>

@@ -24,6 +24,7 @@ def submit(db,pre,decision='CONFIRMED',code=None):
         'rationale':'The original source explicitly states the incident happened here.',
         'expected_source_fingerprint':pre['source_fingerprint'],
         'expected_review_event_id':pre['latest_review']['regency_city_review']['review_event_id'],
+        'expected_assessment_version':pre['current_assessment_version'],
     },'91')
 
 def test_officer_verifies_city_with_append_only_audit_no_acl_changes():
@@ -77,7 +78,8 @@ def test_revoked_permission_and_nonrelevant_assessment_cannot_verify():
             'regency_city_code':p['incident_kabupaten_kota_preview']['candidates'][0]['regency_city_code'],
             'rationale':'The original incident statement mentions Kota Bandung.',
             'expected_source_fingerprint':p['source_fingerprint'],
-            'expected_review_event_id':0}
+            'expected_review_event_id':0,
+            'expected_assessment_version':p['current_assessment_version']}
         with pytest.raises(PermissionError):
             jurisdiction_action(db,user('Provincial Analyst'),
                 'campaignRegencyReview',payload,'91')

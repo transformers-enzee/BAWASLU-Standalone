@@ -61,6 +61,7 @@ jobs:
           node scripts/test-related-regency-v1721.mjs
           node scripts/test-related-regency-v1722.mjs
           node scripts/test-regency-officer-review-v1723.mjs
+          node scripts/test-regency-review-consistency-v1724.mjs
 
       - name: Build production frontend
         working-directory: frontend

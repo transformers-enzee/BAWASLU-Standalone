@@ -90,3 +90,66 @@ def test_cited_wrong_record_cannot_authorize_source_requirement():
                  req(),records,["DOC-2-P8"])
     assert result["status"]=="REVIEW_REQUIRED"
     assert result["review_items"][0]["reason"]=="NO_LOCALLY_CITED_ANCHOR"
+
+
+def test_curated_positive_answer_cannot_overrule_negative_source():
+    source=pdf("Petugas tidak wajib verifikasi lokasi kejadian.")
+    requirement=[{"source_id":"DOC-1-P8",
+                  "anchor":"wajib verifikasi lokasi kejadian",
+                  "expected_polarity":"POSITIVE",
+                  "validate_source_polarity":True}]
+    result=check("Petugas wajib verifikasi lokasi kejadian [DOC-1-P8].",
+                 requirement,source,["DOC-1-P8"])
+    assert result["review_items"][0]["reason"]=="SOURCE_POLARITY_MISMATCH"
+    assert result["semantic_entailment_verified"] is False
+
+
+def test_curated_negative_source_and_negative_answer_align():
+    source=pdf("Petugas tidak wajib verifikasi lokasi kejadian.")
+    requirement=[{"source_id":"DOC-1-P8",
+                  "anchor":"wajib verifikasi lokasi kejadian",
+                  "expected_polarity":"NEGATIVE",
+                  "validate_source_polarity":True}]
+    result=check("Petugas tidak wajib verifikasi lokasi kejadian [DOC-1-P8].",
+                 requirement,source,["DOC-1-P8"])
+    assert result["status"]=="PASS_NARROW_LEXICAL_ONLY"
+
+
+def test_curated_source_with_opposite_clauses_requires_review():
+    source=pdf("Petugas wajib verifikasi lokasi kejadian. Petugas tidak wajib verifikasi lokasi kejadian.")
+    requirement=[{"source_id":"DOC-1-P8",
+                  "anchor":"wajib verifikasi lokasi kejadian",
+                  "expected_polarity":"POSITIVE",
+                  "validate_source_polarity":True}]
+    result=check("Petugas wajib verifikasi lokasi kejadian [DOC-1-P8].",
+                 requirement,source,["DOC-1-P8"])
+    assert result["review_items"][0]["reason"]=="CONFLICTING_SOURCE_CLAUSES"
+
+
+def test_two_curated_requirements_both_need_local_citations():
+    evidence=pdf("Petugas wajib verifikasi lokasi kejadian. Dokumentasi harus disimpan.")
+    requirements=[
+        {"source_id":"DOC-1-P8","anchor":"wajib verifikasi lokasi kejadian",
+         "validate_source_polarity":True},
+        {"source_id":"DOC-1-P8","anchor":"dokumentasi harus disimpan",
+         "validate_source_polarity":True},
+    ]
+    result=check("Petugas wajib verifikasi lokasi kejadian [DOC-1-P8].",
+                 requirements,evidence,["DOC-1-P8"])
+    assert result["requirement_count"]==2
+    assert result["review_items"][0]["reason"]=="NO_LOCALLY_CITED_ANCHOR"
+
+
+def test_two_curated_requirements_both_pass_when_present():
+    evidence=pdf("Petugas wajib verifikasi lokasi kejadian. Dokumentasi harus disimpan.")
+    requirements=[
+        {"source_id":"DOC-1-P8","anchor":"wajib verifikasi lokasi kejadian",
+         "validate_source_polarity":True},
+        {"source_id":"DOC-1-P8","anchor":"dokumentasi harus disimpan",
+         "validate_source_polarity":True},
+    ]
+    result=check("Petugas wajib verifikasi lokasi kejadian [DOC-1-P8]. "
+                 "Dokumentasi harus disimpan [DOC-1-P8].",
+                 requirements,evidence,["DOC-1-P8"])
+    assert result["status"]=="PASS_NARROW_LEXICAL_ONLY"
+    assert result["model_answer_accuracy"] is None

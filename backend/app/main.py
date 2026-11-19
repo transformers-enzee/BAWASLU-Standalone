@@ -866,7 +866,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         text,cited,meta=generate(q,previous,evidence,
             'GROUNDED' if requested=='DATA' or response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else 'HYBRID',
             history=history,
-            response_depth='EXECUTIVE' if response_profile==PDF_GUIDANCE else response_depth,
+            response_depth=response_depth,
             reference_catalog=reference_catalog,response_profile=response_profile,
             duplicate_groups=duplicate_groups)
     except AssistantProviderError as exc:

@@ -153,7 +153,9 @@ def summarize_authorized_saved_reply_batch(results):
                               "pdf_quoted_passage_alignment",
                               "requested_topic_coverage"}:
                     reason_counts[reason]+=1
-        elif state=="NO_DETERMINISTIC_FLAGS":
+        elif state=="NO_DETERMINISTIC_FLAGS" and triage.get("diagnostics_complete") is True:
+            # Never accept a claimed clean status without explicit proof
+            # that both the core and supplemental diagnostic sets completed.
             counts["NO_DETERMINISTIC_FLAGS"]+=1
         else:
             counts["UNASSESSED"]+=1

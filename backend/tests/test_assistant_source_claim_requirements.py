@@ -66,3 +66,27 @@ def test_unsupported_requirement_is_invalid():
                  [{"source_id":"DOC-1-P8","anchor":"wajib verifikasi lokasi kejadian",
                    "expected_polarity":"OTHER"}],pdf(),["DOC-1-P8"])
     assert result["review_items"][0]["reason"]=="INVALID_REQUIREMENT"
+
+
+def test_two_opposing_mentions_in_same_locally_cited_sentence():
+    result=check(
+        "Petugas wajib verifikasi lokasi kejadian tetapi petugas tidak wajib verifikasi lokasi kejadian [DOC-1-P8].",
+        req(),pdf(),["DOC-1-P8"])
+    assert result["status"]=="REVIEW_REQUIRED"
+    assert result["review_items"][0]["reason"]=="CONFLICTING_LOCAL_CLAIMS"
+
+
+def test_repeated_matching_mentions_do_not_create_false_conflict():
+    result=check(
+        "Petugas wajib verifikasi lokasi kejadian; tim nasional wajib verifikasi lokasi kejadian [DOC-1-P8].",
+        req(),pdf(),["DOC-1-P8"])
+    assert result["status"]=="PASS_NARROW_LEXICAL_ONLY"
+
+
+def test_cited_wrong_record_cannot_authorize_source_requirement():
+    records=pdf()+[{"record_id":"DOC-2-P8","record_type":"PDF_KNOWLEDGE",
+                    "source_excerpt":"Dokumen berbeda."}]
+    result=check("Petugas wajib verifikasi lokasi kejadian [DOC-2-P8].",
+                 req(),records,["DOC-2-P8"])
+    assert result["status"]=="REVIEW_REQUIRED"
+    assert result["review_items"][0]["reason"]=="NO_LOCALLY_CITED_ANCHOR"

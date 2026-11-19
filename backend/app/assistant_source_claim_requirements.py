@@ -56,10 +56,10 @@ def check_source_claim_requirements(answer, requirements, evidence, cited_ids):
                 continue
             # Evaluate only immediately preceding negation of the exact
             # anchor; more complex claims are explicitly out of scope.
-            matches = re.finditer(r"(?<!\\w)" + re.escape(anchor) + r"(?!\\w)", norm_span)
+            matches = re.finditer(r"(?<!\w)" + re.escape(anchor) + r"(?!\w)", norm_span)
             for match in matches:
                 before = norm_span[:match.start()]
-                negated = bool(re.search(r"\\b(?:tidak|bukan|belum)\\s+$", before))
+                negated = bool(re.search(r"\b(?:tidak|bukan|belum)\s+$", before))
                 candidates.append("NEGATIVE" if negated else "POSITIVE")
         if not candidates:
             issues.append({"requirement_index": index,

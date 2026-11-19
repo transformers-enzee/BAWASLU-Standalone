@@ -107,8 +107,18 @@ def build_authorized_saved_reply_review_packet(batch):
             "model_output_provenance_verified":False,
             "legal_signoff_verified":False,
         })
+    coverage=Counter(kind for task in tasks
+                     for kind in task["authorized_source_kinds"])
+    diagnostic_gaps=sum(not task["diagnostics_complete"] for task in tasks)
+    source_type_gaps=sum(not task["authorized_source_kinds"] for task in tasks)
+    multi_source_tasks=sum(len(task["authorized_source_kinds"])>1 for task in tasks)
     return {
         "schema":"BAWASLU_AUTHORIZED_SAVED_REPLY_REVIEW_PACKET_V17488",
+        "review_ready_by_authorized_source_kind":dict(sorted(coverage.items())),
+        "review_ready_with_incomplete_diagnostics":diagnostic_gaps,
+        "review_ready_without_source_type_metadata":source_type_gaps,
+        "review_ready_cross_source_replies":multi_source_tasks,
+        "coverage_counts_are_not_accuracy":True,
         "selection_method":"EXPLICIT_USER_SELECTED_REPLIES",
         "review_sample_is_representative":False,
         "requested_replies":len(rows),

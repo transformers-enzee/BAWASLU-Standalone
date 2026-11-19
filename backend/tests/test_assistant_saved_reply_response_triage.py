@@ -2,6 +2,7 @@
 import json
 from app.assistant_saved_reply_response_triage import (
     summarize_authorized_saved_reply_audit as summarize,
+    summarize_authorized_saved_reply_batch as summarize_batch,
 )
 
 
@@ -90,3 +91,49 @@ def test_single_and_batch_routes_use_same_redacted_builder():
     assert "response_quality_triage" in source
     assert "AssistantThread.user_id==user.id" in source
     assert "AssistantThread.user_id==user_id" in source
+
+
+
+def test_batch_summary_counts_only_authorized_audited_items():
+    rows=[
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"REVIEW_FLAGS_PRESENT",
+            "readiness_review_ids":["citation_grounding"]}},
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"NO_DETERMINISTIC_FLAGS"}},
+        {"status":"SOURCE_UNAVAILABLE","response_quality_triage":{
+            "status":"NO_DETERMINISTIC_FLAGS"}},
+        {"status":"INELIGIBLE"},
+    ]
+    result=summarize_batch(rows)
+    assert result["audited_with_review_flags"]==1
+    assert result["audited_without_detected_flags"]==1
+    assert result["unassessed_or_unavailable"]==2
+    assert result["core_review_reason_occurrences"]=={"citation_grounding":1}
+    assert result["human_accuracy"] is None
+    assert result["paid_ai_calls"]==0
+
+
+def test_batch_missing_triage_is_never_counted_as_accurate():
+    result=summarize_batch([
+        {"status":"AUDITED"},
+        {"status":"AUDITED","response_quality_triage":{"status":"UNKNOWN"}},
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"REVIEW_FLAGS_PRESENT","readiness_review_ids":[
+                "SECRET CONTENT","legal_uncertainty"]}},
+    ])
+    assert result["audited_without_detected_flags"]==0
+    assert result["unassessed_or_unavailable"]==2
+    assert result["audited_with_review_flags"]==1
+    assert result["core_review_reason_occurrences"]=={"legal_uncertainty":1}
+    assert "SECRET CONTENT" not in json.dumps(result)
+    assert result["no_flags_is_not_a_quality_pass"] is True
+
+
+def test_saved_history_batch_route_returns_aggregate_builder():
+    from pathlib import Path
+    text=(Path(__file__).resolve().parents[1]/
+          "app"/"assistant_saved_history_eval.py").read_text(encoding="utf-8")
+    assert '"response_quality_batch_triage":summarize_authorized_saved_reply_batch(output)' in text
+    assert "AssistantThread.user_id==user_id" in text
+    assert "resolve_mixed_audit_sources(db,batch_principal,audit)" in text

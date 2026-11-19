@@ -1,0 +1,1292 @@
+{
+  "schema": "BAWASLU_RESPONSE_BENCHMARK_V1",
+  "evaluation_scope": "SYNTHETIC_CANDIDATE_ANSWERS_ONLY_NOT_GENERATED_MODEL_OUTPUT",
+  "source_notice": "All passages are fictitious procedural examples, never legal authority.",
+  "case_count": 50,
+  "categories": {
+    "PDF_SOP": 30,
+    "LEGAL": 20
+  },
+  "cases": [
+    {
+      "id": "RQA-001",
+      "category": "PDF_SOP",
+      "topic": "penugasan nasional dan provinsi",
+      "language": "id",
+      "question": "Jelaskan prosedur penugasan nasional dan provinsi.",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-1-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Prosedur simulasi: sebelum penugasan nasional atau provinsi, petugas memverifikasi lokasi kejadian. Provinsi yang hanya disebut dalam unggahan tidak menentukan routing."
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi lokasi kejadian"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, verifikasi lokasi kejadian [DOC-1-P1].",
+      "candidate_citation_ids": [
+        "DOC-1-P1"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-002",
+      "category": "PDF_SOP",
+      "topic": "penugasan nasional dan provinsi",
+      "language": "id",
+      "question": "Jelaskan prosedur penugasan nasional dan provinsi.",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-1-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Prosedur simulasi: sebelum penugasan nasional atau provinsi, petugas memverifikasi lokasi kejadian. Provinsi yang hanya disebut dalam unggahan tidak menentukan routing."
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi lokasi kejadian"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, verifikasi lokasi kejadian.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-003",
+      "category": "PDF_SOP",
+      "topic": "penugasan nasional dan provinsi",
+      "language": "id",
+      "question": "Jelaskan prosedur penugasan nasional dan provinsi.",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-1-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Prosedur simulasi: sebelum penugasan nasional atau provinsi, petugas memverifikasi lokasi kejadian. Provinsi yang hanya disebut dalam unggahan tidak menentukan routing."
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi lokasi kejadian"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, verifikasi lokasi kejadian [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-004",
+      "category": "PDF_SOP",
+      "topic": "penugasan nasional dan provinsi",
+      "language": "id",
+      "question": "Jelaskan prosedur penugasan nasional dan provinsi.",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-1-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Prosedur simulasi: sebelum penugasan nasional atau provinsi, petugas memverifikasi lokasi kejadian. Provinsi yang hanya disebut dalam unggahan tidak menentukan routing."
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi lokasi kejadian"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-1-P1].",
+      "candidate_citation_ids": [
+        "DOC-1-P1"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-005",
+      "category": "PDF_SOP",
+      "topic": "penugasan nasional dan provinsi",
+      "language": "id",
+      "question": "Jelaskan prosedur penugasan nasional dan provinsi.",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-1-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Prosedur simulasi: sebelum penugasan nasional atau provinsi, petugas memverifikasi lokasi kejadian. Provinsi yang hanya disebut dalam unggahan tidak menentukan routing."
+        }
+      ],
+      "required_answer_points": [
+        "verifikasi lokasi kejadian"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-1-P1]",
+      "candidate_citation_ids": [
+        "DOC-1-P1"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-006",
+      "category": "PDF_SOP",
+      "topic": "pembatasan viewer",
+      "language": "id",
+      "question": "Apa batas kewenangan pengguna Viewer?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-2-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: akun Viewer hanya boleh membaca ringkasan yang berwenang. Viewer tidak boleh menugaskan petugas, mengubah hasil pemeriksaan, atau menyetujui kasus."
+        }
+      ],
+      "required_answer_points": [
+        "tidak boleh menugaskan petugas"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak boleh menugaskan petugas [DOC-2-P2].",
+      "candidate_citation_ids": [
+        "DOC-2-P2"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-007",
+      "category": "PDF_SOP",
+      "topic": "pembatasan viewer",
+      "language": "id",
+      "question": "Apa batas kewenangan pengguna Viewer?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-2-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: akun Viewer hanya boleh membaca ringkasan yang berwenang. Viewer tidak boleh menugaskan petugas, mengubah hasil pemeriksaan, atau menyetujui kasus."
+        }
+      ],
+      "required_answer_points": [
+        "tidak boleh menugaskan petugas"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak boleh menugaskan petugas.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-008",
+      "category": "PDF_SOP",
+      "topic": "pembatasan viewer",
+      "language": "id",
+      "question": "Apa batas kewenangan pengguna Viewer?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-2-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: akun Viewer hanya boleh membaca ringkasan yang berwenang. Viewer tidak boleh menugaskan petugas, mengubah hasil pemeriksaan, atau menyetujui kasus."
+        }
+      ],
+      "required_answer_points": [
+        "tidak boleh menugaskan petugas"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak boleh menugaskan petugas [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-009",
+      "category": "PDF_SOP",
+      "topic": "pembatasan viewer",
+      "language": "id",
+      "question": "Apa batas kewenangan pengguna Viewer?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-2-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: akun Viewer hanya boleh membaca ringkasan yang berwenang. Viewer tidak boleh menugaskan petugas, mengubah hasil pemeriksaan, atau menyetujui kasus."
+        }
+      ],
+      "required_answer_points": [
+        "tidak boleh menugaskan petugas"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-2-P2].",
+      "candidate_citation_ids": [
+        "DOC-2-P2"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-010",
+      "category": "PDF_SOP",
+      "topic": "pembatasan viewer",
+      "language": "id",
+      "question": "Apa batas kewenangan pengguna Viewer?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-2-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: akun Viewer hanya boleh membaca ringkasan yang berwenang. Viewer tidak boleh menugaskan petugas, mengubah hasil pemeriksaan, atau menyetujui kasus."
+        }
+      ],
+      "required_answer_points": [
+        "tidak boleh menugaskan petugas"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-2-P2]",
+      "candidate_citation_ids": [
+        "DOC-2-P2"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-011",
+      "category": "PDF_SOP",
+      "topic": "pengamanan bukti digital",
+      "language": "id",
+      "question": "Bagaimana cara mengamankan bukti digital?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-3-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas mencatat URL asal, waktu akses, tangkapan layar, dan penanggung jawab penyimpanan bukti; catatan perubahan dijaga agar alur penguasaan bukti dapat ditelusuri."
+        }
+      ],
+      "required_answer_points": [
+        "mencatat URL asal"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, mencatat URL asal [DOC-3-P3].",
+      "candidate_citation_ids": [
+        "DOC-3-P3"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-012",
+      "category": "PDF_SOP",
+      "topic": "pengamanan bukti digital",
+      "language": "id",
+      "question": "Bagaimana cara mengamankan bukti digital?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-3-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas mencatat URL asal, waktu akses, tangkapan layar, dan penanggung jawab penyimpanan bukti; catatan perubahan dijaga agar alur penguasaan bukti dapat ditelusuri."
+        }
+      ],
+      "required_answer_points": [
+        "mencatat URL asal"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, mencatat URL asal.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-013",
+      "category": "PDF_SOP",
+      "topic": "pengamanan bukti digital",
+      "language": "id",
+      "question": "Bagaimana cara mengamankan bukti digital?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-3-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas mencatat URL asal, waktu akses, tangkapan layar, dan penanggung jawab penyimpanan bukti; catatan perubahan dijaga agar alur penguasaan bukti dapat ditelusuri."
+        }
+      ],
+      "required_answer_points": [
+        "mencatat URL asal"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, mencatat URL asal [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-014",
+      "category": "PDF_SOP",
+      "topic": "pengamanan bukti digital",
+      "language": "id",
+      "question": "Bagaimana cara mengamankan bukti digital?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-3-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas mencatat URL asal, waktu akses, tangkapan layar, dan penanggung jawab penyimpanan bukti; catatan perubahan dijaga agar alur penguasaan bukti dapat ditelusuri."
+        }
+      ],
+      "required_answer_points": [
+        "mencatat URL asal"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-3-P3].",
+      "candidate_citation_ids": [
+        "DOC-3-P3"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-015",
+      "category": "PDF_SOP",
+      "topic": "pengamanan bukti digital",
+      "language": "id",
+      "question": "Bagaimana cara mengamankan bukti digital?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-3-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas mencatat URL asal, waktu akses, tangkapan layar, dan penanggung jawab penyimpanan bukti; catatan perubahan dijaga agar alur penguasaan bukti dapat ditelusuri."
+        }
+      ],
+      "required_answer_points": [
+        "mencatat URL asal"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-3-P3]",
+      "candidate_citation_ids": [
+        "DOC-3-P3"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-016",
+      "category": "PDF_SOP",
+      "topic": "duplikasi kasus",
+      "language": "id",
+      "question": "Bagaimana mencegah duplikasi penugasan kasus?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-4-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: sebelum membuat penugasan baru, petugas memeriksa identitas unggahan, URL asli, dan hubungan dengan kasus sebelumnya untuk menghindari penugasan ganda."
+        }
+      ],
+      "required_answer_points": [
+        "memeriksa identitas unggahan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memeriksa identitas unggahan [DOC-4-P4].",
+      "candidate_citation_ids": [
+        "DOC-4-P4"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-017",
+      "category": "PDF_SOP",
+      "topic": "duplikasi kasus",
+      "language": "id",
+      "question": "Bagaimana mencegah duplikasi penugasan kasus?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-4-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: sebelum membuat penugasan baru, petugas memeriksa identitas unggahan, URL asli, dan hubungan dengan kasus sebelumnya untuk menghindari penugasan ganda."
+        }
+      ],
+      "required_answer_points": [
+        "memeriksa identitas unggahan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memeriksa identitas unggahan.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-018",
+      "category": "PDF_SOP",
+      "topic": "duplikasi kasus",
+      "language": "id",
+      "question": "Bagaimana mencegah duplikasi penugasan kasus?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-4-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: sebelum membuat penugasan baru, petugas memeriksa identitas unggahan, URL asli, dan hubungan dengan kasus sebelumnya untuk menghindari penugasan ganda."
+        }
+      ],
+      "required_answer_points": [
+        "memeriksa identitas unggahan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memeriksa identitas unggahan [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-019",
+      "category": "PDF_SOP",
+      "topic": "duplikasi kasus",
+      "language": "id",
+      "question": "Bagaimana mencegah duplikasi penugasan kasus?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-4-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: sebelum membuat penugasan baru, petugas memeriksa identitas unggahan, URL asli, dan hubungan dengan kasus sebelumnya untuk menghindari penugasan ganda."
+        }
+      ],
+      "required_answer_points": [
+        "memeriksa identitas unggahan"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-4-P4].",
+      "candidate_citation_ids": [
+        "DOC-4-P4"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-020",
+      "category": "PDF_SOP",
+      "topic": "duplikasi kasus",
+      "language": "id",
+      "question": "Bagaimana mencegah duplikasi penugasan kasus?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-4-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: sebelum membuat penugasan baru, petugas memeriksa identitas unggahan, URL asli, dan hubungan dengan kasus sebelumnya untuk menghindari penugasan ganda."
+        }
+      ],
+      "required_answer_points": [
+        "memeriksa identitas unggahan"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-4-P4]",
+      "candidate_citation_ids": [
+        "DOC-4-P4"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-021",
+      "category": "PDF_SOP",
+      "topic": "sentimen manual",
+      "language": "id",
+      "question": "Bagaimana petugas mengoreksi sentimen AI?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-5-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Petunjuk simulasi: sentimen dari AI adalah usulan analitis, bukan keputusan petugas. Perubahan sentimen manual harus menyimpan label baru, alasan, dan identitas pemeriksa."
+        }
+      ],
+      "required_answer_points": [
+        "alasan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, alasan [DOC-5-P5].",
+      "candidate_citation_ids": [
+        "DOC-5-P5"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-022",
+      "category": "PDF_SOP",
+      "topic": "sentimen manual",
+      "language": "id",
+      "question": "Bagaimana petugas mengoreksi sentimen AI?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-5-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Petunjuk simulasi: sentimen dari AI adalah usulan analitis, bukan keputusan petugas. Perubahan sentimen manual harus menyimpan label baru, alasan, dan identitas pemeriksa."
+        }
+      ],
+      "required_answer_points": [
+        "alasan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, alasan.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-023",
+      "category": "PDF_SOP",
+      "topic": "sentimen manual",
+      "language": "id",
+      "question": "Bagaimana petugas mengoreksi sentimen AI?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-5-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Petunjuk simulasi: sentimen dari AI adalah usulan analitis, bukan keputusan petugas. Perubahan sentimen manual harus menyimpan label baru, alasan, dan identitas pemeriksa."
+        }
+      ],
+      "required_answer_points": [
+        "alasan"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, alasan [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-024",
+      "category": "PDF_SOP",
+      "topic": "sentimen manual",
+      "language": "id",
+      "question": "Bagaimana petugas mengoreksi sentimen AI?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-5-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Petunjuk simulasi: sentimen dari AI adalah usulan analitis, bukan keputusan petugas. Perubahan sentimen manual harus menyimpan label baru, alasan, dan identitas pemeriksa."
+        }
+      ],
+      "required_answer_points": [
+        "alasan"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-5-P5].",
+      "candidate_citation_ids": [
+        "DOC-5-P5"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-025",
+      "category": "PDF_SOP",
+      "topic": "sentimen manual",
+      "language": "id",
+      "question": "Bagaimana petugas mengoreksi sentimen AI?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-5-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Petunjuk simulasi: sentimen dari AI adalah usulan analitis, bukan keputusan petugas. Perubahan sentimen manual harus menyimpan label baru, alasan, dan identitas pemeriksa."
+        }
+      ],
+      "required_answer_points": [
+        "alasan"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-5-P5]",
+      "candidate_citation_ids": [
+        "DOC-5-P5"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-026",
+      "category": "PDF_SOP",
+      "topic": "dokumen belum ditinjau",
+      "language": "id",
+      "question": "Apakah PDF belum ditinjau boleh menjadi SOP resmi?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-6-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: dokumen yang belum ditinjau tidak dapat dianggap SOP resmi. Petugas harus membedakan teks simulasi dari peraturan yang berlaku."
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat dianggap SOP resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak dapat dianggap SOP resmi [DOC-6-P6].",
+      "candidate_citation_ids": [
+        "DOC-6-P6"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-027",
+      "category": "PDF_SOP",
+      "topic": "dokumen belum ditinjau",
+      "language": "id",
+      "question": "Apakah PDF belum ditinjau boleh menjadi SOP resmi?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-6-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: dokumen yang belum ditinjau tidak dapat dianggap SOP resmi. Petugas harus membedakan teks simulasi dari peraturan yang berlaku."
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat dianggap SOP resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak dapat dianggap SOP resmi.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-028",
+      "category": "PDF_SOP",
+      "topic": "dokumen belum ditinjau",
+      "language": "id",
+      "question": "Apakah PDF belum ditinjau boleh menjadi SOP resmi?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-6-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: dokumen yang belum ditinjau tidak dapat dianggap SOP resmi. Petugas harus membedakan teks simulasi dari peraturan yang berlaku."
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat dianggap SOP resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak dapat dianggap SOP resmi [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-029",
+      "category": "PDF_SOP",
+      "topic": "dokumen belum ditinjau",
+      "language": "id",
+      "question": "Apakah PDF belum ditinjau boleh menjadi SOP resmi?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-6-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: dokumen yang belum ditinjau tidak dapat dianggap SOP resmi. Petugas harus membedakan teks simulasi dari peraturan yang berlaku."
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat dianggap SOP resmi"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-6-P6].",
+      "candidate_citation_ids": [
+        "DOC-6-P6"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-030",
+      "category": "PDF_SOP",
+      "topic": "dokumen belum ditinjau",
+      "language": "id",
+      "question": "Apakah PDF belum ditinjau boleh menjadi SOP resmi?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-6-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: dokumen yang belum ditinjau tidak dapat dianggap SOP resmi. Petugas harus membedakan teks simulasi dari peraturan yang berlaku."
+        }
+      ],
+      "required_answer_points": [
+        "tidak dapat dianggap SOP resmi"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-6-P6]",
+      "candidate_citation_ids": [
+        "DOC-6-P6"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-031",
+      "category": "LEGAL",
+      "topic": "dugaan pelanggaran",
+      "language": "id",
+      "question": "Apakah unggahan sosial membuktikan pelanggaran?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-7-P7",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: unggahan sosial adalah petunjuk awal. Dugaan pelanggaran membutuhkan pemeriksaan fakta, sumber, ruang lingkup hukum, dan keputusan pejabat berwenang; unggahan saja bukan putusan resmi."
+        }
+      ],
+      "required_answer_points": [
+        "unggahan saja bukan putusan resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, unggahan saja bukan putusan resmi [DOC-7-P7].",
+      "candidate_citation_ids": [
+        "DOC-7-P7"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-032",
+      "category": "LEGAL",
+      "topic": "dugaan pelanggaran",
+      "language": "id",
+      "question": "Apakah unggahan sosial membuktikan pelanggaran?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-7-P7",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: unggahan sosial adalah petunjuk awal. Dugaan pelanggaran membutuhkan pemeriksaan fakta, sumber, ruang lingkup hukum, dan keputusan pejabat berwenang; unggahan saja bukan putusan resmi."
+        }
+      ],
+      "required_answer_points": [
+        "unggahan saja bukan putusan resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, unggahan saja bukan putusan resmi.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-033",
+      "category": "LEGAL",
+      "topic": "dugaan pelanggaran",
+      "language": "id",
+      "question": "Apakah unggahan sosial membuktikan pelanggaran?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-7-P7",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: unggahan sosial adalah petunjuk awal. Dugaan pelanggaran membutuhkan pemeriksaan fakta, sumber, ruang lingkup hukum, dan keputusan pejabat berwenang; unggahan saja bukan putusan resmi."
+        }
+      ],
+      "required_answer_points": [
+        "unggahan saja bukan putusan resmi"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, unggahan saja bukan putusan resmi [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-034",
+      "category": "LEGAL",
+      "topic": "dugaan pelanggaran",
+      "language": "id",
+      "question": "Apakah unggahan sosial membuktikan pelanggaran?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-7-P7",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: unggahan sosial adalah petunjuk awal. Dugaan pelanggaran membutuhkan pemeriksaan fakta, sumber, ruang lingkup hukum, dan keputusan pejabat berwenang; unggahan saja bukan putusan resmi."
+        }
+      ],
+      "required_answer_points": [
+        "unggahan saja bukan putusan resmi"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-7-P7].",
+      "candidate_citation_ids": [
+        "DOC-7-P7"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-035",
+      "category": "LEGAL",
+      "topic": "dugaan pelanggaran",
+      "language": "id",
+      "question": "Apakah unggahan sosial membuktikan pelanggaran?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-7-P7",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pedoman simulasi: unggahan sosial adalah petunjuk awal. Dugaan pelanggaran membutuhkan pemeriksaan fakta, sumber, ruang lingkup hukum, dan keputusan pejabat berwenang; unggahan saja bukan putusan resmi."
+        }
+      ],
+      "required_answer_points": [
+        "unggahan saja bukan putusan resmi"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-7-P7]",
+      "candidate_citation_ids": [
+        "DOC-7-P7"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-036",
+      "category": "LEGAL",
+      "topic": "takedown vs hukum",
+      "language": "id",
+      "question": "Apa perbedaan takedown platform dan tindak lanjut hukum?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-8-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan simulasi: moderasi atau takedown ditentukan berdasarkan aturan platform. Tindak lanjut hukum pemilu adalah proses terpisah yang mensyaratkan penilaian fakta oleh pejabat berwenang."
+        }
+      ],
+      "required_answer_points": [
+        "proses terpisah"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, proses terpisah [DOC-8-P8].",
+      "candidate_citation_ids": [
+        "DOC-8-P8"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-037",
+      "category": "LEGAL",
+      "topic": "takedown vs hukum",
+      "language": "id",
+      "question": "Apa perbedaan takedown platform dan tindak lanjut hukum?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-8-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan simulasi: moderasi atau takedown ditentukan berdasarkan aturan platform. Tindak lanjut hukum pemilu adalah proses terpisah yang mensyaratkan penilaian fakta oleh pejabat berwenang."
+        }
+      ],
+      "required_answer_points": [
+        "proses terpisah"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, proses terpisah.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-038",
+      "category": "LEGAL",
+      "topic": "takedown vs hukum",
+      "language": "id",
+      "question": "Apa perbedaan takedown platform dan tindak lanjut hukum?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-8-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan simulasi: moderasi atau takedown ditentukan berdasarkan aturan platform. Tindak lanjut hukum pemilu adalah proses terpisah yang mensyaratkan penilaian fakta oleh pejabat berwenang."
+        }
+      ],
+      "required_answer_points": [
+        "proses terpisah"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, proses terpisah [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-039",
+      "category": "LEGAL",
+      "topic": "takedown vs hukum",
+      "language": "id",
+      "question": "Apa perbedaan takedown platform dan tindak lanjut hukum?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-8-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan simulasi: moderasi atau takedown ditentukan berdasarkan aturan platform. Tindak lanjut hukum pemilu adalah proses terpisah yang mensyaratkan penilaian fakta oleh pejabat berwenang."
+        }
+      ],
+      "required_answer_points": [
+        "proses terpisah"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-8-P8].",
+      "candidate_citation_ids": [
+        "DOC-8-P8"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-040",
+      "category": "LEGAL",
+      "topic": "takedown vs hukum",
+      "language": "id",
+      "question": "Apa perbedaan takedown platform dan tindak lanjut hukum?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-8-P8",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan simulasi: moderasi atau takedown ditentukan berdasarkan aturan platform. Tindak lanjut hukum pemilu adalah proses terpisah yang mensyaratkan penilaian fakta oleh pejabat berwenang."
+        }
+      ],
+      "required_answer_points": [
+        "proses terpisah"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-8-P8]",
+      "candidate_citation_ids": [
+        "DOC-8-P8"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-041",
+      "category": "LEGAL",
+      "topic": "ruang lingkup pemilu",
+      "language": "id",
+      "question": "Bagaimana membedakan penanganan Pemilu dan Pilkada?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-9-P9",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas memverifikasi apakah kejadian terkait Pemilu atau Pilkada sebelum memilih referensi hukum. Judul dokumen yang mirip tidak membuktikan penerapan hukum."
+        }
+      ],
+      "required_answer_points": [
+        "memverifikasi apakah kejadian terkait Pemilu atau Pilkada"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memverifikasi apakah kejadian terkait Pemilu atau Pilkada [DOC-9-P9].",
+      "candidate_citation_ids": [
+        "DOC-9-P9"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-042",
+      "category": "LEGAL",
+      "topic": "ruang lingkup pemilu",
+      "language": "id",
+      "question": "Bagaimana membedakan penanganan Pemilu dan Pilkada?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-9-P9",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas memverifikasi apakah kejadian terkait Pemilu atau Pilkada sebelum memilih referensi hukum. Judul dokumen yang mirip tidak membuktikan penerapan hukum."
+        }
+      ],
+      "required_answer_points": [
+        "memverifikasi apakah kejadian terkait Pemilu atau Pilkada"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memverifikasi apakah kejadian terkait Pemilu atau Pilkada.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-043",
+      "category": "LEGAL",
+      "topic": "ruang lingkup pemilu",
+      "language": "id",
+      "question": "Bagaimana membedakan penanganan Pemilu dan Pilkada?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-9-P9",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas memverifikasi apakah kejadian terkait Pemilu atau Pilkada sebelum memilih referensi hukum. Judul dokumen yang mirip tidak membuktikan penerapan hukum."
+        }
+      ],
+      "required_answer_points": [
+        "memverifikasi apakah kejadian terkait Pemilu atau Pilkada"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, memverifikasi apakah kejadian terkait Pemilu atau Pilkada [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-044",
+      "category": "LEGAL",
+      "topic": "ruang lingkup pemilu",
+      "language": "id",
+      "question": "Bagaimana membedakan penanganan Pemilu dan Pilkada?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-9-P9",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas memverifikasi apakah kejadian terkait Pemilu atau Pilkada sebelum memilih referensi hukum. Judul dokumen yang mirip tidak membuktikan penerapan hukum."
+        }
+      ],
+      "required_answer_points": [
+        "memverifikasi apakah kejadian terkait Pemilu atau Pilkada"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-9-P9].",
+      "candidate_citation_ids": [
+        "DOC-9-P9"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-045",
+      "category": "LEGAL",
+      "topic": "ruang lingkup pemilu",
+      "language": "id",
+      "question": "Bagaimana membedakan penanganan Pemilu dan Pilkada?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-9-P9",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: petugas memverifikasi apakah kejadian terkait Pemilu atau Pilkada sebelum memilih referensi hukum. Judul dokumen yang mirip tidak membuktikan penerapan hukum."
+        }
+      ],
+      "required_answer_points": [
+        "memverifikasi apakah kejadian terkait Pemilu atau Pilkada"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-9-P9]",
+      "candidate_citation_ids": [
+        "DOC-9-P9"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-046",
+      "category": "LEGAL",
+      "topic": "pasal dan berlaku",
+      "language": "id",
+      "question": "Apakah nomor pasal dan sanksi di PDF pasti masih berlaku?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-10-P10",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: klaim Pasal, ancaman sanksi, dan tanggal berlaku memerlukan pencocokan dengan naskah resmi dan revisinya. Kutipan PDF tidak otomatis memverifikasi status hukum terbaru."
+        }
+      ],
+      "required_answer_points": [
+        "tidak otomatis memverifikasi status hukum terbaru"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak otomatis memverifikasi status hukum terbaru [DOC-10-P10].",
+      "candidate_citation_ids": [
+        "DOC-10-P10"
+      ],
+      "expected_detection": "PASS",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-047",
+      "category": "LEGAL",
+      "topic": "pasal dan berlaku",
+      "language": "id",
+      "question": "Apakah nomor pasal dan sanksi di PDF pasti masih berlaku?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-10-P10",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: klaim Pasal, ancaman sanksi, dan tanggal berlaku memerlukan pencocokan dengan naskah resmi dan revisinya. Kutipan PDF tidak otomatis memverifikasi status hukum terbaru."
+        }
+      ],
+      "required_answer_points": [
+        "tidak otomatis memverifikasi status hukum terbaru"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak otomatis memverifikasi status hukum terbaru.",
+      "candidate_citation_ids": [],
+      "expected_detection": "MISSING_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-048",
+      "category": "LEGAL",
+      "topic": "pasal dan berlaku",
+      "language": "id",
+      "question": "Apakah nomor pasal dan sanksi di PDF pasti masih berlaku?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-10-P10",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: klaim Pasal, ancaman sanksi, dan tanggal berlaku memerlukan pencocokan dengan naskah resmi dan revisinya. Kutipan PDF tidak otomatis memverifikasi status hukum terbaru."
+        }
+      ],
+      "required_answer_points": [
+        "tidak otomatis memverifikasi status hukum terbaru"
+      ],
+      "candidate_answer": "Menurut dokumen simulasi, tidak otomatis memverifikasi status hukum terbaru [DOC-99-P99].",
+      "candidate_citation_ids": [
+        "DOC-99-P99"
+      ],
+      "expected_detection": "UNAUTHORIZED_CITATION",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-049",
+      "category": "LEGAL",
+      "topic": "pasal dan berlaku",
+      "language": "id",
+      "question": "Apakah nomor pasal dan sanksi di PDF pasti masih berlaku?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-10-P10",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: klaim Pasal, ancaman sanksi, dan tanggal berlaku memerlukan pencocokan dengan naskah resmi dan revisinya. Kutipan PDF tidak otomatis memverifikasi status hukum terbaru."
+        }
+      ],
+      "required_answer_points": [
+        "tidak otomatis memverifikasi status hukum terbaru"
+      ],
+      "candidate_answer": "Dokumen menyatakan “pejabat otomatis menetapkan pelanggaran tanpa bukti” [DOC-10-P10].",
+      "candidate_citation_ids": [
+        "DOC-10-P10"
+      ],
+      "expected_detection": "QUOTATION_MISMATCH",
+      "synthetic_only": true
+    },
+    {
+      "id": "RQA-050",
+      "category": "LEGAL",
+      "topic": "pasal dan berlaku",
+      "language": "id",
+      "question": "Apakah nomor pasal dan sanksi di PDF pasti masih berlaku?",
+      "profile": "PDF_GUIDANCE",
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-10-P10",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Panduan simulasi: klaim Pasal, ancaman sanksi, dan tanggal berlaku memerlukan pencocokan dengan naskah resmi dan revisinya. Kutipan PDF tidak otomatis memverifikasi status hukum terbaru."
+        }
+      ],
+      "required_answer_points": [
+        "tidak otomatis memverifikasi status hukum terbaru"
+      ],
+      "candidate_answer": "BAWASLU telah menetapkan pelanggaran. [DOC-10-P10]",
+      "candidate_citation_ids": [
+        "DOC-10-P10"
+      ],
+      "expected_detection": "UNSUPPORTED_FORMAL_OUTCOME",
+      "synthetic_only": true
+    }
+  ]
+}

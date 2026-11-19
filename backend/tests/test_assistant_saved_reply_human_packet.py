@@ -90,3 +90,47 @@ def test_unavailable_records_are_not_in_review_packet():
     assert packet["ineligible_or_unavailable_replies"]==3
     assert packet["items"]==[]
     assert packet["human_review_completed"] is False
+
+
+
+def test_review_focus_distinguishes_pdf_and_cross_source_claims():
+    pdf=row()
+    pdf["response_quality_triage"]["diagnostics_complete"]=True
+    pdf["selected_source_kinds"]={
+        "PDF_KNOWLEDGE":2,"SOCIAL_LISTENING":1}
+    report=build(batch([pdf]))
+    task=report["items"][0]
+    assert task["authorized_source_kinds"]==[
+        "PDF_KNOWLEDGE","SOCIAL_LISTENING"]
+    assert "VERIFY_EXACT_PDF_PAGE_QUOTE_AND_DOCUMENT_VERSION" in task[
+        "manual_review_focus"]
+    assert "VERIFY_PAGE_LEVEL_CITATIONS_MATCH_ANSWER_CLAIMS" in task[
+        "manual_review_focus"]
+    assert "VERIFY_EACH_CROSS_SOURCE_CLAIM_INDEPENDENTLY" in task[
+        "manual_review_focus"]
+    assert report["human_review_completed"] is False
+
+
+def test_unknown_source_kinds_and_private_metadata_are_never_echoed():
+    suspicious=row()
+    suspicious["selected_source_kinds"]={
+        "PRIVATE_PDF_TITLE_AND_SECRET":7,"PDF_KNOWLEDGE":1}
+    suspicious["answer_text"]="PRIVATE ANSWER CONTENT"
+    suspicious["response_quality_triage"]["diagnostics_complete"]=False
+    report=build(batch([suspicious]))
+    item=report["items"][0]
+    assert item["authorized_source_kinds"]==["PDF_KNOWLEDGE"]
+    assert "REPEAT_MISSING_DIAGNOSTIC_CHECKS" in item["manual_review_focus"]
+    serialized=json.dumps(report)
+    assert "PRIVATE_" not in serialized
+    assert "PRIVATE ANSWER CONTENT" not in serialized
+
+
+def test_absent_source_types_require_manual_type_recheck():
+    report=build(batch([row()]))
+    task=report["items"][0]
+    assert task["authorized_source_kinds"]==[]
+    assert "RECHECK_SOURCE_TYPE_AND_AUTHORIZATION" in task[
+        "manual_review_focus"]
+    assert "CHECK_ALLEGATION_VERSUS_FORMAL_LEGAL_DETERMINATION" in task[
+        "manual_review_focus"]

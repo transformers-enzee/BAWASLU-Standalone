@@ -23,6 +23,11 @@ def _request(thread=OWNED, index=1, submit=True, ratings=None, **flags):
         submissions=[SavedReplyReviewerRating(
             thread_id=thread,answer_message_index=index,
             ratings=ratings or {x:"PASS" for x in DIMENSIONS},
+            answer_revision_token=flags.get("answer_revision_token",
+                module._saved_reply_revision_token(
+                    "What does saved monitoring support?",
+                    "One post raises a concern [SOCIAL-7].",
+                    ["SOCIAL-7"])),
             original_answer_reviewed=flags.get("original_answer_reviewed",True),
             source_material_reviewed=flags.get("source_material_reviewed",True),
             independent_review_attested=flags.get("independent_review_attested",True))]
@@ -216,3 +221,37 @@ def test_pdf_page_access_denial_excludes_human_review(session,monkeypatch):
         saved_reply_human_review(req,Response(),current(),session)
     assert error.value.status_code==422
     assert "Private revoked PDF title" not in str(error.value.detail)
+
+
+
+def test_saved_answer_edit_invalidates_prepared_review(session,monkeypatch):
+    from app.assistant_history import AssistantThread
+    _access(monkeypatch)
+    _sources(monkeypatch)
+    prepared=_request()
+    saved=session.query(AssistantThread).filter(AssistantThread.id==OWNED).one()
+    original=json.loads(saved.messages_json)
+    modified=json.loads(saved.messages_json)
+    modified[1]["text"]="An edited claim now requires fresh verification [SOCIAL-7]."
+    saved.messages_json=json.dumps(modified)
+    session.commit()
+    try:
+        result=saved_reply_human_review(
+            prepared,Response(),current(),session)
+        assert result["scores"]["complete_self_attested_reviews"]==0
+        assert result["scores"]["review_disposition_counts"][
+            "STALE_OR_UNBOUND_ANSWER_REVISION"]==1
+        assert result["scores"]["model_output_provenance_verified"] is False
+    finally:
+        saved.messages_json=json.dumps(original)
+        session.commit()
+
+
+def test_new_revision_matches_fresh_review_only(session,monkeypatch):
+    _access(monkeypatch)
+    _sources(monkeypatch)
+    current_request=_request()
+    result=saved_reply_human_review(
+        current_request,Response(),current(),session)
+    assert result["scores"]["complete_self_attested_reviews"]==1
+    assert result["scores"]["revision_token_does_not_verify_live_source_content"] is True

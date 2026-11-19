@@ -16,20 +16,35 @@ concurrency:
 
 jobs:
   assistant-regressions:
-    name: Assistant deterministic contract checks (no AI billing)
+    name: Deterministic assistant QA (no live AI or staging)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       OPENAI_API_KEY: ""
       SOCIALCRAWL_API_KEY: ""
       DATABASE_URL: "sqlite:///:memory:"
+      PYTHONPATH: "."
       CI: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run assistant source, legal, and saved-answer contracts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend QA dependencies
+        working-directory: backend
+        run: python -m pip install -r requirements.txt
+      - name: Run actual deterministic answer-quality and saved-answer tests
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q             tests/test_assistant_full_answer_replay_v1607.py             tests/test_saved_answer_audit_v1608.py             tests/test_legal_indonesian_modalities_v1600.py
+      - name: Run eight frontend-to-backend regression contracts
         shell: bash
         working-directory: frontend
         run: |
@@ -42,17 +57,17 @@ jobs:
           node scripts/test-full-answer-replay-v1607.mjs
           node scripts/test-saved-answer-audit-v1608.mjs
           node scripts/test-assistant-retrieval-v1640.mjs
-      - name: Publish QA scope and evidence
+      - name: Summarize QA evidence and limitations
         if: always()
         shell: bash
         run: |
           {
             echo "## BAWASLU offline assistant QA"
             echo ""
-            echo "- Commit: \`${GITHUB_SHA}\`"
-            echo "- Eight deterministic Node.js assistant contract checks"
-            echo "- External APIs: disabled; OpenAI and Socialcrawl credentials empty"
-            echo "- Supabase: not contacted"
-            echo "- This job does **not** measure live model factual accuracy, legal correctness, or real PDF citation fidelity."
-            echo "- Those acceptance checks remain pending human/staging validation."
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Deterministic Python tests: synthetic full-answer replay, saved-answer audit and Indonesian legal polarity"
+            echo "- Eight Node.js source-to-UI contract checks"
+            echo "- AI and Socialcrawl keys intentionally empty; local in-memory SQLite"
+            echo "- Not a live model run, real PDF source audit, or independent legal accuracy evaluation"
+            echo "- Officer acceptance and live staging QA remain pending"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -10,7 +10,11 @@ from .geography import REGENCIES, PROVINCE_BY_CODE
 _INCIDENT_WORDS=re.compile(
     r'(?<!\w)(?:dugaan|pelanggaran|insiden|kejadian|kasus|kecurangan|'
     r'pemungutan|pencoblosan|mencoblos|penyalahgunaan|peristiwa|'
-    r'kericuhan|laporan|temuan|pemilu|pilkada)(?!\w)',re.I)
+    r'kericuhan|laporan|temuan)(?!\w)',re.I)
+_NEGATED_INCIDENT=re.compile(
+    r'(?<!\w)(?:tidak\s+ada|tidak\s+ditemukan|bukan|hoaks|'
+    r'tidak\s+benar(?:\s+bahwa)?)\s+(?:dugaan|pelanggaran|'
+    r'insiden|kasus|laporan|kecurangan)(?!\w)',re.I)
 _NO_INFERENCE=re.compile(
     r'\b(?:akun|profil|pengguna|berasal|domisili|alamat|kantor|'
     r'sekretariat|berkantor|markas|berbasis|organisasi|'
@@ -61,7 +65,8 @@ def incident_regency_candidates(text):
             # Exclude profile/address contexts, even when a nearby source
             # contains a seemingly relevant incident term.
             trailing=before[max(before.rfind(','),before.rfind(':'),0):]
-            if not _INCIDENT_WORDS.search(before) or _NO_INFERENCE.search(trailing):
+            if (not _INCIDENT_WORDS.search(before) or _NO_INFERENCE.search(trailing)
+                    or _NEGATED_INCIDENT.search(before)):
                 continue
             names=[match.group('name')]
             after=sentence[match.end():]

@@ -32,8 +32,6 @@ def evaluate_policy_boundary(question,evidence,answer,cited_ids,grounding=None):
     cited=set(str(r) for r in cited_ids or [] if str(r) in selected)
     legal_refs={ref for ref in cited if selected[ref].get("record_type")=="PDF_KNOWLEDGE"
                 and selected[ref].get("document_type") in {"REGULATION","SOP","GUIDANCE"}}
-    if not legal_refs:
-        return base
     flags=[]
     spans=_SENTENCE.split(str(answer or ""))
     for i,span in enumerate(spans):
@@ -53,10 +51,23 @@ def evaluate_policy_boundary(question,evidence,answer,cited_ids,grounding=None):
             if following and not _CITE.sub("",following).strip():
                 local_legal=[ref for ref in legal_refs
                              if "["+ref+"]" in following]
-        if local_legal:
-            flags.append({"claim_index":i+1,
-                          "cited_legal_page_ids":sorted(local_legal)[:12],
-                          "reason":"PLATFORM_VERDICT_CITED_TO_ELECTORAL_LEGAL_REFERENCE"})
+        # Social posts document statements, not a platform's adjudication.
+        # A categorical moderation verdict with no local authorized provider
+        # policy/decision evidence must be routed to human review. The current
+        # Assistant evidence model does not include verified provider decisions.
+        local_cited=[ref for ref in cited if "["+ref+"]" in span]
+        if not local_cited and i+1<len(spans):
+            following=spans[i+1].strip()
+            if following and not _CITE.sub("",following).strip():
+                local_cited=[ref for ref in cited if "["+ref+"]" in following]
+        reason=("PLATFORM_VERDICT_CITED_TO_ELECTORAL_LEGAL_REFERENCE"
+                if local_legal else
+                "PLATFORM_VERDICT_NO_LOCAL_AUTHORIZED_CITATION"
+                if not local_cited else
+                "PLATFORM_VERDICT_WITHOUT_VERIFIED_PROVIDER_DECISION")
+        flags.append({"claim_index":i+1,
+                      "cited_legal_page_ids":sorted(local_legal)[:12],
+                      "reason":reason})
     return {**base,"status":"REVIEW_REQUIRED" if flags else "NOT_APPLICABLE",
             "possible_platform_policy_verdicts":len(flags),
             "review_items":flags[:12]}

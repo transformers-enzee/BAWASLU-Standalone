@@ -24,10 +24,12 @@ def _request(thread=OWNED, index=1, submit=True, ratings=None, **flags):
             thread_id=thread,answer_message_index=index,
             ratings=ratings or {x:"PASS" for x in DIMENSIONS},
             answer_revision_token=flags.get("answer_revision_token",
-                module._saved_reply_revision_token(
+                module._saved_reply_evidence_snapshot_token(
                     "What does saved monitoring support?",
                     "One post raises a concern [SOCIAL-7].",
-                    ["SOCIAL-7"])),
+                    ["SOCIAL-7"],
+                    [{"record_id":"SOCIAL-7","record_type":"SOCIAL_LISTENING",
+                      "source_excerpt":"PRIVATE LIVE AUTHORIZED SOURCE TEXT"}])),
             original_answer_reviewed=flags.get("original_answer_reviewed",True),
             source_material_reviewed=flags.get("source_material_reviewed",True),
             independent_review_attested=flags.get("independent_review_attested",True))]
@@ -255,3 +257,43 @@ def test_new_revision_matches_fresh_review_only(session,monkeypatch):
         current_request,Response(),current(),session)
     assert result["scores"]["complete_self_attested_reviews"]==1
     assert result["scores"]["revision_token_does_not_verify_live_source_content"] is True
+
+
+
+def test_changed_authorized_source_excerpt_invalidates_prior_review(session,monkeypatch):
+    _access(monkeypatch)
+    prepared=_request()
+    seen=[]
+    def changed(db,principal,selection):
+        seen.append(list(selection.source_ids))
+        return [{"record_id":"SOCIAL-7","record_type":"SOCIAL_LISTENING",
+                 "source_excerpt":"CHANGED LIVE AUTHORIZED SOURCE TEXT"}]
+    monkeypatch.setattr(module,"resolve_mixed_audit_sources",changed)
+    result=saved_reply_human_review(prepared,Response(),current(),session)
+    assert seen==[["SOCIAL-7"]]
+    assert result["scores"]["complete_self_attested_reviews"]==0
+    assert result["scores"]["review_disposition_counts"][
+        "STALE_OR_UNBOUND_ANSWER_REVISION"]==1
+    assert "CHANGED LIVE AUTHORIZED" not in json.dumps(result)
+
+
+def test_source_snapshot_token_requires_exact_current_ids_and_excerpt():
+    token=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["DOC-9-P2"],
+        [{"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE",
+          "source_excerpt":"Synthetic authorized PDF page one"}])
+    changed=module._saved_reply_evidence_snapshot_token(
+        "Question","Answer",["DOC-9-P2"],
+        [{"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE",
+          "source_excerpt":"Synthetic authorized PDF page UPDATED"}])
+    assert len(token)==64
+    assert changed!=token
+    with pytest.raises(HTTPException):
+        module._saved_reply_evidence_snapshot_token(
+            "Question","Answer",["DOC-9-P2"],
+            [{"record_id":"DOC-9-P3","record_type":"PDF_KNOWLEDGE",
+              "source_excerpt":"Wrong page"}])
+    with pytest.raises(HTTPException):
+        module._saved_reply_evidence_snapshot_token(
+            "Question","Answer",["DOC-9-P2"],
+            [{"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE"}])

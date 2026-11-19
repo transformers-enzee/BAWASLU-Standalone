@@ -107,7 +107,8 @@ def test_batch_summary_counts_only_authorized_audited_items():
             "status":"REVIEW_FLAGS_PRESENT",
             "readiness_review_ids":["citation_grounding"]}},
         {"status":"AUDITED","response_quality_triage":{
-            "status":"NO_DETERMINISTIC_FLAGS"}},
+            "status":"NO_DETERMINISTIC_FLAGS",
+            "diagnostics_complete":True}},
         {"status":"SOURCE_UNAVAILABLE","response_quality_triage":{
             "status":"NO_DETERMINISTIC_FLAGS"}},
         {"status":"INELIGIBLE"},
@@ -312,3 +313,20 @@ def test_complete_flagged_and_complete_clean_get_distinct_review_routes():
     assert result["review_flags_with_complete_diagnostics"]==1
     assert result["review_flags_with_incomplete_diagnostics"]==0
     assert result["audited_without_detected_flags"]==1
+
+
+
+def test_batch_clean_claim_without_coverage_is_unassessed():
+    result=summarize_batch([
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"NO_DETERMINISTIC_FLAGS"}},
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"NO_DETERMINISTIC_FLAGS",
+            "diagnostics_complete":False}},
+        {"status":"AUDITED","response_quality_triage":{
+            "status":"NO_DETERMINISTIC_FLAGS",
+            "diagnostics_complete":True}},
+    ])
+    assert result["audited_without_detected_flags"]==1
+    assert result["unassessed_or_unavailable"]==2
+    assert result["human_accuracy"] is None

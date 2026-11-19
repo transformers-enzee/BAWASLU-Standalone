@@ -1109,7 +1109,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .models import IssueCategoryPhrase
         active_phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True).all()
         violation_diagnostics={'assessed_relevant':0,'relevant_without_signal':0,'relevant_with_valid_signal':0,'relevant_with_rejected_signal':0,'keyword_review_lead_posts':0,'raw_signals':0,'accepted_signals':0,'rejected_signals':0,'legacy_compatible_signals':0,'rejected_type_values':{},'rejection_reasons':{'invalid_category':0,'invalid_signal_type':0,'missing_or_short_quote':0,'quote_not_in_source':0,'malformed_signal':0},'active_issue_categories':len(active_categories),'scope':'Visible, scoped campaign evidence (paged for Inbox UI; only relevant assessments can enter Inbox)' if paged else 'Visible, scoped campaign evidence (up to 300 links per campaign); only relevant assessments can enter Inbox'}
-        reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
+        reconciliation={'unassessed_without_job':0,'assessed_without_job':0,'pending_job_with_assessment':0,'completed_job_without_assessment':0}; job_counts={'PENDING':0,'PROCESSING':0,'COMPLETED':0,'FAILED':0}; records=[]; jurisdiction_posts_by_id={}; unassessed=0; assessment_counts={'PENDING':0,'RELEVANT':0,'IRRELEVANT':0,'UNCERTAIN':0,'OTHER':0}
         for campaign in visible:
             # Job-state counters are separate from assessment-label counters.
             # Count only scoped, linked evidence; never trigger processing here.
@@ -1150,6 +1150,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                     defer(SocialListeningResult.raw_payload_json)).filter(
                     SocialListeningResult.id.in_(missing)).all():
                     post_by_id[row.id]=row
+            jurisdiction_posts_by_id.update(post_by_id)
             ids={link.result_id for link in links}
             # A DISTINCT(result_id) with ORDER BY version only behaves as
             # DISTINCT ON in PostgreSQL; SQLite silently treats it as ordinary
@@ -1290,11 +1291,23 @@ def campaign_action(db:Session,p,action,data,id=None):
             records.sort(key=lambda row:int(str(row['id'])==requested_result and str(row['campaign_id'])==campaign_id),reverse=True)
         from .candidate_registry import attach_candidate_ids
         candidate_registry_diagnostics=attach_candidate_ids(db,p,records)
-        from .jurisdiction_review import jurisdiction_status
+        from .jurisdiction_review import jurisdiction_statuses_for_posts
         from .models import SocialListeningResult
+        status_pairs=[(int(row['campaign_id']),int(row['id']),
+                       jurisdiction_posts_by_id.get(int(row['id'])))
+                      for row in records]
+        scoped_statuses=jurisdiction_statuses_for_posts(db,status_pairs)
         for row in records:
-            post=post_by_id.get(int(row['id']))
-            review=jurisdiction_status(db,row['campaign_id'],row['id'],post)
+            key=(int(row['campaign_id']),int(row['id']))
+            review=scoped_statuses.get(key)
+            if review is None:
+                # The existing Inbox never reports a jurisdiction outcome
+                # without an already-scoped saved source record.
+                review={'decision':'UNREVIEWED',
+                        'incident_jurisdiction_verified':False,
+                        'regency_city_review':{'decision':'UNREVIEWED',
+                          'incident_regency_city_verified':False,
+                          'review_event_id':0}}
             row['incident_jurisdiction_review']=review
             row['incident_jurisdiction_verified']=review['incident_jurisdiction_verified']
         # Corrections are an immutable officer overlay on AI assessments.

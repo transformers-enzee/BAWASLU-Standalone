@@ -69,8 +69,80 @@ def regency_review_history(db,campaign_id,result_id,limit=12):
             'read_only':True}
 
 
+def _jurisdiction_status_from_rows(post, province_row, event, latest):
+    """Pure source/assessment-bound status rendering shared by single and bulk readers."""
+    source_fingerprint=fingerprint(post.text_content)
+    province_status={'decision':'UNREVIEWED','incident_jurisdiction_verified':False}
+    if province_row:
+        if source_fingerprint!=province_row.evidence_fingerprint:
+            province_status={'decision':'STALE_SOURCE_CHANGED',
+                'incident_jurisdiction_verified':False}
+        elif province_row.decision=='CONFIRMED':
+            if not latest or str(latest.relevance_label or '').upper() not in (
+                    'RELEVANT','HIGHLY_RELEVANT'):
+                province_status={'decision':'STALE_RELEVANCE_CHANGED',
+                    'incident_jurisdiction_verified':False}
+            else:
+                province_status={'decision':province_row.decision,
+                    'incident_province':province_row.province,
+                    'incident_jurisdiction_verified':True,
+                    'human_review_rationale':province_row.rationale,
+                    'reviewed_by':province_row.reviewer_id}
+        else:
+            province_status={'decision':province_row.decision,
+                'incident_province':None,
+                'incident_jurisdiction_verified':False,
+                'human_review_rationale':province_row.rationale,
+                'reviewed_by':province_row.reviewer_id}
+    if not event:
+        city={'decision':'UNREVIEWED','incident_regency_city_verified':False,
+              'review_event_id':0}
+    else:
+        try:
+            data=json.loads(event.changes_json or '{}')
+        except (TypeError,ValueError):
+            data={}
+        if not isinstance(data,dict):
+            data={}
+        verified=data.get('decision')=='CONFIRMED'
+        city={'decision':str(data.get('decision') or 'UNREVIEWED'),
+              'incident_regency_city_verified':False,
+              'review_event_id':event.id,
+              'reviewed_by':event.actor_id}
+        if data.get('evidence_fingerprint')!=source_fingerprint:
+            city['decision']='STALE_SOURCE_CHANGED'
+        elif verified and (
+                not latest or str(latest.relevance_label or '').upper() not in (
+                    'RELEVANT','HIGHLY_RELEVANT')):
+            city['decision']='STALE_RELEVANCE_CHANGED'
+        elif verified and latest.assessment_version!=data.get('assessment_version'):
+            city['decision']='STALE_ASSESSMENT_CHANGED'
+        elif (verified and province_row and
+              province_row.decision in ('CONFIRMED','REJECTED') and
+              source_fingerprint==province_row.evidence_fingerprint and (
+                  province_row.decision=='REJECTED' or
+                  province_row.province!=str(data.get('province') or ''))):
+            city['decision']='PROVINCE_REVIEW_CONFLICT'
+        else:
+            city.update({
+                'incident_regency_city_verified':verified,
+                'incident_regency_city':data.get('regency_city') if verified else None,
+                'incident_regency_city_code':data.get('regency_city_code') if verified else None,
+                'incident_province':data.get('province') if verified else None,
+                'human_review_rationale':data.get('rationale')})
+    province_status['regency_city_review']=city
+    return province_status
+
+
+def _latest_assessment_for_review(db,campaign_id,result_id):
+    return (db.query(EvidenceAssessment).filter_by(
+        campaign_id=int(campaign_id),result_id=int(result_id))
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).first())
+
+
 def regency_review_status(db,campaign_id,result_id,post):
-    """Read the last append-only officer decision; never infer verification."""
+    """Authoritative officer decision with source, assessment, and province guards."""
     event=(db.query(AuditEvent).filter_by(
         subject_type='CampaignIncidentRegencyReview',
         subject_id=f'{int(campaign_id)}:{int(result_id)}',
@@ -79,86 +151,69 @@ def regency_review_status(db,campaign_id,result_id,post):
     if not event:
         return {'decision':'UNREVIEWED','incident_regency_city_verified':False,
                 'review_event_id':0}
-    try:
-        data=json.loads(event.changes_json or '{}')
-    except (TypeError,ValueError):
-        data={}
-    verified=data.get('decision')=='CONFIRMED'
-    status={'decision':str(data.get('decision') or 'UNREVIEWED'),
-            'incident_regency_city_verified':False,
-            'review_event_id':event.id,
-            'reviewed_by':event.actor_id}
-    if data.get('evidence_fingerprint')!=fingerprint(post.text_content):
-        status['decision']='STALE_SOURCE_CHANGED'
-        return status
-    if verified:
-        latest=(db.query(EvidenceAssessment).filter_by(
-            campaign_id=int(campaign_id),result_id=int(result_id))
-            .order_by(EvidenceAssessment.assessment_version.desc(),
-                      EvidenceAssessment.id.desc()).first())
-        if not latest or str(latest.relevance_label or '').upper() not in (
-                'RELEVANT','HIGHLY_RELEVANT'):
-            status['decision']='STALE_RELEVANCE_CHANGED'
-            return status
-        # A newer version of the saved assessment must not silently reuse
-        # an older officer conclusion, even if its relevance stayed the same.
-        if latest.assessment_version!=data.get('assessment_version'):
-            status['decision']='STALE_ASSESSMENT_CHANGED'
-            return status
-    if verified:
-        province_row=db.query(CampaignJurisdictionReview).filter_by(
-            campaign_id=int(campaign_id),result_id=int(result_id)).first()
-        if province_row and province_row.decision in ('CONFIRMED','REJECTED'):
-            province_current=fingerprint(post.text_content)==province_row.evidence_fingerprint
-            if province_current:
-                confirmed_city_province=str(data.get('province') or '')
-                if (province_row.decision=='REJECTED' or
-                        province_row.province!=confirmed_city_province):
-                    status['decision']='PROVINCE_REVIEW_CONFLICT'
-                    return status
-    status.update({'incident_regency_city_verified':verified,
-        'incident_regency_city':data.get('regency_city') if verified else None,
-        'incident_regency_city_code':data.get('regency_city_code') if verified else None,
-        'incident_province':data.get('province') if verified else None,
-        'human_review_rationale':data.get('rationale')})
-    return status
+    row=db.query(CampaignJurisdictionReview).filter_by(
+        campaign_id=int(campaign_id),result_id=int(result_id)).first()
+    latest=_latest_assessment_for_review(db,campaign_id,result_id)
+    return _jurisdiction_status_from_rows(post,row,event,latest)['regency_city_review']
 
 
 def jurisdiction_status(db,campaign_id,result_id,post):
     row=db.query(CampaignJurisdictionReview).filter_by(
         campaign_id=int(campaign_id),result_id=int(result_id)).first()
-    province_status={'decision':'UNREVIEWED','incident_jurisdiction_verified':False}
-    if row:
-        current=fingerprint(post.text_content)
-        if current!=row.evidence_fingerprint:
-            province_status={'decision':'STALE_SOURCE_CHANGED',
-                'incident_jurisdiction_verified':False}
-        else:
-            verified=row.decision=='CONFIRMED'
-            if verified:
-                latest=(db.query(EvidenceAssessment).filter_by(
-                    campaign_id=int(campaign_id),result_id=int(result_id))
-                    .order_by(EvidenceAssessment.assessment_version.desc(),
-                              EvidenceAssessment.id.desc()).first())
-                if not latest or str(latest.relevance_label or '').upper() not in (
-                        'RELEVANT','HIGHLY_RELEVANT'):
-                    province_status={'decision':'STALE_RELEVANCE_CHANGED',
-                        'incident_jurisdiction_verified':False}
-                else:
-                    province_status={'decision':row.decision,
-                        'incident_province':row.province,
-                        'incident_jurisdiction_verified':True,
-                        'human_review_rationale':row.rationale,
-                        'reviewed_by':row.reviewer_id}
-            else:
-                province_status={'decision':row.decision,
-                    'incident_province':None,
-                    'incident_jurisdiction_verified':False,
-                    'human_review_rationale':row.rationale,
-                    'reviewed_by':row.reviewer_id}
-    province_status['regency_city_review']=regency_review_status(
-        db,campaign_id,result_id,post)
-    return province_status
+    event=(db.query(AuditEvent).filter_by(
+        subject_type='CampaignIncidentRegencyReview',
+        subject_id=f'{int(campaign_id)}:{int(result_id)}',
+        action='INCIDENT_REGENCY_REVIEWED')
+        .order_by(AuditEvent.id.desc()).first())
+    latest=(_latest_assessment_for_review(db,campaign_id,result_id)
+            if row or event else None)
+    return _jurisdiction_status_from_rows(post,row,event,latest)
+
+
+def jurisdiction_statuses_for_posts(db,scoped_posts):
+    """Batch status lookup for pre-authorized (campaign_id,result_id,post) rows.
+
+    The caller MUST have checked campaign and source-level permissions. The
+    function returns statuses only for supplied campaign/source pairs and
+    never fetches text or broadens access.
+    """
+    pairs={(int(cid),int(rid)):post for cid,rid,post in scoped_posts
+           if post is not None}
+    if not pairs:
+        return {}
+    campaigns=sorted({cid for cid,_ in pairs})
+    results=sorted({rid for _,rid in pairs})
+    province_rows={}
+    for row in db.query(CampaignJurisdictionReview).filter(
+            CampaignJurisdictionReview.campaign_id.in_(campaigns),
+            CampaignJurisdictionReview.result_id.in_(results)).all():
+        key=(row.campaign_id,row.result_id)
+        if key in pairs:
+            province_rows[key]=row
+    subject_ids={f'{cid}:{rid}' for cid,rid in pairs}
+    audit_rows={}
+    for event in db.query(AuditEvent).filter(
+            AuditEvent.subject_type=='CampaignIncidentRegencyReview',
+            AuditEvent.action=='INCIDENT_REGENCY_REVIEWED',
+            AuditEvent.subject_id.in_(subject_ids)
+            ).order_by(AuditEvent.id.desc()).all():
+        key=event.subject_id
+        if key not in audit_rows:
+            audit_rows[key]=event
+    latest={}
+    if province_rows or audit_rows:
+        for assessment in db.query(EvidenceAssessment).filter(
+                EvidenceAssessment.campaign_id.in_(campaigns),
+                EvidenceAssessment.result_id.in_(results)
+                ).order_by(EvidenceAssessment.assessment_version.desc(),
+                           EvidenceAssessment.id.desc()).all():
+            key=(assessment.campaign_id,assessment.result_id)
+            if key in pairs and key not in latest:
+                latest[key]=assessment
+    return {key:_jurisdiction_status_from_rows(
+        post,province_rows.get(key),audit_rows.get(f'{key[0]}:{key[1]}'),
+        latest.get(key))
+        for key,post in pairs.items()}
 
 
 def save_regency_review(db,p,campaign,post,relevant,data,province_status):

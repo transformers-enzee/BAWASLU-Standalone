@@ -67,6 +67,9 @@ def saved_classifications_for_posts(db, user_profile, posts):
     from .candidate_registry import candidate_index, resolve_post_candidate_mentions
     scoped_candidate_index=candidate_index(db,user_profile)
     posts_by_id={post.id:post for post in posts}
+    from .jurisdiction_review import jurisdiction_statuses_for_posts
+    scoped_statuses=jurisdiction_statuses_for_posts(db,[
+        (cid,rid,posts_by_id[rid]) for cid,rid in relevant])
     for (campaign_id,result_id),assessment in sorted(relevant.items()):
         post=posts_by_id[result_id]
         try:
@@ -81,8 +84,7 @@ def saved_classifications_for_posts(db, user_profile, posts):
             signals=phrase_screening_candidates(post.text_content,categories,phrases)
             if signals:source='KEYWORD_REVIEW_LEAD'
         decision=decisions.get((campaign_id,result_id))
-        from .jurisdiction_review import jurisdiction_status
-        location_review=jurisdiction_status(db,campaign_id,result_id,post)
+        location_review=scoped_statuses[(campaign_id,result_id)]
         shared=shared_violation_decision(signals if source=='SAVED_ASSESSMENT' else [],decision)
         result[result_id].append({
             'canonical_source_id':canonical_source_id('social',result_id),

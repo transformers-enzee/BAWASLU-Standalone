@@ -271,19 +271,21 @@ function SocialEvidenceInbox({onOpenCasework}){
   finally{setJurisdictionBusy(false)}
  }
  async function loadJurisdictionReadiness(cursor=null){
-  if(!selected)return;
+  const requestedCampaign=selected?.campaign_id||campaign;
+  if(!requestedCampaign){setError('Select a campaign to open jurisdiction review.');return;}
   setJurisdictionReadinessBusy(true);setJurisdictionMessage('');
   try{
    const r=await base44.functions.invoke('socialListening',{
-    action:'campaignJurisdictionReadiness',id:selected.campaign_id,
+    action:'campaignJurisdictionReadiness',id:requestedCampaign,
     data:cursor?{cursor}:{}});
    setJurisdictionReadiness(r.data);
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionReadinessBusy(false)}
  }
  async function openJurisdictionReviewLead(resultId){
-  if(!selected||reviewLeadBusy)return;
-  const selectedCampaign=String(selected.campaign_id);
+  if(reviewLeadBusy)return;
+  const selectedCampaign=String(jurisdictionReadiness?.campaign_id||selected?.campaign_id||campaign||'');
+  if(!selectedCampaign)return;
   const expectedSource=String(resultId);
   const token=++reviewLeadRequest.current;
   const applySource=item=>{
@@ -481,6 +483,27 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter),sentimentFilter!=='ALL'].filter(Boolean).length;
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
+  <div data-testid="jurisdiction-review-toolbar" className="rounded-lg border border-slate-200 bg-white p-3 text-xs space-y-2">
+   <div className="flex flex-wrap items-center justify-between gap-2">
+    <p><strong>Jurisdiction officer review</strong> · Open a saved campaign evidence queue without first opening a post.</p>
+    <button type="button" className="intel-ghost text-xs" disabled={!campaign||jurisdictionReadinessBusy} onClick={()=>loadJurisdictionReadiness()}>
+     {jurisdictionReadinessBusy?'Loading review queue...':'Open jurisdiction review queue'}
+    </button>
+   </div>
+   {!selected&&jurisdictionReadiness&&<div data-testid="jurisdiction-review-main-queue" className="space-y-2">
+    <p>Campaign {jurisdictionReadiness.campaign_id} · Authorized evidence in this window: {jurisdictionReadiness.counts?.authorized_sources||0} · Relevant: {jurisdictionReadiness.counts?.relevant_sources||0}</p>
+    <p>Confirmed cities: {jurisdictionReadiness.counts?.city_confirmed||0} · Rejected: {jurisdictionReadiness.counts?.city_rejected||0} · Stale/conflicted: {jurisdictionReadiness.counts?.city_stale_or_conflicted||0} · Unreviewed: {jurisdictionReadiness.counts?.city_unreviewed||0}</p>
+    <div className="flex gap-2 flex-wrap">
+     {jurisdictionReadiness.page_cursor&&<button type="button" className="intel-ghost text-xs" onClick={()=>loadJurisdictionReadiness()} disabled={jurisdictionReadinessBusy}>Latest window</button>}
+     {jurisdictionReadiness.next_cursor&&<button type="button" className="intel-ghost text-xs" onClick={()=>loadJurisdictionReadiness(jurisdictionReadiness.next_cursor)} disabled={jurisdictionReadinessBusy}>Older evidence window</button>}
+    </div>
+    {(jurisdictionReadiness.officer_review_leads||[]).map(lead=><div key={lead.canonical_source_id} className="flex flex-wrap gap-2 items-center border-t border-slate-100 py-1">
+     <span>{lead.canonical_source_id} · {String(lead.priority||'').replaceAll('_',' ')} · {(lead.candidate_regency_cities||[]).join(', ')||'Location not explicit'}</span>
+     <button type="button" className="intel-ghost text-xs" disabled={reviewLeadBusy} onClick={()=>openJurisdictionReviewLead(lead.result_id)}>Open saved source</button>
+    </div>)}
+    <p className="text-amber-900">This is a bounded evidence review queue, not a geographic accuracy metric or automatically approved jurisdiction.</p>
+   </div>}
+  </div>
   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end" aria-label="Campaign dates and totals">
    <label className="text-xs min-w-0 flex flex-col justify-end h-[70px]">Campaign<select className="intel-input mt-1 w-full h-10 min-w-0" aria-label="Filter campaign" value={campaign} onChange={e=>{setCampaign(e.target.value);setSelected(null)}}><option value="">All campaigns</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
    <label className="text-xs min-w-0 flex flex-col justify-end h-[70px]">From date<input type="date" className="intel-input mt-1 w-full h-10 min-w-0" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
@@ -650,7 +673,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
       <p data-testid="reviewed-regency-city"><strong>Human Kabupaten/Kota decision:</strong> {selected.incident_jurisdiction_review?.regency_city_review?.incident_regency_city_verified?selected.incident_jurisdiction_review.regency_city_review.incident_regency_city:'Not verified'} · {selected.incident_jurisdiction_review?.regency_city_review?.decision||'UNREVIEWED'} · Review is separate from regional access.</p>
-      <button type="button" className="intel-ghost text-xs" disabled={jurisdictionReadinessBusy} onClick={loadJurisdictionReadiness}>View campaign jurisdiction readiness (free)</button>
+      <button type="button" className="intel-ghost text-xs" disabled={jurisdictionReadinessBusy} onClick={()=>loadJurisdictionReadiness()}>View campaign jurisdiction readiness (free)</button>
       {jurisdictionReadiness&&<div data-testid="campaign-jurisdiction-readiness" className="rounded border border-slate-200 bg-white p-2 space-y-1">
        <p><strong>Jurisdiction review snapshot (read-only):</strong> {jurisdictionReadiness.counts?.authorized_sources||0} accessible posts from the latest {jurisdictionReadiness.sampled_link_count||0} campaign links, maximum {jurisdictionReadiness.scan_limit||0}.</p>
        <p>Relevant: {jurisdictionReadiness.counts?.relevant_sources||0} · No explicit city cue: {jurisdictionReadiness.counts?.no_explicit_city_candidate||0} · Multiple city cues: {jurisdictionReadiness.counts?.multiple_city_candidates||0} · Multiple provinces: {jurisdictionReadiness.counts?.multi_province_candidates||0}</p>

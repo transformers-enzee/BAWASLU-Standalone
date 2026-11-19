@@ -8,7 +8,7 @@ from .models import (MonitoringCampaign,CampaignEvidence,SocialListeningResult,
                      EvidenceAssessment)
 from .socialcrawl import _result_in_scope
 from .incident_regency_candidates import incident_regency_preview
-from .jurisdiction_review import jurisdiction_status
+from .jurisdiction_review import jurisdiction_statuses_for_posts
 from .related_incident_locations import _safe_source_url
 
 SCAN_LIMIT=30
@@ -59,6 +59,10 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id, cursor=None):
           'city_stale_or_conflicted','province_confirmed')
     counts={key:0 for key in keys}
     leads=[]
+    scoped_posts=[(campaign.id,link.result_id,posts[link.result_id])
+                  for link in sampled_links if link.result_id in posts
+                  and _result_in_scope(db,principal,posts[link.result_id])]
+    scoped_statuses=jurisdiction_statuses_for_posts(db,scoped_posts)
     for link in sampled_links:
         post=posts.get(link.result_id)
         if not post or not _result_in_scope(db,principal,post):
@@ -77,7 +81,7 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id, cursor=None):
         else:counts['multiple_city_candidates']+=1
         if cues['multiple_provinces']:
             counts['multi_province_candidates']+=1
-        review=jurisdiction_status(db,campaign.id,post.id,post)
+        review=scoped_statuses[(campaign.id,post.id)]
         if review.get('incident_jurisdiction_verified'):
             counts['province_confirmed']+=1
         city=review.get('regency_city_review') or {}
@@ -90,8 +94,8 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id, cursor=None):
             counts['city_stale_or_conflicted']+=1
         else:
             counts['city_unreviewed']+=1
-        if not city.get('incident_regency_city_verified') and (
-            len(leads)<SCAN_LIMIT):
+        if (not city.get('incident_regency_city_verified') and
+                city.get('decision')!='REJECTED' and len(leads)<SCAN_LIMIT):
             if city.get('decision')=='PROVINCE_REVIEW_CONFLICT' or (
                 str(city.get('decision') or '').startswith('STALE_')):
                 priority='STALE_OR_CONFLICTED'

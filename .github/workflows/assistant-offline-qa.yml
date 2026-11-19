@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q --junitxml=assistant-offline-results.xml tests/test_assistant_full_answer_replay_v1607.py tests/test_saved_answer_audit_v1608.py tests/test_legal_indonesian_modalities_v1600.py tests/test_assistant_offline_response_eval.py tests/test_assistant_response_benchmark_p1.py tests/test_assistant_response_benchmark_p2.py tests/test_assistant_multipage_response_qa.py tests/test_assistant_pdf_quote_audit.py tests/test_assistant_pdf_depth_budget.py tests/test_assistant_pdf_depth_contract.py tests/test_exact_pdf_page_grounding_v1500.py tests/test_assistant_citation_consistency.py tests/test_assistant_human_review_v1586.py tests/test_assistant_saved_reply_human_packet.py tests/test_assistant_human_review_scoring.py tests/test_assistant_acceptance_evidence_v1588.py
+          python -m pytest -q --junitxml=assistant-offline-results.xml tests/test_assistant_full_answer_replay_v1607.py tests/test_saved_answer_audit_v1608.py tests/test_legal_indonesian_modalities_v1600.py tests/test_assistant_offline_response_eval.py tests/test_assistant_response_benchmark_p1.py tests/test_assistant_response_benchmark_p2.py tests/test_assistant_multipage_response_qa.py tests/test_assistant_pdf_quote_audit.py tests/test_assistant_pdf_depth_budget.py tests/test_assistant_pdf_depth_contract.py tests/test_exact_pdf_page_grounding_v1500.py tests/test_assistant_citation_consistency.py tests/test_assistant_human_review_v1586.py tests/test_assistant_saved_reply_human_packet.py tests/test_assistant_human_review_scoring.py tests/test_assistant_acceptance_evidence_v1588.py tests/test_assistant_acceptance_snapshot.py
       - name: Verify human acceptance remains unapproved without independent review
         working-directory: backend
         shell: bash
@@ -82,6 +82,23 @@ jobs:
           assert "candidate_answer" not in data and "source_excerpt" not in data
           print("Offline triage report verified: 44 synthetic cases, no AI calls, no raw answers.")
           PY
+      - name: Generate evidence-based acceptance snapshot
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m app.assistant_acceptance_snapshot \
+            --junit assistant-offline-results.xml \
+            --triage assistant-offline-triage.json \
+            --output assistant-acceptance-snapshot.json
+      - name: Upload acceptance snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-acceptance-snapshot
+          path: backend/assistant-acceptance-snapshot.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload redacted offline response-triage report
         if: always()
         uses: actions/upload-artifact@v4

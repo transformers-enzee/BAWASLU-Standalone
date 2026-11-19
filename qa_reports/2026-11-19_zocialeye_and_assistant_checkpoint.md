@@ -23,14 +23,15 @@ A broader lexical screen found 13 IRRELEVANT posts mentioning election terms, bu
 ## Implemented on isolated development branch
 - Guarded import-specific CLI: `backend/scripts/resume_zocialeye_assessment.py`. Default is dry-run; actual assessment requires explicit `--execute --acknowledge-metered`, existing backend OpenAI credentials, DB access, and budget. Targets only pending jobs in run #36, does not requeue failed jobs or override classifications.
 - Read-only contradiction flagger: `backend/app/assessment_qa_flags.py`.
-- Five regression cases: `backend/tests/test_assessment_qa_flags.py`.
+- Five relevance-regression cases: `backend/tests/test_assessment_qa_flags.py`.
+- Assistant multi-part question coverage probe: `backend/app/assistant_question_coverage.py`, integrated into the existing deterministic answer-quality metadata, with four regression checks. It flags likely omitted topics but never claims factual or semantic verification.
 - More precise source-grounded screening prompt in `backend/app/auto_relevance.py`; explicitly separates election mention, campaign scope, historical relevance, and violation allegations.
 - Separate GitHub Actions workflow: `.github/workflows/isolated-bulk-qa.yml` (CI status not confirmed).
 
 ## Automated QA performed
 - Direct Supabase audit of imported posts, saved classifications, pending jobs and quota: successful.
-- Five local deterministic relevance-flag tests: 5/5 passed.
-- Backend integration tests, authenticated paid AI resume and live Assistant answer generation: **not executed** in this checkpoint.
+- Nine local deterministic tests: 5 relevance-flag and 4 multi-part answer-coverage checks passed (9/9).
+- Full backend integration, authenticated paid AI resume and live Assistant answer generation: **not executed** in this checkpoint. Github Actions CI was configured, but a completed CI run was not yet verified.
 - Source PDF library: one active 12-page sample simulation, unreviewed and not semantically indexed; 23 stored text chunks spanning all 12 pages. This is not a validated legal corpus.
 
 ## Deployment and safety

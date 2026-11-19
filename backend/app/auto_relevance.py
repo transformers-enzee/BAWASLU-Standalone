@@ -111,7 +111,7 @@ def recover_stale_jobs(campaign_id=None):
 
 def campaign_daily_budget_remaining(db,campaign_id):
     """Conservative request-count ceiling, not a monetary cost estimate."""
-    try: ceiling=max(0,min(5000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+    try: ceiling=max(0,min(1000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except ValueError:ceiling=0
     today=datetime.utcnow().replace(hour=0,minute=0,second=0,microsecond=0)
     billed=db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==int(campaign_id),
@@ -130,7 +130,7 @@ def reserve_automatic_ai_request(db,campaign_id):
     """Atomically reserve both quotas before any paid automatic provider request."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     try:
-        daily=max(0,min(5000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        daily=max(0,min(1000,int(os.getenv('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
         lifetime=max(0,min(5000,int(os.getenv('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except (ValueError,TypeError):return False
     if not daily or not lifetime:return False

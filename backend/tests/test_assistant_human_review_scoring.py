@@ -7,6 +7,7 @@ from app.assistant_human_review_scoring import compile_human_review_scores
 
 def packet():
     task={"thread_id":"123e4567-e89b-12d3-a456-426614174000",
+          "answer_revision_token":"a"*64,
           "answer_message_index":3,"status":"AUDITED",
           "response_quality_triage":{
               "status":"NO_DETERMINISTIC_FLAGS",
@@ -20,6 +21,7 @@ def submission(**changes):
     data={
         "thread_id":"123e4567-e89b-12d3-a456-426614174000",
         "answer_message_index":3,
+        "answer_revision_token":"a"*64,
         "ratings":{name:"PASS" for name in DIMENSIONS},
         "source_access_rechecked":True,
         "source_material_reviewed":True,
@@ -121,3 +123,23 @@ def test_nonrepresentative_sample_cannot_claim_release_acceptance():
     assert report["formal_client_acceptance"] is False
     assert report["formal_legal_signoff"] is False
     assert report["source_truth_verified_by_system"] is False
+
+
+
+@pytest.mark.parametrize("revision",[
+    None, "b"*64, "invalid", "A"*64,
+])
+def test_stale_or_missing_saved_answer_revision_never_counts_as_review(revision):
+    report=compile_human_review_scores(packet(),[
+        submission(answer_revision_token=revision)])
+    assert report["complete_self_attested_reviews"]==0
+    assert report["review_disposition_counts"]["STALE_OR_UNBOUND_ANSWER_REVISION"]==1
+    assert report["release_approved"] is False
+
+
+def test_unbound_legacy_review_packet_is_not_complete():
+    prior=packet()
+    prior["items"][0]["answer_revision_token"]=None
+    report=compile_human_review_scores(prior,[submission()])
+    assert report["complete_self_attested_reviews"]==0
+    assert report["review_disposition_counts"]["STALE_OR_UNBOUND_ANSWER_REVISION"]==1

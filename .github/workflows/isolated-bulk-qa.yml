@@ -1,0 +1,45 @@
+name: BAWASLU isolated bulk QA
+on:
+  push:
+    branches: [bulk-development-20261119, architecture-v2-foundation-20261015]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bawaslu-isolated-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Compile backend and CLI
+        run: python -m compileall -q backend/app backend/scripts
+      - name: Deterministic assistant depth and citation QA
+        working-directory: backend
+        run: python -m pytest -q tests/test_assistant_pdf_depth_contract.py tests/test_assessment_qa_flags.py tests/test_assistant_question_coverage.py
+        env:
+          OPENAI_API_KEY: ''
+          DATABASE_URL: sqlite:////tmp/bawaslu-bulk-qa.sqlite3
+  frontend-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend
+        working-directory: frontend
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

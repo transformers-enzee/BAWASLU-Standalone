@@ -30,10 +30,12 @@ MAX_SOURCE_CARDS=12
 MAX_REPLAY_SOURCE_IDS=20
 
 class SavedReplyAuditRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
     thread_id:str=Field(min_length=36,max_length=36)
     answer_message_index:int=Field(ge=1,le=59)
 
 class BatchSavedReplyAuditRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
     selections:list[SavedReplyAuditRequest]=Field(min_length=1,max_length=5)
 
 class SavedReplyReviewerRating(BaseModel):

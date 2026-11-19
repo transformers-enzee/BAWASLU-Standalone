@@ -40,9 +40,9 @@ def remaining_budget(db, campaign_id):
             return max(0, min(maximum, int(os.getenv(name, "0"))))
         except (TypeError, ValueError):
             return 0
-    daily = cap("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN", 100)
-    lifetime = cap("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN", 500)
-    per_run = cap("BAWASLU_AI_ASSESSMENTS_PER_RUN", 25)
+    daily = cap("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN", 5000)
+    lifetime = cap("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN", 5000)
+    per_run = cap("BAWASLU_AI_ASSESSMENTS_PER_RUN", 50)
     rows = db.query(AIBudgetReservation).filter(
         AIBudgetReservation.campaign_id == int(campaign_id)).all()
     today = datetime.utcnow().strftime("%Y-%m-%d")

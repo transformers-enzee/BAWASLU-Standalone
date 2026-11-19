@@ -38,7 +38,7 @@ def test_sample_flags_ambiguity_and_does_not_extrapolate_full_corpus():
         assert x['counts']['multiple_city_candidates']==1
         assert x['counts']['city_confirmed']==0
         assert x['not_full_corpus_coverage']
-        assert x['scope']=='AUTHORIZED_LATEST_CAMPAIGN_EVIDENCE_ONLY'
+        assert x['scope']=='AUTHORIZED_CAMPAIGN_EVIDENCE_WINDOW_ONLY'
     finally:db.close()
 
 def test_scope_prevents_other_provinces_and_unpermitted_campaigns():

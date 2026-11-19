@@ -235,7 +235,7 @@ def jurisdiction_action(db,p,action,data,id=None):
     if action=='campaignJurisdictionReadiness':
         from .jurisdiction_readiness import campaign_jurisdiction_readiness
         return campaign_jurisdiction_readiness(
-            db,p,id or data.get('campaign_id'))
+            db,p,id or data.get('campaign_id'),data.get('cursor'))
     campaign,post,relevant=scoped_post(
         db,p,id or data.get('campaign_id'),data.get('result_id'))
     if action=='campaignRegencyReviewHistory':

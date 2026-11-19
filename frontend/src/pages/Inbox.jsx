@@ -28,6 +28,8 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [jurisdictionPreview,setJurisdictionPreview]=useState(null),[jurisdictionBusy,setJurisdictionBusy]=useState(false),[jurisdictionMessage,setJurisdictionMessage]=useState('');
  const [regencyReviewHistory,setRegencyReviewHistory]=useState(null),[regencyHistoryBusy,setRegencyHistoryBusy]=useState(false);
  const [jurisdictionReadiness,setJurisdictionReadiness]=useState(null),[jurisdictionReadinessBusy,setJurisdictionReadinessBusy]=useState(false);
+ const [reviewLeadBusy,setReviewLeadBusy]=useState(false);
+ const reviewLeadRequest=useRef(0);
  const [usageDiagnostics,setUsageDiagnostics]=useState(null),[usageBusy,setUsageBusy]=useState(false),[usageError,setUsageError]=useState('');
  const [violationDiagnostics,setViolationDiagnostics]=useState(null);const [readiness,setReadiness]=useState(null),[readinessBusy,setReadinessBusy]=useState(false),[reconBusy,setReconBusy]=useState(false),[reconNotice,setReconNotice]=useState(''),[reconciliation,setReconciliation]=useState(null),[jobCounts,setJobCounts]=useState(null),[findings,setFindings]=useState([]),[campaigns,setCampaigns]=useState([]),[campaign,setCampaign]=useState(requestedCampaign),[view,setView]=useState('all'),[term,setTerm]=useState(''),[selected,setSelected]=useState(null),[unassessed,setUnassessed]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[backlog,setBacklog]=useState(null),[backlogBusy,setBacklogBusy]=useState(false),[backlogStatus,setBacklogStatus]=useState(''),[assessmentCounts,setAssessmentCounts]=useState(null),[processingStatus,setProcessingStatus]=useState('');
  const [watchProgress,setWatchProgress]=useState(false),[watchSnapshot,setWatchSnapshot]=useState(null);
@@ -268,15 +270,56 @@ function SocialEvidenceInbox({onOpenCasework}){
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
  }
- async function loadJurisdictionReadiness(){
+ async function loadJurisdictionReadiness(cursor=null){
   if(!selected)return;
   setJurisdictionReadinessBusy(true);setJurisdictionMessage('');
   try{
    const r=await base44.functions.invoke('socialListening',{
-    action:'campaignJurisdictionReadiness',id:selected.campaign_id,data:{}});
+    action:'campaignJurisdictionReadiness',id:selected.campaign_id,
+    data:cursor?{cursor}:{}});
    setJurisdictionReadiness(r.data);
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionReadinessBusy(false)}
+ }
+ async function openJurisdictionReviewLead(resultId){
+  if(!selected||reviewLeadBusy)return;
+  const selectedCampaign=String(selected.campaign_id);
+  const expectedSource=String(resultId);
+  const token=++reviewLeadRequest.current;
+  const applySource=item=>{
+   if(token!==reviewLeadRequest.current)return;
+   setSelected(item);
+   setFindings(previous=>{
+    const exists=previous.some(row=>String(row.id)===expectedSource&&
+      String(row.campaign_id)===selectedCampaign);
+    return exists?previous:[item,...previous];
+   });
+   setJurisdictionReadiness(null);
+   setJurisdictionPreview(null);
+   setRegencyReviewHistory(null);
+   setJurisdictionMessage('');
+   setError('');
+  };
+  const cached=findings.find(row=>String(row.id)===expectedSource&&
+    String(row.campaign_id)===selectedCampaign);
+  if(cached){applySource(cached);return}
+  setReviewLeadBusy(true);setJurisdictionMessage('Loading authorized source evidence...');
+  try{
+   const response=await base44.functions.invoke('socialListening',{
+    action:'campaignIntelligenceInbox',data:{
+      campaign_id:selectedCampaign,result_id:expectedSource,paged:true,page_size:1}});
+   if(token!==reviewLeadRequest.current)return;
+   const item=(response.data.findings||[]).find(row=>
+     String(row.id)===expectedSource&&String(row.campaign_id)===selectedCampaign);
+   if(!item){
+    setJurisdictionMessage('Source is not available in the authorized Intelligence Inbox. It may no longer be eligible for review.');
+    return;
+   }
+   applySource(item);
+  }catch(e){
+   if(token===reviewLeadRequest.current)
+    setJurisdictionMessage(e.response?.data?.detail||e.message||'Unable to open source.');
+  }finally{if(token===reviewLeadRequest.current)setReviewLeadBusy(false)}
  }
  async function loadRegencyReviewHistory(){
   if(!selected)return;
@@ -612,14 +655,18 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        <p><strong>Jurisdiction review snapshot (read-only):</strong> {jurisdictionReadiness.counts?.authorized_sources||0} accessible posts from the latest {jurisdictionReadiness.sampled_link_count||0} campaign links, maximum {jurisdictionReadiness.scan_limit||0}.</p>
        <p>Relevant: {jurisdictionReadiness.counts?.relevant_sources||0} · No explicit city cue: {jurisdictionReadiness.counts?.no_explicit_city_candidate||0} · Multiple city cues: {jurisdictionReadiness.counts?.multiple_city_candidates||0} · Multiple provinces: {jurisdictionReadiness.counts?.multi_province_candidates||0}</p>
        <p>Officer city confirmations: {jurisdictionReadiness.counts?.city_confirmed||0} · Rejected: {jurisdictionReadiness.counts?.city_rejected||0} · Stale/conflicted: {jurisdictionReadiness.counts?.city_stale_or_conflicted||0} · Awaiting review: {jurisdictionReadiness.counts?.city_unreviewed||0}</p>
-       {jurisdictionReadiness.more_evidence_may_exist&&<p role="status">Additional campaign posts exist beyond the sample; these are not full-corpus totals.</p>}
+       {jurisdictionReadiness.more_evidence_may_exist&&<p role="status">Additional campaign posts exist beyond this window; these are not full-corpus totals.</p>}
+       <div className="flex flex-wrap gap-2" data-testid="jurisdiction-review-pagination">
+        {jurisdictionReadiness.page_cursor&&<button type="button" disabled={jurisdictionReadinessBusy} className="intel-ghost text-xs" onClick={()=>loadJurisdictionReadiness()}>Back to latest 30</button>}
+        {jurisdictionReadiness.next_cursor&&<button type="button" disabled={jurisdictionReadinessBusy} className="intel-ghost text-xs" onClick={()=>loadJurisdictionReadiness(jurisdictionReadiness.next_cursor)}>Inspect older 30 campaign links</button>}
+       </div>
        <p className="text-amber-900">Decision coverage and source cues do not measure actual geolocation accuracy or client acceptance.</p>
        <div data-testid="jurisdiction-officer-review-leads" className="space-y-1">
         <p><strong>Officer review leads (sample only, prioritized):</strong> {(jurisdictionReadiness.officer_review_leads||[]).length}</p>
         {(jurisdictionReadiness.officer_review_leads||[]).map(item=><div key={item.canonical_source_id} className="border-t border-slate-100 py-1">
          <p>{item.canonical_source_id} · {String(item.priority||'').replaceAll('_',' ')} · {item.current_city_decision}</p>
          <p>{(item.candidate_regency_cities||[]).join(', ')||'No explicit city cue'}</p>
-         <button type="button" className="intel-ghost text-xs" onClick={()=>{focusPlayerEvidence(item.result_id);setJurisdictionReadiness(null)}}>Inspect on visible Inbox page</button>
+         <button type="button" className="intel-ghost text-xs" disabled={reviewLeadBusy} onClick={()=>openJurisdictionReviewLead(item.result_id)}>Inspect source in Inbox</button>
          {item.original_source_url&&<a className="ml-2 underline" target="_blank" rel="noopener noreferrer" href={item.original_source_url}>Open saved original post</a>}
         </div>)}
         {jurisdictionReadiness.review_leads_truncated&&<p role="status">Only the highest priority review leads from the bounded sample are shown.</p>}

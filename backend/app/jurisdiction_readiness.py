@@ -1,6 +1,6 @@
 """Permission-scoped, bounded and entirely read-only jurisdiction readiness.
 
-Counts are for the newest saved campaign evidence links only. The result is
+Counts are for one bounded window of saved campaign evidence links. The result is
 a triage sample, not complete field coverage, geolocation accuracy, or approval.
 """
 from .access import allowed, has
@@ -13,7 +13,7 @@ from .related_incident_locations import _safe_source_url
 
 SCAN_LIMIT=30
 
-def campaign_jurisdiction_readiness(db, principal, campaign_id):
+def campaign_jurisdiction_readiness(db, principal, campaign_id, cursor=None):
     if not has(principal,'view_intelligence'):
         raise PermissionError('Intelligence access required')
     if not str(campaign_id or '').isdigit() or int(campaign_id)<1:
@@ -21,8 +21,22 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id):
     campaign=db.get(MonitoringCampaign,int(campaign_id))
     if not campaign or not allowed(principal,campaign):
         raise PermissionError('Campaign unavailable')
-    links=(db.query(CampaignEvidence).filter_by(campaign_id=campaign.id)
-           .order_by(CampaignEvidence.id.desc()).limit(SCAN_LIMIT+1).all())
+    if cursor not in (None,''):
+        try:
+            cursor=int(cursor)
+        except (TypeError,ValueError):
+            raise ValueError('Invalid jurisdiction readiness cursor')
+        if cursor<=0:
+            raise ValueError('Invalid jurisdiction readiness cursor')
+    else:
+        cursor=None
+    query=(db.query(CampaignEvidence).filter(
+        CampaignEvidence.campaign_id==campaign.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
+    if cursor is not None:
+        query=query.filter(CampaignEvidence.id<cursor)
+    links=(query.order_by(CampaignEvidence.id.desc())
+           .limit(SCAN_LIMIT+1).all())
     sampled_links=links[:SCAN_LIMIT]
     ids=[link.result_id for link in sampled_links]
     posts={post.id:post for post in (
@@ -109,7 +123,11 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id):
     leads.sort(key=lambda row:ordering.get(row['priority'],9))
     return {
       'campaign_id':str(campaign.id),
-      'scope':'AUTHORIZED_LATEST_CAMPAIGN_EVIDENCE_ONLY',
+      'scope':'AUTHORIZED_CAMPAIGN_EVIDENCE_WINDOW_ONLY',
+      'page_cursor':str(cursor) if cursor is not None else None,
+      'next_cursor':(str(sampled_links[-1].id)
+                     if len(links)>SCAN_LIMIT and sampled_links else None),
+      'pagination_method':'DESCENDING_EVIDENCE_ID_KEYSET',
       'scan_limit':SCAN_LIMIT,
       'sampled_link_count':len(sampled_links),
       'authorized_link_count':counts['authorized_sources'],

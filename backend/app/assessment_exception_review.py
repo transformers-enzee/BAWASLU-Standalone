@@ -59,6 +59,7 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
     # cross-snapshot drift and unknown future exception codes. It cannot grant
     # authorization; its only role is to block misleading UI approval hints.
     blockers=[]
+    if snapshot_consistency is None: blockers.append('SNAPSHOT_AUDIT_UNAVAILABLE')
     if not snapshot_valid: blockers.append('UNRECONCILED_SNAPSHOT')
     if missing_audits: blockers.append('MISSING_DIAGNOSTIC_AUDITS')
     if unknown: blockers.append('UNRECOGNIZED_EXCEPTION')
@@ -78,6 +79,7 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
         'separate_explicit_approval_required':True,
         'never_authorizes_paid_processing':True,
         'no_provider_requests':True,
+        'snapshot_audit_supplied':snapshot_consistency is not None,
     }
     return {
         'manual_approval_review_gate':review_gate,

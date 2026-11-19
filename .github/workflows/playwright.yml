@@ -49,6 +49,14 @@ jobs:
         working-directory: frontend
         run: npm install --prefer-offline --no-audit --no-fund
 
+      - name: Administrator exception review frontend contracts
+        working-directory: frontend
+        run: |
+          node scripts/test-assessment-exception-review-v1714.mjs
+          node scripts/test-assessment-exception-review-v1715.mjs
+          node scripts/test-assessment-review-gate-v1716.mjs
+          node scripts/test-assessment-review-gate-v1717.mjs
+
       - name: Build production frontend
         working-directory: frontend
         env:

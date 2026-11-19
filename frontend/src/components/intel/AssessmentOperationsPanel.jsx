@@ -147,6 +147,7 @@ export default function AssessmentOperationsPanel({campaignId}){
      <h5 className="font-semibold text-slate-900">Administrator investigation order · read-only</h5>
      <p>Review snapshot consistency, then original provider history, then eligible queue reconciliation. Categories and flag counts may overlap; they are not distinct jobs.</p>
      <p data-testid="exception-review-next-step">Next review step: {String(data.exception_review.next_review_step||'UNKNOWN').replaceAll('_',' ')}</p>
+     {!data.exception_review.manual_approval_review_gate&&<p role="alert" data-testid="manual-approval-gate-unavailable" className="text-amber-900">Consolidated approval safeguards are unavailable from this API version. Do not rely on the legacy capacity figure or authorize paid processing.</p>}
      {data.exception_review.manual_approval_review_gate&&<div className="rounded border border-slate-200 bg-slate-50 p-2 space-y-1" data-testid="manual-approval-review-gate">
       <p className="font-semibold">Manual processing preflight · {data.exception_review.manual_approval_review_gate.status==='BLOCKED'?'Blocked':'Review only'}</p>
       <p>Reviewable capacity after all diagnostic checks: {fmt(data.exception_review.manual_approval_review_gate.displayable_capacity_if_all_checks_clear)}. Separate administrator approval, quota reservation and worker authorization are still required.</p>

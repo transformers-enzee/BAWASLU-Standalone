@@ -193,3 +193,38 @@ test('completed KPI uses completed before usage-backed counts',async({page})=>{
  const card=page.getByText('Completed / usage-backed').locator('..');
  await expect(card).toContainText('9 / 4');
 });
+
+test('consolidated gate blocks capacity when snapshot audit is unavailable',async({page})=>{
+ await mount(page,1717);
+ const data=snapshot(1717);
+ data.exception_review={
+  next_review_step:'REFRESH_SNAPSHOT',snapshot_reconciled:false,
+  usage_audit_available:true,completion_audit_available:true,
+  queue_exceptions_clear:true,missing_audits:[],groups:[],
+  manual_approval_review_gate:{
+   status:'BLOCKED',blockers:['SNAPSHOT_AUDIT_UNAVAILABLE'],
+   displayable_capacity_if_all_checks_clear:0}
+ };
+ data.operational_acceptance.manual_request_capacity_if_separately_approved=12;
+ await respond(page,1717,data);
+ await expect(page.getByTestId('manual-approval-review-gate')).toContainText('Blocked');
+ await expect(page.getByTestId('manual-approval-review-gate')).toContainText('capacity after all diagnostic checks: 0');
+ await expect(page.getByTestId('manual-approval-blockers')).toContainText('SNAPSHOT AUDIT UNAVAILABLE');
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});
+test('older API without consolidated gate prominently fails closed',async({page})=>{
+ await mount(page,1718);
+ const data=snapshot(1718);
+ data.operational_acceptance.manual_request_capacity_if_separately_approved=8;
+ data.exception_review={
+  next_review_step:'VERIFY_HISTORICAL_USAGE_INDEPENDENTLY',
+  snapshot_reconciled:true,usage_audit_available:true,
+  completion_audit_available:true,queue_exceptions_clear:true,
+  missing_audits:[],groups:[]};
+ await respond(page,1718,data);
+ await expect(page.getByTestId('manual-approval-gate-unavailable')).toContainText('Do not rely on the legacy capacity');
+ await expect(page.getByTestId('manual-approval-review-gate')).toHaveCount(0);
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});

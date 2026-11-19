@@ -56,12 +56,11 @@ def check_source_claim_requirements(answer, requirements, evidence, cited_ids):
                 continue
             # Evaluate only immediately preceding negation of the exact
             # anchor; more complex claims are explicitly out of scope.
-            match = re.search(r"(?<!\w)" + re.escape(anchor) + r"(?!\w)", norm_span)
-            if match is None:
-                continue
-            before = norm_span[:match.start()]
-            negated = bool(re.search(r"\b(?:tidak|bukan|belum)\s+$", before))
-            candidates.append("NEGATIVE" if negated else "POSITIVE")
+            matches = re.finditer(r"(?<!\\w)" + re.escape(anchor) + r"(?!\\w)", norm_span)
+            for match in matches:
+                before = norm_span[:match.start()]
+                negated = bool(re.search(r"\\b(?:tidak|bukan|belum)\\s+$", before))
+                candidates.append("NEGATIVE" if negated else "POSITIVE")
         if not candidates:
             issues.append({"requirement_index": index,
                            "reason": "NO_LOCALLY_CITED_ANCHOR", "source_id": ref})

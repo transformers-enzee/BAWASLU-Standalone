@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from app.assistant_grounding import audit_assistant_answer
 from app.assistant_answer_quality import evaluate_answer_quality
+from app.assistant_source_claim_requirements import check_source_claim_requirements
 
 FIXTURE = Path(__file__).parent / "fixtures" / "assistant_response_benchmark_p1.json"
 DATA = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -50,6 +51,14 @@ def test_synthetic_question_to_response_integrity(case):
     assert qa["semantic_entailment_verified"] is False
     assert qa["legal_currentness_verified"] is False
     if expected == "PASS":
+        requirements=[{"source_id":case["authorized_evidence"][0]["record_id"],
+                       "anchor":point}
+                      for point in case["required_answer_points"]]
+        support=check_source_claim_requirements(
+            visible,requirements,case["authorized_evidence"],cited)
+        assert support["status"]=="PASS_NARROW_LEXICAL_ONLY"
+        assert support["semantic_entailment_verified"] is False
+
         assert cited
         assert all(point.casefold() in visible.casefold()
                    for point in case["required_answer_points"])

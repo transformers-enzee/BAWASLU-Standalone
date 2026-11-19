@@ -232,6 +232,10 @@ def save_regency_review(db,p,campaign,post,relevant,data,province_status):
 def jurisdiction_action(db,p,action,data,id=None):
     if not has(p,'view_intelligence'):
         raise PermissionError('Intelligence access required')
+    if action=='campaignJurisdictionReadiness':
+        from .jurisdiction_readiness import campaign_jurisdiction_readiness
+        return campaign_jurisdiction_readiness(
+            db,p,id or data.get('campaign_id'))
     campaign,post,relevant=scoped_post(
         db,p,id or data.get('campaign_id'),data.get('result_id'))
     if action=='campaignRegencyReviewHistory':

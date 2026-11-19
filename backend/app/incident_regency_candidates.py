@@ -70,8 +70,14 @@ def incident_regency_candidates(text):
                 continue
             names=[match.group('name')]
             after=sentence[match.end():]
-            next_match=_FOLLOWUP.match(after)
-            if next_match:names.append(next_match.group('name'))
+            # Repeat only directly consecutive locality clauses, never
+            # guess through arbitrary intervening narrative text.
+            for _ in range(8):
+                next_match=_FOLLOWUP.match(after)
+                if not next_match:
+                    break
+                names.append(next_match.group('name'))
+                after=after[next_match.end():]
             for name in names:
                 row=(_EXPLICIT_FORMS.get(name.casefold()) or
                      _UNIQUE_SUFFIXES.get(name.casefold()))

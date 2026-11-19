@@ -43,7 +43,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q             tests/test_assistant_full_answer_replay_v1607.py             tests/test_saved_answer_audit_v1608.py             tests/test_legal_indonesian_modalities_v1600.py
+          python -m pytest -q --junitxml=assistant-offline-results.xml
+            tests/test_assistant_full_answer_replay_v1607.py
+            tests/test_saved_answer_audit_v1608.py
+            tests/test_legal_indonesian_modalities_v1600.py
+            tests/test_assistant_offline_response_eval.py
+            tests/test_assistant_response_benchmark_p1.py
+            tests/test_assistant_multipage_response_qa.py
+            tests/test_assistant_pdf_quote_audit.py
+            tests/test_assistant_pdf_depth_budget.py
+            tests/test_assistant_pdf_depth_contract.py
+            tests/test_exact_pdf_page_grounding_v1500.py
+            tests/test_assistant_citation_consistency.py
+      - name: Upload machine-readable offline QA results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-offline-pytest
+          path: backend/assistant-offline-results.xml
+          if-no-files-found: warn
+          retention-days: 14
       - name: Run eight frontend-to-backend regression contracts
         shell: bash
         working-directory: frontend
@@ -65,7 +84,7 @@ jobs:
             echo "## BAWASLU offline assistant QA"
             echo ""
             echo "- Commit: ${GITHUB_SHA}"
-            echo "- Deterministic Python tests: synthetic full-answer replay, saved-answer audit and Indonesian legal polarity"
+            echo "- Deterministic Python tests: synthetic replay, legal polarity, 50-case PDF benchmark, 44-case offline response triage, multi-page grounding, exact-page retrieval and saved-answer privacy"
             echo "- Eight Node.js source-to-UI contract checks"
             echo "- AI and Socialcrawl keys intentionally empty; local in-memory SQLite"
             echo "- Not a live model run, real PDF source audit, or independent legal accuracy evaluation"

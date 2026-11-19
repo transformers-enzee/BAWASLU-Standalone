@@ -27,7 +27,7 @@ def summarize_authorized_saved_reply_audit(audit):
             continue
         status=row.get("status")
         name=row.get("id")
-        if name not in _CORE or status not in _KNOWN:
+        if not isinstance(name,str) or not isinstance(status,str) or name not in _CORE or status not in _KNOWN:
             continue
         if name in seen_core:
             duplicate_core=True
@@ -47,7 +47,7 @@ def summarize_authorized_saved_reply_audit(audit):
             continue
         check_id=row.get("id")
         status=row.get("status")
-        if check_id not in _SUPPLEMENTAL or status not in _KNOWN:
+        if not isinstance(check_id,str) or not isinstance(status,str) or check_id not in _SUPPLEMENTAL or status not in _KNOWN:
             continue
         if check_id in seen_supplemental:
             duplicate_supplemental=True
@@ -131,11 +131,11 @@ def summarize_authorized_saved_reply_batch(results):
         if state=="REVIEW_FLAGS_PRESENT":
             counts["REVIEW_FLAGS_PRESENT"]+=1
             for reason in triage.get("readiness_review_ids") or []:
-                if reason in {"citation_grounding","source_relevance",
+                if isinstance(reason,str) and reason in {"citation_grounding","source_relevance",
                               "legal_uncertainty","cross_module_consistency"}:
                     reason_counts[reason]+=1
             for reason in triage.get("supplemental_review_ids") or []:
-                if reason in {"citation_inventory_consistency",
+                if isinstance(reason,str) and reason in {"citation_inventory_consistency",
                               "pdf_quoted_passage_alignment",
                               "requested_topic_coverage"}:
                     reason_counts[reason]+=1

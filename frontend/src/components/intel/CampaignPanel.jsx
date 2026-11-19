@@ -75,12 +75,13 @@ export default function CampaignPanel({campaignId=null}){
  const [activationSaved,setActivationSaved]=useState(null);
  const [allRun,setAllRun]=useState(null),[allOpen,setAllOpen]=useState(false),[allBusy,setAllBusy]=useState(false),[allError,setAllError]=useState('');
  const [allCampaign,setAllCampaign]=useState(null);
- async function launchAssessAll(){
+ async function launchAssessAll(importOnly=false){
   if(!selected||allBusy)return;
-  if(!window.confirm('Assess all remaining unassessed posts for '+selected.name+'? Every eligible post can incur a separately metered GPT request; previously completed and failed/ambiguous requests are not retried. SocialCrawl credits: 0.'))return;
+  const scopeLabel=importOnly?'the 434 imported ZocialEye posts':'all remaining unassessed posts';
+  if(!window.confirm('Assess '+scopeLabel+' for '+selected.name+'? Only unassessed eligible posts are billed; each GPT request may incur charges. Processing respects daily and lifetime request limits. Failed/ambiguous calls are not automatically retried. SocialCrawl credits: 0.'))return;
   setAllBusy(true);setAllError('');
   try{
-   const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAllStart',id:selected.id,data:{confirm_ai_cost:true}});
+   const r=await base44.functions.invoke('socialListening',{action:'campaignAssessmentAllStart',id:selected.id,data:{confirm_ai_cost:true,...(importOnly?{source_batch_prefix:'offline-xlsx-20261119-batch-'}:{})}});
    if(r.data.no_unassessed){setNotice('All linked posts have already been assessed.');return}
    setAllCampaign(selected);setAllOpen(true);setAllRun({...r.data,stage:'ASSESSING',status:'QUEUED',total:r.data.total||0,completed:0,queued:r.data.queued||0});
   }catch(e){setAllError(e.response?.data?.detail||e.message||'Unable to start full AI assessment')}
@@ -690,6 +691,8 @@ export default function CampaignPanel({campaignId=null}){
 
    {campaignSection==='overview'&&dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
     <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
+    {String(selected?.id)==='1'&&<div className="flex flex-wrap items-center gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><button type="button" className="intel-button" disabled={allBusy} onClick={()=>launchAssessAll(true)}>{allBusy?'Preparing…':'Assess imported ZocialEye posts with AI'}</button><span className="text-xs text-slate-600">434 imported records · reviewable AI classifications · token charges may apply · daily budget limits enforced</span></div>}
+    {allError&&<p role="alert" className="text-sm text-red-700">{allError}</p>}
 {appliedKeyword&&<p className="text-xs font-medium text-teal-700">Showing results containing: “{appliedKeyword}”</p>}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/></section>

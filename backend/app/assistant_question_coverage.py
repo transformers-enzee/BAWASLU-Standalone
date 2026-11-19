@@ -39,14 +39,14 @@ TOPICS = {
 
 # A repeated question or bare citation is not a substantive answer.
 _QUESTION_ECHO = re.compile(
-    r"^\\s*(?:pertanyaan\\s+(?:anda|ini)\\s*[:：]|you\\s+asked\\s*[:：])[^\\n]*\\n?", re.I)
+    r"^\s*(?:pertanyaan\s+(?:anda|ini)\s*[:：]|you\s+asked\s*[:：])[^\n]*\n?", re.I)
 _CITATION_ONLY = re.compile(
-    r"^\\s*(?:\\[(?:DOC-\\d+-P\\d+|INT-[A-Za-z0-9:_-]+|SOCIAL-[A-Za-z0-9:_-]+)\\]\\s*)+$")
+    r"^\s*(?:\[(?:DOC-\d+-P\d+|INT-[A-Za-z0-9:_-]+|SOCIAL-[A-Za-z0-9:_-]+)\]\s*)+$")
 
 
 def _answer_body(answer):
     text = _QUESTION_ECHO.sub("", str(answer or ""), count=1)
-    return "\\n".join(line for line in text.splitlines()
+    return "\n".join(line for line in text.splitlines()
                      if not _CITATION_ONLY.fullmatch(line))
 
 

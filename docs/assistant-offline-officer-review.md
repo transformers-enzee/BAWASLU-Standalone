@@ -20,3 +20,21 @@ This is a **local, human-led review**, not an AI judge or automatic legal determ
 The output intentionally cannot establish independent verification, representativeness, genuine model provenance, formal legal sign-off, or release approval. Check the answer revision token and current source authorization before rating. Preserve private inputs within approved storage; the aggregated counts alone do not establish model accuracy.
 
 **Important:** The review packet contains selected answer identifiers and revision tokens. Even without raw answer text it is sensitive operational metadata; do not commit it.
+
+## Simpler CSV worksheet (recommended for officers)
+
+Run locally from `backend` to prepare a blank worksheet:
+
+```bash
+python -m app.assistant_human_review_csv --packet /secure/review-packet.json --blank-csv /secure/officer-ratings.csv
+```
+
+Open the CSV locally in a trusted spreadsheet editor. Keep the three identifier columns unchanged. Fill the six rating columns with `PASS`, `FAIL`, or `NOT_ASSESSABLE`. Use `YES` only for attestations personally completed; `NO` or blank does not count as completed. Do not enter raw answer text or source passages in the CSV.
+
+After the reviewer has checked the original saved answer, source access, exact PDF page and document version, compile redacted review counts locally:
+
+```bash
+python -m app.assistant_human_review_csv --packet /secure/review-packet.json --completed-csv /secure/officer-ratings.csv --output /secure/officer-review-counts.json
+```
+
+No GitHub upload is needed or appropriate for these private review files. This procedure never automatically approves a release, certifies legal correctness, or verifies reviewer independence. The reviewer must use the real application to inspect the original answer and current evidence.

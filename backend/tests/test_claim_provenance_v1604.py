@@ -77,11 +77,17 @@ def test_formal_and_social_refs_not_treated_as_social_only():
 
 def test_unselected_id_not_used_as_source_certification():
     q=assess("BAWASLU confirmed a violation [SOCIAL-99].")
-    assert q["formal_outcome_source_provenance"]["review_required_count"]==0
+    provenance=q["formal_outcome_source_provenance"]
+    assert provenance["review_required_count"]==1
+    assert provenance["review_items"][0]["reason"]=="FORMAL_DECISION_NO_LOCAL_AUTHORIZED_CITATION"
+    assert provenance["formal_decision_verified"] is False
 
 def test_next_sentence_social_citation_not_borrowed():
     q=assess("BAWASLU confirmed a violation. Other commentary [SOCIAL-1].")
-    assert q["formal_outcome_source_provenance"]["review_required_count"]==0
+    provenance=q["formal_outcome_source_provenance"]
+    assert provenance["review_required_count"]==1
+    assert provenance["review_items"][0]["reason"]=="FORMAL_DECISION_NO_LOCAL_AUTHORIZED_CITATION"
+    assert provenance["review_items"][0]["cited_social_ids"]==[]
 
 def test_plain_social_discussion_without_formal_decision_stays_unflagged():
     q=assess("A post alleged an electoral violation [SOCIAL-1].")
@@ -104,8 +110,11 @@ def test_platform_only_question_still_flags_legal_pdf_misattribution(claim):
 
 def test_platform_only_question_without_legal_source_is_not_a_legal_pdf_warning():
     q=assess("Instagram violates platform policy [SOCIAL-1].")
-    assert q["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
-    assert q["platform_policy_legal_boundary"]["platform_breach_confirmed"] is False
+    boundary=q["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_WITHOUT_VERIFIED_PROVIDER_DECISION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
+    assert boundary["platform_breach_confirmed"] is False
 
 def test_platform_uncertainty_still_not_definitive():
     q=assess("Instagram may violate platform policy [DOC-1-P1].",

@@ -186,6 +186,7 @@ export default function CampaignPanel({campaignId=null}){
  const [campaignSection,setCampaignSection]=useState('overview');
  const [statusFilter,setStatusFilter]=useState('all');
  const [trendMetric,setTrendMetric]=useState('posts');
+ const [trendDays,setTrendDays]=useState('30');
  const [chartDay,setChartDay]=useState(null);
  const [evidence,setEvidence]=useState([]),[evidenceLoading,setEvidenceLoading]=useState(false),[evidenceError,setEvidenceError]=useState('');
  const [capturedSentimentFilter,setCapturedSentimentFilter]=useState('ALL'),[capturedSentimentSort,setCapturedSentimentSort]=useState('HOTTEST');
@@ -267,6 +268,21 @@ export default function CampaignPanel({campaignId=null}){
  const [metricRepairBusy,setMetricRepairBusy]=useState(false),[metricRepairNotice,setMetricRepairNotice]=useState(''),[metricRepairError,setMetricRepairError]=useState('');
  const [manualPreview,setManualPreview]=useState(null),[manualBusy,setManualBusy]=useState(false),[manualDuplicate,setManualDuplicate]=useState(false),[manualNotice,setManualNotice]=useState('');
  const [analyticsFrom,setAnalyticsFrom]=useState(''),[analyticsTo,setAnalyticsTo]=useState(''),[analyticsKeyword,setAnalyticsKeyword]=useState(''),[appliedKeyword,setAppliedKeyword]=useState(''),[analyticsBusy,setAnalyticsBusy]=useState(false);
+ // Roll the chart to the current local calendar day; retain the original stored metrics.
+ const trendToday=new Date();
+ const trendTodayKey=[trendToday.getFullYear(),String(trendToday.getMonth()+1).padStart(2,'0'),String(trendToday.getDate()).padStart(2,'0')].join('-');
+ const trendStart=new Date(trendToday.getFullYear(),trendToday.getMonth(),trendToday.getDate()-(Number(trendDays)||30)+1);
+ const trendRows=dashboard?.daily_platform_trend||[];
+ const trendByDate=new Map(trendRows.map(row=>[String(row.date||'').slice(0,10),row]));
+ const chartPlatformKeys=Object.keys(dashboard?.platforms||{});
+ const emptyTrendDate=date=>({date,...Object.fromEntries(chartPlatformKeys.flatMap(p=>['posts','engagement','views'].map(m=>[p+'__'+m,0])))});
+ const trendChartData=trendDays==='all'
+  ? trendRows.filter(row=>String(row.date||'').slice(0,10)<=trendTodayKey).concat(trendByDate.has(trendTodayKey)?[]:[emptyTrendDate(trendTodayKey)])
+  : Array.from({length:Number(trendDays)},(_,index)=>{
+    const day=new Date(trendStart.getFullYear(),trendStart.getMonth(),trendStart.getDate()+index);
+    const date=[day.getFullYear(),String(day.getMonth()+1).padStart(2,'0'),String(day.getDate()).padStart(2,'0')].join('-');
+    return trendByDate.get(date)||emptyTrendDate(date);
+   });
  const visibleCapturedPosts=evidence.filter(item=>{
   const day=String(item.published_at||'').slice(0,10);
   const dateOk=!(analyticsFrom||analyticsTo)||(day&&(!analyticsFrom||day>=analyticsFrom)&&(!analyticsTo||day<=analyticsTo));
@@ -680,15 +696,15 @@ export default function CampaignPanel({campaignId=null}){
 
       <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
       <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Campaign trend by platform">
-<h5 className="font-semibold">Social Listening by platform</h5>
+<div className="flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">Social Listening by platform</h5><div className="flex flex-wrap gap-1" role="group" aria-label="Trend date range">{[['7','7D'],['30','30D'],['90','90D'],['all','All']].map(([days,label])=><button key={days} type="button" aria-pressed={trendDays===days} className={trendDays===days?'intel-button text-xs':'intel-ghost text-xs'} onClick={()=>setTrendDays(days)}>{label}</button>)}</div></div>
 <div className="flex gap-2" role="group" aria-label="Trend metric">{['posts','engagement','views'].map(k=><button key={k} type="button" aria-pressed={trendMetric===k} className={trendMetric===k?'intel-button':'intel-ghost'} onClick={()=>setTrendMetric(k)}>{k==='posts'?'Posts':k==='engagement'?'Engagement':'Views'}</button>)}</div>
-{dashboard.daily_platform_trend?.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
-<LineChart data={dashboard.daily_platform_trend} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
+{trendChartData.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
+<LineChart data={trendChartData} onClick={point=>{if(point?.activeLabel)openChartDate(String(point.activeLabel))}} margin={{top:12,right:14,left:-18,bottom:12}}>
 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="date" tick={{fontSize:10}} minTickGap={26}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Legend verticalAlign="bottom"/>
 {Object.keys(dashboard.platforms||{}).map((platform,index)=><Line key={platform} type="monotone" dataKey={platform+'__'+trendMetric} name={platformLabel(platform)} stroke={['#285f82','#bc9b62','#ba6565','#815ca7','#d2735c','#6d84a1','#69865f','#b95b83'][index%8]} dot={{r:3}} activeDot={{r:6}} connectNulls/>)}
 </LineChart>
 </ResponsiveContainer></div>:<p className="text-xs text-slate-500">No dated posts in this period</p>}
-<p className="text-xs text-slate-500">Click a date on the chart to see its hottest posts. Only stored provider metrics are counted; missing data is not estimated.</p>
+<p className="text-xs text-slate-500">Click a date to see its hottest posts. Empty dates show zero posts; engagement and views use only stored provider metrics. The rolling range ends today.</p>
 </section>
     {campaignSection==='overview'&&dashboard&&<TopicThemes data={dashboard.topics_and_themes} campaignId={selected.id} onUpdated={refreshSentimentViews}/>}
 {chartDay&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setChartDay(null)}}>

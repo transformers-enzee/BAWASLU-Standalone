@@ -24,6 +24,7 @@ def _request(thread=OWNED, index=1, submit=True, ratings=None, **flags):
             thread_id=thread,answer_message_index=index,
             ratings=ratings or {x:"PASS" for x in DIMENSIONS},
             original_answer_reviewed=flags.get("original_answer_reviewed",True),
+            source_material_reviewed=flags.get("source_material_reviewed",True),
             independent_review_attested=flags.get("independent_review_attested",True))]
     return SavedReplyHumanReviewRequest(
         selections=[SavedReplyAuditRequest(
@@ -139,3 +140,16 @@ def test_unauthorized_answer_text_and_evidence_input_are_forbidden():
             "thread_id":OWNED,"answer_message_index":1,
             "ratings":{"SOURCE_ID_ACCURACY":"PASS"},
             "answer_text":"Forged answer"})
+
+
+def test_server_permission_check_does_not_replace_human_source_inspection(session,monkeypatch):
+    _access(monkeypatch)
+    seen=_sources(monkeypatch)
+    data=saved_reply_human_review(
+        _request(source_material_reviewed=False),
+        Response(),current(),session)
+    assert seen==[["SOCIAL-7"]]
+    assert data["source_access_reauthorized_during_request"] is True
+    assert data["scores"]["complete_self_attested_reviews"]==0
+    assert data["scores"]["review_disposition_counts"]["INCOMPLETE_REVIEW"]==1
+    assert data["scores"]["server_source_access_is_not_reviewer_inspection"] is True

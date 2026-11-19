@@ -228,3 +228,24 @@ test('older API without consolidated gate prominently fails closed',async({page}
  expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
   .toEqual(['campaignAssessmentOperationsOverview']);
 });
+
+test('contradictory nested review diagnostics are presented as blocked',async({page})=>{
+ await mount(page,1719);
+ const data=snapshot(1719);
+ data.operational_acceptance.manual_request_capacity_if_separately_approved=5;
+ data.exception_review={
+  next_review_step:'REFRESH_SNAPSHOT',snapshot_reconciled:true,
+  usage_audit_available:true,completion_audit_available:true,
+  missing_audits:[],unknown_codes:[],groups:[],queue_exceptions_clear:true,
+  diagnostic_conflicts:['PROVIDER_FLAGS_MISSING_FROM_EXCEPTIONS'],
+  manual_approval_review_gate:{status:'BLOCKED',blockers:['CONFLICTING_DIAGNOSTICS'],
+   displayable_capacity_if_all_checks_clear:0}
+ };
+ await respond(page,1719,data);
+ await expect(page.getByTestId('exception-diagnostic-conflicts'))
+  .toContainText('PROVIDER FLAGS MISSING FROM EXCEPTIONS');
+ await expect(page.getByTestId('manual-approval-review-gate'))
+  .toContainText('capacity after all diagnostic checks: 0');
+ expect(await page.evaluate(()=>window.__assessmentCalls.map(x=>x.action)))
+  .toEqual(['campaignAssessmentOperationsOverview']);
+});

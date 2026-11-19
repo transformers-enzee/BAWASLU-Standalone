@@ -51,6 +51,25 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
     missing_audits=[]
     if not usage_audit_available: missing_audits.append('PROVIDER_USAGE_INTEGRITY')
     if not completion_audit_available: missing_audits.append('COMPLETION_PROVENANCE')
+    # Fail closed if nested diagnostics disagree with the top-level issue list.
+    # Cross-query reads can race; never silently treat missing issue codes
+    # as proof that the underlying diagnostic counts have cleared.
+    diagnostic_conflicts=[]
+    if usage.get('status')=='REVIEW_REQUIRED' and not any(
+        code in issue_by_code for code in
+        ('USAGE_INTEGRITY_WARNING','CLASSIFICATION_USAGE_LIFECYCLE_CONFLICT')):
+        diagnostic_conflicts.append('PROVIDER_FLAGS_MISSING_FROM_EXCEPTIONS')
+    if max(0,int(provenance.get('requires_historical_usage_review',0))) and (
+        'COMPLETION_PROVENANCE_GAP' not in issue_by_code):
+        diagnostic_conflicts.append('PROVENANCE_GAPS_MISSING_FROM_EXCEPTIONS')
+    if provenance.get('completed_partition_reconciled') is False:
+        diagnostic_conflicts.append('COMPLETED_PARTITION_DRIFT')
+    if triage.get('status')=='RECHECK_INDEPENDENT_SNAPSHOTS':
+        diagnostic_conflicts.append('QUEUE_SNAPSHOT_RECHECK_REQUIRED')
+    if (snapshot_consistency is not None and
+        snapshot_consistency.get('failed_checks') and
+        snapshot_consistency.get('all_consistent') is True):
+        diagnostic_conflicts.append('CONTRADICTORY_SNAPSHOT_REPORT')
     history_verified=False
     queue_review_clear=next(g['active_categories'] for g in groups if g['group']=='QUEUE')==0
     queue_has_no_active_work=triage.get('status')=='NO_ACTIVE_WORK'
@@ -62,6 +81,7 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
     if snapshot_consistency is None: blockers.append('SNAPSHOT_AUDIT_UNAVAILABLE')
     if not snapshot_valid: blockers.append('UNRECONCILED_SNAPSHOT')
     if missing_audits: blockers.append('MISSING_DIAGNOSTIC_AUDITS')
+    if diagnostic_conflicts: blockers.append('CONFLICTING_DIAGNOSTICS')
     if unknown: blockers.append('UNRECOGNIZED_EXCEPTION')
     if history_flags: blockers.append('HISTORICAL_EXCEPTION')
     if not queue_review_clear: blockers.append('QUEUE_RECONCILIATION_REQUIRED')
@@ -93,6 +113,8 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
         'usage_audit_available':usage_audit_available,
         'completion_audit_available':completion_audit_available,
         'missing_audits':missing_audits,
+        'diagnostic_conflicts':diagnostic_conflicts,
+        'diagnostics_consistent':not diagnostic_conflicts,
         'history_verification_blocked_by_missing_audits':bool(missing_audits),
         'historical_provider_usage_independently_verified':history_verified,
         'historical_usage_state':('AUDIT_UNAVAILABLE' if missing_audits else
@@ -101,7 +123,7 @@ def assessment_exception_review(issues, triage, acceptance, snapshot_consistency
         'completion_counts_reconciled':bool(provenance.get('completed_partition_reconciled',False)),
         'no_issues_does_not_verify_provider_usage':True,
         'administrative_queue_clearance_is_not_provider_usage_proof':True,
-        'next_review_step':('REFRESH_SNAPSHOT' if not snapshot_valid else
+        'next_review_step':('REFRESH_SNAPSHOT' if not snapshot_valid or diagnostic_conflicts else
                             'RESTORE_MISSING_AUDITS' if missing_audits else
                             'INVESTIGATE_PROVIDER_HISTORY' if history_flags else
                             'RECONCILE_QUEUE' if not queue_review_clear else

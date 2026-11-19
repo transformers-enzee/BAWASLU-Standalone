@@ -156,6 +156,7 @@ export default function AssessmentOperationsPanel({campaignId}){
      </div>}
 
      {data.exception_review.snapshot_reconciled===false&&<p role="alert" className="text-amber-900" data-testid="exception-snapshot-warning">Independent queue or campaign aggregates do not reconcile. Refresh before any remediation.</p>}
+     {data.exception_review.diagnostic_conflicts?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-diagnostic-conflicts">Operational diagnostics disagree: {data.exception_review.diagnostic_conflicts.join(', ').replaceAll('_',' ')}. Refresh read-only status and investigate persistent discrepancies before any action.</p>}
      {data.exception_review.missing_audits?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-missing-audits">Audit details unavailable: {data.exception_review.missing_audits.join(', ').replaceAll('_',' ')}. No verified historical usage conclusion is possible.</p>}
      <p className="text-slate-600" data-testid="exception-audit-coverage">Provider usage audit: {data.exception_review.usage_audit_available?'Available':'Unavailable'} · Completion audit: {data.exception_review.completion_audit_available?'Available':'Unavailable'} · Snapshots: {data.exception_review.snapshot_reconciled?'Reconciled':'Need recheck'}</p>
      {data.exception_review.groups?.map(group=><div key={group.group} className="rounded border border-slate-200 p-2 space-y-1" data-testid={'exception-group-'+group.group}>

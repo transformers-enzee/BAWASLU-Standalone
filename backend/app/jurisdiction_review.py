@@ -10,6 +10,7 @@ from .models import (MonitoringCampaign,CampaignEvidence,SocialListeningResult,
                      EvidenceAssessment,CampaignJurisdictionReview)
 from .socialcrawl import _result_in_scope
 from .processing_hints import incident_location_cues
+from .incident_regency_candidates import incident_regency_preview
 
 
 def fingerprint(text):
@@ -70,6 +71,7 @@ def jurisdiction_action(db,p,action,data,id=None):
     preview={'campaign_id':str(campaign.id),'result_id':str(post.id),
         'canonical_source_id':'social:'+str(post.id),
         'source_context_provinces_unverified':locations,
+        'incident_kabupaten_kota_preview':incident_regency_preview(post.text_content),
         'source_post_relevance_assessed':relevant,
         'source_evidence_verified':False,
         'geographic_acl_expanded':False,

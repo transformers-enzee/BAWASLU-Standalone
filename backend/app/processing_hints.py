@@ -104,6 +104,17 @@ def incident_location_cues(text):
         for name in (match.group('first'),match.group('second')):
             if name:
                 found.add(INCIDENT_REGENCY_PROVINCES[name])
+    # Region-level incident cues are *unverified*, and only explicit
+    # incident-locality phrases can contribute a provisional province.
+    from .incident_regency_candidates import incident_regency_candidates
+    from .geography import province_name_for
+    for candidate in incident_regency_candidates(text):
+        from_code=province_name_for(candidate['province_code'])
+        if from_code:
+            # UI and existing human review consume Indonesian canonical aliases.
+            code=candidate['province_code']
+            from .geography import INDONESIAN_PROVINCE_ALIASES
+            found.add(INDONESIAN_PROVINCE_ALIASES.get(code,[from_code])[0])
     return sorted(found)
 
 def attention_evidence_readiness(row):

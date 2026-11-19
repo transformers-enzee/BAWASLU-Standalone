@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const inbox=read('src/pages/Inbox.jsx');
+const preview=read('../backend/app/jurisdiction_review.py');
+const hints=read('../backend/app/processing_hints.py');
+assert.ok(inbox.includes('incident-regency-candidates'));
+assert.ok(inbox.includes('Multiple regency/city candidates require separate officer review'));
+assert.ok(inbox.includes('Candidates span multiple provinces'));
+assert.ok(preview.includes('incident_kabupaten_kota_preview'));
+assert.ok(hints.includes('incident_regency_candidates(text)'));
+console.log('PASS v172.0 incident Kabupaten/Kota preview integration contract');

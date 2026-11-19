@@ -57,6 +57,7 @@ jobs:
           node scripts/test-assessment-review-gate-v1716.mjs
           node scripts/test-assessment-review-gate-v1717.mjs
           node scripts/test-assessment-review-gate-v1719.mjs
+          node scripts/test-jurisdiction-regency-v1720.mjs
 
       - name: Build production frontend
         working-directory: frontend

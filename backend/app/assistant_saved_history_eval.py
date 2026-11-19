@@ -8,7 +8,7 @@ import json
 import re
 from collections import Counter
 from fastapi import APIRouter,Depends,HTTPException,Response,Query
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field,ConfigDict
 from sqlalchemy.orm import Session
 from .auth import current_user
 from .db import get_db
@@ -34,6 +34,19 @@ class SavedReplyAuditRequest(BaseModel):
 
 class BatchSavedReplyAuditRequest(BaseModel):
     selections:list[SavedReplyAuditRequest]=Field(min_length=1,max_length=5)
+
+class SavedReplyReviewerRating(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    thread_id:str=Field(min_length=36,max_length=36)
+    answer_message_index:int=Field(ge=1,le=59)
+    ratings:dict[str,str]=Field(min_length=1,max_length=6)
+    original_answer_reviewed:bool=False
+    independent_review_attested:bool=False
+
+class SavedReplyHumanReviewRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    selections:list[SavedReplyAuditRequest]=Field(min_length=1,max_length=5)
+    submissions:list[SavedReplyReviewerRating]=Field(min_length=0,max_length=5)
 
 def _access(db,user):
     principal=profile(db,user)
@@ -360,3 +373,48 @@ def saved_reply_batch_audit(
     _no_store(response)
     return audit_owned_saved_reply_batch(
         db,principal,user.id,request.selections)
+
+@router.post("/saved-reply-human-review")
+def saved_reply_human_review(
+    request:SavedReplyHumanReviewRequest,response:Response,
+    user:User=Depends(current_user),db:Session=Depends(get_db)
+):
+    """Admin-only, read-only human scoring after fresh saved-source authorization.
+
+    A successful invocation merely reports self-attested review counts; no
+    accuracy, legal decision, reviewer identity, or client approval is verified.
+    """
+    principal=_access(db,user)
+    if not has(principal,"administration"):
+        raise HTTPException(403,"Administrator review access required")
+    _no_store(response)
+    batch=audit_owned_saved_reply_batch(
+        db,principal,user.id,request.selections)
+    packet=batch["human_review_packet"]
+    # Never accept client-supplied historical evidence or access flags.
+    # The new batch run has already reauthorized each selected reply.
+    from .assistant_human_review_scoring import compile_human_review_scores
+    submitted=[]
+    for row in request.submissions:
+        data=row.model_dump()
+        data["source_access_rechecked"]=True
+        submitted.append(data)
+    if not packet["items"]:
+        raise HTTPException(422,"No selected replies are eligible for human review")
+    try:
+        scores=compile_human_review_scores(packet,submitted)
+    except ValueError:
+        raise HTTPException(422,"Invalid review selections or ratings")
+    return {
+        "schema":"BAWASLU_SAVED_REPLY_HUMAN_REVIEW_V17501",
+        "scores":scores,
+        "selected_reply_count":len(request.selections),
+        "eligible_reply_count":len(packet["items"]),
+        "source_access_reauthorized_during_request":True,
+        "reviewer_attestations_not_independently_verified":True,
+        "actual_model_accuracy":None,
+        "human_review_is_formal_legal_signoff":False,
+        "released_approved":False,
+        "review_data_persisted":False,
+        "model_calls":0,"database_writes":0,
+    }

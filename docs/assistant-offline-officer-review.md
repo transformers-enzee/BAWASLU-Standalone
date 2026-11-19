@@ -38,3 +38,13 @@ python -m app.assistant_human_review_csv --packet /secure/review-packet.json --c
 ```
 
 No GitHub upload is needed or appropriate for these private review files. This procedure never automatically approves a release, certifies legal correctness, or verifies reviewer independence. The reviewer must use the real application to inspect the original answer and current evidence.
+
+## Local preflight before officer scoring
+
+On the trusted workstation run:
+
+```bash
+python -m app.assistant_review_preflight --packet /secure/review-packet.json --output /secure/preflight.json
+```
+
+The redacted preflight reports how many authorized saved replies still require source-access checks, missing-diagnostic remediation, exact-page PDF verification, and cross-source claim review. It reveals no saved-answer identifiers or response text. It does **not** evaluate accuracy or certify completion: officers must still inspect and rate the original answers independently.

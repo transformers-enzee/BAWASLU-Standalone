@@ -1,3 +1,4 @@
+from .assistant_pdf_depth_budget import pdf_output_token_budget
 """Evidence-first, Squeeze-style BAWASLU conversational analysis.
 
 All private evidence comes from existing permission-scoped application actions.
@@ -689,7 +690,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},
-        "max_output_tokens": 1900 if pdf_guidance else 6000
+        "max_output_tokens": (pdf_output_token_budget(response_depth) if pdf_guidance else 6000)
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:

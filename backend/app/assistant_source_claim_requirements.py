@@ -40,6 +40,29 @@ def check_source_claim_requirements(answer, requirements, evidence, cited_ids):
             issues.append({"requirement_index": index, "reason": "ANCHOR_NOT_IN_SELECTED_SOURCE",
                            "source_id": ref})
             continue
+        # Only explicitly opted-in, curated benchmark requirements inspect
+        # the source's literal polarity. This is not inferred legal meaning.
+        # A positive answer must not pass against a source that literally
+        # says "tidak wajib ..." for the same requirement.
+        if requirement.get("validate_source_polarity") is True:
+            source_text = _norm(source.get("source_excerpt"))
+            source_polarities = set()
+            for occurrence in re.finditer(
+                    r"(?<!\w)" + re.escape(anchor) + r"(?!\w)", source_text):
+                preceding = source_text[:occurrence.start()]
+                neg = bool(re.search(
+                    r"\b(?:tidak|bukan|belum)\s+$", preceding))
+                source_polarities.add("NEGATIVE" if neg else "POSITIVE")
+            if len(source_polarities) > 1:
+                issues.append({"requirement_index": index,
+                               "reason": "CONFLICTING_SOURCE_CLAUSES",
+                               "source_id": ref})
+                continue
+            if expected not in source_polarities:
+                issues.append({"requirement_index": index,
+                               "reason": "SOURCE_POLARITY_MISMATCH",
+                               "source_id": ref})
+                continue
         candidates = []
         for i, span in enumerate(spans):
             norm_span = _norm(_CITE.sub("", span))

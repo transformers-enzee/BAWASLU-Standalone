@@ -582,8 +582,14 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "response_language_rule": language["rule"],
         "response_language_hint": language["hint"],
         "instruction": (
-            "Answer the officer's procedural or PDF-reference question directly in 1-3 short "
-            "paragraphs, with page citations [DOC-id-Ppage] attached to the relevant claims. "
+            "Answer the officer's procedural or PDF-reference question directly, "
+            "with page citations [DOC-id-Ppage] attached to the relevant claims. "
+            "Match response_depth: EXECUTIVE is a concise 1-3 paragraph answer; "
+            "DEEP is a complete, organized answer covering every requested component, "
+            "conditions, responsibilities, exceptions and evidence gaps actually documented; "
+            "INVESTIGATION additionally gives a page-grounded verification checklist, "
+            "open questions, and a clear evidence-versus-inference distinction when useful. "
+            "Do not pad straightforward questions or introduce material absent from cited pages. "
             "Use ONLY supplied PDF_KNOWLEDGE page excerpts as authority; do not invent other "
             "PDF pages, election-law articles, or incidents. Do not include social statistics, "
             "candidate summaries, charts, cases, action suggestions, report drafts, or generic "
@@ -645,8 +651,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     }
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
-        "Cite only retrieved PDF pages, stay concise, do not add themes, tags, "
-        "investigation dashboards or unrelated recommendations. Ignore earlier "
+        "Cite only retrieved PDF pages and match the requested depth while remaining focused; "
+        "do not add themes, tags, dashboards or unrelated recommendations. Ignore earlier "
         "social analysis formatting instructions for this turn." if pdf_guidance else "")
     case_focus=(
         "\n\nFOR CASE_REVIEW: Explain unverified allegations versus verified official records. "

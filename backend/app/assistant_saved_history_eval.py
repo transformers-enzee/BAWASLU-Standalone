@@ -16,7 +16,10 @@ from .models import User
 from .access import profile,has
 from .assistant_history import AssistantThread
 from .assistant_eval_sampling import MixedAnswerAuditRequest,resolve_mixed_audit_sources,build_mixed_answer_audit
-from .assistant_saved_reply_response_triage import summarize_authorized_saved_reply_audit
+from .assistant_saved_reply_response_triage import (
+    summarize_authorized_saved_reply_audit,
+    summarize_authorized_saved_reply_batch,
+)
 
 router=APIRouter(prefix="/api/assistant-evaluation",tags=["assistant-evaluation"])
 _EXACT_REF=re.compile(r"^(?:SOCIAL-[1-9][0-9]{0,11}|INT-[A-Za-z0-9:_-]{1,80}|DOC-[1-9][0-9]{0,11}-P[1-9][0-9]{0,7})$")
@@ -313,6 +316,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             "unavailable":totals["UNAVAILABLE"]+totals["SOURCE_UNAVAILABLE"],
             "unavailable_source":totals["SOURCE_UNAVAILABLE"],
             "results":output,
+            "response_quality_batch_triage":summarize_authorized_saved_reply_batch(output),
             "reason_code_counts":dict(sorted(Counter(
                 x["reason_code"] for x in output if x["status"]!="AUDITED"
             ).items())),

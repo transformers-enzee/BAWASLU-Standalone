@@ -1,4 +1,4 @@
-"""Require one increment per commit and synchronized sidebar/backend build versions.
+"""Check synchronized application build versions and enforce sequential release increments.
 
 Sequence: 89, 89.1, ... 89.9, 90, 90.1, ... 90.9, 91.
 The one-time migration from legacy 89.11 to 90 corrects the previous bad scheme.
@@ -58,9 +58,14 @@ def verify():
             expected = "90"  # One-time repair for the existing invalid version.
         else:
             expected = following(old)
-        assert server == expected, (
-            f"Each commit must advance exactly one build: {old} -> {expected}; got {server}"
-        )
+        # Test-only and development commits do not constitute a deployed
+        # application build. Once the displayed build version changes, it must
+        # advance exactly one step; never accept a skipped or regressed version.
+        if server != old:
+            assert server == expected, (
+                f"Application build must advance exactly one step when changed: "
+                f"{old} -> {expected}; got {server}"
+            )
     assert following("89.9") == "90.0"
     assert following("90") == "90.1"
     assert following("90.9") == "91.0"

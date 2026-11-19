@@ -1,10 +1,11 @@
-from .assistant_pdf_depth_budget import pdf_output_token_budget
 """Evidence-first, Squeeze-style BAWASLU conversational analysis.
 
 All private evidence comes from existing permission-scoped application actions.
 GPT can interpret supplied records, but may not invent database citations or
 claim that outside knowledge is current/live source verification.
 """
+from .assistant_pdf_depth_budget import pdf_output_token_budget
+
 import json
 import os
 import re

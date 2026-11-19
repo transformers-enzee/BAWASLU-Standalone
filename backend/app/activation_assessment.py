@@ -202,7 +202,28 @@ def start_all(db, principal, campaign_id, payload):
                 SocialListeningRun.status.in_(("QUEUED","RUNNING"))).first())
     if active:
         return {"started":False,"run_id":active.id,"already_active":True}
-    ids = _scope_ids(db, principal, c.id)
+    source_prefix = str((payload or {}).get("source_batch_prefix") or "")
+    if source_prefix:
+        # Explicitly scope this run to the verified 19-Nov ZocialEye import.
+        # An operator must approve the metered action; this is not auto-discovery.
+        if source_prefix != "offline-xlsx-20261119-batch-":
+            raise ValueError("Unsupported source import batch")
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        scoped_rows = (db.query(SocialListeningResult)
+            .join(CampaignEvidence, CampaignEvidence.result_id == SocialListeningResult.id)
+            .join(SocialListeningRun, SocialListeningRun.id == SocialListeningResult.run_id)
+            .filter(CampaignEvidence.campaign_id == c.id,
+                    CampaignEvidence.match_method != "WATCHLIST_ACCOUNT",
+                    SocialListeningRun.provider == "ZOCIALEYE",
+                    SocialListeningRun.provider_request_id.like(source_prefix + "%"))
+            .order_by(SocialListeningResult.id).limit(501).all())
+        if len(scoped_rows) > 500:
+            raise ValueError("Import batch exceeds 500 posts; split before assessment")
+        ids = list(dict.fromkeys(post.id for post in scoped_rows
+                                if _result_in_scope(db, principal, post)))
+    else:
+        ids = _scope_ids(db, principal, c.id)
     candidates = [rid for rid in ids if needs_full_assessment(_latest(db,c.id,rid))]
     jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
         AIAssessmentJob.campaign_id == c.id,
@@ -221,7 +242,7 @@ def start_all(db, principal, campaign_id, payload):
         executed_by=str(principal.get("id") or ""),
         result_count=len(candidates),credits_used=0,
         query_json=json.dumps({"campaign_id":c.id,"assessment_result_ids":candidates,
-                               "source":"ASSESS_ALL","cost_confirmed":True}))
+                               "source":"ASSESS_ALL","source_batch_prefix":source_prefix,"cost_confirmed":True}))
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,
                        triggered_by="AI_ASSESS_ALL"))

@@ -143,6 +143,28 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
             "Displayed citation identifiers match selected authorized records; truth not checked.",
             displayed_count=len(cited)))
 
+    # Compare BOTH directions: a reference present in the rendered reply but
+    # absent from citation metadata must not silently pass source readiness.
+    # This is identifier consistency, not PDF text verification or entailment.
+    from .assistant_citation_consistency import reconcile_citation_inventory
+    citation_inventory=reconcile_citation_inventory(answer,cited,evidence)
+    if citation_inventory["status"]=="REVIEW_REQUIRED":
+        checks.append(_status("citation_inventory_consistency",REVIEW,
+            "Displayed source identifiers and citation metadata differ; inspect the final answer.",
+            unauthorized_displayed_ids=citation_inventory["unauthorized_displayed_ids"],
+            unauthorized_metadata_ids=citation_inventory["unauthorized_metadata_ids"],
+            displayed_not_in_metadata=citation_inventory["displayed_not_in_metadata"],
+            metadata_not_displayed=citation_inventory["metadata_not_displayed"],
+            pdf_page_content_verified=False))
+    elif not rows or not cited:
+        checks.append(_status("citation_inventory_consistency",NA,
+            "No displayed source IDs are available for inventory comparison.",
+            pdf_page_content_verified=False))
+    else:
+        checks.append(_status("citation_inventory_consistency",PASS,
+            "Displayed and structured citation identifiers agree; claim and PDF page content are not verified.",
+            pdf_page_content_verified=False))
+
     focus=sorted(_terms(question))[:12]
     quoted=[rows[k] for k in cited if k in rows]
     candidates=quoted or list(rows.values())
@@ -307,6 +329,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "platform_policy_legal_boundary":policy_boundary,
         "formal_outcome_source_provenance":claim_provenance,
         "legal_review_summary":legal_review_summary,
+        "citation_inventory_consistency":citation_inventory,
         "requested_topic_coverage":topic_probe,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),

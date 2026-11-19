@@ -6,6 +6,7 @@ independent evidence or human accuracy.
 """
 import json
 import re
+import hashlib
 from collections import Counter
 from fastapi import APIRouter,Depends,HTTPException,Response,Query
 from pydantic import BaseModel,Field,ConfigDict
@@ -40,6 +41,7 @@ class SavedReplyReviewerRating(BaseModel):
     thread_id:str=Field(min_length=36,max_length=36)
     answer_message_index:int=Field(ge=1,le=59)
     ratings:dict[str,str]=Field(min_length=1,max_length=6)
+    answer_revision_token:str|None=Field(default=None,min_length=64,max_length=64)
     original_answer_reviewed:bool=False
     source_material_reviewed:bool=False
     independent_review_attested:bool=False
@@ -54,6 +56,14 @@ def _access(db,user):
     if principal.get("status")!="Active" or not has(principal,"view_intelligence"):
         raise HTTPException(403,"Active intelligence access required")
     return principal
+
+def _saved_reply_revision_token(question,answer,source_ids):
+    """Change detector for saved text and IDs, not source-content or AI provenance."""
+    payload=json.dumps(
+        {"question":question,"answer":answer,"source_ids":sorted(source_ids)},
+        ensure_ascii=False,sort_keys=True,separators=(",",":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 def _read_messages(row):
     try:
@@ -304,6 +314,8 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],
                         issue_category_counts=cats,
+                        answer_revision_token=_saved_reply_revision_token(
+                            audit.question,audit.answer,scope["source_ids"]),
                         selected_source_kinds=result["selected_source_kinds"],
                         source_record_ids=result["source_record_ids"],
                         # A reduced, allowlisted result supports intentional local

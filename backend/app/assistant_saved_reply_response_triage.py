@@ -118,6 +118,11 @@ def summarize_authorized_saved_reply_batch(results):
                 if reason in {"citation_grounding","source_relevance",
                               "legal_uncertainty","cross_module_consistency"}:
                     reason_counts[reason]+=1
+            for reason in triage.get("supplemental_review_ids") or []:
+                if reason in {"citation_inventory_consistency",
+                              "pdf_quoted_passage_alignment",
+                              "requested_topic_coverage"}:
+                    reason_counts[reason]+=1
         elif state=="NO_DETERMINISTIC_FLAGS":
             counts["NO_DETERMINISTIC_FLAGS"]+=1
         else:
@@ -127,7 +132,11 @@ def summarize_authorized_saved_reply_batch(results):
         "audited_with_review_flags":counts["REVIEW_FLAGS_PRESENT"],
         "audited_without_detected_flags":counts["NO_DETERMINISTIC_FLAGS"],
         "unassessed_or_unavailable":counts["UNASSESSED"],
-        "core_review_reason_occurrences":dict(sorted(reason_counts.items())),
+        "review_reason_occurrences":dict(sorted(reason_counts.items())),
+        "core_review_reason_occurrences":dict(sorted(
+            (key,value) for key,value in reason_counts.items()
+            if key in {"citation_grounding","source_relevance",
+                       "legal_uncertainty","cross_module_consistency"})),
         "no_flags_is_not_a_quality_pass":True,
         "selection_is_not_random_or_representative":True,
         "human_accuracy":None,

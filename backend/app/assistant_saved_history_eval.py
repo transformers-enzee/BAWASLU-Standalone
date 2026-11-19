@@ -65,6 +65,29 @@ def _saved_reply_revision_token(question,answer,source_ids):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _saved_reply_evidence_snapshot_token(question,answer,source_ids,evidence):
+    """Bind review to the exact authorized evidence excerpts used in QA.
+
+    This is not a signed authenticity assertion and not a hash of underlying
+    complete documents; source authorization must still be repeated.
+    """
+    if len(evidence)!=len(source_ids):
+        raise HTTPException(409,"Saved response evidence snapshot is incomplete")
+    rows=[]
+    for identifier,row in zip(source_ids,evidence):
+        if not isinstance(row,dict) or row.get("record_id")!=identifier:
+            raise HTTPException(409,"Saved response evidence snapshot is inconsistent")
+        source_type=row.get("record_type")
+        excerpt=row.get("source_excerpt")
+        if not isinstance(source_type,str) or not isinstance(excerpt,str):
+            raise HTTPException(409,"Saved response evidence excerpt is unavailable")
+        rows.append({"id":identifier,"type":source_type,"excerpt":excerpt})
+    payload=json.dumps(
+        {"question":question,"answer":answer,"evidence":rows},
+        ensure_ascii=False,sort_keys=True,separators=(",",":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _read_messages(row):
     try:
         value=json.loads(row.messages_json or "[]")
@@ -314,8 +337,8 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],
                         issue_category_counts=cats,
-                        answer_revision_token=_saved_reply_revision_token(
-                            audit.question,audit.answer,scope["source_ids"]),
+                        answer_revision_token=_saved_reply_evidence_snapshot_token(
+                            audit.question,audit.answer,scope["source_ids"],sources),
                         selected_source_kinds=result["selected_source_kinds"],
                         source_record_ids=result["source_record_ids"],
                         # A reduced, allowlisted result supports intentional local

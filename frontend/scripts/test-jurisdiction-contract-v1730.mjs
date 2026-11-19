@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const prior=read('scripts/test-jurisdiction-leads-v1728.mjs');
+const screen=read('src/pages/Inbox.jsx');
+const v1729=read('scripts/test-jurisdiction-navigation-v1729.mjs');
+assert.ok(prior.includes('Inspect source in Inbox'));
+assert.ok(!prior.includes('Inspect on visible Inbox page'));
+assert.ok(screen.includes('openJurisdictionReviewLead'));
+assert.ok(screen.includes('page_size:1'));
+assert.ok(v1729.includes('test_exact_scoped_post_lookup_works_when_outside_loaded_inbox_page'));
+console.log('PASS v173.0 corrected legacy review-lead contract');

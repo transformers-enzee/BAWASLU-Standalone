@@ -67,6 +67,7 @@ jobs:
           node scripts/test-jurisdiction-readiness-v1727.mjs
           node scripts/test-jurisdiction-leads-v1728.mjs
           node scripts/test-jurisdiction-navigation-v1729.mjs
+          node scripts/test-jurisdiction-contract-v1730.mjs
 
       - name: Build production frontend
         working-directory: frontend

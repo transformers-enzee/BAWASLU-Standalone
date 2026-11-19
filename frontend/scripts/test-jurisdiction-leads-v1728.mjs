@@ -9,7 +9,9 @@ for(const p of ['officer_review_leads','STALE_OR_CONFLICTED',
  '_safe_source_url(post.canonical_url)','not_independently_verified'])
  assert.ok(logic.includes(p),p);
 for(const p of ['jurisdiction-officer-review-leads',
- 'Inspect on visible Inbox page','Open saved original post','noopener noreferrer'])
+ 'Inspect source in Inbox','Open saved original post','noopener noreferrer'])
  assert.ok(ui.includes(p),p);
 assert.ok(workflow.includes('test-jurisdiction-leads-v1728.mjs'));
-console.log('PASS v172.8 officer review leads security and bounded evidence');
+assert.ok(ui.includes('openJurisdictionReviewLead'));
+assert.ok(ui.includes('result_id:expectedSource,paged:true,page_size:1'));
+console.log('PASS v172.8 officer review leads security and off-page evidence navigation');

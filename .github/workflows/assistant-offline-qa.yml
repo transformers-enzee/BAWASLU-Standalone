@@ -1,0 +1,58 @@
+name: Assistant Offline QA
+
+on:
+  push:
+    branches: [architecture-v2-foundation-20261015]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assistant-offline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assistant-regressions:
+    name: Assistant deterministic contract checks (no AI billing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ""
+      SOCIALCRAWL_API_KEY: ""
+      DATABASE_URL: "sqlite:///:memory:"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run assistant source, legal, and saved-answer contracts
+        shell: bash
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          node scripts/test-assistant-grounding-v1483.mjs
+          node scripts/test-assistant-source-guards-v1489.mjs
+          node scripts/test-legal-indonesian-modalities-v1600.mjs
+          node scripts/test-legal-policy-boundary-v1601.mjs
+          node scripts/test-claim-provenance-v1604.mjs
+          node scripts/test-full-answer-replay-v1607.mjs
+          node scripts/test-saved-answer-audit-v1608.mjs
+          node scripts/test-assistant-retrieval-v1640.mjs
+      - name: Publish QA scope and evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## BAWASLU offline assistant QA"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Eight deterministic Node.js assistant contract checks"
+            echo "- External APIs: disabled; OpenAI and Socialcrawl credentials empty"
+            echo "- Supabase: not contacted"
+            echo "- This job does **not** measure live model factual accuracy, legal correctness, or real PDF citation fidelity."
+            echo "- Those acceptance checks remain pending human/staging validation."
+          } >> "$GITHUB_STEP_SUMMARY"

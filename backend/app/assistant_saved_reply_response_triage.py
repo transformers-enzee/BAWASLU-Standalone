@@ -29,6 +29,25 @@ def summarize_authorized_saved_reply_audit(audit):
                     "legal_uncertainty","cross_module_consistency"
                 ):
                     review_ids.append(name)
+    # Treat supplemental REVIEW_REQUIRED as a review flag even when all four
+    # historical readiness checks pass. Never export arbitrary reason text.
+    supplemental_counts=Counter()
+    supplemental_review=[]
+    allowed_supplemental={
+        "citation_inventory_consistency",
+        "pdf_quoted_passage_alignment",
+        "requested_topic_coverage",
+    }
+    for row in audit.get("supplemental_checks") or []:
+        if not isinstance(row,dict):
+            continue
+        check_id=row.get("id")
+        status=row.get("status")
+        if check_id not in allowed_supplemental or status not in _KNOWN:
+            continue
+        supplemental_counts[status]+=1
+        if status=="REVIEW_REQUIRED":
+            supplemental_review.append(check_id)
     missing=audit.get("missing_cited_source_kinds") or []
     if not isinstance(missing,list):
         missing=[]
@@ -45,12 +64,14 @@ def summarize_authorized_saved_reply_audit(audit):
     issue_category_count=len([key for key,val in categories.items()
                               if isinstance(key,str) and isinstance(val,int)
                               and not isinstance(val,bool) and val>0])
-    flagged=bool(review_ids or missing or rejection or issue_count)
+    flagged=bool(review_ids or supplemental_review or missing or rejection or issue_count)
     return {
         "schema":"BAWASLU_SAVED_REPLY_RESPONSE_TRIAGE_V17468",
         "status":"REVIEW_FLAGS_PRESENT" if flagged else "NO_DETERMINISTIC_FLAGS",
         "readiness_check_counts":dict(sorted(statuses.items())),
         "readiness_review_ids":sorted(set(review_ids)),
+        "supplemental_check_counts":dict(sorted(supplemental_counts.items())),
+        "supplemental_review_ids":sorted(set(supplemental_review)),
         "missing_cited_source_kinds":missing,
         "rejected_citation_count":rejection,
         "issue_candidate_count":issue_count,

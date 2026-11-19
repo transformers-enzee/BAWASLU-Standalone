@@ -137,3 +137,62 @@ def test_saved_history_batch_route_returns_aggregate_builder():
     assert '"response_quality_batch_triage":summarize_authorized_saved_reply_batch(output)' in text
     assert "AssistantThread.user_id==user_id" in text
     assert "resolve_mixed_audit_sources(db,batch_principal,audit)" in text
+
+
+
+def test_supplemental_pdf_warning_surfaces_when_core_checks_pass():
+    audit={
+        "checks":[{"id":"citation_grounding","status":"PASS"},
+                  {"id":"source_relevance","status":"PASS"},
+                  {"id":"legal_uncertainty","status":"PASS"},
+                  {"id":"cross_module_consistency","status":"PASS"}],
+        "supplemental_checks":[
+            {"id":"pdf_quoted_passage_alignment","status":"REVIEW_REQUIRED"},
+            {"id":"citation_inventory_consistency","status":"PASS"}],
+        "issue_triage":{"issue_candidate_count":0},
+    }
+    result=summarize(audit)
+    assert result["status"]=="REVIEW_FLAGS_PRESENT"
+    assert result["readiness_review_ids"]==[]
+    assert result["supplemental_review_ids"]==["pdf_quoted_passage_alignment"]
+    assert result["supplemental_check_counts"]=={"PASS":1,"REVIEW_REQUIRED":1}
+    assert result["no_flags_is_not_a_quality_pass"] is True
+
+
+def test_supplemental_free_text_and_unknown_ids_are_not_leaked():
+    audit={
+        "supplemental_checks":[
+            {"id":"CONFIDENTIAL_CASE_TITLE","status":"REVIEW_REQUIRED",
+             "reason":"CONFIDENTIAL_EXCERPT"},
+            {"id":"requested_topic_coverage","status":"REVIEW_REQUIRED",
+             "reason":"CONFIDENTIAL_QUESTION"},
+        ]
+    }
+    result=summarize(audit)
+    text=json.dumps(result)
+    assert "CONFIDENTIAL" not in text
+    assert result["supplemental_review_ids"]==["requested_topic_coverage"]
+
+
+def test_supplemental_warning_is_aggregated_not_dropped():
+    first=summarize({
+        "supplemental_checks":[
+            {"id":"citation_inventory_consistency","status":"REVIEW_REQUIRED"}]})
+    summary=summarize_batch([
+        {"status":"AUDITED","response_quality_triage":first},
+        {"status":"SOURCE_UNAVAILABLE"},
+    ])
+    assert summary["audited_with_review_flags"]==1
+    assert summary["audited_without_detected_flags"]==0
+    assert summary["unassessed_or_unavailable"]==1
+    assert summary["review_reason_occurrences"]=={
+        "citation_inventory_consistency":1}
+    assert summary["core_review_reason_occurrences"]=={}
+
+
+def test_mixed_audit_allowlists_supplemental_status_only():
+    from pathlib import Path
+    source=(Path(__file__).resolve().parents[1]/
+            "app"/"assistant_eval_sampling.py").read_text(encoding="utf-8")
+    assert '"supplemental_checks":[{"id":x["id"],"status":x["status"]}' in source
+    assert '"supplemental_check_results_are_heuristics":True' in source

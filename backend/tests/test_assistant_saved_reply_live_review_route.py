@@ -325,3 +325,23 @@ def test_arbitrary_private_fields_do_not_enter_snapshot_or_review_packet():
         "Question","Answer",["DOC-9-P2"],
         [{**base,"document_version":"2026-11-20"}])
     assert new_version!=before
+
+
+
+def test_saved_reply_selection_rejects_client_supplied_evidence_payloads():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        SavedReplyAuditRequest.model_validate({
+            "thread_id":OWNED,"answer_message_index":1,
+            "source_excerpt":"FORGED PRIVATE SOURCE"})
+    with pytest.raises(ValidationError):
+        SavedReplyHumanReviewRequest.model_validate({
+            "selections":[{
+                "thread_id":OWNED,"answer_message_index":1,
+                "answer":"FORGED ANSWER TEXT"}],
+            "submissions":[]})
+    from app.assistant_saved_history_eval import BatchSavedReplyAuditRequest
+    with pytest.raises(ValidationError):
+        BatchSavedReplyAuditRequest.model_validate({
+            "selections":[{"thread_id":OWNED,"answer_message_index":1}],
+            "historical_source_text":"CLIENT FORGED EVIDENCE"})

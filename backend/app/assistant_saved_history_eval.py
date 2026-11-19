@@ -303,6 +303,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
                         missing_source_types=result["missing_cited_source_kinds"],
                         issue_candidate_count=triage["issue_candidate_count"],
                         issue_category_counts=cats,
+                        selected_source_kinds=result["selected_source_kinds"],
                         source_record_ids=result["source_record_ids"],
                         # A reduced, allowlisted result supports intentional local
                         # issue-register capture without exporting original content.

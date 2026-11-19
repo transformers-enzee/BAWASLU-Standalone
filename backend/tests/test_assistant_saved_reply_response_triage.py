@@ -242,3 +242,27 @@ def test_unrecognized_check_ids_are_not_counted_or_exposed():
     assert result["supplemental_check_counts"]=={}
     assert result["status"]=="INCOMPLETE_DIAGNOSTICS"
     assert "SENSITIVE" not in json.dumps(result)
+
+
+
+def test_unhashable_diagnostic_ids_do_not_crash_or_leak():
+    summary=summarize({
+        "checks":[{"id":["CONFIDENTIAL"],"status":"PASS"},
+                  {"id":"citation_grounding","status":["PASS"]}],
+        "supplemental_checks":[{"id":{"PRIVATE":"DOC"},"status":"PASS"},
+                               {"id":"pdf_quoted_passage_alignment","status":{"bad":"value"}}],
+    })
+    assert summary["status"]=="INCOMPLETE_DIAGNOSTICS"
+    assert summary["readiness_check_counts"]=={}
+    assert summary["supplemental_check_counts"]=={}
+    assert "CONFIDENTIAL" not in json.dumps(summary)
+    aggregate=summarize_batch([{
+        "status":"AUDITED",
+        "response_quality_triage":{
+            "status":"REVIEW_FLAGS_PRESENT",
+            "readiness_review_ids":[["CONFIDENTIAL"],"legal_uncertainty"],
+            "supplemental_review_ids":[{"PRIVATE":"value"},"requested_topic_coverage"]
+        }
+    }])
+    assert aggregate["review_reason_occurrences"]=={
+        "legal_uncertainty":1,"requested_topic_coverage":1}

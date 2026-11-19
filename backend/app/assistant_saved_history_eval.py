@@ -81,7 +81,16 @@ def _saved_reply_evidence_snapshot_token(question,answer,source_ids,evidence):
         excerpt=row.get("source_excerpt")
         if not isinstance(source_type,str) or not isinstance(excerpt,str):
             raise HTTPException(409,"Saved response evidence excerpt is unavailable")
-        rows.append({"id":identifier,"type":source_type,"excerpt":excerpt})
+        relevant_metadata={}
+        for key in ("sentiment","source_verification_status",
+                    "page_number","document_version"):
+            value=row.get(key)
+            if value is not None:
+                if not isinstance(value,(str,int,float,bool)):
+                    raise HTTPException(409,"Saved response evidence metadata is inconsistent")
+                relevant_metadata[key]=value
+        rows.append({"id":identifier,"type":source_type,
+                     "excerpt":excerpt,"review_metadata":relevant_metadata})
     payload=json.dumps(
         {"question":question,"answer":answer,"evidence":rows},
         ensure_ascii=False,sort_keys=True,separators=(",",":"))

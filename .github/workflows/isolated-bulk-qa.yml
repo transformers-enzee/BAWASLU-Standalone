@@ -29,6 +29,19 @@ jobs:
         env:
           OPENAI_API_KEY: ''
           DATABASE_URL: sqlite:////tmp/bawaslu-bulk-qa.sqlite3
+      - name: Produce redacted zero-credit Assistant QA report
+        working-directory: backend
+        run: python -m app.assistant_offline_response_eval --output assistant-offline-qa-report.json
+        env:
+          OPENAI_API_KEY: ''
+          DATABASE_URL: sqlite:////tmp/bawaslu-bulk-qa.sqlite3
+      - name: Upload Assistant QA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-offline-qa-report
+          path: backend/assistant-offline-qa-report.json
+          retention-days: 7
+          if-no-files-found: error
   frontend-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 15

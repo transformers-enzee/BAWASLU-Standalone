@@ -56,6 +56,7 @@ def compile_human_review_scores(packet,submissions):
             outcomes["INCOMPLETE_REVIEW"]+=1
             continue
         if (item.get("source_access_rechecked") is not True or
+                item.get("source_material_reviewed") is not True or
                 item.get("original_answer_reviewed") is not True or
                 item.get("independent_review_attested") is not True):
             outcomes["INCOMPLETE_REVIEW"]+=1
@@ -79,6 +80,7 @@ def compile_human_review_scores(packet,submissions):
         "dimension_rating_counts":{k:dict(sorted(v.items()))
                                    for k,v in dimension_counts.items()},
         "human_attestation_is_independently_verified":False,
+        "server_source_access_is_not_reviewer_inspection":True,
         "source_truth_verified_by_system":False,
         "review_sample_is_representative":False,
         "formal_legal_signoff":False,

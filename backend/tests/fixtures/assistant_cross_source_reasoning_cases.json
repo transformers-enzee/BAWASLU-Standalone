@@ -1,0 +1,1334 @@
+{
+  "schema": "BAWASLU_CROSS_SOURCE_RESPONSE_BENCHMARK_V1",
+  "assessment": "SYNTHETIC_DETECTION_ONLY_NOT_MODEL_ACCURACY",
+  "cases": [
+    {
+      "id": "RQA-CROSS-001",
+      "topic": "fact_vs_allegation",
+      "question": "Berdasarkan dua sumber, bedakan fakta tercatat dan dugaan yang masih perlu diperiksa.",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-401",
+          "source_excerpt": "Catatan yang tersimpan wajib memiliki URL asal dan waktu pengambilan.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-41-P2",
+          "source_excerpt": "Dugaan pelanggaran belum boleh dianggap putusan resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-401",
+          "anchor": "wajib memiliki URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-41-P2",
+          "anchor": "belum boleh dianggap putusan resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memiliki URL asal [INT-401].\n\nKedua, belum boleh dianggap putusan resmi [DOC-41-P2].",
+      "candidate_citation_ids": [
+        "INT-401",
+        "DOC-41-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-002",
+      "topic": "fact_vs_allegation",
+      "question": "Berdasarkan dua sumber, bedakan fakta tercatat dan dugaan yang masih perlu diperiksa.",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-401",
+          "source_excerpt": "Catatan yang tersimpan wajib memiliki URL asal dan waktu pengambilan.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-41-P2",
+          "source_excerpt": "Dugaan pelanggaran belum boleh dianggap putusan resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-401",
+          "anchor": "wajib memiliki URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-41-P2",
+          "anchor": "belum boleh dianggap putusan resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memiliki URL asal [INT-401].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "INT-401"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-003",
+      "topic": "fact_vs_allegation",
+      "question": "Berdasarkan dua sumber, bedakan fakta tercatat dan dugaan yang masih perlu diperiksa.",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-401",
+          "source_excerpt": "Catatan yang tersimpan wajib memiliki URL asal dan waktu pengambilan.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-41-P2",
+          "source_excerpt": "Dugaan pelanggaran belum boleh dianggap putusan resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-401",
+          "anchor": "wajib memiliki URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-41-P2",
+          "anchor": "belum boleh dianggap putusan resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memiliki URL asal [INT-401].\n\nKedua, belum boleh dianggap putusan resmi [INT-401].",
+      "candidate_citation_ids": [
+        "INT-401"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-004",
+      "topic": "fact_vs_allegation",
+      "question": "Berdasarkan dua sumber, bedakan fakta tercatat dan dugaan yang masih perlu diperiksa.",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-401",
+          "source_excerpt": "Catatan yang tersimpan wajib memiliki URL asal dan waktu pengambilan.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-41-P2",
+          "source_excerpt": "Dugaan pelanggaran belum boleh dianggap putusan resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-401",
+          "anchor": "wajib memiliki URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-41-P2",
+          "anchor": "belum boleh dianggap putusan resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib memiliki URL asal [INT-401].\n\nKedua, belum boleh dianggap putusan resmi [DOC-41-P2].",
+      "candidate_citation_ids": [
+        "INT-401",
+        "DOC-41-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-005",
+      "topic": "authority_vs_location",
+      "question": "Apa syarat pengalihan kasus ke provinsi dan pembatasan peran Viewer?",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-42-P1",
+          "source_excerpt": "Penugasan wilayah wajib verifikasi lokasi kejadian.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-42-P2",
+          "source_excerpt": "Akun Viewer tidak boleh menyetujui kasus.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-42-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-42-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib verifikasi lokasi kejadian [DOC-42-P1].\n\nKedua, tidak boleh menyetujui kasus [DOC-42-P2].",
+      "candidate_citation_ids": [
+        "DOC-42-P1",
+        "DOC-42-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-006",
+      "topic": "authority_vs_location",
+      "question": "Apa syarat pengalihan kasus ke provinsi dan pembatasan peran Viewer?",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-42-P1",
+          "source_excerpt": "Penugasan wilayah wajib verifikasi lokasi kejadian.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-42-P2",
+          "source_excerpt": "Akun Viewer tidak boleh menyetujui kasus.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-42-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-42-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib verifikasi lokasi kejadian [DOC-42-P1].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "DOC-42-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-007",
+      "topic": "authority_vs_location",
+      "question": "Apa syarat pengalihan kasus ke provinsi dan pembatasan peran Viewer?",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-42-P1",
+          "source_excerpt": "Penugasan wilayah wajib verifikasi lokasi kejadian.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-42-P2",
+          "source_excerpt": "Akun Viewer tidak boleh menyetujui kasus.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-42-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-42-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib verifikasi lokasi kejadian [DOC-42-P1].\n\nKedua, tidak boleh menyetujui kasus [DOC-42-P1].",
+      "candidate_citation_ids": [
+        "DOC-42-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-008",
+      "topic": "authority_vs_location",
+      "question": "Apa syarat pengalihan kasus ke provinsi dan pembatasan peran Viewer?",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-42-P1",
+          "source_excerpt": "Penugasan wilayah wajib verifikasi lokasi kejadian.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-42-P2",
+          "source_excerpt": "Akun Viewer tidak boleh menyetujui kasus.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-42-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-42-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib verifikasi lokasi kejadian [DOC-42-P1].\n\nKedua, tidak boleh menyetujui kasus [DOC-42-P2].",
+      "candidate_citation_ids": [
+        "DOC-42-P1",
+        "DOC-42-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-009",
+      "topic": "platform_vs_election",
+      "question": "Bedakan evaluasi aturan platform dengan kewenangan penegakan pemilu.",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-43-P1",
+          "source_excerpt": "Tinjauan kebijakan platform wajib dipisahkan dari pengujian hukum pemilu.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-43-P2",
+          "source_excerpt": "Temuan pengawasan belum boleh disebut putusan pengadilan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-43-P1",
+          "anchor": "wajib dipisahkan dari pengujian hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-43-P2",
+          "anchor": "belum boleh disebut putusan pengadilan",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dipisahkan dari pengujian hukum pemilu [DOC-43-P1].\n\nKedua, belum boleh disebut putusan pengadilan [DOC-43-P2].",
+      "candidate_citation_ids": [
+        "DOC-43-P1",
+        "DOC-43-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-010",
+      "topic": "platform_vs_election",
+      "question": "Bedakan evaluasi aturan platform dengan kewenangan penegakan pemilu.",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-43-P1",
+          "source_excerpt": "Tinjauan kebijakan platform wajib dipisahkan dari pengujian hukum pemilu.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-43-P2",
+          "source_excerpt": "Temuan pengawasan belum boleh disebut putusan pengadilan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-43-P1",
+          "anchor": "wajib dipisahkan dari pengujian hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-43-P2",
+          "anchor": "belum boleh disebut putusan pengadilan",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dipisahkan dari pengujian hukum pemilu [DOC-43-P1].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "DOC-43-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-011",
+      "topic": "platform_vs_election",
+      "question": "Bedakan evaluasi aturan platform dengan kewenangan penegakan pemilu.",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-43-P1",
+          "source_excerpt": "Tinjauan kebijakan platform wajib dipisahkan dari pengujian hukum pemilu.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-43-P2",
+          "source_excerpt": "Temuan pengawasan belum boleh disebut putusan pengadilan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-43-P1",
+          "anchor": "wajib dipisahkan dari pengujian hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-43-P2",
+          "anchor": "belum boleh disebut putusan pengadilan",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dipisahkan dari pengujian hukum pemilu [DOC-43-P1].\n\nKedua, belum boleh disebut putusan pengadilan [DOC-43-P1].",
+      "candidate_citation_ids": [
+        "DOC-43-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-012",
+      "topic": "platform_vs_election",
+      "question": "Bedakan evaluasi aturan platform dengan kewenangan penegakan pemilu.",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-43-P1",
+          "source_excerpt": "Tinjauan kebijakan platform wajib dipisahkan dari pengujian hukum pemilu.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-43-P2",
+          "source_excerpt": "Temuan pengawasan belum boleh disebut putusan pengadilan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-43-P1",
+          "anchor": "wajib dipisahkan dari pengujian hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-43-P2",
+          "anchor": "belum boleh disebut putusan pengadilan",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib dipisahkan dari pengujian hukum pemilu [DOC-43-P1].\n\nKedua, belum boleh disebut putusan pengadilan [DOC-43-P2].",
+      "candidate_citation_ids": [
+        "DOC-43-P1",
+        "DOC-43-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-013",
+      "topic": "metadata_vs_truth",
+      "question": "Apa arti review relevansi dan apa yang masih belum diverifikasi?",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-404",
+          "source_excerpt": "Label relevansi wajib dibedakan dari status kebenaran konten.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-44-P2",
+          "source_excerpt": "Validasi kebenaran sumber belum boleh diasumsikan selesai.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-404",
+          "anchor": "wajib dibedakan dari status kebenaran konten",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-44-P2",
+          "anchor": "belum boleh diasumsikan selesai",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari status kebenaran konten [INT-404].\n\nKedua, belum boleh diasumsikan selesai [DOC-44-P2].",
+      "candidate_citation_ids": [
+        "INT-404",
+        "DOC-44-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-014",
+      "topic": "metadata_vs_truth",
+      "question": "Apa arti review relevansi dan apa yang masih belum diverifikasi?",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-404",
+          "source_excerpt": "Label relevansi wajib dibedakan dari status kebenaran konten.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-44-P2",
+          "source_excerpt": "Validasi kebenaran sumber belum boleh diasumsikan selesai.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-404",
+          "anchor": "wajib dibedakan dari status kebenaran konten",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-44-P2",
+          "anchor": "belum boleh diasumsikan selesai",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari status kebenaran konten [INT-404].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "INT-404"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-015",
+      "topic": "metadata_vs_truth",
+      "question": "Apa arti review relevansi dan apa yang masih belum diverifikasi?",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-404",
+          "source_excerpt": "Label relevansi wajib dibedakan dari status kebenaran konten.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-44-P2",
+          "source_excerpt": "Validasi kebenaran sumber belum boleh diasumsikan selesai.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-404",
+          "anchor": "wajib dibedakan dari status kebenaran konten",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-44-P2",
+          "anchor": "belum boleh diasumsikan selesai",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari status kebenaran konten [INT-404].\n\nKedua, belum boleh diasumsikan selesai [INT-404].",
+      "candidate_citation_ids": [
+        "INT-404"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-016",
+      "topic": "metadata_vs_truth",
+      "question": "Apa arti review relevansi dan apa yang masih belum diverifikasi?",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "INT-404",
+          "source_excerpt": "Label relevansi wajib dibedakan dari status kebenaran konten.",
+          "record_type": "FORMAL_INTELLIGENCE",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-44-P2",
+          "source_excerpt": "Validasi kebenaran sumber belum boleh diasumsikan selesai.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "INT-404",
+          "anchor": "wajib dibedakan dari status kebenaran konten",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-44-P2",
+          "anchor": "belum boleh diasumsikan selesai",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib dibedakan dari status kebenaran konten [INT-404].\n\nKedua, belum boleh diasumsikan selesai [DOC-44-P2].",
+      "candidate_citation_ids": [
+        "INT-404",
+        "DOC-44-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-017",
+      "topic": "social_reposts",
+      "question": "Bagaimana menghindari penghitungan ganda dan kesimpulan berlebihan?",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-405",
+          "source_excerpt": "Unggahan ulang wajib dihitung terpisah dari identitas penulis unik.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-45-P2",
+          "source_excerpt": "Jumlah unggahan belum boleh ditafsirkan sebagai jumlah saksi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-405",
+          "anchor": "wajib dihitung terpisah dari identitas penulis unik",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-45-P2",
+          "anchor": "belum boleh ditafsirkan sebagai jumlah saksi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dihitung terpisah dari identitas penulis unik [SOCIAL-405].\n\nKedua, belum boleh ditafsirkan sebagai jumlah saksi [DOC-45-P2].",
+      "candidate_citation_ids": [
+        "SOCIAL-405",
+        "DOC-45-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-018",
+      "topic": "social_reposts",
+      "question": "Bagaimana menghindari penghitungan ganda dan kesimpulan berlebihan?",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-405",
+          "source_excerpt": "Unggahan ulang wajib dihitung terpisah dari identitas penulis unik.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-45-P2",
+          "source_excerpt": "Jumlah unggahan belum boleh ditafsirkan sebagai jumlah saksi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-405",
+          "anchor": "wajib dihitung terpisah dari identitas penulis unik",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-45-P2",
+          "anchor": "belum boleh ditafsirkan sebagai jumlah saksi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dihitung terpisah dari identitas penulis unik [SOCIAL-405].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "SOCIAL-405"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-019",
+      "topic": "social_reposts",
+      "question": "Bagaimana menghindari penghitungan ganda dan kesimpulan berlebihan?",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-405",
+          "source_excerpt": "Unggahan ulang wajib dihitung terpisah dari identitas penulis unik.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-45-P2",
+          "source_excerpt": "Jumlah unggahan belum boleh ditafsirkan sebagai jumlah saksi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-405",
+          "anchor": "wajib dihitung terpisah dari identitas penulis unik",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-45-P2",
+          "anchor": "belum boleh ditafsirkan sebagai jumlah saksi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dihitung terpisah dari identitas penulis unik [SOCIAL-405].\n\nKedua, belum boleh ditafsirkan sebagai jumlah saksi [SOCIAL-405].",
+      "candidate_citation_ids": [
+        "SOCIAL-405"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-020",
+      "topic": "social_reposts",
+      "question": "Bagaimana menghindari penghitungan ganda dan kesimpulan berlebihan?",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-405",
+          "source_excerpt": "Unggahan ulang wajib dihitung terpisah dari identitas penulis unik.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-45-P2",
+          "source_excerpt": "Jumlah unggahan belum boleh ditafsirkan sebagai jumlah saksi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-405",
+          "anchor": "wajib dihitung terpisah dari identitas penulis unik",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-45-P2",
+          "anchor": "belum boleh ditafsirkan sebagai jumlah saksi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib dihitung terpisah dari identitas penulis unik [SOCIAL-405].\n\nKedua, belum boleh ditafsirkan sebagai jumlah saksi [DOC-45-P2].",
+      "candidate_citation_ids": [
+        "SOCIAL-405",
+        "DOC-45-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-021",
+      "topic": "evidence_chain",
+      "question": "Apa tahapan pencatatan bukti dan pembatasan tindakan petugas?",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-46-P1",
+          "source_excerpt": "Pencatatan bukti wajib menyertakan waktu akses dan URL asal.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-46-P2",
+          "source_excerpt": "Petugas belum boleh membuat penetapan hukum otomatis.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-46-P1",
+          "anchor": "wajib menyertakan waktu akses dan URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-46-P2",
+          "anchor": "belum boleh membuat penetapan hukum otomatis",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib menyertakan waktu akses dan URL asal [DOC-46-P1].\n\nKedua, belum boleh membuat penetapan hukum otomatis [DOC-46-P2].",
+      "candidate_citation_ids": [
+        "DOC-46-P1",
+        "DOC-46-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-022",
+      "topic": "evidence_chain",
+      "question": "Apa tahapan pencatatan bukti dan pembatasan tindakan petugas?",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-46-P1",
+          "source_excerpt": "Pencatatan bukti wajib menyertakan waktu akses dan URL asal.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-46-P2",
+          "source_excerpt": "Petugas belum boleh membuat penetapan hukum otomatis.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-46-P1",
+          "anchor": "wajib menyertakan waktu akses dan URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-46-P2",
+          "anchor": "belum boleh membuat penetapan hukum otomatis",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib menyertakan waktu akses dan URL asal [DOC-46-P1].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "DOC-46-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-023",
+      "topic": "evidence_chain",
+      "question": "Apa tahapan pencatatan bukti dan pembatasan tindakan petugas?",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-46-P1",
+          "source_excerpt": "Pencatatan bukti wajib menyertakan waktu akses dan URL asal.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-46-P2",
+          "source_excerpt": "Petugas belum boleh membuat penetapan hukum otomatis.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-46-P1",
+          "anchor": "wajib menyertakan waktu akses dan URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-46-P2",
+          "anchor": "belum boleh membuat penetapan hukum otomatis",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib menyertakan waktu akses dan URL asal [DOC-46-P1].\n\nKedua, belum boleh membuat penetapan hukum otomatis [DOC-46-P1].",
+      "candidate_citation_ids": [
+        "DOC-46-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-024",
+      "topic": "evidence_chain",
+      "question": "Apa tahapan pencatatan bukti dan pembatasan tindakan petugas?",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-46-P1",
+          "source_excerpt": "Pencatatan bukti wajib menyertakan waktu akses dan URL asal.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-46-P2",
+          "source_excerpt": "Petugas belum boleh membuat penetapan hukum otomatis.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-46-P1",
+          "anchor": "wajib menyertakan waktu akses dan URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-46-P2",
+          "anchor": "belum boleh membuat penetapan hukum otomatis",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib menyertakan waktu akses dan URL asal [DOC-46-P1].\n\nKedua, belum boleh membuat penetapan hukum otomatis [DOC-46-P2].",
+      "candidate_citation_ids": [
+        "DOC-46-P1",
+        "DOC-46-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-025",
+      "topic": "question_followup",
+      "question": "Jelaskan tindak lanjut ketika identitas kasus dan yurisdiksi belum jelas.",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-47-P1",
+          "source_excerpt": "Petugas wajib memeriksa identitas kasus sebelum penugasan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-47-P2",
+          "source_excerpt": "Provinsi yang hanya disebut dalam teks tidak boleh menjadi dasar routing.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-47-P1",
+          "anchor": "wajib memeriksa identitas kasus",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-47-P2",
+          "anchor": "tidak boleh menjadi dasar routing",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memeriksa identitas kasus [DOC-47-P1].\n\nKedua, tidak boleh menjadi dasar routing [DOC-47-P2].",
+      "candidate_citation_ids": [
+        "DOC-47-P1",
+        "DOC-47-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-026",
+      "topic": "question_followup",
+      "question": "Jelaskan tindak lanjut ketika identitas kasus dan yurisdiksi belum jelas.",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-47-P1",
+          "source_excerpt": "Petugas wajib memeriksa identitas kasus sebelum penugasan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-47-P2",
+          "source_excerpt": "Provinsi yang hanya disebut dalam teks tidak boleh menjadi dasar routing.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-47-P1",
+          "anchor": "wajib memeriksa identitas kasus",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-47-P2",
+          "anchor": "tidak boleh menjadi dasar routing",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memeriksa identitas kasus [DOC-47-P1].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "DOC-47-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-027",
+      "topic": "question_followup",
+      "question": "Jelaskan tindak lanjut ketika identitas kasus dan yurisdiksi belum jelas.",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-47-P1",
+          "source_excerpt": "Petugas wajib memeriksa identitas kasus sebelum penugasan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-47-P2",
+          "source_excerpt": "Provinsi yang hanya disebut dalam teks tidak boleh menjadi dasar routing.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-47-P1",
+          "anchor": "wajib memeriksa identitas kasus",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-47-P2",
+          "anchor": "tidak boleh menjadi dasar routing",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib memeriksa identitas kasus [DOC-47-P1].\n\nKedua, tidak boleh menjadi dasar routing [DOC-47-P1].",
+      "candidate_citation_ids": [
+        "DOC-47-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-028",
+      "topic": "question_followup",
+      "question": "Jelaskan tindak lanjut ketika identitas kasus dan yurisdiksi belum jelas.",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "DOC-47-P1",
+          "source_excerpt": "Petugas wajib memeriksa identitas kasus sebelum penugasan.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-47-P2",
+          "source_excerpt": "Provinsi yang hanya disebut dalam teks tidak boleh menjadi dasar routing.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-47-P1",
+          "anchor": "wajib memeriksa identitas kasus",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-47-P2",
+          "anchor": "tidak boleh menjadi dasar routing",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib memeriksa identitas kasus [DOC-47-P1].\n\nKedua, tidak boleh menjadi dasar routing [DOC-47-P2].",
+      "candidate_citation_ids": [
+        "DOC-47-P1",
+        "DOC-47-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "RQA-CROSS-029",
+      "topic": "formal_decision",
+      "question": "Bagaimana membedakan hasil analisis sosial dan keputusan resmi?",
+      "variant": "COMPLETE_TWO_SOURCES",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-408",
+          "source_excerpt": "Sentimen negatif wajib dibedakan dari hasil penyelidikan resmi.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-48-P2",
+          "source_excerpt": "Penetapan pelanggaran belum boleh disimpulkan tanpa proses resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-408",
+          "anchor": "wajib dibedakan dari hasil penyelidikan resmi",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-48-P2",
+          "anchor": "belum boleh disimpulkan tanpa proses resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari hasil penyelidikan resmi [SOCIAL-408].\n\nKedua, belum boleh disimpulkan tanpa proses resmi [DOC-48-P2].",
+      "candidate_citation_ids": [
+        "SOCIAL-408",
+        "DOC-48-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "RQA-CROSS-030",
+      "topic": "formal_decision",
+      "question": "Bagaimana membedakan hasil analisis sosial dan keputusan resmi?",
+      "variant": "MISSING_SECOND_CLAIM",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-408",
+          "source_excerpt": "Sentimen negatif wajib dibedakan dari hasil penyelidikan resmi.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-48-P2",
+          "source_excerpt": "Penetapan pelanggaran belum boleh disimpulkan tanpa proses resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-408",
+          "anchor": "wajib dibedakan dari hasil penyelidikan resmi",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-48-P2",
+          "anchor": "belum boleh disimpulkan tanpa proses resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari hasil penyelidikan resmi [SOCIAL-408].\n\nKedua, perlu kajian lebih lanjut.",
+      "candidate_citation_ids": [
+        "SOCIAL-408"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-031",
+      "topic": "formal_decision",
+      "question": "Bagaimana membedakan hasil analisis sosial dan keputusan resmi?",
+      "variant": "WRONG_SECOND_CITATION",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-408",
+          "source_excerpt": "Sentimen negatif wajib dibedakan dari hasil penyelidikan resmi.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-48-P2",
+          "source_excerpt": "Penetapan pelanggaran belum boleh disimpulkan tanpa proses resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-408",
+          "anchor": "wajib dibedakan dari hasil penyelidikan resmi",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-48-P2",
+          "anchor": "belum boleh disimpulkan tanpa proses resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, wajib dibedakan dari hasil penyelidikan resmi [SOCIAL-408].\n\nKedua, belum boleh disimpulkan tanpa proses resmi [SOCIAL-408].",
+      "candidate_citation_ids": [
+        "SOCIAL-408"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "RQA-CROSS-032",
+      "topic": "formal_decision",
+      "question": "Bagaimana membedakan hasil analisis sosial dan keputusan resmi?",
+      "variant": "FIRST_CLAIM_REVERSED",
+      "synthetic_only": true,
+      "authorized_evidence": [
+        {
+          "record_id": "SOCIAL-408",
+          "source_excerpt": "Sentimen negatif wajib dibedakan dari hasil penyelidikan resmi.",
+          "record_type": "SOCIAL_LISTENING",
+          "document_type": null,
+          "review_status": "UNREVIEWED"
+        },
+        {
+          "record_id": "DOC-48-P2",
+          "source_excerpt": "Penetapan pelanggaran belum boleh disimpulkan tanpa proses resmi.",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "GUIDANCE",
+          "review_status": "UNREVIEWED"
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "SOCIAL-408",
+          "anchor": "wajib dibedakan dari hasil penyelidikan resmi",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-48-P2",
+          "anchor": "belum boleh disimpulkan tanpa proses resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Pertama, tidak wajib dibedakan dari hasil penyelidikan resmi [SOCIAL-408].\n\nKedua, belum boleh disimpulkan tanpa proses resmi [DOC-48-P2].",
+      "candidate_citation_ids": [
+        "SOCIAL-408",
+        "DOC-48-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    }
+  ]
+}

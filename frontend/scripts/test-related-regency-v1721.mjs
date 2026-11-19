@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const panel=read('src/pages/Inbox.jsx');
+const endpoint=read('../backend/app/jurisdiction_review.py');
+const matcher=read('../backend/app/related_incident_locations.py');
+assert.ok(panel.includes('related-incident-place-mentions'));
+assert.ok(panel.includes('does not prove the same incident'));
+assert.ok(endpoint.includes('related_incident_place_mentions'));
+assert.ok(matcher.includes('max_scanned=200'));
+assert.ok(matcher.includes('CampaignEvidence.campaign_id==int(campaign_id)'));
+assert.ok(matcher.includes('_result_in_scope'));
+console.log('PASS v172.1 bounded cross-post locality review contracts');

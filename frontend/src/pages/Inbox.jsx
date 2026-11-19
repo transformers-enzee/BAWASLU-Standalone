@@ -557,6 +557,15 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        {jurisdictionPreview.incident_kabupaten_kota_preview.multiple_regency_candidates&&<p role="status">Multiple regency/city candidates require separate officer review; do not assume a single incident location.</p>}
        {jurisdictionPreview.incident_kabupaten_kota_preview.multiple_provinces&&<p role="alert">Candidates span multiple provinces. Do not confirm one province from this preview alone.</p>}
        <p className="text-slate-500">Source cues only. This cannot confirm Kabupaten/Kota, change regional access, or authorize a geographic reassignment.</p>
+       {jurisdictionPreview.related_incident_place_mentions&&<div data-testid="related-incident-place-mentions" className="rounded border border-slate-200 p-2 space-y-1">
+        <p><strong>Other saved campaign posts mentioning these places (review leads):</strong></p>
+        {(jurisdictionPreview.related_incident_place_mentions.candidate_matches||[]).map(group=><div key={group.regency_city_code}>
+         <p>{group.regency_city}: {group.related_mention_count||0} additional source mentions</p>
+         {(group.related_mentions||[]).length>0&&<ul className="list-disc pl-4">{group.related_mentions.map(mention=><li key={mention.canonical_source_id}>{mention.platform} · {mention.canonical_source_id}</li>)}</ul>}
+        </div>)}
+        {jurisdictionPreview.related_incident_place_mentions.truncated_possible&&<p role="status">Related source scan is capped; additional posts may exist.</p>}
+        <p className="text-amber-900">Matching a location in another post does not prove the same incident or independent corroboration. Human review is required.</p>
+       </div>}
       </div>}{selected.can_review_flag&&jurisdictionPreview.source_post_relevance_assessed&&<div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy||(jurisdictionPreview.source_context_provinces_unverified||[]).length!==1} onClick={()=>confirmIncidentJurisdiction('CONFIRMED')}>Verify incident province</button><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={()=>confirmIncidentJurisdiction('REJECTED')}>Reject location cue</button></div>}</div>}
       {jurisdictionMessage&&<p role="status" className="text-slate-600">{jurisdictionMessage}</p>}
      </div><p><strong>Communication context (review hint):</strong> {selected.processing_hints?.communication_context?.category||'UNRESOLVED'} · Actionability not established; existing AI and human decisions remain unchanged.</p><p><strong>Topic suggestions (text-only):</strong> {(selected.processing_hints?.topic_suggestions||[]).join(', ')||'None'}</p><p><strong>Province mentions (not verified incident location):</strong> {(selected.processing_hints?.province_mentions||[]).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p>{(selected.topic_labels||[]).length>0&&<p><strong>AI topic classification:</strong> {selected.topic_labels.join(', ')} · Based on saved assessment, not keyword hints.</p>}

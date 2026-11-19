@@ -266,3 +266,49 @@ def test_unhashable_diagnostic_ids_do_not_crash_or_leak():
     }])
     assert aggregate["review_reason_occurrences"]=={
         "legal_uncertainty":1,"requested_topic_coverage":1}
+
+
+
+def test_flagged_but_incomplete_is_not_treated_as_fully_evaluated():
+    flagged=summarize({
+        "checks":[{"id":"citation_grounding","status":"REVIEW_REQUIRED"}],
+    })
+    assert flagged["status"]=="REVIEW_FLAGS_PRESENT"
+    assert flagged["diagnostics_complete"] is False
+    assert flagged["human_review_route"]=="REVIEW_FLAGS_AND_MISSING_CHECKS"
+    assert "source_relevance" in flagged["core_missing_check_ids"]
+    assert "requested_topic_coverage" in flagged["supplemental_missing_check_ids"]
+    result=summarize_batch([
+        {"status":"AUDITED","response_quality_triage":flagged},
+    ])
+    assert result["audited_with_review_flags"]==1
+    assert result["review_flags_with_incomplete_diagnostics"]==1
+    assert result["review_flags_with_complete_diagnostics"]==0
+    assert result["human_accuracy"] is None
+
+
+def test_complete_flagged_and_complete_clean_get_distinct_review_routes():
+    core=[{"id":name,"status":"PASS"} for name in (
+        "citation_grounding","source_relevance","legal_uncertainty",
+        "cross_module_consistency")]
+    supplemental=[{"id":name,"status":"PASS"} for name in (
+        "citation_inventory_consistency","pdf_quoted_passage_alignment",
+        "requested_topic_coverage")]
+    clean=summarize({"checks":core,"supplemental_checks":supplemental})
+    assert clean["diagnostics_complete"] is True
+    assert clean["human_review_route"]=="COMPLETE_HEURISTIC_SPOT_CHECK"
+    assert clean["core_missing_check_ids"]==[]
+    assert clean["supplemental_missing_check_ids"]==[]
+    flagged=summarize({
+        "checks":core,
+        "supplemental_checks":supplemental[:-1]+[
+            {"id":"requested_topic_coverage","status":"REVIEW_REQUIRED"}],
+    })
+    assert flagged["human_review_route"]=="REVIEW_FLAGGED_SOURCE_CLAIMS"
+    result=summarize_batch([
+        {"status":"AUDITED","response_quality_triage":flagged},
+        {"status":"AUDITED","response_quality_triage":clean},
+    ])
+    assert result["review_flags_with_complete_diagnostics"]==1
+    assert result["review_flags_with_incomplete_diagnostics"]==0
+    assert result["audited_without_detected_flags"]==1

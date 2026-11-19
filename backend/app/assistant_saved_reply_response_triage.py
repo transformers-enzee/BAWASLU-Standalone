@@ -7,6 +7,10 @@ Historical chat content is editable and not provenance-authenticated.
 from collections import Counter
 
 _KNOWN={"PASS","REVIEW_REQUIRED","NOT_APPLICABLE"}
+_CORE={"citation_grounding","source_relevance",
+       "legal_uncertainty","cross_module_consistency"}
+_SUPPLEMENTAL={"citation_inventory_consistency",
+               "pdf_quoted_passage_alignment","requested_topic_coverage"}
 
 
 def summarize_authorized_saved_reply_audit(audit):
@@ -16,35 +20,39 @@ def summarize_authorized_saved_reply_audit(audit):
         checks=[]
     statuses=Counter()
     review_ids=[]
+    seen_core=set()
+    duplicate_core=False
     for row in checks:
         if not isinstance(row,dict):
             continue
         status=row.get("status")
-        if status in _KNOWN:
-            statuses[status]+=1
-            if status=="REVIEW_REQUIRED":
-                name=row.get("id")
-                if isinstance(name,str) and name in (
-                    "citation_grounding","source_relevance",
-                    "legal_uncertainty","cross_module_consistency"
-                ):
-                    review_ids.append(name)
+        name=row.get("id")
+        if name not in _CORE or status not in _KNOWN:
+            continue
+        if name in seen_core:
+            duplicate_core=True
+            continue
+        seen_core.add(name)
+        statuses[status]+=1
+        if status=="REVIEW_REQUIRED":
+            review_ids.append(name)
     # Treat supplemental REVIEW_REQUIRED as a review flag even when all four
     # historical readiness checks pass. Never export arbitrary reason text.
     supplemental_counts=Counter()
     supplemental_review=[]
-    allowed_supplemental={
-        "citation_inventory_consistency",
-        "pdf_quoted_passage_alignment",
-        "requested_topic_coverage",
-    }
+    seen_supplemental=set()
+    duplicate_supplemental=False
     for row in audit.get("supplemental_checks") or []:
         if not isinstance(row,dict):
             continue
         check_id=row.get("id")
         status=row.get("status")
-        if check_id not in allowed_supplemental or status not in _KNOWN:
+        if check_id not in _SUPPLEMENTAL or status not in _KNOWN:
             continue
+        if check_id in seen_supplemental:
+            duplicate_supplemental=True
+            continue
+        seen_supplemental.add(check_id)
         supplemental_counts[status]+=1
         if status=="REVIEW_REQUIRED":
             supplemental_review.append(check_id)
@@ -65,9 +73,17 @@ def summarize_authorized_saved_reply_audit(audit):
                               if isinstance(key,str) and isinstance(val,int)
                               and not isinstance(val,bool) and val>0])
     flagged=bool(review_ids or supplemental_review or missing or rejection or issue_count)
+    diagnostics_complete=(seen_core==_CORE and seen_supplemental==_SUPPLEMENTAL
+                          and not duplicate_core and not duplicate_supplemental)
+    status=("REVIEW_FLAGS_PRESENT" if flagged else
+            "INCOMPLETE_DIAGNOSTICS" if not diagnostics_complete else
+            "NO_DETERMINISTIC_FLAGS")
     return {
         "schema":"BAWASLU_SAVED_REPLY_RESPONSE_TRIAGE_V17468",
-        "status":"REVIEW_FLAGS_PRESENT" if flagged else "NO_DETERMINISTIC_FLAGS",
+        "status":status,
+        "diagnostics_complete":diagnostics_complete,
+        "core_check_count":len(seen_core),
+        "supplemental_check_count":len(seen_supplemental),
         "readiness_check_counts":dict(sorted(statuses.items())),
         "readiness_review_ids":sorted(set(review_ids)),
         "supplemental_check_counts":dict(sorted(supplemental_counts.items())),

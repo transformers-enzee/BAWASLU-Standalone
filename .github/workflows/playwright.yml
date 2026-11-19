@@ -65,6 +65,7 @@ jobs:
           node scripts/test-regency-aliases-v1725.mjs
           node scripts/test-regency-eval-v1726.mjs
           node scripts/test-jurisdiction-readiness-v1727.mjs
+          node scripts/test-jurisdiction-leads-v1728.mjs
 
       - name: Build production frontend
         working-directory: frontend

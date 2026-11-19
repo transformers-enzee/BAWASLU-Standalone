@@ -9,6 +9,7 @@ from .models import (MonitoringCampaign,CampaignEvidence,SocialListeningResult,
 from .socialcrawl import _result_in_scope
 from .incident_regency_candidates import incident_regency_preview
 from .jurisdiction_review import jurisdiction_status
+from .related_incident_locations import _safe_source_url
 
 SCAN_LIMIT=30
 
@@ -43,6 +44,7 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id):
           'city_confirmed','city_rejected','city_unreviewed',
           'city_stale_or_conflicted','province_confirmed')
     counts={key:0 for key in keys}
+    leads=[]
     for link in sampled_links:
         post=posts.get(link.result_id)
         if not post or not _result_in_scope(db,principal,post):
@@ -74,9 +76,37 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id):
             counts['city_stale_or_conflicted']+=1
         else:
             counts['city_unreviewed']+=1
+        if not city.get('incident_regency_city_verified') and (
+            len(leads)<SCAN_LIMIT):
+            if city.get('decision')=='PROVINCE_REVIEW_CONFLICT' or (
+                str(city.get('decision') or '').startswith('STALE_')):
+                priority='STALE_OR_CONFLICTED'
+            elif cues['multiple_regency_candidates']:
+                priority='MULTIPLE_INCIDENT_LOCALITIES'
+            elif cues['candidate_count']==1:
+                priority='EXPLICIT_LOCALITY_AWAITING_OFFICER'
+            else:
+                priority='NO_EXPLICIT_CITY_CUE'
+            leads.append({
+                'result_id':str(post.id),
+                'canonical_source_id':'social:'+str(post.id),
+                'priority':priority,
+                'current_city_decision':str(city.get('decision') or 'UNREVIEWED'),
+                'candidate_regency_cities':[c['regency_city']
+                                            for c in cues['candidates']],
+                'original_source_url':_safe_source_url(post.canonical_url),
+                'not_independently_verified':True,
+                'review_is_human_only':True,
+            })
     total=counts['relevant_sources']
     # Not a field accuracy or a system acceptance percentage.
     reviewed=counts['city_confirmed']+counts['city_rejected']
+    ordering={
+      'STALE_OR_CONFLICTED':0,
+      'MULTIPLE_INCIDENT_LOCALITIES':1,
+      'EXPLICIT_LOCALITY_AWAITING_OFFICER':2,
+      'NO_EXPLICIT_CITY_CUE':3}
+    leads.sort(key=lambda row:ordering.get(row['priority'],9))
     return {
       'campaign_id':str(campaign.id),
       'scope':'AUTHORIZED_LATEST_CAMPAIGN_EVIDENCE_ONLY',
@@ -86,6 +116,10 @@ def campaign_jurisdiction_readiness(db, principal, campaign_id):
       'more_evidence_may_exist':len(links)>SCAN_LIMIT,
       'incomplete_for_campaign':len(links)>SCAN_LIMIT,
       'counts':counts,
+      'officer_review_leads':leads[:12],
+      'review_lead_limit':12,
+      'review_leads_truncated':len(leads)>12,
+      'review_leads_are_source_cues_not_approval':True,
       'officer_decision_coverage_percent_sample':(
           round(100*reviewed/total,1) if total else None),
       'not_full_corpus_coverage':True,

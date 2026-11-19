@@ -614,6 +614,17 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        <p>Officer city confirmations: {jurisdictionReadiness.counts?.city_confirmed||0} · Rejected: {jurisdictionReadiness.counts?.city_rejected||0} · Stale/conflicted: {jurisdictionReadiness.counts?.city_stale_or_conflicted||0} · Awaiting review: {jurisdictionReadiness.counts?.city_unreviewed||0}</p>
        {jurisdictionReadiness.more_evidence_may_exist&&<p role="status">Additional campaign posts exist beyond the sample; these are not full-corpus totals.</p>}
        <p className="text-amber-900">Decision coverage and source cues do not measure actual geolocation accuracy or client acceptance.</p>
+       <div data-testid="jurisdiction-officer-review-leads" className="space-y-1">
+        <p><strong>Officer review leads (sample only, prioritized):</strong> {(jurisdictionReadiness.officer_review_leads||[]).length}</p>
+        {(jurisdictionReadiness.officer_review_leads||[]).map(item=><div key={item.canonical_source_id} className="border-t border-slate-100 py-1">
+         <p>{item.canonical_source_id} · {String(item.priority||'').replaceAll('_',' ')} · {item.current_city_decision}</p>
+         <p>{(item.candidate_regency_cities||[]).join(', ')||'No explicit city cue'}</p>
+         <button type="button" className="intel-ghost text-xs" onClick={()=>{focusPlayerEvidence(item.result_id);setJurisdictionReadiness(null)}}>Inspect on visible Inbox page</button>
+         {item.original_source_url&&<a className="ml-2 underline" target="_blank" rel="noopener noreferrer" href={item.original_source_url}>Open saved original post</a>}
+        </div>)}
+        {jurisdictionReadiness.review_leads_truncated&&<p role="status">Only the highest priority review leads from the bounded sample are shown.</p>}
+        <p>These are officer investigation leads, not an approval queue or proof of a real-world location.</p>
+       </div>
       </div>}
       <button type="button" className="intel-ghost text-xs" disabled={regencyHistoryBusy} onClick={loadRegencyReviewHistory}>View officer Kabupaten/Kota decision history</button>
       {regencyReviewHistory&&<div data-testid="regency-review-history" className="rounded border border-slate-200 bg-white p-2 text-xs space-y-1">

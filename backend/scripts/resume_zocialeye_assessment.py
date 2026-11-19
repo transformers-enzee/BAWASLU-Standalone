@@ -22,6 +22,15 @@ PREFIX = "offline-xlsx-20261119-batch-"
 CAMPAIGN_ID = 1
 
 
+def assert_job_assessment_alignment(job_state, assessment):
+    """Refuse conflicting job/assessment states rather than risk duplicate billing."""
+    classified = relevance_is_assessed(assessment)
+    if job_state == "COMPLETED" and not classified:
+        raise ValueError("Completed job lacks a saved relevance assessment")
+    if job_state == "PENDING" and classified:
+        raise ValueError("Pending job already has a saved assessment; manual reconciliation required")
+
+
 def inspect_queue(db, run_id):
     run = db.get(SocialListeningRun, run_id)
     if run is None or run.provider != "AI_ASSESS_ALL":
@@ -64,11 +73,7 @@ def inspect_queue(db, run_id):
     for assessment in previous:
         latest.setdefault(assessment.result_id, assessment)
     for rid, row in mapped.items():
-        classified = relevance_is_assessed(latest.get(rid))
-        if row.state == "COMPLETED" and not classified:
-            raise ValueError("Completed job lacks a saved relevance assessment")
-        if row.state == "PENDING" and classified:
-            raise ValueError("Pending job already has a saved assessment; manual reconciliation required")
+        assert_job_assessment_alignment(row.state, latest.get(rid))
     # Jobs must never be reset, and ambiguous/failed calls must not be retried.
     pending = [rid for rid in original_ids
                if mapped[rid].state == "PENDING" and int(mapped[rid].attempts or 0) < 3]

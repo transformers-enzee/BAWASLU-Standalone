@@ -22,6 +22,7 @@ def submission(**changes):
         "answer_message_index":3,
         "ratings":{name:"PASS" for name in DIMENSIONS},
         "source_access_rechecked":True,
+        "source_material_reviewed":True,
         "original_answer_reviewed":True,
         "independent_review_attested":True,
         "reviewer_free_text":"PRIVATE SOURCE TEXT",
@@ -50,6 +51,7 @@ def test_self_attested_complete_review_is_not_legal_signoff():
 
 @pytest.mark.parametrize("bad",[
     {"source_access_rechecked":False},
+    {"source_material_reviewed":False},
     {"original_answer_reviewed":False},
     {"independent_review_attested":False},
     {"ratings":{"SOURCE_ID_ACCURACY":"PASS"}},

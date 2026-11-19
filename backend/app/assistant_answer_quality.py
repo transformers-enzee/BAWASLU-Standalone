@@ -349,6 +349,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
     checks=[x for x in checks if x["id"] in core_ids]
     needs=[x["id"] for x in checks if x["status"]==REVIEW]
     additional_needs=[x["id"] for x in additional_checks if x["status"]==REVIEW]
+    all_readiness_reasons=list(dict.fromkeys(needs+additional_needs))
     return {
         "framework":"ASSISTANT_ANSWER_READINESS_V1484",
         "evaluation_type":"DETERMINISTIC_HEURISTICS_NOT_HUMAN_ACCURACY",
@@ -363,6 +364,9 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "requested_topic_coverage":topic_probe,
         "additional_checks":additional_checks,
         "additional_needs_review":additional_needs,
+        "all_readiness_review_reasons":all_readiness_reasons,
+        "supplemental_review_required":bool(additional_needs),
+        "supplemental_review_count":len(additional_needs),
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),
         "not_applicable_checks":sum(x["status"]==NA for x in checks),

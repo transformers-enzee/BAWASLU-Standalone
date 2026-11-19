@@ -268,6 +268,24 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         checks.append(_status("cross_module_consistency",NA,
             "No cross-module comparison or conflicting saved-source classification in this answer."))
 
+    # A conservative diagnostic for multi-part questions; lexical matches do
+    # not establish correct, complete, or source-grounded explanations.
+    from .assistant_question_coverage import requested_topic_coverage
+    topic_probe=requested_topic_coverage(question,answer,profile)
+    if topic_probe["status"]=="NEEDS_REVIEW":
+        checks.append(_status("requested_topic_coverage",REVIEW,
+            "Some explicitly requested topics may be absent from the answer; inspect the question and sourced response.",
+            missing_requested_topics=topic_probe["missing_topics"],
+            lexical_only=True))
+    elif topic_probe["status"]=="PASS_LEXICAL_ONLY":
+        checks.append(_status("requested_topic_coverage",PASS,
+            "Requested topics appear in the answer lexically; accuracy and completeness remain unverified.",
+            lexical_only=True))
+    else:
+        checks.append(_status("requested_topic_coverage",NA,
+            "No multi-part procedural coverage probe applies to this question.",
+            lexical_only=True))
+
     legal_alignment=_legal_reference_alignment(question,rows,cited,grounding)
     legal_consistency=evaluate_legal_claim_consistency(question,evidence,answer,cited,grounding)
     numeric_consistency=evaluate_legal_numeric_claims(question,evidence,answer,cited,grounding)
@@ -289,6 +307,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "platform_policy_legal_boundary":policy_boundary,
         "formal_outcome_source_provenance":claim_provenance,
         "legal_review_summary":legal_review_summary,
+        "requested_topic_coverage":topic_probe,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),
         "not_applicable_checks":sum(x["status"]==NA for x in checks),

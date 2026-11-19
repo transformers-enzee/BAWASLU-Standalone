@@ -42,11 +42,17 @@ def test_inline_policy_citation_still_flags():
 
 def test_next_narrative_sentence_cannot_supply_local_policy_citation():
     qa=assess("Instagram violates platform policy. See page [DOC-1-P1] for election law.")
-    assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=qa["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_NO_LOCAL_AUTHORIZED_CITATION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 def test_one_sentence_citation_cannot_support_later_platform_claim():
     qa=assess("Election law is discussed [DOC-1-P1]. Instagram violates platform policy.")
-    assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=qa["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_NO_LOCAL_AUTHORIZED_CITATION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 @pytest.mark.parametrize("text",[
     "Instagram may violate platform policy.\n[DOC-1-P1]",
@@ -61,11 +67,17 @@ def test_uncertainty_and_attributed_reporting_not_definitive(text):
 def test_contextual_report_not_policy_authority():
     qa=assess("TikTok breaches community guidelines.\n[DOC-2-P1]",
               [source("DOC-2-P1","REPORT")])
-    assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=qa["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_WITHOUT_VERIFIED_PROVIDER_DECISION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 def test_unselected_reference_cannot_trigger_review_or_count_as_support():
     qa=assess("Instagram violates platform policy.\n[DOC-999-P1]")
-    assert qa["platform_policy_legal_boundary"]["possible_platform_policy_verdicts"]==0
+    boundary=qa["platform_policy_legal_boundary"]
+    assert boundary["possible_platform_policy_verdicts"]==1
+    assert boundary["review_items"][0]["reason"]=="PLATFORM_VERDICT_NO_LOCAL_AUTHORIZED_CITATION"
+    assert boundary["review_items"][0]["cited_legal_page_ids"]==[]
 
 def test_platform_only_question_cannot_bypass_source_type_review():
     qa=assess("Instagram violates platform policy.\n[DOC-1-P1]",

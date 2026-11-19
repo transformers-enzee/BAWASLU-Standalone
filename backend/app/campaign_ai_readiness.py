@@ -17,9 +17,9 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
     worker=str(settings.get('BAWASLU_AI_WORKER_ENABLED','false')).lower()=='true'
     enabled=str(settings.get('BAWASLU_AUTO_AI_SCREENING_ENABLED','false')).lower()=='true'
     provider=bool(str(settings.get('OPENAI_API_KEY','')).strip())
-    daily=cap('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN',100)
-    lifetime=cap('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN',500)
-    per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',25)
+    daily=cap('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN',5000)
+    lifetime=cap('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN',5000)
+    per_run=cap('BAWASLU_AI_ASSESSMENTS_PER_RUN',50)
     postgres=db.bind.dialect.name=='postgresql'
     today=datetime.utcnow().strftime('%Y-%m-%d')
     daily_used,lifetime_used=(db.query(
@@ -120,9 +120,9 @@ def campaign_manual_batch_preview(db,campaign_id,requested_limit,env=None):
         raise ValueError('Choose an integer batch size between 1 and 20')
     cid=int(campaign_id)
     try:
-        run_limit=max(0,min(25,int(settings.get('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
-        daily=max(0,min(100,int(settings.get('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
-        lifetime=max(0,min(500,int(settings.get('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        run_limit=max(0,min(50,int(settings.get('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
+        daily=max(0,min(5000,int(settings.get('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        lifetime=max(0,min(5000,int(settings.get('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
     except (ValueError,TypeError):
         run_limit=daily=lifetime=0
     today=datetime.utcnow().strftime('%Y-%m-%d')

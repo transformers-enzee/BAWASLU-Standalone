@@ -41,6 +41,7 @@ class SavedReplyReviewerRating(BaseModel):
     answer_message_index:int=Field(ge=1,le=59)
     ratings:dict[str,str]=Field(min_length=1,max_length=6)
     original_answer_reviewed:bool=False
+    source_material_reviewed:bool=False
     independent_review_attested:bool=False
 
 class SavedReplyHumanReviewRequest(BaseModel):

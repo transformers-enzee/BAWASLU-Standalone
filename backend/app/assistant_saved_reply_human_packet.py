@@ -19,6 +19,35 @@ DIMENSIONS=(
 )
 _RATINGS=("PASS","FAIL","NOT_ASSESSABLE")
 
+_SOURCE_FOCUS={
+    "PDF_KNOWLEDGE":"VERIFY_EXACT_PDF_PAGE_QUOTE_AND_DOCUMENT_VERSION",
+    "SOCIAL_LISTENING":"VERIFY_POST_PROVENANCE_CONTEXT_AND_LOCATION_CONFIDENCE",
+    "FORMAL_INTELLIGENCE":"VERIFY_OFFICER_RECORD_CONTEXT_AND_DECISION_STATUS",
+}
+
+
+def _authorized_review_focus(kinds,triage):
+    """Allowlisted reviewer prompts from reauthorized source-kind metadata."""
+    selected=[]
+    if isinstance(kinds,dict):
+        for kind,count in kinds.items():
+            if (isinstance(kind,str) and kind in _SOURCE_FOCUS and
+                isinstance(count,int) and not isinstance(count,bool) and count>0):
+                selected.append(kind)
+    selected=sorted(set(selected))
+    focuses=[_SOURCE_FOCUS[kind] for kind in selected]
+    if not selected:
+        focuses.append("RECHECK_SOURCE_TYPE_AND_AUTHORIZATION")
+    if "PDF_KNOWLEDGE" in selected:
+        focuses.append("VERIFY_PAGE_LEVEL_CITATIONS_MATCH_ANSWER_CLAIMS")
+    if len(selected)>1:
+        focuses.append("VERIFY_EACH_CROSS_SOURCE_CLAIM_INDEPENDENTLY")
+    if triage.get("status")=="INCOMPLETE_DIAGNOSTICS" or triage.get("diagnostics_complete") is not True:
+        focuses.append("REPEAT_MISSING_DIAGNOSTIC_CHECKS")
+    focuses.append("CHECK_ALLEGATION_VERSUS_FORMAL_LEGAL_DETERMINATION")
+    return selected,sorted(set(focuses))
+
+
 
 def build_authorized_saved_reply_review_packet(batch):
     """Provide blank review tasks without reproducing answers or source text."""
@@ -55,7 +84,11 @@ def build_authorized_saved_reply_review_packet(batch):
         if key in selected_keys:
             raise ValueError("Duplicate audited saved-reply selection")
         selected_keys.add(key)
+        source_types,focus=_authorized_review_focus(
+            item.get("selected_source_kinds"),triage)
         tasks.append({
+            "authorized_source_kinds":source_types,
+            "manual_review_focus":focus,
             "thread_id":thread_id,
             "answer_message_index":index,
             "triage_status":triage["status"],

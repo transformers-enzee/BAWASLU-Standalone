@@ -1,0 +1,128 @@
+name: BAWASLU Option B - prebuilt staging image
+
+# One bootstrap image build on installation. Later releases are explicitly
+# dispatched in bulk; ordinary code pushes never trigger Render deployments.
+on:
+  push:
+    branches: [architecture-v2-foundation-20261015]
+    paths:
+      - '.github/workflows/bawaslu-option-b-image.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: 'Deploy to image-backed Render staging after manual source verification'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: bawaslu-option-b-staging
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/transformers-enzee/bawaslu-standalone
+
+jobs:
+  build-image:
+    if: github.ref == 'refs/heads/architecture-v2-foundation-20261015'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact approved staging commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check image build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Dockerfile
+          test -f backend/requirements.txt
+          test -f frontend/package.json
+          echo "Building from the current staging commit only; no Render build is triggered."
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish immutable staging image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/transformers-enzee/bawaslu-standalone:staging
+            ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/transformers-enzee/BAWASLU-Standalone
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=bawaslu-staging
+          cache-to: type=gha,mode=max,scope=bawaslu-staging
+      - name: Document released image
+        shell: bash
+        run: |
+          {
+            echo "## BAWASLU Option B staging image"
+            echo ""
+            echo "Image: `ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}`"
+            echo "Staging alias: `ghcr.io/transformers-enzee/bawaslu-standalone:staging`"
+            echo "Built for linux/amd64; image is published to GitHub Container Registry."
+            echo "A successful image build does NOT mean Render has been updated."
+            echo "Do not switch the Render source before the image is pullable and staging database readiness is verified."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    needs: build-image
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_staging == true && github.ref == 'refs/heads/architecture-v2-foundation-20261015'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOURCE_CONFIRMED: ${{ vars.BAWASLU_STAGING_IMAGE_READY }}
+      RENDER_STAGING_DEPLOY_HOOK: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+      IMAGE_REF: ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
+    steps:
+      - name: Require explicit image-backed staging confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_CONFIRMED" != "true" ]; then
+            echo "BLOCKED: set BAWASLU_STAGING_IMAGE_READY=true only after confirming the Render staging service uses this GHCR image."
+            exit 1
+          fi
+          if [ -z "$RENDER_STAGING_DEPLOY_HOOK" ]; then
+            echo "BLOCKED: staging deploy hook secret is not configured."
+            exit 1
+          fi
+      - name: Deploy immutable image tag without a Render-side build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+          hook = os.environ["RENDER_STAGING_DEPLOY_HOOK"]
+          if not hook.startswith("https://api.render.com/deploy/"):
+              raise SystemExit("Invalid Render staging deploy hook format")
+          image = os.environ["IMAGE_REF"]
+          separator = "&" if "?" in hook else "?"
+          url = hook + separator + "imgURL=" + quote(image, safe="")
+          with urlopen(Request(url, method="POST"), timeout=30) as response:
+              if response.status not in (200, 202):
+                  raise SystemExit("Staging image deploy was not accepted")
+          print("Render accepted the image-backed staging deployment request.")
+          PY
+      - name: Record deploy acceptance limits
+        shell: bash
+        run: |
+          echo "Render deploy requested for immutable image ${{ github.sha }}." >> "$GITHUB_STEP_SUMMARY"
+          echo "This confirms a request, not successful startup, migrations, health checks or officer acceptance." >> "$GITHUB_STEP_SUMMARY"

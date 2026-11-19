@@ -487,7 +487,7 @@ def test_pdf_guidance_chat_uses_only_pdf_skips_social_stats_and_action_cards(mon
         observed["profile"]=kwargs.get("response_profile")
         observed["evidence"]=evidence
         assert mode=="GROUNDED"
-        assert kwargs["response_depth"]=="EXECUTIVE"
+        assert kwargs["response_depth"]=="DEEP"
         cited=next(row["record_id"] for row in evidence if row["page"]==6)
         return "Menurut PDF, amankan bukti digital "+f"[{cited}]",[cited],{
             "answer_language":"id",

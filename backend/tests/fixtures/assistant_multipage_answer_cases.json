@@ -1,0 +1,504 @@
+{
+  "schema": "BAWASLU_MULTIPAGE_SYNTHETIC_V1",
+  "description": "12 two-page test pairs; entirely fictional, not actual BAWASLU law or SOP.",
+  "cases": [
+    {
+      "id": "MULTIPAGE-001",
+      "topic": "assignment_and_authority",
+      "question": "Jelaskan persyaratan penugasan dan pembatasan kewenangan petugas berdasarkan dua halaman PDF simulasi.",
+      "variant": "COMPLETE_TWO_CITATIONS",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-31-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Penugasan provinsi wajib verifikasi lokasi kejadian sebelum routing."
+        },
+        {
+          "record_id": "DOC-31-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Akun Viewer hanya dapat melihat ringkasan dan tidak boleh menyetujui kasus."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-31-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-31-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib verifikasi lokasi kejadian [DOC-31-P1].\n\nSelanjutnya, tidak boleh menyetujui kasus [DOC-31-P2].",
+      "candidate_citation_ids": [
+        "DOC-31-P1",
+        "DOC-31-P2"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "MULTIPAGE-002",
+      "topic": "assignment_and_authority",
+      "question": "Jelaskan persyaratan penugasan dan pembatasan kewenangan petugas berdasarkan dua halaman PDF simulasi.",
+      "variant": "OMITTED_SECOND_REQUIREMENT",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-31-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Penugasan provinsi wajib verifikasi lokasi kejadian sebelum routing."
+        },
+        {
+          "record_id": "DOC-31-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Akun Viewer hanya dapat melihat ringkasan dan tidak boleh menyetujui kasus."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-31-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-31-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib verifikasi lokasi kejadian [DOC-31-P1].\n\nKetentuan berikutnya memerlukan pemeriksaan lanjutan.",
+      "candidate_citation_ids": [
+        "DOC-31-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-003",
+      "topic": "assignment_and_authority",
+      "question": "Jelaskan persyaratan penugasan dan pembatasan kewenangan petugas berdasarkan dua halaman PDF simulasi.",
+      "variant": "SECOND_CLAIM_WRONG_PAGE",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-31-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Penugasan provinsi wajib verifikasi lokasi kejadian sebelum routing."
+        },
+        {
+          "record_id": "DOC-31-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Akun Viewer hanya dapat melihat ringkasan dan tidak boleh menyetujui kasus."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-31-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-31-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib verifikasi lokasi kejadian [DOC-31-P1].\n\nSelanjutnya, tidak boleh menyetujui kasus [DOC-31-P1].",
+      "candidate_citation_ids": [
+        "DOC-31-P1"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-004",
+      "topic": "assignment_and_authority",
+      "question": "Jelaskan persyaratan penugasan dan pembatasan kewenangan petugas berdasarkan dua halaman PDF simulasi.",
+      "variant": "FIRST_CLAIM_NEGATED",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-31-P1",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Penugasan provinsi wajib verifikasi lokasi kejadian sebelum routing."
+        },
+        {
+          "record_id": "DOC-31-P2",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Akun Viewer hanya dapat melihat ringkasan dan tidak boleh menyetujui kasus."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-31-P1",
+          "anchor": "wajib verifikasi lokasi kejadian",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-31-P2",
+          "anchor": "tidak boleh menyetujui kasus",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: tidak wajib verifikasi lokasi kejadian [DOC-31-P1].\n\nSelanjutnya, tidak boleh menyetujui kasus [DOC-31-P2].",
+      "candidate_citation_ids": [
+        "DOC-31-P1",
+        "DOC-31-P2"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "MULTIPAGE-005",
+      "topic": "digital_evidence_and_review",
+      "question": "Jelaskan pengamanan bukti digital dan langkah pemeriksaan kasus dari dua halaman sumber simulasi.",
+      "variant": "COMPLETE_TWO_CITATIONS",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-32-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pengamanan bukti wajib mencatat URL asal dan waktu akses."
+        },
+        {
+          "record_id": "DOC-32-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Sebelum keputusan, petugas wajib memeriksa fakta dasar."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-32-P3",
+          "anchor": "wajib mencatat URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-32-P4",
+          "anchor": "wajib memeriksa fakta dasar",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib mencatat URL asal [DOC-32-P3].\n\nSelanjutnya, wajib memeriksa fakta dasar [DOC-32-P4].",
+      "candidate_citation_ids": [
+        "DOC-32-P3",
+        "DOC-32-P4"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "MULTIPAGE-006",
+      "topic": "digital_evidence_and_review",
+      "question": "Jelaskan pengamanan bukti digital dan langkah pemeriksaan kasus dari dua halaman sumber simulasi.",
+      "variant": "OMITTED_SECOND_REQUIREMENT",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-32-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pengamanan bukti wajib mencatat URL asal dan waktu akses."
+        },
+        {
+          "record_id": "DOC-32-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Sebelum keputusan, petugas wajib memeriksa fakta dasar."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-32-P3",
+          "anchor": "wajib mencatat URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-32-P4",
+          "anchor": "wajib memeriksa fakta dasar",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib mencatat URL asal [DOC-32-P3].\n\nKetentuan berikutnya memerlukan pemeriksaan lanjutan.",
+      "candidate_citation_ids": [
+        "DOC-32-P3"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-007",
+      "topic": "digital_evidence_and_review",
+      "question": "Jelaskan pengamanan bukti digital dan langkah pemeriksaan kasus dari dua halaman sumber simulasi.",
+      "variant": "SECOND_CLAIM_WRONG_PAGE",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-32-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pengamanan bukti wajib mencatat URL asal dan waktu akses."
+        },
+        {
+          "record_id": "DOC-32-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Sebelum keputusan, petugas wajib memeriksa fakta dasar."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-32-P3",
+          "anchor": "wajib mencatat URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-32-P4",
+          "anchor": "wajib memeriksa fakta dasar",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: wajib mencatat URL asal [DOC-32-P3].\n\nSelanjutnya, wajib memeriksa fakta dasar [DOC-32-P3].",
+      "candidate_citation_ids": [
+        "DOC-32-P3"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-008",
+      "topic": "digital_evidence_and_review",
+      "question": "Jelaskan pengamanan bukti digital dan langkah pemeriksaan kasus dari dua halaman sumber simulasi.",
+      "variant": "FIRST_CLAIM_NEGATED",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-32-P3",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Pengamanan bukti wajib mencatat URL asal dan waktu akses."
+        },
+        {
+          "record_id": "DOC-32-P4",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Sebelum keputusan, petugas wajib memeriksa fakta dasar."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-32-P3",
+          "anchor": "wajib mencatat URL asal",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-32-P4",
+          "anchor": "wajib memeriksa fakta dasar",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: tidak wajib mencatat URL asal [DOC-32-P3].\n\nSelanjutnya, wajib memeriksa fakta dasar [DOC-32-P4].",
+      "candidate_citation_ids": [
+        "DOC-32-P3",
+        "DOC-32-P4"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    },
+    {
+      "id": "MULTIPAGE-009",
+      "topic": "platform_and_electoral",
+      "question": "Jelaskan perbedaan moderasi platform dan penilaian hukum pemilu dari dua halaman pedoman simulasi.",
+      "variant": "COMPLETE_TWO_CITATIONS",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-33-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Tindakan platform harus dipisahkan dari proses hukum pemilu."
+        },
+        {
+          "record_id": "DOC-33-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan sosial saja tidak boleh dianggap putusan hukum resmi."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-33-P5",
+          "anchor": "harus dipisahkan dari proses hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-33-P6",
+          "anchor": "tidak boleh dianggap putusan hukum resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: harus dipisahkan dari proses hukum pemilu [DOC-33-P5].\n\nSelanjutnya, tidak boleh dianggap putusan hukum resmi [DOC-33-P6].",
+      "candidate_citation_ids": [
+        "DOC-33-P5",
+        "DOC-33-P6"
+      ],
+      "expected_status": "PASS_NARROW_LEXICAL_ONLY",
+      "expected_issue": null
+    },
+    {
+      "id": "MULTIPAGE-010",
+      "topic": "platform_and_electoral",
+      "question": "Jelaskan perbedaan moderasi platform dan penilaian hukum pemilu dari dua halaman pedoman simulasi.",
+      "variant": "OMITTED_SECOND_REQUIREMENT",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-33-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Tindakan platform harus dipisahkan dari proses hukum pemilu."
+        },
+        {
+          "record_id": "DOC-33-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan sosial saja tidak boleh dianggap putusan hukum resmi."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-33-P5",
+          "anchor": "harus dipisahkan dari proses hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-33-P6",
+          "anchor": "tidak boleh dianggap putusan hukum resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: harus dipisahkan dari proses hukum pemilu [DOC-33-P5].\n\nKetentuan berikutnya memerlukan pemeriksaan lanjutan.",
+      "candidate_citation_ids": [
+        "DOC-33-P5"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-011",
+      "topic": "platform_and_electoral",
+      "question": "Jelaskan perbedaan moderasi platform dan penilaian hukum pemilu dari dua halaman pedoman simulasi.",
+      "variant": "SECOND_CLAIM_WRONG_PAGE",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-33-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Tindakan platform harus dipisahkan dari proses hukum pemilu."
+        },
+        {
+          "record_id": "DOC-33-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan sosial saja tidak boleh dianggap putusan hukum resmi."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-33-P5",
+          "anchor": "harus dipisahkan dari proses hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-33-P6",
+          "anchor": "tidak boleh dianggap putusan hukum resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: harus dipisahkan dari proses hukum pemilu [DOC-33-P5].\n\nSelanjutnya, tidak boleh dianggap putusan hukum resmi [DOC-33-P5].",
+      "candidate_citation_ids": [
+        "DOC-33-P5"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "NO_LOCALLY_CITED_ANCHOR"
+    },
+    {
+      "id": "MULTIPAGE-012",
+      "topic": "platform_and_electoral",
+      "question": "Jelaskan perbedaan moderasi platform dan penilaian hukum pemilu dari dua halaman pedoman simulasi.",
+      "variant": "FIRST_CLAIM_NEGATED",
+      "synthetic_only": true,
+      "documents": [
+        {
+          "record_id": "DOC-33-P5",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Tindakan platform harus dipisahkan dari proses hukum pemilu."
+        },
+        {
+          "record_id": "DOC-33-P6",
+          "record_type": "PDF_KNOWLEDGE",
+          "document_type": "SOP",
+          "review_status": "UNREVIEWED",
+          "source_excerpt": "Catatan sosial saja tidak boleh dianggap putusan hukum resmi."
+        }
+      ],
+      "requirements": [
+        {
+          "source_id": "DOC-33-P5",
+          "anchor": "harus dipisahkan dari proses hukum pemilu",
+          "expected_polarity": "POSITIVE"
+        },
+        {
+          "source_id": "DOC-33-P6",
+          "anchor": "tidak boleh dianggap putusan hukum resmi",
+          "expected_polarity": "POSITIVE"
+        }
+      ],
+      "candidate_answer": "Ringkasan: tidak harus dipisahkan dari proses hukum pemilu [DOC-33-P5].\n\nSelanjutnya, tidak boleh dianggap putusan hukum resmi [DOC-33-P6].",
+      "candidate_citation_ids": [
+        "DOC-33-P5",
+        "DOC-33-P6"
+      ],
+      "expected_status": "REVIEW_REQUIRED",
+      "expected_issue": "EXPLICIT_POLARITY_REVERSAL"
+    }
+  ]
+}

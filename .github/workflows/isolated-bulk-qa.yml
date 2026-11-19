@@ -25,7 +25,7 @@ jobs:
         run: python -m compileall -q backend/app backend/scripts
       - name: Deterministic assistant depth and citation QA
         working-directory: backend
-        run: python -m pytest -q tests/test_assistant_pdf_depth_contract.py tests/test_assessment_qa_flags.py tests/test_assistant_question_coverage.py
+        run: python -m pytest -q tests/test_assistant_pdf_depth_contract.py tests/test_assessment_qa_flags.py tests/test_assistant_question_coverage.py tests/test_zocialeye_resume_integrity.py
         env:
           OPENAI_API_KEY: ''
           DATABASE_URL: sqlite:////tmp/bawaslu-bulk-qa.sqlite3

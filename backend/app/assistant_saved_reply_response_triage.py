@@ -82,6 +82,14 @@ def summarize_authorized_saved_reply_audit(audit):
         "schema":"BAWASLU_SAVED_REPLY_RESPONSE_TRIAGE_V17468",
         "status":status,
         "diagnostics_complete":diagnostics_complete,
+        "human_review_route":(
+            "REVIEW_FLAGS_AND_MISSING_CHECKS" if flagged and not diagnostics_complete else
+            "REVIEW_FLAGGED_SOURCE_CLAIMS" if flagged else
+            "COMPLETE_HEURISTIC_SPOT_CHECK" if diagnostics_complete else
+            "REPEAT_INCOMPLETE_QA"
+        ),
+        "core_missing_check_ids":sorted(_CORE-seen_core),
+        "supplemental_missing_check_ids":sorted(_SUPPLEMENTAL-seen_supplemental),
         "core_check_count":len(seen_core),
         "supplemental_check_count":len(seen_supplemental),
         "readiness_check_counts":dict(sorted(statuses.items())),
@@ -115,6 +123,8 @@ def summarize_authorized_saved_reply_batch(results):
     """
     counts=Counter()
     reason_counts=Counter()
+    incomplete_flagged=0
+    complete_flagged=0
     for item in results or []:
         if not isinstance(item,dict):
             counts["UNASSESSED"]+=1
@@ -130,6 +140,10 @@ def summarize_authorized_saved_reply_batch(results):
         state=triage.get("status")
         if state=="REVIEW_FLAGS_PRESENT":
             counts["REVIEW_FLAGS_PRESENT"]+=1
+            if triage.get("diagnostics_complete") is True:
+                complete_flagged+=1
+            else:
+                incomplete_flagged+=1
             for reason in triage.get("readiness_review_ids") or []:
                 if isinstance(reason,str) and reason in {"citation_grounding","source_relevance",
                               "legal_uncertainty","cross_module_consistency"}:
@@ -146,6 +160,8 @@ def summarize_authorized_saved_reply_batch(results):
     return {
         "schema":"BAWASLU_SAVED_REPLY_BATCH_RESPONSE_TRIAGE_V17472",
         "audited_with_review_flags":counts["REVIEW_FLAGS_PRESENT"],
+        "review_flags_with_complete_diagnostics":complete_flagged,
+        "review_flags_with_incomplete_diagnostics":incomplete_flagged,
         "audited_without_detected_flags":counts["NO_DETERMINISTIC_FLAGS"],
         "unassessed_or_unavailable":counts["UNASSESSED"],
         "review_reason_occurrences":dict(sorted(reason_counts.items())),

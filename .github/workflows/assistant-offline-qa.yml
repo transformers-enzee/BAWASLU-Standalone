@@ -43,7 +43,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q --junitxml=assistant-offline-results.xml tests/test_assistant_full_answer_replay_v1607.py tests/test_saved_answer_audit_v1608.py tests/test_legal_indonesian_modalities_v1600.py tests/test_assistant_offline_response_eval.py tests/test_assistant_response_benchmark_p1.py tests/test_assistant_response_benchmark_p2.py tests/test_assistant_multipage_response_qa.py tests/test_assistant_pdf_quote_audit.py tests/test_assistant_pdf_depth_budget.py tests/test_assistant_pdf_depth_contract.py tests/test_exact_pdf_page_grounding_v1500.py tests/test_assistant_citation_consistency.py
+          python -m pytest -q --junitxml=assistant-offline-results.xml tests/test_assistant_full_answer_replay_v1607.py tests/test_saved_answer_audit_v1608.py tests/test_legal_indonesian_modalities_v1600.py tests/test_assistant_offline_response_eval.py tests/test_assistant_response_benchmark_p1.py tests/test_assistant_response_benchmark_p2.py tests/test_assistant_multipage_response_qa.py tests/test_assistant_pdf_quote_audit.py tests/test_assistant_pdf_depth_budget.py tests/test_assistant_pdf_depth_contract.py tests/test_exact_pdf_page_grounding_v1500.py tests/test_assistant_citation_consistency.py tests/test_assistant_human_review_v1586.py tests/test_assistant_saved_reply_human_packet.py tests/test_assistant_human_review_scoring.py tests/test_assistant_acceptance_evidence_v1588.py
+      - name: Verify human acceptance remains unapproved without independent review
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from app.assistant_saved_reply_human_packet import build_authorized_saved_reply_review_packet
+          from app.assistant_human_review_scoring import compile_human_review_scores
+          audit={"selection_method":"EXPLICIT_USER_SELECTED_REPLIES","requested":1,"results":[{
+              "thread_id":"123e4567-e89b-12d3-a456-426614174000",
+              "answer_revision_token":"a"*64,"answer_message_index":3,"status":"AUDITED",
+              "response_quality_triage":{"status":"NO_DETERMINISTIC_FLAGS","diagnostics_complete":True}
+          }]}
+          packet=build_authorized_saved_reply_review_packet(audit)
+          report=compile_human_review_scores(packet,[])
+          assert report["complete_self_attested_reviews"]==0
+          assert report["release_approved"] is False
+          assert report["formal_client_acceptance"] is False
+          print("Human acceptance gate correctly remains unapproved without verified reviews")
+          PY
       - name: Generate redacted offline answer-triage report
         working-directory: backend
         shell: bash
@@ -99,7 +119,7 @@ jobs:
             echo "## BAWASLU offline assistant QA"
             echo ""
             echo "- Commit: ${GITHUB_SHA}"
-            echo "- Deterministic Python tests: synthetic replay, legal polarity, 100-case PDF/legal/cross-source benchmark, 44-case offline response triage, multi-page grounding, exact-page retrieval and saved-answer privacy"
+            echo "- Deterministic Python tests: synthetic replay, legal polarity, 100-case PDF/legal/cross-source benchmark, human-review scoring safeguards, 44-case offline response triage, multi-page grounding, exact-page retrieval and saved-answer privacy"
             echo "- Eight Node.js source-to-UI contract checks"
             echo "- AI and Socialcrawl keys intentionally empty; local in-memory SQLite"
             echo "- Not a live model run, real PDF source audit, or independent legal accuracy evaluation"

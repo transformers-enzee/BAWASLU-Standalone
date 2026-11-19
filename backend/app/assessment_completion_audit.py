@@ -181,10 +181,19 @@ def campaign_completion_audit(db,campaign_id):
         .filter(AIAssessmentJob.campaign_id==cid,
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
                 is_gap)
-        .group_by(func.coalesce(func.nullif(latest.model_version,''),'UNSPECIFIED'))
-        .order_by(func.count(AIAssessmentJob.id).desc()).limit(10).all())
-    model_buckets=[{'latest_model':str(name)[:100],'jobs':int(n)}
-                   for name,n in model_rows]
+        # PostgreSQL requires the underlying column in GROUP BY here.
+        # Rebuilding COALESCE/NULLIF with new SQL bind parameters can cause a
+        # grouping error even if the expressions look identical in Python.
+        .group_by(latest.model_version)
+        .all())
+    # NULL and empty model names both display as UNSPECIFIED. Merge the two
+    # groups after the query, then apply the existing top-ten limit.
+    model_totals={}
+    for name,n in model_rows:
+        label=str(name or 'UNSPECIFIED')[:100]
+        model_totals[label]=model_totals.get(label,0)+int(n)
+    model_buckets=[{'latest_model':name,'jobs':count} for name,count in
+                   sorted(model_totals.items(),key=lambda pair:(-pair[1],pair[0]))[:10]]
     return {
         'scope':'AUTHORIZED_CAMPAIGN_ORDINARY_ASSESSMENT_JOBS',
         'campaign_id':str(cid),'ordinary_jobs':jobs,

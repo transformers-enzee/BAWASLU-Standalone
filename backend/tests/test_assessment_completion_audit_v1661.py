@@ -84,3 +84,24 @@ def test_public_dispatch_is_campaign_authorized_and_read_only():
     assert "if action=='campaignAssessmentCompletionAudit':" in c
     assert "if not campaign or not allowed(p,campaign):raise ValueError('Campaign not available')" in c
     assert 'return campaign_completion_audit(db,campaign.id)' in c
+
+
+def test_missing_and_empty_model_versions_combine_in_distribution():
+    engine,db=setup()
+    try:
+        # Only completed jobs with saved classification but no usage belong
+        # in the historical-provenance model histogram.
+        job(db,9,1); a=assess(db,9,1,1,'RELEVANT');a.model_version=None
+        job(db,9,2); b=assess(db,9,2,1,'RELEVANT');b.model_version=''
+        job(db,9,3); c=assess(db,9,3,1,'RELEVANT');c.model_version='gpt-test'
+        db.commit()
+        report=campaign_completion_audit(db,9)
+        buckets=report['historical_missing_usage_triage']['latest_saved_model_distribution']
+        assert buckets==[
+            {'latest_model':'UNSPECIFIED','jobs':2},
+            {'latest_model':'gpt-test','jobs':1},
+        ]
+        assert report['paid_provider_called'] is False
+        assert report['database_writes']==0
+    finally:
+        db.close();engine.dispose()

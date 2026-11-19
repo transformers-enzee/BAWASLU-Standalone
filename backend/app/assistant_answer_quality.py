@@ -165,6 +165,27 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
             "Displayed and structured citation identifiers agree; claim and PDF page content are not verified.",
             pdf_page_content_verified=False))
 
+    # A limited literal-quotation check: citations adjacent to direct PDF
+    # quotes must point to pages containing that quoted text. Ordinary
+    # paraphrases still require human/semantic review.
+    from .assistant_pdf_quote_audit import audit_pdf_quoted_passages
+    pdf_quote_audit=audit_pdf_quoted_passages(answer,evidence)
+    if pdf_quote_audit["status"]=="REVIEW_REQUIRED":
+        checks.append(_status("pdf_quoted_passage_alignment",REVIEW,
+            "An explicit PDF quotation is not present in its immediately cited selected page excerpt.",
+            quote_issue_count=len(pdf_quote_audit["issues"]),
+            issues=pdf_quote_audit["issues"],
+            semantic_support_verified=False))
+    elif pdf_quote_audit["status"]=="PASS_QUOTE_TEXT_ONLY":
+        checks.append(_status("pdf_quoted_passage_alignment",PASS,
+            "Immediately cited PDF quotations appear verbatim in selected page excerpts; factual and legal support remain unchecked.",
+            verified_literal_quote_count=pdf_quote_audit["checked_quotes"],
+            semantic_support_verified=False))
+    else:
+        checks.append(_status("pdf_quoted_passage_alignment",NA,
+            "No immediately cited explicit PDF quotation found. Citation identifiers alone do not establish source support.",
+            semantic_support_verified=False))
+
     focus=sorted(_terms(question))[:12]
     quoted=[rows[k] for k in cited if k in rows]
     candidates=quoted or list(rows.values())
@@ -330,6 +351,7 @@ def evaluate_answer_quality(question,evidence,answer,cited_ids,
         "formal_outcome_source_provenance":claim_provenance,
         "legal_review_summary":legal_review_summary,
         "citation_inventory_consistency":citation_inventory,
+        "pdf_quoted_passage_alignment":pdf_quote_audit,
         "requested_topic_coverage":topic_probe,
         "checks":checks,"passed_checks":sum(x["status"]==PASS for x in checks),
         "review_required_checks":len(needs),

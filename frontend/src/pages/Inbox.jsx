@@ -233,6 +233,37 @@ function SocialEvidenceInbox({onOpenCasework}){
   }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
   finally{setJurisdictionBusy(false)}
  }
+ async function reviewIncidentRegency(decision,candidate){
+  if(!selected||!jurisdictionPreview)return;
+  const possible=jurisdictionPreview.incident_kabupaten_kota_preview?.candidates||[];
+  if(decision==='CONFIRMED'&&(possible.length!==1||!candidate)){
+   setJurisdictionMessage('Kabupaten/Kota is ambiguous or unsupported; confirmation is blocked.');return;
+  }
+  const rationale=window.prompt('Explain which original source passage supports the Kabupaten/Kota decision (10-1200 characters):');
+  if(rationale===null)return;
+  if(rationale.trim().length<10||rationale.trim().length>1200){
+   setJurisdictionMessage('Review rationale must be 10-1200 characters.');return;
+  }
+  if(!window.confirm('Record an auditable officer Kabupaten/Kota review? This does not change regional permissions or automatically confirm an incident.'))return;
+  setJurisdictionBusy(true);setJurisdictionMessage('');
+  try{
+   const r=await base44.functions.invoke('socialListening',{
+    action:'campaignRegencyReview',id:selected.campaign_id,
+    data:{result_id:selected.id,decision,
+      regency_city_code:candidate?.regency_city_code||'',
+      rationale:rationale.trim(),
+      expected_source_fingerprint:jurisdictionPreview.source_fingerprint,
+      expected_review_event_id:jurisdictionPreview.latest_review?.regency_city_review?.review_event_id||0}});
+   setJurisdictionPreview(r.data);
+   const review=r.data.latest_review;
+   const updated={...selected,incident_jurisdiction_review:review,
+     incident_jurisdiction_verified:review.incident_jurisdiction_verified};
+   setSelected(updated);
+   setFindings(all=>all.map(item=>item.id===updated.id&&item.campaign_id===updated.campaign_id?updated:item));
+   setJurisdictionMessage('Officer Kabupaten/Kota review saved in audit history; access permissions unchanged.');
+  }catch(e){setJurisdictionMessage(e.response?.data?.detail||e.message)}
+  finally{setJurisdictionBusy(false)}
+ }
  async function saveOfficerClassification(){
   if(!selected||correctionBusy)return;
   if(!window.confirm('Save a new officer-reviewed assessment version? The original AI assessment will remain unchanged.'))return;
@@ -550,6 +581,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
      <p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
+      <p data-testid="reviewed-regency-city"><strong>Human Kabupaten/Kota decision:</strong> {selected.incident_jurisdiction_review?.regency_city_review?.incident_regency_city_verified?selected.incident_jurisdiction_review.regency_city_review.incident_regency_city:'Not verified'} · {selected.incident_jurisdiction_review?.regency_city_review?.decision||'UNREVIEWED'} · Review is separate from regional access.</p>
       <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={previewIncidentJurisdiction}>Preview source-grounded location (free)</button>
       {jurisdictionPreview&&<div className="space-y-1"><p>Source-grounded incident province candidates (unverified): {(jurisdictionPreview.source_context_provinces_unverified||[]).join(', ')||'None identified'} · Assessment relevant: {jurisdictionPreview.source_post_relevance_assessed?'Yes':'No'}</p>{jurisdictionPreview.incident_kabupaten_kota_preview&&<div data-testid="incident-regency-candidates" className="rounded border border-slate-200 bg-white p-2 space-y-1">
        <p><strong>Kabupaten/Kota incident candidates (unverified):</strong> {jurisdictionPreview.incident_kabupaten_kota_preview.candidate_count||0} matched from explicit source wording.</p>
@@ -557,6 +589,11 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        {jurisdictionPreview.incident_kabupaten_kota_preview.multiple_regency_candidates&&<p role="status">Multiple regency/city candidates require separate officer review; do not assume a single incident location.</p>}
        {jurisdictionPreview.incident_kabupaten_kota_preview.multiple_provinces&&<p role="alert">Candidates span multiple provinces. Do not confirm one province from this preview alone.</p>}
        <p className="text-slate-500">Source cues only. This cannot confirm Kabupaten/Kota, change regional access, or authorize a geographic reassignment.</p>
+       {selected.can_review_flag&&jurisdictionPreview.source_post_relevance_assessed&&<div className="flex flex-wrap gap-2">
+        <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy||(jurisdictionPreview.incident_kabupaten_kota_preview.candidates||[]).length!==1} onClick={()=>reviewIncidentRegency('CONFIRMED',jurisdictionPreview.incident_kabupaten_kota_preview.candidates[0])}>Verify selected Kabupaten/Kota</button>
+        <button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={()=>reviewIncidentRegency('REJECTED',jurisdictionPreview.incident_kabupaten_kota_preview.candidates?.[0])}>Reject Kabupaten/Kota cue</button>
+       </div>}
+       <p className="text-slate-500">Unverified source cues are only evidence for a separate human review; verified city decisions are recorded in the existing append-only audit history.</p>
        {jurisdictionPreview.related_incident_place_mentions&&<div data-testid="related-incident-place-mentions" className="rounded border border-slate-200 p-2 space-y-1">
         <p><strong>Other saved campaign posts mentioning these places (review leads):</strong></p>
         {(jurisdictionPreview.related_incident_place_mentions.candidate_matches||[]).map(group=><div key={group.regency_city_code}>

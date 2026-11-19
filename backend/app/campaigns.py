@@ -447,7 +447,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                   'campaignFindingGroupSources'):
         from .finding_groups import finding_group_action
         return finding_group_action(db,p,action,data or {},id)
-    if action in ('campaignJurisdictionPreview','campaignJurisdictionReview'):
+    if action in ('campaignJurisdictionPreview','campaignJurisdictionReview','campaignRegencyReview'):
         from .jurisdiction_review import jurisdiction_action
         return jurisdiction_action(db,p,action,data or {},id)
     if action=='campaignOfficerClassificationCorrection':

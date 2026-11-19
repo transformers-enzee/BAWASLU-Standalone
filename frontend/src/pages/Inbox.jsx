@@ -560,8 +560,10 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        {jurisdictionPreview.related_incident_place_mentions&&<div data-testid="related-incident-place-mentions" className="rounded border border-slate-200 p-2 space-y-1">
         <p><strong>Other saved campaign posts mentioning these places (review leads):</strong></p>
         {(jurisdictionPreview.related_incident_place_mentions.candidate_matches||[]).map(group=><div key={group.regency_city_code}>
-         <p>{group.regency_city}: {group.related_mention_count||0} additional source mentions</p>
-         {(group.related_mentions||[]).length>0&&<ul className="list-disc pl-4">{group.related_mentions.map(mention=><li key={mention.canonical_source_id}>{mention.platform} · {mention.canonical_source_id}</li>)}</ul>}
+         <p>{group.regency_city}: {group.related_mention_count||0} additional source mentions · Platforms: {(group.distinct_platforms||[]).join(', ')||'None'}</p>
+         {group.cross_platform_review_lead&&<p>Cross-platform review lead; distinct platforms alone do not verify independent reports.</p>}
+         {group.within_72_hours_count>0&&<p>{group.within_72_hours_count} source(s) published within 72 hours of this post; time proximity does not prove the same event.</p>}
+         {(group.related_mentions||[]).length>0&&<ul className="list-disc pl-4">{group.related_mentions.map(mention=><li key={mention.canonical_source_id}>{mention.platform} · {mention.canonical_source_id} · {String(mention.publication_window_status||'UNKNOWN_PUBLICATION_TIME').replaceAll('_',' ').toLowerCase()}{mention.original_source_url&&<a className="ml-2 underline" href={mention.original_source_url} target="_blank" rel="noopener noreferrer" aria-label={'Open original source '+mention.canonical_source_id}>Open original source</a>}</li>)}</ul>}
         </div>)}
         {jurisdictionPreview.related_incident_place_mentions.truncated_possible&&<p role="status">Related source scan is capped; additional posts may exist.</p>}
         <p className="text-amber-900">Matching a location in another post does not prove the same incident or independent corroboration. Human review is required.</p>

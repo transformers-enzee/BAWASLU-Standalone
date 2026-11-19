@@ -153,3 +153,66 @@ def test_server_permission_check_does_not_replace_human_source_inspection(sessio
     assert data["scores"]["complete_self_attested_reviews"]==0
     assert data["scores"]["review_disposition_counts"]["INCOMPLETE_REVIEW"]==1
     assert data["scores"]["server_source_access_is_not_reviewer_inspection"] is True
+
+
+
+def test_authorized_saved_pdf_answer_gets_page_level_review_guidance(session,monkeypatch):
+    from datetime import datetime
+    from app.assistant_history import AssistantThread
+    _access(monkeypatch)
+    tid="33333333-3333-4333-8333-333333333333"
+    session.add(AssistantThread(
+        id=tid,user_id=3,title="Private PDF question",
+        messages_json=json.dumps([
+            {"role":"user","text":"Summarize the provincial assignment requirements from the PDF."},
+            {"role":"assistant","text":"Check officer authority and the verified event location [DOC-9-P2].",
+             "records":[{"record_type":"PDF_KNOWLEDGE","record_id":"DOC-9-P2"}]}]),
+        created_at=datetime(2026,11,1),updated_at=datetime(2026,11,2)))
+    session.commit()
+    seen=[]
+    def pdf_page(db,principal,request):
+        seen.append(list(request.source_ids))
+        return [{"record_id":"DOC-9-P2","record_type":"PDF_KNOWLEDGE",
+                 "source_excerpt":"Private synthetic PDF page: authorization and event location."}]
+    monkeypatch.setattr(module,"resolve_mixed_audit_sources",pdf_page)
+    req=SavedReplyHumanReviewRequest(
+        selections=[SavedReplyAuditRequest(thread_id=tid,answer_message_index=1)],
+        submissions=[])
+    response=Response()
+    result=saved_reply_human_review(req,response,current(),session)
+    assert seen==[["DOC-9-P2"]]
+    assert result["eligible_reply_count"]==1
+    assert result["scores"]["complete_self_attested_reviews"]==0
+    packet=module.audit_owned_saved_reply_batch(
+        session,{"status":"Active","permissions":{"view_intelligence":True}},3,
+        req.selections)["human_review_packet"]
+    assert packet["items"][0]["authorized_source_kinds"]==["PDF_KNOWLEDGE"]
+    assert "VERIFY_PAGE_LEVEL_CITATIONS_MATCH_ANSWER_CLAIMS" in packet[
+        "items"][0]["manual_review_focus"]
+    assert "Private synthetic PDF page" not in json.dumps(result)
+    assert "Private synthetic PDF page" not in json.dumps(packet)
+
+
+def test_pdf_page_access_denial_excludes_human_review(session,monkeypatch):
+    from datetime import datetime
+    from app.assistant_history import AssistantThread
+    _access(monkeypatch)
+    tid="44444444-4444-4444-8444-444444444444"
+    session.add(AssistantThread(
+        id=tid,user_id=3,title="PDF access revoked",
+        messages_json=json.dumps([
+            {"role":"user","text":"What does this document require?"},
+            {"role":"assistant","text":"The PDF previously indicated an officer review [DOC-8-P1].",
+             "records":[{"record_type":"PDF_KNOWLEDGE","record_id":"DOC-8-P1"}]}]),
+        created_at=datetime(2026,11,1),updated_at=datetime(2026,11,2)))
+    session.commit()
+    monkeypatch.setattr(module,"resolve_mixed_audit_sources",
+                        lambda *args: (_ for _ in ()).throw(
+                            HTTPException(404,"Private revoked PDF title")))
+    req=SavedReplyHumanReviewRequest(
+        selections=[SavedReplyAuditRequest(thread_id=tid,answer_message_index=1)],
+        submissions=[])
+    with pytest.raises(HTTPException) as error:
+        saved_reply_human_review(req,Response(),current(),session)
+    assert error.value.status_code==422
+    assert "Private revoked PDF title" not in str(error.value.detail)

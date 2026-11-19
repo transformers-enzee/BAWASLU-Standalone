@@ -6,6 +6,8 @@ counts are returned; source passages, answer text, and reviewer identifiers
 are not exported.
 """
 from collections import Counter
+import hmac
+import re
 from .assistant_saved_reply_human_packet import DIMENSIONS
 
 VALID_RATINGS={"PASS","FAIL","NOT_ASSESSABLE"}
@@ -21,6 +23,7 @@ def compile_human_review_scores(packet,submissions):
     if not isinstance(submissions,list) or len(submissions)>5:
         raise ValueError("Submissions must be a bounded list")
     known=set()
+    versions={}
     for task in tasks:
         if not isinstance(task,dict):
             raise ValueError("Invalid packet task")
@@ -32,6 +35,7 @@ def compile_human_review_scores(packet,submissions):
         if key in known:
             raise ValueError("Duplicate packet task")
         known.add(key)
+        versions[key]=task.get("answer_revision_token")
     seen=set()
     outcomes=Counter()
     dimension_counts={name:Counter() for name in DIMENSIONS}
@@ -46,6 +50,15 @@ def compile_human_review_scores(packet,submissions):
         if key not in known or key in seen:
             raise ValueError("Submission outside selected packet or duplicated")
         seen.add(key)
+        expected=versions[key]
+        received=item.get("answer_revision_token")
+        if (not isinstance(expected,str) or
+                not re.fullmatch(r"[0-9a-f]{64}",expected) or
+                not isinstance(received,str) or
+                not re.fullmatch(r"[0-9a-f]{64}",received) or
+                not hmac.compare_digest(expected,received)):
+            outcomes["STALE_OR_UNBOUND_ANSWER_REVISION"]+=1
+            continue
         ratings=item.get("ratings")
         # No partial ratings can be silently counted as full completion.
         if not isinstance(ratings,dict) or set(ratings)!=set(DIMENSIONS):
@@ -82,6 +95,7 @@ def compile_human_review_scores(packet,submissions):
         "human_attestation_is_independently_verified":False,
         "server_source_access_is_not_reviewer_inspection":True,
         "source_truth_verified_by_system":False,
+        "revision_token_does_not_verify_live_source_content":True,
         "review_sample_is_representative":False,
         "formal_legal_signoff":False,
         "formal_client_acceptance":False,

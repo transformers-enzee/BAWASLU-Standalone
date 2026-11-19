@@ -24,7 +24,7 @@ def _normalized_case(case):
     requirements=case.get("requirements")
     if not isinstance(case,dict) or not isinstance(evidence,list) or not isinstance(requirements,list):
         raise ValueError("Each case must contain authorized evidence and explicit requirements")
-    if not requirements or len(requirements)>12 or len(evidence)>20:
+    if not requirements or not evidence or len(requirements)>12 or len(evidence)>20:
         raise ValueError("Requirement or evidence size outside bounded evaluation limits")
     if not isinstance(case.get("candidate_answer"),str) or len(case["candidate_answer"])>30000:
         raise ValueError("Answer must be bounded text")

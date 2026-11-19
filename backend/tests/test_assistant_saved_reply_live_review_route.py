@@ -345,3 +345,19 @@ def test_saved_reply_selection_rejects_client_supplied_evidence_payloads():
         BatchSavedReplyAuditRequest.model_validate({
             "selections":[{"thread_id":OWNED,"answer_message_index":1}],
             "historical_source_text":"CLIENT FORGED EVIDENCE"})
+
+
+
+def test_human_review_response_exposes_redacted_coverage_backlog(session,monkeypatch):
+    _access(monkeypatch)
+    _sources(monkeypatch)
+    report=saved_reply_human_review(
+        _request(submit=False),Response(),current(),session)
+    coverage=report["review_coverage"]
+    assert coverage["source_kinds"]=={"SOCIAL_LISTENING":1}
+    assert coverage["unavailable_or_ineligible"]==0
+    assert isinstance(coverage["incomplete_diagnostics"],int)
+    assert isinstance(coverage["missing_source_type_metadata"],int)
+    assert report["coverage_is_not_an_accuracy_measure"] is True
+    assert report["actual_model_accuracy"] is None
+    assert "PRIVATE LIVE AUTHORIZED SOURCE TEXT" not in json.dumps(report)

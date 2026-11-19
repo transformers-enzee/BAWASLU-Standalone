@@ -134,3 +134,36 @@ def test_absent_source_types_require_manual_type_recheck():
         "manual_review_focus"]
     assert "CHECK_ALLEGATION_VERSUS_FORMAL_LEGAL_DETERMINATION" in task[
         "manual_review_focus"]
+
+
+
+def test_review_coverage_excludes_unavailable_and_tracks_diagnostic_gaps():
+    pdf=row()
+    pdf["selected_source_kinds"]={"PDF_KNOWLEDGE":3}
+    pdf["response_quality_triage"]["diagnostics_complete"]=True
+    social=row()
+    social["thread_id"]="a11b22c3-1111-4111-8111-111111111111"
+    social["selected_source_kinds"]={
+        "SOCIAL_LISTENING":1,"FORMAL_INTELLIGENCE":1,
+        "PRIVATE_SOURCE_TITLE":100}
+    social["response_quality_triage"]["diagnostics_complete"]=False
+    report=build(batch([pdf,social,row("SOURCE_UNAVAILABLE")]))
+    assert report["review_ready_replies"]==2
+    assert report["ineligible_or_unavailable_replies"]==1
+    assert report["review_ready_by_authorized_source_kind"]=={
+        "FORMAL_INTELLIGENCE":1,"PDF_KNOWLEDGE":1,"SOCIAL_LISTENING":1}
+    assert report["review_ready_with_incomplete_diagnostics"]==1
+    assert report["review_ready_cross_source_replies"]==1
+    assert report["review_ready_without_source_type_metadata"]==0
+    assert report["coverage_counts_are_not_accuracy"] is True
+    assert "PRIVATE_SOURCE_TITLE" not in json.dumps(report)
+
+
+def test_missing_source_kind_counts_only_authorized_review_tasks():
+    task=row()
+    task["response_quality_triage"]["diagnostics_complete"]=False
+    report=build(batch([task,row("INELIGIBLE")]))
+    assert report["review_ready_without_source_type_metadata"]==1
+    assert report["review_ready_with_incomplete_diagnostics"]==1
+    assert report["review_ready_by_authorized_source_kind"]=={}
+    assert report["human_review_completed"] is False

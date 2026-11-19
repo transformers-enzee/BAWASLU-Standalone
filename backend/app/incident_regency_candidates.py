@@ -16,17 +16,36 @@ _NO_INFERENCE=re.compile(
     r'sekretariat|berkantor|markas|berbasis|organisasi|'
     r'berita\s+dari|media\s+dari|narasumber)\b',re.I)
 _ROW_BY_NAME={}
+_EXPLICIT_FORMS={}
+_SUFFIXES={}
 for _row in REGENCIES:
     _name=str(_row.get('name') or '')
-    if _name.startswith(('Kabupaten ','Kota ')):
-        _ROW_BY_NAME[_name.casefold()]=_row
-_ALTERNATIVES='|'.join(re.escape(n) for n in sorted(_ROW_BY_NAME,key=len,reverse=True))
+    if not _name.startswith(('Kabupaten ','Kota ')):
+        continue
+    _ROW_BY_NAME[_name.casefold()]=_row
+    _EXPLICIT_FORMS[_name.casefold()]=_row
+    if _name.startswith('Kabupaten '):
+        _suffix=_name[len('Kabupaten '):]
+        for _prefix in ('Kab. ','Kab '):
+            _EXPLICIT_FORMS[(_prefix+_suffix).casefold()]=_row
+    else:
+        _suffix=_name[len('Kota '):]
+    _SUFFIXES.setdefault(_suffix.casefold(),[]).append(_row)
+
+# Bare locality names can follow an explicitly qualified locality in the
+# same grammatical location clause, but are never accepted on their own.
+# Ignore bare names shared by different Kabupaten/Kota.
+_UNIQUE_SUFFIXES={name:rows[0] for name,rows in _SUFFIXES.items()
+                  if len(rows)==1}
+_EXPLICIT_TERMS='|'.join(re.escape(n) for n in
+                         sorted(_EXPLICIT_FORMS,key=len,reverse=True))
+_FOLLOWUP_TERMS='|'.join(re.escape(n) for n in sorted(
+    dict.fromkeys([*_EXPLICIT_FORMS,*_UNIQUE_SUFFIXES]),key=len,reverse=True))
 _EXPLICIT=re.compile(
     r'(?<!\w)(?:di|pada|berlokasi\s+di|bertempat\s+di)\s+'
-    r'(?P<name>'+_ALTERNATIVES+r')(?!\w)',re.I)
-# A second locality following a conjunction inherits the preceding "di"
-# only if it is itself fully qualified ("Kabupaten" or "Kota").
-_FOLLOWUP=re.compile(r'^\s*(?:dan|serta|atau)\s+(?P<name>'+_ALTERNATIVES+r')(?!\w)',re.I)
+    r'(?P<name>'+_EXPLICIT_TERMS+r')(?!\w)',re.I)
+_FOLLOWUP=re.compile(
+    r'^\s*(?:dan|serta|atau)\s+(?P<name>'+_FOLLOWUP_TERMS+r')(?!\w)',re.I)
 
 def incident_regency_candidates(text):
     """Return source-supported, unverified official region candidates.
@@ -36,7 +55,7 @@ def incident_regency_candidates(text):
     """
     body=str(text or '')
     found={}
-    for sentence in re.split(r'[.!?;\n]+',body):
+    for sentence in re.split(r'(?<!\bKab)[.!?;\n]+',body,flags=re.I):
         for match in _EXPLICIT.finditer(sentence):
             before=sentence[max(0,match.start()-180):match.start()]
             # Exclude profile/address contexts, even when a nearby source
@@ -49,7 +68,8 @@ def incident_regency_candidates(text):
             next_match=_FOLLOWUP.match(after)
             if next_match:names.append(next_match.group('name'))
             for name in names:
-                row=_ROW_BY_NAME.get(name.casefold())
+                row=(_EXPLICIT_FORMS.get(name.casefold()) or
+                     _UNIQUE_SUFFIXES.get(name.casefold()))
                 if not row:continue
                 code=str(row['code'])
                 pcode=str(row.get('province_code') or '')

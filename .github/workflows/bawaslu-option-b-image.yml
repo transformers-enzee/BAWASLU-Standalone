@@ -7,6 +7,9 @@ on:
     branches: [architecture-v2-foundation-20261015]
     paths:
       - '.github/workflows/bawaslu-option-b-image.yml'
+      - 'Dockerfile'
+      - 'backend/app/main.py'
+      - 'backend/tests/test_option_b_safe_startup.py'
   workflow_dispatch:
     inputs:
       deploy_staging:

@@ -71,6 +71,10 @@ app.mount('/uploads',StaticFiles(directory=str(UPLOAD_DIR)),name='uploads')
 
 @app.on_event('startup')
 def startup():
+    # Staging's shared Supabase protection: no startup DB writes or workers.
+    if os.getenv('BAWASLU_STARTUP_READ_ONLY', '').strip().lower() in ('1', 'true', 'yes'):
+        logging.getLogger(__name__).info('BAWASLU read-only startup: automatic DB writes and background workers skipped')
+        return
     Base.metadata.create_all(engine)
     from .db import SessionLocal
     db=SessionLocal()

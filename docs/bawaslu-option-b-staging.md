@@ -44,3 +44,8 @@ Never place the deploy hook, registry token, database credentials or officer rec
 - Do not apply repository `render.yaml` as a Blueprint for this migration: it targets a different service and contains legacy database settings.
 - A Render source switch may cause a brief interruption and database migrations; officer data must not be changed as part of a test run.
 - GitHub Actions for public repositories has generally included standard runner minutes, but GHCR package visibility/storage and hosting costs must be checked under the organization's account terms.
+
+## v175.40 shared-Supabase safeguards
+The new image defaults to `BAWASLU_STARTUP_READ_ONLY=1`. On startup it skips Alembic, `Base.metadata.create_all`, administrator seeding, social-language backfills, and all optional background jobs. The older v175.39 image does not have this safeguard; do not deploy it against the shared database. Do not override this variable without a separately approved migration and data-access review.
+
+The main Supabase project is shared with staging. SQL exports are not a fully tested database, authentication or Storage recovery plan. Confirm the safe v175.40 image is built successfully before any Render deployment. A GitHub image build never deploys to Render by itself.

@@ -32,4 +32,6 @@ COPY --from=frontend-build /src/frontend/dist ./frontend_dist
 ENV FRONTEND_DIST=/app/frontend_dist
 WORKDIR /app/backend
 EXPOSE 8000
-CMD ["sh","-c","alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Shared Supabase protection: no automatic schema or record mutations on image startup.
+ENV BAWASLU_STARTUP_READ_ONLY=1
+CMD ["sh","-c","if [ \"${BAWASLU_STARTUP_READ_ONLY:-1}\" != \"1\" ]; then alembic upgrade head || exit 1; fi; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

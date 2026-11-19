@@ -16,6 +16,7 @@ from .models import User
 from .access import profile,has
 from .assistant_history import AssistantThread
 from .assistant_eval_sampling import MixedAnswerAuditRequest,resolve_mixed_audit_sources,build_mixed_answer_audit
+from .assistant_saved_reply_human_packet import build_authorized_saved_reply_review_packet
 from .assistant_saved_reply_response_triage import (
     summarize_authorized_saved_reply_audit,
     summarize_authorized_saved_reply_batch,
@@ -309,7 +310,7 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             item.get("issue_candidate_count",0))
         totals[item["status"]]+=1
         output.append(item)
-    return {"schema":"BAWASLU_SAVED_REPLY_BATCH_AUDIT_V1618",
+    result={"schema":"BAWASLU_SAVED_REPLY_BATCH_AUDIT_V1618",
             "requested":len(selections),
             "audited":totals["AUDITED"],
             "ineligible":totals["INELIGIBLE"],
@@ -346,6 +347,8 @@ def audit_owned_saved_reply_batch(db,principal,user_id,selections):
             "formal_client_acceptance_verified":False,
             "answers_generated":0,"database_writes":0,
             "saved_replies_modified":False}
+    result["human_review_packet"]=build_authorized_saved_reply_review_packet(result)
+    return result
 
 
 @router.post("/saved-reply-batch-audit")

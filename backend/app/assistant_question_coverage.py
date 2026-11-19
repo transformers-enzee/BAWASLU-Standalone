@@ -37,13 +37,26 @@ TOPICS = {
 }
 
 
+# A repeated question or bare citation is not a substantive answer.
+_QUESTION_ECHO = re.compile(
+    r"^\\s*(?:pertanyaan\\s+(?:anda|ini)\\s*[:：]|you\\s+asked\\s*[:：])[^\\n]*\\n?", re.I)
+_CITATION_ONLY = re.compile(
+    r"^\\s*(?:\\[(?:DOC-\\d+-P\\d+|INT-[A-Za-z0-9:_-]+|SOCIAL-[A-Za-z0-9:_-]+)\\]\\s*)+$")
+
+
+def _answer_body(answer):
+    text = _QUESTION_ECHO.sub("", str(answer or ""), count=1)
+    return "\\n".join(line for line in text.splitlines()
+                     if not _CITATION_ONLY.fullmatch(line))
+
+
 def requested_topic_coverage(question, answer, profile="PDF_GUIDANCE"):
     """Mark possible omissions; never assert a claim was actually supported."""
     if profile not in ("PDF_GUIDANCE", "CASE_REVIEW", "CROSS_MODULE_REVIEW"):
         return {"status": "NOT_APPLICABLE", "requested_topics": [],
                 "missing_topics": [], "lexical_only": True}
     question = str(question or "")
-    answer = str(answer or "")
+    answer = _answer_body(answer)
     requested = [topic for topic, (req, _) in TOPICS.items()
                  if re.search(req, question, re.I)]
     if len(requested) < 2:

@@ -404,6 +404,13 @@ def build_mixed_answer_audit(evidence,request:MixedAnswerAuditRequest):
         "checks":[{"id":x["id"],"status":x["status"],"reason":x["reason"]}
                   for x in quality["checks"]],
         "review_required_checks":quality["review_required_checks"],
+        "supplemental_checks":[{"id":x["id"],"status":x["status"]}
+            for x in quality.get("additional_checks",[])
+            if x.get("id") in ("citation_inventory_consistency",
+                               "pdf_quoted_passage_alignment",
+                               "requested_topic_coverage") and
+               x.get("status") in ("PASS","REVIEW_REQUIRED","NOT_APPLICABLE")],
+        "supplemental_check_results_are_heuristics":True,
         "legal_review_issue_codes":sorted({str(x["code"]) for x in issues}),
         "legal_review_issue_count":len(issues),
         "human_accuracy":None,"source_truth_verified":False,

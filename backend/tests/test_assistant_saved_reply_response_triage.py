@@ -42,10 +42,16 @@ def test_flags_and_counts_are_redacted():
 
 def test_no_flags_never_represents_accuracy_or_approval():
     result=summarize({
-        "checks":[{"id":"citation_grounding","status":"PASS"}],
+        "checks":[{"id":name,"status":"PASS"} for name in (
+            "citation_grounding","source_relevance",
+            "legal_uncertainty","cross_module_consistency")],
+        "supplemental_checks":[{"id":name,"status":"PASS"} for name in (
+            "citation_inventory_consistency","pdf_quoted_passage_alignment",
+            "requested_topic_coverage")],
         "issue_triage":{"issue_candidate_count":0},
     })
     assert result["status"]=="NO_DETERMINISTIC_FLAGS"
+    assert result["diagnostics_complete"] is True
     assert result["no_flags_is_not_a_quality_pass"] is True
     assert result["reference_answer_comparison_performed"] is False
     assert result["factual_accuracy_verified"] is False
@@ -61,7 +67,8 @@ def test_arbitrary_reason_and_id_strings_are_not_exported():
         "reason":"source excerpt confidential"}]})
     assert "case title" not in json.dumps(result)
     assert "source excerpt" not in json.dumps(result)
-    assert result["readiness_check_counts"]["REVIEW_REQUIRED"]==1
+    assert result["readiness_check_counts"].get("REVIEW_REQUIRED",0)==0
+    assert result["status"]=="INCOMPLETE_DIAGNOSTICS"
 
 
 def test_unknown_source_kinds_are_not_returned():
@@ -196,3 +203,42 @@ def test_mixed_audit_allowlists_supplemental_status_only():
             "app"/"assistant_eval_sampling.py").read_text(encoding="utf-8")
     assert '"supplemental_checks":[{"id":x["id"],"status":x["status"]}' in source
     assert '"supplemental_check_results_are_heuristics":True' in source
+
+
+
+def test_partial_results_are_incomplete_not_clear():
+    partial=summarize({
+        "checks":[{"id":"citation_grounding","status":"PASS"}],
+        "supplemental_checks":[{"id":"requested_topic_coverage","status":"PASS"}]})
+    assert partial["status"]=="INCOMPLETE_DIAGNOSTICS"
+    assert partial["core_check_count"]==1
+    assert partial["supplemental_check_count"]==1
+    assert partial["diagnostics_complete"] is False
+    aggregate=summarize_batch([
+        {"status":"AUDITED","response_quality_triage":partial}])
+    assert aggregate["audited_without_detected_flags"]==0
+    assert aggregate["unassessed_or_unavailable"]==1
+
+
+def test_duplicate_checks_cannot_count_as_complete_diagnostics():
+    checks=[{"id":name,"status":"PASS"} for name in (
+        "citation_grounding","source_relevance","legal_uncertainty",
+        "cross_module_consistency")]
+    supplemental=[{"id":name,"status":"PASS"} for name in (
+        "citation_inventory_consistency","pdf_quoted_passage_alignment",
+        "requested_topic_coverage")]
+    result=summarize({"checks":checks+[checks[0]],
+                      "supplemental_checks":supplemental})
+    assert result["status"]=="INCOMPLETE_DIAGNOSTICS"
+    assert result["diagnostics_complete"] is False
+    assert result["readiness_check_counts"]["PASS"]==4
+
+
+def test_unrecognized_check_ids_are_not_counted_or_exposed():
+    result=summarize({
+        "checks":[{"id":"SENSITIVE_USER_TEXT","status":"PASS"}],
+        "supplemental_checks":[{"id":"SENSITIVE_PDF","status":"PASS"}]})
+    assert result["readiness_check_counts"]=={}
+    assert result["supplemental_check_counts"]=={}
+    assert result["status"]=="INCOMPLETE_DIAGNOSTICS"
+    assert "SENSITIVE" not in json.dumps(result)

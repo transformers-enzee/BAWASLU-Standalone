@@ -88,16 +88,17 @@ def test_monitoring_opt_in_preserves_fast_casework_default_and_scoped_sources(mo
     # The fixture creates its casework rows at the real current UTC time.
     # A frozen 2026-11-12 end date excluded newly created 2026-11-13 rows.
     runtime_now=datetime.utcnow()
+    recent_publication=(runtime_now-timedelta(hours=12)).replace(microsecond=0).isoformat()+"Z"
     try:
         from app import inbox_radar
         def authorized_feed(connection, principal, states=None):
             calls.append(principal.get("province") or "Nationwide")
             if principal.get("province")=="Bali":
-                return [finding("discussion",post(50,platform="Facebook",
+                return [finding("discussion",post(50,published=recent_publication,platform="Facebook",
                    text="Bali local election issue"))],{}
-            return [finding("source_review",post(15),
+            return [finding("source_review",post(15,published=recent_publication),
                     title="Riau election incident"),
-                    finding("discussion",post(16,platform="Reddit",
+                    finding("discussion",post(16,published=recent_publication,platform="Reddit",
                          sentiment="NEUTRAL"),title="Riau public concern")],{}
         monkeypatch.setattr(inbox_radar,"live_inbox_findings",authorized_feed)
         access=profile(db,db.get(User,2))

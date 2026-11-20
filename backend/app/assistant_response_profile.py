@@ -66,6 +66,8 @@ _EXPLICIT_PDF_SOURCE=re.compile(
     r"|\b(?:gunakan|use|jawab|answer)\b[^\n.]{0,90}"
     r"\b(?:hanya|only)\b[^\n.]{0,30}\bpdf\b",re.I)
 
+from .assistant_officer_action_contract import officer_action_intent
+
 _FOLLOWUP=re.compile(
     r"\b(?:itu|tersebut|tadi|sebelumnya|what about|how about|"
     r"bagaimana dengan|lalu|then|and|selanjutnya)\b",re.I)
@@ -92,8 +94,7 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
     if not prev and isinstance(history,list):
         prev=next((str(row.get("text") or "") for row in reversed(history[-8:])
                    if isinstance(row,dict) and row.get("role")=="user"),"")
-    continuing_document=(bool(_FOLLOWUP.search(q)) and
-                         bool(_PDF.search(prev) or (_PROCEDURE.search(prev) and not _SOCIAL.search(prev))))
+    continuing_document=(bool(_FOLLOWUP.search(q)) and bool(_PDF.search(prev)))
     if _EXPLICIT_PDF_SOURCE.search(q):
         return PDF_GUIDANCE
     # A narrative executive briefing is not a request to create assignments,
@@ -105,13 +106,15 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
         return ACTION_REQUEST
     if specific_case:
         return CASE_REVIEW
+    if officer_action_intent(q) and not social:
+        return CASE_REVIEW
     modules=bool(re.search(r"\b(?:intelligence inbox|intel inbox|inbox)\b",q,re.I) and
                  re.search(r"\b(?:social listening|social media)\b",q,re.I))
     if modules and _CROSS_MODULE.search(q):
         return CROSS_MODULE_REVIEW
     if social:
         return SOCIAL_ANALYSIS
-    if cited and (document_question or procedural or continuing_document):
+    if cited and (document_question or continuing_document):
         return PDF_GUIDANCE
     return SOCIAL_ANALYSIS if q else GENERAL
 

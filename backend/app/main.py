@@ -153,7 +153,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','175.67'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','175.68'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -877,7 +877,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             history=history,
             response_depth=response_depth,
             reference_catalog=reference_catalog,response_profile=response_profile,
-            duplicate_groups=duplicate_groups)
+            duplicate_groups=duplicate_groups,
+            officer_scope={'geographic_scope':p.get('geographic_scope'),
+                           'province':p.get('province') or '',
+                           'regency_city':p.get('regency_city') or ''})
     except AssistantProviderError as exc:
         text,cited=evidence_fallback(evidence,exc.code,language=language)
         meta={'mode':'DETERMINISTIC_FALLBACK','model':'','fallback_code':exc.code,

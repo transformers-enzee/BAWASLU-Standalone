@@ -417,10 +417,12 @@ def is_general_knowledge_question(question):
       'pengawasan','violation','pelanggaran','public concern','social listening')
     return not any(term in q for term in institutional)
 
-def generate_general_openai_answer(question, previous_question=''):
+def generate_general_openai_answer(question, previous_question='', response_depth='DEEP'):
     """General questions use OpenAI without exporting private system records."""
     from .assistant_language import language_directive
     language=language_directive(question)
+    from .assistant_officer_action_contract import officer_response_mode, officer_mode_prompt
+    response_mode=officer_response_mode(response_depth)
     key=os.getenv('OPENAI_API_KEY','').strip()
     if not key:raise AssistantProviderError('not_configured','OpenAI is not configured')
     model=openai_triage_model()
@@ -432,9 +434,11 @@ def generate_general_openai_answer(question, previous_question=''):
         'records. Do not claim access to current live information or private records. '
         'Provide useful context and scenario-based recommendations where data is unavailable, clearly distinguish hypotheses from measurements and avoid repetitive no-data statements. Use bold key points and bullets where helpful. Never invent audience percentages as facts. Do not create targeted political persuasion. '
         'Do not invent citations. Reply in the language of the question with useful depth and clear formatting. '
-        + language['rule'])},
+        'Without event evidence, recommend conditional processes, not factual or legally confirmed cases. '
+        + officer_mode_prompt(response_depth) + ' ' + language['rule'])},
       {'role':'user','content':str(question or '')[:500]}
-    ],'max_output_tokens':650}
+    ],'max_output_tokens':800 if response_mode=='QUICK_BRIEF' else
+                          2300 if response_mode=='LEGAL_DEEP_DIVE' else 1600}
     try:
         with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
             response=client.post(base+'/responses',headers={
@@ -449,4 +453,5 @@ def generate_general_openai_answer(question, previous_question=''):
     answer=_response_output_text(payload).strip()
     if not answer:raise AssistantProviderError('provider_empty_output')
     return answer,{'mode':'OPENAI_GENERAL_KNOWLEDGE','model':payload.get('model') or model,
-                   'response_id':payload.get('id') or ''}
+                   'response_id':payload.get('id') or '',
+                   'officer_response_mode':response_mode}

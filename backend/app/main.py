@@ -832,7 +832,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)
     if general or (not evidence and requested=='AUTO' and not explicit_saved_id):
         try:
-            text,provider=generate_general_openai_answer(q,previous)
+            text,provider=generate_general_openai_answer(q,previous,response_depth=response_depth)
         except AssistantProviderError as exc:
             raise HTTPException(503,'GPT unavailable: '+exc.code)
         notices={

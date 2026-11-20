@@ -21,5 +21,5 @@ const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell
 const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1636);
 assert.ok(hasDynamicBuildVersion(shell,version));
-assert.ok(shell.includes('aria-label="Build version">v'+version));
+assert.ok(hasDynamicBuildVersion(shell,version),'Footer must show the runtime backend release');
 console.log('PASS v163.6 safe historical Assistant reply labeling, fresh-question preparation and action gate');

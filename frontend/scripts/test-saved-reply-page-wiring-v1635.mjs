@@ -9,7 +9,7 @@ const version=readBackendVersion(read('../backend/app/main.py'));
 const shell=read('src/components/intel/Shell.jsx');
 assert.ok(Number(version.replace('.',''))>=1635);
 assert.ok(hasDynamicBuildVersion(shell,version));
-assert.ok(shell.includes('aria-label="Build version">v'+version));
+assert.ok(hasDynamicBuildVersion(shell,version),'Footer must show the runtime backend release');
 assert.ok(page.includes("import AssistantSavedReplyAudit from '@/components/intel/AssistantSavedReplyAudit'"));
 assert.equal((page.match(/<AssistantSavedReplyAudit\s+disabled=\{busy\|\|historyBusy\}\s*\/>/g)||[]).length,1,
  'Saved reply QA must be mounted once, and disabled during active Assistant/history operations');

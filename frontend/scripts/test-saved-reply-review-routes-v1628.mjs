@@ -12,5 +12,5 @@ for(const token of ['batch.review_route_counts','x.review_route','audit.review_r
 const ver=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(ver.replace('.',''))>=1628);
 assert.ok(hasDynamicBuildVersion(shell,ver));
-assert.ok(shell.includes('aria-label="Build version">v'+ver));
+assert.ok(hasDynamicBuildVersion(shell,ver),'Footer must show the runtime backend release');
 console.log('PASS v162.8 historical audit reviewer next-step routing guards');

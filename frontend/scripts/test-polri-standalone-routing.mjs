@@ -6,6 +6,7 @@ const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 assert.match(nginx,/location = \/ \{ return 302 \/demo\/; \}/);
 assert.match(nginx,/absolute_redirect off;/);
 assert.match(nginx,/port_in_redirect off;/);
+assert.match(nginx,/location = \/demo\/ \{ rewrite \^ \/index\.html last; \}/);
 assert.match(nginx,/location \^~ \/demo\/ \{[\s\S]*?try_files \$uri \/index\.html;/);
 assert.doesNotMatch(nginx,/try_files \$uri \$uri\//);
 assert.match(nginx,/location \^~ \/api\/ \{ return 403; \}/);

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
+const page=read('../src/pages/SmartRadar.jsx');
+const view=read('../src/components/intel/SmartRadarViolationIntelligence.jsx');
+const panel=read('../src/components/intel/ActionIntelligencePanel.jsx');
+assert.ok(page.includes("mode==='actions'"));
+assert.ok(page.includes('<SmartRadarViolationIntelligence access={access}/>'));
+assert.ok(page.includes('Violation Intelligence'));
+assert.ok(page.includes('<ManagementBriefings/>'));
+assert.ok(page.includes('/ui-freeze/smart-radar-v6_2.html'));
+assert.ok(view.includes("base44.functions.invoke('commandCenter',filters)"));
+assert.ok(view.includes("province:national?province:''"));
+assert.ok(view.includes("data.action_intelligence||null"));
+assert.ok(view.includes("<ActionIntelligencePanel model={model}/>"));
+assert.ok(view.includes('All historical dates'));
+assert.ok(view.includes('if(!active)return'));
+for(const label of ['1. Violation type','2. Geographical impact','3. Recommended action plan'])
+  assert.ok(panel.includes(label),label);
+console.log('Smart Radar Violation Intelligence: 14 integration and scope contracts passed');

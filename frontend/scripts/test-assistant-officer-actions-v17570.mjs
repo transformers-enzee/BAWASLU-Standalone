@@ -19,5 +19,6 @@ assert.ok(view.includes('data-testid="assistant-copy-officer-plan"'));
 assert.ok(view.includes('navigator.clipboard.writeText'));
 assert.ok(view.includes('role="status"'));
 assert.ok(view.includes('data-officer-actions-visible="true"'));
-assert.ok(backend.includes("'BAWASLU_BUILD_VERSION','175.70'"));
+const buildVersion=backend.match(/BAWASLU_BUILD_VERSION','(\d+\.\d+)'/);
+assert.ok(buildVersion && Number(buildVersion[1])>=175.70,'requires v175.70 or later, not exactly the original release');
 console.log('BAWASLU v175.70 Action Intelligence: 15 source/UI contracts passed');

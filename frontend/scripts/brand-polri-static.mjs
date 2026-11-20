@@ -27,5 +27,5 @@ change('demo/smart-radar.html',[
 change('demo/watchlist.html',[
  ['<title>BAWASLU Watchlist V2.2 — Interactive Prototype</title>','<title>Smart Radar — POLRI Demo</title>']
 ]);
-if(!fs.existsSync(path.join(root,'polri-logo.svg')))throw new Error('POLRI logo is missing from static build');
+if(!fs.existsSync(path.join(root,'polri-logo.png')))throw new Error('POLRI logo is missing from static build');
 console.log('PASS: isolated Smart Radar POLRI branding, logo and favicon bundled');

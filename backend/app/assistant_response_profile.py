@@ -106,6 +106,15 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
         return ACTION_REQUEST
     if specific_case:
         return CASE_REVIEW
+    # Descriptive questions about the *process itself* use cited procedural
+    # knowledge. Asking what to do about a specific incident remains a case
+    # assessment, regardless of the existence of an unrelated PDF.
+    descriptive_procedure=bool(re.match(
+        r"^(?:jelaskan|uraikan|terangkan|explain|describe)\s+"
+        r"(?:alur|proses|prosedur|mekanisme|workflow|process|procedure)\b",
+        q,re.I))
+    if cited and descriptive_procedure and procedural and not social:
+        return PDF_GUIDANCE
     if officer_action_intent(q) and not social:
         return CASE_REVIEW
     modules=bool(re.search(r"\b(?:intelligence inbox|intel inbox|inbox)\b",q,re.I) and

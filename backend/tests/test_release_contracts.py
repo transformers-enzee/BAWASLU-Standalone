@@ -274,8 +274,13 @@ def test_v93_0_sidebar_health_and_frontend_versions_agree():
     metadata=main.health()
     assert_current_build_at_least('93.0')
     nav=(FRONTEND/'components'/'intel'/'AccessNavigation.jsx').read_text(encoding='utf-8')
-    assert "useState({build_version:null})" in nav
+    # Navigation is presentational: authenticated Shell obtains build metadata
+    # from /api/health and passes it as the 'build' prop.
+    assert "export default function AccessNavigation({access,user,build})" in nav
+    assert "'Build '+build.build_version" in nav
     shell=(FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
+    assert "fetch('/api/health'" in shell
+    assert "build={buildInfo}" in shell
     assert_current_build_at_least('93.0')
 
 

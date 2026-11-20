@@ -5,6 +5,7 @@ GPT can interpret supplied records, but may not invent database citations or
 claim that outside knowledge is current/live source verification.
 """
 from .assistant_pdf_depth_budget import pdf_output_token_budget
+from .assistant_officer_action_contract import OFFICER_DECISION_CONTRACT, complete_officer_steps
 
 import json
 import os
@@ -45,7 +46,7 @@ SCHEMA = {
                  "next_checks", "limitations", "cited_ids", "language_code", "detected_tags", "presentation_labels"],
     "additionalProperties": False
 }
-SYSTEM = """You are BAWASLU's expert, politically neutral social intelligence, public relations, crisis communication, marketing research, and government affairs analyst. Provide context-aware strategic analysis for lawful public information, accountability, and nonpartisan outreach. Do not craft personalized political persuasion aimed at voter segments.
+SYSTEM = """You are BAWASLU's senior, politically neutral internal intelligence and election-supervision adviser. Help HQ and provincial officers interpret authorized evidence, assess electoral relevance, and decide what concrete review happens next. Social listening and PDF knowledge are supporting resources, not the end goal. Do not craft personalized political persuasion aimed at voter segments.
 Behave like a skilled senior analyst, not a rigid compliance template or a search results list.
 Respond conversationally, directly and with analytic depth.
 For questions about narratives, audiences, PR, or campaign performance, proactively provide sentiment analysis: distinguish observed positive, negative, neutral and mixed positions; explain their drivers, emerging concerns, narrative implications and change over time if supported. Never assign quantitative sentiment shares without counts. Prefer a compact table for comparing three or more segments, themes, or platforms; generate chart data without being asked when trustworthy numeric comparisons support it. Use narrative analysis, public web sources when returned, and professional OpenAI reasoning together, with citations tied to factual claims. Prefer scannable bullet points for multi-part analytical answers. Start each bullet with a short **bold key finding**, then its record evidence, interpretation, and relevant implication. Use a concise bold lead for major conclusions; avoid walls of text.
@@ -67,6 +68,7 @@ Use earlier exchanges in this conversation to resolve references, evolving user 
 Never end with stock statements like 'records do not provide audience demographics' or 'locations are unavailable' unless a numeric or verified claim directly depends on it. Instead answer with qualitative segments, likely information needs, plausible hypotheses, and nonpartisan communication approaches. If the question explicitly requests measured percentages or verified residence, say briefly that the figure is not established, then offer an analytical scenario clearly marked hypothetical. Avoid unsupported specificity.
 
 PDF KNOWLEDGE POLICY:
+- PDFs are supporting page-cited legal/SOP references, not proof that an alleged incident happened or the sole basis for officer recommendations.
 - PDF_KNOWLEDGE records are officer-uploaded knowledge excerpts with exact page IDs [DOC-<id>-P<page>]. Cite those IDs for regulatory provisions, SOPs, and methodological guidance. Explain the provision in its documentary context and state the page. Distinguish documentary references from social-media claims and internal incident intelligence.
 - PDF upload is NOT model training and is NOT proof that the uploaded document is authentic, current, or legally controlling. OFFICER_REVIEWED indicates human review of the uploaded reference, NOT certification of current legal force. Check issuing authority, effective date, amendments and repeal externally before a legal conclusion. UNREVIEWED documents must be identified as unreviewed if their authority is important to the answer.
 - For BAWASLU legal questions, distinguish (1) election-law implications, (2) social-platform community rules and terms, (3) source verification, and (4) the procedural legal follow-up beyond takedown. Do not claim a platform has violated its own rules without the applicable current official policy and evidence.
@@ -545,7 +547,7 @@ def formal_evidence_count(evidence):
 
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
              reference_catalog=None, response_profile='SOCIAL_ANALYSIS',
-             duplicate_groups=None):
+             duplicate_groups=None, officer_scope=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -568,7 +570,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "available_pdf_library": (reference_catalog or [])[:24],
         "pdf_reference_guidance": (
             "The listed PDFs are already connected to the entire assistant chat. "
-            "Use page-cited PDF_KNOWLEDGE passages in available_records automatically "
+            "Use page-cited PDF_KNOWLEDGE excerpts as supporting legal/SOP references "
             "whenever relevant to this question or recent follow-up context. "
             "Do not direct the officer to a manual retrieval screen; answer the question "
             "yourself. The library catalog only proves a document is available: "
@@ -586,6 +588,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
         "response_depth": response_depth,
         "response_profile": response_profile,
+        "officer_review_scope":officer_scope or {},
         "operational_assessment_scope":assessment_scope(question),
         "operational_assessment_authority_inventory":assessment_authority_inventory(evidence),
         "response_language_rule": language["rule"],
@@ -642,13 +645,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              "detected_tags empty; avoid repeating sections. Answer in formal "
              "Indonesian as requested."
              if executive_report else
-            ("This is social-intelligence analysis, not an operational handoff. "
+            ("This is actionable BAWASLU officer decision support, not an authorization to create cases or send referrals. "
              "The source records supplied here are exactly the same posts used in the "
              "visible charts; any numerical sentiment breakdown or percentages MUST "
              "be computed only from their saved sentiment labels, not guessed. "
              "Do not describe more posts as analyzed than the supplied source_count. "
              "Start with a concise 2-3 sentence executive summary; provide at most "
-             "three nonduplicative source-backed observations and two specific checks "
+             "three source-backed observations and three prioritized officer checks with role, evidence, expected output and escalation conditions "
              "in the structured fields. Leave interpretation and limitations empty "
              "when already expressed in the summary. Do not invent a population or "
              "audience survey. Stay focused on the subject requested: do not "
@@ -658,6 +661,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              if response_profile == 'SOCIAL_ANALYSIS' else
              ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")) ))
     }
+    officer_focus=("" if pdf_guidance else "\n\n"+OFFICER_DECISION_CONTRACT)
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
         "Cite only retrieved PDF pages and match the requested depth while remaining focused; "
@@ -691,7 +695,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         sum(r.get("record_type")=="SOCIAL_LISTENING" for r in evidence))
     request = {
         "model": model, "store": False,
-        "input": [{"role":"system","content":SYSTEM+document_focus+case_focus+cross_module_focus+
+        "input": [{"role":"system","content":SYSTEM+officer_focus+document_focus+case_focus+cross_module_focus+
                             ("\n\n"+assessment_focus if assessment_focus else "")+
                             ("\n\n"+module_focus if module_focus else "")+
                             ("\n\n"+scope_focus if scope_focus else "")},
@@ -723,6 +727,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         result["validated_tags"] = ([] if pdf_guidance else
                                     combined_tags(result.get("detected_tags") or [],evidence))
         result["validated_ui_labels"] = validate_ui_labels(result.get("presentation_labels") or [])
+        result["next_checks"], officer_steps_fallback = complete_officer_steps(
+            question,response_profile,result.get("next_checks"),answer_language)
         if pdf_guidance:
             # The model's long-form report fields must never leak into PDF
             # procedural answers even if its schema happens to fill them.
@@ -768,6 +774,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "quality": quality,
         "answer_language": result["language_code"],
         "response_profile": response_profile,
+        "officer_steps_fallback":officer_steps_fallback,
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
     }
@@ -783,7 +790,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     meta["analytical_findings"] = (None if pdf_guidance or executive_report else {
         "observations": (result.get("observations") or [])[:3] if social_brief
                          else result.get("observations") or [],
-        "review_steps": (result.get("next_checks") or [])[:2] if social_brief
+        "review_steps": (result.get("next_checks") or [])[:3] if social_brief
                         else result.get("next_checks") or []
     })
     answer = answer_text(result, bool(evidence),result["language_code"])

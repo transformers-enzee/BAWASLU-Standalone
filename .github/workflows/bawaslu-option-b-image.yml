@@ -1,7 +1,8 @@
 name: BAWASLU Option B - prebuilt staging image
 
-# One bootstrap image build on installation. Later releases are explicitly
-# dispatched in bulk; ordinary code pushes never trigger Render deployments.
+# v175.60: image publication remains explicit and staging-only.
+# Changing this workflow triggers an image build; Render deployment remains manual.
+# Normal application changes do not automatically deploy to Render.
 on:
   push:
     branches: [architecture-v2-foundation-20261015]
@@ -49,6 +50,18 @@ jobs:
           test -f backend/requirements.txt
           test -f frontend/package.json
           echo "Building from the current staging commit only; no Render build is triggered."
+      - name: Validate release source and offline citation regression coverage
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test -f backend/tests/test_assistant_visible_citations_v17556.py
+          test -f backend/app/assistant_visible_citations.py
+          test -f .github/workflows/isolated-bulk-qa.yml
+          grep -Fq 'test_assistant_visible_citations_v17556.py' .github/workflows/isolated-bulk-qa.yml
+          echo "Source revision and offline citation regression wiring checked."
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
@@ -58,6 +71,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish immutable staging image
+        id: publish
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -70,19 +84,28 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/transformers-enzee/BAWASLU-Standalone
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=BAWASLU staging v175.60
           cache-from: type=gha,scope=bawaslu-staging
           cache-to: type=gha,mode=max,scope=bawaslu-staging
-      - name: Document released image
+      - name: Document source SHA and published image digest
         shell: bash
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
+          set -euo pipefail
+          test -n "$IMAGE_DIGEST"
+          case "$IMAGE_DIGEST" in sha256:*) ;; *) echo "Invalid Docker digest"; exit 1 ;; esac
           {
-            echo "## BAWASLU Option B staging image"
+            echo "## BAWASLU v175.60 staging image"
             echo ""
-            echo "Image: `ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}`"
-            echo "Staging alias: `ghcr.io/transformers-enzee/bawaslu-standalone:staging`"
-            echo "Built for linux/amd64; image is published to GitHub Container Registry."
-            echo "A successful image build does NOT mean Render has been updated."
-            echo "Do not switch the Render source before the image is pullable and staging database readiness is verified."
+            echo "Source commit: \`$COMMIT_SHA\`"
+            echo "Immutable tag: \`ghcr.io/transformers-enzee/bawaslu-standalone:sha-$COMMIT_SHA\`"
+            echo "Published digest: \`$IMAGE_DIGEST\`"
+            echo "Mutable staging alias: \`ghcr.io/transformers-enzee/bawaslu-standalone:staging\`"
+            echo ""
+            echo "Image published for linux/amd64. Render deployment was NOT performed by this push workflow."
+            echo "For Render staging, use the immutable tag above after verifying the successful build."
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:

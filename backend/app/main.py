@@ -979,6 +979,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'matched_social':matched_social,
             'formal_selected_count':len(selected_formal),
             'social_selected_count':len(chosen_social),
+            'sample_not_exhaustive':bool(chosen_social) and response_profile==SOCIAL_ANALYSIS,
             'potential_duplicate_groups':duplicate_groups,
             'scope':'AUTHORIZED_PDF_REFERENCES' if response_profile==PDF_GUIDANCE
                    else 'AUTHORIZED_INTELLIGENCE_AND_SOCIAL_LISTENING',

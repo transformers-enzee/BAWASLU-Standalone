@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+const backend=read('../../backend/app/main.py');
+const ui=read('../src/pages/IntelligenceAssistant.jsx');
+const model=read('../../backend/app/assistant_orchestration.py');
+assert.match(backend,/sample_not_exhaustive.*SOCIAL_ANALYSIS/);
+assert.match(backend,/if response_profile==SOCIAL_ANALYSIS and not explicit_formal_ids:/);
+assert.match(ui,/data-testid="assistant-sample-scope-disclosure"/);
+assert.match(ui,/bukan pemeriksaan menyeluruh seluruh Intelligence Inbox/);
+assert.match(ui,/Absence from the sample does not establish absence elsewhere/);
+assert.match(model,/Do NOT claim incompatible conclusions are both correct/);
+console.log('PASS Assistant evidence scope, social-card isolation and contradiction policy');

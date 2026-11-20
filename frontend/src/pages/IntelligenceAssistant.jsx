@@ -235,6 +235,12 @@ export default function IntelligenceAssistant(){
         {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
+        {m.grounding?.sample_not_exhaustive&&<p data-testid="assistant-sample-scope-disclosure"
+          className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs leading-relaxed text-[#52657a]">
+          {(m.answer_language||'id')==='id'
+            ?`Cakupan jawaban: ${m.grounding.social_selected_count} unggahan Social Listening terpilih dalam akses Anda. Ini bukan pemeriksaan menyeluruh seluruh Intelligence Inbox. Tidak ditemukan dalam sampel tidak berarti tidak ada pada data lainnya.`
+            :`Answer scope: ${m.grounding.social_selected_count} selected, accessible Social Listening posts. This is not an exhaustive Intelligence Inbox search. Absence from the sample does not establish absence elsewhere.`}
+        </p>}
        </>:<p data-i18n-exempt className="whitespace-pre-line leading-6">{m.text}</p>}
        {m.role==='assistant'&&<>
         {!reviewableIndexes.has(i)&&<div data-testid="assistant-historical-source-caution"

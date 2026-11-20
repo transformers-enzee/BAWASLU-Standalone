@@ -5,6 +5,7 @@ visible response text and must be included in identifier accounting. This is
 not semantic claim verification; no model calls, database I/O or mutations.
 """
 from .assistant_grounding import audit_assistant_answer
+from .assistant_social_answer_safety import prepare_social_answer
 
 _SEPARATOR="\n\n__ASSISTANT_VISIBLE_FINDINGS_SEPARATOR_17556__\n"
 
@@ -22,6 +23,9 @@ def visible_assistant_text(answer, findings):
 
 def audit_visible_assistant_parts(question, evidence, answer, model_cited_ids,
                                   findings, profile="SOCIAL_ANALYSIS", language="id"):
+    social_safety = {}
+    if profile == "SOCIAL_ANALYSIS":
+        answer, social_safety = prepare_social_answer(answer, evidence, language)
     observations=[x for x in ((findings or {}).get("observations") or [])
                   if isinstance(x,str) and x.strip()]
     steps=[x for x in ((findings or {}).get("review_steps") or [])
@@ -29,6 +33,7 @@ def audit_visible_assistant_parts(question, evidence, answer, model_cited_ids,
     if not observations and not steps:
         text,cited,audit=audit_assistant_answer(
             question,evidence,answer,model_cited_ids,profile=profile,language=language)
+        audit.update(social_safety)
         return text,cited,audit,findings
     # Serialize as visible sections and audit once against the same authorized
     # evidence. Source references never acquire permission through this helper.
@@ -54,6 +59,7 @@ def audit_visible_assistant_parts(question, evidence, answer, model_cited_ids,
     count=len(observations)
     clean_findings={**findings,"observations":parts[1:1+count],
                     "review_steps":parts[1+count:]}
+    audit.update(social_safety)
     audit["citation_scope"]="VISIBLE_ANSWER_AND_FINDINGS"
     audit["visible_findings_included"]=len(observations)
     return clean_answer,cited,audit,clean_findings

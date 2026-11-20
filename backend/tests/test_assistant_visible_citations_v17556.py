@@ -91,3 +91,61 @@ def test_findings_reject_unknown_ids_in_quality_inventory():
     checks={x["id"]:x["status"] for x in quality["checks"]}
     assert checks["citation_grounding"]=="REVIEW_REQUIRED"
     assert audit["rejected_unavailable_citations"]==1
+
+
+def test_selected_ids_in_opening_become_local_bracket_citations():
+    response=("SOCIAL-907 bernada negatif dan menyebut BAWASLU. "
+              "SOCIAL-910 membahas demokrasi secara umum.")
+    findings={"observations":["Kritik [SOCIAL-907] dan refleksi [SOCIAL-910]."],
+              "review_steps":[]}
+    text,cited,audit,clean=audit_visible_assistant_parts(
+        "Bandingkan unggahan",[evidence("SOCIAL-907"),evidence("SOCIAL-910")],
+        response,[],findings)
+    assert "[SOCIAL-907]" in text and "[SOCIAL-910]" in text
+    assert cited==["SOCIAL-907","SOCIAL-910"]
+    assert audit["inline_id_citations_added"]==2
+    assert clean["observations"][0].count("[SOCIAL-")==2
+
+
+def test_unselected_ids_are_not_promoted_to_citations():
+    text,cited,audit,_=audit_visible_assistant_parts(
+        "Ulasan BAWASLU",[evidence("SOCIAL-907")],
+        "SOCIAL-999 tidak tersedia. SOCIAL-907 perlu verifikasi.",
+        [],None)
+    assert "[SOCIAL-999]" not in text and "[SOCIAL-907]" in text
+    assert cited==["SOCIAL-907"]
+
+
+def test_unrelated_official_links_removed_from_selected_social_answer():
+    text,cited,audit,_=audit_visible_assistant_parts(
+        "Bandingkan dua unggahan",[evidence("SOCIAL-907")],
+        "SOCIAL-907 perlu diverifikasi.\n\nSumber publik: "
+        "https://sigaplapor.bawaslu.go.id/pemeriksaan?utm_source=openai",
+        [],None)
+    assert "sigaplapor" not in text
+    assert "Sumber publik:" not in text
+    assert audit["unsupported_public_links_removed"]==1
+    assert cited==["SOCIAL-907"]
+
+
+def test_selected_social_link_is_preserved_but_not_invented():
+    source=evidence("SOCIAL-907")
+    source["source_url"]="https://facebook.com/example/907"
+    text,_,audit,_=audit_visible_assistant_parts(
+        "Unggahan",[source],
+        "SOCIAL-907 https://facebook.com/example/907",[],None)
+    assert "https://facebook.com/example/907" in text
+    assert audit["unsupported_public_links_removed"]==0
+
+
+def test_javanese_ambiguity_is_explicit_without_literal_translation_claim():
+    post=evidence("SOCIAL-907")
+    post["source_excerpt"]="Hasil pemilu paling yo akal akalan nyatane bawaslune akeh dipateni"
+    text,cited,audit,_=audit_visible_assistant_parts(
+        "Makna unggahan",[post],
+        "SOCIAL-907 menunjukkan BAWASLU banyak dibungkam atau menjadi korban.",
+        [],None)
+    assert "BAWASLU banyak dibungkam" not in text
+    assert "Catatan bahasa:" in text
+    assert audit["regional_language_review_required"] is True
+    assert cited==["SOCIAL-907"]

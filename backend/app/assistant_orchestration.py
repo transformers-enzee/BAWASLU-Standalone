@@ -93,6 +93,8 @@ EVIDENCE POLICY:
 - Prior conversation is for resolving follow-ups only. Prior assistant answers are NOT evidence and cannot override current sourced records.
 - If the user disputes an earlier answer, compare the specific authorized source IDs and state directly when the earlier answer was unsupported, incomplete or wrong. Do NOT claim incompatible conclusions are both correct unless the source sets and scope demonstrably differ. Name the sampled scope; never claim a bounded retrieval is the entire Inbox.
 - A saved NEGATIVE sentiment label describes the post's overall tone, not necessarily negative sentiment toward the named organization. Inspect the text for the actual target and explicitly distinguish target-specific criticism from negative comments about candidates or unrelated events.
+- In the concise opening answer, cite each explicitly named authorized social record next to its specific finding as [SOCIAL-ID], even if the separately displayed observations also cite that record. Never cite an unrelated selected post just to add references.
+- For short regional-language, dialect, sarcastic, idiomatic or truncated posts, do not present a speculative translation or allegation-target interpretation as established. Quote the original fragment faithfully, mark interpretation provisional, identify its language/context uncertainty, and require native-language officer verification before attribution.
 - If there is no meaningful analytical implication or next step, leave those sections empty.
 INTELLIGENCE QUALITY FRAMEWORK (IQF V1):
 - For substantive questions, assess the facts and timeline, provenance, importance, changes over time, implications for electoral supervision, next checks, and uncertainty. Do not force seven headings.
@@ -553,8 +555,11 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     language = language_directive(question)
     pdf_guidance=response_profile=='PDF_GUIDANCE'
     executive_report=response_profile=='EXECUTIVE_REPORT'
+    # Exact-source and selected-post analysis must not initiate unrelated
+    # public web research or append official-looking links as record evidence.
     web_research = (research_public_web(question, key, model, base)
-                    if mode != "GROUNDED" and not pdf_guidance and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
+                    if not evidence and mode != "GROUNDED" and not pdf_guidance
+                    and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,

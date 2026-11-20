@@ -45,6 +45,15 @@ def test_non_authorized_ids_are_removed_from_both_text_and_id_list():
     assert clean["source_ids"]==["SOCIAL-894"]
 
 
+def test_bare_source_ids_cannot_circumvent_authorized_record_filter():
+    row=action(task="Review SOCIAL-894 and unrelated SOCIAL-999",
+               evidence_required="Compare INT-2025-000001 if within scope")
+    clean=sanitize_officer_actions([row],{"SOCIAL-894"})[0]
+    assert "[SOCIAL-894]" in clean["task"]
+    assert "SOCIAL-999" not in clean["task"]
+    assert "INT-2025-000001" not in clean["evidence_required"]
+
+
 def test_source_ids_cannot_authorize_reported_court_verdicts():
     row=action(task="Check whether a court issued the reported Banjarbaru ruling.",
                reviewing_role="HQ legal review",source_ids=["INT-2025-000001"])

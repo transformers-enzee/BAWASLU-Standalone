@@ -18,6 +18,10 @@ ACTION_ITEM_SCHEMA={
 }
 OFFICER_ACTIONS_SCHEMA={"type":"array","items":ACTION_ITEM_SCHEMA}
 _SOURCE=re.compile(r"\[([A-Z]+-[A-Za-z0-9:_-]+)\]")
+_BARE_SOURCE=re.compile(
+    r"(?<![\w-])(?:SOCIAL-\d+|INT-\d{4}-\d{6}|DOC-\d+-P\d+)(?![\w-])",
+    re.I,
+)
 
 def sanitize_officer_actions(items,permitted,limit=4):
     """Only selected evidence IDs may survive; never manufacture an assignment."""
@@ -30,9 +34,15 @@ def sanitize_officer_actions(items,permitted,limit=4):
             continue
         def clean(v):
             value=v.strip()[:500] if isinstance(v,str) else ""
-            return _SOURCE.sub(
+            value=_SOURCE.sub(
                 lambda m:m.group(0) if m.group(1) in allowed else "",
-                value).strip()
+                value)
+            # Bracketed and unbracketed official record IDs need identical
+            # authorization. Convert permitted bare IDs into visible citations.
+            value=_BARE_SOURCE.sub(
+                lambda m:"["+m.group(0).upper()+"]"
+                if m.group(0).upper() in allowed else "",value)
+            return value.strip()
         item={name:clean(row.get(name)) for name in ACTION_FIELDS}
         if not item["task"]:
             continue

@@ -19,7 +19,7 @@ ACTION_ITEM_SCHEMA={
 OFFICER_ACTIONS_SCHEMA={"type":"array","items":ACTION_ITEM_SCHEMA}
 _SOURCE=re.compile(r"\[([A-Z]+-[A-Za-z0-9:_-]+)\]")
 _BARE_SOURCE=re.compile(
-    r"(?<![\w-])(?:SOCIAL-\d+|INT-\d{4}-\d{6}|DOC-\d+-P\d+)(?![\w-])",
+    r"(?<![\w-])(?<!\[)(?:SOCIAL-\d+|INT-\d{4}-\d{6}|DOC-\d+-P\d+)(?![\w-])(?!\])",
     re.I,
 )
 

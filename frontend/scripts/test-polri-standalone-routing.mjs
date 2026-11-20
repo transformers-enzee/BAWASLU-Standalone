@@ -9,6 +9,9 @@ assert.match(nginx,/port_in_redirect off;/);
 assert.match(nginx,/location = \/demo\/ \{ rewrite \^ \/index\.html last; \}/);
 assert.match(nginx,/location \^~ \/demo\/ \{[\s\S]*?try_files \$uri \/index\.html;/);
 assert.doesNotMatch(nginx,/try_files \$uri \$uri\//);
+// Literal backslash-n in an Nginx comment previously commented out try_files.
+assert.doesNotMatch(nginx,/\\\\n\s*# Do not choose/);
+assert.match(nginx,/location \^~ \/demo\/ \{\n[\s\S]*?\n\s+try_files \$uri \/index\.html;\n\s*\}/);
 assert.match(nginx,/location \^~ \/api\/ \{ return 403; \}/);
 assert.match(docker,/FROM nginx:/);
 assert.doesNotMatch(docker,/COPY --from=build \/src\/backend/);

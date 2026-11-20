@@ -22,5 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify frontend uses deployed backend build metadata
+        run: node frontend/scripts/test-build-version-minimums-v1535.mjs
       - name: Check bilingual UI glossary and source-text safety
         run: node frontend/scripts/check-language-coverage-v1198.mjs

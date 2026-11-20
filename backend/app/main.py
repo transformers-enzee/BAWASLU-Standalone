@@ -153,7 +153,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':'173.1','commit':os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','175.61'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -891,14 +891,15 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # Findings are separately rendered in AssistantIntelligenceReport. They are
     # still part of the visible response, so citations inside those findings
     # must count in the reference audit and evidence-card matching.
-    from .assistant_visible_citations import audit_visible_assistant_parts
+    from .assistant_visible_citations import audit_visible_assistant_parts, visible_assistant_text
     text,cited,grounding_audit,visible_findings=audit_visible_assistant_parts(
         q,evidence,text,cited,meta.get('analytical_findings'),
         profile=response_profile,language=answer_lang)
     meta['grounding_audit']=grounding_audit
     from .assistant_answer_quality import evaluate_answer_quality
     answer_quality=evaluate_answer_quality(
-        q,evidence,text,cited,profile=response_profile,grounding=grounding_audit)
+        q,evidence,visible_assistant_text(text,visible_findings),cited,
+        profile=response_profile,grounding=grounding_audit)
     meta['answer_quality']=answer_quality
     if isinstance(meta.get('quality'),dict):
         meta['quality']['cited_evidence_count']=len(cited)

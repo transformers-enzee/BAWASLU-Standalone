@@ -9,6 +9,9 @@ COPY backend /src/backend
 RUN npm run build
 
 FROM python:3.12-slim
+ARG BAWASLU_BUILD_VERSION=175.61
+ARG BAWASLU_BUILD_COMMIT=unknown
+ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 WORKDIR /app
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

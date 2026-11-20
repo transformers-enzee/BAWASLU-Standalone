@@ -1,78 +1,66 @@
-"""Check synchronized application build versions and enforce sequential release increments.
+"""Canonical image release version and UI contract.
 
-Sequence: 89, 89.1, ... 89.9, 90, 90.1, ... 90.9, 91.
-The one-time migration from legacy 89.11 to 90 corrects the previous bad scheme.
+Historical releases numbered v175.59/v175.60 but app health was stuck at 173.1.
+v175.61 is the one-time alignment; thereafter prebuilt images receive their
+version and exact commit through Docker build arguments supplied by Actions.
 """
 import pathlib
 import re
 import subprocess
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "backend/app/main.py"
-SIDEBAR = ROOT / "frontend/src/components/intel/AccessNavigation.jsx"
-VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9])?\Z")
+ROOT=pathlib.Path(__file__).resolve().parents[2]
+MAIN=ROOT/"backend/app/main.py"
+SHELL=ROOT/"frontend/src/components/intel/Shell.jsx"
+NAV=ROOT/"frontend/src/components/intel/AccessNavigation.jsx"
 
+def valid(value):
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]?))?",value or ""):
+        return False
+    major,*minor=map(int,value.split("."))
+    return not minor or major>=175 or minor[0]<=9
 
 def following(value):
-    assert VERSION.fullmatch(value), f"Invalid preceding build version: {value}"
-    major, *minor = value.split(".")
-    if not minor:
-        return f"{major}.1"
-    if minor[0] == "9":
-        return f"{int(major) + 1}.0"
-    return f"{major}.{int(minor[0]) + 1}"
+    assert valid(value),f"Invalid build version: {value}"
+    major,*minor=map(int,value.split("."))
+    last=minor[0] if minor else 0
+    max_minor=99 if major>=175 else 9
+    return f"{major+1}.0" if last>=max_minor else f"{major}.{last+1}"
 
-
-def read_version(source, pattern, name):
-    match = re.search(pattern, source)
-    assert match, f"Missing {name} build version"
-    value = match.group(1)
-    assert VERSION.fullmatch(value), (
-        f"Invalid {name} build version {value}; use 90.0, 90.1 ... 90.9, 91.0, not .10"
-    )
-    return value
-
+def read_version(source):
+    match=re.search(r"'build_version':os\.getenv\('BAWASLU_BUILD_VERSION','([^']+)'\)",source)
+    if match:return match.group(1)
+    match=re.search(r"'build_version':'([^']+)'",source)
+    return match.group(1) if match else None
 
 def verify():
-    backend = BACKEND.read_text(encoding="utf-8")
-    sidebar = SIDEBAR.read_text(encoding="utf-8")
-    server = read_version(backend, r"'build_version':'([^']+)'", "backend")
-    # AccessNavigation intentionally fetches the current backend health version
-    # instead of freezing a stale static value in shipped JavaScript.
-    if "useState({build_version:null})" in sidebar and "fetch('/api/health'" in sidebar:
-        assert "build.build_version" in sidebar, "Sidebar must show fetched backend build"
-        client = server
-    else:
-        client = read_version(sidebar, r"useState\(\{build_version:'([^']+)'", "sidebar")
-    assert server == client, f"Build mismatch: backend {server}, sidebar {client}"
+    backend=MAIN.read_text(encoding="utf-8")
+    shell=SHELL.read_text(encoding="utf-8")
+    sidebar=NAV.read_text(encoding="utf-8")
+    version=read_version(backend)
+    assert valid(version),f"Invalid backend fallback build: {version}"
+    assert "fetch('/api/health'" in shell
+    assert "data-build-version={buildInfo.build_version||'unavailable'}" in shell
+    assert "<AccessNavigation access={access} user={user} build={buildInfo}/>" in shell
+    assert "build?.build_version" in sidebar
+    assert "173.1" not in shell and "173.1" not in sidebar
+    assert "BAWASLU_BUILD_COMMIT" in backend
+    previous=subprocess.run(["git","show","HEAD^:backend/app/main.py"],
+                           cwd=ROOT,text=True,capture_output=True,check=False)
+    if previous.returncode==0:
+        old=read_version(previous.stdout)
+        assert old and valid(old),f"Invalid previous version: {old}"
+        if version!=old:
+            if (old,version)==("173.1","175.61"):
+                message=subprocess.run(["git","log","-1","--format=%s"],cwd=ROOT,
+                                       text=True,capture_output=True,check=True).stdout.strip()
+                assert message.startswith("BAWASLU v175.61:"),"Unapproved version reconciliation"
+            else:
+                assert version==following(old),f"Non-sequential build: {old} -> {version}"
+    assert following("89.9")=="90.0"
+    assert following("175.61")=="175.62"
+    assert following("175.99")=="176.0"
+    assert not valid("89.10")
+    print("Build metadata contract OK:",version)
 
-    previous = subprocess.run(
-        ["git", "show", "HEAD^:backend/app/main.py"],
-        cwd=ROOT, text=True, capture_output=True, check=False,
-    )
-    if previous.returncode == 0:
-        match = re.search(r"'build_version':'([^']+)'", previous.stdout)
-        assert match, "Previous commit missing a build version"
-        old = match.group(1)
-        if old == "89.11":
-            expected = "90"  # One-time repair for the existing invalid version.
-        else:
-            expected = following(old)
-        # Test-only and development commits do not constitute a deployed
-        # application build. Once the displayed build version changes, it must
-        # advance exactly one step; never accept a skipped or regressed version.
-        if server != old:
-            assert server == expected, (
-                f"Application build must advance exactly one step when changed: "
-                f"{old} -> {expected}; got {server}"
-            )
-    assert following("89.9") == "90.0"
-    assert following("90") == "90.1"
-    assert following("90.9") == "91.0"
-    assert not VERSION.fullmatch("89.10")
-    assert not VERSION.fullmatch("89.11")
-    print("Build version OK:", server)
-
-
-if __name__ == "__main__":
+if __name__=="__main__":
     verify()

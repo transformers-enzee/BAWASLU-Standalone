@@ -62,6 +62,17 @@ jobs:
           test -f .github/workflows/isolated-bulk-qa.yml
           grep -Fq 'test_assistant_visible_citations_v17556.py' .github/workflows/isolated-bulk-qa.yml
           echo "Source revision and offline citation regression wiring checked."
+      - name: Resolve build label from versioned release commit
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject="$(git log -1 --format=%s)"
+          if [[ ! "$subject" =~ ^BAWASLU[[:space:]]v([0-9]+\.[0-9]+): ]]; then
+            echo "This pipeline only publishes versioned BAWASLU release commits."
+            exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
@@ -78,13 +89,17 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
+          build-args: |
+            BAWASLU_BUILD_VERSION=${{ steps.release.outputs.version }}
+            BAWASLU_BUILD_COMMIT=${{ github.sha }}
           tags: |
             ghcr.io/transformers-enzee/bawaslu-standalone:staging
             ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/transformers-enzee/BAWASLU-Standalone
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.title=BAWASLU staging v175.60
+            org.opencontainers.image.title=BAWASLU staging
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
           cache-from: type=gha,scope=bawaslu-staging
           cache-to: type=gha,mode=max,scope=bawaslu-staging
       - name: Document source SHA and published image digest
@@ -92,12 +107,13 @@ jobs:
         env:
           COMMIT_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           test -n "$IMAGE_DIGEST"
           case "$IMAGE_DIGEST" in sha256:*) ;; *) echo "Invalid Docker digest"; exit 1 ;; esac
           {
-            echo "## BAWASLU v175.60 staging image"
+            echo "## BAWASLU v$RELEASE_VERSION staging image"
             echo ""
             echo "Source commit: \`$COMMIT_SHA\`"
             echo "Immutable tag: \`ghcr.io/transformers-enzee/bawaslu-standalone:sha-$COMMIT_SHA\`"

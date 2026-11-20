@@ -484,9 +484,11 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         notes.append(_message(language,"citation_overflow"))
     if records and not cited and not pdf_guidance:
         notes.append(_message(language,"uncited"))
+    appended_notices=[]
     for note in notes:
         if note not in text:
             text=text.rstrip()+"\n\n"+note
+            appended_notices.append(note)
     review_reasons=[]
     if categorical_outcome_flags:
         review_reasons.append("CATEGORICAL_LEGAL_OUTCOME")
@@ -525,6 +527,7 @@ def audit_assistant_answer(question, evidence, answer, model_cited_ids=None,
         "scope":"ONLY_CURRENTLY_AUTHORIZED_SELECTED_RECORDS",
         "selected_records":len(records),
         "displayed_citation_count":len(cited),
+        "appended_safety_notices":appended_notices,
         "displayed_citation_ids":cited,
         "model_cited_but_not_displayed":len(structured-set(cited)),
         "rejected_unavailable_citations":len(rejected),

@@ -8,6 +8,18 @@ from .assistant_grounding import audit_assistant_answer
 
 _SEPARATOR="\n\n__ASSISTANT_VISIBLE_FINDINGS_SEPARATOR_17556__\n"
 
+def visible_assistant_text(answer, findings):
+    """Exactly the visible answer sections for zero-credit citation-quality QA.
+
+    Findings are visible even when collapsed in the UI; never silently omit
+    their cited identifiers from the post-audit quality evaluator.
+    """
+    parts=[str(answer or "")]
+    for key in ("observations", "review_steps"):
+        parts.extend(x for x in ((findings or {}).get(key) or [])
+                     if isinstance(x,str) and x.strip())
+    return "\n\n".join(parts)
+
 def audit_visible_assistant_parts(question, evidence, answer, model_cited_ids,
                                   findings, profile="SOCIAL_ANALYSIS", language="id"):
     observations=[x for x in ((findings or {}).get("observations") or [])
@@ -27,16 +39,15 @@ def audit_visible_assistant_parts(question, evidence, answer, model_cited_ids,
     parts=checked.split(_SEPARATOR)
     if len(parts)!=len(pieces):
         raise ValueError("assistant visible-section integrity mismatch")
-    # Audit cautions appended to the final section should appear in the answer
-    # (before it), not be hidden inside the verification checklist.
-    last=parts[-1]
-    notes=[]
-    for message in ("Catatan bukti:","Evidence note:"):
-        offset=last.find("\n\n"+message)
-        if offset>=0:
-            notes.append(last[offset+2:])
-            parts[-1]=last[:offset]
-            break
+    # The grounding layer reports every warning it actually appended. Move
+    # ALL such notices to the main visible answer; the final review step may
+    # otherwise hide legal, enforcement, or citation warnings in a <details>.
+    notes=list(audit.get("appended_safety_notices") or [])
+    for note in reversed(notes):
+        suffix="\n\n"+note
+        if not parts[-1].endswith(suffix):
+            raise ValueError("assistant safety-notice integrity mismatch")
+        parts[-1]=parts[-1][:-len(suffix)]
     clean_answer=parts[0]
     if notes:
         clean_answer=clean_answer.rstrip()+"\n\n"+"\n\n".join(notes)

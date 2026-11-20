@@ -39,3 +39,48 @@ def test_without_separate_findings_keeps_pdf_guidance_contract():
         "Rujukan [DOC-1-P1].",["DOC-1-P1"],None,profile="PDF_GUIDANCE")
     assert cited==["DOC-1-P1"]
     assert findings is None
+
+def test_quality_evaluator_counts_citations_in_visible_findings():
+    from app.assistant_answer_quality import evaluate_answer_quality
+    from app.assistant_visible_citations import visible_assistant_text
+    q="Apa kritik terhadap BAWASLU?"
+    findings={"observations":["Kritik terhadap BAWASLU [SOCIAL-907]."],
+              "review_steps":["Buka unggahan asli."]}
+    text,cited,audit,clean=audit_visible_assistant_parts(
+        q,[evidence("SOCIAL-907")],"Unggahan perlu verifikasi.",[],findings)
+    quality=evaluate_answer_quality(
+        q,[evidence("SOCIAL-907")],visible_assistant_text(text,clean),
+        cited,grounding=audit)
+    checks={x["id"]:x["status"] for x in quality["checks"]}
+    assert checks["citation_grounding"]=="PASS"
+    assert checks["citation_inventory_consistency"]=="PASS"
+
+
+def test_legal_safety_notices_are_not_hidden_in_collapsed_steps():
+    findings={"observations":["Catatan belum terverifikasi [SOCIAL-907]."],
+              "review_steps":["Periksa sumber sebelum tindakan."]}
+    text,cited,audit,clean=audit_visible_assistant_parts(
+        "Bagaimana penanganan?",[evidence("SOCIAL-907")],
+        "Pelaku wajib ditangkap.",["SOCIAL-907"],findings)
+    assert cited==["SOCIAL-907"]
+    assert "Peringatan tindakan hukum:" in text
+    assert "Peringatan tindakan hukum:" not in " ".join(clean["review_steps"])
+    assert audit["appended_safety_notices"]
+    assert clean["review_steps"]==["Periksa sumber sebelum tindakan."]
+
+
+def test_findings_reject_unknown_ids_in_quality_inventory():
+    from app.assistant_answer_quality import evaluate_answer_quality
+    from app.assistant_visible_citations import visible_assistant_text
+    findings={"observations":["Tinjau [SOCIAL-999] dan [SOCIAL-907]."],
+              "review_steps":[]}
+    text,cited,audit,clean=audit_visible_assistant_parts(
+        "Kritik BAWASLU",[evidence("SOCIAL-907")],"Bukti terbatas.",
+        ["SOCIAL-999","SOCIAL-907"],findings)
+    assert "SOCIAL-999" not in visible_assistant_text(text,clean)
+    quality=evaluate_answer_quality(
+        "Kritik BAWASLU",[evidence("SOCIAL-907")],
+        visible_assistant_text(text,clean),cited,grounding=audit)
+    checks={x["id"]:x["status"] for x in quality["checks"]}
+    assert checks["citation_grounding"]=="REVIEW_REQUIRED"
+    assert audit["rejected_unavailable_citations"]==1

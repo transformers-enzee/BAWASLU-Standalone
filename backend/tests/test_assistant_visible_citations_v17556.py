@@ -52,8 +52,15 @@ def test_quality_evaluator_counts_citations_in_visible_findings():
         q,[evidence("SOCIAL-907")],visible_assistant_text(text,clean),
         cited,grounding=audit)
     checks={x["id"]:x["status"] for x in quality["checks"]}
+    supplemental={x["id"]:x["status"] for x in quality["additional_checks"]}
     assert checks["citation_grounding"]=="PASS"
-    assert checks["citation_inventory_consistency"]=="PASS"
+    # Preserve the stable four-core-check API: inventory integrity is an
+    # additional diagnostic, never silently merged into the core score.
+    assert "citation_inventory_consistency" not in checks
+    assert supplemental["citation_inventory_consistency"]=="PASS"
+    assert quality["citation_inventory_consistency"]["status"]=="PASS_IDENTIFIERS_ONLY"
+    assert quality["supplemental_review_required"] is False or (
+        "citation_inventory_consistency" not in quality["additional_needs_review"])
 
 
 def test_legal_safety_notices_are_not_hidden_in_collapsed_steps():

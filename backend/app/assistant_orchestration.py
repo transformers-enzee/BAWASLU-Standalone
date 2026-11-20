@@ -5,7 +5,11 @@ GPT can interpret supplied records, but may not invent database citations or
 claim that outside knowledge is current/live source verification.
 """
 from .assistant_pdf_depth_budget import pdf_output_token_budget
-from .assistant_officer_action_contract import OFFICER_DECISION_CONTRACT, complete_officer_steps
+from .assistant_officer_action_contract import (
+    OFFICER_DECISION_CONTRACT, OFFICER_BRIEF_SCHEMA, complete_officer_steps,
+    sanitize_officer_brief, render_officer_brief, officer_response_mode,
+    officer_mode_prompt, operational_brief_readiness,
+)
 
 import json
 import os
@@ -40,10 +44,12 @@ SCHEMA = {
         "cited_ids": {"type": "array", "items": {"type": "string"}},
         "language_code": {"type": "string"},
         "detected_tags": TAG_SCHEMA,
-        "presentation_labels": UI_SCHEMA
+        "presentation_labels": UI_SCHEMA,
+        "operational_brief": OFFICER_BRIEF_SCHEMA
     },
     "required": ["direct_answer", "observations", "interpretation",
-                 "next_checks", "limitations", "cited_ids", "language_code", "detected_tags", "presentation_labels"],
+                 "next_checks", "limitations", "cited_ids", "language_code",
+                 "detected_tags", "presentation_labels", "operational_brief"],
     "additionalProperties": False
 }
 SYSTEM = """You are BAWASLU's senior, politically neutral internal intelligence and election-supervision adviser. Help HQ and provincial officers interpret authorized evidence, assess electoral relevance, and decide what concrete review happens next. Social listening and PDF knowledge are supporting resources, not the end goal. Do not craft personalized political persuasion aimed at voter segments.
@@ -302,6 +308,8 @@ def _safe_output(result, allowed):
         result[key] = [safe(x).strip() for x in (result.get(key) or [])
                        if isinstance(x, str) and x.strip()][:6]
     result["cited_ids"] = cited
+    result["operational_brief"] = sanitize_officer_brief(
+        result.get("operational_brief"),allowed)
     return result
 
 def answer_text(result, has_evidence, language='id'):
@@ -322,6 +330,12 @@ def answer_text(result, has_evidence, language='id'):
         localized=(titles.get('findings_heading','Findings'),titles.get('implications_heading','Oversight implications'),
                    titles.get('verification_heading','Next checks'),titles.get('limitations_heading','Evidence limitations'))
     chunks = [answer] if answer else []
+    officer_brief=render_officer_brief(
+        result.get("operational_brief"),language,
+        result.get("response_depth") or "DEEP",
+        result.get("response_profile") or "SOCIAL_ANALYSIS")
+    if officer_brief:
+        chunks.append(officer_brief)
     if observations and not result.get('visual_report'):
         chunks.append("**"+localized[0]+"**\n" + "\n".join("- " + x for x in observations[:6]))
     if interpretation and not result.get('compact_social') and interpretation.casefold() not in answer.casefold():
@@ -587,6 +601,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "report_sample_statistics":(evidence_snapshot([r for r in evidence
             if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
         "response_depth": response_depth,
+        "officer_response_mode":officer_response_mode(response_depth),
         "response_profile": response_profile,
         "officer_review_scope":officer_scope or {},
         "operational_assessment_scope":assessment_scope(question),
@@ -661,7 +676,18 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              if response_profile == 'SOCIAL_ANALYSIS' else
              ("Prioritize authorized records for factual findings; supplement with professional OpenAI analysis and transparent assumptions. If evidence is sparse, answer directly with a professional qualitative assessment, actionable contextual insights and clearly labeled hypothetical scenarios; do not write an inventory of unavailable fields or fabricate findings." if mode == "GROUNDED" else "Use professional OpenAI context plus supplied records, citing sources only for claims they actually support. Use conditional scenario ranges instead of invented measured audience percentages.")) ))
     }
-    officer_focus=("" if pdf_guidance else "\n\n"+OFFICER_DECISION_CONTRACT)
+    officer_focus=("" if pdf_guidance else "\n\n"+OFFICER_DECISION_CONTRACT+
+                   "\n\n"+officer_mode_prompt(response_depth)+
+                   "\n\nFill the six required operational_brief fields "
+                   "(violation_type, legal_status, geographical_impact, "
+                   "electoral_nexus, recommended_decision, evidence_limit) "
+                   "with concise, distinct, cautious analysis; cite authorized "
+                   "record IDs beside factual claims. When incident geography "
+                   "is not established, say so rather than guessing from "
+                   "publisher address or monitoring location. All values are "
+                   "provisional AI suggestions. For simple non-operational "
+                   "questions, return all six as empty strings. For PDF-only "
+                   "and executive-report profiles return empty strings.")
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
         "Cite only retrieved PDF pages and match the requested depth while remaining focused; "
@@ -702,7 +728,9 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
                           "strict":True,"schema":SCHEMA}},
-        "max_output_tokens": (pdf_output_token_budget(response_depth) if pdf_guidance else 6000)
+        "max_output_tokens": (pdf_output_token_budget(response_depth) if pdf_guidance
+                              else 2800 if officer_response_mode(response_depth)=="QUICK_BRIEF"
+                              else 6000)
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0, read=90.0, write=15.0, pool=8.0)) as client:
@@ -729,6 +757,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         result["validated_ui_labels"] = validate_ui_labels(result.get("presentation_labels") or [])
         result["next_checks"], officer_steps_fallback = complete_officer_steps(
             question,response_profile,result.get("next_checks"),answer_language)
+        if officer_response_mode(response_depth)=="QUICK_BRIEF":
+            result["next_checks"]=result["next_checks"][:2]
         if pdf_guidance:
             # The model's long-form report fields must never leak into PDF
             # procedural answers even if its schema happens to fill them.
@@ -756,6 +786,9 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     # Deterministic citation checks, not an expert quality score.
     quality = {
         "framework": "SMART_RADAR_IQF_V1",
+        "operational_brief_readiness":operational_brief_readiness(
+            result["operational_brief"],result.get("next_checks"),
+            response_profile,response_depth),
         "response_depth": response_depth,
         "response_profile": response_profile,
         "selected_evidence_count": len(evidence),
@@ -774,6 +807,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "quality": quality,
         "answer_language": result["language_code"],
         "response_profile": response_profile,
+        "officer_response_mode":officer_response_mode(response_depth),
         "officer_steps_fallback":officer_steps_fallback,
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
@@ -785,6 +819,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         result["next_checks"]=[]
         result["limitations"]=[]
         result["validated_tags"]=[]
+    result["response_depth"]=response_depth
+    result["response_profile"]=response_profile
     result["visual_report"] = bool(evidence) and not pdf_guidance
     result["compact_social"]=social_brief
     meta["analytical_findings"] = (None if pdf_guidance or executive_report else {

@@ -136,7 +136,7 @@ def test_schema_requires_model_language_and_evidence_linked_tags(monkeypatch):
     prompt=json.loads(observed["input"]["input"][1]["content"])
     assert prompt["response_language_hint"]=="id"
     assert "Bahasa Indonesia" in prompt["response_language_rule"]
-    assert observed["input"]["text"]["format"]["name"]=="bawaslu_insight_answer_v3"
+    assert observed["input"]["text"]["format"]["name"]=="bawaslu_insight_answer_v4"
 
 
 def test_uploaded_pdf_is_automatic_model_context_not_a_manual_search(monkeypatch):

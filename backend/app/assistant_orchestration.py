@@ -593,7 +593,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "pdf_reference_guidance": (
             "The listed PDFs are already connected to the entire assistant chat. "
             "Use page-cited PDF_KNOWLEDGE excerpts as supporting legal/SOP references "
-            "whenever relevant to this question or recent follow-up context. "
+            "automatically whenever relevant to this question or recent follow-up context. "
             "Do not direct the officer to a manual retrieval screen; answer the question "
             "yourself. The library catalog only proves a document is available: "
             "never claim a specific document passage or law unless that page was "

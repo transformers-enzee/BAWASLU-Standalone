@@ -202,8 +202,15 @@ def assert_current_build_at_least(minimum):
     minimum_pair = tuple(int(x) for x in minimum.split('.'))
     assert actual >= minimum_pair
     shell = (FRONTEND/'components'/'intel'/'Shell.jsx').read_text(encoding='utf-8')
-    assert 'data-build-version="'+current+'"' in shell
-    assert 'v'+current in shell
+    # The build label now comes from /api/health at runtime, not a
+    # hard-coded frontend constant. Verify the authenticated shell actually
+    # requests and renders the SAME backend build version dynamically.
+    assert "fetch('/api/health'" in shell
+    assert "build_version:info.build_version||null" in shell
+    assert "data-build-version={buildInfo.build_version||'unavailable'}" in shell
+    assert "buildInfo.build_version?'v'+buildInfo.build_version" in shell
+    navigation=(FRONTEND/'components'/'intel'/'AccessNavigation.jsx').read_text(encoding='utf-8')
+    assert "'Build '+build.build_version" in navigation
 
 def test_v92_4_readiness_tracks_classification_and_source_quality_without_paid_calls():
     from app import integration_readiness

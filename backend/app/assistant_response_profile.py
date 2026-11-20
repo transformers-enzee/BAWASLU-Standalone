@@ -114,7 +114,11 @@ def choose_response_profile(question, previous="", pdf_evidence=None,
         return CROSS_MODULE_REVIEW
     if social:
         return SOCIAL_ANALYSIS
-    if cited and (document_question or continuing_document):
+    # A descriptive procedural question should be answered from relevant
+    # authorized SOP/PDF pages when they exist. A case-specific "what should
+    # officers do next" question must remain an operational assessment.
+    if cited and (document_question or continuing_document or
+                  (procedural and not officer_action_intent(q))):
         return PDF_GUIDANCE
     return SOCIAL_ANALYSIS if q else GENERAL
 

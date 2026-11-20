@@ -48,10 +48,11 @@ assert.ok(visuals.includes('data-advanced-social-metrics')&&
   visuals.includes('Every chart uses the same')&&
   visuals.includes('snapshot.matched_pool_count'),
  'social charts disclose their identical AI sample and hide extra metrics');
-assert.ok(report.includes("const StepsContainer=compact?'details':'div'")&&
-  report.includes('data-optional-social-verification')&&
-  report.includes('compact?3:6'),
- 'additional social-analysis findings and verification steps are compact and optional');
+assert.ok(report.includes("const StepsContainer='div'")&&
+  report.includes('data-officer-actions-visible="true"')&&
+  report.includes('compact?3:6')&&
+  !report.includes('data-optional-social-verification'),
+ 'social findings stay compact while officer verification actions remain visible, not optional');
 assert.ok(page.includes("compact={m.response_profile==='SOCIAL_ANALYSIS'}"),
  'the social answer uses its simplified report layout');
 console.log('Assistant multilingual/tagging integration checks passed');

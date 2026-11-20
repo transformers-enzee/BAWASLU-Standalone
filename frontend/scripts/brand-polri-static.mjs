@@ -15,7 +15,7 @@ function change(relative, replacements){
 }
 change('index.html',[
  ['<title>BAWASLU Smart Radar</title>','<title>Smart Radar</title>'],
- ['href="/nadicom-symbol.webp"','href="/polri-logo.svg"'],
+ ['href="/nadicom-symbol.webp"','href="/polri-logo.png"'],
  ['<link rel="manifest" href="/manifest.json" />','<!-- No BAWASLU web manifest in POLRI demo -->']
 ]);
 // Preserve original evidence text and provenance. Change only page titles and

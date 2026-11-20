@@ -9,10 +9,9 @@ COPY frontend/ ./
 COPY backend/ /src/backend/
 ENV VITE_DEMO_STANDALONE=1
 ENV VITE_POLRI_DEMO=1
-# Bundle the publicly available government emblem in this demo image only.
-# Fail the build rather than shipping a broken logo.
-RUN wget -q -O public/polri-logo.svg https://upload.wikimedia.org/wikipedia/commons/0/08/Polri_Logo.svg \
-    && test -s public/polri-logo.svg
+# POLRI-style demo emblem is bundled in frontend/public/polri-logo.png.
+# No external image downloads or operational database connections.
+RUN test -s public/polri-logo.png
 RUN npm run build && node scripts/brand-polri-static.mjs
 
 FROM nginx:1.27-alpine

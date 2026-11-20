@@ -7,7 +7,7 @@ const page=read('../src/demo/DemoTrainingPage.jsx');
 const shell=read('../src/components/intel/Shell.jsx');
 const builder=read('./brand-polri-static.mjs');
 assert.match(docker,/ENV VITE_POLRI_DEMO=1/);
-assert.match(docker,/Polri_Logo\.svg/);
+assert.match(docker,/public\/polri-logo\.png/);
 assert.match(docker,/node scripts\/brand-polri-static\.mjs/);
 assert.match(nav,/POLRI_DEMO\?"\/polri-logo\.svg"/);
 assert.match(page,/Welcome to Smart Radar/);

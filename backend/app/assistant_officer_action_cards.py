@@ -79,9 +79,12 @@ def format_officer_action(row,language="id"):
 def visible_officer_steps(items,language="id"):
     return [format_officer_action(item,language) for item in items or []]
 
-def officer_action_readiness(items, profile, depth):
+def officer_action_readiness(items, profile, depth, question=""):
     """Structure/readability only, NOT incident truth or legal applicability."""
-    if profile in ("PDF_GUIDANCE","EXECUTIVE_REPORT"):
+    from .assistant_officer_action_contract import officer_action_intent
+    if (profile in ("PDF_GUIDANCE","EXECUTIVE_REPORT") or
+        (not officer_action_intent(question) and
+         profile not in ("CASE_REVIEW","ACTION_REQUEST"))):
         return {"status":"NOT_APPLICABLE","actions":0,
                 "factually_verified":False,"assignments_created":False}
     minimum=1 if str(depth).upper()=="EXECUTIVE" else 3

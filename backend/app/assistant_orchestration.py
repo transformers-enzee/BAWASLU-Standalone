@@ -824,7 +824,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             result["operational_brief"],result.get("next_checks"),
             response_profile,response_depth),
         "officer_action_readiness":officer_action_readiness(
-            result.get("officer_actions"),response_profile,response_depth),
+            result.get("officer_actions"),response_profile,response_depth,
+            question=question),
         "response_depth": response_depth,
         "response_profile": response_profile,
         "selected_evidence_count": len(evidence),

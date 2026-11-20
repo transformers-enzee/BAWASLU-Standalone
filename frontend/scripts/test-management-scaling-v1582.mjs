@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ for(const field of ['CaseAssignment.id','CaseAssignment.title','CaseAssignment.c
 for(const field of ['CaseAssignment.notes','CaseAssignment.tags_json',
  'CaseAssignment.suggested_provinces_json','CaseAssignment.updated_at'])
  assert.ok(!group.includes(field),field);
-const b=main.split("'build_version':'")[1]?.split("'")[0];
-const f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1582);
 console.log('PASS v158.2 scoped activity projection and scaling benchmark contract');

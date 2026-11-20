@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ assert.ok(campaigns.includes("if (data or {}).get('dry_run') is True:"));
 assert.ok(campaigns.includes("'paid_provider_called':False,'database_writes':0"));
 assert.ok(worker.includes("CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'"));
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const version=api.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(api);
 assert.ok(Number(version.replace('.',''))>=1649);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v164.9 watchlist exclusion, pending assessment coverage and no-cost preview');

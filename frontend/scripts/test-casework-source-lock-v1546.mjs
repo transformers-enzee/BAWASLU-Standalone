@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -27,8 +28,8 @@ const sourceCheck=source.indexOf('source = _source(db,p,body.source_type.upper()
 const lock=source.indexOf('    _lock_assignment_source(db,source)');
 const duplicate=source.indexOf('    existing=(_authorized_cases_query(db,p,user.id)');
 assert.ok(sourceCheck>=0&&sourceCheck<lock&&lock<duplicate);
-const back=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const front=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.equal(back,front);
 const [major,minor]=back.split('.').map(Number);
 assert.ok(major>154||(major===154&&minor>=6));

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -14,7 +15,7 @@ for(const key of ['_acceptance_trace','row_num<=200','observed_stages','CaseRepo
 for(const key of ['Observed in bounded casework audit (not formal acceptance)',
 'Not observed in available casework audit','Audit history truncated'])
  assert.ok(ui.includes(key),key);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(back&&front&&back===front);
 console.log('PASS v156.0 bounded authorized casework audit trace on pilot worksheet');

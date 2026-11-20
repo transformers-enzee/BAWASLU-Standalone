@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ assert.ok(selection.includes('matched=formal_source_term_score('));
 assert.ok(!selection.includes("matched=sum(2 for t in tokens if t in hay)"));
 assert.ok(model.includes('scope_focus=retrieval_scope_note('));
 assert.ok(model.includes('scope_focus if scope_focus else'));
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1640);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v164.0 exact-term selected evidence relevance and scope disclosure');

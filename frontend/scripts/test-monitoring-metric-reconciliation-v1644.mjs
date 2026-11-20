@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ assert.ok(cc.includes('command_metric_integrity(len(captured_ids),platform_count
 assert.ok(radar.includes('radar_metric_integrity(findings,platforms,sentiments,len(posts))'));
 assert.ok(cc.includes("'metric_integrity':period_metrics"));
 assert.ok(radar.includes('"metric_integrity":recent_metrics'));
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1644);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v164.4 platform/day/sentiment aggregate counts reconcile against selected unique sources');

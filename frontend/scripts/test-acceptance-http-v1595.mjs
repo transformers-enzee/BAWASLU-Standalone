@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ for(const x of ['TestClient(app)','sqlite:///:memory:',
  'app.dependency_overrides[get_db]']){
  assert.ok(tests.includes(x),x);
 }
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1595);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v159.5 isolated two-administrator HTTP acceptance QA and review lock');

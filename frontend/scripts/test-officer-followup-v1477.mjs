@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const root=new URL('../',import.meta.url);
@@ -43,8 +44,8 @@ assert.ok(casePage.includes('r.is_latest_version')&&
     'Superseded reports are visible history, not approvable reports');
 assert.ok(casePage.includes('!activeReport?.is_latest_version'),
     'Outdated report drafts are not editable in the UI');
-const backendVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const frontendVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const backendVersion=readBackendVersion(app);
+const frontendVersion=readShellVersion(shell);
 assert.ok(backendVersion&&frontendVersion&&backendVersion===frontendVersion,
   'Build version matches both backend and frontend');
 console.log('PASS v147.8 contextual officer follow-up, current-version report approval and SQL authorization contracts');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -15,7 +16,7 @@ for(const item of ['test_explicit_selection_status_totals_and_denied_reasons',
  assert.ok(test.includes(item),item);
 const main=read('../backend/app/main.py');
 const shell=read('src/components/intel/Shell.jsx');
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1620);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v162.0 explicit user selection and privacy-bounded reason aggregation');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -23,8 +24,8 @@ assert.ok(ui.includes('data-testid="briefing-no-real-casework"'));
 assert.ok(ui.includes('RECONCILE_CASE_REPORT_STATUS'));
 assert.ok(ui.includes('No officer casework available in this reporting period'));
 assert.ok(ui.includes('not a successful officer evaluation or formal acceptance'));
-const v=backend.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const f=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const v=readBackendVersion(backend);
+const f=readShellVersion(shell);
 assert.ok(v);
 const [major,minor]=v.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=9));

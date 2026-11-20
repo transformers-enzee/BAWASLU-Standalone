@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -19,7 +20,7 @@ for(const token of ['saved-answer-audit','maxLength={10000}',
 assert.ok(sampler.includes('AssistantSavedAnswerAudit'));
 assert.ok(sampler.includes('item.not_a_real_source?null:item'));
 assert.ok(qa.includes('test_all_or_nothing_source_scope_does_not_enumerate_hidden_rows'));
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1608);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v160.8 real saved-source, no-generation answer audit and privacy guards');

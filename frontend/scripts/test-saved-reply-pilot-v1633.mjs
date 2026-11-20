@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -8,7 +9,7 @@ for(const code of ['def pilot_queue','BAWASLU_OWNED_SAVED_REPLY_PILOT_QUEUE_V163
  assert.ok(backend.includes(code),code);
 for(const code of ['assistant-load-pilot-review-queue','assistant-pilot-review-summary',
  'assistant-select-pilot-batch','selectPilotBatch','slice(0,5)'])assert.ok(ui.includes(code),code);
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1633);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v163.3 owned pilot review inventory and bounded selection');

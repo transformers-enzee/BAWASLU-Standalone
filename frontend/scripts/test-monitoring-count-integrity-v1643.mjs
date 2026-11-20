@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ assert.ok(radar.includes('inbox_window_integrity(inbox.get("findings") or [],fin
 assert.ok(cc.includes("'count_integrity':period_integrity"));
 assert.ok(radar.includes('"count_integrity":recent_integrity'));
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const version=api.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(api);
 assert.ok(Number(version.replace('.',''))>=1643);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v164.3 period vs recent Inbox count reconciliation and semantic separation');

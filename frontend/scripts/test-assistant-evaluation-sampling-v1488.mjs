@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -40,7 +41,7 @@ assert.ok(page.includes('<AssistantEvaluationSampler')&&
 assert.ok(browser.includes('Assistant prepares real-source evaluation questions without calling the AI model')&&
  browser.includes('Assistant evaluation preparation does not reveal sources without authorization'),
  'Playwright tests verify no implicit model call and denial');
-const apiVersion=api.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const uiVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const apiVersion=readBackendVersion(api);
+const uiVersion=readShellVersion(shell);
 assert.ok(apiVersion&&apiVersion===uiVersion,'Backend/UI build versions must match');
 console.log('PASS v148.8 permission-scoped source sampling, exact-ID retrieval, no-credits preparation and coverage caveats');

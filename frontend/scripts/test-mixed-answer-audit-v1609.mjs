@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -16,7 +17,7 @@ for(const token of ['Cross-module audit','mixed-audit-additional-ids',
  'legal_review_issue_codes'])
  assert.ok(ui.includes(token),token);
 assert.ok(qa.includes('test_inaccessible_pdf_page_aborts_entire_request'));
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1609);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v160.9 all-or-nothing permission-scoped mixed source audit');

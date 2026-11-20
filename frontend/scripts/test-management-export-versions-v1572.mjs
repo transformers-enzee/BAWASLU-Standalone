@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -10,6 +11,6 @@ for(const key of ['Historical report versions (not approvals)','Historical retur
 for(const key of ['"Latest report status"', '"Latest report ID"',
  '"Stored report versions"', '"Superseded report versions"',
  'version_counts=Counter(r.case_id for r in reports)'])assert.ok(reporting.includes(key),key);
-const b=main.split("'build_version':'")[1]?.split("'")[0],f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(main),f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1572);
 console.log('PASS v157.2 cross-format management export latest-report/version integrity');

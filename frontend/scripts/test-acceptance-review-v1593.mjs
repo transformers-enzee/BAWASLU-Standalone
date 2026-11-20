@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -18,7 +19,7 @@ for(const s of ['window.__BAWASLU_DEMO_REPLICA__','National Administrator','geog
  'legal or client sign-off','cache:\'no-store\''])assert.ok(ui.includes(s),s);
 for(const s of ['_admin(db,user)','Independent reviewer required','REVIEWED',
  'REVISION_REQUESTED','legal_signoff','client_acceptance'])assert.ok(api.includes(s),s);
-const v=backend.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(backend);
 assert.ok(Number(v.replace('.',''))>=1593);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v159.3 administrator Acceptance Review UI, safe review actions and version parity');

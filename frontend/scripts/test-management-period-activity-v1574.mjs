@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -10,6 +11,6 @@ for(const value of ['def _casework_activity_window','older_cases_with_observed_a
 for(const value of ['Cases with audit activity in period','Approval audit events on older cases'])assert.ok(template.includes(value),value);
 for(const value of ['briefing-period-audit-activity','exportActivityCsv','Activity CSV'])assert.ok(ui.includes(value),value);
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const back=main.split("'build_version':'")[1]?.split("'")[0],front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main),front=readShellVersion(shell);
 assert.equal(back,front);assert.ok(Number(back.replace('.',''))>=1574);
 console.log('PASS v157.4 cross-period casework audit activity transparency');

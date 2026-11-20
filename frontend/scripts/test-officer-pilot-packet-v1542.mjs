@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -30,8 +31,8 @@ assert.ok(ui.includes('pilot-packet-period-caveat'));
 assert.ok(management.includes('PENDING_AUTHORIZED_HUMAN_REVIEW'));
 assert.ok(ui.includes('followupLink(item)'));
 assert.ok(ui.includes('No real cases in this authorized reporting window'));
-const b=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const f=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.ok(b&&f);assert.equal(b,f);
 const [major,minor]=b.split('.').map(Number);
 assert.ok(major>154||(major===154&&minor>=2),'Pilot packet introduced in v154.2');

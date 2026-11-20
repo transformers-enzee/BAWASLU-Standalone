@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const k of ['CaseAssignment.source_excerpt','CaseAssignment.verified_provinc
 for(const k of ['CaseAssignment.notes','CaseAssignment.tags_json',
 'CaseAssignment.suggested_provinces_json','CaseAssignment.updated_at'])
  assert.ok(!q.includes(k),k);
-const b=main.split("'build_version':'")[1]?.split("'")[0];
-const f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1581);
 console.log('PASS v158.1 lightweight management case cohort contract');

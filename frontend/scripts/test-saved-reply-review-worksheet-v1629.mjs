@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createReviewEntry,exportReviewWorksheet} from '../src/lib/savedReplyReviewWorksheet.js';
@@ -21,7 +22,7 @@ const parent=read('src/components/intel/AssistantSavedReplyAudit.jsx');
 for(const s of ['self-attestation','export-saved-reply-review-worksheet','EVIDENCE_CHECKED_'])
  assert.ok(ui.includes(s),s);
 assert.ok(parent.includes('SavedReplyReviewWorksheet'));
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1629);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v162.9 local review worksheet: attestation, boundaries, sanitized export');

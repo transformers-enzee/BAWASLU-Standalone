@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -10,7 +11,7 @@ for(const s of ['batch_principal={**principal','saved_cards_without_displayed_ci
  assert.ok(hist.includes(s),s);
 assert.ok(ui.includes('batch.citation_coverage_counts'));
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const ver=main.split("'build_version':'")[1]?.split("'")[0];
+const ver=readBackendVersion(main);
 assert.ok(Number(ver.replace('.',''))>=1626);
-assert.ok(shell.includes('data-build-version="'+ver+'"'));
+assert.ok(hasDynamicBuildVersion(shell,ver));
 console.log('PASS v162.6 scoped batch evidence caching and uncited historical cards');

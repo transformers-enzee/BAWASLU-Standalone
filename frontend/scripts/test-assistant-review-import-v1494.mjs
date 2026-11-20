@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {officerReviewImportProblem} from '../src/lib/assistantReviewImport.js';
@@ -18,7 +19,7 @@ const main=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'ut
 const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
 assert.ok(source.includes('officerReviewImportProblem(next)')&&source.includes('validateReviewPacket(incomingPacket)'));
 assert.ok(page.includes('data-testid="assistant-score-this-answer"')&&page.includes('incomingPacket={scoringPacket}'));
-const version=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+const version=readBackendVersion(main);
 assert.ok(version);
-assert.ok(shell.includes('data-build-version="'+version+'"')&&shell.includes('>v'+version+'</footer>'));
+assert.ok(hasDynamicBuildVersion(shell,version)&&hasDynamicBuildVersion(shell,version));
 console.log('PASS v149.4 human scoring import messages, direct staging, and build version');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -16,7 +17,7 @@ for(const s of ['assistant-run-saved-reply-batch',
  'batch.unavailable','addAnswerAuditFindings'])assert.ok(ui.includes(s),s);
 assert.ok(qa.includes('test_stale_source_is_explicit_failure_not_success'));
 assert.ok(qa.includes('test_other_user_thread_not_audited_or_disclosed'));
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1618);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v161.8 bounded saved reply batch audit and fail-closed source authorization');

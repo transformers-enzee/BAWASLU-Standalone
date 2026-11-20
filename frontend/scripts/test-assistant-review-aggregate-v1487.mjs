@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
@@ -144,8 +145,8 @@ const app=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'utf
 const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
 const page=readFileSync(new URL('../src/pages/IntelligenceAssistant.jsx',import.meta.url),'utf8');
 const e2e=readFileSync(new URL('../e2e/assistant-knowledge-library.spec.js',import.meta.url),'utf8');
-const apiVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const uiVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const apiVersion=readBackendVersion(app);
+const uiVersion=readShellVersion(shell);
 assert.ok(apiVersion&&apiVersion===uiVersion);
 assert.ok(page.includes('<AssistantReviewConsolidation/>'));
 assert.ok(e2e.includes('Assistant consolidates independently scored local review sheets'));

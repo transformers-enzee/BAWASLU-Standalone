@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -16,7 +17,7 @@ for(const k of ['?before_id=','cursorTrail','Older records','Newer records',
 for(const k of ['test_multiple_pages_cover_every_record_without_duplicates',
                   'test_pagination_keeps_query_count_bounded',
                   'test_invalid_cursor_rejected']) assert.ok(qa.includes(k),k);
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1597);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v159.7 bounded historical acceptance pagination and safeguards');

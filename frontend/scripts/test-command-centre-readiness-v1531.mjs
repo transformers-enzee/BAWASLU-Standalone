@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -25,8 +26,8 @@ assert.ok(reporting.includes('"source_quality":{'));
 assert.ok(reporting.includes('_safe_original_source_url'));
 assert.ok(template.includes('missing_safe_original_url'));
 assert.ok(ui.includes('include_monitoring:String(includeMonitoring)'));
-const bv=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const fv=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const bv=readBackendVersion(app);
+const fv=readShellVersion(shell);
 assert.ok(bv,'Backend build version must be present');
 const [major,minor]=bv.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=1),'Command Centre readiness was introduced in v153.1');

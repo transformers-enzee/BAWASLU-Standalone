@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -8,8 +9,8 @@ for(const token of ['_historical_review_route','review_route_counts','review_rou
  assert.ok(py.includes(token),token);
 for(const token of ['batch.review_route_counts','x.review_route','audit.review_route'])
  assert.ok(ui.includes(token),token);
-const ver=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const ver=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(ver.replace('.',''))>=1628);
-assert.ok(shell.includes('data-build-version="'+ver+'"'));
+assert.ok(hasDynamicBuildVersion(shell,ver));
 assert.ok(shell.includes('aria-label="Build version">v'+ver));
 console.log('PASS v162.8 historical audit reviewer next-step routing guards');

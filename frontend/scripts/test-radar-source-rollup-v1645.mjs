@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -16,7 +17,7 @@ assert.ok(helper.includes('pair=(sid,norm)'));
 assert.ok(helper.includes('if len(norm)<3 or pair in seen:continue'));
 assert.ok(radar.includes('recent_metrics=radar_metric_integrity(findings,platforms,sentiments,len(posts))'));
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const version=api.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(api);
 assert.ok(Number(version.replace('.',''))>=1645);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v164.5 unique saved-source Radar aggregates and campaign keyword deduplication');

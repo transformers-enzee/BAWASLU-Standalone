@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,8 +14,8 @@ assert.ok(intake.includes('inbox_snapshot_assessment_version'));
 for(const key of ['Saved evidence availability changed (preview)','New assessment version (preview)',
     'Saved assessment updated since Inbox snapshot','Source availability updated since Inbox snapshot'])
     assert.ok(ui.includes(key),key);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(back && front && back===front);
 assert.ok(Number(back.split('.')[0])>=155);
 console.log('PASS v155.6 current saved text/URL/assessment snapshot reconciliation');

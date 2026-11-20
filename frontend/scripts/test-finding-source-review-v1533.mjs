@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -26,7 +27,7 @@ assert.ok(template.includes('RECOVER_EXPLICIT_PUBLICATION_TIME'));
 assert.ok(brief.includes('data-testid="briefing-evidence-follow-up"'));
 assert.ok(brief.includes('undated')||brief.includes('Undated'));
 assert.ok(plugin.includes('data-review-tab="legal"')&&plugin.includes('data-review-tab="policy"'));
-const v=main.match(/'build_version':'(\d+\.\d+)'/)?.[1],fv=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const v=readBackendVersion(main),fv=readShellVersion(shell);
 assert.ok(v,'Backend version must be present');
 const [major,minor]=v.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=3),'Source investigation was introduced in v153.3');

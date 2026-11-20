@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ assert.ok(route.includes('explicit_saved_id=bool(explicit_social_ids or explicit
 assert.ok(route.includes('explicit_formal_ids and not exact_formal_selection_complete(q,selected_formal,limit=10)'));
 assert.ok(!route.includes("explicit_social_id=bool(explicit_social_ids)"));
 const main=read('../backend/app/main.py');
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1641);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v164.1 exact Inbox source-ID fail-closed routing and multiword-place matching');

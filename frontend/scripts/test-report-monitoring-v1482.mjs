@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
@@ -37,8 +38,8 @@ assert.ok(ui.includes('data-testid="briefing-signal-overlap"')&&
 assert.ok(ui.includes('data-testid="briefing-intelligence-monitoring"')&&
   ui.includes('monitoring.publication_date_unknown'),
   'Onscreen monitoring distinguishes missing source dates');
-const backendVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const frontendVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const backendVersion=readBackendVersion(app);
+const frontendVersion=readShellVersion(shell);
 assert.ok(backendVersion&&frontendVersion&&backendVersion===frontendVersion,
   'Backend and frontend version must match');
 console.log('PASS v148.2 optional sampled monitoring, date-bound integrity and export provenance');

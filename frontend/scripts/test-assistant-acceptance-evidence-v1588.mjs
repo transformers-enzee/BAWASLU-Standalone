@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const item of ['@router.get("/acceptance-evidence.csv")',
 for(const item of ['synthetic_checks_are_human_approval',
  'recorded_approvals','FORMAL_CLIENT_ACCEPTANCE',
  'csv.DictWriter','lstrip().startswith'])assert.ok(register.includes(item),item);
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1588);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v158.8 acceptance evidence CSV and no-approval contract');

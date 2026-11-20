@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const root=new URL('../',import.meta.url);
@@ -6,8 +7,8 @@ const audit=read('../backend/app/assistant_grounding.py');
 const api=read('../backend/app/main.py');
 const page=read('src/pages/IntelligenceAssistant.jsx');
 const browser=read('e2e/assistant-knowledge-library.spec.js');
-const appVersion=api.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const uiVersion=read('src/components/intel/Shell.jsx').match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const appVersion=readBackendVersion(api);
+const uiVersion=readShellVersion(read('src/components/intel/Shell.jsx'));
 
 assert.ok(audit.includes('def audit_assistant_answer'),'Deterministic post-answer audit required');
 assert.ok(audit.includes('if ref not in allowed:')&&audit.includes('rejected.append(ref)'),

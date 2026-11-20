@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {buildAssistantReviewPacket} from '../src/lib/assistantReviewPacket.js';
@@ -52,7 +53,7 @@ const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta
 assert.ok(source.includes('assistant-human-scoring-export')&&
  source.includes('completedOfficerScoringCsv')&&source.includes('setConfirmed(false)'));
 assert.ok(page.includes('<AssistantHumanScoring incomingPacket={scoringPacket}/>'));
-const release=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-assert.ok(release&&shell.includes('data-build-version="'+release+'"')&&
- shell.includes('>v'+release+'</footer>'));
+const release=readBackendVersion(main);
+assert.ok(release&&hasDynamicBuildVersion(shell,release)&&
+ hasDynamicBuildVersion(shell,release));
 console.log('PASS offline independent scoring workbench, complete CSV exports, validation, formula hygiene and dynamic version alignment');

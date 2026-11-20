@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -25,9 +26,9 @@ assert.ok(management.includes('"additional_database_queries":0'));
 assert.ok(template.includes('absence')||template.includes('Absence')||template.includes('Absence is'));
 assert.ok(report.includes('data-testid="briefing-casework-progress"'));
 assert.ok(report.includes('source_review_event_not_observed_in_window'));
-const version=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+const version=readBackendVersion(main);
 assert.ok(version);
 const [major,minor]=version.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=4));
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v153.4 authorized casework audit progress, report follow-up, release contracts');

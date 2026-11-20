@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ for(const x of ['test_possible_indonesian_modal_reversal_is_flagged_for_officer'
  'test_negation_is_not_split_or_reinterpreted_as_positive',
  'test_uncited_or_nonlegal_context_cannot_trigger_modal_warning'])
  assert.ok(qa.includes(x),x);
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1600);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v160.0 Indonesian legal polarity review safeguards and version parity');

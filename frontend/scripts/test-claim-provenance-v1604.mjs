@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -14,7 +15,7 @@ assert.ok(!policy.includes('if not (grounding or {}).get("legal_question"):\n   
 assert.ok(quality.includes('evaluate_claim_provenance'));
 assert.ok(quality.includes('"formal_outcome_source_provenance":claim_provenance'));
 assert.ok(summary.includes('FORMAL_OUTCOME_SOCIAL_ONLY'));
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1604);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v160.4 source-type provenance and platform-only question boundaries');

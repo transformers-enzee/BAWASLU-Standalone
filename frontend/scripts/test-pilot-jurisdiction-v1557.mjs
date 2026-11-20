@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ for(const key of ['Flag signals needing renewed review (preview)',
 'Jurisdiction verification changed (preview)',
 'Incident jurisdiction verification changed; reconfirm before routing'])
  assert.ok(ui.includes(key),key);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(back && front && back===front);
 console.log('PASS v155.7 jurisdiction and flag-review freshness contract');

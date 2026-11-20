@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -18,9 +19,9 @@ assert.ok(page.includes('{showQa&&<div data-testid="assistant-qa-tools-content"'
 assert.ok(api.includes('@router.get("/legal-benchmark")'));
 assert.ok(api.includes('not has(principal,"administration")'));
 assert.ok(api.includes('X-Evaluation-Generation'));
-const version=main.match(/'build_version':'([0-9]+\.[0-9]+)'/)?.[1];
+const version=readBackendVersion(main);
 assert.ok(version, 'Build version must be present');
 const [major,minor]=version.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=0),'Legal benchmark was introduced in v153.0');
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v153.0 admin-only synthetic legal benchmark UI, zero-credit and release contracts');

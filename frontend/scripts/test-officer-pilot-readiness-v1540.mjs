@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -23,8 +24,8 @@ assert.ok(ui.includes('data-testid="briefing-officer-pilot-no-real-cases"'));
 assert.ok(ui.includes('Synthetic automated tests cannot substitute'));
 assert.ok(ui.includes('five_stage_observed_case_count'));
 assert.ok(ui.includes('authorized_case_count'));
-const b=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const f=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.ok(b&&f);
 const [major,minor]=b.split('.').map(Number);
 assert.ok(major>154||(major===154&&minor>=0),'Officer pilot readiness introduced in v154.0');

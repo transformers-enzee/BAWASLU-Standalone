@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ for (const x of ['formal_cited=sorted(formal.intersection(cited))',
 for(const x of ['run_full_answer_replay','real_model_responses_evaluated',
  'human_accuracy_measured','SYNTHETIC_PIPELINE_REGRESSION_ONLY'])assert.ok(replay.includes(x),x);
 assert.ok(qa.includes('test_selected_but_uncited_formal_source_cannot_qualify_as_complete_comparison'));
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1607);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v160.7 cross-module displayed-citation gating and full-answer replay');

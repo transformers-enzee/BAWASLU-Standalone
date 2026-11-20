@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -17,8 +18,8 @@ assert.ok(api.includes('general=not explicit_formal_ids and not explicit_social_
  'Formal/PDF evidence must never substitute a missing exact social source');
 assert.ok(sampler.includes('ch.isspace()')&&sampler.includes('not parts.hostname'),
  'Reject unsafe URLs in officer evaluation source lists');
-const buildVersion=api.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-assert.ok(buildVersion&&shell.includes('data-build-version="'+buildVersion+'"')&&
- shell.includes('>v'+buildVersion+'</footer>'),
+const buildVersion=readBackendVersion(api);
+assert.ok(buildVersion&&hasDynamicBuildVersion(shell,buildVersion)&&
+ hasDynamicBuildVersion(shell,buildVersion),
  'Single bulk release must update API and UI build version together');
 console.log('PASS exact source all-or-nothing retrieval, URL safety and dynamic release-version contract');

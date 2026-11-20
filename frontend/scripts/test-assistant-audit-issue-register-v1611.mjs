@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {addAnswerAuditFindings,exportAnswerAuditIssueRegister} from '../src/lib/assistantAuditIssueRegister.js';
@@ -29,7 +30,7 @@ assert.ok(api.includes('classify_answer_audit(quality,ground,cited,kinds)'));
 for(const token of ['assistant-add-audit-register','assistant-qa-issue-register',
  'assistant-export-qa-issue-register','issue_triage.issue_candidates'])
  assert.ok(ui.includes(token),token);
-const v=main.split("'build_version':'")[1]?.split("'")[0];
+const v=readBackendVersion(main);
 assert.ok(Number(v.replace('.',''))>=1611);
-assert.ok(shell.includes('data-build-version="'+v+'"'));
+assert.ok(hasDynamicBuildVersion(shell,v));
 console.log('PASS v161.1 warning-only QA register and sanitized local export');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
@@ -91,8 +92,8 @@ assert.ok(ui.includes('data-testid="assistant-human-review-export"')&&
  'Explicit per-answer export controls exist in Assistant');
 assert.ok(e2e.includes('Assistant review packet exports preserve blank human scores'),
  'Browser QA covers local reviewer download');
-const backendVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const frontendVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const backendVersion=readBackendVersion(app);
+const frontendVersion=readShellVersion(shell);
 assert.ok(backendVersion&&backendVersion===frontendVersion);
 assert.ok(/^\d+\.\d+$/.test(backendVersion),'Build version format is valid');
 console.log('PASS v148.5 explicit client-side review packet, blank human scoring sheet and source minimization');

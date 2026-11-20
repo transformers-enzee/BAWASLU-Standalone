@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ for(const key of ['from .officer_pilot_readiness import _STAGES',
 for(const key of ['PILOT_ACCEPTANCE_STAGES','pilot-acceptance-checklist',
  'Unsigned preparation only. Completion and approval',
  'Requires verified casework evidence']) assert.ok(ui.includes(key),key);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(back&&front&&back===front);
 console.log('PASS v155.9 unsigned five-stage officer acceptance worksheet');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -15,7 +16,7 @@ for(const key of ['Distinct cases with approval activity','Distinct cases with r
 for(const key of ['Distinct cases with returned reports',
 'Distinct cases with revisions','Distinct cases with approval activity'])
  assert.ok(ui.includes(key),key);
-const bv=backend.split("'build_version':'")[1]?.split("'")[0];
-const fv=shell.split('data-build-version="')[1]?.split('"')[0];
+const bv=readBackendVersion(backend);
+const fv=readShellVersion(shell);
 assert.equal(bv,fv);assert.ok(Number(bv.replace('.',''))>=1575);
 console.log('PASS v157.5 distinct case activity versus audit events');

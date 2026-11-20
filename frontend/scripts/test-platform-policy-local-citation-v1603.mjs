@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -13,7 +14,7 @@ for(const token of ['test_standalone_next_line_pdf_citation_flags_provider_verdi
  'test_contextual_report_not_policy_authority',
  'test_uncertainty_and_attributed_reporting_not_definitive'])
  assert.ok(qa.includes(token),token);
-const ver=main.split("'build_version':'")[1]?.split("'")[0];
+const ver=readBackendVersion(main);
 assert.ok(Number(ver.replace('.',''))>=1603);
-assert.ok(shell.includes('data-build-version="'+ver+'"'));
+assert.ok(hasDynamicBuildVersion(shell,ver));
 console.log('PASS v160.3 local platform-policy citations, no false legal signoff');

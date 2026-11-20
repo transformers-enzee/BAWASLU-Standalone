@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -19,7 +20,7 @@ assert.ok(/<\/p>\}\s*\{\(audit\.audit\.issue_triage/.test(web));
 for(const s of ['test_batch_missing_cited_source_fails_not_fake_pass',
  'test_combined_card_and_citation_scope_safely_supports_historical_sizes'])
  assert.ok(qa.includes(s),s);
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1622);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v162.2 historical cited-only source union and mandatory reauthorization');

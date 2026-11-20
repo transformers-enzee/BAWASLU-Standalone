@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,6 +12,6 @@ for(const key of ['CaseReport.id,CaseReport.case_id','CaseReport.status,CaseRepo
  assert.ok(block.includes(key),key);
 assert.ok(!block.includes('db.query(CaseReport)'));
 assert.ok(!block.includes('db.query(CaseTransition)'));
-const b=backend.split("'build_version':'")[1]?.split("'")[0],f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(backend),f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1579);
 console.log('PASS v157.9 lightweight management report metadata projections');

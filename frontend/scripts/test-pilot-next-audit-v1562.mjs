@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ for (const marker of ['acceptance_next_audit_stage','acceptance_preview_incomple
 'acceptance_preview_next_missing_stage_count']) assert.ok(endpoint.includes(marker),marker);
 for (const marker of ['pilot-next-audit-stage','pilot-audit-history-incomplete',
 'pilot-audit-all-observed','older evidence may exist']) assert.ok(ui.includes(marker),marker);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(back&&front&&back===front);
 console.log('PASS v156.2 next audit stage, incomplete history, and signoff safeguards');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -14,7 +15,7 @@ for(const s of ['Recommended reviewer action','SELECTED_UTC_PERIOD_ONLY_NOT_LIFE
 'PENDING_AUTHORIZED_HUMAN_REVIEW']) assert.ok(exportCode.includes(s),s);
 for(const s of ['pilot-packet-review-actions','pilot-packet-period-caveat',
 'Inspect truncated audit and full history']) assert.ok(ui.includes(s),s);
-const bv=main.split("'build_version':'")[1]?.split("'")[0];
-const fv=shell.split('data-build-version="')[1]?.split('"')[0];
+const bv=readBackendVersion(main);
+const fv=readShellVersion(shell);
 assert.ok(bv&&bv===fv);
 console.log('PASS v156.3 management officer pilot packet reviewer triage and period scope');

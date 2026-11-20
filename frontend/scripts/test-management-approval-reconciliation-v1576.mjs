@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -17,7 +18,7 @@ for(const key of ['Approval-activity cases still approved',
 for(const key of ['Approval activity without a saved report',
  'Reconciled with the latest saved report per case'])
  assert.ok(ui.includes(key),key);
-const bv=main.split("'build_version':'")[1]?.split("'")[0];
-const fv=shell.split('data-build-version="')[1]?.split('"')[0];
+const bv=readBackendVersion(main);
+const fv=readShellVersion(shell);
 assert.equal(bv,fv);assert.ok(Number(bv.replace('.',''))>=1576);
 console.log('PASS v157.6 approval-event to latest-report reconciliation');

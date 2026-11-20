@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const x of ['def cross_module_inventory','explicit_source_links',
 assert.ok(mapping.includes("'origin_source_id':item.source_id"));
 assert.ok(model.includes('"cross_module_inventory":cross_module_inventory(evidence)'));
 assert.ok(model.includes('module_focus=cross_module_instruction(response_profile)'));
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1639);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v163.9 current selected social vs Inbox source identity, no false corroboration');

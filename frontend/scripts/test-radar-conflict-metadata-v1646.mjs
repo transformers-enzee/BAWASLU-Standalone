@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -10,7 +11,7 @@ for(const token of ['def radar_source_conflicts','conflicting_distinct_sources',
 assert.ok(radar.includes("keyword_counts=keyword_cloud_source_counts(inbox.get('findings') or [],main_by_campaign)"));
 assert.ok(radar.includes('"metric_integrity":recent_metrics'));
 assert.ok(!radar.includes('counted_keywords=set()'));
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1646);
-assert.ok(read('src/components/intel/Shell.jsx').includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));
 console.log('PASS v164.6 repeated-source metadata conflict visibility and cross-campaign normalized keyword totals');

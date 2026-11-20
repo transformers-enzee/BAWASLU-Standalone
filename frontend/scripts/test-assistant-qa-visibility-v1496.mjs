@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {canShowAssistantQa} from '../src/lib/assistantQaVisibility.js';
@@ -19,8 +20,8 @@ assert.ok(page.includes('cited_unreviewed_pdf_pages'));
 assert.ok(page.includes('{showQa&&m.grounding?.answer_quality?.checks?.length>0&&'));
 assert.ok(page.includes('<AssistantReviewConsolidation/>'));
 assert.ok(page.includes('<AssistantHumanScoring incomingPacket={scoringPacket}/>'));
-const version=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+const version=readBackendVersion(main);
 assert.ok(version,'Missing build version');
 assert.ok(page.includes('</section>}\n  <div className="flex flex-wrap gap-2">'), 'QA panel must close its outer JSX condition');
-assert.ok(shell.includes('data-build-version="'+version+'"')&&shell.includes('>v'+version+'</footer>'));
+assert.ok(hasDynamicBuildVersion(shell,version)&&hasDynamicBuildVersion(shell,version));
 console.log('PASS v149.6 collapsed admin QA, officer source cautions and synchronized release');

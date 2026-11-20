@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -21,8 +22,8 @@ assert.ok(shortlist.includes('len(value)>19'));
 assert.ok(shortlist.includes('9223372036854775807'));
 assert.ok(shortlist.includes('isinstance(value,bool)'));
 assert.ok(shortlist.includes('source_prefill_available_count'));
-const bv=back.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const fv=front.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const bv=readBackendVersion(back);
+const fv=readShellVersion(front);
 assert.ok(bv && fv);
 assert.equal(bv,fv);
 const [major,minor]=bv.split('.').map(Number);

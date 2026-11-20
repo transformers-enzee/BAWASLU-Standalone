@@ -1,13 +1,14 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {canShowAssistantQa} from '../src/lib/assistantQaVisibility.js';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const page=read('src/pages/IntelligenceAssistant.jsx');
 const audit=read('src/components/intel/AssistantSavedReplyAudit.jsx');
-const version=read('../backend/app/main.py').split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(read('../backend/app/main.py'));
 const shell=read('src/components/intel/Shell.jsx');
 assert.ok(Number(version.replace('.',''))>=1635);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 assert.ok(shell.includes('aria-label="Build version">v'+version));
 assert.ok(page.includes("import AssistantSavedReplyAudit from '@/components/intel/AssistantSavedReplyAudit'"));
 assert.equal((page.match(/<AssistantSavedReplyAudit\s+disabled=\{busy\|\|historyBusy\}\s*\/>/g)||[]).length,1,

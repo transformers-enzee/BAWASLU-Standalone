@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const key of ['def _report_version_integrity','superseded_returned_versions'
 for(const key of ['briefing-report-version-integrity','Report revision history',
  'Historical returned reports','Latest approved after a return',
  'Returned awaiting revision'])assert.ok(ui.includes(key),key);
-const b=main.split("'build_version':'")[1]?.split("'")[0];
-const f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1571);
 console.log('PASS v157.1 report-revision history and latest-version KPI transparency');

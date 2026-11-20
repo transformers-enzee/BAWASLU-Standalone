@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const root=new URL('../',import.meta.url);
@@ -35,8 +36,8 @@ assert.ok(ui.includes('data-testid="assistant-answer-quality"')&&
  'Visible QA does not claim factual accuracy');
 assert.ok(e2e.includes('Assistant shows four answer readiness checks without claiming human accuracy'),
  'Browser QA exercises the check states');
-const apiVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const uiVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const apiVersion=readBackendVersion(app);
+const uiVersion=readShellVersion(shell);
 assert.ok(apiVersion&&/^\d+\.\d+$/.test(apiVersion),'Build version format is valid');
 assert.equal(uiVersion,apiVersion);
 console.log('PASS v148.4 Assistant answer-quality readiness, curated synthetic challenge fixtures, cross-module caveats and version contract');

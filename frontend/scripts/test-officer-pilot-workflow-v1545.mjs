@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -26,8 +27,8 @@ assert.ok(briefing.includes('data-testid="briefing-pilot-evidence-availability"'
 assert.ok(briefing.includes('pilotIntake.source_prefill_available_count'));
 assert.ok(briefing.includes('pilotIntake.source_recovery_required_count'));
 assert.ok(briefing.includes('Nothing is assigned or approved automatically.'));
-const backendVersion=main.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const frontVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const backendVersion=readBackendVersion(main);
+const frontVersion=readShellVersion(shell);
 assert.ok(backendVersion&&frontVersion);
 assert.equal(backendVersion,frontVersion);
 const [major,minor]=backendVersion.split('.').map(Number);

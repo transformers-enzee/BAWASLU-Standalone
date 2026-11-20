@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const root=new URL('../',import.meta.url);
@@ -32,8 +33,8 @@ assert.ok(drawer.includes('source_count_matches_finding')&&drawer.includes('poli
   'Finding detail presents evidence reconciliation and platform context');
 assert.ok(html.includes('finding-assessments-v1470.js'),'Retain existing drawer enhancement');
 assert.ok(!html.includes('id="legalCaseQueue"'),'Do not reinstate standalone legal section');
-const backendVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const frontendVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const backendVersion=readBackendVersion(app);
+const frontendVersion=readShellVersion(shell);
 assert.ok(backendVersion&&frontendVersion&&backendVersion===frontendVersion,
   'Build version matches both backend and frontend');
 console.log('PASS v147.6 Phase 2 assessment provenance, reviewed citations and nine-platform policy contracts');

@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {addAnswerAuditFindings,summarizeAnswerAuditIssueRegister,
@@ -37,8 +38,8 @@ for(const key of ['assistant-export-qa-issue-csv','assistant-audit-category-summ
  'summarizeAnswerAuditIssueRegister'])assert.ok(ui.includes(key),key);
 const main=readFileSync(new URL('../../backend/app/main.py',import.meta.url),'utf8');
 const shell=readFileSync(new URL('../src/components/intel/Shell.jsx',import.meta.url),'utf8');
-const current=main.split("'build_version':'")[1]?.split("'")[0];
+const current=readBackendVersion(main);
 assert.ok(Number(current.replace('.',''))>=1613);
-assert.ok(shell.includes('data-build-version="'+current+'"'));
+assert.ok(hasDynamicBuildVersion(shell,current));
 // Version parity checked using the current release, not a stale exact label.
 console.log('PASS v161.3 recurring warning aggregation, safe CSV/JSON, human verification boundaries');

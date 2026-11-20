@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const key of ['def _activity_period_window','start,end,topic=_activity_perio
 const section=api.slice(api.indexOf('def briefing_activity_csv('),api.indexOf('@router.get("/officer-pilot.csv")'));
 assert.ok(!section.includes('scoped_cases('),'Activity export must not load case-creation cohort');
 assert.ok(section.includes('_casework_activity_window'));
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const client=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const client=readShellVersion(shell);
 assert.equal(back,client);assert.ok(Number(back.replace('.',''))>=1578);
 console.log('PASS v157.8 Activity CSV window provenance and reduced DB reads');

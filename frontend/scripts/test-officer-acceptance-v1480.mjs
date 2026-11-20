@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -32,7 +33,7 @@ assert.ok(page.includes('sourceReviewNote.trim().length<20')&&
   'Frontend requires documented review and original-source confirmation');
 assert.ok(inbox.includes('<Casework key={JSON.stringify(caseworkRequest)} embedded'),
   'No separate top-level casework module is introduced');
-const apiVersion=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const uiVersion=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const apiVersion=readBackendVersion(app);
+const uiVersion=readShellVersion(shell);
 assert.ok(apiVersion&&uiVersion&&apiVersion===uiVersion,'Frontend/backend build versions must match');
 console.log('PASS v148.0 source-review attestation and operational acceptance workflow contracts');

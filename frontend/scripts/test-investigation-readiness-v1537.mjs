@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -25,8 +26,8 @@ assert.ok(page.includes('READINESS_GROUPS'));
 assert.ok(page.includes('READINESS_STEPS'));
 assert.ok(page.includes("followupLink(item)"));
 assert.ok(page.includes('These categories indicate workflow evidence, not legal or factual clearance'));
-const b=app.match(/'build_version':'(\d+\.\d+)'/)?.[1];
-const f=shell.match(/data-build-version="(\d+\.\d+)"/)?.[1];
+const b=readBackendVersion(app);
+const f=readShellVersion(shell);
 assert.ok(b);
 const [major,minor]=b.split('.').map(Number);
 assert.ok(major>153||(major===153&&minor>=7),'Readiness was introduced in v153.7');

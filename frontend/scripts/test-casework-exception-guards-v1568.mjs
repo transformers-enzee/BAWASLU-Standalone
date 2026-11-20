@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -15,7 +16,7 @@ for(const marker of ['test_invalid_original_urls_cannot_be_attested_as_checked',
 'test_unverified_province_never_authorizes_province_route',
 'test_unavailable_source_can_be_recorded_without_false_confirmation'])
  assert.ok(tests.includes(marker),marker);
-const back=main.split("'build_version':'")[1]?.split("'")[0];
-const front=shell.split('data-build-version="')[1]?.split('"')[0];
+const back=readBackendVersion(main);
+const front=readShellVersion(shell);
 assert.ok(Number(back.replace('.',''))>=1568,'Build must not regress below v156.8');assert.equal(back,front);
 console.log('PASS v156.8 original URL safeguards, role gates and jurisdiction negative QA');

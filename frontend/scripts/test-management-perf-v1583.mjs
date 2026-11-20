@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -9,7 +10,7 @@ for(const key of ['BAWASLU_REPORT_PERF_ENABLED','National Administrator',
  'query_count_includes_profile_lookup']) assert.ok(api.includes(key),key);
 for(const key of ['event.listen(conn','event.remove(conn',
  'after_cursor_execute','perf_counter'])assert.ok(perf.includes(key),key);
-const b=main.split("'build_version':'")[1]?.split("'")[0];
-const f=shell.split('data-build-version="')[1]?.split('"')[0];
+const b=readBackendVersion(main);
+const f=readShellVersion(shell);
 assert.equal(b,f);assert.ok(Number(b.replace('.',''))>=1583);
 console.log('PASS v158.3 safe administrator-only opt-in reporting probe');

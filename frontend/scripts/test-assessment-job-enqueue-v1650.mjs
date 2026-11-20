@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -14,8 +15,8 @@ assert.ok(campaigns.includes("created=enqueue_campaign_evidence(campaign.id)"));
 assert.ok(campaigns.includes("'assessment_link_coverage':campaign_link_assessment_coverage(db,campaign.id)"));
 const api=read('../backend/app/main.py');
 const shell=read('src/components/intel/Shell.jsx');
-const version=api.match(/'build_version':'(\d+\.\d+)'/)?.[1];
+const version=readBackendVersion(api);
 assert.ok(version,'API build version must be declared');
-assert.ok(shell.includes('data-build-version="'+version+'"'));
-assert.ok(shell.includes('>v'+version+'</footer>'));
+assert.ok(hasDynamicBuildVersion(shell,version));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v165.0 bounded, conflict-safe, no-credit assessment job queue');

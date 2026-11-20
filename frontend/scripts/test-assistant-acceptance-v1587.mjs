@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -12,7 +13,7 @@ for(const term of ['PREPARATION_ONLY_NOT_FORMAL_ACCEPTANCE',
  'human_accuracy_measured','legal_reference_signoff_complete']){
   assert.ok(ready.includes(term),term);
 }
-const bv=main.split("'build_version':'")[1]?.split("'")[0];
-assert.equal(bv,shell.split('data-build-version="')[1]?.split('"')[0]);
+const bv=readBackendVersion(main);
+assert.equal(bv,readShellVersion(shell));
 assert.ok(Number(bv.replace('.',''))>=1587);
 console.log('PASS v158.7 legal and Assistant acceptance readiness safeguards');

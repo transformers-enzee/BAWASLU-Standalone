@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -10,7 +11,7 @@ for(const t of ['operational_assessment_scope','operational_assessment_authority
 'assessment_focus=assessment_instruction','assessment_focus if assessment_focus else'])
  assert.ok(gen.includes(t),t);
 const api=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const version=api.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(api);
 assert.ok(Number(version.replace('.',''))>=1638);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v163.8 differentiated legal/platform assessment question instructions');

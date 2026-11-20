@@ -1,3 +1,4 @@
+import {readBackendVersion,readShellVersion,hasDynamicBuildVersion} from './runtime-build-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
@@ -11,7 +12,7 @@ for(const token of ['def inbox_saved_link_consistency',
 assert.ok(radar.includes('saved_link_consistency=inbox_saved_link_consistency(inbox.get("findings") or [])'));
 assert.ok(radar.includes('"saved_link_consistency":saved_link_consistency'));
 const main=read('../backend/app/main.py'),shell=read('src/components/intel/Shell.jsx');
-const version=main.split("'build_version':'")[1]?.split("'")[0];
+const version=readBackendVersion(main);
 assert.ok(Number(version.replace('.',''))>=1648);
-assert.ok(shell.includes('data-build-version="'+version+'"'));
+assert.ok(hasDynamicBuildVersion(shell,version));
 console.log('PASS v164.8 cross-campaign saved assessment conflicts visible pre-dedup without raw evidence');

@@ -50,7 +50,11 @@ _FALLBACK={
 }
 def complete_officer_steps(question, profile, steps, language="id"):
     current=[x.strip() for x in (steps or []) if isinstance(x,str) and x.strip()]
-    if profile in ("PDF_GUIDANCE","EXECUTIVE_REPORT") or not officer_action_intent(question) or len(current)>=3:
+    if profile in ("PDF_GUIDANCE","EXECUTIVE_REPORT"):
+        return current,False
+    if not officer_action_intent(question) and profile not in ("CASE_REVIEW","ACTION_REQUEST"):
+        return current,False
+    if len(current)>=3:
         return current,False
     return (current+_FALLBACK.get(language,_FALLBACK["en"])[len(current):])[:4],True
 

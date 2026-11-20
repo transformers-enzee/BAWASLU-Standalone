@@ -385,11 +385,11 @@ export default function IntelligenceAssistant(){
     {showJump&&<button type="button" onClick={()=>latestRef.current?.scrollIntoView({behavior:'smooth',block:'end'})} className="fixed bottom-24 right-7 z-40 flex items-center gap-2 rounded-full bg-[#801b24] px-4 py-2 text-sm font-semibold text-white shadow-lg" aria-label="Jump to latest chat message"><ArrowDown size={16}/> Jump to latest</button>}
     <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
       <span>Ruang lingkup jawaban: {analysisMode==='AUTO'?'Analisis sumber yang tersedia':analysisMode==='DATA'?'Hanya sumber BAWASLU tersimpan':'Penjelasan umum'}</span>
-      <label className="flex items-center gap-2">Intelligence depth
+      <label className="flex items-center gap-2">Officer response mode
        <select aria-label="Intelligence response depth" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={responseDepth} onChange={e=>setResponseDepth(e.target.value)} disabled={busy}>
-        <option value="EXECUTIVE">Executive brief</option>
-        <option value="DEEP">Deep analysis</option>
-        <option value="INVESTIGATION">Investigation support</option>
+        <option value="EXECUTIVE">Quick Brief · Ringkasan Cepat</option>
+        <option value="DEEP">Action Plan · Rencana Tindak Lanjut</option>
+        <option value="INVESTIGATION">Legal Deep Dive · Kajian Hukum</option>
        </select>
       </label>
       <select aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={analysisMode} onChange={e=>setAnalysisMode(e.target.value)} disabled={busy}>
@@ -402,7 +402,7 @@ export default function IntelligenceAssistant(){
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={1000} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
      <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
     </form>
-    <p className="text-xs text-[#8192a3]">AI menyiapkan analisis dan draf; petugas memilih, memeriksa, dan mengonfirmasi setiap tindakan resmi.</p>
+    <p className="text-xs text-[#8192a3]">Pilih format ringkas, rencana tindak lanjut, atau kajian hukum. PDF hanya rujukan pendukung. AI menyiapkan rekomendasi; petugas memeriksa dan mengesahkan setiap tindakan resmi.</p>
    </div>
   </div>
  </div>;

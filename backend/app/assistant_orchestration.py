@@ -10,6 +10,10 @@ from .assistant_officer_action_contract import (
     sanitize_officer_brief, render_officer_brief, officer_response_mode,
     officer_mode_prompt, operational_brief_readiness,
 )
+from .assistant_officer_action_cards import (
+    OFFICER_ACTIONS_SCHEMA, sanitize_officer_actions, visible_officer_steps,
+    officer_action_readiness,
+)
 
 import json
 import os
@@ -45,11 +49,13 @@ SCHEMA = {
         "language_code": {"type": "string"},
         "detected_tags": TAG_SCHEMA,
         "presentation_labels": UI_SCHEMA,
-        "operational_brief": OFFICER_BRIEF_SCHEMA
+        "operational_brief": OFFICER_BRIEF_SCHEMA,
+        "officer_actions": OFFICER_ACTIONS_SCHEMA
     },
     "required": ["direct_answer", "observations", "interpretation",
                  "next_checks", "limitations", "cited_ids", "language_code",
-                 "detected_tags", "presentation_labels", "operational_brief"],
+                 "detected_tags", "presentation_labels", "operational_brief",
+                 "officer_actions"],
     "additionalProperties": False
 }
 SYSTEM = """You are BAWASLU's senior, politically neutral internal intelligence and election-supervision adviser. Help HQ and provincial officers interpret authorized evidence, assess electoral relevance, and decide what concrete review happens next. Social listening and PDF knowledge are supporting resources, not the end goal. Do not craft personalized political persuasion aimed at voter segments.
@@ -310,6 +316,8 @@ def _safe_output(result, allowed):
     result["cited_ids"] = cited
     result["operational_brief"] = sanitize_officer_brief(
         result.get("operational_brief"),allowed)
+    result["officer_actions"] = sanitize_officer_actions(
+        result.get("officer_actions"),allowed)
     return result
 
 def answer_text(result, has_evidence, language='id'):
@@ -604,6 +612,17 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "officer_response_mode":officer_response_mode(response_depth),
         "response_profile": response_profile,
         "officer_review_scope":officer_scope or {},
+        "officer_action_card_policy":(
+            "For substantive cases or explicit BAWASLU action requests, populate "
+            "officer_actions with 1-2 items in QUICK_BRIEF or 3-4 in ACTION_PLAN "
+            "and LEGAL_DEEP_DIVE. Each item MUST have proposed reviewing_role, "
+            "specific task, evidence_required, expected_output and "
+            "escalation_condition. source_ids contains only relevant IDs from "
+            "available_records, or [] when unsupported. No case assignment, "
+            "filing, takedown, referral or legal verdict is authorized. "
+            "For simple informational/PDF-only questions return []. "
+            "Do not conflate publication region with incident location."
+        ),
         "operational_assessment_scope":assessment_scope(question),
         "operational_assessment_authority_inventory":assessment_authority_inventory(evidence),
         "response_language_rule": language["rule"],
@@ -687,7 +706,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                    "publisher address or monitoring location. All values are "
                    "provisional AI suggestions. For simple non-operational "
                    "questions, return all six as empty strings. For PDF-only "
-                   "and executive-report profiles return empty strings.")
+                   "and executive-report profiles return empty strings. "
+                   "For each officer_actions entry identify the proposed "
+                   "reviewing team, concrete task, required documents or source "
+                   "checks, expected officer deliverable, and conditional "
+                   "escalation or closure gate. Do not use vague 'monitor' advice. "
+                   "Use only authorized IDs in source_ids, or [] if none, and "
+                   "never infer an approved provincial assignment.")
     document_focus=(
         "\n\nTHIS TURN IS A PDF PROCEDURAL ANSWER, NOT A SOCIAL INTELLIGENCE REPORT. "
         "Cite only retrieved PDF pages and match the requested depth while remaining focused; "
@@ -726,7 +751,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                             ("\n\n"+module_focus if module_focus else "")+
                             ("\n\n"+scope_focus if scope_focus else "")},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
-        "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v3",
+        "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v4",
                           "strict":True,"schema":SCHEMA}},
         "max_output_tokens": (pdf_output_token_budget(response_depth) if pdf_guidance
                               else 2800 if officer_response_mode(response_depth)=="QUICK_BRIEF"
@@ -755,6 +780,15 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         result["validated_tags"] = ([] if pdf_guidance else
                                     combined_tags(result.get("detected_tags") or [],evidence))
         result["validated_ui_labels"] = validate_ui_labels(result.get("presentation_labels") or [])
+        # Use a single visible action-text channel for the citation audit.
+        # Structured draft items are flattened before any visible grounding QA.
+        if pdf_guidance or executive_report:
+            result["officer_actions"]=[]
+        elif result.get("officer_actions"):
+            limit=2 if officer_response_mode(response_depth)=="QUICK_BRIEF" else 4
+            result["officer_actions"]=result["officer_actions"][:limit]
+            result["next_checks"]=visible_officer_steps(
+                result["officer_actions"],answer_language)
         result["next_checks"], officer_steps_fallback = complete_officer_steps(
             question,response_profile,result.get("next_checks"),answer_language)
         if officer_response_mode(response_depth)=="QUICK_BRIEF":
@@ -789,6 +823,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "operational_brief_readiness":operational_brief_readiness(
             result["operational_brief"],result.get("next_checks"),
             response_profile,response_depth),
+        "officer_action_readiness":officer_action_readiness(
+            result.get("officer_actions"),response_profile,response_depth),
         "response_depth": response_depth,
         "response_profile": response_profile,
         "selected_evidence_count": len(evidence),
@@ -809,6 +845,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "response_profile": response_profile,
         "officer_response_mode":officer_response_mode(response_depth),
         "officer_steps_fallback":officer_steps_fallback,
+        "proposed_action_count":len(result.get("officer_actions") or []),
+        "officer_action_policy":"DRAFT_ONLY_NO_EXECUTION",
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
     }

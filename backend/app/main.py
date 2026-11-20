@@ -795,6 +795,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         chosen_social=[]
         context_pdf=[]
         response_profile=SOCIAL_ANALYSIS
+    # Exact SOCIAL-ID questions must never gain unrelated Inbox matches even
+    # when the user requests an action plan and the profile becomes CASE_REVIEW.
+    if explicit_social_ids and not explicit_formal_ids:
+        selected_formal=[]
     # Social-analysis answers should not append unrelated formal Inbox records.
     # Keep explicit named INT IDs available for officer-requested comparisons.
     if response_profile==SOCIAL_ANALYSIS and not explicit_formal_ids:

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+const ui=read('../src/components/intel/AssistantIntelligenceReport.jsx');
+const main=read('../../backend/app/main.py');
+const orchestrator=read('../../backend/app/assistant_orchestration.py');
+const agent=read('../../backend/app/assistant_officer_action_contract.py');
+assert.ok(ui.includes('Tindak Lanjut Prioritas BAWASLU'));
+assert.ok(ui.includes('Priority BAWASLU Officer Actions'));
+assert.ok(ui.includes('data-officer-actions-visible="true"'));
+assert.ok(!ui.includes('Langkah verifikasi (opsional)'));
+assert.ok(!ui.includes("compact?'details'"));
+assert.ok(ui.includes('compact?3:5'));
+assert.ok(main.includes("officer_scope={'geographic_scope':p.get('geographic_scope')"));
+assert.ok(orchestrator.includes('OFFICER_DECISION_CONTRACT'));
+assert.ok(orchestrator.includes('officer_steps_fallback'));
+assert.ok(agent.includes('not the sole'));
+console.log('Officer-action response v175.68: 10 visibility and evidence scope checks passed');

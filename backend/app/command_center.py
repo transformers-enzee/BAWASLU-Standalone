@@ -22,6 +22,7 @@ from .socialcrawl import _result_in_scope
 from .monitoring_count_integrity import command_period_integrity
 from .monitoring_metric_reconciliation import command_metric_integrity
 from .inbox_radar import _normalized_platform
+from .command_center_actions import build_action_intelligence
 
 def _as_list(raw):
     try:
@@ -490,6 +491,8 @@ def build_command_center(db,p,data=None):
             'published_at':display_date,
             'summary':(record.ai_summary or record.title or record.original_content or '').strip()[:260],
             'review_status':record.review_status,
+            'title':record.title,'potential_issue_category':record.potential_issue_category,
+            'province':record.province,'jurisdiction_type':record.jurisdiction_type,
             'date_basis':'SOURCE_PUBLICATION' if _day(date_text) else 'RECORD_CREATED'
         })
     for item in manual_recent:
@@ -576,6 +579,7 @@ def build_command_center(db,p,data=None):
         focus.append({'kind':'VERIFY_COVERAGE','title':'Review recent Intelligence Inbox evidence and collection coverage',
             'detail':'No evidence-backed issue alert is available in the current authorized view. Check source coverage, assessments and review decisions before treating this as an absence of electoral issues.',
             'basis':'COVERAGE_STATUS'})
+    action_intelligence=build_action_intelligence(alerts,manual_recent,p.get('geographic_scope'))
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
             'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
             'scope':{'label':scope_label,'geographic_scope':p.get('geographic_scope'),
@@ -587,6 +591,7 @@ def build_command_center(db,p,data=None):
                 'awaiting_review':sum(x['review_status']=='AWAITING_REVIEW' for x in alerts),
                 'emerging_issues':None},
             'briefing':briefing,'focus_actions':focus,'attention_actions':attention[:4],
+            'action_intelligence':action_intelligence,
             'alerts':alerts[:10], 'latest_intelligence':recent,
             'activity':{'captured_mentions':len(captured_ids),
                         'newly_collected_mentions':newly_collected,

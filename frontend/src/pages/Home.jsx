@@ -3,6 +3,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight, Clock3, Globe2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
+import ActionIntelligencePanel from '@/components/intel/ActionIntelligencePanel';
 
 const homeSnapshotCache=new Map();
 const HOME_CACHE_TTL_MS=45000;
@@ -117,6 +118,7 @@ export default function Home(){
      <p className="text-[11px] text-slate-500">Generated from stored evidence and review status at refresh time. This is not live streaming analysis or a determination of electoral misconduct.</p>
     </div>
    </Panel>
+   <ActionIntelligencePanel model={data.action_intelligence}/>
    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3" aria-label="Intelligence indicators">
     <Stat label="Published social posts" value={activity.captured_mentions} description="Source publication in selected period" to="/social-listening"/>
     <Stat label="Newly collected posts" value={activity.newly_collected_mentions} description="Added to Social Listening in period" to="/social-listening"/>

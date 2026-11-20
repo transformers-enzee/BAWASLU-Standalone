@@ -37,5 +37,5 @@ export default function Shell(){
    <main className={deniedView?'min-h-screen flex items-center justify-center p-5 md:p-9':location.pathname==='/'?'max-w-[1600px] mx-auto p-4 md:px-6 md:py-4':'max-w-[1530px] mx-auto p-5 md:p-9'}><Outlet context={{access,setDeniedView}}/></main>
    <footer className="px-5 pb-2 text-[10px] text-slate-400 text-right" aria-label="Build version">v173.1</footer>
   </div>
- </div>{window.__BAWASLU_DEMO_REPLICA__&&<DemoFeedbackWidget/>}</>;
+ </div>{window.__BAWASLU_DEMO_REPLICA__&&!import.meta.env.VITE_DEMO_STANDALONE&&<DemoFeedbackWidget/>}</>;
 }

@@ -20,7 +20,8 @@ assert.ok(audit.includes('review_status')&&audit.includes('OFFICER_REVIEWED'),
 assert.ok(audit.includes('legal_currentness_verified":False')&&
   audit.includes('legal_verdict_confirmed":False'),
   'Never assert current law or a confirmed violation');
-assert.ok(api.includes('audit_assistant_answer(')&&
+assert.ok(api.includes('audit_visible_assistant_parts(')&&
+  read('../backend/app/assistant_visible_citations.py').includes('audit_assistant_answer(')&&
   api.includes("meta['grounding_audit']=grounding_audit"),
   'Chat route must run deterministic audit before source cards are built');
 assert.ok(api.includes("'cited_count':len(cited)")&&

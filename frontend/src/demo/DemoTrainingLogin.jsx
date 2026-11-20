@@ -4,6 +4,7 @@ import {useLanguage} from '@/lib/LanguageContext';
 
 // No plaintext training password stored in the source or in browser storage.
 // This local demonstration gate is NOT server-side authentication.
+const POLRI_DEMO=import.meta.env.VITE_POLRI_DEMO==='1';
 const CHECKSUM='2f1532b4a2485c17b65447a6be8ed60aa158c418dd681e71a4cb1b650377b4c4';
 const STORE='bawaslu_demo_training_session';
 async function digest(value){
@@ -33,8 +34,8 @@ export default function DemoTrainingLogin({onSuccess}){
  return <main className="min-h-screen flex items-center justify-center bg-[#faf7f5] px-4 py-8" data-demo-training-login="true">
   <div className="w-full max-w-[430px] overflow-hidden rounded-2xl border border-[#eadcdc] bg-white shadow-[0_16px_50px_#43161f15]">
    <header className="bg-[#801b24] px-7 py-6 text-white flex items-center justify-between gap-3">
-    <div className="flex items-center gap-3"><img src="/bawaslu-emblem.svg" alt="BAWASLU" className="h-11 w-11 object-contain bg-white rounded-md p-1"/>
-     <div><div className="text-lg font-bold tracking-wide">BAWASLU</div><p className="text-[10px] tracking-[.20em]">SMART RADAR · DEMO</p></div></div>
+    <div className="flex items-center gap-3"><img src={POLRI_DEMO?"/polri-logo.svg":"/bawaslu-emblem.svg"} alt={POLRI_DEMO?"POLRI":"BAWASLU"} className="h-11 w-11 object-contain bg-white rounded-md p-1"/>
+     <div><div className="text-lg font-bold tracking-wide">{POLRI_DEMO?"POLRI":"BAWASLU"}</div><p className="text-[10px] tracking-[.20em]">SMART RADAR · DEMO</p></div></div>
     <div className="flex gap-1 rounded-lg border border-white/40 p-1 text-xs">
       <button type="button" aria-pressed={language==='en'} onClick={()=>setLocale('en')} className={'px-2 py-1 rounded '+(language==='en'?'bg-white text-[#801b24]':'text-white')}>EN</button>
       <button type="button" aria-pressed={language==='id'} onClick={()=>setLocale('id')} className={'px-2 py-1 rounded '+(language==='id'?'bg-white text-[#801b24]':'text-white')}>ID</button>

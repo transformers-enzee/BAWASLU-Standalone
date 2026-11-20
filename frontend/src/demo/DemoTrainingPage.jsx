@@ -3,6 +3,7 @@ import {BookOpen,Home,Radio,Inbox,LayoutDashboard,Sparkles,ArrowRight,ShieldChec
 import {useLanguage} from '@/lib/LanguageContext';
 import {snapshot,demoAllEvidence,demoCampaigns,demoWatchlist} from './currentSnapshot.js';
 
+const POLRI_DEMO=import.meta.env.VITE_POLRI_DEMO==='1';
 const flow=[
  {path:'/social-listening',icon:Radio,en:'Social Listening',id:'Pemantauan Media Sosial',enAction:'Explore campaigns, captured sources and saved assessments.',idAction:'Jelajahi kampanye, sumber terkumpul, dan penilaian tersimpan.'},
  {path:'/inbox',icon:Inbox,en:'Intelligence Inbox',id:'Kotak Masuk Intelijen',enAction:'Examine AI findings, source evidence and review decisions.',idAction:'Periksa temuan AI, bukti sumber, dan keputusan peninjauan.'},
@@ -15,12 +16,12 @@ export default function DemoTrainingPage({mode='home'}){
  const isGuide=mode==='guide';
  return <div className="mx-auto max-w-6xl space-y-6 pb-10">
   <section className="rounded-2xl bg-[#801b24] px-6 py-8 text-white shadow-sm md:px-9 md:py-10">
-   <p className="text-[11px] font-bold tracking-[.22em] text-[#ffdbd6] uppercase">BAWASLU SMART RADAR · {T('TRAINING PROTOTYPE','PROTOTIPE PELATIHAN')}</p>
+   <p className="text-[11px] font-bold tracking-[.22em] text-[#ffdbd6] uppercase">{POLRI_DEMO?'SMART RADAR · POLRI': 'BAWASLU SMART RADAR'} · {T('TRAINING PROTOTYPE','PROTOTIPE PELATIHAN')}</p>
    <div className="mt-4 flex items-start gap-3"><div className="rounded-xl bg-white/15 p-3">{isGuide?<BookOpen size={26}/>:<Home size={26}/>}</div>
-    <div><h1 className="text-2xl font-bold leading-tight md:text-3xl">{isGuide?T('How to Use This Guide','Cara Menggunakan Panduan'):T('Welcome to the BAWASLU Interactive Demo','Selamat Datang di Demo Interaktif BAWASLU')}</h1>
+    <div><h1 className="text-2xl font-bold leading-tight md:text-3xl">{isGuide?T('How to Use This Guide','Cara Menggunakan Panduan'):T(POLRI_DEMO?'Welcome to Smart Radar — POLRI Demo':'Welcome to the BAWASLU Interactive Demo',POLRI_DEMO?'Selamat Datang di Smart Radar — Demo POLRI':'Selamat Datang di Demo Interaktif BAWASLU')}</h1>
      <p className="mt-3 max-w-3xl text-sm leading-7 text-white/90">{isGuide?
-      T('This instructor-led guide walks participants through the BAWASLU prototype one module at a time, explaining how evidence becomes intelligence and how officers decide what to review.','Panduan bersama instruktur ini mengajak peserta mempelajari prototipe BAWASLU tahap demi tahap, dari pengumpulan bukti menjadi intelijen hingga keputusan peninjauan petugas.'):
-      T('Explore an interactive replica of the BAWASLU intelligence system together with your instructor. You can navigate, filter and practice, but cannot change operational records.','Jelajahi replika interaktif sistem intelijen BAWASLU bersama instruktur. Anda dapat menavigasi, memfilter, dan berlatih tanpa mengubah data operasional.')}</p>
+      T(POLRI_DEMO?'This guided Smart Radar demonstration walks participants through sample evidence, intelligence and officer review.':'This instructor-led guide walks participants through the BAWASLU prototype one module at a time, explaining how evidence becomes intelligence and how officers decide what to review.',POLRI_DEMO?'Panduan Smart Radar ini mengajak peserta mempelajari contoh bukti, intelijen, dan peninjauan petugas.':'Panduan bersama instruktur ini mengajak peserta mempelajari prototipe BAWASLU tahap demi tahap, dari pengumpulan bukti menjadi intelijen hingga keputusan peninjauan petugas.'):
+      T(POLRI_DEMO?'Explore the Smart Radar POLRI-branded training prototype. You can navigate, filter and practice, but cannot change operational records.':'Explore an interactive replica of the BAWASLU intelligence system together with your instructor. You can navigate, filter and practice, but cannot change operational records.',POLRI_DEMO?'Jelajahi prototipe pelatihan Smart Radar bermerek POLRI. Anda dapat menavigasi, memfilter, dan berlatih tanpa mengubah data operasional.':'Jelajahi replika interaktif sistem intelijen BAWASLU bersama instruktur. Anda dapat menavigasi, memfilter, dan berlatih tanpa mengubah data operasional.')}</p>
     </div></div>
    <div className="mt-6 flex flex-wrap gap-3"><Link to={isGuide?'/social-listening':'/guide'} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#801b24]">{isGuide?T('Begin module 01','Mulai modul 01'):T('Read the training guide','Baca panduan pelatihan')}<ArrowRight size={16}/></Link><Link to="/smart-radar" className="inline-flex items-center gap-2 rounded-xl border border-white/50 px-4 py-3 text-sm font-medium text-white">{T('See the Command Centre','Lihat Pusat Komando')}</Link></div>
   </section>

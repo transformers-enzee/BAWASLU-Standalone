@@ -3,6 +3,7 @@ import {useNavigate} from 'react-router-dom';
 import {BookOpen,ChevronRight,ChevronLeft,X,RotateCcw,ShieldCheck} from 'lucide-react';
 import {useLanguage} from '@/lib/LanguageContext';
 
+const POLRI_DEMO=import.meta.env.VITE_POLRI_DEMO==='1';
 /** Training overlay around the actual production modules. No API or persistence. */
 const steps=[
  {path:'/',en:'Home and training orientation',id:'Beranda dan orientasi pelatihan',enText:'Start together with the instructor. Learn how the prototype works, what data is frozen, and why each stage matters before opening a module.',idText:'Mulai bersama instruktur. Pelajari alur prototipe, batasan data tetap, dan tujuan setiap tahap sebelum membuka modul.'},
@@ -21,9 +22,9 @@ export default function DemoGuide(){
   <button type="button" onClick={()=>setOpen(true)} className="flex items-center gap-2 rounded-xl border border-[#8d202d] bg-[#801b24] px-4 py-3 text-sm font-semibold text-white shadow-xl hover:bg-[#a52a2f]"><BookOpen size={17}/>{T('Interactive User Guide','Panduan Pengguna Interaktif')}</button>
   {open&&<div className="fixed inset-0 z-[90] flex items-end justify-end bg-[#1e293b]/60 p-3 sm:items-center sm:p-6" onMouseDown={e=>{if(e.target===e.currentTarget)setOpen(false)}}>
    <section role="dialog" aria-modal="true" aria-label={T('Interactive User Guide','Panduan Pengguna Interaktif')} className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-    <header className="flex items-center justify-between border-b p-5"><div><p className="text-[11px] font-bold tracking-widest text-[#9f3033]">BAWASLU SMART RADAR</p><h2 className="mt-1 text-xl font-bold text-[#29202b]">{T('Interactive User Guide','Panduan Pengguna Interaktif')}</h2></div><button className="rounded-lg border p-2" onClick={()=>setOpen(false)} aria-label={T('Close','Tutup')}><X size={18}/></button></header>
+    <header className="flex items-center justify-between border-b p-5"><div><p className="text-[11px] font-bold tracking-widest text-[#9f3033]">{POLRI_DEMO?"SMART RADAR · POLRI":"BAWASLU SMART RADAR"}</p><h2 className="mt-1 text-xl font-bold text-[#29202b]">{T('Interactive User Guide','Panduan Pengguna Interaktif')}</h2></div><button className="rounded-lg border p-2" onClick={()=>setOpen(false)} aria-label={T('Close','Tutup')}><X size={18}/></button></header>
     <div className="overflow-auto p-5">
-     <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-xs leading-6 text-teal-900"><ShieldCheck size={16} className="mr-2 inline"/>{T('This is the actual BAWASLU interface with a frozen snapshot. All demo actions are temporary and do not change Supabase data.','Ini adalah antarmuka BAWASLU asli dengan salinan data tetap. Semua tindakan demo bersifat sementara dan tidak mengubah data Supabase.')}</div>
+     <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-xs leading-6 text-teal-900"><ShieldCheck size={16} className="mr-2 inline"/>{T(POLRI_DEMO?'Smart Radar POLRI is an unofficial training demo using a frozen, sanitized BAWASLU sample dataset. This is not live POLRI data; no operational records change.':'This is the actual BAWASLU interface with a frozen snapshot. All demo actions are temporary and do not change Supabase data.',POLRI_DEMO?'Smart Radar POLRI adalah demo pelatihan tidak resmi yang memakai sampel data BAWASLU yang telah disamarkan dan dibekukan. Ini bukan data POLRI langsung; catatan operasional tidak berubah.':'Ini adalah antarmuka BAWASLU asli dengan salinan data tetap. Semua tindakan demo bersifat sementara dan tidak mengubah data Supabase.')}</div>
      <p className="mt-5 text-xs font-semibold text-slate-500">{T('STEP','LANGKAH')} {step+1} / {steps.length}</p>
      <h3 className="mt-2 text-lg font-bold text-[#801b24]">{T(entry.en,entry.id)}</h3>
      <p className="mt-2 text-sm leading-7 text-slate-700">{T(entry.enText,entry.idText)}</p>

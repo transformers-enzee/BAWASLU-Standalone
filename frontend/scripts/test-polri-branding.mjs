@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
+const docker=read('../../Dockerfile.polri-demo');
+const nav=read('../src/demo/DemoAccessNavigation.jsx');
+const page=read('../src/demo/DemoTrainingPage.jsx');
+const shell=read('../src/components/intel/Shell.jsx');
+const builder=read('./brand-polri-static.mjs');
+assert.match(docker,/ENV VITE_POLRI_DEMO=1/);
+assert.match(docker,/Polri_Logo\.svg/);
+assert.match(docker,/node scripts\/brand-polri-static\.mjs/);
+assert.match(nav,/POLRI_DEMO\?"\/polri-logo\.svg"/);
+assert.match(page,/Welcome to Smart Radar/);
+assert.match(shell,/POLRI_DEMO&&demo\?'SMART RADAR'/);
+assert.match(builder,/<title>Smart Radar<\/title>/);
+assert.match(builder,/href="\/polri-logo\.svg"/);
+assert.match(builder,/Preserve original evidence text/);
+console.log('PASS POLRI standalone-only logo, Smart Radar name and preserved evidence');

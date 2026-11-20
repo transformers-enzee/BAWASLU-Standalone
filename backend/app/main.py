@@ -795,6 +795,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         chosen_social=[]
         context_pdf=[]
         response_profile=SOCIAL_ANALYSIS
+    # Social-analysis answers should not append unrelated formal Inbox records.
+    # Keep explicit named INT IDs available for officer-requested comparisons.
+    if response_profile==SOCIAL_ANALYSIS and not explicit_formal_ids:
+        selected_formal=[]
     evidence=evidence_for_profile(
         response_profile,
         [assistant_evidence_record(row) for row in selected_formal],
@@ -884,8 +888,13 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # a contextual source card is not proof that a claim was cited.
     from .assistant_grounding import audit_assistant_answer
     answer_lang=meta.get('answer_language') or language
-    text,cited,grounding_audit=audit_assistant_answer(
-        q,evidence,text,cited,profile=response_profile,language=answer_lang)
+    # Findings are separately rendered in AssistantIntelligenceReport. They are
+    # still part of the visible response, so citations inside those findings
+    # must count in the reference audit and evidence-card matching.
+    from .assistant_visible_citations import audit_visible_assistant_parts
+    text,cited,grounding_audit,visible_findings=audit_visible_assistant_parts(
+        q,evidence,text,cited,meta.get('analytical_findings'),
+        profile=response_profile,language=answer_lang)
     meta['grounding_audit']=grounding_audit
     from .assistant_answer_quality import evaluate_answer_quality
     answer_quality=evaluate_answer_quality(
@@ -907,11 +916,15 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         elif cid in social_by_id:support.append(social_record_view(social_by_id[cid]))
         elif cid in pdf_by_id:support.append(pdf_by_id[cid])
         used.add(cid)
-    # Return representative source cards even if provider omitted citations.
+    # Only contextualize from the same selected evidence type. A generic
+    # social question must not display unrelated UAT or news Inbox cards.
     if not support:
-        support=[social_record_view(x) for x in chosen_social[:4]]
-        support += [assistant_record_view(x) for x in selected_formal[:3]]
-        support += context_pdf[:3]
+        if response_profile==SOCIAL_ANALYSIS:
+            support=[social_record_view(x) for x in chosen_social[:4]]
+        else:
+            support=[social_record_view(x) for x in chosen_social[:4]]
+            support += [assistant_record_view(x) for x in selected_formal[:3]]
+            support += context_pdf[:3]
     if source_warning:
         if (meta.get('answer_language') or language)=='id':
             source_warning='Sumber Social Listening sementara tidak dapat diambil; analisis mungkin belum lengkap.'
@@ -952,7 +965,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
         'provider':meta,'response_profile':response_profile,
         'evidence_snapshot':snapshot,
-        'analytical_findings':None if response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else meta.get('analytical_findings'),
+        'analytical_findings':None if response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else visible_findings,
         'featured_sources':featured,
         'answer_language':meta.get('answer_language') or language,
         'detected_tags':displayed_tags,

@@ -1,4 +1,5 @@
-import { ClipboardCheck, FileSearch } from 'lucide-react';
+import { ClipboardCheck, FileSearch, Copy } from 'lucide-react';
+import {useState} from 'react';
 import AssistantAnswer from './AssistantAnswer';
 import {textFor,friendlySource,assistantLocale} from '@/lib/assistantResponseLocale';
 import {findingSourceIds,withoutRepeatedFindingRefs} from '@/lib/assistantFindingSources';
@@ -10,15 +11,29 @@ function Links({text,records}){
 }
 export default function AssistantIntelligenceReport({findings,records,language='id',labels={},compact=false}){
  const t=key=>textFor(language,labels,key);
+ const [copyState,setCopyState]=useState('');
  const observations=(findings?.observations||[]).filter(x=>typeof x==='string'&&x.trim()).slice(0,compact?3:6);
  const steps=(findings?.review_steps||[]).filter(x=>typeof x==='string'&&x.trim()).slice(0,compact?3:5);
  if(!observations.length&&!steps.length)return null;
  const StepsContainer='div';
+ async function copyReviewPlan(){
+  try{
+   if(!navigator?.clipboard?.writeText)throw Error('Clipboard unavailable');
+   await navigator.clipboard.writeText(steps.map((step,i)=>(i+1)+'. '+step).join('\n\n'));
+   setCopyState('copied');
+  }catch{
+   setCopyState('failed');
+  }
+ }
  return <section aria-label={t("findings_heading")} className="mt-5 space-y-5" data-i18n-exempt lang={assistantLocale(language)}>
   {!!observations.length&&<div><div className="flex items-center gap-2 mb-3"><FileSearch size={18} className="text-[#801b24]"/><h3 className="text-lg font-bold text-[#801b24]">{t('findings_heading')}</h3></div><div className="grid grid-cols-1 gap-3">{observations.map((item,i)=><article className="min-w-0 rounded-xl border border-[#e5eaf0] bg-white p-4" key={i}><div className="flex justify-between"><span className="text-xs font-bold tracking-wide text-[#801b24]">{t('finding_label').toUpperCase()} {i+1}</span><span className="text-xs text-[#64748b]">{t('needs_review')}</span></div><div className="mt-3 text-sm leading-relaxed"><AssistantAnswer text={friendlySource(withoutRepeatedFindingRefs(item,language),language,labels)}/></div><Links text={item} records={records}/></article>)}</div></div>}
   {!!steps.length&&<StepsContainer className="rounded-xl border border-[#e5eaf0] bg-white p-4 space-y-3" data-officer-actions-visible="true">
     <div className="flex items-center gap-2 mb-3"><ClipboardCheck size={18} className="text-[#801b24]"/><h3 className="text-lg font-bold text-[#801b24]">{language==='id'?'Tindak Lanjut Prioritas BAWASLU':language==='en'?'Priority BAWASLU Officer Actions':t('verification_heading')}</h3></div>
-    <p className="text-xs text-slate-600">{language==='id'?'Usulan untuk penelaahan petugas. Tidak ada penugasan, penerusan atau penetapan otomatis.':'Proposed officer review only. No automatic assignment, referral or legal finding.'}</p>
+    <div className="flex flex-wrap items-start justify-between gap-2">
+     <p className="text-xs text-slate-600 max-w-2xl">{language==='id'?'Usulan untuk penelaahan petugas. Tidak ada penugasan, penerusan atau penetapan otomatis.':'Proposed officer review only. No automatic assignment, referral or legal finding.'}</p>
+     <button type="button" onClick={copyReviewPlan} className="intel-ghost inline-flex items-center gap-1.5 text-xs" aria-label={language==='id'?'Salin rencana tindak lanjut':'Copy officer review plan'} data-testid="assistant-copy-officer-plan"><Copy size={13}/>{language==='id'?'Salin rencana':'Copy plan'}</button>
+    </div>
+    {copyState&&<p role="status" className="text-[11px] text-[#52657a]">{copyState==='copied'?(language==='id'?'Rencana tindak lanjut disalin.':'Review plan copied.'):(language==='id'?'Tidak dapat menyalin. Salin teks langkah secara manual.':'Clipboard unavailable; copy the steps manually.')}</p>}
     <div className={compact?'mt-4 space-y-2':'space-y-2'}>{steps.map((item,i)=><article key={i} className="rounded-xl border border-[#e5eaf0] bg-white p-4 flex gap-3"><div className="shrink-0 w-8 h-8 grid place-items-center rounded-lg bg-[#f2e7e8] text-[#801b24] font-bold">{i+1}</div><div className="min-w-0 flex-1"><AssistantAnswer text={friendlySource(withoutRepeatedFindingRefs(item,language),language,labels)}/><Links text={item} records={records}/></div></article>)}</div></StepsContainer>}
   <p className="text-xs text-[#64748b]">{t('review_notice')}</p>
  </section>;

@@ -2,9 +2,11 @@
 # DATABASE_URL, Supabase, OpenAI or SocialCrawl runtime is installed.
 FROM node:22-alpine AS build
 WORKDIR /src/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY frontend/package*.json ./
+RUN npm install --no-audit --no-fund
 COPY frontend/ ./
+# Frontend contract QA uses backend source, but it is NOT copied to Nginx.
+COPY backend/ /src/backend/
 ENV VITE_DEMO_STANDALONE=1
 RUN npm run build
 

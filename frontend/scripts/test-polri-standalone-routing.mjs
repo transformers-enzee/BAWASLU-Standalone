@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const nginx=fs.readFileSync(new URL('../../deploy/polri-demo.nginx.conf',import.meta.url),'utf8');
+const docker=fs.readFileSync(new URL('../../Dockerfile.polri-demo',import.meta.url),'utf8');
+const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+assert.match(nginx,/location = \/ \{ return 302 \/demo\/; \}/);
+assert.match(nginx,/absolute_redirect off;/);
+assert.match(nginx,/port_in_redirect off;/);
+assert.match(nginx,/location \^~ \/demo\/ \{[\s\S]*?try_files \$uri \/index\.html;/);
+assert.doesNotMatch(nginx,/try_files \$uri \$uri\//);
+assert.match(nginx,/location \^~ \/api\/ \{ return 403; \}/);
+assert.match(docker,/FROM nginx:/);
+assert.doesNotMatch(docker,/COPY --from=build \/src\/backend/);
+assert.match(main,/import\('@\/demo\/realBridge\.js'\)/);
+console.log('PASS standalone POLRI demo SPA routing and offline guards');

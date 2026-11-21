@@ -368,8 +368,8 @@ export default function IntelligenceAssistant(){
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         {['CASE_REVIEW','CROSS_MODULE_REVIEW'].includes(m.response_profile)&&m.grounding?.formal_selected_count===0&&<p className="my-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Tidak ditemukan catatan Intelligence Inbox yang relevan dengan pertanyaan dalam cakupan akses ini. Bukti Social Listening tetap merupakan informasi awal yang perlu diverifikasi.</p>}
-        {m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantIntelligenceReport findings={m.analytical_findings} records={m.records} language={m.answer_language||'id'} labels={m.presentation_labels} compact={m.response_profile==='SOCIAL_ANALYSIS'}/>}
+        {m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsights snapshot={m.evidence_snapshot} grounding={m.grounding} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <AssistantRecords records={m.records} featured={m.featured_sources}
           citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}
           language={m.answer_language||'id'} labels={m.presentation_labels}

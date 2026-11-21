@@ -47,7 +47,13 @@ def select_action_evidence(matched_rows, question, limit=20, reserve=6):
         int(str(r.get("id") or "0")) if str(r.get("id") or "").isdigit() else 0
     ),reverse=True)
     priority=pending[:min(count,max(0,int(reserve)))]
-    chosen=ranked[:max(0,count-len(priority))]
+    # Keep dismissed prior allegations out of the front of action queues.
+    # They may be revisited only when the question explicitly names a source
+    # or no alternative authorized record is available.
+    active=[r for r in ranked if str(
+        r.get("flag_review_status") or "").strip().upper()!="FLAG_DISMISSED"]
+    base=active if active else ranked
+    chosen=base[:max(0,count-len(priority))]
     used={str(r.get("id")) for r in chosen}
     for r in priority:
         rid=str(r.get("id"))

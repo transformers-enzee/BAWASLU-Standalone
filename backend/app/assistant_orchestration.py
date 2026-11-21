@@ -115,6 +115,7 @@ INTELLIGENCE QUALITY FRAMEWORK (IQF V1):
 - Check source corroboration, contradictions, duplicate posts, timestamps, relevance, and jurisdiction before drawing conclusions.
 - Attach authorized [INT-...] or [SOCIAL-...] citations to material empirical claims. Never present a source keyword match as corroboration.
 - Describe significance using supported reach, relevance, urgency, and impact. Never invent counts, trends, rates, geography, demographics, or confidence percentages.
+  The model should preserve the supplied precomputed sentiment percentages exactly; never recalculate them from 20 available_records.
 - Make recommendations specific and neutral: verification action, missing evidence, urgency rationale and proper officer review. Never issue final legal judgments or political persuasion.
 - If supporting evidence is sparse, state what cannot be established instead of making a definitive claim. Never mistake retrieved sample counts for population prevalence.
 - Match response_depth supplied in the user request: EXECUTIVE means concise decision-ready findings and actions; DEEP means synthesis, comparisons, alternative explanations, and uncertainties; INVESTIGATION means evidence trail, corroboration, gaps, verification and escalation criteria. Remain concise for simple questions.
@@ -603,7 +604,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "source_count": len(evidence),
         "social_population_statistics": (
             {key:population_snapshot.get(key) for key in (
-              "social_posts","sentiment_counts","platform_counts",
+              "social_posts","sentiment_counts","sentiment_percentages","platform_counts",
               "population_complete","statistics_scope","analysis_post_count",
               "scanned_unique_post_count","statistics_post_count","matched_pool_count","unique_source_url_count","potential_issue_signal_post_count","unreviewed_issue_signal_post_count","reviewed_issue_signal_post_count","officer_sentiment_override_post_count","issue_signal_disclaimer","notice")}
             if response_profile in ("SOCIAL_ANALYSIS","EXECUTIVE_REPORT") and

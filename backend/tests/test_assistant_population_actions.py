@@ -49,6 +49,8 @@ def test_query_wide_counts_are_not_limited_to_twenty_evidence_posts():
     assert snapshot["statistics_post_count"]==125
     assert snapshot["analysis_post_count"]==20
     assert sum(snapshot["sentiment_counts"].values())==125
+    assert snapshot["sentiment_percentages"]["NEGATIVE"]==round(100*63/125,1)
+    assert snapshot["sentiment_percentages"]["NEUTRAL"]==round(100*62/125,1)
     assert snapshot["potential_issue_signal_post_count"]==9
     assert snapshot["unreviewed_issue_signal_post_count"]==6
     assert snapshot["reviewed_issue_signal_post_count"]==3
@@ -90,3 +92,42 @@ def test_saved_issue_flag_is_not_a_case_assignment():
     assert result["potential_issue_signal_post_count"]==1
     assert result["unreviewed_issue_signal_post_count"]==1
     assert "not verified electoral" in result["issue_signal_disclaimer"]
+
+
+def test_officer_dismissal_is_not_pending_or_live_signal():
+    dismissed=_post(100,flagged=False,reviewed=False)
+    dismissed["potential_issues"]=[{"type":"OLD_AI_SUGGESTION"}]
+    dismissed["flag_review_status"]="FLAG_DISMISSED"
+    old_unaccepted=_post(101,flagged=False,reviewed=False)
+    old_unaccepted["potential_issues"]=[{"type":"UNACCEPTED_AI_SUGGESTION"}]
+    pending=_post(102,flagged=True,reviewed=False)
+    reviewed=_post(103,flagged=True,reviewed=False)
+    reviewed["flag_review_status"]="FURTHER_INVESTIGATION"
+    snapshot=collect_social_population(
+        None,{},"Analisis Gibran",
+        _paged_action([dismissed,old_unaccepted,pending,reviewed]))["snapshot"]
+    assert snapshot["social_posts"]==4
+    assert snapshot["potential_issue_signal_post_count"]==2
+    assert snapshot["unreviewed_issue_signal_post_count"]==1
+    assert snapshot["reviewed_issue_signal_post_count"]==1
+    ordered=[dismissed,old_unaccepted,pending,reviewed]
+    selected=select_action_evidence(
+        ordered,"Apa langkah tindak lanjut BAWASLU terkait Gibran?",limit=2,reserve=2)
+    assert "102" in [row["id"] for row in selected]
+    assert "100" not in [row["id"] for row in selected]
+
+
+def test_empty_population_has_zero_shares_without_divide_by_zero():
+    snapshot=collect_social_population(
+        None,{},"Gibran",_paged_action([]))["snapshot"]
+    assert snapshot["social_posts"]==0
+    assert snapshot["population_complete"] is True
+    assert all(value==0.0 for value in snapshot["sentiment_percentages"].values())
+
+
+def test_missing_pagination_metadata_does_not_claim_complete_scan():
+    post=_post(1)
+    action=lambda db,profile,name,args:{"findings":[post],"pagination":{}}
+    result=collect_social_population(None,{},"Gibran",action)
+    assert result["complete"] is False
+    assert "INCOMPLETE" in result["snapshot"]["statistics_scope"]

@@ -770,7 +770,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         selected_formal=select_assistant_records(q,focus_pool,limit=10)
         try:
             from .campaigns import campaign_action
-            if response_profile==SOCIAL_ANALYSIS:
+            if response_profile in (SOCIAL_ANALYSIS,EXECUTIVE_REPORT):
                 # Authorized query-wide counts are calculated separately
                 # from the bounded selection sent to the AI model.
                 from .assistant_social_population import collect_social_population, select_action_evidence

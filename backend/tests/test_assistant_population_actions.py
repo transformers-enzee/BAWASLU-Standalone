@@ -192,3 +192,16 @@ def test_population_numeric_audit_does_not_condemn_hypothetical_scenario():
     result=evaluate_population_statistics_answer(
         "Contoh hipotetis: 80% sentimen negatif jika topik meningkat.",snapshot)
     assert result["status"]=="NOT_APPLICABLE"
+
+
+def test_undismissed_sources_fill_action_evidence_before_dismissed_history():
+    active=[_post(i) for i in range(101,125)]
+    dismissed=[_post(i,flagged=False) for i in range(1,8)]
+    for row in dismissed:
+        row["flag_review_status"]="FLAG_DISMISSED"
+    # Put dismissed rows first to test preference throughout the fill loop.
+    ranked=dismissed+active
+    chosen=select_action_evidence(
+        ranked,"Apa langkah tindak lanjut BAWASLU?",limit=20)
+    assert len(chosen)==20
+    assert all(x["flag_review_status"]!="FLAG_DISMISSED" for x in chosen)

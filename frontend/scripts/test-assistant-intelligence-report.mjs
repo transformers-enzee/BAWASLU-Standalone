@@ -39,8 +39,12 @@ assert.ok(page.includes("m.response_profile==='SOCIAL_ANALYSIS'&&<AssistantInsig
   'only sentiment/social analysis should show the numerical dashboard');
 assert.ok(records.includes("t('sources_heading')"),'visual source gallery present');
 assert.ok(records.includes('mergeSocialCards(records||[],featured||[])'), 'all retrieved social evidence remains visible, with featured cards deduplicated');
-assert.ok(dashboard.includes('Every chart uses the same')&&dashboard.includes('snapshot.matched_pool_count'),
-  'the social dashboard and AI narrative use one clearly disclosed set of posts');
+assert.ok(dashboard.includes('PERMISSION_SCOPED_QUERY_MATCHED_SCAN')&&
+          dashboard.includes('snapshot.population_complete===true')&&
+          dashboard.includes('data-testid="assistant-statistics-coverage"')&&
+          dashboard.includes('snapshot.analysis_post_count')&&
+          dashboard.includes('Pemindaian belum selesai'),
+  'statistics may cover more posts than AI excerpts, but coverage and incomplete scans must be disclosed');
 assert.ok(dashboard.includes('data-advanced-social-metrics'),
   'additional engagement and date statistics are collapsed by default');
 assert.ok(records.includes('rel="noopener noreferrer"'),'external links isolated');

@@ -1,0 +1,78 @@
+name: BAWASLU v175.77 staging Docker image
+
+on:
+  push:
+    branches:
+      - architecture-v2-foundation-20261015
+    paths:
+      - ".github/workflows/bawaslu-v17577-ghcr-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: bawaslu-v17577-ghcr-image
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build verified image, publish to GHCR (no Render deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push only if Dockerfile tests succeed
+        id: image_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            BAWASLU_BUILD_VERSION=175.77
+            BAWASLU_BUILD_COMMIT=${{ github.sha }}
+          tags: |
+            ghcr.io/transformers-enzee/bawaslu-standalone:v175.77
+            ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
+          provenance: false
+      - name: Record published image digest for manual staging deployment
+        env:
+          IMAGE_DIGEST: ${{ steps.image_build.outputs.digest }}
+        run: |
+          mkdir -p release-manifests
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload={
+            "version":"175.77",
+            "source_commit":os.environ["GITHUB_SHA"],
+            "image":"ghcr.io/transformers-enzee/bawaslu-standalone",
+            "tag":"v175.77",
+            "digest":os.environ["IMAGE_DIGEST"],
+            "image_reference":"ghcr.io/transformers-enzee/bawaslu-standalone@"+os.environ["IMAGE_DIGEST"],
+            "github_run":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+            "deployment":"not_deployed_to_render",
+          }
+          Path("release-manifests/v17577.json").write_text(
+              json.dumps(payload,indent=2)+"\n",encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release-manifests/v17577.json
+          git commit -m "Verify published BAWASLU v175.77 GHCR image digest"
+          git push origin HEAD:refs/heads/architecture-v2-foundation-20261015
+      - name: Write exact image reference to job summary
+        run: |
+          echo "BAWASLU v175.77 image published after Dockerfile checks." >> "${GITHUB_STEP_SUMMARY}"
+          echo "ghcr.io/transformers-enzee/bawaslu-standalone:v175.77" >> "${GITHUB_STEP_SUMMARY}"
+          echo "ghcr.io/transformers-enzee/bawaslu-standalone:sha-${GITHUB_SHA}" >> "${GITHUB_STEP_SUMMARY}"

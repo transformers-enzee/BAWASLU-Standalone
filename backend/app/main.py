@@ -761,6 +761,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     chosen_social=[]
     accessible=[]
     matched_social=0
+    population_snapshot=None
+    population_complete=False
     if not general and response_profile!=PDF_GUIDANCE:
         accessible=list_intelligence(db,p)
         focus_pool=(cross_module_formal_focus(q,accessible)
@@ -768,9 +770,19 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         selected_formal=select_assistant_records(q,focus_pool,limit=10)
         try:
             from .campaigns import campaign_action
-            result=campaign_action(db,p,'campaignIntelligenceInbox',{})
-            social_rows=result.get('findings') or []
-            chosen_social,matched_social=_social_select(social_rows,q,limit=20)
+            if response_profile==SOCIAL_ANALYSIS:
+                # Authorized query-wide counts are calculated separately
+                # from the bounded selection sent to the AI model.
+                from .assistant_social_population import collect_social_population
+                population=collect_social_population(db,p,q,campaign_action)
+                matched_social=population['matched_count']
+                population_snapshot=population['snapshot']
+                population_complete=population['complete']
+                chosen_social=population['matched_rows'][:20]
+            else:
+                result=campaign_action(db,p,'campaignIntelligenceInbox',{})
+                social_rows=result.get('findings') or []
+                chosen_social,matched_social=_social_select(social_rows,q,limit=20)
         except PermissionError:
             raise HTTPException(403,'Social source access denied')
         except Exception:
@@ -882,6 +894,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             response_depth=response_depth,
             reference_catalog=reference_catalog,response_profile=response_profile,
             duplicate_groups=duplicate_groups,
+            population_snapshot=population_snapshot,
             officer_scope={'geographic_scope':p.get('geographic_scope'),
                            'province':p.get('province') or '',
                            'regency_city':p.get('regency_city') or ''})
@@ -947,14 +960,17 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     featured=[]
     if response_profile==SOCIAL_ANALYSIS:
         from .assistant_orchestration import evidence_snapshot
-        # The charts and the model must use exactly the same authorized,
-        # relevance-ranked and deduplicated post IDs. Previous code counted
-        # a 300-post search pool while the answer analyzed just 20.
-        snapshot=evidence_snapshot([social_evidence(row) for row in chosen_social])
+        # Charts use query-matched authorized scanned posts. AI citations
+        # remain bounded to 20 individually retrieved source excerpts.
+        # Incomplete scans are always labeled as partial.
+        snapshot=population_snapshot
+        if snapshot is None:
+            snapshot=evidence_snapshot([social_evidence(row) for row in chosen_social])
+            snapshot['population_complete']=False
+            snapshot['statistics_scope']='AI_EVIDENCE_SAMPLE_ONLY'
+            snapshot['matched_pool_count']=matched_social
         snapshot['analysis_post_count']=len(chosen_social)
-        snapshot['statistics_post_count']=len(chosen_social)
-        snapshot['matched_pool_count']=matched_social
-        snapshot['statistics_scope']='SAME_SELECTED_POSTS_AS_AI_ANALYSIS'
+        snapshot['statistics_post_count']=snapshot['social_posts']
         featured=source_cards_for_question(chosen_social,cited,social_record_view,limit=4)
     if response_profile in (CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT):
         featured=source_cards_for_question(chosen_social,cited,social_record_view,
@@ -985,6 +1001,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'grounding_audit':grounding_audit,
             'answer_quality':answer_quality,
             'matched_social':matched_social,
+            'population_complete':population_complete,
+            'statistics_post_count':snapshot.get('statistics_post_count') if snapshot else None,
             'formal_selected_count':len(selected_formal),
             'social_selected_count':len(chosen_social),
             'sample_not_exhaustive':bool(chosen_social) and response_profile==SOCIAL_ANALYSIS,

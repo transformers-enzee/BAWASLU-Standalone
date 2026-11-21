@@ -47,6 +47,7 @@ def test_relevance_is_question_specific_and_deduplicated():
     data=rows(40)
     for x in data[10:]:
         x["text_content"]="No relevant topic; unrelated subject"
+        x["topic_labels"]=[]
     result=collect_social_population("fake-db",{"geographic_scope":"Nationwide"},
              "Gibran pendidikan",paged(data))
     assert result["snapshot"]["social_posts"]==10

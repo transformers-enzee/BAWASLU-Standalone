@@ -26,11 +26,12 @@ ANSWER_SCHEMA={
     'answer_summary':{'type':'string'},
     'key_observations':{'type':'array','items':{'type':'string'},'maxItems':8},
     'evidence_status':{'type':'array','items':{'type':'string'},'maxItems':6},
+    'recommended_actions':{'type':'array','items':{'type':'string'},'maxItems':5},
     'date_basis':{'type':'string'},
     'limitations':{'type':'array','items':{'type':'string'},'maxItems':5},
     'cited_record_ids':{'type':'array','items':{'type':'string'},'maxItems':12}
   },
-  'required':['answer_summary','key_observations','evidence_status','date_basis','limitations','cited_record_ids'],
+  'required':['answer_summary','key_observations','evidence_status','recommended_actions','date_basis','limitations','cited_record_ids'],
   'additionalProperties':False
 }
 
@@ -52,6 +53,12 @@ Mandatory rules:
 13. Keep the answer useful for an analyst: concise, evidence-grounded, and traceable.
 14. When mentioning a human-validation timestamp, copy validated_at_display_utc exactly as supplied. Do not convert, infer, recalculate, or silently change its date/time. All validated_at_display_utc values are UTC.
 15. A record with validation_governance_state=LEGACY_GOVERNANCE_EXCEPTION has a historical validated status but does not satisfy one or more current validation prerequisites. Explicitly label it as a governance exception; do not present it as a clean current-rules validation.
+
+16. AVAILABLE RECORDS are a bounded evidence selection, not necessarily the entire matching database. Never present the selected-record count as full-dataset coverage, population sentiment, prevalence, or complete search results. Do not invent aggregates. Explicitly state that database-wide totals are unavailable if no aggregates are supplied.
+17. For substantive intelligence questions, provide the issue, grounded evidence IDs, operational implication, verification gaps, and feasible next review actions. Do not present recommended tasks as assigned or completed.
+18. recommended_actions must contain at most five specific Bahasa Indonesia recommendations, each describing suggested responsible function, concrete review/verification step, expected output, and urgency only when justified. For narrow factual questions this list may be empty.
+19. Distinguish whole-post sentiment from entity-targeted sentiment. Negative overall sentiment is not necessarily criticism of the entity asked about. Sentiment, political disagreement, demonstrations, and raw AI flags never prove a legal violation.
+20. Distinguish social allegations from verified official legal documents and approved officer findings. Never invent court decisions, legal citations, or dates.
 
 The assistant is read-only and does not validate, verify, modify, or promote intelligence records."""
 
@@ -333,6 +340,7 @@ def generate_openai_assistant_answer(question, previous_question, records):
       'current_question':str(question or '')[:500],
       'previous_question':str(previous_question or '')[:500],
       'query_semantics':semantics,
+      'evidence_selection':{'selected_record_count':len(records),'coverage':'bounded_evidence_selection_not_full_database','database_wide_aggregates_available':False},
       'available_records':records
     }
     request={
@@ -378,6 +386,7 @@ def format_assistant_answer(result):
       'RINGKASAN INTELIJEN\n'+str(result.get('answer_summary') or 'Tidak ada jawaban yang dapat didukung oleh data yang tersedia.').strip()+
       '\n\nOBSERVASI KUNCI\n'+lines(result.get('key_observations'))+
       '\n\nSTATUS BUKTI\n'+lines(result.get('evidence_status'))+
+      '\n\nREKOMENDASI TINDAK LANJUT (USULAN, BUKAN PENUGASAN)\n'+lines(result.get('recommended_actions'))+
       '\n\nDASAR WAKTU\n'+str(result.get('date_basis') or 'Tidak ada filter waktu khusus.').strip()+
       '\n\nKETERBATASAN\n'+lines(result.get('limitations'))
     )
@@ -387,10 +396,10 @@ def deterministic_assistant_answer(question, records, reason=''):
     if not records:
         return {
           'answer':(
-            'RINGKASAN INTELIJEN\nTidak ada catatan intelijen yang dapat diakses dan cocok dengan pertanyaan.\n\n'
+            'RINGKASAN INTELIJEN\nTidak ada catatan intelijen terpilih yang cocok dalam cakupan tersedia; ini tidak membuktikan database kosong.\n\n'
             'OBSERVASI KUNCI\n- Tidak ada observasi yang didukung oleh catatan yang tersedia.\n\n'
-            'STATUS BUKTI\n- Tidak ada bukti record yang cocok untuk ditampilkan.\n\n'
-            'DASAR WAKTU\n'+semantics['date_basis_note']+'\n\n'
+            'STATUS BUKTI\n- Tidak ada bukti record terpilih yang cocok untuk ditampilkan.\n\n'
+            'REKOMENDASI TINDAK LANJUT (USULAN, BUKAN PENUGASAN)\n- Periksa kembali cakupan, waktu, dan identitas sumber jika diperlukan.\n\nDASAR WAKTU\n'+semantics['date_basis_note']+'\n\n'
             'KETERBATASAN\n- Asisten tidak menyimpulkan fakta di luar catatan BAWASLU yang dapat diakses.'
           ),
           'cited_record_ids':[]
@@ -399,11 +408,12 @@ def deterministic_assistant_answer(question, records, reason=''):
     validated=sum(1 for r in records if r.get('review_status')=='Validated as Relevant Intelligence')
     unverified=sum(1 for r in records if r.get('verification_status')=='UNVERIFIED')
     result={
-      'answer_summary':f'Ditemukan {len(records)} catatan intelijen yang dapat diakses dan relevan dengan pertanyaan. {validated} telah divalidasi sebagai intelijen relevan; {unverified} masih didukung oleh sumber berstatus UNVERIFIED.',
+      'answer_summary':f'Dari {len(records)} rekaman bukti terpilih (bukan total seluruh dataset) yang relevan dengan pertanyaan, {validated} telah divalidasi sebagai intelijen relevan; {unverified} masih didukung oleh sumber berstatus UNVERIFIED.',
       'key_observations':[f"[{r['record_id']}] {r['title']}" for r in records[:5]],
       'evidence_status':[f'{validated} catatan berstatus Validated as Relevant Intelligence (penilaian relevansi manusia, bukan verifikasi kebenaran sumber).',f'{unverified} catatan memiliki sumber berstatus UNVERIFIED; klaim sumber belum terverifikasi.'],
       'date_basis':semantics['date_basis_note'],
-      'limitations':['Sintesis generatif tidak tersedia; jawaban ini adalah ringkasan deterministik dari catatan yang terpilih.'+(f' Status provider: {reason}.' if reason else '')],
+      'recommended_actions':['Petugas penelaah: periksa sumber asli dan konteks rekaman yang dikutip, lalu buat catatan verifikasi terdokumentasi sebelum menentukan eskalasi.'],
+      'limitations':['Jumlah bukti terpilih tidak mewakili seluruh dataset atau distribusi sentimen populasi.','Sintesis generatif tidak tersedia; jawaban ini adalah ringkasan deterministik dari catatan yang terpilih.'+(f' Status provider: {reason}.' if reason else '')],
       'cited_record_ids':ids
     }
     return {'answer':format_assistant_answer(result),'cited_record_ids':ids}

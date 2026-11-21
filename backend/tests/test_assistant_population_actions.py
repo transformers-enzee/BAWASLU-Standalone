@@ -153,3 +153,42 @@ def test_reviewed_signal_does_not_become_legal_verdict():
     assert source["issue_signal_active"] is True
     assert source["issue_review_status"]=="FLAG_CONFIRMED"
     assert "not a judicial" in source["issue_review_note"]
+
+
+def test_population_numeric_audit_accepts_actual_distribution():
+    from app.assistant_population_readiness import evaluate_population_statistics_answer
+    snapshot={"sentiment_percentages":{"NEGATIVE":47.2,"NEUTRAL":45.6,
+                 "POSITIVE":6.5,"UNKNOWN":0.7},
+              "statistics_post_count":307,"population_complete":True}
+    result=evaluate_population_statistics_answer(
+        "Negatif: 145 (47,2%). Netral 45,6%. Positif 6,5%.",snapshot)
+    assert result["status"]=="PASS_LEXICAL_ONLY"
+    assert result["checked_shares"]==3
+    assert result["mismatches"]==[]
+
+def test_population_numeric_audit_flags_stale_twenty_post_share():
+    from app.assistant_population_readiness import evaluate_population_statistics_answer
+    snapshot={"sentiment_percentages":{"NEGATIVE":47.2,"NEUTRAL":45.6,
+                 "POSITIVE":6.5,"UNKNOWN":0.7},
+              "statistics_post_count":307,"population_complete":True}
+    result=evaluate_population_statistics_answer(
+        "Sentimen negatif 35% berdasarkan data Social Listening.",snapshot)
+    assert result["status"]=="REVIEW_REQUIRED"
+    assert result["mismatches"][0]["label"]=="NEGATIVE"
+
+def test_population_numeric_audit_rejects_false_complete_claim():
+    from app.assistant_population_readiness import evaluate_population_statistics_answer
+    snapshot={"sentiment_percentages":{"NEGATIVE":60.0,"NEUTRAL":40.0},
+              "statistics_post_count":100,"population_complete":False}
+    result=evaluate_population_statistics_answer(
+        "Seluruh data menunjukkan 60% sentimen negatif.",snapshot)
+    assert result["status"]=="REVIEW_REQUIRED"
+    assert {"scope":"partial_scan_claimed_complete"} in result["mismatches"]
+
+def test_population_numeric_audit_does_not_condemn_hypothetical_scenario():
+    from app.assistant_population_readiness import evaluate_population_statistics_answer
+    snapshot={"sentiment_percentages":{"NEGATIVE":47.2},
+              "statistics_post_count":307,"population_complete":True}
+    result=evaluate_population_statistics_answer(
+        "Contoh hipotetis: 80% sentimen negatif jika topik meningkat.",snapshot)
+    assert result["status"]=="NOT_APPLICABLE"

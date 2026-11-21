@@ -205,3 +205,30 @@ def test_undismissed_sources_fill_action_evidence_before_dismissed_history():
         ranked,"Apa langkah tindak lanjut BAWASLU?",limit=20)
     assert len(chosen)==20
     assert all(x["flag_review_status"]!="FLAG_DISMISSED" for x in chosen)
+
+
+def test_platform_population_totals_reconcile_across_more_than_six_platforms():
+    posts=[_post(i) for i in range(1,13)]
+    for i,row in enumerate(posts):
+        row["platform"]=f"Provider{i}"
+    result=collect_social_population(
+        None,{},"Analisis Gibran",_paged_action(posts))
+    snapshot=result["snapshot"]
+    assert snapshot["population_complete"] is True
+    assert snapshot["platform_distinct_count"]==12
+    assert snapshot["platform_other_count"]==4
+    assert sum(snapshot["platform_counts"].values())==12
+    assert snapshot["platform_counts"]["Other platforms"]==4
+    assert snapshot["platform_post_count"]==snapshot["statistics_post_count"]
+
+
+def test_platform_rollup_preserves_all_seven_platforms():
+    posts=[_post(i) for i in range(1,8)]
+    for i,row in enumerate(posts):
+        row["platform"]=f"Provider{i}"
+    snapshot=collect_social_population(
+        None,{},"Analisis Gibran",_paged_action(posts))["snapshot"]
+    assert snapshot["platform_distinct_count"]==7
+    assert len(snapshot["platform_counts"])==7
+    assert snapshot["platform_other_count"]==0
+    assert sum(snapshot["platform_counts"].values())==7

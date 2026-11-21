@@ -14,7 +14,12 @@ export default function AssistantInsights({snapshot,grounding,language='id',labe
  const analyzed=snapshot.analysis_post_count||snapshot.social_posts;
  const total=snapshot.social_posts;
  const sentiments=Object.entries(snapshot.sentiment_counts||{}).filter(([k,v])=>COLORS[k]&&Number.isInteger(v)&&v>0).map(([k,v])=>({key:k,name:t(({POSITIVE:'positive',NEUTRAL:'neutral',NEGATIVE:'negative',UNKNOWN:'unknown'})[k]),value:v}));
- const platforms=Object.entries(snapshot.platform_counts||{}).filter(([,v])=>Number.isInteger(v)&&v>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
+ // Server already includes an explicit Other platforms rollup when needed.
+ // Never truncate these bars: the displayed counts must reconcile to total posts.
+ const platforms=Object.entries(snapshot.platform_counts||{}).filter(([,v])=>Number.isInteger(v)&&v>0).sort((a,b)=>b[1]-a[1]);
+ const distinctPlatforms=Number.isInteger(snapshot.platform_distinct_count)?snapshot.platform_distinct_count:platforms.length;
+ const countedPlatforms=platforms.reduce((sum,[,count])=>sum+count,0);
+ const platformCoverageComplete=countedPlatforms===total;
  const engagement=Object.entries(snapshot.platform_engagement||{}).filter(([,v])=>Number.isInteger(v)&&v>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
  const timeline=(snapshot.activity_by_date||[]).filter(x=>x&&typeof x.date==='string'&&Number.isInteger(x.posts)).slice(-31);
  const topics=Object.entries(snapshot.topic_counts||{}).slice(0,6);
@@ -23,7 +28,7 @@ export default function AssistantInsights({snapshot,grounding,language='id',labe
   <div className="flex flex-wrap justify-between items-center gap-2"><div><h2 className="text-lg font-bold text-[#801b24]">{t('stats_heading')}</h2><p className="text-xs text-[#64748b] mt-1">{t('stats_intro')}</p></div><span className="rounded-full bg-[#f5ebec] text-[#801b24] px-3 py-1 text-xs font-semibold">{expanded?(complete?(language==='id'?'Pencarian data selesai':'Saved-data scan complete'):(language==='id'?'Pemindaian parsial':'Partial scan')):t('sample_note')}</span></div>
   <div className="grid grid-cols-2 gap-3">
    <Metric label={t("posts")} value={fmt(total)} note={expanded?(language==='id'?'Unggahan tersimpan yang cocok dalam cakupan pemindaian':'Matching saved posts in scanned scope'):(language==='id'?'Sampel unggahan yang dianalisis AI':'Posts analyzed by AI in this sample')}/>
-   <Metric label={t("platforms")} value={fmt(platforms.length)} note={t("sample_platforms")}/>
+   <Metric label={t("platforms")} value={fmt(distinctPlatforms)} note={t("sample_platforms")}/>
   </div>
   <div className="rounded-lg border border-[#dce5ec] bg-[#f7f9fb] p-3 text-xs text-[#52657a]" data-testid="assistant-statistics-coverage">
    {expanded
@@ -36,7 +41,7 @@ export default function AssistantInsights({snapshot,grounding,language='id',labe
   </div>
   <div className="grid lg:grid-cols-2 gap-4">
    <Panel title={t("sentiment_heading")}><div className="h-44" role="img" aria-label={sentiments.map(x=>x.name+': '+x.value).join(', ')}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sentiments} dataKey="value" nameKey="name" innerRadius={40} outerRadius={68} paddingAngle={2} isAnimationActive={false}>{sentiments.map(x=><Cell key={x.key} fill={COLORS[x.key]}/>)}</Pie><Tooltip formatter={v=>[fmt(v)+' '+t('posts'),t('posts')]}/></PieChart></ResponsiveContainer></div><div className="flex flex-wrap gap-3">{sentiments.map(x=><div key={x.key} className="text-xs flex gap-1 items-center"><span className="w-2.5 h-2.5 rounded-full" style={{background:COLORS[x.key]}}/>{x.name}: <strong>{fmt(x.value)}</strong></div>)}</div></Panel>
-   <Panel title={t("platform_volume")}><div className="space-y-3 mt-2">{platforms.map(([platform,count])=><div key={platform}><div className="flex justify-between text-xs mb-1"><span>{platform}</span><strong>{fmt(count)}</strong></div><div className="h-2.5 rounded-full bg-[#eff2f5] overflow-hidden"><div className="h-full bg-[#992d37] rounded-full" style={{width:100*count/total+'%'}}/></div></div>)}</div></Panel>
+   <Panel title={t("platform_volume")}><div className="space-y-3 mt-2" data-testid="assistant-platform-counts">{platforms.map(([platform,count])=><div key={platform}><div className="flex justify-between text-xs mb-1"><span>{platform}</span><strong>{fmt(count)}</strong></div><div className="h-2.5 rounded-full bg-[#eff2f5] overflow-hidden"><div className="h-full bg-[#992d37] rounded-full" style={{width:100*count/total+'%'}}/></div></div>)}</div><p className="mt-3 text-[11px] text-[#64748b]" data-testid="assistant-platform-reconciliation">{language==='id'?'Total unggahan menurut platform: ':'Total posts across platforms: '}{fmt(countedPlatforms)} / {fmt(total)}{platformCoverageComplete?'':(language==='id'?' · Perlu verifikasi selisih':' · Count discrepancy needs review')}</p></Panel>
   </div>
   <details className="rounded-xl border border-[#e5eaf0] bg-white p-4" data-advanced-social-metrics>
    <summary className="cursor-pointer select-none text-sm font-semibold text-[#801b24]">

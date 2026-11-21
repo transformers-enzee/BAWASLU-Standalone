@@ -569,7 +569,7 @@ def formal_evidence_count(evidence):
 
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
              reference_catalog=None, response_profile='SOCIAL_ANALYSIS',
-             duplicate_groups=None, officer_scope=None):
+             duplicate_groups=None, officer_scope=None, population_snapshot=None):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -602,6 +602,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         ),
         "recent_conversation": (history or [])[-20:],
         "source_count": len(evidence),
+        "social_population_statistics": (
+            {key:population_snapshot.get(key) for key in (
+              "social_posts","sentiment_counts","platform_counts",
+              "population_complete","statistics_scope","analysis_post_count",
+              "scanned_unique_post_count","notice")}
+            if response_profile=="SOCIAL_ANALYSIS" and
+               isinstance(population_snapshot,dict) else None),
         "formal_record_count":formal_evidence_count(evidence),
         "cross_module_inventory":cross_module_inventory(evidence)
             if response_profile in ("CASE_REVIEW","CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None,
@@ -680,13 +687,27 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              "Indonesian as requested."
              if executive_report else
             ("This is actionable BAWASLU officer decision support, not an authorization to create cases or send referrals. "
-             "The source records supplied here are exactly the same posts used in the "
-             "visible charts; any numerical sentiment breakdown or percentages MUST "
-             "be computed only from their saved sentiment labels, not guessed. "
-             "Do not describe more posts as analyzed than the supplied source_count. "
-             "Start with a concise 2-3 sentence executive summary; provide at most "
-             "three source-backed observations and three prioritized officer checks with role, evidence, expected output and escalation conditions "
-             "in the structured fields. Leave interpretation and limitations empty "
+             "The cited available_records are the bounded evidence excerpt, "
+             "NOT necessarily the entire statistical denominator. The visible "
+             "charts use social_population_statistics, which was aggregated "
+             "deterministically over separately retrieved, permission-scoped "
+             "question-matching saved posts. If population_complete is false, "
+             "state these are partial scan figures, not exhaustive counts. "
+             "Use ONLY social_population_statistics for quantitative counts "
+             "and percentages, never recompute percentages from available_records "
+             "or describe more individually reviewed AI posts than source_count. "
+             "ANSWER THE QUESTION FIRST: when asked for sentiment, begin with "
+             "the quantified sentiment and main narratives (not a legal memo). "
+             "Then add a clearly labeled 1-2 sentence BAWASLU OPERATIONAL "
+             "TAKEAWAY explaining the most defensible immediate decision, "
+             "including the possibility that no formal BAWASLU action is needed. "
+             "Provide at most three source-backed observations and three "
+             "ranked officer actions: IMMEDIATE source/narrative verification, "
+             "CONDITIONAL jurisdiction review if electoral nexus emerges, "
+             "and ESCALATE OR CLOSE based on specified evidence gates. "
+             "Each action needs a reviewing role, evidence, output and gate. "
+             "Avoid repetitive boilerplate and unsupported accusations. "
+             "Leave interpretation and limitations empty "
              "when already expressed in the summary. Do not invent a population or "
              "audience survey. Stay focused on the subject requested: do not "
              "emphasize unrelated co-mentioned candidates or provinces. "

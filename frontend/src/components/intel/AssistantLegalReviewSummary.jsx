@@ -12,6 +12,12 @@ const LABELS={
  SOURCE_RELEVANCE:['Source topic relevance','Relevansi topik rujukan'],
  VERSION_OR_EFFECTIVE_DATE:['Document version/date metadata','Metadata versi atau tanggal berlaku']
 };
+const DETAIL_LABELS={
+ DATE:['Date to verify','Tanggal yang perlu diverifikasi'],
+ QUANTITY:['Figure to verify','Jumlah yang perlu diverifikasi'],
+ ARTICLE:['Legal article requiring primary citation','Pasal yang memerlukan rujukan primer'],
+ CLAIM:['Statement requiring legal-source support','Klaim yang membutuhkan dukungan sumber hukum']
+};
 function Item({issue,id}){
  const title=LABELS[issue.code]||[issue.code,issue.code];
  return <li className="rounded-lg border border-[#e2e7eb] bg-white px-3 py-2">
@@ -20,7 +26,7 @@ function Item({issue,id}){
    <span className="font-semibold text-[#33475b]">{title[id?1:0]}</span>
   </div>
   {issue.source_ids?.length>0&&<p className="mt-1 text-[#697d8e]">{id?'Halaman/sumber terkait':'Related cited sources'}: {issue.source_ids.join(', ')}</p>}
-  {issue.detail_kinds?.length>0&&<p className="mt-1 text-[#697d8e]">{id?'Periksa jenis klaim':'Inspect claim details'}: {issue.detail_kinds.join(', ')}</p>}
+  {issue.detail_kinds?.length>0&&<p className="mt-1 text-[#697d8e]">{id?'Periksa jenis klaim':'Inspect claim details'}: {issue.detail_kinds.map(code=>DETAIL_LABELS[code]?.[id?1:0]).filter(Boolean).join(', ')}</p>}
  </li>;
 }
 export default function AssistantLegalReviewSummary({summary,language='id'}){

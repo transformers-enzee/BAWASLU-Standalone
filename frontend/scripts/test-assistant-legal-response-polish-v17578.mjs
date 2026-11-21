@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+const ui=read('../src/components/intel/AssistantLegalReviewSummary.jsx');
+const backend=read('../../backend/app/assistant_officer_action_cards.py');
+const orch=read('../../backend/app/assistant_orchestration.py');
+assert.ok(ui.includes("DETAIL_LABELS"),'Legal review must localize claim detail types');
+assert.ok(ui.includes("Klaim yang membutuhkan dukungan sumber hukum"));
+assert.ok(ui.includes("Pasal yang memerlukan rujukan primer"));
+assert.ok(!ui.includes("issue.detail_kinds.join(', ')"),'Do not expose raw CLAIM/ARTICLE internal codes');
+assert.ok(backend.includes("Removing unauthorized IDs can strand commas"));
+assert.ok(backend.includes('value=re.sub(r"\\s*[,;]\\s*[,;]'));
+assert.ok(orch.includes("no official ruling or BAWASLU case exists anywhere"));
+assert.ok(orch.includes("put evidence IDs only in source_ids"));
+console.log("BAWASLU v175.78 legal response polish: 8 offline source contracts passed");

@@ -1,0 +1,39 @@
+name: BAWASLU Assistant offline intelligence QA
+
+on:
+  push:
+    branches:
+      - architecture-v2-foundation-20261015
+    paths:
+      - "backend/app/assistant_social_population.py"
+      - "backend/app/assistant_orchestration.py"
+      - "backend/app/intelligence_assistant.py"
+      - "backend/app/main.py"
+      - "backend/tests/test_assistant_population_actions.py"
+      - "backend/tests/test_intelligence_assistant.py"
+      - ".github/workflows/assistant-intelligence-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assistant-regressions:
+    name: Offline Assistant regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENAI_API_KEY: ""
+      DATABASE_URL: "sqlite:///./assistant_qa.db"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run deterministic tests (no paid AI/provider calls)
+        working-directory: backend
+        run: python -m pytest -q tests/test_assistant_population_actions.py tests/test_intelligence_assistant.py

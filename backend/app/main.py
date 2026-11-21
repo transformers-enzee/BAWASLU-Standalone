@@ -839,6 +839,35 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                              'scope':'AUTHORIZED_PDF_REFERENCES',
                              'source_types':[],'reference_pdf_count':len(reference_catalog),
                              'reference_page_count':0,'limited':True}}
+    # A bounded scan can miss relevant posts beyond its safety limit.
+    # An empty, incomplete scan must not trigger confident "no evidence"
+    # answers or ungrounded general-GPT substitution.
+    if (response_profile==SOCIAL_ANALYSIS and not evidence and
+            population_snapshot and not population_complete):
+        message=('Pemindaian data Social Listening belum selesai dan belum '
+                 'menemukan unggahan yang cocok pada bagian yang diperiksa. '
+                 'Ini bukan bukti bahwa unggahan tersebut tidak ada. '
+                 'Persempit pertanyaan atau gunakan filter rentang waktu '
+                 'untuk pemeriksaan lebih lanjut.'
+                 if language=='id' else
+                 'The authorized Social Listening scan stopped before '
+                 'completion and found no matches in the scanned portion. '
+                 'This does not establish that no matching records exist. '
+                 'Narrow the topic or date range for further review.')
+        return {'answer':message,'records':[],
+                'provider':{'mode':'DETERMINISTIC_FALLBACK',
+                            'model':'','fallback_code':'partial_social_scan'},
+                'response_profile':SOCIAL_ANALYSIS,
+                'evidence_snapshot':population_snapshot,
+                'analytical_findings':None,'featured_sources':[],
+                'answer_language':language,'detected_tags':[],
+                'presentation_labels':{},
+                'grounding':{'accessible_count':len(accessible),
+                  'selected_count':0,'supporting_count':0,
+                  'matched_social':0,'social_selected_count':0,
+                  'population_complete':False,
+                  'scope':'AUTHORIZED_PARTIAL_SOCIAL_SCAN',
+                  'limited':True}}
     # An explicitly named saved post is an exact-source question. Never
     # substitute GPT general context when the ID was not authorized/found.
     explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)

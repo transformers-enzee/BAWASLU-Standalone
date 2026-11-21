@@ -9,6 +9,49 @@ from .assistant_orchestration import _social_select, social_evidence, evidence_s
 PAGE_SIZE=100
 MAX_PAGES=15
 
+
+def _issue_signal(row):
+    """Saved potential signals remain allegations, never legal determinations."""
+    return bool(row.get("is_flagged") is True or row.get("potential_issues"))
+
+
+def _review_candidate(row):
+    # An existing officer flag review takes precedence over model suggestions.
+    return _issue_signal(row) and not str(row.get("flag_review_status") or "").strip()
+
+
+def select_action_evidence(matched_rows, question, limit=20, reserve=6):
+    """Keep topical relevance ranking but surface pending review examples.
+
+    Only authorized, query-matched records are eligible. This changes which
+    excerpts GPT sees, not population statistics or officer review state.
+    """
+    from .assistant_officer_action_contract import officer_action_intent
+    count=max(0,min(int(limit),20))
+    ranked=list(matched_rows or [])
+    if not officer_action_intent(question) or not count:
+        return ranked[:count]
+    pending=[r for r in ranked if _review_candidate(r)]
+    pending.sort(key=lambda r:(
+        r.get("is_flagged") is True,
+        int(str(r.get("id") or "0")) if str(r.get("id") or "").isdigit() else 0
+    ),reverse=True)
+    priority=pending[:min(count,max(0,int(reserve)))]
+    chosen=ranked[:max(0,count-len(priority))]
+    used={str(r.get("id")) for r in chosen}
+    for r in priority:
+        rid=str(r.get("id"))
+        if rid not in used:
+            chosen.append(r)
+            used.add(rid)
+    for r in ranked:
+        if len(chosen)>=count:break
+        rid=str(r.get("id"))
+        if rid not in used:
+            chosen.append(r)
+            used.add(rid)
+    return chosen[:count]
+
 def collect_social_population(db, profile, question, campaign_action,
                               max_pages=MAX_PAGES):
     pages=max(1,min(int(max_pages),MAX_PAGES))
@@ -50,6 +93,23 @@ def collect_social_population(db, profile, question, campaign_action,
     matched_rows,matched_count=_social_select(
         list(all_rows.values()),question,limit=max(1,len(all_rows)))
     snapshot=evidence_snapshot([social_evidence(x) for x in matched_rows])
+    signal_rows=[row for row in matched_rows if _issue_signal(row)]
+    pending_rows=[row for row in signal_rows if _review_candidate(row)]
+    reviewed_rows=[row for row in signal_rows if not _review_candidate(row)]
+    unique_urls={str(r.get("canonical_url") or "").strip().casefold()
+                 for r in matched_rows if str(r.get("canonical_url") or "").strip()}
+    snapshot.update({
+        "potential_issue_signal_post_count":len(signal_rows),
+        "unreviewed_issue_signal_post_count":len(pending_rows),
+        "reviewed_issue_signal_post_count":len(reviewed_rows),
+        "officer_sentiment_override_post_count":sum(
+            str(row.get("sentiment_origin") or "").upper()=="OFFICER_CORRECTION"
+            for row in matched_rows),
+        "unique_source_url_count":len(unique_urls),
+        "issue_signal_disclaimer":(
+            "Saved potential-issue flags are triage leads, not verified electoral "
+            "violations, legal findings, or assigned cases."),
+    })
     snapshot.update({
         "basis":"PERMISSION_SCOPED_QUERY_MATCHED_SCAN",
         "population_complete":complete,

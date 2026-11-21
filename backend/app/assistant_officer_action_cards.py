@@ -44,12 +44,12 @@ def sanitize_officer_actions(items,permitted,limit=4):
                 if m.group(0).upper() in allowed else "",value)
             # Removing unauthorized IDs can strand commas or joining words.
             # Repair punctuation without inventing replacement evidence.
-            value=re.sub(r"\\s*[,;]\\s*[,;](?:\\s*[,;])*",", ",value)
-            value=re.sub(r"\\b(?:dan|serta|atau)\\s*(?=[.,;!?](?:\\s|$))","",value,flags=re.I)
-            value=re.sub(r"\\b(?:dalam|pada|oleh|dari)\\s*(?=[.,;!?](?:\\s|$))","",value,flags=re.I)
-            value=re.sub(r"\\s*[,;]\\s*(?=[.!?])","",value)
-            value=re.sub(r"\\s+([,;:.!?])",r"\\1",value)
-            value=re.sub(r"\\s{2,}"," ",value)
+            value=re.sub(r"\s*[,;]\s*[,;](?:\s*[,;])*",", ",value)
+            value=re.sub(r"\b(?:dan|serta|atau)\s*(?=[.,;!?](?:\s|$))","",value,flags=re.I)
+            value=re.sub(r"\b(?:dalam|pada|oleh|dari)\s*(?=[.,;!?](?:\s|$))","",value,flags=re.I)
+            value=re.sub(r"\s*[,;]\s*(?=[.!?])","",value)
+            value=re.sub(r"\s+([,;:.!?])",r"\1",value)
+            value=re.sub(r"\s{2,}"," ",value)
             return value.strip()
         item={name:clean(row.get(name)) for name in ACTION_FIELDS}
         if not item["task"]:

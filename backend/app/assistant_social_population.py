@@ -11,8 +11,18 @@ MAX_PAGES=15
 
 
 def _issue_signal(row):
-    """Saved potential signals remain allegations, never legal determinations."""
-    return bool(row.get("is_flagged") is True or row.get("potential_issues"))
+    """Count accepted live triage signals, never officer-dismissed flags."""
+    review=str(row.get("flag_review_status") or "").strip().upper()
+    if review=="FLAG_DISMISSED":
+        return False
+    if review in ("FLAG_CONFIRMED","FURTHER_INVESTIGATION"):
+        return True
+    # campaignIntelligenceInbox computes is_flagged after checking accepted
+    # signal provenance and the latest officer decision; trust that result
+    # over raw potential_issues, which may include screened-out suggestions.
+    if isinstance(row.get("is_flagged"),bool):
+        return row["is_flagged"]
+    return bool(row.get("potential_issues"))
 
 
 def _review_candidate(row):

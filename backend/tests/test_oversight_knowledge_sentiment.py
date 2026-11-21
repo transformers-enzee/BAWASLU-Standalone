@@ -565,7 +565,7 @@ def test_social_tags_focus_on_requested_candidate_without_unrequested_province()
     assert all(set(x["source_ids"]) <= {"SOCIAL-1","SOCIAL-2"} for x in actual)
 
 
-def test_social_metrics_use_exact_ai_sample_not_larger_result_pool(monkeypatch,db):
+def test_social_metrics_use_authorized_query_matched_population_not_unrelated_posts(monkeypatch,db):
     from app.main import intelligence_assistant
     from app import assistant_orchestration,domain,campaigns
     monkeypatch.setattr(domain,"list_intelligence",lambda *_:[])
@@ -582,7 +582,8 @@ def test_social_metrics_use_exact_ai_sample_not_larger_result_pool(monkeypatch,d
         source(504,"Gibran Rakabuming Raka video lama.","NEGATIVE",999999,"IRRELEVANT"),
     ]
     rows[2]["campaign_name"]="Other campaign"
-    monkeypatch.setattr(campaigns,"campaign_action",lambda *_a,**_kw:{"findings":rows})
+    monkeypatch.setattr(campaigns,"campaign_action",lambda *_a,**_kw:{
+        "findings":rows,"pagination":{"has_more":False}})
     def fake_generate(q,previous,evidence,mode,**kwargs):
         assert len([x for x in evidence if x.get("record_type")=="SOCIAL_LISTENING"])==2
         return ("Dua unggahan: satu netral dan satu negatif [SOCIAL-501] [SOCIAL-502].",
@@ -602,8 +603,10 @@ def test_social_metrics_use_exact_ai_sample_not_larger_result_pool(monkeypatch,d
         "conversationContext":[]},user(db,1),db)
     snap=result["evidence_snapshot"]
     assert result["response_profile"]=="SOCIAL_ANALYSIS"
-    assert snap["statistics_scope"]=="SAME_SELECTED_POSTS_AS_AI_ANALYSIS"
-    assert snap["social_posts"]==snap["analysis_post_count"]==snap["statistics_post_count"]==2
+    assert snap["statistics_scope"]=="ALL_MATCHED_AUTHORIZED_RECORDS_IN_PAGED_SCAN"
+    assert snap["population_complete"] is True
+    assert snap["social_posts"]==snap["statistics_post_count"]==2
+    assert snap["analysis_post_count"]==2
     assert snap["sentiment_counts"]["NEUTRAL"]==1
     assert snap["sentiment_counts"]["NEGATIVE"]==1
     assert sum(snap["sentiment_counts"].values())==2

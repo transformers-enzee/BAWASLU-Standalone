@@ -29,5 +29,12 @@ assert.ok(generator.includes('BAWASLU OPERATIONAL'));
 assert.ok(ui.includes('data-testid="assistant-statistics-coverage"'));
 assert.ok(ui.includes('Pemindaian belum selesai'));
 assert.ok(ui.includes('analysis_post_count'));
+assert.ok(ui.includes('data-testid="assistant-platform-reconciliation"'));
+assert.ok(ui.includes('platforms.reduce((sum,[,count])=>sum+count,0)'));
+assert.ok(!ui.includes('.slice(0,6);\n const engagement='));
+assert.ok(generator.includes('"platform_distinct_count":len(platforms)'));
+assert.ok(generator.includes('"platform_other_count":platform_other_count'));
+assert.ok(generator.includes('"platform_post_count":sum(platform_counts.values())'));
+
 assert.ok(page.indexOf('<AssistantIntelligenceReport findings=')<page.indexOf('<AssistantInsights snapshot='));
-console.log('Assistant population and action intelligence v175.76: coverage, review queue and citation contracts passed');
+console.log('Assistant population and action intelligence v175.77: coverage, review queue and citation contracts passed');

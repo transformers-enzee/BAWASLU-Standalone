@@ -93,6 +93,8 @@ EVIDENCE POLICY:
 - Mark allegations as allegations. Do not equate social mentions, sentiment, AI labels,
   candidate activity, or potential-violation signals with verified facts/legal wrongdoing.
 - Recorded AI relevance/issue suggestions are NOT human-confirmed findings.
+- Use issue_review_status in each available social record: FLAG_DISMISSED is an existing officer dismissal, not an open AI lead; FLAG_CONFIRMED and FURTHER_INVESTIGATION record officer review dispositions, not established legal guilt. Never recommend reopening a dismissed issue without a new verifiable development or an explicit officer instruction.
+- sentiment_origin=OFFICER_CORRECTION indicates the displayed saved sentiment has been amended by an officer, but it still describes the whole post, not an independently measured position toward each co-mentioned person.
 - Do not infer identity, location, vote intent, demographic attributes, or guilt.
 - Do not invent exact numbers, dates, links, quotations, or trends; only use server-computed social_population_statistics or report_sample_statistics for dataset-wide numeric claims, and disclose population_complete and scope. Available excerpts are a separate bounded sample, never a full-dataset denominator.
 - Distinguish direct evidence-based observations from analytical interpretation.
@@ -257,11 +259,17 @@ def social_evidence(row):
         "campaign": row.get("campaign_name") or "",
         "relevance_label": row.get("relevance_label") or "",
         "sentiment": row.get("sentiment") or "UNKNOWN",
+        "sentiment_origin": row.get("sentiment_origin") or "SAVED_ASSESSMENT",
+        "sentiment_target_scope": "WHOLE_POST_NOT_ENTITY_SPECIFIC",
         "topic_labels": (row.get("topic_labels") or [])[:5],
         "candidate_signals": (row.get("candidate_signals") or [])[:8],
         "province_hints": (row.get("location_signals") or [])[:8],
         "incident_jurisdiction_verified": row.get("incident_jurisdiction_verified") is True,
         "potential_issues": (row.get("potential_issues") or [])[:3],
+        "issue_signal_active": (row.get("is_flagged") is True and
+                                str(row.get("flag_review_status") or "").upper()!="FLAG_DISMISSED"),
+        "issue_review_status": str(row.get("flag_review_status") or "NOT_REVIEWED"),
+        "issue_review_note": "Officer review of an AI indicator is not a judicial or statutory finding.",
         "verification_status": "UNVERIFIED_SOCIAL_SOURCE",
         "validation_status": "AI_RELEVANCE_NOT_LEGAL_VERIFICATION"
     }
@@ -281,6 +289,9 @@ def social_record_view(row):
         "jurisdiction": "Not independently verified",
         "verification_status": "UNVERIFIED",
         "review_status": "Saved source evidence",
+        "issue_review_status": source["issue_review_status"],
+        "issue_signal_active": source["issue_signal_active"],
+        "sentiment_origin": source["sentiment_origin"],
         "priority": "", "evidence_type": "Social Listening",
         "approved_count": 0
     }

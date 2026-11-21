@@ -985,6 +985,21 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         q,evidence,visible_assistant_text(text,visible_findings),cited,
         profile=response_profile,grounding=grounding_audit)
     meta['answer_quality']=answer_quality
+    if (response_profile in (SOCIAL_ANALYSIS,EXECUTIVE_REPORT) and
+            population_snapshot is not None):
+        from .assistant_population_readiness import evaluate_population_statistics_answer
+        population_audit=evaluate_population_statistics_answer(
+            visible_assistant_text(text,visible_findings),population_snapshot)
+        meta['population_statistics_audit']=population_audit
+        answer_quality['population_statistics_audit']=population_audit
+        if population_audit['status']=='REVIEW_REQUIRED':
+            # A diagnostic warning, not a replacement for officer verification.
+            answer_quality['supplemental_review_required']=True
+            answer_quality['supplemental_review_count']+=1
+            answer_quality['additional_needs_review'].append(
+                'population_statistics_audit')
+            answer_quality['all_readiness_review_reasons'].append(
+                'population_statistics_audit')
     if isinstance(meta.get('quality'),dict):
         meta['quality']['cited_evidence_count']=len(cited)
         meta['quality']['citation_ids_valid']=grounding_audit['citation_ids_valid']

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -31,6 +31,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push only if Dockerfile tests succeed
+        id: image_build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -44,6 +45,32 @@ jobs:
             ghcr.io/transformers-enzee/bawaslu-standalone:v175.76
             ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
           provenance: false
+      - name: Record published image digest for manual staging deployment
+        env:
+          IMAGE_DIGEST: ${{ steps.image_build.outputs.digest }}
+        run: |
+          mkdir -p release-manifests
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload={
+            "version":"175.76",
+            "source_commit":os.environ["GITHUB_SHA"],
+            "image":"ghcr.io/transformers-enzee/bawaslu-standalone",
+            "tag":"v175.76",
+            "digest":os.environ["IMAGE_DIGEST"],
+            "image_reference":"ghcr.io/transformers-enzee/bawaslu-standalone@"+os.environ["IMAGE_DIGEST"],
+            "github_run":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+            "deployment":"not_deployed_to_render",
+          }
+          Path("release-manifests/v17576.json").write_text(
+              json.dumps(payload,indent=2)+"\\n",encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release-manifests/v17576.json
+          git commit -m "Verify published BAWASLU v175.76 GHCR image digest"
+          git push origin HEAD:refs/heads/architecture-v2-foundation-20261015
       - name: Write exact image reference to job summary
         run: |
           echo "BAWASLU v175.76 image published after Dockerfile checks." >> "${GITHUB_STEP_SUMMARY}"

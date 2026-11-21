@@ -773,12 +773,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             if response_profile==SOCIAL_ANALYSIS:
                 # Authorized query-wide counts are calculated separately
                 # from the bounded selection sent to the AI model.
-                from .assistant_social_population import collect_social_population
+                from .assistant_social_population import collect_social_population, select_action_evidence
                 population=collect_social_population(db,p,q,campaign_action)
                 matched_social=population['matched_count']
                 population_snapshot=population['snapshot']
                 population_complete=population['complete']
-                chosen_social=population['matched_rows'][:20]
+                chosen_social=select_action_evidence(population['matched_rows'],q,limit=20)
             else:
                 result=campaign_action(db,p,'campaignIntelligenceInbox',{})
                 social_rows=result.get('findings') or []
@@ -1001,6 +1001,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             snapshot['statistics_scope']='AI_EVIDENCE_SAMPLE_ONLY'
             snapshot['matched_pool_count']=matched_social
         snapshot['analysis_post_count']=len(chosen_social)
+        snapshot['action_evidence_post_count']=sum(
+            bool(row.get('is_flagged') is True or row.get('potential_issues')) and
+            not str(row.get('flag_review_status') or '').strip()
+            for row in chosen_social)
         snapshot['statistics_post_count']=snapshot['social_posts']
         featured=source_cards_for_question(chosen_social,cited,social_record_view,limit=4)
     if response_profile in (CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT):

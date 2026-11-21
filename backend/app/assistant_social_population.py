@@ -103,6 +103,14 @@ def collect_social_population(db, profile, question, campaign_action,
     matched_rows,matched_count=_social_select(
         list(all_rows.values()),question,limit=max(1,len(all_rows)))
     snapshot=evidence_snapshot([social_evidence(x) for x in matched_rows])
+    # Exact server-side numerators/denominator; never use the 20 excerpt
+    # limit for population percentages. Percentages are descriptive of posts.
+    denominator=len(matched_rows)
+    sentiment_counts=snapshot.get("sentiment_counts") or {}
+    snapshot["sentiment_percentages"]={
+        label:round(100*count/denominator,1) if denominator else 0.0
+        for label,count in sentiment_counts.items()
+    }
     signal_rows=[row for row in matched_rows if _issue_signal(row)]
     pending_rows=[row for row in signal_rows if _review_candidate(row)]
     reviewed_rows=[row for row in signal_rows if not _review_candidate(row)]

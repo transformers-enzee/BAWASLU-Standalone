@@ -843,7 +843,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # An empty, incomplete scan must not trigger confident "no evidence"
     # answers or ungrounded general-GPT substitution.
     if (response_profile==SOCIAL_ANALYSIS and not evidence and
-            population_snapshot and not population_complete):
+            not explicit_social_ids and not explicit_formal_ids and
+            not explicit_pdf_ids and population_snapshot and
+            not population_complete):
         message=('Pemindaian data Social Listening belum selesai dan belum '
                  'menemukan unggahan yang cocok pada bagian yang diperiksa. '
                  'Ini bukan bukti bahwa unggahan tersebut tidak ada. '

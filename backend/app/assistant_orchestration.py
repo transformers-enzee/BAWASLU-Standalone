@@ -952,12 +952,22 @@ def evidence_snapshot(evidence):
         for topic in row.get("topic_labels") or []:
             if isinstance(topic,str) and topic.strip():
                 topics[topic.strip()[:75]] += 1
+    ranked_platforms=platforms.most_common()
+    # Never silently drop low-volume platforms from the post denominator.
+    # Keep AI payload bounded but reconcile all platform counts with a rollup.
+    platform_counts=dict(ranked_platforms[:8])
+    platform_other_count=sum(count for _,count in ranked_platforms[8:])
+    if platform_other_count:
+        platform_counts["Other platforms"]=platform_other_count
     return {
         "basis":"PERMISSION_SCOPED_RETRIEVED_SAMPLE_ONLY",
         "social_posts":len(social),
         "formal_records":len(evidence)-len(social),
         "sentiment_counts":sentiments,
-        "platform_counts":dict(platforms.most_common(8)),
+        "platform_counts":platform_counts,
+        "platform_distinct_count":len(platforms),
+        "platform_other_count":platform_other_count,
+        "platform_post_count":sum(platform_counts.values()),
         "platform_engagement":dict(engagement_by_platform.most_common(8)),
         "observed_engagement":engagement_total,
         "engagement_coverage":engagement_coverage,

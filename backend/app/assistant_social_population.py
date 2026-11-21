@@ -60,12 +60,16 @@ def select_action_evidence(matched_rows, question, limit=20, reserve=6):
         if rid not in used:
             chosen.append(r)
             used.add(rid)
-    for r in ranked:
+    for pool in (base,ranked):
+        # Use current, non-dismissed evidence first; historical dismissals
+        # are a last resort when no other selected evidence fills the cap.
+        for r in pool:
+            if len(chosen)>=count:break
+            rid=str(r.get("id"))
+            if rid not in used:
+                chosen.append(r)
+                used.add(rid)
         if len(chosen)>=count:break
-        rid=str(r.get("id"))
-        if rid not in used:
-            chosen.append(r)
-            used.add(rid)
     return chosen[:count]
 
 def collect_social_population(db, profile, question, campaign_action,

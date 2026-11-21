@@ -6,6 +6,9 @@ on:
       - architecture-v2-foundation-20261015
     paths:
       - "backend/app/assistant_social_population.py"
+      - "backend/app/assistant_population_readiness.py"
+      - "frontend/scripts/test-assistant-population-actions-v17575.mjs"
+      - "Dockerfile"
       - "backend/app/assistant_orchestration.py"
       - "backend/app/intelligence_assistant.py"
       - "backend/app/main.py"

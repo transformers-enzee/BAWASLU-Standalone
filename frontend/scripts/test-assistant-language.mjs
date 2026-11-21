@@ -45,9 +45,11 @@ assert.ok(sources.includes("canPrepareCaseworkFromCard(r,allowAssignments)&&<Lin
   sources.includes("Date.now()-Date.parse(r.publication_date)>365"),
  'source cards restrict assignment shortcuts and clearly label historical records');
 assert.ok(visuals.includes('data-advanced-social-metrics')&&
-  visuals.includes('Every chart uses the same')&&
-  visuals.includes('snapshot.matched_pool_count'),
- 'social charts disclose their identical AI sample and hide extra metrics');
+  visuals.includes('PERMISSION_SCOPED_QUERY_MATCHED_SCAN')&&
+  visuals.includes('snapshot.population_complete===true')&&
+  visuals.includes('data-testid="assistant-statistics-coverage"')&&
+  visuals.includes('analysis_post_count'),
+ 'social charts separate query-wide saved-data coverage from AI evidence and preserve optional extended metrics');
 assert.ok(report.includes("const StepsContainer='div'")&&
   report.includes('data-officer-actions-visible="true"')&&
   report.includes('compact?3:6')&&

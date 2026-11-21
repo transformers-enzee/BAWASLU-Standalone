@@ -6,6 +6,7 @@ COPY frontend ./
 # Frontend contract checks verify backend API/source semantics at build time.
 # These sources are present only in the temporary build stage, not browser assets.
 COPY backend /src/backend
+# v175.75: broader query-matched social statistics, bounded AI evidence and fail-closed pagination.
 # Release-contract QA reads the exact Dockerfile within this temporary build stage.
 # The file is not included in browser assets or the final runtime image.
 COPY Dockerfile /src/Dockerfile

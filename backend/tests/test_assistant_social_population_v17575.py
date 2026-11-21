@@ -73,6 +73,16 @@ def test_missing_cursor_cannot_claim_exhaustive_coverage():
     assert result["snapshot"]["population_complete"] is False
     assert result["snapshot"]["social_posts"]==100
 
+def test_missing_pagination_metadata_never_claims_complete():
+    def broken_action(db,profile,op,data):
+        return {"findings":rows(5),"pagination":{}}
+    result=collect_social_population(
+        "fake-db",{"geographic_scope":"Nationwide"},
+        "Gibran pendidikan",broken_action)
+    assert result["snapshot"]["social_posts"]==5
+    assert result["snapshot"]["population_complete"] is False
+
+
 def test_page_limit_is_bounded():
     assert PAGE_SIZE==100 and MAX_PAGES<=20
 

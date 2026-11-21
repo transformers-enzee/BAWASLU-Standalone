@@ -30,9 +30,14 @@ def collect_social_population(db, profile, question, campaign_action,
             if rid.isdigit() and rid not in all_rows:
                 all_rows[rid]=row
         fetched+=len(rows)
-        has_more=pagination.get("has_more") is True
-        if not has_more:
+        page_state=pagination.get("has_more")
+        has_more=page_state is True
+        if page_state is False:
             complete=True
+            break
+        if page_state is not True:
+            # Missing/inconsistent pagination metadata must never be reported
+            # as a completed query-wide scan.
             break
         next_cursor=str(pagination.get("next_cursor") or "")
         if not next_cursor.isdigit() or next_cursor in seen_cursors:

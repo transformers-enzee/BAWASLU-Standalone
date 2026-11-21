@@ -131,3 +131,25 @@ def test_missing_pagination_metadata_does_not_claim_complete_scan():
     result=collect_social_population(None,{},"Gibran",action)
     assert result["complete"] is False
     assert "INCOMPLETE" in result["snapshot"]["statistics_scope"]
+
+
+def test_social_evidence_exposes_officer_disposition_and_sentiment_origin():
+    from app.assistant_orchestration import social_evidence
+    dismissed=_post(15,flagged=False,correction=True)
+    dismissed["potential_issues"]=[{"signal_type":"POTENTIAL_VIOLATION"}]
+    dismissed["flag_review_status"]="FLAG_DISMISSED"
+    source=social_evidence(dismissed)
+    assert source["issue_review_status"]=="FLAG_DISMISSED"
+    assert source["issue_signal_active"] is False
+    assert source["sentiment_origin"]=="OFFICER_CORRECTION"
+    assert source["sentiment_target_scope"]=="WHOLE_POST_NOT_ENTITY_SPECIFIC"
+    assert source["verification_status"]=="UNVERIFIED_SOCIAL_SOURCE"
+
+def test_reviewed_signal_does_not_become_legal_verdict():
+    from app.assistant_orchestration import social_evidence
+    reviewed=_post(22,flagged=True)
+    reviewed["flag_review_status"]="FLAG_CONFIRMED"
+    source=social_evidence(reviewed)
+    assert source["issue_signal_active"] is True
+    assert source["issue_review_status"]=="FLAG_CONFIRMED"
+    assert "not a judicial" in source["issue_review_note"]

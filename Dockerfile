@@ -6,14 +6,14 @@ COPY frontend ./
 # Frontend contract checks verify backend API/source semantics at build time.
 # These sources are present only in the temporary build stage, not browser assets.
 COPY backend /src/backend
-# v175.76 build gate: review-aware population scope, sentiment and officer decisions.
+# v175.77 build gate: review-aware population scope, sentiment and officer decisions.
 # Release-contract QA reads the exact Dockerfile within this temporary build stage.
 # The file is not included in browser assets or the final runtime image.
 COPY Dockerfile /src/Dockerfile
 RUN npm run build
 
 FROM python:3.12-slim
-ARG BAWASLU_BUILD_VERSION=175.76
+ARG BAWASLU_BUILD_VERSION=175.77
 ARG BAWASLU_BUILD_COMMIT=unknown
 ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 WORKDIR /app

@@ -94,8 +94,7 @@ EVIDENCE POLICY:
   candidate activity, or potential-violation signals with verified facts/legal wrongdoing.
 - Recorded AI relevance/issue suggestions are NOT human-confirmed findings.
 - Do not infer identity, location, vote intent, demographic attributes, or guilt.
-- Do not invent exact numbers, dates, links, quotations, or trends; compute counts only
-  from the supplied sample, labeled as a sample. Avoid fake quantitative comparisons.
+- Do not invent exact numbers, dates, links, quotations, or trends; only use server-computed social_population_statistics or report_sample_statistics for dataset-wide numeric claims, and disclose population_complete and scope. Available excerpts are a separate bounded sample, never a full-dataset denominator.
 - Distinguish direct evidence-based observations from analytical interpretation.
 - GPT GENERAL CONTEXT is permitted for domain expertise, plausible hypotheses, PR and social-listening methods, crisis communications frameworks, creative public information, and historical background.
   Treat this as analysis, not up-to-date external reporting.
@@ -606,15 +605,16 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             {key:population_snapshot.get(key) for key in (
               "social_posts","sentiment_counts","platform_counts",
               "population_complete","statistics_scope","analysis_post_count",
-              "scanned_unique_post_count","notice")}
-            if response_profile=="SOCIAL_ANALYSIS" and
+              "scanned_unique_post_count","statistics_post_count","matched_pool_count","unique_source_url_count","potential_issue_signal_post_count","unreviewed_issue_signal_post_count","reviewed_issue_signal_post_count","officer_sentiment_override_post_count","issue_signal_disclaimer","notice")}
+            if response_profile in ("SOCIAL_ANALYSIS","EXECUTIVE_REPORT") and
                isinstance(population_snapshot,dict) else None),
         "formal_record_count":formal_evidence_count(evidence),
         "cross_module_inventory":cross_module_inventory(evidence)
             if response_profile in ("CASE_REVIEW","CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None,
         "potential_duplicate_groups":(duplicate_groups or [])[:6],
-        "report_sample_statistics":(evidence_snapshot([r for r in evidence
-            if r.get("record_type")=="SOCIAL_LISTENING"]) if executive_report else None),
+        "report_sample_statistics":((population_snapshot if isinstance(population_snapshot,dict)
+            else evidence_snapshot([r for r in evidence
+            if r.get("record_type")=="SOCIAL_LISTENING"])) if executive_report else None),
         "response_depth": response_depth,
         "officer_response_mode":officer_response_mode(response_depth),
         "response_profile": response_profile,
@@ -675,9 +675,9 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              "present in available_records, no online research or PDF assumptions. "
              "If formal_record_count is zero, state NO relevant Inbox record was selected "
              "and never cite unrelated Inbox IDs. "
-             "Use report_sample_statistics as the sole source of sample counts, "
-             "sentiment labels and platform distribution. A sample counts posts "
-             "rather than people or independent witnesses. "
+             "Use report_sample_statistics as the sole source of counts, "
+             "sentiment labels and platform distribution. When population_complete is true, counts cover all matched authorized saved posts; otherwise they are partial. Counts represent posts, not people or voters. Saved potential-issue signals are triage leads, not legally confirmed violations. "
+             "Distinguish pending signals from officer-reviewed records, and recommend verification where supported. "
              "Explain possible duplicate posts using potential_duplicate_groups "
              "without overstating certainty. Use bracketed source IDs on important "
              "findings, never invent a court ruling or statute. Put an appropriately "
@@ -705,7 +705,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
              "ranked officer actions: IMMEDIATE source/narrative verification, "
              "CONDITIONAL jurisdiction review if electoral nexus emerges, "
              "and ESCALATE OR CLOSE based on specified evidence gates. "
-             "Each action needs a reviewing role, evidence, output and gate. "
+             "Each action needs a reviewing role, evidence, output and gate. If there are unreviewed issue signals, prioritize selected source-backed examples and give a conditional review task. Never cite population-only IDs missing from available_records. "
              "Avoid repetitive boilerplate and unsupported accusations. "
              "Leave interpretation and limitations empty "
              "when already expressed in the summary. Do not invent a population or "

@@ -1,0 +1,10 @@
+{
+  "version": "175.76",
+  "source_commit": "5a889b4cd07a2aa36ddcdf12c40bf8ca5abf9b08",
+  "image": "ghcr.io/transformers-enzee/bawaslu-standalone",
+  "tag": "v175.76",
+  "digest": "sha256:4c3cfa4abec1d8f1d8aaf0f2e74159977d7c544e380943997f2fb5e5e91cce76",
+  "image_reference": "ghcr.io/transformers-enzee/bawaslu-standalone@sha256:4c3cfa4abec1d8f1d8aaf0f2e74159977d7c544e380943997f2fb5e5e91cce76",
+  "github_run": "https://github.com/transformers-enzee/BAWASLU-Standalone/actions/runs/44877401845",
+  "deployment": "not_deployed_to_render"
+}

@@ -118,7 +118,7 @@ def call(method,url,body=None,timeout=50):
     return value.get('data') or {},value
 
 def action(db,p,verb,data,cid):
-    c=campaign(db,p,cid,verb!='campaignDiscoverStatus' and verb!='campaignCandidateSuggestions')
+    c=campaign(db,p,cid,verb not in ('campaignDiscoverStatus','campaignCandidateSuggestions','campaignDiscoverLastRunDiagnostics'))
     if verb=='campaignCandidateSuggestions':
         from .processing_hints import normalize_candidate_signals
         ids=[x[0] for x in db.query(CampaignEvidence.result_id).filter(

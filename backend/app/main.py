@@ -791,8 +791,6 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
-    if not source_choice['smartRadar'] and source_choice['legalReferences'] and pdf_evidence:
-        response_profile=PDF_GUIDANCE
     from .assistant_evidence_relevance import exact_formal_source_ids,exact_formal_selection_complete
     explicit_formal_ids=exact_formal_source_ids(q)
     explicit_social_ids=exact_social_source_ids(q)

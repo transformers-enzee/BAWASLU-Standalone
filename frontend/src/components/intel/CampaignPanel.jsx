@@ -158,7 +158,7 @@ export default function CampaignPanel({campaignId=null}){
    setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
      setDiscoverPreview(r.data)}
-   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Campaign readiness check failed')}
+   catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
  }
  async function launchDiscover(){
@@ -318,7 +318,7 @@ export default function CampaignPanel({campaignId=null}){
   const content=[fields.join(','),...evidence.map(x=>fields.map(k=>escape(x[k])).join(','))].join('\r\n');
   const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);const link=document.createElement('a');
-  link.href=url;link.download='bawaslu-campaign-'+selected.id+'-evidence.csv';link.click();
+  link.href=url;link.download='bawaslu-project-'+selected.id+'-evidence.csv';link.click();
   URL.revokeObjectURL(url);
  }
  async function openChartDate(day){
@@ -400,7 +400,7 @@ export default function CampaignPanel({campaignId=null}){
  async function executeManualCrawl(){
   if(!selected||!manualPreview?.can_run)return;setManualBusy(true);setManualNotice('');
   try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate,everywhere_query:manualPreview.query,confirmed_query:manualPreview.query}});
-   setManualPreview(null);setManualNotice('Completed: '+r.data.result_count+' new results, '+r.data.linked_evidence+' linked campaign evidence. Actual credits: '+r.data.credits_used+'.');
+   setManualPreview(null);setManualNotice('Completed: '+r.data.result_count+' new results, '+r.data.linked_evidence+' linked project evidence. Actual credits: '+r.data.credits_used+'.');
    await refresh();await viewEvidence(selected);
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setManualBusy(false)}
@@ -429,7 +429,7 @@ export default function CampaignPanel({campaignId=null}){
       setEvidence(old=>old.map(x=>x.id===result_id?{...x,sentiment:r.data.sentiment,sentiment_details:{confidence:r.data.confidence,explanation:r.data.explanation,model:r.data.model}}:x))}
    catch(e){setAiError('Batch stopped: '+(e.response?.data?.detail||e.message));break}
   }
-  setBatchNotice(completed+' post(s) processed. The campaign chart reflects saved labels.');
+  setBatchNotice(completed+' post(s) processed. The project chart reflects saved labels.');
   setBatchPreview(null);
   if(completed){try{await refreshSentimentViews()}catch(e){setAiError('Analysis was saved but refresh failed: '+(e.response?.data?.detail||e.message))}}
   setAiBusy(false);
@@ -441,10 +441,10 @@ export default function CampaignPanel({campaignId=null}){
     preview=(await base44.functions.invoke('socialListening',{
       action:'campaignSentimentBatchPreview',id:selected.id,
       data:{sample_limit:20,all_remaining:true,retry_unclassified:true}})).data;
-  }catch(e){setAiError('Unable to inspect campaign: '+(e.response?.data?.detail||e.message));return}
+  }catch(e){setAiError('Unable to inspect project: '+(e.response?.data?.detail||e.message));return}
   const ids=preview.selected_ids||[];
   if(!ids.length){setBatchNotice('No eligible posts with source text in this project.');return}
-  if(!window.confirm('Analyze '+ids.length+' campaign posts with missing or Unclassified sentiment using OpenAI? Estimated '+ids.length+' billable API requests. '+(preview.missing_text||0)+' posts without text cannot be assessed. Every result is saved as a new assessment version. Continue?'))return;
+  if(!window.confirm('Analyze '+ids.length+' project posts with missing or Unclassified sentiment using OpenAI? Estimated '+ids.length+' billable API requests. '+(preview.missing_text||0)+' posts without text cannot be assessed. Every result is saved as a new assessment version. Continue?'))return;
   setAiBusy(true);setAiError('');
   let processed=0,classified=0,uncertain=0,failed=0;
   for(const result_id of ids){
@@ -553,15 +553,15 @@ export default function CampaignPanel({campaignId=null}){
  }
  async function removeCampaign(c){
   if(saving)return;
-  const typed=window.prompt('Remove project "'+c.name+'"? This hides the project while preserving collected posts and audit history. Type the exact campaign name to confirm:');
+  const typed=window.prompt('Remove project "'+c.name+'"? This hides the project while preserving collected posts and audit history. Type the exact project name to confirm:');
   if(typed===null)return;
-  if(typed!==c.name){setError('Campaign removal cancelled: name did not match.');return;}
+  if(typed!==c.name){setError('Project removal cancelled: name did not match.');return;}
   setSaving(true);setError('');setNotice('');
   try{
    await base44.functions.invoke('socialListening',{action:'deleteCampaign',id:c.id,data:{confirm_name:typed}});
    await refresh();
    setNotice('Project removed. Shared source records and assessment history were preserved.');
-  }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Campaign removal failed');}
+  }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Project removal failed');}
   finally{setSaving(false)}
  }
  async function pause(c){
@@ -569,7 +569,7 @@ export default function CampaignPanel({campaignId=null}){
   setSaving(true);setError('');
   try{
    await base44.functions.invoke('socialListening',{action:'updateCampaign',id:c.id,data:{status:'PAUSED'}});
-   await refresh();setNotice('Campaign paused');
+   await refresh();setNotice('Project paused');
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setSaving(false)}
  }
@@ -685,17 +685,17 @@ export default function CampaignPanel({campaignId=null}){
     <input type="file" accept=".xlsx" aria-label="Human-verified Excel workbook" className="mt-3 block" onChange={e=>{setHumanVerifiedFile(e.target.files?.[0]||null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('')}}/>
     <div className="mt-3 flex gap-2 flex-wrap">
       <button type="button" className="intel-ghost text-xs" disabled={!humanVerifiedFile||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('preview')}>{humanVerifiedBusy?'Checking…':'Preview human labels'}</button>
-      <button type="button" className="intel-button text-xs" disabled={!humanVerifiedFile||!humanVerifiedPreview||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('start')}>Confirm and import to campaign</button>
+      <button type="button" className="intel-button text-xs" disabled={!humanVerifiedFile||!humanVerifiedPreview||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('start')}>Confirm and import to project</button>
     </div>
     {humanVerifiedPreview&&<p className="mt-2 text-teal-900">Preview: <strong>{humanVerifiedPreview.total} total</strong> · {humanVerifiedPreview.relevant} Relevant → Inbox · {humanVerifiedPreview.irrelevant} Irrelevant → Social Listening only. Source URL count: {humanVerifiedPreview.unique_direct_urls}. No records written yet.</p>}
     {humanVerifiedResult&&<p className="mt-2 font-semibold text-teal-900" role="status">Imported: {humanVerifiedResult.inserted} new sources, {humanVerifiedResult.already_present} already present; {humanVerifiedResult.saved_human_assessments} human assessments saved. {humanVerifiedResult.relevant} Relevant / {humanVerifiedResult.irrelevant} Irrelevant.</p>}
     {humanVerifiedError&&<p role="alert" className="mt-2 text-red-700">{humanVerifiedError}</p>}
    </details>
-   <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected campaign sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
+   <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected project sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
     {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id} showModeTabs={false} refreshKey={authorRefreshKey}
       onSentimentCorrected={()=>refreshSentimentViews().catch(e=>
        setDashboardError(e.response?.data?.detail||e.message||'Sentiment was saved but dashboard refresh failed'))}/>}
-   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected campaign" scrolling="no" onLoad={event=>{
+   {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected project" scrolling="no" onLoad={event=>{
     const frame=event.currentTarget;
     frame.__watchlistResizeObserver?.disconnect();
     const doc=frame.contentDocument;
@@ -726,7 +726,7 @@ export default function CampaignPanel({campaignId=null}){
       <section className="rounded-lg border p-4 space-y-2" aria-label="Social Listening statistics"><h5 className="font-semibold text-teal-700">Statistics</h5><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{[['Messages',dashboard.statistics?.messages],['Engagements',dashboard.statistics?.engagement],['Accounts',dashboard.statistics?.accounts],['Views',dashboard.statistics?.views]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg border px-2 py-3 text-center"><strong className="block text-lg font-semibold tabular-nums">{Number(value||0).toLocaleString()}</strong><p className="break-words text-[10px] leading-tight text-slate-500">{label}</p></div>)}</div><SentimentBar values={dashboard.sentiment}/></section>
 
       <section className="rounded-lg border p-4 space-y-2" aria-label="Channel distribution"><h5 className="font-semibold">Channel distribution</h5><ChannelDonut values={dashboard.platforms}/></section>
-      <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Campaign trend by platform">
+      <section className="min-w-0 rounded-lg border p-4 space-y-3 lg:col-span-2" aria-label="Project trend by platform">
 <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">Social Listening by platform</h5><div className="flex flex-wrap gap-1" role="group" aria-label="Trend date range">{[['7','7D'],['30','30D'],['90','90D'],['all','All']].map(([days,label])=><button key={days} type="button" aria-pressed={trendDays===days} className={trendDays===days?'intel-button text-xs':'intel-ghost text-xs'} onClick={()=>setTrendDays(days)}>{label}</button>)}</div></div>
 <div className="flex gap-2" role="group" aria-label="Trend metric">{['posts','engagement','views'].map(k=><button key={k} type="button" aria-pressed={trendMetric===k} className={trendMetric===k?'intel-button':'intel-ghost'} onClick={()=>setTrendMetric(k)}>{k==='posts'?'Posts':k==='engagement'?'Engagement':'Views'}</button>)}</div>
 {trendChartData.length?<div className="h-80 w-full min-w-0 lg:h-96" role="img" aria-label={trendMetric+' trend by platform'}><ResponsiveContainer width="100%" height="100%">
@@ -758,7 +758,7 @@ export default function CampaignPanel({campaignId=null}){
     </div>
     {/^https:\/\//i.test(post.canonical_url||'')&&<a className="inline-flex items-center gap-1 text-xs text-[#285f82] underline" href={post.canonical_url} target="_blank" rel="noopener noreferrer">Open original source <ExternalLink size={12}/></a>}
    </div>):<p className="text-sm text-slate-500">No saved posts found for this date.</p>}
-   {chartDay.truncated&&<p className="text-xs text-amber-700">Results are limited to the latest 5,000 campaign records.</p>}
+   {chartDay.truncated&&<p className="text-xs text-amber-700">Results are limited to the latest 5,000 project records.</p>}
   </div>
  </div>
 </div>}
@@ -790,7 +790,7 @@ export default function CampaignPanel({campaignId=null}){
  <button type="button" className="intel-ghost text-xs" disabled={metricRepairBusy} onClick={async()=>{setMetricRepairBusy(true);setMetricRepairError('');setMetricRepairNotice('');try{const response=await base44.externalImport.repairMetrics(selected.id);setMetricRepairNotice('Metrics restored for '+response.repaired+' records. Dashboard refreshed.');const [ev,d]=await Promise.all([base44.functions.invoke('socialListening',{action:'campaignEvidence',id:selected.id,data:{keyword:appliedKeyword}}),base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}})]);setEvidence(ev.data.evidence||[]);setDashboard(d.data)}catch(e){setMetricRepairError(e.response?.data?.error||e.message||'Metric repair failed')}finally{setMetricRepairBusy(false)}}}>{metricRepairBusy?'Restoring metrics…':'Admin: restore imported metrics'}</button>
  {metricRepairNotice&&<p role="status" className="text-xs text-teal-700">{metricRepairNotice}</p>}
  {metricRepairError&&<p role="alert" className="text-xs text-red-700">{metricRepairError}</p>}
- <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find campaign post by ID">
+ <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find project post by ID">
   <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any project post by Post ID</label>
   <form onSubmit={e=>{e.preventDefault();findPostById()}} className="flex gap-2">
    <input id="campaign-post-lookup" className="intel-input min-w-0 flex-1" inputMode="numeric" pattern="[0-9]+" placeholder="e.g. 649" value={postLookup} onChange={e=>setPostLookup(e.target.value)}/>
@@ -859,9 +859,9 @@ export default function CampaignPanel({campaignId=null}){
  {singleNotice&&<p role="status" className="text-xs">{singleNotice}</p>}
  <p className="text-xs text-slate-500">Up to 40 matching posts displayed from the loaded 200 hottest stored posts (up to 5,000 scanned). Filters do not search outside the loaded set.</p>
  </section>
- <section hidden className="hidden" aria-label="Campaign demographics">
+ <section hidden className="hidden" aria-label="Project demographics">
  <h5 className="font-semibold">Demographics & data coverage</h5>
- <p className="text-xs text-slate-600">Availability of supported metadata in selected campaign evidence, not a demographic profile of viewers or voters.</p>
+ <p className="text-xs text-slate-600">Availability of supported metadata in selected project evidence, not a demographic profile of viewers or voters.</p>
  <div className="grid grid-cols-2 gap-2 text-sm">
  {[['Country metadata','country_available'],['Language metadata','language_available']].map(([label,key])=><div key={key} className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><strong>{dashboard.demographics_coverage?.[key]||0} / {dashboard.demographics_coverage?.records||0}</strong><p className="text-xs text-slate-500">records</p></div>)}
  </div>
@@ -871,7 +871,7 @@ export default function CampaignPanel({campaignId=null}){
  </section>
     </div>
 <ProvinceHeatmap distribution={dashboard.province_connected_distribution||[]} totalPosts={dashboard.statistics?.messages||0}/>
- <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
+ <section className="rounded-lg border p-4 space-y-3" aria-label="Project word cloud">
  <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
  {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured project keywords appear in the selected evidence.</p>}
  <p className="text-xs text-slate-500">Only configured main and secondary keywords are shown. Sizes reflect recorded mentions in the selected date range. Gold indicates secondary keywords. No additional SocialCrawl or AI calls.</p>

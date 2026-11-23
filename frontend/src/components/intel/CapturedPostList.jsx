@@ -29,7 +29,7 @@ function Post({post,campaignId,onCorrected,isEnglish}){
   </div>
  </article>;
 }
-export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCorrected}){
+export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCorrected,initialSearchMode='standard',showModeTabs=true}){
  const {language}=useLanguage();
  const isEnglish=language==='en';
  const t=(en,id)=>isEnglish?en:id;
@@ -44,7 +44,7 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
   onSentimentCorrected?.(correction);
  };
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
- const [searchMode,setSearchMode]=useState('standard'),[booleanQuery,setBooleanQuery]=useState('');
+ const [searchMode,setSearchMode]=useState(initialSearchMode==='boolean'?'boolean':'standard'),[booleanQuery,setBooleanQuery]=useState('');
  const booleanSearch=useMemo(()=>{
   if(searchMode!=='boolean'||!booleanQuery.trim())return {test:null,error:''};
   try{return {test:compileBooleanPostSearch(booleanQuery),error:''}}
@@ -91,10 +91,10 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
  },[posts,from,to,keyword,searchMode,booleanSearch,platform,sentiment,sort]);
  return <section data-i18n-exempt aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
   <div className="mb-4 space-y-2" data-testid="social-listening-search-modes">
-   <div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
-    <button type="button" aria-pressed={searchMode==='standard'} onClick={()=>setSearchMode('standard')} className={searchMode==='standard'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Standard search','Pencarian standar')}</button>
-    <button type="button" aria-pressed={searchMode==='boolean'} onClick={()=>setSearchMode('boolean')} className={searchMode==='boolean'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Boolean search','Pencarian Boolean')}</button>
-   </div>
+   {showModeTabs&&   <div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
+        <button type="button" aria-pressed={searchMode==='standard'} onClick={()=>setSearchMode('standard')} className={searchMode==='standard'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Standard search','Pencarian standar')}</button>
+        <button type="button" aria-pressed={searchMode==='boolean'} onClick={()=>setSearchMode('boolean')} className={searchMode==='boolean'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Boolean search','Pencarian Boolean')}</button>
+       </div>}
    <p className="text-xs text-slate-600">{searchMode==='boolean'
     ?t('Search saved post text using AND, OR, NOT, quoted phrases and parentheses. Case-insensitive. No new crawling or AI charges.','Cari teks unggahan tersimpan memakai AND, OR, NOT, frasa dalam tanda kutip, dan tanda kurung. Tidak membedakan huruf besar/kecil. Tanpa crawl atau biaya AI baru.')
     :t('Existing keyword search is unchanged. Switch modes to use Boolean logic on saved posts.','Pencarian kata kunci tetap seperti sebelumnya. Ganti mode untuk memakai logika Boolean pada unggahan tersimpan.')}</p>

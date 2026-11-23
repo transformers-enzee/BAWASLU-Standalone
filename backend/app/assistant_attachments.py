@@ -278,6 +278,11 @@ def remove_attachment(thread_id:str,attachment_id:str,user:User=Depends(current_
     if changed:
         thread.messages_json=_json.dumps(saved,ensure_ascii=False)
         thread.updated_at=datetime.utcnow()
+        from .assistant_response_feedback import AssistantResponseFeedback
+        for index,message in enumerate(saved):
+            if message.get("role")=="assistant" and message.get("grounding",{}).get("scope")=="ATTACHMENT_DELETED":
+                db.query(AssistantResponseFeedback).filter_by(
+                    thread_id=thread.id,user_id=user.id,message_index=index).delete(synchronize_session=False)
     db.delete(row);db.commit()
     return {"deleted":True,"derived_history_redacted":changed}
 

@@ -5,6 +5,7 @@ are enforced in the existing authenticated Social Listening API.
 """
 import json
 import math
+from .project_boolean import decode_project_query, encode_boolean_project_query
 from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
@@ -139,11 +140,28 @@ def _normalize(db,p,data,existing=None):
     if not name or len(name)>MAX_NAME: raise ValueError('Campaign name must be 1–255 characters')
     description=str(data.get('description') or '').strip()
     if len(description)>2000: raise ValueError('Campaign description must not exceed 2000 characters')
-    primary=_campaign_edit_keywords(data.get('primary_keywords',[]),'Main keywords',True,existing.primary_keywords_json if existing else None)
-    secondary=_campaign_edit_keywords(data.get('secondary_keywords',[]),'Secondary keywords',False,existing.secondary_keywords_json if existing else None)
-    excluded=_campaign_edit_keywords(data.get('excluded_keywords',[]),'Excluded keywords',False,existing.excluded_keywords_json if existing else None)
-    overlap={x.casefold() for x in primary}&{x.casefold() for x in excluded}
-    if overlap: raise ValueError('Main keywords cannot also be excluded')
+    prior=decode_project_query(existing.primary_keywords_json) if existing else {'search_mode':'KEYWORDS'}
+    mode=str(data.get('search_mode') or prior['search_mode']).upper()
+    if mode not in ('KEYWORDS','BOOLEAN'):
+        raise ValueError('Choose Keywords or Boolean search mode')
+    if mode=='BOOLEAN':
+        expression=data.get('boolean_query')
+        if not isinstance(expression,str):
+            raise ValueError('Boolean expression is required')
+        encoded_primary=encode_boolean_project_query(expression)
+        primary=decode_project_query(encoded_primary)['retrieval_terms']
+        secondary=[]
+        excluded=[]
+    else:
+        primary=_campaign_edit_keywords(data.get('primary_keywords',[]),'Main keywords',True,
+            existing.primary_keywords_json if existing and prior['search_mode']=='KEYWORDS' else None)
+        secondary=_campaign_edit_keywords(data.get('secondary_keywords',[]),'Secondary keywords',False,
+            existing.secondary_keywords_json if existing else None)
+        excluded=_campaign_edit_keywords(data.get('excluded_keywords',[]),'Excluded keywords',False,
+            existing.excluded_keywords_json if existing else None)
+        overlap={x.casefold() for x in primary}&{x.casefold() for x in excluded}
+        if overlap: raise ValueError('Main keywords cannot also be excluded')
+        encoded_primary=json.dumps(primary,ensure_ascii=False)
     platforms=data.get('platforms',list(DEFAULT_CAMPAIGN_PLATFORMS))
     if not isinstance(platforms,list) or not platforms: raise ValueError('Select at least one platform')
     if len(platforms)>len(AVAILABLE_PLATFORMS): raise ValueError('Too many platforms')
@@ -162,7 +180,7 @@ def _normalize(db,p,data,existing=None):
     filters=_scope_filters(p,{'query':' '.join(primary),'platforms':AVAILABLE_PLATFORMS if platforms==['search_everywhere'] else platforms,
        'province':data.get('province') or '', 'regency_city':data.get('regency_city') or ''})
     return {'name':name,'description':description,
-       'primary_keywords_json':json.dumps(primary,ensure_ascii=False),
+       'primary_keywords_json':encoded_primary,
        'secondary_keywords_json':json.dumps(secondary,ensure_ascii=False),
        'excluded_keywords_json':json.dumps(excluded,ensure_ascii=False),
        'platforms_json':json.dumps(platforms),
@@ -171,13 +189,16 @@ def _normalize(db,p,data,existing=None):
        'interval_minutes':interval}
 
 def _view(db,c):
+    search=decode_project_query(c.primary_keywords_json)
     counts=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
     evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
         CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').count()
     return {'id':str(c.id),'name':c.name,'description':c.description,
-       'primary_keywords':json.loads(c.primary_keywords_json or '[]'),
-       'secondary_keywords':json.loads(c.secondary_keywords_json or '[]'),
-       'excluded_keywords':json.loads(c.excluded_keywords_json or '[]'),
+       'search_mode':search['search_mode'],'boolean_query':search['boolean_query'],
+       'retrieval_terms':search['retrieval_terms'],
+       'primary_keywords':search['retrieval_terms'] if search['search_mode']=='KEYWORDS' else [],
+       'secondary_keywords':json.loads(c.secondary_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],
+       'excluded_keywords':json.loads(c.excluded_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],
        'platforms':json.loads(c.platforms_json or '[]'),'language':c.language,
        'date_from':c.date_from,'date_to':c.date_to,
        'province':c.province,'regency_city':c.regency_city,

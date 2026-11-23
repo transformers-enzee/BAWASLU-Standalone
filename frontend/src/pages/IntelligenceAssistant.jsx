@@ -76,9 +76,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   }
   return attachmentSessionRef.current;
  }
- const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:false,legalReferences:true,attachments:true});
+ const [sourceSelection,setSourceSelection]=useState({smartRadar:false,publicWeb:true,legalReferences:false,attachments:true});
  const hasSelectedSources=Object.values(sourceSelection).some(Boolean);
- const [responseDepth,setResponseDepth]=useState('DEEP');
+ const [responseDepth,setResponseDepth]=useState('EXECUTIVE');
  const [showHistory,setShowHistory]=useState(false);
  const activeIdRef=useRef(null);
  const latestRef=useRef(null);
@@ -242,7 +242,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
    perspective={perspective} setPerspective={setPerspective}/>
   <AssistantWorkflowControls workspace={workspace} workflowMode={workflowMode} setWorkflowMode={setWorkflowMode}
    sourceSelection={sourceSelection} setSourceSelection={setSourceSelection} busy={busy}/>
-  <AssistantKnowledgeLibrary/>
+  {sourceSelection.legalReferences&&<AssistantKnowledgeLibrary/>}
   {canViewQa&&<section data-testid="assistant-qa-tools" className="rounded-xl border border-[#e5e9ee] bg-white">
    <button type="button" data-testid="assistant-qa-tools-toggle" aria-expanded={qaOpen}
     className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-semibold text-[#536578]"

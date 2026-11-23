@@ -157,7 +157,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','176.4'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','176.5'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -753,25 +753,33 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         requested='DATA'  # No silent GPT-only substitution for explicit selected sources.
     # An explicit public-web-only choice does not read private intelligence.
     if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences'] and not attachment_evidence:
-        import re
-        if re.search(r'(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+)(?!\w)',q,re.I):
+        from .assistant_web_first import safe_public_question, web_brief_text
+        if not safe_public_question(q):
             raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
         from .openai_triage import openai_triage_model,OPENAI_DEFAULT_BASE_URL
         from .assistant_orchestration import research_public_web
         key=os.getenv('OPENAI_API_KEY','').strip()
         base=(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip('/')
-        research=(research_public_web(q,key,openai_triage_model(),base) if key else None)
+        research=(research_public_web(q,key,openai_triage_model(),base,
+                  assistant_mode=mode_config['assistant_mode'],
+                  perspective=mode_config['perspective']) if key else None)
         urls=research['urls'] if research else []
-        text=(research['summary']+'\n\n'+('Public source URLs: ' if language=='en' else 'URL sumber publik: ')+
-                ' · '.join(urls) if research else
-                ('No attributable live public web research was returned. No public facts are verified by this response.'
-                 if language=='en' else 'Pencarian web publik tidak menghasilkan sumber yang dapat dikutip. Tidak ada fakta publik yang diverifikasi.'))
-        return {'answer':text,'records':[],'provider':{'mode':'WEB_ONLY_RESEARCH' if research else 'NO_ATTRIBUTABLE_WEB_RESULTS'},
+        answer=web_brief_text(research,language)
+        return {'answer':answer,'records':[],
+                'response_profile':'WEB_RESEARCH',
+                'provider':{'mode':'WEB_ONLY_RESEARCH' if research else 'NO_ATTRIBUTABLE_WEB_RESULTS',
+                            'web_attribution_count':len(urls)},
                 'answer_language':language,'workflow_mode':workflow_mode,
+                'assistant_mode':mode_config['assistant_mode'],
+                'workspace_mode':mode_config['workspace_mode'],
+                'perspective':mode_config['perspective'],
                 'source_consultation':source_consultation(source_choice,[],[],urls),
                 'structured_findings':[],'draft_policy':drafting_notice(workflow_mode),
-                'decision_plan':[],'grounding':{'selected_count':0,'supporting_count':0,'cited_count':0,
-                'scope':'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS','limited':True}}
+                'decision_plan':[],
+                'grounding':{'selected_count':0,'supporting_count':0,'cited_count':0,
+                    'web_source_count':len(urls),
+                    'retrieved_at':research.get('retrieved_at') if research else None,
+                    'scope':'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS','limited':not bool(research)}}
     # The saved PDF library is part of normal conversation context.
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.

@@ -373,36 +373,58 @@ def answer_text(result, has_evidence, language='id'):
 
 
 
-def research_public_web(question, key, model, base):
-    """Optional fresh public-source research; never sends private campaign records."""
+def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL', perspective='AUTO'):
+    """One attributed public web call. Do not forward saved BAWASLU records."""
     if os.getenv("BAWASLU_ASSISTANT_WEB_SEARCH", "true").lower() not in ("true","1","yes"):
         return None
-    question=str(question or "").strip()[:350]
-    if not question:return None
+    from .assistant_web_first import safe_public_question, safe_web_urls
+    question=str(question or "").strip()[:1000]
+    if not question or not safe_public_question(question):return None
+    # This public query carries NO private evidence excerpts or conversation history.
+    style='Management decision brief' if assistant_mode=='MANAGEMENT' else 'Operational officer brief'
+    direction=(
+        "You are a neutral public-research analyst supporting Indonesian BAWASLU election supervisors. "
+        "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, "
+        "kpu.go.id, jdih.kpu.go.id, mkri.id and official government publications when relevant. "
+        "Treat news and social posts as reports, NOT verified legal findings; distinguish allegations, "
+        "confirmed public records, analysis, and proposed next steps. Never assume a public claim, "
+        "sentiment label, or viral post establishes an election-law violation. Do not recommend takedowns "
+        "or sanctions merely for criticism. If a law, election stage, jurisdiction, official decision "
+        "or deadline is not confirmed, label it as needing verification. "
+        "Answer in the question's language, in about 180-260 words, with at most four short sections: "
+        "(1) Decision / What matters now; (2) Main verified public developments and involved parties "
+        "(only when supported); (3) Officer actions: 2-3 specific steps giving the reviewing ROLE, "
+        "what to check, the expected output and a conditional escalation/closure gate; "
+        "(4) Material verification gap. Make clear when no formal BAWASLU action is indicated. "
+        "For trends, specify dates and distinguish news coverage from a representative population sample. "
+        "Do not invent trend percentages, posting volumes, a conclusion about voter opinion or parties' culpability. "
+        "Link each material factual claim to attributable retrieved web URLs. Do not cite uncited or invented URLs. "
+        "No duplicates, repeated tables, copied checklists or decorative boilerplate. "
+        "This is a "+style+"; perspective="+str(perspective)[:25]+". "
+        "All proposals require human verification and applicable authority."
+    )
     req={"model":model,"store":False,"tools":[{"type":"web_search"}],
-         "tool_choice":"auto","max_output_tokens":850,
-         "input":[{"role":"system","content":
-             "Find credible, current public sources relevant to this question. Prefer official publications, reputable news and studies. "
-             "Summarize factual findings concisely with source attribution. Do not infer precise audience demographics or claim that estimated segments are measured."},
-           {"role":"user","content":question}]}
+         "tool_choice":"auto","max_output_tokens":1150,
+         "input":[{"role":"system","content":direction},{"role":"user","content":question}]}
     try:
         with httpx.Client(timeout=httpx.Timeout(50.0,connect=8.0,read=50.0,write=10.0,pool=8.0)) as client:
             response=client.post(base+"/responses",headers={
                 "Authorization":"Bearer "+key,"Content-Type":"application/json"},json=req)
-        if response.status_code >= 400:
-            return None  # Research is optional; retain normal internal synthesis.
+        if response.status_code >= 400:return None
         payload=response.json()
         if payload.get("status")=="incomplete":return None
-        sources=[]
+        annotated_urls=[]
         for item in payload.get("output",[]):
             for part in item.get("content",[]):
                 for annotation in part.get("annotations",[]):
-                    url=str(annotation.get("url") or "")
-                    if annotation.get("type")=="url_citation" and url.startswith("https://") and url not in sources:
-                        sources.append(url)
+                    if annotation.get("type")=="url_citation":
+                        annotated_urls.append(annotation.get("url"))
+        urls=safe_web_urls(annotated_urls)
         summary=_response_output_text(payload).strip()
-        if not summary or not sources:return None
-        return {"summary":summary[:3500],"urls":sources[:6]}
+        if not summary or not urls:return None
+        from datetime import datetime, timezone
+        return {"summary":summary[:3400],"urls":urls[:6],
+                "retrieved_at":datetime.now(timezone.utc).isoformat()}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):
         return None
 
@@ -601,16 +623,29 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     executive_report=response_profile=='EXECUTIVE_REPORT'
     # Exact-source and selected-post analysis must not initiate unrelated
     # public web research or append official-looking links as record evidence.
-    explicit_private_source=bool(re.search(r'(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+)(?!\w)',question,re.I))
+    from .assistant_web_first import safe_public_question
+    explicit_private_source=not safe_public_question(question)
     web_permitted=(not evidence and mode != 'GROUNDED' if allow_public_web is None
                    else bool(allow_public_web))
     # Private source identifiers never enter a public web lookup.
-    web_research=(research_public_web(question,key,model,base)
-                  if web_permitted and not explicit_private_source and not pdf_guidance
-                  and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
+    web_research=(research_public_web(question,key,model,base,
+                  assistant_mode=(mode_config or {}).get('assistant_mode','OPERATIONAL'),
+                  perspective=(mode_config or {}).get('perspective','AUTO'))
+                  if web_permitted and not explicit_private_source and not pdf_guidance else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
+        "public_web_first_guidance": (
+            "When external_public_research has attributable live URLs and the question asks about external "
+            "events or public issues, lead with public findings and specific neutral BAWASLU actions. "
+            "Internal records are OPTIONAL LOCAL CONTEXT, not the primary source of current world knowledge. "
+            "Do not repeat saved-data charts or sentiment counts unless explicitly requested. "
+            "Keep the answer concise: conclusion, 2-3 consequential findings with attribution, "
+            "responsible reviewer role, proposed next action, and a conditional decision gate. "
+            "If selected web search returned no attributable sources, disclose this; do not portray "
+            "general model knowledge or private snapshots as live web verification. "
+            "State when the alleged conduct is ordinary political commentary rather than a demonstrated violation."
+            if allow_public_web else ""),
         "question": question[:1000], "previous_question": previous[:1000],
         "mode": mode, "available_records": evidence,
         "available_pdf_library": (reference_catalog or [])[:24],

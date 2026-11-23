@@ -7,7 +7,7 @@ export default function AssistantWorkflowControls({
  return <section className="intel-card space-y-4 p-4 md:p-5" data-testid="assistant-workflow-mode-selector">
   <div className="flex flex-wrap items-center justify-between gap-2">
    <div><h2 className="font-semibold text-[#19364c]">AI research and decision support</h2>
-    <p className="mt-1 text-xs text-slate-600">Two connected workflows, using source records you are authorized to access.</p>
+    <p className="mt-1 text-xs text-slate-600">Web-first public research for timely BAWASLU decisions; add authorized SmartRadar evidence only when needed.</p>
    </div>
    <div className="flex flex-wrap gap-2 text-xs">
     <Link to="/management" className="intel-ghost">Management home</Link>
@@ -28,8 +28,8 @@ export default function AssistantWorkflowControls({
    <legend className="text-sm font-semibold text-[#19364c]">Select the sources the assistant may consult</legend>
    <div className="grid gap-2 md:grid-cols-3">
     {[
-     ['smartRadar','SmartRadar / saved BAWASLU intelligence','Permission-scoped saved evidence; not a live crawl'],
-     ['publicWeb','Public web / public social','Opt-in live public web lookup; may use AI credits, not a SocialCrawl crawl'],
+     ['smartRadar','SmartRadar / saved BAWASLU intelligence','Optional private local context for explicitly requested records or stored metrics'],
+     ['publicWeb','Public web / public social · recommended','Default live public research; attributable official/news sources, not a population-wide social crawl'],
      ['legalReferences','Official legal/reference sources','Authorized PDF/reference library; authenticity and currentness need separate verification'],
      ['attachments','Conversation attachments','Private scanned documents and public HTTPS links, confined to this conversation']
     ].map(([key,label,note])=><label key={key} className="flex gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
@@ -41,7 +41,7 @@ export default function AssistantWorkflowControls({
    {!count&&<p role="alert" className="text-xs font-semibold text-red-700">Choose at least one authorized source category.</p>}
    {sourceSelection.publicWeb&&<p className="text-xs text-amber-900">Live public web lookup may incur OpenAI search costs. Only your question—not saved private source passages—is sent to web search. Do not include confidential information in a public-search question.</p>}
   </fieldset>
-  <p className="text-xs text-slate-600" data-testid="assistant-source-truthfulness-note">Answers show which sources were actually consulted. Saved records are fixed snapshots, live web sources require attributable URLs, and demo data must be identified as simulated. Allegations, official records and AI inferences have different evidentiary status.</p>
+  <p className="text-xs text-slate-600" data-testid="assistant-source-truthfulness-note">Public web is the default research source. Saved SmartRadar records are optional and never supplied to public web search. Only attributable retrieved links count as consulted; public coverage is not a population-wide sentiment survey. Legal findings and officer actions require authorization.</p>
   {workflowMode==='STRATEGY_DRAFTING'&&<p className="text-xs font-semibold text-amber-900">Drafts and proposed decisions are for authorized staff to review, revise and send. The assistant cannot issue a legal determination, assign an officer or send an email.</p>}
  </section>;
 }

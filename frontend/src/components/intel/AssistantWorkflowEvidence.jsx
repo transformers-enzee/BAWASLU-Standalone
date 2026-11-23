@@ -14,10 +14,20 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
  const findings=Array.isArray(message?.structured_findings)?message.structured_findings:[];
  const plan=Array.isArray(message?.decision_plan)?message.decision_plan:[];
  const isDraft=message?.draft_policy==='DRAFT_ONLY_STAFF_REVIEW_AND_SEND';
+ const webOnly=message?.response_profile==='WEB_RESEARCH';
  const attachmentCitationIds=Array.from(new Set(
   [...String(message?.text||'').matchAll(/\[(ATT-[a-f0-9]{32}-S\d+)\]/g)].map(x=>x[1])
  )).slice(0,12);
  if(!sources.length&&!findings.length&&!plan.length&&!isDraft)return null;
+ if(webOnly)return <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs" data-testid="assistant-consulted-sources">
+  <summary className="cursor-pointer font-semibold text-[#19364c]">Sources consulted · public research trail</summary>
+  <p className="mt-2 text-slate-600">This is public web research, not a legally verified BAWASLU finding. Unavailable searches are explicitly disclosed.</p>
+  {sources.filter(row=>row.requested).map(row=><div className="mt-2" key={row.key}>
+   <strong>{row.label}: </strong><span>{sourceStatus[row.status]||row.status}</span>
+   {(row.urls||[]).filter(url=>/^https:\/\/[^ ]+$/.test(url)).map(url=><a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block truncate text-teal-800 underline" title={url}>{url}</a>)}
+   {row.warning&&<p className="text-amber-800">{row.warning}</p>}
+  </div>)}
+ </details>;
  return <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-xs" data-testid="assistant-structured-workflow">
   <section className="rounded-lg border border-slate-200 bg-white p-3 space-y-2" data-testid="assistant-consulted-sources">
    <h3 className="font-semibold text-[#19364c]">Source consultation record</h3>

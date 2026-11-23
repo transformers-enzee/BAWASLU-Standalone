@@ -111,6 +111,21 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
+ async function refreshAfterAttachmentRemoval(){
+  // The server redacts saved replies derived from a deleted source. Never leave
+  // those replies or review/export permissions visible in the current tab.
+  const threadId=activeIdRef.current;
+  setReviewableIndexes(new Set());
+  setScoringPacket(null);
+  if(!threadId){setMessages([]);return}
+  try{
+   const saved=await historyRequest('/'+encodeURIComponent(threadId));
+   if(activeIdRef.current===threadId)setMessages(saved.messages||[]);
+  }catch(e){
+   setMessages([]);
+   setHistoryError('Attachment deleted, but conversation refresh failed: '+e.message);
+  }
+ }
  async function removeThread(id){
   if(busy||historyBusy||!window.confirm('Delete this conversation history? Source intelligence records are not deleted.'))return;
   setHistoryBusy(true);setHistoryError('');
@@ -453,7 +468,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     <div className="intel-card space-y-2 p-3">
      <AssistantComposerAttachments threadId={activeId} ensureThread={ensureAttachmentThread}
        items={attachments} setItems={setAttachments} disabled={busy||historyBusy}
-       selected={sourceSelection.attachments} onProcessingChange={setAttachmentBusy}/>
+       selected={sourceSelection.attachments} onProcessingChange={setAttachmentBusy}
+       onRemoved={refreshAfterAttachmentRemoval}/>
      <form onSubmit={e=>{e.preventDefault();ask(question)}} className="flex gap-2">
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={1000} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
      <button type="submit" className="intel-button" disabled={busy||historyBusy||attachmentBusy||!question.trim()||!hasSelectedSources}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>

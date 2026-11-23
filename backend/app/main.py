@@ -17,6 +17,7 @@ from .source_retrieval import _language_detection
 from .smart_radar import router as smart_radar_router
 from .issue_distribution import router as issue_distribution_router
 from .assistant_history import router as assistant_history_router
+from .assistant_attachments import router as assistant_attachments_router
 from .assistant_saved_history_eval import router as saved_history_eval_router
 from .saved_reply_reviews import router as saved_reply_reviews_router
 from .assistant_eval_sampling import router as assistant_eval_sampling_router
@@ -51,6 +52,7 @@ app.include_router(oversight_legal_router)
 app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
+app.include_router(assistant_attachments_router)
 app.include_router(saved_history_eval_router)
 app.include_router(saved_reply_reviews_router)
 app.include_router(assistant_eval_sampling_router)
@@ -719,6 +721,20 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         raise HTTPException(400,str(exc))
     source_choice=workflow_config['sources']
     workflow_mode=workflow_config['workflow']
+    from .assistant_mode import mode_contract
+    from .assistant_attachments import selected_attachment_evidence
+    try:mode_config=mode_contract(body,p)
+    except PermissionError as exc:raise HTTPException(403,str(exc))
+    except ValueError as exc:raise HTTPException(422,str(exc))
+    raw_attachment_ids=body.get('attachmentIds') or []
+    if not isinstance(raw_attachment_ids,list):
+        raise HTTPException(422,'Attachment IDs must be a list')
+    if raw_attachment_ids and not source_choice.get('attachments',False):
+        raise HTTPException(400,'Conversation attachments are deselected; enable the source category')
+    attachment_evidence=(selected_attachment_evidence(
+        db,user,p,body.get('conversationId'),raw_attachment_ids)
+        if raw_attachment_ids else [])
+    # A user attachment is never added to the shared PDF legal corpus or a case record.
     empty_workflow_metadata={
         'workflow_mode':workflow_mode,
         'source_consultation':source_consultation(source_choice,[],[],[]),
@@ -732,7 +748,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if isinstance(body.get('sourceSelection'),dict) and requested=='AUTO':
         requested='DATA'  # No silent GPT-only substitution for explicit selected sources.
     # An explicit public-web-only choice does not read private intelligence.
-    if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences']:
+    if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences'] and not attachment_evidence:
         import re
         if re.search(r'(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+)(?!\w)',q,re.I):
             raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
@@ -865,6 +881,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         [assistant_evidence_record(row) for row in selected_formal],
         [social_evidence(row) for row in chosen_social],
         context_pdf)
+    evidence=(evidence+attachment_evidence)[:55]
     if response_profile==PDF_GUIDANCE and not evidence:
         message=('Tidak ditemukan halaman PDF terindeks yang relevan dan dapat '
                  'diakses untuk pertanyaan ini. Saya tidak dapat menyimpulkan '
@@ -1006,6 +1023,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             population_snapshot=population_snapshot,
             workflow_mode=workflow_mode,
             allow_public_web=source_choice['publicWeb'] if workflow_config['explicit'] else None,
+            mode_config=mode_config,
             officer_scope={'geographic_scope':p.get('geographic_scope'),
                            'province':p.get('province') or '',
                            'regency_city':p.get('regency_city') or ''})
@@ -1055,6 +1073,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     formal_by_id={record.intelligence_id:record for record in selected_formal}
     social_by_id={'SOCIAL-'+str(row['id']):row for row in chosen_social}
     pdf_by_id={row['record_id']:row for row in context_pdf}
+    attachment_by_id={row['record_id']:row for row in attachment_evidence}
     support=[]
     used=set()
     for cid in cited:
@@ -1062,6 +1081,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         if cid in formal_by_id:support.append(assistant_record_view(formal_by_id[cid]))
         elif cid in social_by_id:support.append(social_record_view(social_by_id[cid]))
         elif cid in pdf_by_id:support.append(pdf_by_id[cid])
+        elif cid in attachment_by_id:support.append(attachment_by_id[cid])
         used.add(cid)
     # Only contextualize from the same selected evidence type. A generic
     # social question must not display unrelated UAT or news Inbox cards.
@@ -1072,6 +1092,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             support=[social_record_view(x) for x in chosen_social[:4]]
             support += [assistant_record_view(x) for x in selected_formal[:3]]
             support += context_pdf[:3]
+            support += attachment_evidence[:3]
     if source_warning:
         if (meta.get('answer_language') or language)=='id':
             source_warning='Sumber Social Listening sementara tidak dapat diambil; analisis mungkin belum lengkap.'
@@ -1119,6 +1140,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
         'provider':meta,'response_profile':response_profile,
         'workflow_mode':workflow_mode,
+        'assistant_mode':mode_config['assistant_mode'],
+        'workspace_mode':mode_config['workspace_mode'],
+        'perspective':mode_config['perspective'],
+        'attached_source_count':len(attachment_evidence),
         'source_consultation':source_consultation(source_choice,evidence,cited,meta.get('external_research_urls') or []),
         'structured_findings':structured_findings(visible_findings,evidence,cited),
         'decision_plan':meta.get('decision_plan') or [],

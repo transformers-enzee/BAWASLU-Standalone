@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import {useOutletContext} from 'react-router-dom';
+import {Link,useOutletContext} from 'react-router-dom';
 import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown, Download } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
+import AssistantWorkflowEvidence from '@/components/intel/AssistantWorkflowEvidence';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
 import AssistantKnowledgeLibrary from '@/components/intel/AssistantKnowledgeLibrary';
@@ -39,7 +40,7 @@ async function historyRequest(path='',method='GET',body=null){
  }
  return data;
 }
-export default function IntelligenceAssistant(){
+export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  const {t}=useLanguage();
  const {access}=useOutletContext()||{};
  const canViewQa=canShowAssistantQa(access,{demo:!!window.__BAWASLU_DEMO_REPLICA__});
@@ -55,7 +56,10 @@ export default function IntelligenceAssistant(){
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
- const [analysisMode,setAnalysisMode]=useState('AUTO');
+ const [analysisMode,setAnalysisMode]=useState('DATA');
+ const [workflowMode,setWorkflowMode]=useState('RESEARCH');
+ const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:false,legalReferences:true});
+ const hasSelectedSources=Object.values(sourceSelection).some(Boolean);
  const [responseDepth,setResponseDepth]=useState('DEEP');
  const [showHistory,setShowHistory]=useState(false);
  const activeIdRef=useRef(null);
@@ -139,18 +143,28 @@ export default function IntelligenceAssistant(){
  async function ask(text){
   const q=String(text||'').trim();
   if(!q||busy||historyBusy)return;
+  if(!hasSelectedSources){setError('Select at least one authorized source category before asking.');return}
   setBusy(true);setError('');setQuestion('');
   const previous=messages.filter(m=>m.role==='user').at(-1)?.text||'';
   const outgoing=[...messages,{role:'user',text:q}];
   setMessages(outgoing);
   try{
-   const response=await base44.functions.invoke('intelligenceAssistant',{question:q,previousQuestion:previous,analysisMode,responseDepth,conversationContext:messages.slice(-20).map(m=>({role:m.role,text:String(m.text||'').slice(0,1300)}))});
+   const response=await base44.functions.invoke('intelligenceAssistant',{
+    question:q,previousQuestion:previous,analysisMode:'DATA',responseDepth,
+    workflowMode,sourceSelection,
+    conversationContext:messages.slice(-16).map(m=>({role:m.role,text:String(m.text||'').slice(0,2200)}))
+   });
    const answer={
     role:'assistant',text:response.data.answer||'',
     records:response.data.records||[],provider:response.data.provider,
     grounding:response.data.grounding,evidence_snapshot:response.data.evidence_snapshot,
     analytical_findings:response.data.analytical_findings,featured_sources:response.data.featured_sources,
     response_profile:response.data.response_profile||'SOCIAL_ANALYSIS',
+    workflow_mode:response.data.workflow_mode||workflowMode,
+    source_consultation:response.data.source_consultation||[],
+    structured_findings:response.data.structured_findings||[],
+    decision_plan:response.data.decision_plan||[],
+    draft_policy:response.data.draft_policy||'',
     answer_language:response.data.answer_language,detected_tags:response.data.detected_tags||[],presentation_labels:response.data.presentation_labels||{}
    };
    const full=[...outgoing,answer];
@@ -174,7 +188,7 @@ export default function IntelligenceAssistant(){
  return <div className="max-w-[1300px] mx-auto space-y-5">
   <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] px-6 py-7 text-white">
    <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">ASISTEN KERJA INTELIJEN BAWASLU</div>
-   <h1 className="text-2xl md:text-3xl font-bold mt-2">{t('intelligence_assistant')}</h1>
+   <h1 className="text-2xl md:text-3xl font-bold mt-2">{workspace==='MANAGEMENT'?'Management AI Assistant':'Operational AI Assistant'}</h1>
    <p className="text-sm text-[#f5dfdb] mt-2">Dari temuan menuju pekerjaan nyata: analisis, prioritas pemeriksaan, penugasan, dan draf laporan dalam satu tempat.</p>
    <p className="text-xs text-[#f0d0cc] mt-2">Hanya sumber yang Anda berwenang akses. Tindak lanjut disimpan setelah konfirmasi dan tetap memerlukan pemeriksaan petugas.</p>
   </header>
@@ -235,6 +249,7 @@ export default function IntelligenceAssistant(){
         {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
+        <AssistantWorkflowEvidence message={m}/>
         {m.grounding?.sample_not_exhaustive&&<p data-testid="assistant-sample-scope-disclosure"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs leading-relaxed text-[#52657a]">
           {(m.answer_language||'id')==='id'

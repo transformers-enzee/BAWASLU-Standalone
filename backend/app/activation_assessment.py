@@ -84,6 +84,16 @@ def status(db, principal, campaign_id, run_id):
         meta = {}
     ids = [int(x) for x in meta.get("assessment_result_ids", [])[:500]
            if str(x).isdigit()]
+    diag=meta.get("collection_diagnostics")
+    if not isinstance(diag,dict):diag={}
+    if run.provider=="SOCIALCRAWL_PRISM" and not diag:
+        # Old provider runs did not save precise candidate diagnostics.
+        # A stored-row count only represents newly inserted source rows.
+        from .models import SocialListeningResult
+        saved_rows=db.query(SocialListeningResult.id).filter(SocialListeningResult.run_id==run.id).count()
+        diag={'newly_saved_source_rows':saved_rows,
+              'accepted_boolean_matches':int(run.result_count or 0),
+              'counts_basis':'legacy_new_source_rows_only'}
     if not ids:
         stage = ("FAILED" if run.status == "FAILED" else
                  "COLLECTING" if run.status in ("QUEUED", "RUNNING") else
@@ -92,6 +102,12 @@ def status(db, principal, campaign_id, run_id):
                 "posts_saved":int(run.result_count or 0),"total":0,"completed":0,
                 "queued":0,"processing":0,"failed":0,"blocked":0,
                 "progress_percent":0,"credits_used":int(run.credits_used or 0),
+                "collection_diagnostics":diag,
+                "status_reason":("Provider returned source rows, but none entered this monitoring project. "
+                                 "Boolean matching may have excluded all candidates; provider credits still apply."
+                                 if run.provider=="SOCIALCRAWL_PRISM" and
+                                    int(diag.get('raw_provider_items') or diag.get('newly_saved_source_rows') or 0)>0
+                                    and not int(run.result_count or 0) else ""),
                 "error":run.error_text or "", "budget":remaining_budget(db,c.id)}
     assessments = {}
     for row in (db.query(EvidenceAssessment).filter(
@@ -166,6 +182,7 @@ def status(db, principal, campaign_id, run_id):
             "posts_saved":int(run.result_count or 0), "total":len(ids),
             **totals,"progress_percent":round(100*totals["completed"]/len(ids)),
             "credits_used":int(run.credits_used or 0),
+            "collection_diagnostics":diag,
             "error":run.error_text or "", "budget":budget}
 
 

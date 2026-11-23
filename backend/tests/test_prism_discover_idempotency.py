@@ -223,7 +223,10 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
         'Gibran AND (ijazah OR pendidikan) NOT hoaks')
     db.commit()
     params,_=prism_discover.body_for(db,campaign)
-    assert params['groups'][0]['keywords']==['gibran']
+    assert params['groups'][0]['keywords']==['ijazah','pendidikan']
+    assert params['contains']=='gibran'
+    assert params['groups'][0]['exclude_terms']==['hoaks']
+    assert params['max_credits']==20
 
     matched=post('boolean-true','https://instagram.com/p/boolean-true')
     matched['text']='Warga membahas ijazah Gibran.'
@@ -242,4 +245,10 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
     assert meta['matched'] is True
     queued_ids=json.loads(run.query_json or '{}').get('assessment_result_ids')
     assert queued_ids==[approved.id]  # Excluded posts cannot enter the paid AI queue.
+    diagnostics=json.loads(run.query_json or '{}')['collection_diagnostics']
+    assert diagnostics['raw_provider_items']==3
+    assert diagnostics['unique_candidates']==3
+    assert diagnostics['accepted_boolean_matches']==1
+    assert diagnostics['excluded_by_boolean']==2
+    assert diagnostics['new_evidence_links']==1
     db.close()

@@ -401,6 +401,7 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "Start with the answer, decision or evidence gap. Cite actually retrieved public sources "
         "beside the claims they support, formatted as Markdown links [source title](https://...). "
         +question_shaped_directive(question)+" "
+        "Do not invent trend percentages, engagement totals, publication dates, source findings or legal conclusions. "
         "No duplicates, repeated tables, copied checklists or decorative boilerplate. "
         "This is a "+style+"; perspective="+str(perspective)[:25]+". "
         "All proposals require human verification and applicable authority."

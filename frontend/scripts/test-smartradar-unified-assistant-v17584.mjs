@@ -25,13 +25,18 @@ has(mode,[
 ]);
 has(page,[
  'AssistantModeControls','AssistantComposerAttachments','AssistantResponseFeedback',
- 'workspaceMode:workspace,assistantMode,perspective',
+ 'workspaceMode:workspace===\'MANAGEMENT\'?\'MANAGEMENT\':\'OPERATIONAL\',assistantMode,perspective',
  'conversationId:activeIdRef.current',
  'attachmentIds:selectedIds',
  'onProcessingChange={setAttachmentBusy}',
  'attachmentBusy||!question.trim()',
  'setAttachments([])',
 ]);
+// The Operations route retains its historical name, but API requests must
+// use the canonical analytical mode. Never regress to the rejected OPERATIONS payload.
+assert.ok(page.includes("workspaceMode:workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL'"));
+assert.ok(mode.includes('if workspace=="OPERATIONS":workspace="OPERATIONAL"'));
+assert.ok(!page.includes('workspaceMode:workspace,assistantMode,perspective'));
 has(controls,["['attachments','Conversation attachments'","'smartRadar','SmartRadar"]);
 has(composer,[
  'data-testid="smart-radar-attachment-composer"',

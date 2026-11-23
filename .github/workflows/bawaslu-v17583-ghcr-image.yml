@@ -1,5 +1,5 @@
 name: BAWASLU v175.83 staging Docker image
-# Phase 1 QA retry 2: preserve familiar UI guards and formally block assignments from Strategy & Drafting.
+# Phase 1 QA retry 3: retain stronger Strategy & Drafting restrictions across all legacy source-card regressions.
 # Publish only after the full frontend and backend Dockerfile test gates have passed.
 
 on:

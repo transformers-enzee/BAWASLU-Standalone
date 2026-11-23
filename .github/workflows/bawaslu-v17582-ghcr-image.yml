@@ -1,5 +1,5 @@
 name: BAWASLU v175.82 staging Docker image
-# Build selective Boolean provider retrieval and zero-yield credit protections.
+# Final v175.82 rebuild: three-source focused mode, explicit budget approval and diagnostics regression checks.
 # Docker build gates include backend mocked provider tests and frontend credit safety contracts.
 
 on:

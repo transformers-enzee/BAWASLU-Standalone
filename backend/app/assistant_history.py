@@ -75,6 +75,31 @@ def clean_messages(messages):
             "detected_tags": [t for t in (item.get("detected_tags") or [])[:18] if isinstance(t,dict)] if isinstance(item.get("detected_tags"),list) else [],
             "presentation_labels": {str(k)[:50]:str(v)[:120] for k,v in list((item.get("presentation_labels") or {}).items())[:70]} if isinstance(item.get("presentation_labels"),dict) else {},
 
+            "workflow_mode":item.get("workflow_mode") if item.get("workflow_mode") in ("RESEARCH","STRATEGY_DRAFTING") else "",
+            "source_consultation":[{
+                "key":str(x.get("key") or "")[:32],
+                "label":str(x.get("label") or "")[:80],
+                "status":str(x.get("status") or "")[:40],
+                "basis":str(x.get("basis") or "")[:55],
+                "selected_count":int(x.get("selected_count") or 0) if str(x.get("selected_count") or "0").isdigit() else 0,
+                "warning":str(x.get("warning") or "")[:220],
+                "cited_source_ids":[str(y)[:50] for y in (x.get("cited_source_ids") or [])[:12] if isinstance(y,str)] if isinstance(x.get("cited_source_ids"),list) else [],
+                "urls":[str(y)[:900] for y in (x.get("urls") or [])[:6] if isinstance(y,str) and y.startswith("https://")] if isinstance(x.get("urls"),list) else [],
+            } for x in (item.get("source_consultation") or [])[:3] if isinstance(x,dict)] if isinstance(item.get("source_consultation"),list) else [],
+            "structured_findings":[{
+                "text":str(x.get("text") or "")[:900],
+                "source_ids":[str(y)[:50] for y in (x.get("source_ids") or [])[:4] if isinstance(y,str)] if isinstance(x.get("source_ids"),list) else [],
+                "evidence_class":str(x.get("evidence_class") or "")[:70],
+                "support_status":str(x.get("support_status") or "")[:70],
+            } for x in (item.get("structured_findings") or [])[:5] if isinstance(x,dict)] if isinstance(item.get("structured_findings"),list) else [],
+            "decision_plan":[{
+                "owner_role":str(x.get("owner_role") or "")[:200],
+                "milestone":str(x.get("milestone") or "")[:500],
+                "expected_output":str(x.get("expected_output") or "")[:300],
+                "review_point":str(x.get("review_point") or "")[:400],
+                "source_ids":[str(y)[:50] for y in (x.get("source_ids") or [])[:4] if isinstance(y,str)] if isinstance(x.get("source_ids"),list) else [],
+            } for x in (item.get("decision_plan") or [])[:4] if isinstance(x,dict)] if isinstance(item.get("decision_plan"),list) else [],
+            "draft_policy":"DRAFT_ONLY_STAFF_REVIEW_AND_SEND" if item.get("draft_policy")=="DRAFT_ONLY_STAFF_REVIEW_AND_SEND" else "",
             "analytical_findings": item.get("analytical_findings") if isinstance(item.get("analytical_findings"),dict) else None,
             "featured_sources": [x for x in item.get("featured_sources",[])[:6] if isinstance(x,dict)] if isinstance(item.get("featured_sources"),list) else [],
         })

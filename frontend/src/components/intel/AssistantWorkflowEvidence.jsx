@@ -7,6 +7,7 @@ const sourceStatus={CONSULTED:'Consulted',NOT_SELECTED:'Not selected',
 const basisStatus={FIXED_SAVED_SNAPSHOT:'Saved snapshot · not a live source check',
  LIVE_PUBLIC_LOOKUP:'Live when retrieved · not a continuing or independently verified feed',
  SIMULATED_DEMO:'Simulated demo content · not real-world evidence',
+ USER_SUPPLIED_UNVERIFIED:'User-provided attachment · not independently verified',
  NOT_CONSULTED:'No source consulted',NOT_SELECTED:'Not selected'};
 export default function AssistantWorkflowEvidence({message,fresh=false,threadId=null}){
  const sources=Array.isArray(message?.source_consultation)?message.source_consultation:[];

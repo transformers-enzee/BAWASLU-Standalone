@@ -541,7 +541,7 @@ export default function CampaignPanel({campaignId=null}){
    : {...form};
   try{
    if(editing&&!Object.keys(data).length){
-    setNotice('No campaign changes to save.');setCreating(false);setEditing(null);return;
+    setNotice('No project changes to save.');setCreating(false);setEditing(null);return;
    }
    const action=editing?'updateCampaign':'createCampaign';
    await base44.functions.invoke('socialListening',{action,id:editing?.id,data});
@@ -595,7 +595,7 @@ export default function CampaignPanel({campaignId=null}){
     <form className="p-5 sm:p-7 space-y-4" onSubmit={save} aria-label="Project editor">
    <div className="flex items-center justify-between gap-4">
     <div><h2 id="campaign-modal-title" className="text-xl font-semibold text-[#152c47]">{editing?'Edit monitoring project':'Create a monitoring project'}</h2><p className="text-sm text-[#60768c]">Choose a search type and configure monitoring, then save your project to open its dashboard.</p></div>
-    <button type="button" aria-label="Close campaign popup" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>✕</button>
+    <button type="button" aria-label="Close project editor" className="intel-ghost" disabled={saving} onClick={()=>setCreating(false)}>✕</button>
    </div>
    <div className="grid gap-3 md:grid-cols-2">
     <label className="text-sm md:col-span-2">Project name *<input className="intel-input mt-1" value={form.name} maxLength={255} required onChange={e=>set('name',e.target.value)}/></label>
@@ -662,7 +662,7 @@ export default function CampaignPanel({campaignId=null}){
   }}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No projects match your search.</p>}</div>}
    </section>
-   <section className="rounded-xl border border-[#c7e5dc] bg-[#fcf5f4] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a project.</h3><p className="mt-2 text-xs text-[#60768c]">Create a project using keywords or Boolean Search, then open its dashboard to explore saved posts.</p></div><button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a campaign</button></div></section>
+   <section className="rounded-xl border border-[#c7e5dc] bg-[#fcf5f4] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a project.</h3><p className="mt-2 text-xs text-[#60768c]">Create a project using keywords or Boolean Search, then open its dashboard to explore saved posts.</p></div><button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a project</button></div></section>
   </section>}
   {campaignId&&selected&&!creating&&<div className="v10-detail space-y-4">
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to projects</button>
@@ -681,7 +681,7 @@ export default function CampaignPanel({campaignId=null}){
 
    <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">
     <summary className="cursor-pointer font-semibold text-teal-900">Admin · Import human-reviewed source posts (Social Listening → Inbox)</summary>
-    <p className="mt-2 text-slate-600">All spreadsheet records enter the selected campaign's Captured Posts. Only rows marked Relevant appear in Intelligence Inbox. Human labels are preserved, no AI or crawl credits are spent, and repeat imports do not duplicate sample IDs.</p>
+    <p className="mt-2 text-slate-600">All spreadsheet records enter the selected project's Captured Posts. Only rows marked Relevant appear in Intelligence Inbox. Human labels are preserved, no AI or crawl credits are spent, and repeat imports do not duplicate sample IDs.</p>
     <input type="file" accept=".xlsx" aria-label="Human-verified Excel workbook" className="mt-3 block" onChange={e=>{setHumanVerifiedFile(e.target.files?.[0]||null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('')}}/>
     <div className="mt-3 flex gap-2 flex-wrap">
       <button type="button" className="intel-ghost text-xs" disabled={!humanVerifiedFile||humanVerifiedBusy} onClick={()=>humanVerifiedRequest('preview')}>{humanVerifiedBusy?'Checking…':'Preview human labels'}</button>
@@ -717,7 +717,7 @@ export default function CampaignPanel({campaignId=null}){
    {evidenceLoading&&!dashboard&&<p role="status" className="intel-card p-4 text-sm text-slate-600">Loading monitoring dashboard… Large campaigns can take longer to calculate.</p>}
    {!evidenceLoading&&!dashboard&&<div className="intel-card p-4 flex flex-wrap items-center gap-3" role="status"><span className="text-sm text-amber-800">Dashboard analytics could not load. Project data is still available.</span><button type="button" className="intel-button text-xs" onClick={async()=>{setDashboardError('');setEvidenceLoading(true);try{const response=await base44.functions.invoke('socialListening',{action:'campaignDashboard',id:selected.id,data:{date_from:analyticsFrom,date_to:analyticsTo,keyword:appliedKeyword}});setDashboard(response.data)}catch(e){setDashboardError(e.response?.data?.detail||e.message||'Dashboard request failed')}finally{setEvidenceLoading(false)}}}>Retry dashboard</button></div>}
 
-   {campaignSection==='overview'&&dashboard&&<section aria-label="Campaign monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
+   {campaignSection==='overview'&&dashboard&&<section aria-label="Project monitoring dashboard" data-active-campaign-tab={campaignSection} className="rounded-[13px] border border-[#dce5ed] bg-white p-5 space-y-4">
     <h4 className="text-lg font-semibold text-[#19324a]">Monitoring dashboard</h4><p className="text-sm text-[#60768c]">Review the overall conversation here. Open Captured Posts to inspect original evidence, or Candidate Watchlist to monitor selected people.</p>
     {String(selected?.id)==='1'&&<div className="flex flex-wrap items-center gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><button type="button" className="intel-button" disabled={allBusy} onClick={()=>launchAssessAll(true)}>{allBusy?'Preparing…':'Assess imported ZocialEye posts with AI'}</button><span className="text-xs text-slate-600">434 imported records · reviewable AI classifications · token charges may apply · daily budget limits enforced</span></div>}
     {allError&&<p role="alert" className="text-sm text-red-700">{allError}</p>}
@@ -791,7 +791,7 @@ export default function CampaignPanel({campaignId=null}){
  {metricRepairNotice&&<p role="status" className="text-xs text-teal-700">{metricRepairNotice}</p>}
  {metricRepairError&&<p role="alert" className="text-xs text-red-700">{metricRepairError}</p>}
  <div className="rounded-lg border border-slate-200 p-3 space-y-2" aria-label="Find campaign post by ID">
-  <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any campaign post by Post ID</label>
+  <label htmlFor="campaign-post-lookup" className="block text-xs font-semibold">Find any project post by Post ID</label>
   <form onSubmit={e=>{e.preventDefault();findPostById()}} className="flex gap-2">
    <input id="campaign-post-lookup" className="intel-input min-w-0 flex-1" inputMode="numeric" pattern="[0-9]+" placeholder="e.g. 649" value={postLookup} onChange={e=>setPostLookup(e.target.value)}/>
    <button type="submit" className="intel-button text-xs" disabled={lookupBusy||!/^\d+$/.test(postLookup.trim())}>{lookupBusy?'Finding…':'Find post'}</button>
@@ -873,7 +873,7 @@ export default function CampaignPanel({campaignId=null}){
 <ProvinceHeatmap distribution={dashboard.province_connected_distribution||[]} totalPosts={dashboard.statistics?.messages||0}/>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Campaign word cloud">
  <div className="flex items-center justify-between gap-3"><h5 className="font-semibold">Word cloud</h5><span className="text-xs text-slate-500" title="Larger words occur more often in captured evidence. Common Indonesian, Malay and English filler words are removed.">Term frequency · stored posts</span></div>
- {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured campaign keywords appear in the selected evidence.</p>}
+ {dashboard.word_cloud?.length?<div className="min-h-64 flex flex-wrap items-center content-center justify-center gap-x-4 gap-y-3 px-3 py-5" aria-label="Word cloud terms">{dashboard.word_cloud.map((term,index)=>{const max=Math.max(...dashboard.word_cloud.map(x=>x.count),1);const ratio=term.count/max;return <span key={term.word} title={term.word+': '+term.count+' occurrences'} className="font-medium leading-tight" style={{fontSize:(12+ratio*27)+'px',color:term.secondary?'#b7791f':['#0c5963','#237e86','#326b88','#426c78'][index%4],fontWeight:term.secondary?700:500}}>{term.word}</span>})}</div>:<p className="min-h-56 flex items-center justify-center text-sm text-slate-500">No configured project keywords appear in the selected evidence.</p>}
  <p className="text-xs text-slate-500">Only configured main and secondary keywords are shown. Sizes reflect recorded mentions in the selected date range. Gold indicates secondary keywords. No additional SocialCrawl or AI calls.</p>
  </section>
  <section className="rounded-lg border p-4 space-y-3" aria-label="Top social accounts">

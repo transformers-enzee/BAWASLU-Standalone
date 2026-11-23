@@ -9,6 +9,8 @@ const web=read('../../backend/app/assistant_orchestration.py');
 const docker=read('../../Dockerfile');
 assert.ok(page.includes('smartRadar:false,publicWeb:true,legalReferences:false,attachments:true'));
 assert.ok(page.includes("useState('EXECUTIVE')"));
+assert.ok(page.includes('What are the latest verified BAWASLU and KPU updates'));
+assert.ok(page.includes('sourceSelection.smartRadar?starters:webStarterPrompts'));
 assert.ok(controls.includes('Public web / public social · recommended'));
 assert.ok(server.includes("'response_profile':'WEB_RESEARCH'"));
 assert.ok(server.includes('web_brief_text(research,language)'));

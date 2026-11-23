@@ -26,6 +26,14 @@ import {buildAssistantReviewPacket,downloadAssistantReviewFile} from '@/lib/assi
 import {canShowAssistantQa} from '@/lib/assistantQaVisibility';
 
 const starterKeys=['starter_latest_validated','starter_main_issues','starter_last_7_days','starter_campaign_issues','starter_locations','starter_high_priority','starter_campaign_materials','starter_unverified','starter_today'];
+const webStarterPrompts=[
+ 'What are the latest verified BAWASLU and KPU updates, and which actions should officers prioritize?',
+ 'What election misinformation risks have credible public sources reported in the past 14 days?',
+ 'Which institutions may handle an alleged electoral violation, and what must be verified first?',
+ 'What changed in recent official election rules or court decisions, and why does it matter?',
+ 'Summarize independent public reporting about a specified electoral issue and distinguish allegations from facts.',
+ 'Draft a short leadership memo from verified public sources with owners, next actions and review gates.'
+];
 async function historyRequest(path='',method='GET',body=null){
  const token=window.__BAWASLU_DEMO_REPLICA__?'DEMO-SNAPSHOT':(window.localStorage.getItem('bawaslu_access_token')||'');
  if(!token)throw Error('Your login session has expired. Sign in to access conversation history.');
@@ -290,7 +298,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         </div>
        </div>
        <div className="flex gap-2 items-center"><MessageSquareText size={18} className="text-[#a52a2f]"/><p className="text-sm font-semibold">{t('try_asking')}</p></div>
-       <div className="flex flex-wrap gap-2">{starters.map(starter=><button key={starter} type="button" disabled={busy||historyBusy} onClick={()=>ask(starter)} className="intel-ghost text-xs text-left">{starter}</button>)}</div>
+       <div className="flex flex-wrap gap-2">{(sourceSelection.smartRadar?starters:webStarterPrompts).map(starter=><button key={starter} type="button" disabled={busy||historyBusy} onClick={()=>ask(starter)} className="intel-ghost text-xs text-left">{starter}</button>)}</div>
      </div>}
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>

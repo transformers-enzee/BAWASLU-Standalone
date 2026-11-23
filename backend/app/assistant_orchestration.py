@@ -382,8 +382,11 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
     if not question or not safe_public_question(question):return None
     # This public query carries NO private evidence excerpts or conversation history.
     style='Management decision brief' if assistant_mode=='MANAGEMENT' else 'Operational officer brief'
+    from datetime import datetime, timezone
+    utc_date=datetime.now(timezone.utc).date().isoformat()
     direction=(
         "You are a neutral public-research analyst supporting Indonesian BAWASLU election supervisors. "
+        "Current UTC date: "+utc_date+". Interpret recent periods relative to this date. "
         "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, "
         "kpu.go.id, jdih.kpu.go.id, mkri.id and official government publications when relevant. "
         "Treat news and social posts as reports, NOT verified legal findings; distinguish allegations, "
@@ -425,7 +428,6 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         urls=safe_web_urls(annotated_urls)
         summary=_response_output_text(payload).strip()
         if not summary or not urls:return None
-        from datetime import datetime, timezone
         return {"summary":summary[:3400],"urls":urls[:6],
                 "retrieved_at":datetime.now(timezone.utc).isoformat()}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):

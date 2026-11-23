@@ -18,6 +18,7 @@ from .smart_radar import router as smart_radar_router
 from .issue_distribution import router as issue_distribution_router
 from .assistant_history import router as assistant_history_router
 from .assistant_attachments import router as assistant_attachments_router
+from .assistant_response_feedback import router as assistant_feedback_router
 from .assistant_saved_history_eval import router as saved_history_eval_router
 from .saved_reply_reviews import router as saved_reply_reviews_router
 from .assistant_eval_sampling import router as assistant_eval_sampling_router
@@ -53,6 +54,7 @@ app.include_router(smart_radar_router)
 app.include_router(issue_distribution_router)
 app.include_router(assistant_history_router)
 app.include_router(assistant_attachments_router)
+app.include_router(assistant_feedback_router)
 app.include_router(saved_history_eval_router)
 app.include_router(saved_reply_reviews_router)
 app.include_router(assistant_eval_sampling_router)
@@ -775,6 +777,18 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         retrieve_chat_knowledge,authorized_reference_catalog,explicit_pdf_page_refs,
         exact_pdf_selection_complete)
     history=body.get('conversationContext') or []
+    conversation_id=body.get('conversationId')
+    if conversation_id:
+        # Re-open only this user's current persisted thread. Never trust
+        # client-provided old assistant messages or source cards as evidence.
+        from .assistant_history import AssistantThread
+        import json as _json
+        try:thread_uuid=str(uuid.UUID(str(conversation_id)))
+        except (TypeError,ValueError):raise HTTPException(422,'Invalid conversation ID')
+        owned_thread=db.query(AssistantThread).filter_by(id=thread_uuid,user_id=user.id).first()
+        if not owned_thread:raise HTTPException(403,'Conversation unavailable for this officer')
+        history=_json.loads(owned_thread.messages_json or '[]')
+        history=[x for x in history if isinstance(x,dict) and x.get('role') in ('user','assistant')]
     history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:2200]}
              for x in history[-8:] if isinstance(x,dict) and
              x.get('role') in ('user','assistant')] if isinstance(history,list) else []
@@ -1144,6 +1158,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         'workspace_mode':mode_config['workspace_mode'],
         'perspective':mode_config['perspective'],
         'attached_source_count':len(attachment_evidence),
+        'attached_source_ids':[x['record_id'] for x in attachment_evidence][:45],
         'source_consultation':source_consultation(source_choice,evidence,cited,meta.get('external_research_urls') or []),
         'structured_findings':structured_findings(visible_findings,evidence,cited),
         'decision_plan':meta.get('decision_plan') or [],

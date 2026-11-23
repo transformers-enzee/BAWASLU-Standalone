@@ -26,7 +26,7 @@ def campaign(db,p,cid,write=False):
     if write and c.status!='DRAFT':raise ValueError('Only draft campaigns can run Discover')
     return c
 
-def body_for(db,c,max_credits=None):
+def body_for(db,c,max_credits=None,platform_mode=None):
     search=decode_project_query(c.primary_keywords_json)
     boolean_mode=search['search_mode']=='BOOLEAN'
     default_cap=20 if boolean_mode else 100
@@ -38,6 +38,14 @@ def body_for(db,c,max_credits=None):
     if not words:raise ValueError('Configure positive search terms first')
     platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
     if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']
+    mode=platform_mode or ('FOCUSED' if boolean_mode else 'ALL')
+    if mode not in ('FOCUSED','ALL') or (not boolean_mode and mode!='ALL'):
+        raise ValueError('Choose Focused Sources or All Sources for this Boolean project')
+    if mode=='FOCUSED':
+        # Limit the initial exploration to three configured social sources.
+        # This is a cost-control choice, not a claim about completeness.
+        preferred=('instagram','tiktok','threads','twitter','facebook','youtube','news')
+        platforms=[p for p in preferred if p in platforms][:3]
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
     if boolean_mode and not c.description:
         context=('Indonesian public discussion matching the topic of '+search['boolean_query'])[:1000]
@@ -80,7 +88,8 @@ def latest_collection_outcome(db,c,params=None):
     plan_changed=(bool(params) and
                   (previous_body.get('groups') or [{}])[0].get('keywords') != params['groups'][0]['keywords'] or
                   bool(params) and previous_body.get('contains','') != params.get('contains','') or
-                  bool(params) and (previous_body.get('groups') or [{}])[0].get('exclude_terms',[]) != params['groups'][0].get('exclude_terms',[]))
+                  bool(params) and (previous_body.get('groups') or [{}])[0].get('exclude_terms',[]) != params['groups'][0].get('exclude_terms',[]) or
+                  bool(params) and previous_body.get('platforms',[]) != params.get('platforms',[]))
     return {
         'run_id':str(run.id),
         'status':run.status,
@@ -156,7 +165,7 @@ def action(db,p,verb,data,cid):
     if verb=='campaignDiscoverLastRunDiagnostics':
         return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
     search=decode_project_query(c.primary_keywords_json)
-    params,sig=body_for(db,c,(data or {}).get('max_credits'))
+    params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'))
     last=latest_collection_outcome(db,c,params) if search['search_mode']=='BOOLEAN' else None
     plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverPreview':
@@ -170,7 +179,9 @@ def action(db,p,verb,data,cid):
             'keywords_total':len(search['retrieval_terms']),
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
-            'platforms':params['platforms'],'incremental':bool(params.get('since_watermark')),
+            'platforms':params['platforms'],
+            'platform_mode':(data or {}).get('platform_mode') or ('FOCUSED' if search['search_mode']=='BOOLEAN' else 'ALL'),
+            'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
@@ -178,6 +189,8 @@ def action(db,p,verb,data,cid):
     if search['search_mode']=='BOOLEAN':
         if type((data or {}).get('confirmed_max_credits')) is not int or (data or {}).get('confirmed_max_credits')!=params['max_credits']:
             raise ValueError('Credit cap changed; request and approve a new free preview')
+        if (data or {}).get('confirmed_platform_mode')!=((data or {}).get('platform_mode') or 'FOCUSED'):
+            raise ValueError('Source selection changed; request and approve a new free preview')
         if last and last['zero_yield_paid_run'] and (data or {}).get('acknowledge_zero_yield') is not True:
             raise ValueError('The last paid collection matched zero posts. Review the new retrieval plan and explicitly acknowledge the zero-yield risk')
     active=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)

@@ -68,6 +68,7 @@ export default function ManagementHome(){
      <div className="flex flex-wrap gap-2">
       <Link to="/management/assistant?q=Prepare%20a%20neutral%20executive%20summary%20of%20authorized%20election-oversight%20records%20with%20citations%20and%20uncertainties" className="intel-button"><Search size={16}/> Research with AI <ArrowRight size={15}/></Link>
       <Link to="/assistant" className="intel-ghost">Operational assistant</Link>
+      <Link to="/management/ai-assistant" className="intel-ghost">New AI Assistant · Research / Strategy / Drafting</Link>
      </div>
     </article>
     <aside className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">

@@ -22,6 +22,7 @@ import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
+import AIAssistantV2 from '@/pages/AIAssistantV2';
 import ManagementHome from '@/pages/ManagementHome';
 // Legacy /casework links are redirected into Intelligence Inbox.
 const LegacyCaseworkRedirect=()=>{
@@ -90,8 +91,10 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant workspace="OPERATIONS" />} />
+            <Route path="/ai-assistant" element={<AIAssistantV2 workspace="OPERATIONS" />} />
              <Route path="/management" element={<ManagementHome />} />
              <Route path="/management/assistant" element={<IntelligenceAssistant workspace="MANAGEMENT" />} />
+             <Route path="/management/ai-assistant" element={<AIAssistantV2 workspace="MANAGEMENT" />} />
             <Route path="/casework" element={demoLocation?<Navigate to="/social-listening" replace/>:<LegacyCaseworkRedirect/>} />
           </Route>
           <Route element={<AccessGate permission="add_intelligence" />}><Route path="/add" element={<AddIntelligence />} /></Route>

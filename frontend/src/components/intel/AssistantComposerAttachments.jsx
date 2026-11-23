@@ -20,7 +20,7 @@ export function attachmentRequest(path,method='GET',body=null,isFile=false){
  return call(path,method,body,isFile);
 }
 export default function AssistantComposerAttachments({
- threadId,ensureThread,items,setItems,disabled=false,selected=true
+ threadId,ensureThread,items,setItems,disabled=false,selected=true,onProcessingChange=()=>{}
 }){
  const [open,setOpen]=useState(false),[link,setLink]=useState(''),[working,setWorking]=useState([]),[failure,setFailure]=useState('');
  const inputRef=useRef(null);
@@ -33,6 +33,7 @@ export default function AssistantComposerAttachments({
   return()=>{alive=false};
  },[threadId,setItems]);
  const busy=working.length>0;
+ useEffect(()=>onProcessingChange(busy),[busy,onProcessingChange]);
  async function saveFile(file){
   const id=crypto.randomUUID();
   setWorking(a=>[...a,{id,title:file.name,status:'SCANNING_AND_EXTRACTING'}]);

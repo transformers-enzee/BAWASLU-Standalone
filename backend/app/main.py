@@ -157,7 +157,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','175.84'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','175.86'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -653,6 +653,11 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         exact_social_source_ids, exact_social_selection_complete,
         is_conceptual, generate, evidence_fallback
     )
+    # The legacy entry point must never bypass the same access gate as the v2 UI.
+    # This check must precede GPT-only routing and all private retrieval.
+    p=profile(db,user)
+    if not has(p,'view_intelligence'):
+        raise HTTPException(403,'Intelligence Assistant permission required')
     # Preserve the existing endpoint contract for older clients. The upgraded
     # Intelligence Assistant UI explicitly supplies analysisMode to select v2.
     if 'analysisMode' not in body and 'sourceSelection' not in body and 'workflowMode' not in body:
@@ -676,7 +681,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                     'supporting_count':0,'scope':'OPENAI_GENERAL_NO_SYSTEM_DATA',
                     'date_basis':'not_applicable','date_basis_label':'General knowledge',
                     'date_basis_note':'No BAWASLU system records were accessed.','window':None}}
-        accessible=list_intelligence(db,profile(db,user))
+        accessible=list_intelligence(db,p)
         selected=select_assistant_records(q,accessible,limit=12)
         evidence=[assistant_evidence_record(x) for x in selected]
         cited_ids=[]
@@ -703,9 +708,6 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                     'date_basis_label':semantics['date_basis_label'],
                     'date_basis_note':semantics['date_basis_note'],
                     'window':semantics['window']}}
-    p=profile(db,user)
-    if not has(p,'view_intelligence'):
-        raise HTTPException(403,'Intelligence Assistant permission required')
     q=str(body.get('question') or '').strip()
     if not q or len(q)>1000:
         raise HTTPException(400,'Question must be between 1 and 1000 characters')

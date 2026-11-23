@@ -768,9 +768,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         raise HTTPException(400,'The named PDF source is deselected. Enable legal/reference sources to inspect it.')
     reference_catalog=authorized_reference_catalog(db,p) if source_choice['legalReferences'] else []
     explicit_pdf_ids=named_pdf_ids if source_choice['legalReferences'] else []
-    pdf_evidence=retrieve_chat_knowledge(
-        db,p,research_q,previous,history,limit=6) if source_choice['legalReferences'] and
-        (requested!='GENERAL' or explicit_pdf_ids) else []
+    pdf_evidence=(retrieve_chat_knowledge(
+        db,p,research_q,previous,history,limit=6)
+        if (source_choice['legalReferences'] and
+            (requested!='GENERAL' or explicit_pdf_ids)) else [])
     # A named PDF page is an exact-source constraint, including mixed
     # Social Listening/PDF comparisons. Do not substitute another source.
     if explicit_pdf_ids and not exact_pdf_selection_complete(q,pdf_evidence,limit=6):

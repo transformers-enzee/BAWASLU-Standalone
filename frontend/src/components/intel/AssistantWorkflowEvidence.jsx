@@ -34,7 +34,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
    </div>)}
   </section>}
   {message?.officer_decision?.missing_evidence&&<p className="mt-3 text-amber-800" data-testid="assistant-decision-evidence-gap">Evidence still needed: {message.officer_decision.missing_evidence}</p>}
-  {message?.officer_decision?.quality&&<p className="mt-2 text-[11px] text-slate-500">Decision audit: {message.officer_decision.quality.claim_count||0} attributed claim(s), {message.officer_decision.quality.action_count||0} proposed action(s); legal applicability and formal authority require officer verification.</p>
+  {message?.officer_decision?.quality&&<p className="mt-2 text-[11px] text-slate-500">Decision audit: {message.officer_decision.quality.claim_count||0} attributed claim(s), {message.officer_decision.quality.action_count||0} proposed action(s); legal applicability and formal authority require officer verification.</p>}
   {sources.filter(row=>row.status!=='NOT_SELECTED').map(row=><div className="mt-2" key={row.key}>
    <strong>{row.label}: </strong><span>{sourceStatus[row.status]||row.status}</span>
    {(row.urls||[]).filter(url=>/^https:\/\/[^ ]+$/.test(url)).map(url=><a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block truncate text-teal-800 underline" title={url}>{url}</a>)}

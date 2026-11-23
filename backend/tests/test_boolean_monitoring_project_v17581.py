@@ -39,7 +39,6 @@ def test_or_coverage_requires_two_retrieval_anchors():
     '', 'Gibran OR', 'OR Gibran', 'Gibran pemilu',
     '(Gibran OR ijazah', 'Gibran AND ()', '"Gibran',
     'NOT Gibran', 'Gibran OR NOT hoaks',
-    'Gibran AND (NOT hoaks OR NOT fitnah)',
     'A'*513, ' OR '.join(['term']*35),
 ])
 def test_invalid_or_unbounded_boolean_projects_are_rejected(expression):

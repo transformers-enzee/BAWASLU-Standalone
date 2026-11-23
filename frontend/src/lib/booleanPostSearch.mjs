@@ -22,7 +22,7 @@ function tokenize(input) {
    i++;let term='';let closed=false;
    while(i<input.length) {
     const ch=input[i++];
-    if(ch==='"\\'&&i<input.length&&(input[i]==='"'||input[i]==='\\')){term+=input[i++];continue;}
+     if(ch==='\\'&&i<input.length&&(input[i]==='"'||input[i]==='\\')){term+=input[i++];continue;}
     if(ch==='"'){closed=true;break;}
     term+=ch;
    }

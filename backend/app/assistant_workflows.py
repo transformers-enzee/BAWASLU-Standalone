@@ -7,8 +7,8 @@ heuristic answer routing. Source labels say what was ACTUALLY consulted.
 import re
 
 WORKFLOW_MODES=('RESEARCH','STRATEGY_DRAFTING')
-SOURCE_KEYS=('smartRadar','publicWeb','legalReferences')
-CITE=re.compile(r'\[(INT-[A-Za-z0-9:_-]+|SOCIAL-[0-9]+|DOC-[0-9]+-P[0-9]+)\]')
+SOURCE_KEYS=('smartRadar','publicWeb','legalReferences','attachments')
+CITE=re.compile(r'\[(INT-[A-Za-z0-9:_-]+|SOCIAL-[0-9]+|DOC-[0-9]+-P[0-9]+|ATT-[a-f0-9]{32}-S[0-9]+)\]')
 
 
 def normalize_workflow_request(body):
@@ -20,7 +20,7 @@ def normalize_workflow_request(body):
     raw=body.get('sourceSelection')
     explicit=raw is not None
     if raw is None:
-        raw={'smartRadar':True,'publicWeb':False,'legalReferences':True}
+        raw={'smartRadar':True,'publicWeb':False,'legalReferences':True,'attachments':True}
     if not isinstance(raw,dict) or any(k not in SOURCE_KEYS for k in raw):
         raise ValueError('Invalid assistant source selector')
     if any(type(v) is not bool for v in raw.values()):
@@ -67,13 +67,15 @@ def source_consultation(selection,evidence=(),cited=(),public_urls=(),environmen
     cited_ids={str(x) for x in cited or []}&ids
     types={str(r.get('record_type') or '') for r in evidence}
     groups={
-        'smartRadar': [r for r in evidence if r.get('record_type')!='PDF_KNOWLEDGE'],
+        'smartRadar': [r for r in evidence if r.get('record_type') not in ('PDF_KNOWLEDGE','CHAT_ATTACHMENT')],
+        'attachments':[r for r in evidence if r.get('record_type')=='CHAT_ATTACHMENT'],
         'legalReferences': [r for r in evidence if r.get('record_type')=='PDF_KNOWLEDGE'],
     }
     result=[]
     for key,label in [('smartRadar','Saved SmartRadar/BAWASLU intelligence'),
                       ('publicWeb','Public web/social research'),
-                      ('legalReferences','Authorized legal/reference library')]:
+                      ('legalReferences','Authorized legal/reference library'),
+                      ('attachments','Conversation attachments')]:
         requested=bool(selection.get(key))
         matched=groups.get(key,[])
         if key=='publicWeb':
@@ -114,6 +116,7 @@ def structured_findings(findings,evidence,cited,limit=5):
         refs=list(dict.fromkeys(x for x in CITE.findall(text) if x in cited))[:4]
         record_types={str(allowed[ref].get('record_type') or '') for ref in refs}
         kind=('REPORTED_ALLEGATION_OR_OBSERVATION' if 'SOCIAL_LISTENING' in record_types
+              else 'USER_ATTACHED_UNVERIFIED_SOURCE' if 'CHAT_ATTACHMENT' in record_types
               else 'DOCUMENTARY_REFERENCE_REQUIRES_AUTHORITY_CHECK' if 'PDF_KNOWLEDGE' in record_types
               else 'SAVED_OFFICER_RECORD_NOT_SOURCE_AUTHENTICATION' if refs
               else 'ANALYTICAL_INFERENCE_UNCITED')

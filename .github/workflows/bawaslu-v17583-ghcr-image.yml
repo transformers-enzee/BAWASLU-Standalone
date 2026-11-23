@@ -1,5 +1,5 @@
 name: BAWASLU v175.83 staging Docker image
-# Phase 1 QA retry 4: re-ground assistant population selection to the substantive user topic in draft follow-ups.
+# Phase 1 QA retry 5: fix parser-proven JSX closure in Boolean Project Overview before publishing AI workspaces.
 # Publish only after the full frontend and backend Dockerfile test gates have passed.
 
 on:

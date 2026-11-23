@@ -208,11 +208,12 @@ async def upload(thread_id:str=Form(...),file:UploadFile=File(...),
 
 @router.post("/link")
 def attach_link(body:LinkRequest,user:User=Depends(current_user),db:Session=Depends(get_db)):
-    p=_user_scope(db,user);thread=_thread(db,user,body.thread_id)
+    p=_user_scope(db,user)
     url=body.url.strip()
     parsed=urlsplit(url)
     if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password:
         raise HTTPException(422,"Only public HTTPS links without credentials are permitted")
+    thread=_thread(db,user,body.thread_id)
     _limit(db,thread.id)
     # Reuse the application's approved public-source retriever, including its
     # nonpublic-IP, size, redirect and HTML checks. No private network lookups.

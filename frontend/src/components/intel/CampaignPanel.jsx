@@ -205,6 +205,7 @@ export default function CampaignPanel({campaignId=null}){
  const [mediaPreviewBusy,setMediaPreviewBusy]=useState(false),[mediaPreview,setMediaPreview]=useState(null),[mediaPreviewError,setMediaPreviewError]=useState('');
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
+ const [latestPrismCollection,setLatestPrismCollection]=useState(null);
  const [singlePreview,setSinglePreview]=useState(null),[singleBusy,setSingleBusy]=useState(false),[singleNotice,setSingleNotice]=useState('');
  const [postLookup,setPostLookup]=useState(''),[lookupBusy,setLookupBusy]=useState(false),[lookupError,setLookupError]=useState(''),[lookupPost,setLookupPost]=useState(null);
  async function findPostById(){
@@ -304,16 +305,18 @@ export default function CampaignPanel({campaignId=null}){
  }).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
   setCampaignSection(['watchlist','posts'].includes(new URLSearchParams(window.location.search).get('tab'))?new URLSearchParams(window.location.search).get('tab'):'overview');
-  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
-    base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}})
+    base44.functions.invoke('socialListening',{action:'campaignDashboard',id:c.id,data:{}}),
+    base44.functions.invoke('socialListening',{action:'campaignDiscoverLastRunDiagnostics',id:c.id,data:{}})
    ]);
    if(results[0].status==='fulfilled')setEvidence(results[0].value.data.evidence||[]);
    else setEvidenceError(results[0].reason?.response?.data?.detail||results[0].reason?.message||'Unable to load evidence');
    if(results[1].status==='fulfilled')setDashboard(results[1].value.data);
    else setDashboardError(results[1].reason?.response?.data?.detail||results[1].reason?.message||'Dashboard request failed');
+   if(results[2].status==='fulfilled')setLatestPrismCollection(results[2].value.data.last_run||null);
   }finally{setEvidenceLoading(false)}
  }
  function exportEvidenceCsv(){
@@ -687,6 +690,17 @@ export default function CampaignPanel({campaignId=null}){
      :[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
    </div>
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
+   {latestPrismCollection&&<section className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm space-y-2" aria-label="Latest SocialCrawl collection outcome" data-testid="prism-latest-collection-outcome">
+    <strong>Latest SocialCrawl collection · Run #{latestPrismCollection.run_id}</strong>
+    <div className="flex flex-wrap gap-4 text-xs">
+     <span><strong>{latestPrismCollection.provider_candidate_rows??latestPrismCollection.newly_saved_source_rows??'Unknown'}</strong> {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'?'new source rows saved':'unique provider candidates'}</span>
+     <span><strong>{latestPrismCollection.matched}</strong> accepted into project</span>
+     <span><strong>{latestPrismCollection.credits_used}</strong> SocialCrawl credits charged</span>
+    </div>
+    {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by Boolean query: {latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
+    {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">The previous provider request incurred charges but no posts satisfied this project's search. Review the free preflight before repeating paid collection.</p>}
+    {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}
+   </section>}
    <AssessmentOperationsPanel key={selected.id} campaignId={selected.id} />
 
    <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">

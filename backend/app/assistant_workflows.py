@@ -131,7 +131,7 @@ def drafting_notice(workflow):
 
 _REVISE=re.compile(
     r'\b(shorten|shorter|condense|rewrite|rephrase|polish|convert|turn (?:it|this) into|'
-    r'make (?:it|this) an? email|change (?:the )?audience|'
+    r'make (?:it|this) an? email|turn .{0,95}? into|email draft|change (?:the )?audience|'
     r'ringkas|persingkat|perpendek|ubah menjadi|jadikan|'
     r'buat versi|revisi|sunting|format ulang)\b',re.I)
 

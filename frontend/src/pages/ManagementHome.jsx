@@ -7,9 +7,11 @@ const safeDate=value=>value?new Date(value).toLocaleDateString('en-GB',{day:'2-d
 
 export default function ManagementHome(){
  const {access}=useOutletContext()||{};
+ const leadership=['National Administrator','National Leadership','Provincial Administrator'].includes(access?.role);
  const [period,setPeriod]=useState('weekly'),[snapshot,setSnapshot]=useState(null);
  const [error,setError]=useState(''),[loading,setLoading]=useState(true);
  useEffect(()=>{
+  if(!leadership){setLoading(false);setSnapshot(null);return}
   let active=true;const controller=new AbortController();
   setLoading(true);setError('');
   const token=window.__BAWASLU_DEMO_REPLICA__?'DEMO-SNAPSHOT':window.localStorage.getItem('bawaslu_access_token')||'';
@@ -21,7 +23,7 @@ export default function ManagementHome(){
   }).then(data=>{if(active)setSnapshot(data)}).catch(e=>{if(active&&e.name!=='AbortError')setError(e.message)})
    .finally(()=>{if(active)setLoading(false)});
   return()=>{active=false;controller.abort()};
- },[period]);
+ },[period,leadership]);
  const metrics=snapshot?.metrics||{},consistency=snapshot?.management_consistency||{},
   queue=snapshot?.followup_queue||{},quality=snapshot?.casework_progress||{};
  const cases=snapshot?.recent_cases||[];
@@ -30,6 +32,7 @@ export default function ManagementHome(){
  const scope=snapshot?.scope?.geographic_scope==='Province'?
   'Authorized province: '+(snapshot?.scope?.province||'Unspecified'):
   'Authorized national scope';
+ if(!leadership)return <section role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm">Management workspace requires an authorized national or provincial leadership role. Operational officers can use the same SmartRadar assistant from the Operations workspace.</section>;
  return <div className="mx-auto max-w-[1250px] space-y-6" data-testid="management-workspace-home">
   <header className="rounded-2xl bg-gradient-to-r from-[#173950] to-[#245369] px-6 py-7 text-white">
    <p className="text-[11px] font-bold uppercase tracking-[.18em] text-[#cce7ed]">BAWASLU · MANAGEMENT WORKSPACE</p>

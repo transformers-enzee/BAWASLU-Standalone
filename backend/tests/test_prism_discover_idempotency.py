@@ -211,3 +211,33 @@ def test_missing_provider_stance_is_pending_not_falsely_assessed(monkeypatch):
     assert not sentiment_is_assessed(record)
     assert 'did not supply' in record.sentiment_explanation
     db.close()
+
+
+def test_boolean_project_discover_links_only_true_matches(monkeypatch):
+    """No paid calls; provider candidates are screened before evidence linking."""
+    from app.project_boolean import encode_boolean_project_query
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    db=SessionLocal()
+    campaign,run=seed(db)
+    campaign.primary_keywords_json=encode_boolean_project_query(
+        'Gibran AND (ijazah OR pendidikan) NOT hoaks')
+    db.commit()
+    params,_=prism_discover.body_for(db,campaign)
+    assert params['groups'][0]['keywords']==['gibran']
+
+    matched=post('boolean-true','https://instagram.com/p/boolean-true')
+    matched['text']='Warga membahas ijazah Gibran.'
+    wrong_topic=post('boolean-wrong','https://instagram.com/p/boolean-wrong')
+    wrong_topic['text']='Gibran membahas jalan tol.'
+    excluded=post('boolean-excluded','https://instagram.com/p/boolean-excluded')
+    excluded['text']='Gibran membantah hoaks ijazah.'
+    assert prism_discover.store(db,run,campaign,[matched,wrong_topic,excluded])==1
+    links=db.query(CampaignEvidence).all()
+    assert len(links)==1
+    approved=db.get(SocialListeningResult,links[0].result_id)
+    assert approved.provider_result_id=='boolean-true'
+    assert db.query(EvidenceAssessment).count()==1
+    meta=json.loads(links[0].matched_fields_json)
+    assert meta['search_mode']=='BOOLEAN'
+    assert meta['matched'] is True
+    db.close()

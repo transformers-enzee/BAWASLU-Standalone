@@ -16,15 +16,15 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)onClose?.()}}>
   <section className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Activation and AI assessment progress">
    <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-    <div><h2 className="text-lg font-bold text-[#19324a]">{title||'Campaign activation'}</h2>
+    <div><h2 className="text-lg font-bold text-[#19324a]">{title||'Project activation'}</h2>
      <p className="mt-1 text-xs text-slate-500">{run?.run_id?'Run #'+run.run_id:'Confirm activation'}</p></div>
     <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" onClick={onClose} aria-label="Close progress popup">✕ Close</button>
    </header>
    <div className="space-y-5 overflow-y-auto p-5">
     {!run&&<div className="space-y-3">
-     <p className="text-sm text-slate-700">Activate this campaign to collect posts and assess the saved results?</p>
+     <p className="text-sm text-slate-700">Activate this project to collect posts and assess the saved results?</p>
      {preview&&<p className="text-xs text-slate-600">Keywords: {(preview.keywords_used||[]).join(', ')} · Platforms: {(preview.platforms||[]).join(', ')}</p>}
-     {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking campaign readiness…</p>}
+     {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>
       {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview} onClick={onConfirm}>Activate</button>}

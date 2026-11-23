@@ -189,6 +189,17 @@ async def upload(thread_id:str=Form(...),file:UploadFile=File(...),
     data=await file.read(MAX_BYTES+1)
     if len(data)>MAX_BYTES:raise HTTPException(422,"Maximum attachment size is 5 MB")
     if not data:raise HTTPException(422,"Empty document")
+    if name.lower().endswith(".docx"):
+        # Reject decompression bombs and oversized embedded objects.
+        import zipfile
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                infos=z.infolist()
+                if len(infos)>220 or sum(x.file_size for x in infos)>18*1024*1024:
+                    raise HTTPException(422,"DOCX is too complex or expands beyond the safe size limit")
+        except HTTPException:raise
+        except (zipfile.BadZipFile,OSError) as exc:
+            raise HTTPException(422,"Unreadable DOCX archive") from exc
     _limit(db,thread.id)
     _clamav_scan(data)
     sections=_decode_document(name,data)
@@ -241,8 +252,33 @@ def remove_attachment(thread_id:str,attachment_id:str,user:User=Depends(current_
     p=_user_scope(db,user);thread=_thread(db,user,thread_id)
     row=db.query(AssistantChatAttachment).filter_by(id=attachment_id,thread_id=thread.id,user_id=user.id).first()
     if row is None:raise HTTPException(404,"Attachment unavailable")
-    _check_scope(row,p);db.delete(row);db.commit()
-    return {"deleted":True}
+    _check_scope(row,p)
+    # Remove derived answer snapshots associated with this attachment, not
+    # merely the original extracted text. Earlier outputs are not evidence.
+    import json as _json
+    saved=_json.loads(thread.messages_json or "[]")
+    changed=False
+    source_prefix="ATT-"+row.id.replace("-","")+"-"
+    for msg in saved:
+        if not isinstance(msg,dict):continue
+        if msg.get("role")=="user" and row.id in (msg.get("attachment_ids") or []):
+            msg["attachment_ids"]=[x for x in msg["attachment_ids"] if x!=row.id]
+            changed=True
+        if msg.get("role")=="assistant" and any(
+            str(x).startswith(source_prefix) for x in msg.get("attached_source_ids") or []):
+            # Even paraphrased excerpts in the generated answer are cleared.
+            msg.clear()
+            msg.update({"role":"assistant",
+              "text":"An attachment used in this answer was deleted. Its derived answer content was removed. Re-run the request using currently authorized sources.",
+              "records":[],"source_consultation":[],"structured_findings":[],
+              "decision_plan":[],"attached_source_ids":[],
+              "draft_policy":"","grounding":{"limited":True,"scope":"ATTACHMENT_DELETED"}})
+            changed=True
+    if changed:
+        thread.messages_json=_json.dumps(saved,ensure_ascii=False)
+        thread.updated_at=datetime.utcnow()
+    db.delete(row);db.commit()
+    return {"deleted":True,"derived_history_redacted":changed}
 
 
 def selected_attachment_evidence(db,user,p,thread_id,ids):

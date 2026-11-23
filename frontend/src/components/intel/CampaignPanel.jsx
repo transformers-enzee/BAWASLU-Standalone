@@ -66,6 +66,8 @@ export default function CampaignPanel({campaignId=null}){
  const [creating,setCreating]=useState(false),[editing,setEditing]=useState(null);
  const [form,setForm]=useState({...initial}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [workspaceMode,setWorkspaceMode]=useState('standard');
+ const [booleanCampaignId,setBooleanCampaignId]=useState('');
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
@@ -574,15 +576,35 @@ export default function CampaignPanel({campaignId=null}){
     <div><p className="text-[11px] font-extrabold uppercase tracking-[.13em] text-[#6d8994]">Monitoring &amp; Collection</p>
     <h1 className="mt-1 text-[27px] font-bold tracking-tight text-[#152c47]">Social Listening</h1>
     <p className="mt-1 text-sm text-[#60768c]">Discover broad conversations. Track selected candidates.</p></div>
-    {!campaignId&&<button type="button" className="rounded-xl border border-[#a52a2f] bg-[#a52a2f] px-5 py-3 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={newCampaign}>＋ Create campaign</button>}
+    {!campaignId&&workspaceMode==='standard'&&<button type="button" className="rounded-xl border border-[#a52a2f] bg-[#a52a2f] px-5 py-3 text-sm font-semibold text-white hover:bg-[#801b24]" onClick={newCampaign}>＋ Create campaign</button>}
   </header>
-  <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1" aria-label="Monitoring workflow steps">
+  {!campaignId&&<div role="group" aria-label="Social Listening search modes" data-testid="social-listening-module-modes" className="flex flex-wrap gap-2 rounded-xl border border-[#dce5ed] bg-white p-2">
+   <button type="button" aria-pressed={workspaceMode==='standard'} onClick={()=>setWorkspaceMode('standard')} className={workspaceMode==='standard'?'intel-button text-sm':'intel-ghost text-sm'}>Standard Monitoring</button>
+   <button type="button" aria-pressed={workspaceMode==='boolean'} onClick={()=>{setWorkspaceMode('boolean');setCreating(false);setSelected(null)}} className={workspaceMode==='boolean'?'intel-button text-sm':'intel-ghost text-sm'}>Boolean Search</button>
+  </div>}
+  {(campaignId||workspaceMode==='standard')&&<nav className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1" aria-label="Monitoring workflow steps">
    {['Set up monitoring','Monitoring Home','Campaign Dashboard'].map((label,i)=><span key={label} className={'inline-flex items-center gap-2 text-xs '+((creating?i===0:campaignId?i===2:i===1)?'font-bold text-[#9f3033]':'text-[#708394]')}>
     <span className={'grid h-6 w-6 place-items-center rounded-full '+((creating?i===0:campaignId?i===2:i===1)?'bg-[#9f3033] text-white':'bg-[#e3eaee] text-[#708394]')}>{i+1}</span>{label}{i<2&&<span className="ml-2 text-[#a0b1bb]">→</span>}
    </span>)}
-  </nav>
+  </nav>}
   {!creating&&error&&<p role="alert" className="intel-card p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="intel-card p-3 text-green-700">{notice}</p>}
+  {!campaignId&&workspaceMode==='boolean'&&<section className="space-y-4" data-testid="social-listening-boolean-workspace" aria-label="Boolean Search workspace">
+   <div className="rounded-xl border border-[#dce5ed] bg-white p-5 space-y-3">
+    <h2 className="text-xl font-semibold text-[#19324a]">Boolean Search</h2>
+    <p className="text-sm text-[#60768c]">Search saved Social Listening posts using AND, OR, NOT, quoted phrases, and parentheses. This mode does not crawl providers, change campaigns, assess with AI, or spend credits.</p>
+    <label className="block max-w-xl text-sm font-semibold text-[#19324a]">Campaign
+     <select className="intel-input mt-1" value={booleanCampaignId} onChange={e=>setBooleanCampaignId(e.target.value)} aria-label="Choose campaign for Boolean Search">
+      <option value="">Select a campaign to search</option>
+      {campaigns.map(c=><option key={c.id} value={String(c.id)}>{c.name}</option>)}
+     </select>
+    </label>
+    <p className="text-xs text-slate-500">Results are limited to campaigns and saved posts accessible to your account. Full feed pagination is used; an interrupted load is labeled partial.</p>
+   </div>
+   {booleanCampaignId
+    ?<CapturedPostList key={booleanCampaignId} campaignId={booleanCampaignId} initialSearchMode="boolean" showModeTabs={false}/>
+    :<p className="rounded-xl border border-dashed border-[#cbd5e1] bg-white p-5 text-sm text-[#60768c]">{loading?'Loading accessible campaigns…':'Choose a campaign to begin Boolean Search.'}</p>}
+  </section>}
   {creating&&<section className="rounded-xl border border-[#dce5ed] bg-white p-4 sm:p-6">
    <div className="w-full">
     <form className="p-5 sm:p-7 space-y-4" onSubmit={save} aria-label="Campaign editor">
@@ -605,7 +627,7 @@ export default function CampaignPanel({campaignId=null}){
     </form>
    </div>
   </section>}
-  {!campaignId&&!creating&&<section className="space-y-4">
+  {!campaignId&&!creating&&workspaceMode==='standard'&&<section className="space-y-4">
    <div className="flex flex-wrap items-center justify-between gap-3 pt-1"><div><h2 className="text-xl font-semibold text-[#152c47]">Your monitoring campaigns</h2><p className="text-sm text-[#60768c]">Open a campaign to see the dashboard, captured posts and candidate tracking.</p></div>
    {campaigns.length>0&&<button type="button" className="rounded-xl bg-[#a52a2f] px-4 py-3 text-sm font-semibold text-white" onClick={()=>navigate('/social-listening/campaigns/'+campaigns[0].id+'?tab=watchlist')}>◎ Candidate Watchlist</button>}</div>
    {window.__BAWASLU_DEMO_REPLICA__?<DemoSocialListeningStats/>:<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

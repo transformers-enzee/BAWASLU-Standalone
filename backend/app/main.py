@@ -719,6 +719,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         raise HTTPException(400,str(exc))
     source_choice=workflow_config['sources']
     workflow_mode=workflow_config['workflow']
+    empty_workflow_metadata={
+        'workflow_mode':workflow_mode,
+        'source_consultation':source_consultation(source_choice,[],[],[]),
+        'structured_findings':[],'decision_plan':[],
+        'draft_policy':drafting_notice(workflow_mode),
+    }
     language = effective_language(q, None)
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
@@ -773,7 +779,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                  if language=='id' else
                  'One or more requested PDF pages are unavailable within your access. '
                  'I will not substitute other evidence for those named pages.')
-        return {'answer':message,'records':[],
+        return {'answer':message,'records':[],**empty_workflow_metadata,
                 'provider':{'mode':'DETERMINISTIC_FALLBACK','model':'',
                             'fallback_code':'no_matching_evidence'},
                 'answer_language':language,'detected_tags':[],
@@ -868,7 +874,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                  'No matching, accessible indexed PDF passages were found for '
                  'this question. I cannot infer the document contents without '
                  'available page excerpts.')
-        return {'answer':message,'records':[],'provider':{'mode':'NO_PDF_EVIDENCE'},
+        return {'answer':message,'records':[],**empty_workflow_metadata,'provider':{'mode':'NO_PDF_EVIDENCE'},
                 'response_profile':PDF_GUIDANCE,'evidence_snapshot':None,
                 'analytical_findings':None,'featured_sources':[],
                 'answer_language':language,'detected_tags':[],
@@ -896,7 +902,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                  'completion and found no matches in the scanned portion. '
                  'This does not establish that no matching records exist. '
                  'Narrow the topic or date range for further review.')
-        return {'answer':message,'records':[],
+        return {'answer':message,'records':[],**empty_workflow_metadata,
                 'provider':{'mode':'DETERMINISTIC_FALLBACK',
                             'model':'','fallback_code':'partial_social_scan'},
                 'response_profile':SOCIAL_ANALYSIS,
@@ -929,7 +935,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'There is no basis for a sentiment distribution or incident '
             'follow-up on this topic. Review filters, topic terms and date '
             'range if needed.')
-        return {'answer':message,'records':[],
+        return {'answer':message,'records':[],**empty_workflow_metadata,
                 'provider':{'mode':'DETERMINISTIC_FALLBACK',
                             'model':'','fallback_code':'complete_social_no_match'},
                 'response_profile':response_profile,
@@ -968,7 +974,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             preface='Sumber Social Listening sementara tidak dapat diambil.\n\n'+preface
         elif source_warning and language=='en':
             preface=source_warning+'\n\n'+preface
-        return {'answer':preface+text,'records':[],'provider':provider,
+        return {'answer':preface+text,'records':[],**empty_workflow_metadata,'provider':provider,
                 'answer_language':language,'detected_tags':[],'presentation_labels':{},
                 'grounding':{'accessible_count':len(accessible),
                     'selected_count':0,'supporting_count':0,'scope':'GPT_GENERAL_NO_PRIVATE_RECORDS',
@@ -980,7 +986,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             'es':'No se encontraron registros pertinentes de BAWASLU dentro de su acceso autorizado.',
             'fr':'Aucune donnée BAWASLU correspondante n’a été trouvée dans votre périmètre autorisé.',
         }
-        return {'answer':no_match.get(language,no_match['en']),
+        return {'answer':no_match.get(language,no_match['en']),**empty_workflow_metadata,
                 'answer_language':language,'detected_tags':[],'presentation_labels':{},
                 'records':[],'provider':{'mode':'DETERMINISTIC_FALLBACK','model':'',
                 'fallback_code':'no_matching_evidence'},

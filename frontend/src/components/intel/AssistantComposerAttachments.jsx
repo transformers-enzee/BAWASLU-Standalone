@@ -20,7 +20,7 @@ export function attachmentRequest(path,method='GET',body=null,isFile=false){
  return call(path,method,body,isFile);
 }
 export default function AssistantComposerAttachments({
- threadId,ensureThread,items,setItems,disabled=false,selected=true,onProcessingChange=()=>{}
+ threadId,ensureThread,items,setItems,disabled=false,selected=true,onProcessingChange=()=>{},onRemoved=()=>{}
 }){
  const [open,setOpen]=useState(false),[link,setLink]=useState(''),[working,setWorking]=useState([]),[failure,setFailure]=useState('');
  const inputRef=useRef(null);
@@ -66,6 +66,7 @@ export default function AssistantComposerAttachments({
   try{
    await call('/'+encodeURIComponent(item.thread_id)+'/'+encodeURIComponent(item.id),'DELETE');
    setItems(old=>old.filter(x=>x.id!==item.id));setFailure('');
+   await onRemoved(item);
   }catch(e){setFailure('Removal failed: '+e.message)}
  }
  return <div className="w-full space-y-2" data-testid="smart-radar-attachment-composer">

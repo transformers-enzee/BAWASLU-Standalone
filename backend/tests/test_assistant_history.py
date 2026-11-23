@@ -17,7 +17,11 @@ from app.db import Base
 def db(monkeypatch):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     # Include only the table under test; no staging data is modified.
-    Base.metadata.create_all(engine, tables=[history.AssistantThread.__table__])
+    from app.assistant_attachments import AssistantChatAttachment
+    from app.assistant_response_feedback import AssistantResponseFeedback
+    Base.metadata.create_all(engine, tables=[
+        history.AssistantThread.__table__,
+        AssistantChatAttachment.__table__,AssistantResponseFeedback.__table__])
     monkeypatch.setattr(history, "require_access", lambda session, user: None)
     with Session(engine) as session:
         yield session
@@ -47,7 +51,8 @@ def test_per_user_conversation_isolation(db):
         history.delete_thread(first["id"], user=user(12), db=db)
     assert denied.value.status_code == 404
     assert history.get_thread(first["id"], user=user(11), db=db)["title"] == "Source review"
-    assert history.delete_thread(first["id"], user=user(11), db=db) == {"ok": True}
+    assert history.delete_thread(first["id"], user=user(11), db=db) == {
+        "ok": True, "conversation_evidence_deleted": True}
     assert history.list_threads(user=user(11), db=db)["threads"] == []
 
 

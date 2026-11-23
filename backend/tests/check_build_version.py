@@ -23,7 +23,7 @@ def following(value):
     assert valid(value),f"Invalid build version: {value}"
     major,*minor=map(int,value.split("."))
     last=minor[0] if minor else 0
-    max_minor=99 if major>=175 else 9
+    max_minor=99 if major==175 else 9
     return f"{major+1}.0" if last>=max_minor else f"{major}.{last+1}"
 
 def read_version(source):
@@ -59,6 +59,8 @@ def verify():
     assert following("89.9")=="90.0"
     assert following("175.61")=="175.62"
     assert following("175.99")=="176.0"
+    assert following("176.9")=="177.0"
+    assert following("177.0")=="177.1"
     assert not valid("89.10")
     print("Build metadata contract OK:",version)
 

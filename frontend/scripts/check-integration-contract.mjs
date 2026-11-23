@@ -44,14 +44,14 @@ assert.match(watchBridge,/data-track-suggestion/);
 assert.match(campaign,/Captured Posts/);
 assert.match(campaign,/Candidate Watchlist/);
 assert.match(campaign,/campaignSection==='posts'&&<CapturedPostList/);
-assert.match(campaign,/campaignSection==='overview'&&dashboard&&<section aria-label="Campaign monitoring dashboard"/);
+assert.match(campaign,/campaignSection==='overview'&&dashboard&&<section aria-label="Project monitoring dashboard"/);
 assert.match(captured,/action:'campaignCapturedPosts'/);
 assert.match(captured,/page_size:200/);
 assert.match(captured,/if\(!result\.has_more\)break/);
 assert.doesNotMatch(captured,/Demo citizen|Demo institutional|Export|Find post by ID|Analyze with AI/);
 assert.match(campaignsApi,/if action=='campaignCapturedPosts':/);
 assert.match(socialcrawl,/campaignCapturedPosts/,'The authenticated dispatcher must allow captured feed reads');
-const trendPosition=campaign.indexOf('aria-label="Campaign trend by platform"');
+const trendPosition=campaign.indexOf('aria-label="Project trend by platform"');
 const topicsPosition=campaign.indexOf('<TopicThemes data={dashboard.topics_and_themes} campaignId={selected.id}');
 const capturedPosition=campaign.indexOf('aria-label="Captured posts"',trendPosition);
 assert.ok(trendPosition>=0 && trendPosition<topicsPosition && topicsPosition<capturedPosition,

@@ -23,7 +23,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
   <summary className="cursor-pointer font-semibold text-[#19364c]">Sources consulted · public research trail</summary>
   <p className="mt-2 text-slate-600">This is public web research, not a legally verified BAWASLU finding. Unavailable searches are explicitly disclosed.</p>
   {message?.grounding?.retrieved_at&&<p className="mt-1 text-slate-500">Sources retrieved: {new Date(message.grounding.retrieved_at).toLocaleString()}</p>}
-  {sources.filter(row=>row.requested).map(row=><div className="mt-2" key={row.key}>
+  {sources.filter(row=>row.status!=='NOT_SELECTED').map(row=><div className="mt-2" key={row.key}>
    <strong>{row.label}: </strong><span>{sourceStatus[row.status]||row.status}</span>
    {(row.urls||[]).filter(url=>/^https:\/\/[^ ]+$/.test(url)).map(url=><a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block truncate text-teal-800 underline" title={url}>{url}</a>)}
    {row.warning&&<p className="text-amber-800">{row.warning}</p>}

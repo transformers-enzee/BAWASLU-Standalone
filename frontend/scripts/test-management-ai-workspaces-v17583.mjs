@@ -35,7 +35,7 @@ for(const field of [
  "['RESEARCH','Research & Analysis'",
  "['STRATEGY_DRAFTING','Strategy & Drafting'",
  "'smartRadar','SmartRadar / saved BAWASLU intelligence'",
- "'publicWeb','Public web / public social'",
+ "'publicWeb','Public web / public social · recommended'",
  "'legalReferences','Official legal/reference sources'",
  'data-testid="assistant-authorized-source-selection"',
  'not a live crawl',

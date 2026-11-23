@@ -6,6 +6,9 @@ PERSPECTIVES={"AUTO","EXECUTIVE","OPERATIONAL","RESEARCH"}
 
 def mode_contract(payload,grant):
     workspace=str(payload.get("workspaceMode") or "OPERATIONAL").upper()
+    # Existing Operations workspace routing uses OPERATIONS, while the analytical
+    # mode contract is OPERATIONAL. Normalize only this known legacy alias.
+    if workspace=="OPERATIONS":workspace="OPERATIONAL"
     active=str(payload.get("assistantMode") or workspace).upper()
     perspective=str(payload.get("perspective") or "AUTO").upper()
     if workspace not in MODES or active not in MODES or perspective not in PERSPECTIVES:

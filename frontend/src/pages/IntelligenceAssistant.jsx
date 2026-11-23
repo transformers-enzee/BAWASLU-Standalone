@@ -190,7 +190,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
    const response=await base44.functions.invoke('intelligenceAssistant',{
     question:q,previousQuestion:previous,analysisMode:'DATA',responseDepth,
     workflowMode,sourceSelection,
-    workspaceMode:workspace,assistantMode,perspective,
+    workspaceMode:workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL',assistantMode,perspective,
     conversationId:activeIdRef.current,
     attachmentIds:selectedIds,
     conversationContext:messages.slice(-16).map(m=>({role:m.role,text:String(m.text||'').slice(0,2200)}))

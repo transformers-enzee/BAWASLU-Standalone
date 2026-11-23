@@ -24,6 +24,17 @@ def officer(role="Regency/City Officer",scope="Regency/City"):
         "permissions":{"view_intelligence":True}}
 
 
+def test_operations_workspace_alias_preserves_access_guards():
+    # The existing Operations route sends OPERATIONS; it is not a new analytical mode.
+    operational=mode_contract({"workspaceMode":"OPERATIONS","perspective":"AUTO"},officer())
+    assert operational["workspace_mode"]=="OPERATIONAL"
+    assert operational["assistant_mode"]=="OPERATIONAL"
+    with pytest.raises(PermissionError):
+        mode_contract({"workspaceMode":"OPERATIONS","assistantMode":"MANAGEMENT"},officer())
+    with pytest.raises(ValueError):
+        mode_contract({"workspaceMode":"WRONG_WORKSPACE"},officer())
+
+
 def test_default_workspace_mode_separate_from_optional_perspective():
     operations=mode_contract({"workspaceMode":"OPERATIONAL","perspective":"EXECUTIVE"},officer())
     assert operations["assistant_mode"]=="OPERATIONAL"

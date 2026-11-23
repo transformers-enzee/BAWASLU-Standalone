@@ -194,7 +194,11 @@ def _normalize(db,p,data,existing=None):
 
 def _view(db,c):
     search=decode_project_query(c.primary_keywords_json)
-    prism_plan=discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None
+    prism_plan=None
+    prism_plan_error=''
+    if search['search_mode']=='BOOLEAN':
+        try:prism_plan=discover_boolean_plan(search['boolean_query'])
+        except ValueError as exc:prism_plan_error=str(exc)  # Listing a saved project must never fail because its paid plan is unsupported.
     counts=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
     evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
         CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').count()
@@ -204,6 +208,7 @@ def _view(db,c):
        'prism_provider_keywords':prism_plan['keywords'] if prism_plan else [],
        'prism_provider_contains':prism_plan['contains'] if prism_plan else '',
        'prism_provider_excludes':prism_plan['exclude_terms'] if prism_plan else [],
+       'prism_plan_error':prism_plan_error,
        'primary_keywords':search['retrieval_terms'] if search['search_mode']=='KEYWORDS' else [],
        'secondary_keywords':json.loads(c.secondary_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],
        'excluded_keywords':json.loads(c.excluded_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],

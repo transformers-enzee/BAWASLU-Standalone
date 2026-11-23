@@ -71,6 +71,7 @@ export default function CampaignPanel({campaignId=null}){
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
  const [discoverCreditCap,setDiscoverCreditCap]=useState(20),[discoverZeroYieldAcknowledged,setDiscoverZeroYieldAcknowledged]=useState(false);
+ const [discoverPlatformMode,setDiscoverPlatformMode]=useState('FOCUSED');
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
  // Persisted run IDs are accessible via explicit campaign activation, but a
@@ -156,9 +157,9 @@ export default function CampaignPanel({campaignId=null}){
   return ()=>{active=false;clearInterval(timer)};
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
- async function checkDiscover(c,cap=c.search_mode==='BOOLEAN'?20:100){
-   setDiscoverCampaign(c);setDiscoverCreditCap(cap);setDiscoverZeroYieldAcknowledged(false);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
-   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{max_credits:cap}});
+ async function checkDiscover(c,cap=c.search_mode==='BOOLEAN'?20:100,mode=c.search_mode==='BOOLEAN'?'FOCUSED':'ALL'){
+   setDiscoverCampaign(c);setDiscoverCreditCap(cap);setDiscoverPlatformMode(mode);setDiscoverZeroYieldAcknowledged(false);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{max_credits:cap,platform_mode:mode}});
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
@@ -169,6 +170,7 @@ export default function CampaignPanel({campaignId=null}){
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
       data:{confirm_cost:true,signature:discoverPreview.signature,...(discoverCampaign.search_mode==='BOOLEAN'?{
          max_credits:discoverCreditCap,confirmed_max_credits:discoverCreditCap,
+         platform_mode:discoverPlatformMode,confirmed_platform_mode:discoverPlatformMode,
          acknowledge_zero_yield:discoverZeroYieldAcknowledged
        }:{})}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
@@ -670,7 +672,9 @@ export default function CampaignPanel({campaignId=null}){
   }}
   booleanMode={discoverCampaign.search_mode==='BOOLEAN'}
   creditCap={discoverCreditCap}
-  onCreditCapChange={cap=>checkDiscover(discoverCampaign,cap)}
+  onCreditCapChange={cap=>checkDiscover(discoverCampaign,cap,discoverPlatformMode)}
+  platformMode={discoverPlatformMode}
+  onPlatformModeChange={mode=>checkDiscover(discoverCampaign,discoverCreditCap,mode)}
   zeroYieldAcknowledged={discoverZeroYieldAcknowledged}
   onAcknowledgeZeroYield={setDiscoverZeroYieldAcknowledged}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No projects match your search.</p>}</div>}

@@ -8,7 +8,7 @@ from app.assistant_workflows import (
 
 def test_explicit_source_categories_and_two_ai_modes():
     cfg=normalize_workflow_request({'workflowMode':'STRATEGY_DRAFTING',
-          'sourceSelection':{'smartRadar':True,'publicWeb':False,'legalReferences':True}})
+          'sourceSelection':{'smartRadar':True,'publicWeb':False,'legalReferences':True,'attachments':True}})
     assert cfg['workflow']=='STRATEGY_DRAFTING'
     assert cfg['explicit'] is True
     assert cfg['sources']['publicWeb'] is False

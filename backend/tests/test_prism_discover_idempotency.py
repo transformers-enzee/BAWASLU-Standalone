@@ -240,4 +240,6 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
     meta=json.loads(links[0].matched_fields_json)
     assert meta['search_mode']=='BOOLEAN'
     assert meta['matched'] is True
+    queued_ids=json.loads(run.query_json or '{}').get('assessment_result_ids')
+    assert queued_ids==[approved.id]  # Excluded posts cannot enter the paid AI queue.
     db.close()

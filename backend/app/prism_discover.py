@@ -264,6 +264,7 @@ def store(db,run,c,items,full_assessment=False):
         EvidenceAssessment.campaign_id==c.id,
         EvidenceAssessment.result_id.in_(result_ids)).all()}
     new=[]
+    accepted_ids=[]
     from .campaign_scheduler import keyword_screen
     boolean_mode=decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
     for row,raw in pairs:
@@ -272,6 +273,7 @@ def store(db,run,c,items,full_assessment=False):
             # Provider retrieval is broad; only Boolean-confirmed posts
             # enter the project, its Inbox and billable assessment path.
             continue
+        accepted_ids.append(row.id)
         if row.id not in links:
             db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
@@ -295,14 +297,14 @@ def store(db,run,c,items,full_assessment=False):
         db.add(assessment);new.append((row,assessment))
         assessed.add(row.id)
     meta=json.loads(run.query_json or '{}')
-    meta['assessment_result_ids']=[row.id for row,_ in pairs]
+    meta['assessment_result_ids']=accepted_ids
     run.query_json=json.dumps(meta,ensure_ascii=False)
     db.commit()
     # Legacy manual store still supports topic-only enrichment. The Activate
     # pipeline uses the full intelligence assessor instead of two paid passes.
     if not full_assessment:
         enrich(db,c,new)
-    return len(pairs)
+    return len(accepted_ids)
 
 def execute(run_id):
     db=SessionLocal()

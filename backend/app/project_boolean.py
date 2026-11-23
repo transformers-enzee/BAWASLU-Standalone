@@ -185,9 +185,11 @@ def discover_boolean_plan(expression,max_keywords=5):
         if kind=='TERM':
             return [(node[1],)]
         if kind=='NOT':
-            return [()]
+            return []  # A negative branch alone cannot cover retrieval.
         left,right=alternatives(node[1]),alternatives(node[2])
         if kind=='OR':
+            if not left or not right:
+                return []  # A negative-only OR arm can match without positive terms.
             return [tuple(dict.fromkeys(a+b)) for a in left for b in right]
         return left+right
 

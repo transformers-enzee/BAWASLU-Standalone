@@ -252,7 +252,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
-        <AssistantWorkflowEvidence message={m}/>
+        <AssistantWorkflowEvidence message={m} fresh={reviewableIndexes.has(i)}/>
         {m.grounding?.sample_not_exhaustive&&<p data-testid="assistant-sample-scope-disclosure"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs leading-relaxed text-[#52657a]">
           {(m.answer_language||'id')==='id'

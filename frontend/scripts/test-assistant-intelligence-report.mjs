@@ -8,7 +8,9 @@ const dashboard=read('../src/components/intel/AssistantInsights.jsx');
 const findings=read('../src/components/intel/AssistantIntelligenceReport.jsx');
 const records=read('../src/components/intel/AssistantRecords.jsx');
 assert.ok(page.includes('AssistantIntelligenceReport')&&page.includes('featured_sources'),'report connected to chat');
-assert.ok(page.includes("useState('DEEP')"),'deep intelligence default');
+assert.ok(page.includes("useState('EXECUTIVE')"),'concise web-first response default');
+assert.ok(page.includes('<option value="DEEP">Action Plan'),
+  'officers can still select a detailed investigation or action plan');
 assert.ok(dashboard.includes('activity_by_date')&&dashboard.includes('platform_engagement'),'source-based charts connected');
 assert.ok(dashboard.includes('engagement_coverage'),'metric coverage disclosed');
 assert.ok(findings.includes("t('verification_heading')"),'officer actions presented');

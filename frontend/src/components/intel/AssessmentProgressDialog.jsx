@@ -6,7 +6,7 @@ const since=value=>{if(!value)return 'No successful AI activity recorded';const 
 const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment in progress',
  COMPLETED:'Assessment complete',NEEDS_ATTENTION:'Paused — action required',
  FAILED:'Run failed',NO_NEW_POSTS:'No new posts captured'};
-export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null,booleanMode=false,creditCap=20,onCreditCapChange=null,zeroYieldAcknowledged=false,onAcknowledgeZeroYield=null}){
+export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null,booleanMode=false,creditCap=20,onCreditCapChange=null,zeroYieldAcknowledged=false,onAcknowledgeZeroYield=null,platformMode='FOCUSED',onPlatformModeChange=null}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
  // Collection percentage is unknown until results are saved.
@@ -23,7 +23,14 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
    <div className="space-y-5 overflow-y-auto p-5">
     {!run&&<div className="space-y-3">
      <p className="text-sm text-slate-700">Activate this project to collect posts and assess the saved results?</p>
-     {booleanMode&&<label className="block text-sm font-medium text-[#19324a]">Maximum SocialCrawl credits for this provider run
+     {booleanMode&&<label className="block text-sm font-medium text-[#19324a]">Provider source scope
+       <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" aria-label="SocialCrawl source scope" value={platformMode} disabled={loading} onChange={e=>onPlatformModeChange?.(e.target.value)}>
+        <option value="FOCUSED">Focused Sources — up to 3 social platforms (lower exposure)</option>
+        <option value="ALL">All configured sources — broader, potentially costlier</option>
+       </select>
+       <span className="mt-1 block text-xs font-normal text-slate-600">The free preflight shows exactly which platforms will be searched.</span>
+      </label>}
+      {booleanMode&&<label className="block text-sm font-medium text-[#19324a]">Maximum SocialCrawl credits for this provider run
        <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" aria-label="Maximum SocialCrawl credits" value={creditCap} disabled={loading} onChange={e=>onCreditCapChange?.(Number(e.target.value))}>
         {[10,20,35,50,100].map(n=><option value={n} key={n}>{n} credits</option>)}
        </select>
@@ -47,7 +54,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>
-      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview||(booleanMode&&(Number(preview.credit_cap)!==Number(creditCap)||(preview.zero_yield_ack_required&&!zeroYieldAcknowledged)))} onClick={onConfirm}>Activate</button>}
+      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview||(booleanMode&&(Number(preview.credit_cap)!==Number(creditCap)||preview.platform_mode!==platformMode||(preview.zero_yield_ack_required&&!zeroYieldAcknowledged)))} onClick={onConfirm}>Activate</button>}
      </div>
      {loading&&<p role="status" className="text-xs text-slate-500">Submitting activation request…</p>}
     </div>}

@@ -84,11 +84,33 @@ export function compileBooleanPostSearch(raw) {
  const ast=or(0);
  if(pos!==tokens.length)throw new BooleanSearchSyntaxError(
   'Add AND or OR between terms and check the parentheses.');
+ function retrievalAnchors(node) {
+  if(node.type==='TERM')return [node.value];
+  if(node.type==='NOT')return null;
+  const left=retrievalAnchors(node.left),right=retrievalAnchors(node.right);
+  if(node.type==='OR')return left&&right?[...new Set([...left,...right])]:null;
+  if(!left)return right;
+  if(!right)return left;
+  return left.length<=right.length?left:right;
+ }
  function matches(node,text) {
   if(node.type==='TERM')return text.includes(node.value);
   if(node.type==='NOT')return !matches(node.child,text);
   if(node.type==='AND')return matches(node.left,text)&&matches(node.right,text);
   return matches(node.left,text)||matches(node.right,text);
  }
- return post=>matches(ast,String(post?.text_content||'').toLocaleLowerCase('id-ID'));
+ const predicate=post=>matches(ast,String(post?.text_content||'').toLocaleLowerCase('id-ID'));
+ predicate.retrievalTerms=retrievalAnchors(ast);
+ return predicate;
+}
+
+/** Validate a project query using the same provider-retrieval safeguards as the backend. */
+export function compileBooleanProjectSearch(raw) {
+ const predicate=compileBooleanPostSearch(raw);
+ const anchors=predicate.retrievalTerms;
+ if(!anchors?.length)throw new BooleanSearchSyntaxError(
+  'A monitoring project needs a positive search term in every OR branch.');
+ if(anchors.length>30)throw new BooleanSearchSyntaxError(
+  'Too many independent retrieval terms (maximum 30).');
+ return predicate;
 }

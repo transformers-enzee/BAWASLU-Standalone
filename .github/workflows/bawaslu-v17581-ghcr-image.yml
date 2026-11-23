@@ -1,5 +1,5 @@
 name: BAWASLU v175.81 staging Docker image
-# Rebuilt after Boolean project matching and AI-queue exclusion integration QA.
+# Rebuilt after Boolean project query validation, Prism evidence gating and regression QA.
 # Builds from the corrected, 43-check Boolean parser and dual-mode UI staging revision.
 
 on:

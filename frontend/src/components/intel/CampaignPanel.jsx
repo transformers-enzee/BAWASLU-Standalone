@@ -5,7 +5,7 @@ import {Trash2,  ExternalLink, ImageOff, Smile, Meh, Frown, CircleHelp } from 'l
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import KeywordTags from '@/components/intel/KeywordTags';
-import {compileBooleanPostSearch} from '@/lib/booleanPostSearch.mjs';
+import {compileBooleanProjectSearch} from '@/lib/booleanPostSearch.mjs';
 import ProvinceHeatmap from '@/components/intel/ProvinceHeatmap';
 import AssessmentPilotPreview from '@/components/intel/AssessmentPilotPreview';
 import CapturedPostList from '@/components/intel/CapturedPostList';
@@ -507,7 +507,7 @@ export default function CampaignPanel({campaignId=null}){
 
  const set=(key,value)=>{clearEstimate();setForm(x=>({...x,[key]:value}))};
  const booleanFormError=form.search_mode==='BOOLEAN'&&form.boolean_query.trim()
-   ?(()=>{try{compileBooleanPostSearch(form.boolean_query);return ''}catch(error){return error.message}})()
+   ?(()=>{try{compileBooleanProjectSearch(form.boolean_query);return ''}catch(error){return error.message}})()
    :'';
 
  async function refresh(){

@@ -2,6 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {ExternalLink,Smile,Meh,Frown,CircleHelp} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 import SentimentCorrection from './SentimentCorrection';
+import {compileBooleanPostSearch} from '@/lib/booleanPostSearch.mjs';
 import {useLanguage} from '@/lib/LanguageContext';
 import {correctedSentimentPost,overlaySentimentCorrections,sentimentCorrectionKey} from '@/lib/sentimentFeedState';
 const platformName=v=>({tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',facebook:'Facebook',threads:'Threads',twitter:'X',x:'X',reddit:'Reddit',linkedin:'LinkedIn',online_news:'Online News'}[String(v||'').toLowerCase()]||String(v||'Unknown source'));
@@ -43,6 +44,12 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
   onSentimentCorrected?.(correction);
  };
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
+ const [searchMode,setSearchMode]=useState('standard'),[booleanQuery,setBooleanQuery]=useState('');
+ const booleanSearch=useMemo(()=>{
+  if(searchMode!=='boolean'||!booleanQuery.trim())return {test:null,error:''};
+  try{return {test:compileBooleanPostSearch(booleanQuery),error:''}}
+  catch(error){return {test:null,error:error.message||'Invalid Boolean expression'}}
+ },[searchMode,booleanQuery]);
  const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');
  useEffect(()=>{
   let active=true;setPosts([]);setLoading(true);setError('');
@@ -68,32 +75,50 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
  },[campaignId,refreshKey]);
  const platforms=useMemo(()=>[...new Set(posts.map(p=>p.platform).filter(Boolean))].sort(),[posts]);
  const visible=useMemo(()=>{
-  const q=keyword.toLocaleLowerCase('id-ID').trim();
+  const q=searchMode==='standard'?keyword.toLocaleLowerCase('id-ID').trim():'';
+  if(searchMode==='boolean'&&booleanSearch.error)return [];
   const items=posts.filter(p=>{
    const day=String(p.published_at||'').slice(0,10);
    return (!from||(day&&day>=from))&&(!to||(day&&day<=to))&&
     (!platform||p.platform===platform)&&(!sentiment||String(p.sentiment||'').toLowerCase()===sentiment)&&
-    (!q||String(p.text_content||'').toLocaleLowerCase('id-ID').includes(q));
+    (searchMode==='boolean'
+      ?(!booleanSearch.test||booleanSearch.test(p))
+      :(!q||String(p.text_content||'').toLocaleLowerCase('id-ID').includes(q)));
   });
   const score=p=>{try{const e=typeof p.engagement==='object'?p.engagement:JSON.parse(p.engagement_json||'{}');return Number(e.engagement_total||e.likes||0)}catch{return 0}};
   return items.sort((a,b)=>sort==='oldest'?String(a.published_at||'').localeCompare(String(b.published_at||'')):
    sort==='engagement'?score(b)-score(a):String(b.published_at||'').localeCompare(String(a.published_at||'')));
- },[posts,from,to,keyword,platform,sentiment,sort]);
+ },[posts,from,to,keyword,searchMode,booleanSearch,platform,sentiment,sort]);
  return <section data-i18n-exempt aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
+  <div className="mb-4 space-y-2" data-testid="social-listening-search-modes">
+   <div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
+    <button type="button" aria-pressed={searchMode==='standard'} onClick={()=>setSearchMode('standard')} className={searchMode==='standard'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Standard search','Pencarian standar')}</button>
+    <button type="button" aria-pressed={searchMode==='boolean'} onClick={()=>setSearchMode('boolean')} className={searchMode==='boolean'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Boolean search','Pencarian Boolean')}</button>
+   </div>
+   <p className="text-xs text-slate-600">{searchMode==='boolean'
+    ?t('Search saved post text using AND, OR, NOT, quoted phrases and parentheses. Case-insensitive. No new crawling or AI charges.','Cari teks unggahan tersimpan memakai AND, OR, NOT, frasa dalam tanda kutip, dan tanda kurung. Tidak membedakan huruf besar/kecil. Tanpa crawl atau biaya AI baru.')
+    :t('Existing keyword search is unchanged. Switch modes to use Boolean logic on saved posts.','Pencarian kata kunci tetap seperti sebelumnya. Ganti mode untuk memakai logika Boolean pada unggahan tersimpan.')}</p>
+  </div>
   <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={t('Captured posts filters and sorting','Filter dan urutan unggahan')}>
    <label className="text-xs">{t('From date','Dari tanggal')}<input className="intel-input mt-1" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
    <label className="text-xs">{t('To date','Sampai tanggal')}<input className="intel-input mt-1" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
-   <label className="text-xs">{t('Keyword','Kata kunci')}<input className="intel-input mt-1" placeholder={t('Search post text','Cari teks unggahan')} value={keyword} onChange={e=>setKeyword(e.target.value)}/></label>
+   {searchMode==='standard'
+    ?<label className="text-xs">{t('Keyword','Kata kunci')}<input className="intel-input mt-1" placeholder={t('Search post text','Cari teks unggahan')} value={keyword} onChange={e=>setKeyword(e.target.value)}/></label>
+    :<label className="text-xs sm:col-span-2 xl:col-span-1">{t('Boolean expression','Ekspresi Boolean')}<input data-testid="social-listening-boolean-query" className="intel-input mt-1" value={booleanQuery} onChange={e=>setBooleanQuery(e.target.value)} maxLength={512} spellCheck={false} placeholder={'Gibran AND (ijazah OR pendidikan) AND NOT hoaks'}/></label>}
    <label className="text-xs">Platform<select className="intel-input mt-1" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="">{t('All platforms','Semua platform')}</option>{platforms.map(x=><option value={x} key={x}>{platformName(x)}</option>)}</select></label>
    <label className="text-xs">{t('Sentiment','Sentimen')}<select className="intel-input mt-1" value={sentiment} onChange={e=>setSentiment(e.target.value)}><option value="">{t('All sentiments','Semua sentimen')}</option>{['positive','neutral','negative','unclassified'].map(x=><option key={x} value={x}>{({positive:t('Positive','Positif'),neutral:t('Neutral','Netral'),negative:t('Negative','Negatif'),unclassified:t('Unclassified','Belum diklasifikasikan')})[x]}</option>)}</select></label>
    <label className="text-xs">{t('Sort by','Urutkan berdasarkan')}<select className="intel-input mt-1" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">{t('Newest first','Terbaru dahulu')}</option><option value="oldest">{t('Oldest first','Terlama dahulu')}</option><option value="engagement">{t('Engagement','Interaksi')}</option></select></label>
   </div>
+  {searchMode==='boolean'&&<div className="mb-3 text-xs text-slate-600">
+   <p>{t('Example','Contoh')}: <code className="rounded bg-slate-100 px-1 py-0.5">("Gibran Rakabuming" OR Gibran) AND ijazah AND NOT hoaks</code></p>
+   {booleanSearch.error&&<p role="alert" data-testid="social-listening-boolean-error" className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-red-700">{t('Check the Boolean expression: ','Periksa ekspresi Boolean: ')}{booleanSearch.error}</p>}
+  </div>}
   <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{isEnglish?
     `${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`:
     `${visible.length.toLocaleString()} dari ${posts.length.toLocaleString()} unggahan tersimpan`}
     {loading ? t(' · Loading more…',' · Memuat lainnya…'):
-      error ? t(' · Partial results (loading failed)',' · Hasil tidak lengkap (gagal memuat)') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
+      error ? t(' · Partial results (loading failed)',' · Hasil tidak lengkap (gagal memuat)') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setBooleanQuery('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
   {error&&<p role="alert" className="py-3 text-sm text-red-700">{t('Unable to load the complete post list:','Gagal memuat seluruh unggahan:')} {error}. {t('Showing any records retrieved before the failure.','Menampilkan unggahan yang berhasil diambil sebelumnya.')}</p>}
-  {visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>onCorrectionSaved(post,correction)}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
+  {searchMode==='boolean'&&booleanSearch.error?null:visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>onCorrectionSaved(post,correction)}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
  </section>;
 }

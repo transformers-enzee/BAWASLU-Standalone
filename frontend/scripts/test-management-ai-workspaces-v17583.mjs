@@ -52,6 +52,7 @@ for(const field of [
  "Shorten memo",
  "Turn into email",
  'fresh={reviewableIndexes.has(i)}',
+ "m.workflow_mode!=='STRATEGY_DRAFTING'",
 ])assert.ok(chat.includes(field),'Conversation feature missing: '+field);
 for(const field of [
  'data-testid="assistant-consulted-sources"',
@@ -63,6 +64,7 @@ for(const field of [
 ])assert.ok(evidence.includes(field),'Source-linked rendering missing: '+field);
 for(const field of [
  'normalize_workflow_request(body)',
+ "if 'analysisMode' not in body and 'sourceSelection' not in body and 'workflowMode' not in body:",
  "if not general and response_profile!=PDF_GUIDANCE and source_choice['smartRadar']:",
  "(source_choice['legalReferences'] and",
  "not source_choice['smartRadar'] and not source_choice['legalReferences']",

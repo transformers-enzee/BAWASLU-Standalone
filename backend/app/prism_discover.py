@@ -6,7 +6,7 @@ from urllib.parse import urlsplit,urljoin
 import httpx
 from sqlalchemy import or_
 from .db import SessionLocal
-from .project_boolean import decode_project_query
+from .project_boolean import decode_project_query, discover_boolean_plan
 from .access import has,allowed
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
@@ -26,18 +26,29 @@ def campaign(db,p,cid,write=False):
     if write and c.status!='DRAFT':raise ValueError('Only draft campaigns can run Discover')
     return c
 
-def body_for(db,c):
+def body_for(db,c,max_credits=None):
     search=decode_project_query(c.primary_keywords_json)
-    if search['search_mode']=='BOOLEAN' and len(search['retrieval_terms'])>5:
-        raise ValueError('Prism Discover supports up to five Boolean retrieval terms. Narrow the project query or use a separate bounded manual search.')
-    words=list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))[:5]
+    boolean_mode=search['search_mode']=='BOOLEAN'
+    default_cap=20 if boolean_mode else 100
+    cap=default_cap if max_credits is None else max_credits
+    if type(cap) is not int or cap not in (10,20,35,50,100):
+        raise ValueError('Select a supported SocialCrawl credit cap: 10, 20, 35, 50 or 100')
+    plan=discover_boolean_plan(search['boolean_query']) if boolean_mode else None
+    words=plan['keywords'] if plan else list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))[:5]
     if not words:raise ValueError('Configure positive search terms first')
     platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
     if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
-    params={'groups':[{'id':'campaign-'+str(c.id),'keywords':words,'context':context}],
+    if boolean_mode and not c.description:
+        context=('Indonesian public discussion matching the topic of '+search['boolean_query'])[:1000]
+    group={'id':'campaign-'+str(c.id),'keywords':words,'context':context}
+    if plan and plan['exclude_terms']:
+        group['exclude_terms']=plan['exclude_terms']
+    params={'groups':[group],
             'platforms':platforms,'country':['ID'],'period':'7d','label':['stance'],
-            'limit':CAP,'retention_days':7,'max_credits':CAP}
+            'limit':CAP,'retention_days':7,'max_credits':cap}
+    if plan and plan['contains']:
+        params['contains']=plan['contains']
     signature=hashlib.sha256(json.dumps(params,sort_keys=True).encode()).hexdigest()
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -49,6 +60,41 @@ def body_for(db,c):
         if meta.get('signature')==signature and meta.get('watermark'):
             params['since_watermark']=meta['watermark'];break
     return params,signature
+
+def latest_collection_outcome(db,c,params=None):
+    """Read-only aggregate of latest Prism run; never spends provider credits."""
+    run=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
+         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
+                 SocialListeningRun.status.in_(['COMPLETED','PARTIAL','FAILED']))
+         .order_by(SocialListeningRun.id.desc()).first())
+    if not run:
+        return None
+    try:meta=json.loads(run.query_json or '{}')
+    except (TypeError,ValueError):meta={}
+    diag=meta.get('collection_diagnostics')
+    if not isinstance(diag,dict):diag={}
+    # For legacy runs, these are newly saved source rows, NOT the full
+    # provider response: do not misrepresent them as exact retrieved totals.
+    newly_saved=db.query(SocialListeningResult.id).filter(SocialListeningResult.run_id==run.id).count()
+    previous_body=meta.get('body') or {}
+    plan_changed=(bool(params) and
+                  (previous_body.get('groups') or [{}])[0].get('keywords') != params['groups'][0]['keywords'] or
+                  bool(params) and previous_body.get('contains','') != params.get('contains','') or
+                  bool(params) and (previous_body.get('groups') or [{}])[0].get('exclude_terms',[]) != params['groups'][0].get('exclude_terms',[]))
+    return {
+        'run_id':str(run.id),
+        'status':run.status,
+        'credits_used':int(run.credits_used or 0),
+        'matched':int(run.result_count or 0),
+        'provider_candidate_rows':diag.get('unique_candidates'),
+        'provider_returned_rows':diag.get('raw_provider_items'),
+        'newly_saved_source_rows':newly_saved,
+        'excluded_by_boolean':diag.get('excluded_by_boolean'),
+        'plan_changed':bool(plan_changed),
+        'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
+        'counts_basis':'provider_item_diagnostics' if diag else 'legacy_new_source_rows_only',
+    }
+
 
 def safe_url(path):
     value=str(path or '')

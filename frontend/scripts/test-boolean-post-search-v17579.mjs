@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {compileBooleanPostSearch, BooleanSearchSyntaxError} from '../src/lib/booleanPostSearch.mjs';
+
+const hit=(expression,text)=>compileBooleanPostSearch(expression)({text_content:text});
+assert.equal(hit('Gibran','Gibran terkait ijazah'),true);
+assert.equal(hit('gibran','GIBRAN terkait ijazah'),true);
+assert.equal(hit('Gibran AND ijazah','Gibran membahas ijazah'),true);
+assert.equal(hit('Gibran AND ijazah','Gibran membahas kebijakan'),false);
+assert.equal(hit('Gibran OR Prabowo','Prabowo membahas kebijakan'),true);
+assert.equal(hit('Gibran OR Prabowo','BAWASLU membahas kampanye'),false);
+assert.equal(hit('Gibran OR Prabowo AND ijazah','Gibran membahas kebijakan'),true);
+assert.equal(hit('(Gibran OR Prabowo) AND ijazah','Gibran membahas kebijakan'),false);
+assert.equal(hit('(Gibran OR Prabowo) AND ijazah','Prabowo membahas ijazah'),true);
+assert.equal(hit('Gibran AND NOT hoaks','Gibran menyampaikan pidato'),true);
+assert.equal(hit('Gibran AND NOT hoaks','Gibran membantah hoaks'),false);
+assert.equal(hit('Gibran NOT hoaks','Gibran pidato'),true);
+assert.equal(hit('"Gibran Rakabuming"','Gibran Rakabuming Raka'),true);
+assert.equal(hit('"Gibran Rakabuming"','Gibran dan Rakabuming'),false);
+assert.equal(hit('"AND" OR ijazah','AND sebagai kata'),true);
+assert.equal(hit('NOT Gibran','BAWASLU membahas kebijakan'),true);
+assert.equal(hit('NOT Gibran','Gibran hadir'),false);
+assert.equal(hit('pemilu','PEMILU Nasional'),true);
+assert.equal(hit('pendidikan AND (Gibran OR KPU)','Pendidikan KPU'),true);
+assert.equal(hit('Gibran',null),false);
+assert.equal(hit('Gibran AND "tanda \\"petik\\""','Gibran tanda "petik"'),true);
+assert.equal(hit('hoaks OR "kode asing";DROP','kode asing;DROP'),true);
+for(const invalid of ['','Gibran AND','OR Gibran','Gibran Prabowo','(Gibran OR Prabowo','Gibran AND ()','"Gibran','Gibran )','AND','Gibran OR OR KPU']){
+ assert.throws(()=>compileBooleanPostSearch(invalid),BooleanSearchSyntaxError,invalid);
+}
+assert.throws(()=>compileBooleanPostSearch('a'.repeat(513)),BooleanSearchSyntaxError);
+assert.throws(()=>compileBooleanPostSearch('(' .repeat(15)+'Gibran'+')'.repeat(15)),BooleanSearchSyntaxError);
+assert.throws(()=>compileBooleanPostSearch(Array.from({length:70},()=> 'abc').join(' AND ')),BooleanSearchSyntaxError);
+const component=readFileSync(new URL('../src/components/intel/CapturedPostList.jsx',import.meta.url),'utf8');
+assert.ok(component.includes('social-listening-search-modes'));
+assert.ok(component.includes('social-listening-boolean-query'));
+assert.ok(component.includes("searchMode==='standard'"));
+assert.ok(component.includes("searchMode==='boolean'"));
+assert.ok(component.includes("booleanSearch.error"));
+assert.ok(component.includes('setBooleanQuery('));
+assert.ok(component.includes("action:'campaignCapturedPosts'"));
+assert.ok(!component.includes('Boolean Search credits'));
+console.log('PASS BAWASLU v175.79: Boolean parser, guardrails, legacy search mode and saved-post-only UI contracts');

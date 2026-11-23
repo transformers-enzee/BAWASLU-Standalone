@@ -299,6 +299,9 @@ def selected_attachment_evidence(db,user,p,thread_id,ids):
                 "record_type":"CHAT_ATTACHMENT","title":row.title,
                 "source_url":row.url if row.kind=="LINK" else "",
                 "section":section["section"],"excerpt":section["text"][:1800],
+                "source_excerpt":section["text"][:1800],
+                "source_name":row.title,
+                "verification_status":"USER_SUPPLIED_UNVERIFIED",
                 "source_basis":"USER_SUPPLIED_UNVERIFIED","attachment_id":row.id})
     return output[:45]
 

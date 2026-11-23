@@ -685,14 +685,25 @@ export default function CampaignPanel({campaignId=null}){
    <button type="button" className="intel-ghost" onClick={()=>navigate("/social-listening?tab=campaigns")}>← Back to projects</button>
    <h3 className="text-2xl font-bold text-[#152c47]">{selected.name} — <span>Project Overview</span></h3>
    <div className="flex flex-wrap gap-2" aria-label="Project search configuration">
-    {selected.search_mode==='BOOLEAN'
-     ?<div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-       <strong>Boolean Search</strong>
-       <p className="mt-1 whitespace-pre-wrap break-words font-mono text-xs">{selected.boolean_query}</p>
-       <p className="mt-2 text-xs text-slate-600">Prism provider search keywords: {(selected.prism_provider_keywords||[]).join(', ')||'Unavailable'}. {selected.prism_provider_contains&&'Must contain '+selected.prism_provider_contains+'. '}{(selected.prism_provider_excludes||[]).length>0&&'Excludes '+selected.prism_provider_excludes.join(', ')+'. '}The full expression is still checked locally after retrieval.</p>
-        {selected.prism_plan_error&&<p role="alert" className="mt-2 text-xs text-amber-800">Prism plan unavailable: {selected.prism_plan_error}</p>}
-      </div>
-     :[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=><details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary><div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div></details>)}
+    {selected.search_mode==='BOOLEAN'&&(
+     <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <strong>Boolean Search</strong>
+      <p className="mt-1 whitespace-pre-wrap break-words font-mono text-xs">{selected.boolean_query}</p>
+      <p className="mt-2 text-xs text-slate-600">
+       Prism provider search keywords: {(selected.prism_provider_keywords||[]).join(', ')||'Unavailable'}.
+       {selected.prism_provider_contains ? ' Must contain '+selected.prism_provider_contains+'.' : ''}
+       {(selected.prism_provider_excludes||[]).length>0 ? ' Excludes '+(selected.prism_provider_excludes||[]).join(', ')+'.' : ''}
+       The full expression is still checked locally after retrieval.
+      </p>
+      {selected.prism_plan_error&&<p role="alert" className="mt-2 text-xs text-amber-800">Prism plan unavailable: {selected.prism_plan_error}</p>}
+     </div>
+    )}
+    {selected.search_mode!=='BOOLEAN'&&[['Main keywords',selected.primary_keywords],['Subkeywords',selected.secondary_keywords],['Excluded',selected.excluded_keywords]].map(([label,terms])=>(
+     <details key={label} className="group min-w-[150px] max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+      <summary className="cursor-pointer font-medium text-slate-700">{label} <strong className="ml-1 text-teal-700">{(terms||[]).length}</strong><span className="ml-1 text-slate-400 group-open:hidden">· View</span></summary>
+      <div className="mt-2 flex max-h-44 max-w-[680px] flex-wrap gap-1 overflow-y-auto">{(terms||[]).length?(terms||[]).map((term,i)=><span key={i} className="rounded border border-slate-200 bg-white px-2 py-1 break-words">{term}</span>):<span>None</span>}</div>
+     </details>
+    ))}
    </div>
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
    {latestPrismCollection&&<section className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm space-y-2" aria-label="Latest SocialCrawl collection outcome" data-testid="prism-latest-collection-outcome">

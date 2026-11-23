@@ -88,7 +88,7 @@ export default function AssistantComposerAttachments({
    {items.map(item=><div key={item.id} className="flex max-w-full items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs" data-testid="assistant-attachment-ready">
     {item.kind==='LINK'?<Link2 size={13}/>:<FileUp size={13}/>}
     <span className="max-w-[220px] truncate" title={item.title}>{item.title}</span>
-    <span className="text-teal-800">Ready · {item.sections} sections</span>
+    <span className="text-teal-800">Ready · {item.sections} sections{item.kind==='LINK'&&item.retrieved_at?' · '+new Date(item.retrieved_at).toLocaleString('en-GB'):''}</span>
     {item.url&&<a href={item.url} target="_blank" rel="noopener noreferrer" aria-label="Open original public page"><ExternalLink size={13}/></a>}
     <button type="button" aria-label={'Remove '+item.title} disabled={disabled} onClick={()=>remove(item)}><X size={14}/></button>
    </div>)}

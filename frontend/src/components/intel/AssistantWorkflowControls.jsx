@@ -28,7 +28,7 @@ export default function AssistantWorkflowControls({
    <legend className="text-sm font-semibold text-[#19364c]">Select the sources the assistant may consult</legend>
    <div className="grid gap-2 md:grid-cols-3">
     {[
-     ['smartRadar','SmartRadar / saved BAWASLU intelligence','Optional private local context for explicitly requested records or stored metrics'],
+     ['smartRadar','SmartRadar / saved BAWASLU intelligence','Optional private local context for explicitly requested records or stored metrics; not a live crawl'],
      ['publicWeb','Public web / public social · recommended','Default live public research; attributable official/news sources, not a population-wide social crawl'],
      ['legalReferences','Official legal/reference sources','Authorized PDF/reference library; authenticity and currentness need separate verification'],
      ['attachments','Conversation attachments','Private scanned documents and public HTTPS links, confined to this conversation']

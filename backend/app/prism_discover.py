@@ -6,6 +6,7 @@ from urllib.parse import urlsplit,urljoin
 import httpx
 from sqlalchemy import or_
 from .db import SessionLocal
+from .project_boolean import decode_project_query
 from .access import has,allowed
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
@@ -26,8 +27,11 @@ def campaign(db,p,cid,write=False):
     return c
 
 def body_for(db,c):
-    words=list(dict.fromkeys(str(x).strip() for x in json.loads(c.primary_keywords_json or '[]') if str(x).strip()))[:5]
-    if not words:raise ValueError('Configure main keywords first')
+    search=decode_project_query(c.primary_keywords_json)
+    if search['search_mode']=='BOOLEAN' and len(search['retrieval_terms'])>5:
+        raise ValueError('Prism Discover supports up to five Boolean retrieval terms. Narrow the project query or use a separate bounded manual search.')
+    words=list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))[:5]
+    if not words:raise ValueError('Configure positive search terms first')
     platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
     if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
@@ -108,7 +112,9 @@ def action(db,p,verb,data,cid):
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
             'post_limit':CAP,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
-            'keywords_total':len(json.loads(c.primary_keywords_json or '[]')),
+            'keywords_total':len(decode_project_query(c.primary_keywords_json)['retrieval_terms']),
+            'search_mode':decode_project_query(c.primary_keywords_json)['search_mode'],
+            'boolean_local_screening':decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN',
             'platforms':params['platforms'],'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
@@ -258,11 +264,18 @@ def store(db,run,c,items,full_assessment=False):
         EvidenceAssessment.campaign_id==c.id,
         EvidenceAssessment.result_id.in_(result_ids)).all()}
     new=[]
+    from .campaign_scheduler import keyword_screen
+    boolean_mode=decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
     for row,raw in pairs:
+        match=keyword_screen(c,{'text_content':row.text_content}) if boolean_mode else None
+        if boolean_mode and not match['matched']:
+            # Provider retrieval is broad; only Boolean-confirmed posts
+            # enter the project, its Inbox and billable assessment path.
+            continue
         if row.id not in links:
             db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
-                    {'matched_keywords':raw.get('matched_keywords') or []})))
+                    match if boolean_mode else {'matched_keywords':raw.get('matched_keywords') or []})))
             links.add(row.id)
         # Preserve existing human/AI assessment versions and never create a
         # second version=1 for a repeated source within the same batch.

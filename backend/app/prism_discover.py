@@ -153,19 +153,33 @@ def action(db,p,verb,data,cid):
         if not run:raise ValueError('Discover run unavailable')
         from .activation_assessment import status as activation_status
         return activation_status(db,p,c.id,run.id)
-    params,sig=body_for(db,c)
+    if verb=='campaignDiscoverLastRunDiagnostics':
+        return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
+    search=decode_project_query(c.primary_keywords_json)
+    params,sig=body_for(db,c,(data or {}).get('max_credits'))
+    last=latest_collection_outcome(db,c,params) if search['search_mode']=='BOOLEAN' else None
+    plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
-            'post_limit':CAP,'credit_cap':CAP,'keywords_used':params['groups'][0]['keywords'],
-            'keywords_total':len(decode_project_query(c.primary_keywords_json)['retrieval_terms']),
-            'search_mode':decode_project_query(c.primary_keywords_json)['search_mode'],
-            'boolean_local_screening':decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN',
+            'post_limit':CAP,'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
+            'provider_contains':params.get('contains',''),
+            'provider_exclude_terms':params['groups'][0].get('exclude_terms',[]),
+            'provider_plan':plan,'last_run':last,
+            'zero_yield_ack_required':bool(last and last['zero_yield_paid_run']),
+            'keywords_total':len(search['retrieval_terms']),
+            'search_mode':search['search_mode'],
+            'boolean_local_screening':search['search_mode']=='BOOLEAN',
             'platforms':params['platforms'],'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
+    if search['search_mode']=='BOOLEAN':
+        if type((data or {}).get('confirmed_max_credits')) is not int or (data or {}).get('confirmed_max_credits')!=params['max_credits']:
+            raise ValueError('Credit cap changed; request and approve a new free preview')
+        if last and last['zero_yield_paid_run'] and (data or {}).get('acknowledge_zero_yield') is not True:
+            raise ValueError('The last paid collection matched zero posts. Review the new retrieval plan and explicitly acknowledge the zero-yield risk')
     active=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
                 SocialListeningRun.status.in_(['QUEUED','RUNNING'])).first())
@@ -177,7 +191,7 @@ def action(db,p,verb,data,cid):
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_DISCOVER'))
     db.commit()
-    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'credit_cap':CAP}
+    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'credit_cap':params['max_credits']}
 
 def ai_text(payload):
     if isinstance(payload.get('output_text'),str):return payload['output_text']

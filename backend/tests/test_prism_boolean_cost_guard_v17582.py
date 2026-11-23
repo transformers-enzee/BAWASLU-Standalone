@@ -4,6 +4,8 @@ All provider calls are mocked; SQLite is in-memory. Nothing touches live
 Supabase, SocialCrawl or OpenAI.
 """
 import json
+import os
+os.environ['DATABASE_URL']='sqlite:///:memory:'
 from types import SimpleNamespace
 
 import pytest
@@ -123,7 +125,7 @@ def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgemen
     with pytest.raises(ValueError,match='Credit cap changed'):
         prism_discover.action(db,{},'campaignDiscoverStart',
             {**valid,'confirmed_max_credits':100,'acknowledge_zero_yield':True},c.id)
-    with pytest.raises(ValueError,match='free preview'):
+    with pytest.raises(ValueError,match='free credit preview'):
         prism_discover.action(db,{},'campaignDiscoverStart',
             {**valid,'max_credits':35,'acknowledge_zero_yield':True},c.id)
     assert db.query(SocialListeningRun).count()==1

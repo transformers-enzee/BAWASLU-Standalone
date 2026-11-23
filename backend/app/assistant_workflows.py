@@ -87,6 +87,7 @@ def source_consultation(selection,evidence=(),cited=(),public_urls=(),environmen
             actually=bool(matched)
             count=len(matched)
             basis=('SIMULATED_DEMO' if environment=='SIMULATED' else
+                   'USER_SUPPLIED_UNVERIFIED' if key=='attachments' else
                    'FIXED_SAVED_SNAPSHOT') if actually else 'NOT_CONSULTED'
         result.append({'key':key,'label':label,
                        'requested':requested,
@@ -101,7 +102,9 @@ def source_consultation(selection,evidence=(),cited=(),public_urls=(),environmen
                        'warning':('Public search returned no attributable URLs; do not claim live verification.'
                            if key=='publicWeb' and requested and not actually else
                            'Uploaded legal PDF pages are not independently certified as current official law.'
-                           if key=='legalReferences' and actually else '')})
+                           if key=='legalReferences' and actually else
+                           'Conversation uploads/links are user-supplied. Their contents and legal force are not independently verified.'
+                           if key=='attachments' and actually else '')})
     return result
 
 

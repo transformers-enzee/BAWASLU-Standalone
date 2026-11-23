@@ -35,7 +35,7 @@ assert.deepEqual(compileBooleanProjectSearch('Gibran AND (ijazah OR pendidikan)'
 assert.deepEqual(compileBooleanProjectSearch('Gibran OR Prabowo').retrievalTerms,['gibran','prabowo']);
 assert.throws(()=>compileBooleanProjectSearch('NOT Gibran'),BooleanSearchSyntaxError);
 assert.throws(()=>compileBooleanProjectSearch('Gibran OR NOT hoaks'),BooleanSearchSyntaxError);
-assert.throws(()=>compileBooleanProjectSearch('Gibran AND (NOT hoaks OR NOT fitnah)'),BooleanSearchSyntaxError);
+assert.deepEqual(compileBooleanProjectSearch('Gibran AND (NOT hoaks OR NOT fitnah)').retrievalTerms,['gibran']);
 assert.equal(compileBooleanProjectSearch('Gibran NOT hoaks')({text_content:'Gibran terkait ijazah'}),true);
 const component=readFileSync(new URL('../src/components/intel/CapturedPostList.jsx',import.meta.url),'utf8');
 assert.ok(component.includes('social-listening-search-modes'));

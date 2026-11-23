@@ -249,7 +249,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
      {messages.map((m,i)=><div key={i} className={m.role==='user'?'flex justify-end':'flex justify-start'}>
       <div className={m.role==='user'?'max-w-[90%] rounded-xl bg-[#801b24] text-white px-4 py-3 text-sm':'w-full rounded-xl bg-[#f5f7fa] border border-[#e4e9ef] p-4 text-sm'}>
        {m.role==='assistant'?<>
-        {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&
+        {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
         <AssistantWorkflowEvidence message={m} fresh={reviewableIndexes.has(i)}/>
@@ -392,7 +392,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
           citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}
           language={m.answer_language||'id'} labels={m.presentation_labels}
           compactPdf={m.response_profile==='PDF_GUIDANCE'}
-          allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'}/></>}
+          allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'}/></>}
       </div>
      </div>)}
      {messages.some(m=>m.role==='assistant')&&workflowMode==='STRATEGY_DRAFTING'&&<div className="flex flex-wrap gap-2" data-testid="assistant-draft-revision-shortcuts">

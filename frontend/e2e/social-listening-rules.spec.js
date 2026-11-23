@@ -27,14 +27,14 @@ test('V3 Social Listening navigation shows campaigns, not retired Saved Searches
  await login(page);
  await page.goto('/social-listening');
  await expect(page.getByRole('heading',{name:'Social Listening'})).toBeVisible();
- await expect(page.getByRole('button',{name:/create campaign/i})).toBeVisible();
+ await expect(page.getByRole('button',{name:/create project/i})).toBeVisible();
  await expect(page.getByRole('button',{name:/saved searches|review queue|discover sources/i})).toHaveCount(0);
 });
 test('V3 campaign captured posts and candidate watchlist stay in the selected campaign',async({page,request})=>{
  const {campaign}=await makeCampaign(request,'QA Campaign tabs '+Date.now());
  await login(page);
  await page.goto('/social-listening/campaigns/'+campaign.id);
- const sections=page.getByRole('navigation',{name:'Selected campaign sections'});
+ const sections=page.getByRole('navigation',{name:'Selected project sections'});
  await expect(sections.getByRole('button',{name:'Overview'})).toBeVisible();
  await sections.getByRole('button',{name:'Captured Posts'}).click();
  await expect(page.getByRole('region',{name:'Captured posts'})).toBeVisible();
@@ -53,8 +53,8 @@ test('V3 separate Discover is explicit and cannot silently execute on navigation
 test('campaign editor uses seven fixed sources without legacy filters',async({page})=>{
  await login(page);
  await page.goto('/social-listening');
- await page.getByRole('button',{name:/create campaign/i}).click();
- const editor=page.getByRole('form',{name:'Campaign editor'});
+ await page.getByRole('button',{name:/create project/i}).click();
+ const editor=page.getByRole('form',{name:'Project editor'});
  // Collection sources are backend defaults, not a user-editable platform widget.
  await expect(editor.getByLabel('Description')).toBeVisible();
  await expect(editor.getByRole('textbox',{name:'Main keywords'})).toBeVisible();

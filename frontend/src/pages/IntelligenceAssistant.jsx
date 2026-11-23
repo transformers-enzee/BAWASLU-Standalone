@@ -4,6 +4,7 @@ import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown, Download } f
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantWorkflowEvidence from '@/components/intel/AssistantWorkflowEvidence';
+import AssistantWorkflowControls from '@/components/intel/AssistantWorkflowControls';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
 import AssistantKnowledgeLibrary from '@/components/intel/AssistantKnowledgeLibrary';
@@ -193,6 +194,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
    <p className="text-xs text-[#f0d0cc] mt-2">Hanya sumber yang Anda berwenang akses. Tindak lanjut disimpan setelah konfirmasi dan tetap memerlukan pemeriksaan petugas.</p>
   </header>
   <UserWorkspacePulse/>
+  <AssistantWorkflowControls workspace={workspace} workflowMode={workflowMode} setWorkflowMode={setWorkflowMode}
+   sourceSelection={sourceSelection} setSourceSelection={setSourceSelection} busy={busy}/>
   <AssistantKnowledgeLibrary/>
   {canViewQa&&<section data-testid="assistant-qa-tools" className="rounded-xl border border-[#e5e9ee] bg-white">
    <button type="button" data-testid="assistant-qa-tools-toggle" aria-expanded={qaOpen}
@@ -392,6 +395,11 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
           allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'}/></>}
       </div>
      </div>)}
+     {messages.some(m=>m.role==='assistant')&&workflowMode==='STRATEGY_DRAFTING'&&<div className="flex flex-wrap gap-2" data-testid="assistant-draft-revision-shortcuts">
+      <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Shorten the preceding source-grounded memo into a concise executive brief. Preserve evidence citations, uncertainty and review gates.')}>Shorten memo</button>
+      <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Turn the preceding findings into a professional email draft for management review. Keep source caveats and do not invent recipient addresses or send the email.')}>Turn into email</button>
+      <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Rewrite the preceding memo for an executive audience. Compare oversight options, specify proposed owner roles and review points, and keep caveats.')}>Executive audience</button>
+     </div>}
      {busy&&<p role="status" className="text-sm text-[#617789]">{t('reviewing_records')}</p>}
      {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
      {historyError&&<p role="alert" className="text-sm text-amber-800">{historyError}</p>}
@@ -399,7 +407,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     </section>
     {showJump&&<button type="button" onClick={()=>latestRef.current?.scrollIntoView({behavior:'smooth',block:'end'})} className="fixed bottom-24 right-7 z-40 flex items-center gap-2 rounded-full bg-[#801b24] px-4 py-2 text-sm font-semibold text-white shadow-lg" aria-label="Jump to latest chat message"><ArrowDown size={16}/> Jump to latest</button>}
     <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
-      <span>Ruang lingkup jawaban: {analysisMode==='AUTO'?'Analisis sumber yang tersedia':analysisMode==='DATA'?'Hanya sumber BAWASLU tersimpan':'Penjelasan umum'}</span>
+      <span>AI mode: {workflowMode==='RESEARCH'?'Research & Analysis':'Strategy & Drafting'} · selected-source grounded</span>
       <label className="flex items-center gap-2">Officer response mode
        <select aria-label="Intelligence response depth" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={responseDepth} onChange={e=>setResponseDepth(e.target.value)} disabled={busy}>
         <option value="EXECUTIVE">Quick Brief · Ringkasan Cepat</option>
@@ -407,15 +415,11 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         <option value="INVESTIGATION">Legal Deep Dive · Kajian Hukum</option>
        </select>
       </label>
-      <select aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={analysisMode} onChange={e=>setAnalysisMode(e.target.value)} disabled={busy}>
-       <option value="AUTO">Otomatis</option>
-       <option value="DATA">Bukti tersimpan</option>
-       <option value="GENERAL">Pengetahuan umum</option>
-      </select>
+      <span aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-xs font-semibold">Authorized selected sources</span>
      </div>
     <form onSubmit={e=>{e.preventDefault();ask(question)}} className="intel-card p-3 flex gap-2">
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={1000} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
-     <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
+     <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()||!hasSelectedSources}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
     </form>
     <p className="text-xs text-[#8192a3]">Pilih format ringkas, rencana tindak lanjut, atau kajian hukum. PDF hanya rujukan pendukung. AI menyiapkan rekomendasi; petugas memeriksa dan mengesahkan setiap tindakan resmi.</p>
    </div>

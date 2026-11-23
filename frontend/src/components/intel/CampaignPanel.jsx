@@ -70,6 +70,7 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
+ const [discoverCreditCap,setDiscoverCreditCap]=useState(20),[discoverZeroYieldAcknowledged,setDiscoverZeroYieldAcknowledged]=useState(false);
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
  // Persisted run IDs are accessible via explicit campaign activation, but a
@@ -133,9 +134,10 @@ export default function CampaignPanel({campaignId=null}){
   window.localStorage.removeItem('bawaslu-active-discover-run');
   setActivationSaved(null);
   setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');
+  const sourceRows=run.collection_diagnostics?.unique_candidates??run.collection_diagnostics?.newly_saved_source_rows;
   setNotice(run.posts_saved>0
-   ?'SocialCrawl collection finished. AI assessment continues independently.'
-   :'SocialCrawl collection finished; no new posts were saved.');
+   ?'SocialCrawl collection finished. '+run.posts_saved+' accepted posts; '+(run.credits_used??0)+' credits spent. AI assessment continues independently.'
+   :'SocialCrawl collection finished: '+(sourceRows==null?'Unknown':sourceRows)+' source candidates/new rows → 0 accepted posts; '+(run.credits_used??0)+' credits spent. No more crawling was started.');
   refresh();
  }
  function handleDiscoverStatus(result){
@@ -154,9 +156,9 @@ export default function CampaignPanel({campaignId=null}){
   return ()=>{active=false;clearInterval(timer)};
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
- async function checkDiscover(c){
-   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
-   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
+ async function checkDiscover(c,cap=c.search_mode==='BOOLEAN'?20:100){
+   setDiscoverCampaign(c);setDiscoverCreditCap(cap);setDiscoverZeroYieldAcknowledged(false);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{max_credits:cap}});
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
@@ -165,7 +167,10 @@ export default function CampaignPanel({campaignId=null}){
    if(!discoverCampaign||!discoverPreview||discoverBusy||discoverPreviewBusy)return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      data:{confirm_cost:true,signature:discoverPreview.signature,...(discoverCampaign.search_mode==='BOOLEAN'?{
+         max_credits:discoverCreditCap,confirmed_max_credits:discoverCreditCap,
+         acknowledge_zero_yield:discoverZeroYieldAcknowledged
+       }:{})}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
       window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
       setActivationSaved(saved)}
@@ -660,6 +665,11 @@ export default function CampaignPanel({campaignId=null}){
     }
     setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');
   }}
+  booleanMode={discoverCampaign.search_mode==='BOOLEAN'}
+  creditCap={discoverCreditCap}
+  onCreditCapChange={cap=>checkDiscover(discoverCampaign,cap)}
+  zeroYieldAcknowledged={discoverZeroYieldAcknowledged}
+  onAcknowledgeZeroYield={setDiscoverZeroYieldAcknowledged}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No projects match your search.</p>}</div>}
    </section>
    <section className="rounded-xl border border-[#c7e5dc] bg-[#fcf5f4] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a project.</h3><p className="mt-2 text-xs text-[#60768c]">Create a project using keywords or Boolean Search, then open its dashboard to explore saved posts.</p></div><button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a project</button></div></section>

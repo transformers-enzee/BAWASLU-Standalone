@@ -157,7 +157,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','177.6'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','177.7'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -758,13 +758,19 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
         from .openai_triage import openai_triage_model,OPENAI_DEFAULT_BASE_URL
         from .assistant_orchestration import research_public_web
+        from .assistant_decision_intelligence import synthesize_public_decision
         key=os.getenv('OPENAI_API_KEY','').strip()
         base=(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip('/')
         research=(research_public_web(q,key,openai_triage_model(),base,
                   assistant_mode=mode_config['assistant_mode'],
                   perspective=mode_config['perspective']) if key else None)
         urls=research['urls'] if research else []
-        answer=web_brief_text(research,language)
+        assessment=synthesize_public_decision(
+            q,research,key,openai_triage_model(),base,language=language,
+            assistant_mode=mode_config['assistant_mode'],
+            perspective=mode_config['perspective'])
+        answer=assessment.get('answer') or web_brief_text(research,language)
+        officer_decision=assessment.get('officer_decision') or {}
         return {'answer':answer,'records':[],
                 'response_profile':'WEB_RESEARCH',
                 'provider':{'mode':'WEB_ONLY_RESEARCH' if research else 'NO_ATTRIBUTABLE_WEB_RESULTS',
@@ -775,8 +781,11 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                 'perspective':mode_config['perspective'],
                 'source_consultation':source_consultation(source_choice,[],[],urls),
                 'structured_findings':[],'draft_policy':drafting_notice(workflow_mode),
-                'decision_plan':[],
+                'decision_plan':assessment.get('decision_plan') or [],
+                'officer_decision':officer_decision,
                 'grounding':{'selected_count':0,'supporting_count':0,'cited_count':0,
+                    'decision_quality':officer_decision.get('quality') or {},
+                    'institutional_relevance':officer_decision.get('relevance') or 'UNRESOLVED',
                     'web_source_count':len(urls),
                     'retrieved_at':research.get('retrieved_at') if research else None,
                     'scope':'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS','limited':not bool(research)}}

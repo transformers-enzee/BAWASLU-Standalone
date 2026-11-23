@@ -389,9 +389,13 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "You are a neutral public-research analyst supporting Indonesian BAWASLU election supervisors. "
         "Current UTC date: "+utc_date+". Interpret recent periods relative to this date. "
         "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, "
-        "kpu.go.id, jdih.kpu.go.id, mkri.id and official government publications when relevant. "
+        "kpu.go.id, jdih.kpu.go.id, dkpp.go.id, mkri.id, mahkamahagung.go.id, "
+        "mpr.go.id, peraturan.bpk.go.id and official government publications when relevant. "
         "Treat news and social posts as reports, NOT verified legal findings; distinguish allegations, "
-        "confirmed public records, analysis, and proposed next steps. Never assume a public claim, "
+        "confirmed public records, analysis, and proposed next steps. "
+        "Explicitly identify whether a matter concerns BAWASLU oversight duties or instead "
+        "belongs to the MPR, DKPP, KPU, police, judiciary or a platform's moderation process. "
+        "Never assume a public claim, "
         "sentiment label, or viral post establishes an election-law violation. Do not recommend takedowns "
         "or sanctions merely for criticism. If a law, election stage, jurisdiction, official decision "
         "or deadline is not confirmed, label it as needing verification. "
@@ -407,7 +411,7 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "All proposals require human verification and applicable authority."
     )
     req={"model":model,"store":False,"tools":[{"type":"web_search"}],
-         "tool_choice":"auto","max_output_tokens":1150,
+         "tool_choice":"auto","max_output_tokens":1550,
          "input":[{"role":"system","content":direction},{"role":"user","content":question}]}
     try:
         with httpx.Client(timeout=httpx.Timeout(50.0,connect=8.0,read=50.0,write=10.0,pool=8.0)) as client:
@@ -425,7 +429,7 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         urls=safe_web_urls(annotated_urls)
         summary=_response_output_text(payload).strip()
         if not summary or not urls:return None
-        return {"summary":summary[:3400],"urls":urls[:6],
+        return {"summary":summary[:4700],"urls":urls[:6],
                 "retrieved_at":datetime.now(timezone.utc).isoformat()}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):
         return None

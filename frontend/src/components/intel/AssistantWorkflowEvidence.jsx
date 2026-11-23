@@ -23,6 +23,18 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
   <summary className="cursor-pointer font-semibold text-[#19364c]">Research Trail · consulted public sources</summary>
   <p className="mt-2 text-slate-600">This is public web research, not a legally verified BAWASLU finding. Unavailable searches are explicitly disclosed.</p>
   {message?.grounding?.retrieved_at&&<p className="mt-1 text-slate-500">Sources retrieved: {new Date(message.grounding.retrieved_at).toLocaleString()}</p>}
+  {!fresh&&<p className="mt-1 font-semibold text-amber-800">Historical answer snapshot. Rerun source verification before any new official action.</p>}
+  {message?.officer_decision?.claims?.length>0&&<section className="mt-3 space-y-2" data-testid="assistant-public-claim-ledger">
+   <h4 className="font-semibold text-[#19364c]">Claim-level source ledger</h4>
+   {message.officer_decision.claims.map((claim,i)=><div key={i} className="rounded-md border border-slate-200 bg-slate-50 p-2">
+    <p>{claim.claim}</p>
+    <p className="mt-1 text-[11px] text-slate-500">{claim.evidence_status?.replaceAll('_',' ')} · Not officer-authenticated</p>
+    <div className="mt-1 space-y-1">{(claim.source_urls||[]).filter(url=>message.officer_decision.consulted_urls?.includes(url)).map(url=>
+     <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block truncate text-teal-800 underline">{url}</a>)}</div>
+   </div>)}
+  </section>}
+  {message?.officer_decision?.missing_evidence&&<p className="mt-3 text-amber-800" data-testid="assistant-decision-evidence-gap">Evidence still needed: {message.officer_decision.missing_evidence}</p>}
+  {message?.officer_decision?.quality&&<p className="mt-2 text-[11px] text-slate-500">Decision audit: {message.officer_decision.quality.claim_count||0} attributed claim(s), {message.officer_decision.quality.action_count||0} proposed action(s); legal applicability and formal authority require officer verification.</p>
   {sources.filter(row=>row.status!=='NOT_SELECTED').map(row=><div className="mt-2" key={row.key}>
    <strong>{row.label}: </strong><span>{sourceStatus[row.status]||row.status}</span>
    {(row.urls||[]).filter(url=>/^https:\/\/[^ ]+$/.test(url)).map(url=><a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block truncate text-teal-800 underline" title={url}>{url}</a>)}

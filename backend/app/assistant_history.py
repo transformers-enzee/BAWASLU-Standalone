@@ -75,7 +75,7 @@ def clean_messages(messages):
             "evidence_snapshot": item.get("evidence_snapshot") if isinstance(item.get("evidence_snapshot"),dict) else None,
             "response_profile": (str(item.get("response_profile") or "")[:24]
               if str(item.get("response_profile") or "") in
-              ("PDF_GUIDANCE","SOCIAL_ANALYSIS","CASE_REVIEW","CROSS_MODULE_REVIEW","ACTION_REQUEST","GENERAL")
+              ("PDF_GUIDANCE","SOCIAL_ANALYSIS","CASE_REVIEW","CROSS_MODULE_REVIEW","ACTION_REQUEST","GENERAL","WEB_RESEARCH")
               else ""),
             "answer_language": str(item.get("answer_language") or "")[:12],
             "detected_tags": [t for t in (item.get("detected_tags") or [])[:18] if isinstance(t,dict)] if isinstance(item.get("detected_tags"),list) else [],
@@ -102,9 +102,38 @@ def clean_messages(messages):
                 "owner_role":str(x.get("owner_role") or "")[:200],
                 "milestone":str(x.get("milestone") or "")[:500],
                 "expected_output":str(x.get("expected_output") or "")[:300],
+                "required_evidence":str(x.get("required_evidence") or "")[:440],
                 "review_point":str(x.get("review_point") or "")[:400],
+                "source_urls":[str(y)[:900] for y in (x.get("source_urls") or [])[:4] if isinstance(y,str) and y.startswith("https://")] if isinstance(x.get("source_urls"),list) else [],
                 "source_ids":[str(y)[:50] for y in (x.get("source_ids") or [])[:4] if isinstance(y,str)] if isinstance(x.get("source_ids"),list) else [],
             } for x in (item.get("decision_plan") or [])[:4] if isinstance(x,dict)] if isinstance(item.get("decision_plan"),list) else [],
+            "officer_decision":({
+                "relevance":item["officer_decision"].get("relevance")
+                    if item["officer_decision"].get("relevance") in ("DIRECT_OVERSIGHT","POSSIBLE_NEXUS","NO_ESTABLISHED_NEXUS") else "POSSIBLE_NEXUS",
+                "institutional_implication":str(item["officer_decision"].get("institutional_implication") or "")[:520],
+                "recommended_decision":str(item["officer_decision"].get("recommended_decision") or "")[:470],
+                "reason":str(item["officer_decision"].get("reason") or "")[:470],
+                "missing_evidence":str(item["officer_decision"].get("missing_evidence") or "")[:550],
+                "status":"HISTORICAL_PROPOSED_REVIEW_ONLY",
+                "legal_review":{
+                    "domain":str((item["officer_decision"].get("legal_review") or {}).get("domain") or "")[:380],
+                    "competent_authority":str((item["officer_decision"].get("legal_review") or {}).get("competent_authority") or "")[:380],
+                    "rule_reference":str((item["officer_decision"].get("legal_review") or {}).get("rule_reference") or "")[:380],
+                    "applicability":str((item["officer_decision"].get("legal_review") or {}).get("applicability") or "")[:380],
+                    "verification_needed":str((item["officer_decision"].get("legal_review") or {}).get("verification_needed") or "")[:380],
+                    "officer_verification_required":True,
+                    "source_urls":[str(u)[:900] for u in ((item["officer_decision"].get("legal_review") or {}).get("source_urls") or [])[:6] if isinstance(u,str) and u.startswith("https://")],
+                },
+                "claims":[{
+                    "claim":str(c.get("claim") or "")[:360],
+                    "evidence_status":str(c.get("evidence_status") or "")[:40],
+                    "source_urls":[str(u)[:900] for u in (c.get("source_urls") or [])[:4] if isinstance(u,str) and u.startswith("https://")],
+                    "verified_by_officer":False
+                } for c in (item["officer_decision"].get("claims") or [])[:5] if isinstance(c,dict)],
+                "consulted_urls":[str(u)[:900] for u in (item["officer_decision"].get("consulted_urls") or [])[:6] if isinstance(u,str) and u.startswith("https://")],
+                "quality":{"review_required":True,"automated_actions_executed":False}
+            } if isinstance(item.get("officer_decision"),dict) and
+                 isinstance(item["officer_decision"].get("legal_review") or {},dict) else None),
             "draft_policy":"DRAFT_ONLY_STAFF_REVIEW_AND_SEND" if item.get("draft_policy")=="DRAFT_ONLY_STAFF_REVIEW_AND_SEND" else "",
             "analytical_findings": item.get("analytical_findings") if isinstance(item.get("analytical_findings"),dict) else None,
             "featured_sources": [x for x in item.get("featured_sources",[])[:6] if isinstance(x,dict)] if isinstance(item.get("featured_sources"),list) else [],

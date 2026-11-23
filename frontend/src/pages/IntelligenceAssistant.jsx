@@ -4,6 +4,7 @@ import { Send, Plus, History, Trash2, MessageSquareText, ArrowDown, Download } f
 import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantWorkflowEvidence from '@/components/intel/AssistantWorkflowEvidence';
+import AssistantOfficerDecisionPanel from '@/components/intel/AssistantOfficerDecisionPanel';
 import AssistantWorkflowControls from '@/components/intel/AssistantWorkflowControls';
 import AssistantModeControls from '@/components/intel/AssistantModeControls';
 import AssistantComposerAttachments,{attachmentRequest} from '@/components/intel/AssistantComposerAttachments';
@@ -213,6 +214,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     source_consultation:response.data.source_consultation||[],
     structured_findings:response.data.structured_findings||[],
     decision_plan:response.data.decision_plan||[],
+    officer_decision:response.data.officer_decision||null,
     draft_policy:response.data.draft_policy||'',
     assistant_mode:response.data.assistant_mode||assistantMode,
     perspective:response.data.perspective||perspective,
@@ -306,6 +308,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
+        <AssistantOfficerDecisionPanel message={m} question={messages[i-1]?.role==='user'?messages[i-1].text:''}
+         fresh={reviewableIndexes.has(i)} onDraftMemo={reviewableIndexes.has(i)&&i===messages.length-1&&!busy?
+           ()=>ask('Draft a concise BAWASLU leadership memo, leading with the institutional decision, lawful options, evidence and next review steps, based only on currently consulted authorized sources about: '+String(messages[i-1]?.text||'').slice(0,450)):null}/>
         <AssistantWorkflowEvidence message={m} fresh={reviewableIndexes.has(i)} threadId={activeId}/>
         <AssistantResponseFeedback threadId={activeId} messageIndex={i}
          disabled={!reviewableIndexes.has(i)||busy||historyBusy}/>

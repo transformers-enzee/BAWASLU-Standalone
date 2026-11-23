@@ -13,7 +13,7 @@ COPY Dockerfile /src/Dockerfile
 RUN npm run build
 
 FROM python:3.12-slim
-ARG BAWASLU_BUILD_VERSION=175.95
+ARG BAWASLU_BUILD_VERSION=175.96
 ARG BAWASLU_BUILD_COMMIT=unknown
 ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 WORKDIR /app
@@ -22,6 +22,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend ./backend
 # Include the Inbox source for zero-credit cross-layer regression assertions.
 COPY frontend/src/pages/Inbox.jsx ./frontend/src/pages/Inbox.jsx
+# Assistant lifecycle QA reads the actual frontend composer and conversation source.
+COPY frontend/src/pages/IntelligenceAssistant.jsx ./frontend/src/pages/IntelligenceAssistant.jsx
+COPY frontend/src/components/intel/AssistantComposerAttachments.jsx ./frontend/src/components/intel/AssistantComposerAttachments.jsx
 COPY frontend/src/api/base44Client.js ./frontend/src/api/base44Client.js
 COPY frontend/public/ui-freeze/watchlist-live.js ./frontend/public/ui-freeze/watchlist-live.js
 COPY frontend/public/ui-freeze/watchlist-v2_2.html ./frontend/public/ui-freeze/watchlist-v2_2.html

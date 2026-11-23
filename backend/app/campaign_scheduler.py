@@ -11,14 +11,17 @@ from sqlalchemy import func
 from .models import (MonitoringCampaign, CampaignRun, SocialListeningRun,
                      SocialListeningProviderUsage)
 from .socialcrawl import estimate_search_cost
+from .project_boolean import decode_project_query, evaluate_boolean
 
 def utc_now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def campaign_query(c):
-    keywords=json.loads(c.primary_keywords_json or '[]')
-    excluded=json.loads(c.excluded_keywords_json or '[]')
-    # A provider-agnostic query until syntax/OR behavior is validated.
+    search=decode_project_query(c.primary_keywords_json)
+    keywords=search["retrieval_terms"]
+    excluded=json.loads(c.excluded_keywords_json or '[]') if search["search_mode"]=="KEYWORDS" else []
+    # Provider searches retrieve candidates; Boolean logic is applied
+    # locally during source linking. No provider-wide Boolean guarantee.
     # Don't treat these terms as proof of contextual relevance.
     return {
         'query':' '.join(keywords),
@@ -111,17 +114,24 @@ def keyword_screen(c,row):
     if isinstance(comments,list):
         comment_text=' '.join(str(x.get('text') or '') for x in comments if isinstance(x,dict))
     haystack=((row.get('text_content') or '')+' '+comment_text).casefold()
-    primary=json.loads(c.primary_keywords_json or '[]')
-    secondary=json.loads(c.secondary_keywords_json or '[]')
-    excluded=json.loads(c.excluded_keywords_json or '[]')
+    search=decode_project_query(c.primary_keywords_json)
+    primary=search["retrieval_terms"]
+    secondary=json.loads(c.secondary_keywords_json or '[]') if search["search_mode"]=="KEYWORDS" else []
+    excluded=json.loads(c.excluded_keywords_json or '[]') if search["search_mode"]=="KEYWORDS" else []
     matched_main=[word for word in primary if word.casefold() in haystack]
     matched_secondary=[word for word in secondary if word.casefold() in haystack]
     matched_excluded=[word for word in excluded if word.casefold() in haystack]
-    return {'matched':bool(matched_main) and not bool(matched_excluded),
+    boolean_mode=search["search_mode"]=="BOOLEAN"
+    matched=(evaluate_boolean(search["ast"],haystack) if boolean_mode
+             else bool(matched_main) and not bool(matched_excluded))
+    return {'matched':matched,
             'main_keywords':matched_main,'secondary_keywords':matched_secondary,
             'excluded_keywords':matched_excluded,
-            'context_signal':'STRONGER_CONTEXT' if matched_secondary and matched_main else
-                             'MAIN_KEYWORD_ONLY' if matched_main else 'NO_MAIN_KEYWORD'}
+            'search_mode':search["search_mode"],
+            'context_signal':('BOOLEAN_EXPRESSION_MATCH' if boolean_mode and matched
+                              else 'BOOLEAN_EXPRESSION_NO_MATCH' if boolean_mode
+                              else 'STRONGER_CONTEXT' if matched_secondary and matched_main
+                              else 'MAIN_KEYWORD_ONLY' if matched_main else 'NO_MAIN_KEYWORD')}
 
 def _keyword_match(c,row):
     return keyword_screen(c,row)['matched']

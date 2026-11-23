@@ -4,10 +4,10 @@
 const sourceStatus={CONSULTED:'Consulted',NOT_SELECTED:'Not selected',
  SELECTED_NOT_CONSULTED:'Selected · not consulted'};
 const basisStatus={FIXED_SAVED_SNAPSHOT:'Saved snapshot · not a live source check',
- LIVE_PUBLIC_LOOKUP:'Live public lookup · authenticity not independently verified',
+ LIVE_PUBLIC_LOOKUP:'Live when retrieved · not a continuing or independently verified feed',
  SIMULATED_DEMO:'Simulated demo content · not real-world evidence',
  NOT_CONSULTED:'No source consulted',NOT_SELECTED:'Not selected'};
-export default function AssistantWorkflowEvidence({message}){
+export default function AssistantWorkflowEvidence({message,fresh=false}){
  const sources=Array.isArray(message?.source_consultation)?message.source_consultation:[];
  const findings=Array.isArray(message?.structured_findings)?message.structured_findings:[];
  const plan=Array.isArray(message?.decision_plan)?message.decision_plan:[];
@@ -16,6 +16,7 @@ export default function AssistantWorkflowEvidence({message}){
  return <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-xs" data-testid="assistant-structured-workflow">
   <section className="rounded-lg border border-slate-200 bg-white p-3 space-y-2" data-testid="assistant-consulted-sources">
    <h3 className="font-semibold text-[#19364c]">Source consultation record</h3>
+   {!fresh&&<p className="font-semibold text-amber-900">Historical answer snapshot. Access, source contents and currentness may have changed; rerun the question for fresh evidence before casework.</p>}
    <p className="text-slate-600">Only the sources actually retrieved or looked up for this answer are labeled consulted. Citation links remain separate from source availability.</p>
    <div className="grid gap-2 md:grid-cols-3">
     {sources.map(row=><div key={row.key} className="rounded-md border border-slate-200 bg-slate-50 p-3">

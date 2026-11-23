@@ -438,6 +438,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
            className="intel-ghost text-xs"><Download size={13}/> {(m.answer_language||'id')==='id'?'Ekspor lembar skor kosong (.csv)':'Export blank scoring sheet (.csv)'}</button>
          </div>
         </div>}
+        <details data-testid="assistant-extended-analysis" className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+          <summary className="cursor-pointer font-semibold text-[#19364c]">{(m.answer_language||'id')==='id'?'Analisis tambahan · grafik dan sumber':'Extended analysis · charts and source details'}</summary>
+          <div className="mt-3 space-y-3">
         {m.response_profile!=='PDF_GUIDANCE'&&m.grounding?.supporting_count>0&&
          <p className="mt-4 text-xs text-[#64748b]">{m.grounding.supporting_count} {textFor(m.answer_language||'id',m.presentation_labels,'evidence_refs')} · {textFor(m.answer_language||'id',m.presentation_labels,'source_review_required')}</p>}
         {m.response_profile!=='PDF_GUIDANCE'&&<AssistantDetectedTags tags={m.detected_tags} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
@@ -448,7 +451,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
           citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}
           language={m.answer_language||'id'} labels={m.presentation_labels}
           compactPdf={m.response_profile==='PDF_GUIDANCE'}
-          allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'}/></>}
+          allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'}/>
+          </div>
+        </details></>}
       </div>
      </div>)}
      {messages.some(m=>m.role==='assistant')&&workflowMode==='STRATEGY_DRAFTING'&&<div className="flex flex-wrap gap-2" data-testid="assistant-draft-revision-shortcuts">

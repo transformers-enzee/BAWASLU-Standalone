@@ -58,3 +58,38 @@ def mode_directive(config):
         "RESEARCH":"Emphasize traceable sources, contradictory claims, provenance, coverage and gaps."
     }
     return prefix+"\nPERSPECTIVE: "+perspectives[config["perspective"]]
+
+
+def question_shaped_directive(question):
+    """Choose answer presentation, without validating claims or overriding permissions."""
+    import re
+    q = str(question or "").casefold()
+    choices = (
+        ("DRAFT", r"\b(draft|memo|email|compose|surat|buatkan|susun memo)\b"),
+        ("LEGAL", r"\b(legal|law|regulation|pasal|hukum|pelanggaran|putusan|kewenangan)\b"),
+        ("STRATEGY", r"\b(strategy|options|trade.?off|strategi|opsi|taktik|rekomendasi)\b"),
+        ("COMPARISON", r"\b(compare|similar|versus|bandingkan|serupa|perbandingan|perbedaan)\b"),
+        ("TREND", r"\b(trend|changed|increase|decline|tren|perkembangan|meningkat|menurun)\b"),
+    )
+    kind = next((name for name, pattern in choices if re.search(pattern, q)), "DIRECT")
+    by_kind = {
+        "DRAFT": "Lead with the requested memo or email itself. Preserve source citations, caveats and draft-only status through revisions; never claim it was sent.",
+        "LEGAL": "Lead with the verified applicable rule or practical first casework step. Identify the election type, stage, jurisdiction, official provision, deadlines and authority only if confirmed; otherwise show what the officer must verify.",
+        "STRATEGY": "Compare credible politically neutral options and trade-offs. Recommend a conditional course, owner role, milestone, review point and evidence that would change the decision.",
+        "COMPARISON": "Compare relevant sourced examples side by side; cite each example and explain which similarities and differences matter.",
+        "TREND": "State what changed, the exact comparison dates, supporting evidence and what to watch. Never infer population trends from saved posts alone.",
+        "DIRECT": "Answer plainly and directly, without a compulsory violation-review form or checklist.",
+    }
+    return (
+        "ANSWER-FIRST: In the first two or three sentences give the answer, decision needed, next practical step, or material evidence gap. "
+        "Answer in the language of the user's question. Choose the question-specific structure rather than the same casework template for every query. "
+        "Cite material factual claims next to the claims using genuinely consulted and authorized sources; never cite a source that was not consulted. "
+        "Distinguish independently checked public facts, authorized saved observations, attachments, allegations, interpretations and recommendations. "
+        "If current public research was needed but unavailable, state that gap up front rather than presenting model knowledge as verified live news. "
+        "Explain implications and choices to leadership, but actionable checks, evidence needs and reviewing roles to officers. "
+        "Do not invent deadlines, legal authority, findings, named assignees or jurisdiction. "
+        "Keep the main answer concise (approximately 120-260 words unless a long draft or deeper analysis is requested). "
+        "Show each finding and recommendation once; avoid boilerplate and repeated action plans. "
+        "Keep source consultation, extended charts, methods and full verification inventories in the expandable Research Trail. "
+        + by_kind[kind]
+    )

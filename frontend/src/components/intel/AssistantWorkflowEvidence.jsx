@@ -20,7 +20,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
  )).slice(0,12);
  if(!sources.length&&!findings.length&&!plan.length&&!isDraft)return null;
  if(webOnly)return <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs" data-testid="assistant-consulted-sources">
-  <summary className="cursor-pointer font-semibold text-[#19364c]">Sources consulted · public research trail</summary>
+  <summary className="cursor-pointer font-semibold text-[#19364c]">Research Trail · consulted public sources</summary>
   <p className="mt-2 text-slate-600">This is public web research, not a legally verified BAWASLU finding. Unavailable searches are explicitly disclosed.</p>
   {message?.grounding?.retrieved_at&&<p className="mt-1 text-slate-500">Sources retrieved: {new Date(message.grounding.retrieved_at).toLocaleString()}</p>}
   {sources.filter(row=>row.status!=='NOT_SELECTED').map(row=><div className="mt-2" key={row.key}>
@@ -29,7 +29,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
    {row.warning&&<p className="text-amber-800">{row.warning}</p>}
   </div>)}
  </details>;
- return <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-xs" data-testid="assistant-structured-workflow">
+ return <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs" data-testid="assistant-research-trail"><summary className="cursor-pointer font-semibold text-[#19364c]">Research Trail · sources, evidence and review details</summary><div className="mt-3 space-y-3" data-testid="assistant-structured-workflow">
   <section className="rounded-lg border border-slate-200 bg-white p-3 space-y-2" data-testid="assistant-consulted-sources">
    <h3 className="font-semibold text-[#19364c]">Source consultation record</h3>
    {!fresh&&<p className="font-semibold text-amber-900">Historical answer snapshot. Access, source contents and currentness may have changed; rerun the question for fresh evidence before casework.</p>}
@@ -73,5 +73,5 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
   {isDraft&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900" data-testid="assistant-draft-review-required">
    DRAFT ONLY · Executive summaries, memos and email replies are for authorized staff to verify, revise and send. No assignment, approval, message or legal determination was created.
   </div>}
- </div>;
+ </div></details>;
 }

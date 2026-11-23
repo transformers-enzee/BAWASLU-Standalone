@@ -22,6 +22,7 @@ from datetime import date
 from collections import Counter
 import httpx
 from .assistant_language import language_directive, effective_language
+from .assistant_mode import question_shaped_directive
 from .assistant_assessment_focus import assessment_scope, assessment_instruction, assessment_authority_inventory
 from .assistant_cross_module_inventory import cross_module_inventory, cross_module_instruction
 from .assistant_evidence_relevance import retrieval_scope_note, social_source_term_score
@@ -397,14 +398,9 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "For plausible election administrative violations, process disputes, ethics complaints, or possible "
         "electoral crimes, propose the appropriate BAWASLU reviewer, DKPP or Gakkumdu referral path "
         "ONLY after the legal basis, competent authority and verified facts have been confirmed. "
-        "Answer in the question's language, in about 180-260 words, with at most four short sections: "
-        "(1) Decision / What matters now; (2) Main verified public developments and involved parties "
-        "(only when supported); (3) Officer actions: 2-3 specific steps giving the reviewing ROLE, "
-        "what to check, the expected output and a conditional escalation/closure gate; "
-        "(4) Material verification gap. Make clear when no formal BAWASLU action is indicated. "
-        "For trends, specify dates and distinguish news coverage from a representative population sample. "
-        "Do not invent trend percentages, posting volumes, a conclusion about voter opinion or parties' culpability. "
-        "Link each material factual claim to attributable retrieved web URLs. Do not cite uncited or invented URLs. "
+        "Start with the answer, decision or evidence gap. Cite actually retrieved public sources "
+        "beside the claims they support, formatted as Markdown links [source title](https://...). "
+        +question_shaped_directive(question)+" "
         "No duplicates, repeated tables, copied checklists or decorative boilerplate. "
         "This is a "+style+"; perspective="+str(perspective)[:25]+". "
         "All proposals require human verification and applicable authority."
@@ -840,7 +836,7 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
                             ("\n\n"+module_focus if module_focus else "")+
                             ("\n\n"+scope_focus if scope_focus else "")+
                             workflow_system_directive(workflow_mode)+
-                            (mode_directive(mode_config) if mode_config else "")},
+                            (mode_directive(mode_config) if mode_config else "")+"\n\n"+question_shaped_directive(question)},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v4",
                           "strict":True,"schema":SCHEMA}},

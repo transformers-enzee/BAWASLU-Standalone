@@ -1,8 +1,26 @@
 /** Safe, flexible formatting for assistant prose, tables and evidence-backed bars. */
+const safeCitationHref=value=>{
+ try{
+  const url=new URL(value);
+  const host=url.hostname.toLowerCase();
+  if(url.protocol!=='https:'||url.username||url.password||!host||host==='localhost'||host.endsWith('.localhost'))return null;
+  if(/^(?:127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(host))return null;
+  if(host==='[::1]'||host==='::1')return null;
+  return url.href;
+ }catch{return null;}
+};
 function rich(text){
- return String(text||'').split(/(\*\*[^*\n]+\*\*)/g).map((part,i)=>
-   part.startsWith('**')&&part.endsWith('**')?
-    <strong key={i} className="font-semibold text-[#801b24]">{part.slice(2,-2)}</strong>:part);
+ return String(text||'').split(/(\*\*[^*\n]+\*\*|\[[^\]\n]{1,120}\]\(https:\/\/[^\s)]+\)|https:\/\/[^\s<>]+)/g).map((part,i)=>{
+  if(part.startsWith('**')&&part.endsWith('**'))return <strong key={i} className="font-semibold text-[#801b24]">{part.slice(2,-2)}</strong>;
+  const linked=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);
+  if(linked){const href=safeCitationHref(linked[2]);return href?<a key={i} href={href} target="_blank" rel="noopener noreferrer" className="break-all font-medium text-teal-800 underline">{linked[1]}</a>:part;}
+  if(part.startsWith('https://')){
+   const suffix=part.match(/[.,;!?]+$/)?.[0]||'';
+   const raw=part.slice(0,part.length-suffix.length),href=safeCitationHref(raw);
+   return href?<span key={i}><a href={href} target="_blank" rel="noopener noreferrer" className="break-all text-teal-800 underline">{raw}</a>{suffix}</span>:part;
+  }
+  return part;
+ });
 }
 function tableParts(lines){
  if(lines.length<2||!/^\s*\|?\s*:?-{3,}/.test(lines[1].replace(/\|/g,'')))return null;

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+const answer=read('../src/components/intel/AssistantAnswer.jsx');
+const trail=read('../src/components/intel/AssistantWorkflowEvidence.jsx');
+const page=read('../src/pages/IntelligenceAssistant.jsx');
+const model=read('../../backend/app/assistant_orchestration.py');
+assert.ok(answer.includes('safeCitationHref')&&answer.includes('rel="noopener noreferrer"'));
+assert.ok(trail.includes('Research Trail')&&trail.includes('data-testid="assistant-research-trail"'));
+assert.ok(page.includes('data-testid="assistant-extended-analysis"'));
+assert.ok(model.includes('question_shaped_directive(question)'));
+console.log('PASS answer-first response, safe HTTPS citations and expandable evidence');

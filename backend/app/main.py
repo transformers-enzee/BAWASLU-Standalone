@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .db import Base, engine, get_db
 from .models import User, SessionToken
 from .auth import current_user, verify_password, create_session, hash_password
-from .access import profile
+from .access import profile, has
 from .domain import intelligence_action
 from .registry import registry_action
 from .socialcrawl import social_listening_action, recover_existing_news_languages, sync_promoted_news_languages
@@ -140,6 +140,18 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
       AssistantProviderError
     )
     p=profile(db,user)
+    if not has(p, 'view_intelligence'):
+        raise HTTPException(403, 'Assistant access requires view_intelligence permission')
+    mode = str(body.get('workspaceMode') or 'Operational').strip().title()
+    perspective = str(body.get('perspective') or 'Auto').strip().title()
+    if mode not in ('Management', 'Operational'):
+        raise HTTPException(400, 'Invalid workspace mode')
+    if perspective not in ('Auto', 'Executive', 'Operational', 'Research'):
+        raise HTTPException(400, 'Invalid assistant perspective')
+    # Leadership mode is reserved for roles already entitled to leadership/manager workflows.
+    leadership_roles = {'National Administrator', 'National Leadership', 'Provincial Administrator'}
+    if mode == 'Management' and p.get('role') not in leadership_roles:
+        raise HTTPException(403, 'Management mode is not authorized for this role')
     q=str(body.get('question','')).strip()
     if not q: raise HTTPException(400,'Question is required')
     if len(q)>500: raise HTTPException(400,'Question is too long')
@@ -152,7 +164,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     try:
         if not os.getenv('OPENAI_API_KEY','').strip():
             raise AssistantProviderError('not_configured','OpenAI is not configured')
-        result,provider=generate_openai_assistant_answer(q,previous,evidence)
+        result,provider=generate_openai_assistant_answer(q,previous,evidence,workspace_mode=mode,perspective=perspective,office_role=p.get('role',''),jurisdiction=p.get('geographic_scope',''))
         allowed_ids={r['record_id'] for r in evidence}
         cited_ids=[x for x in (result.get('cited_record_ids') or []) if x in allowed_ids]
         answer=format_assistant_answer(result)
@@ -165,7 +177,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     if not support:
         support=[assistant_record_view(x) for x in selected[:6]]
     semantics=assistant_query_semantics(q)
-    return {'answer':answer,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY','date_basis':semantics['date_basis'],'date_basis_label':semantics['date_basis_label'],'date_basis_note':semantics['date_basis_note'],'window':semantics['window']}}
+    return {'answer':answer,'workspace_mode':mode,'perspective':perspective,'records':support,'provider':provider,'grounding':{'accessible_count':len(accessible),'selected_count':len(selected),'supporting_count':len(support),'scope':'CURRENT_USER_AUTHORIZED_RECORDS_ONLY','date_basis':semantics['date_basis'],'date_basis_label':semantics['date_basis_label'],'date_basis_note':semantics['date_basis_note'],'window':semantics['window']}}
 
 FRONTEND_DIST=Path(os.getenv('FRONTEND_DIST',Path(__file__).resolve().parents[2]/'frontend_dist'))
 if FRONTEND_DIST.exists():

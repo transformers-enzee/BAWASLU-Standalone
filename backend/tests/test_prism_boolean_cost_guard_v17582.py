@@ -74,6 +74,7 @@ def test_provider_body_uses_supported_fields_and_tighter_default_cap():
     assert params['groups'][0]['exclude_terms']==['hoaks']
     assert params['contains']=='bawaslu'
     assert params['max_credits']==20
+    assert params['platforms']==['instagram','tiktok','news']
     assert params['limit']==100
     assert len(signature)==64
     with pytest.raises(ValueError):
@@ -107,6 +108,7 @@ def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgemen
     args={'max_credits':20}
     preview=prism_discover.action(db,{},'campaignDiscoverPreview',args,c.id)
     assert preview['credit_cap']==20
+    assert preview['platform_mode']=='FOCUSED'
     assert preview['keywords_used']==['bandung','jawa barat']
     assert preview['provider_contains']=='bawaslu'
     assert preview['provider_exclude_terms']==['hoaks']
@@ -119,7 +121,8 @@ def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgemen
     assert db.query(SocialListeningRun).count()==1
 
     valid={'max_credits':20,'confirm_cost':True,
-           'signature':preview['signature'],'confirmed_max_credits':20}
+           'signature':preview['signature'],'confirmed_max_credits':20,
+           'platform_mode':'FOCUSED','confirmed_platform_mode':'FOCUSED'}
     with pytest.raises(ValueError,match='zero posts'):
         prism_discover.action(db,{},'campaignDiscoverStart',valid,c.id)
     with pytest.raises(ValueError,match='Credit cap changed'):
@@ -128,6 +131,9 @@ def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgemen
     with pytest.raises(ValueError,match='free credit preview'):
         prism_discover.action(db,{},'campaignDiscoverStart',
             {**valid,'max_credits':35,'acknowledge_zero_yield':True},c.id)
+    with pytest.raises(ValueError,match='Source selection changed'):
+        prism_discover.action(db,{},'campaignDiscoverStart',
+            {**valid,'confirmed_platform_mode':'ALL','acknowledge_zero_yield':True},c.id)
     assert db.query(SocialListeningRun).count()==1
     accepted=prism_discover.action(db,{},'campaignDiscoverStart',
         {**valid,'acknowledge_zero_yield':True},c.id)

@@ -325,6 +325,7 @@ def store(db,run,c,items,full_assessment=False):
         EvidenceAssessment.result_id.in_(result_ids)).all()}
     new=[]
     accepted_ids=[]
+    new_evidence_links=0
     from .campaign_scheduler import keyword_screen
     boolean_mode=decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
     for row,raw in pairs:
@@ -339,6 +340,7 @@ def store(db,run,c,items,full_assessment=False):
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
                     match if boolean_mode else {'matched_keywords':raw.get('matched_keywords') or []})))
             links.add(row.id)
+            new_evidence_links+=1
         # Preserve existing human/AI assessment versions and never create a
         # second version=1 for a repeated source within the same batch.
         if row.id in assessed:continue
@@ -358,6 +360,18 @@ def store(db,run,c,items,full_assessment=False):
         assessed.add(row.id)
     meta=json.loads(run.query_json or '{}')
     meta['assessment_result_ids']=accepted_ids
+    from collections import Counter as _Counter
+    meta['collection_diagnostics']={
+        'raw_provider_items':len(items),
+        'considered_items':len(kept),
+        'unique_candidates':len(pairs),
+        'accepted_boolean_matches':len(accepted_ids),
+        'excluded_by_boolean':len(pairs)-len(accepted_ids) if boolean_mode else 0,
+        'new_evidence_links':new_evidence_links,
+        'candidate_platforms':dict(_Counter(row.platform for row,_ in pairs)),
+        'counts_basis':'scanned_provider_candidates',
+        'paid_provider_called':False,
+    }
     run.query_json=json.dumps(meta,ensure_ascii=False)
     db.commit()
     # Legacy manual store still supports topic-only enrichment. The Activate

@@ -583,7 +583,9 @@ def formal_evidence_count(evidence):
 
 def generate(question, previous, evidence, mode, history=None, response_depth='EXECUTIVE',
              reference_catalog=None, response_profile='SOCIAL_ANALYSIS',
-             duplicate_groups=None, officer_scope=None, population_snapshot=None):
+             duplicate_groups=None, officer_scope=None, population_snapshot=None,
+             workflow_mode='RESEARCH',allow_public_web=None):
+    from .assistant_workflows import workflow_system_directive
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise AssistantProviderError("not_configured")
@@ -595,9 +597,13 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     executive_report=response_profile=='EXECUTIVE_REPORT'
     # Exact-source and selected-post analysis must not initiate unrelated
     # public web research or append official-looking links as record evidence.
-    web_research = (research_public_web(question, key, model, base)
-                    if not evidence and mode != "GROUNDED" and not pdf_guidance
-                    and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
+    explicit_private_source=bool(re.search(r'(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+)(?!\w)',question,re.I))
+    web_permitted=(not evidence and mode != 'GROUNDED' if allow_public_web is None
+                   else bool(allow_public_web))
+    # Private source identifiers never enter a public web lookup.
+    web_research=(research_public_web(question,key,model,base)
+                  if web_permitted and not explicit_private_source and not pdf_guidance
+                  and response_profile not in ("CROSS_MODULE_REVIEW","EXECUTIVE_REPORT") else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
         "external_public_research": web_research,
@@ -788,7 +794,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "input": [{"role":"system","content":SYSTEM+officer_focus+document_focus+case_focus+cross_module_focus+
                             ("\n\n"+assessment_focus if assessment_focus else "")+
                             ("\n\n"+module_focus if module_focus else "")+
-                            ("\n\n"+scope_focus if scope_focus else "")},
+                            ("\n\n"+scope_focus if scope_focus else "")+
+                            workflow_system_directive(workflow_mode)},
                   {"role":"user","content":json.dumps(user_data,ensure_ascii=False,default=str)}],
         "text":{"format":{"type":"json_schema","name":"bawaslu_insight_answer_v4",
                           "strict":True,"schema":SCHEMA}},
@@ -887,6 +894,16 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
         "officer_steps_fallback":officer_steps_fallback,
         "proposed_action_count":len(result.get("officer_actions") or []),
         "officer_action_policy":"DRAFT_ONLY_NO_EXECUTION",
+        "workflow_mode":workflow_mode,
+        "decision_plan":[{
+            "owner_role":a.get('reviewing_role') or '',
+            "milestone":a.get('task') or '',
+            "required_evidence":a.get('evidence_required') or '',
+            "expected_output":a.get('expected_output') or '',
+            "review_point":a.get('escalation_condition') or '',
+            "source_ids":a.get('source_ids') or [],
+            "status":"PROPOSED_ONLY"
+        } for a in (result.get('officer_actions') or [])[:4]],
         "detected_tags": result["validated_tags"],
         "presentation_labels": result["validated_ui_labels"]
     }

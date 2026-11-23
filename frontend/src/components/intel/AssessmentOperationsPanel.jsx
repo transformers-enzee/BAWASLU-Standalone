@@ -126,7 +126,7 @@ export default function AssessmentOperationsPanel({campaignId}){
         <p role="status" className="text-amber-900">Usage integrity detail unavailable; refresh before interpreting provider lineage.</p>:
         <>
          <p>Status: {String(integrity.status).replaceAll('_',' ')} · Recorded usage rows: {fmt(integrity.usage_rows)}</p>
-         <p>Campaign mismatches: {fmt(integrity.usage_flags?.campaign_id_mismatch)} · Usage not reported: {fmt(integrity.usage_flags?.provider_usage_not_reported)}</p>
+         <p>Project ID mismatches: {fmt(integrity.usage_flags?.campaign_id_mismatch)} · Usage not reported: {fmt(integrity.usage_flags?.provider_usage_not_reported)}</p>
          <p>Negative token counts: {fmt(integrity.usage_flags?.negative_token_counts)} · Missing provider models: {fmt(integrity.usage_flags?.provider_model_missing)}</p>
          <p>Non-completed jobs with classification usage: {fmt(integrity.lifecycle_flags?.noncompleted_jobs_with_classification_usage)} · Assessments with duplicate classification usage: {fmt(integrity.lifecycle_flags?.assessments_with_duplicate_classification_usage)}</p>
          {integrity.status==='REVIEW_REQUIRED'&&<p role="status" className="font-medium text-amber-900">Provider history review required; do not automatically replay requests.</p>}
@@ -155,7 +155,7 @@ export default function AssessmentOperationsPanel({campaignId}){
       <p className="text-slate-500">This display cannot start or authorize paid AI requests. Older preflight capacity figures do not override these safeguards.</p>
      </div>}
 
-     {data.exception_review.snapshot_reconciled===false&&<p role="alert" className="text-amber-900" data-testid="exception-snapshot-warning">Independent queue or campaign aggregates do not reconcile. Refresh before any remediation.</p>}
+     {data.exception_review.snapshot_reconciled===false&&<p role="alert" className="text-amber-900" data-testid="exception-snapshot-warning">Independent queue or project aggregates do not reconcile. Refresh before any remediation.</p>}
      {data.exception_review.diagnostic_conflicts?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-diagnostic-conflicts">Operational diagnostics disagree: {data.exception_review.diagnostic_conflicts.join(', ').replaceAll('_',' ')}. Refresh read-only status and investigate persistent discrepancies before any action.</p>}
      {data.exception_review.missing_audits?.length>0&&<p role="alert" className="text-amber-900" data-testid="exception-missing-audits">Audit details unavailable: {data.exception_review.missing_audits.join(', ').replaceAll('_',' ')}. No verified historical usage conclusion is possible.</p>}
      <p className="text-slate-600" data-testid="exception-audit-coverage">Provider usage audit: {data.exception_review.usage_audit_available?'Available':'Unavailable'} · Completion audit: {data.exception_review.completion_audit_available?'Available':'Unavailable'} · Snapshots: {data.exception_review.snapshot_reconciled?'Reconciled':'Need recheck'}</p>

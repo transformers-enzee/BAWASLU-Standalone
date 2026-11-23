@@ -219,7 +219,7 @@ def _keyword_search_plan(db,p,c):
     from .campaign_scheduler import campaign_query
     from .socialcrawl import search_preflight
     base=campaign_query(c)
-    keywords=json.loads(c.primary_keywords_json or '[]')
+    keywords=decode_project_query(c.primary_keywords_json)['retrieval_terms']
     searches=[]
     for keyword in keywords[:30]:
         filters={**base,'query':keyword}
@@ -229,9 +229,16 @@ def _keyword_search_plan(db,p,c):
     return searches
 
 def _manual_preflight(db,p,c,everywhere_query=''):
+    search=decode_project_query(c.primary_keywords_json)
+    if search['search_mode']=='BOOLEAN' and json.loads(c.platforms_json or '[]')==['search_everywhere']:
+        return {'estimated_credits':0,'components':[],'duplicate_recent':None,
+                'keyword_searches':[],'credit_limit':0,'can_run':False,
+                'manual_only':True,'paid_provider_called':False,
+                'retrieval_mode':'BOOLEAN_UNSUPPORTED_EVERYWHERE',
+                'blocked_reason':'Boolean project monitoring does not support Search Everywhere; select native platforms.'}
     if json.loads(c.platforms_json or '[]')==['search_everywhere']:
         query=str(everywhere_query or '').strip()
-        primary=json.loads(c.primary_keywords_json or '[]')
+        primary=search['retrieval_terms']
         query=query or (primary[0] if len(primary)==1 else '')
         query_valid=bool(query and len(query)<=512)
         return {'estimated_credits':20,'components':[{'label':'Search Everywhere: one cross-platform query (not 20 per platform)','credits':20}],
@@ -250,7 +257,11 @@ def _manual_preflight(db,p,c,everywhere_query=''):
                                  'duplicate_recent':s['duplicate_recent']} for s in searches],
             'credit_limit':MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT,
             'can_run':bool(cost>0 and cost<=MANUAL_CRAWL_ESTIMATED_CREDIT_LIMIT),
-            'manual_only':True,'paid_provider_called':False,'retrieval_mode':'PER_KEYWORD_OR'}
+            'manual_only':True,'paid_provider_called':False,
+            'retrieval_mode':'BOOLEAN_RETRIEVAL_SEEDS' if search['search_mode']=='BOOLEAN' else 'PER_KEYWORD_OR',
+            'search_mode':search['search_mode'],
+            'query_warning':('Boolean matching is enforced locally on retrieved posts. Provider search coverage is not guaranteed.'
+                             if search['search_mode']=='BOOLEAN' else None)}
 
 def _existing_thumbnail(item, include_expired=False):
     """Read already-stored image metadata for social posts and news. No network calls."""
@@ -1540,7 +1551,9 @@ def campaign_action(db:Session,p,action,data,id=None):
         return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
                 'credits_used':credits_used,'provider_received':provider_received,'reused_results':reused_results,
                 'manual_only':True,'estimated_credits':preview['estimated_credits'],
-                'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else 'PER_KEYWORD_OR'}
+                'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else
+                    'BOOLEAN_RETRIEVAL_SEEDS' if decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
+                    else 'PER_KEYWORD_OR'}
     if action=='campaignSentimentBatchPreview':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
@@ -1608,7 +1621,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             SocialListeningResult.canonical_url)
         links=query.with_entities(*columns).order_by(CampaignEvidence.id.desc()).yield_per(1000)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
-        primary_terms=json.loads(c.primary_keywords_json or '[]')
+        primary_terms=decode_project_query(c.primary_keywords_json)['retrieval_terms']
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
         # Compile once: avoid 516 individual substring scans per evidence record.
         import re
@@ -1925,23 +1938,30 @@ def campaign_action(db:Session,p,action,data,id=None):
         from .socialcrawl import estimate_search_cost
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted')
         values=_normalize(db,p,data)
-        filters={'query':' '.join(json.loads(values['primary_keywords_json'])),
-                 'exclude_terms':json.loads(values['excluded_keywords_json']),
+        search=decode_project_query(values['primary_keywords_json'])
+        filters={'query':' '.join(search['retrieval_terms']),
+                 'exclude_terms':json.loads(values['excluded_keywords_json']) if search['search_mode']=='KEYWORDS' else [],
                  'platforms':json.loads(values['platforms_json']),
                  'language':values['language'],
                  'date_from':values['date_from'],'date_to':values['date_to'],
                  'province':values['province'],'regency_city':values['regency_city']}
+        if filters['platforms']==['search_everywhere'] and search['search_mode']=='BOOLEAN':
+            return {'estimated_credits':0,'components':[],
+                    'billing_warning':'Search Everywhere Boolean provider semantics have not been verified. Select native platforms.',
+                    'paid_run_enabled':False,'approval_required':True,'retrieval_mode':'BOOLEAN_UNSUPPORTED_EVERYWHERE'}
         if filters['platforms']==['search_everywhere']:
             return {'estimated_credits':20,'components':[{'endpoint':'/v1/search/everywhere','credits':20,'label':'Search Everywhere · one query across supported sources'}],
                     'billing_warning':'20 credits per API call, not per platform. Multiple keywords in one query are not yet verified; paid execution is disabled.',
                     'paid_run_enabled':False,'approval_required':True,'retrieval_mode':'SEARCH_EVERYWHERE_PREVIEW'}
         estimate=estimate_search_cost(filters)
-        estimate['estimated_credits']*=len(json.loads(values['primary_keywords_json']))
+        estimate['estimated_credits']*=len(search['retrieval_terms'])
         estimate['components']=[{'label':keyword+' · '+part['label'],'credits':part['credits'],'endpoint':part['endpoint']}
-              for keyword in json.loads(values['primary_keywords_json']) for part in estimate['components']]
+              for keyword in search['retrieval_terms'] for part in estimate['components']]
         return {'estimated_credits':estimate['estimated_credits'],
                 'components':estimate['components'],
-                'billing_warning':'Estimate only. Actual provider credits may vary.',
+                'search_mode':search['search_mode'],'retrieval_terms':search['retrieval_terms'],
+                'billing_warning':('Estimate only. Boolean matching is enforced on retrieved posts, not guaranteed by the provider. Actual credits may vary.'
+                                   if search['search_mode']=='BOOLEAN' else 'Estimate only. Actual provider credits may vary.'),
                 'paid_run_enabled':False,'approval_required':True}
     if action=='listCampaigns':
         rows=db.query(MonitoringCampaign).order_by(MonitoringCampaign.created_at.desc(),MonitoringCampaign.id.desc()).all()

@@ -711,10 +711,20 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         raise HTTPException(400,'Invalid response depth')
     from .assistant_language import effective_language, language_directive
     from .assistant_tags import fallback_tags
+    from .assistant_workflows import (normalize_workflow_request,source_consultation,
+        structured_findings,drafting_notice,retrieval_question_for_revision)
+    try:
+        workflow_config=normalize_workflow_request(body)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    source_choice=workflow_config['sources']
+    workflow_mode=workflow_config['workflow']
     language = effective_language(q, None)
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
+    if isinstance(body.get('sourceSelection'),dict) and requested=='AUTO':
+        requested='DATA'  # No silent GPT-only substitution for explicit selected sources.
     # The saved PDF library is part of normal conversation context.
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.
@@ -722,13 +732,18 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         retrieve_chat_knowledge,authorized_reference_catalog,explicit_pdf_page_refs,
         exact_pdf_selection_complete)
     history=body.get('conversationContext') or []
-    history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:750]}
-             for x in history[-6:] if isinstance(x,dict) and
+    history=[{'role':str(x.get('role') or ''),'text':str(x.get('text') or '')[:2200]}
+             for x in history[-8:] if isinstance(x,dict) and
              x.get('role') in ('user','assistant')] if isinstance(history,list) else []
-    reference_catalog=authorized_reference_catalog(db,p)
-    explicit_pdf_ids=explicit_pdf_page_refs(q)
+    research_q=retrieval_question_for_revision(q,previous,history)
+    named_pdf_ids=explicit_pdf_page_refs(q)
+    if named_pdf_ids and not source_choice['legalReferences']:
+        raise HTTPException(400,'The named PDF source is deselected. Enable legal/reference sources to inspect it.')
+    reference_catalog=authorized_reference_catalog(db,p) if source_choice['legalReferences'] else []
+    explicit_pdf_ids=named_pdf_ids if source_choice['legalReferences'] else []
     pdf_evidence=retrieve_chat_knowledge(
-        db,p,q,previous,history,limit=6) if requested!='GENERAL' or explicit_pdf_ids else []
+        db,p,research_q,previous,history,limit=6) if source_choice['legalReferences'] and
+        (requested!='GENERAL' or explicit_pdf_ids) else []
     # A named PDF page is an exact-source constraint, including mixed
     # Social Listening/PDF comparisons. Do not substitute another source.
     if explicit_pdf_ids and not exact_pdf_selection_complete(q,pdf_evidence,limit=6):
@@ -749,9 +764,13 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     from .assistant_response_profile import (
         choose_response_profile,evidence_for_profile,select_case_reference_pages,cross_module_formal_focus,PDF_GUIDANCE,SOCIAL_ANALYSIS,CASE_REVIEW,CROSS_MODULE_REVIEW,EXECUTIVE_REPORT)
     response_profile=choose_response_profile(q,previous,pdf_evidence,requested,history)
+    if not source_choice['smartRadar'] and source_choice['legalReferences'] and pdf_evidence:
+        response_profile=PDF_GUIDANCE
     from .assistant_evidence_relevance import exact_formal_source_ids,exact_formal_selection_complete
     explicit_formal_ids=exact_formal_source_ids(q)
     explicit_social_ids=exact_social_source_ids(q)
+    if (explicit_formal_ids or explicit_social_ids) and not source_choice['smartRadar']:
+        raise HTTPException(400,'Named saved intelligence is deselected. Enable SmartRadar/BAWASLU sources.')
     general=not explicit_formal_ids and not explicit_social_ids and not explicit_pdf_ids and (requested=='GENERAL' or (
         requested=='AUTO' and response_profile!=PDF_GUIDANCE and
         is_conceptual(q) and not pdf_evidence))
@@ -763,26 +782,26 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     matched_social=0
     population_snapshot=None
     population_complete=False
-    if not general and response_profile!=PDF_GUIDANCE:
+    if not general and response_profile!=PDF_GUIDANCE and source_choice['smartRadar']:
         accessible=list_intelligence(db,p)
         focus_pool=(cross_module_formal_focus(q,accessible)
                     if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) else accessible)
-        selected_formal=select_assistant_records(q,focus_pool,limit=10)
+        selected_formal=select_assistant_records(research_q,focus_pool,limit=10)
         try:
             from .campaigns import campaign_action
             if response_profile in (SOCIAL_ANALYSIS,EXECUTIVE_REPORT):
                 # Authorized query-wide counts are calculated separately
                 # from the bounded selection sent to the AI model.
                 from .assistant_social_population import collect_social_population, select_action_evidence
-                population=collect_social_population(db,p,q,campaign_action)
+                population=collect_social_population(db,p,research_q,campaign_action)
                 matched_social=population['matched_count']
                 population_snapshot=population['snapshot']
                 population_complete=population['complete']
-                chosen_social=select_action_evidence(population['matched_rows'],q,limit=20)
+                chosen_social=select_action_evidence(population['matched_rows'],research_q,limit=20)
             else:
                 result=campaign_action(db,p,'campaignIntelligenceInbox',{})
                 social_rows=result.get('findings') or []
-                chosen_social,matched_social=_social_select(social_rows,q,limit=20)
+                chosen_social,matched_social=_social_select(social_rows,research_q,limit=20)
         except PermissionError:
             raise HTTPException(403,'Social source access denied')
         except Exception:
@@ -794,10 +813,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # Keep saved PDF context available in chat, but do not append procedural
     # handbook pages to an ordinary candidate sentiment/social question.
     context_pdf=(pdf_evidence if response_profile!=SOCIAL_ANALYSIS or
-                 question_mentions_pdf(q) else [])
+                 question_mentions_pdf(q) or not source_choice['smartRadar'] else [])
     if response_profile==CASE_REVIEW:
         context_pdf=select_case_reference_pages(q,context_pdf)
-    if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) and not question_mentions_pdf(q):
+    if response_profile in (CROSS_MODULE_REVIEW,EXECUTIVE_REPORT) and not question_mentions_pdf(q) and source_choice['smartRadar']:
         context_pdf=[]
     if (explicit_social_ids and not exact_social_selection_complete(q,chosen_social,limit=20)) or (
             explicit_formal_ids and not exact_formal_selection_complete(q,selected_formal,limit=10)):

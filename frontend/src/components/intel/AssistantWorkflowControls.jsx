@@ -30,7 +30,8 @@ export default function AssistantWorkflowControls({
     {[
      ['smartRadar','SmartRadar / saved BAWASLU intelligence','Permission-scoped saved evidence; not a live crawl'],
      ['publicWeb','Public web / public social','Opt-in live public web lookup; may use AI credits, not a SocialCrawl crawl'],
-     ['legalReferences','Official legal/reference sources','Authorized PDF/reference library; authenticity and currentness need separate verification']
+     ['legalReferences','Official legal/reference sources','Authorized PDF/reference library; authenticity and currentness need separate verification'],
+     ['attachments','Conversation attachments','Private scanned documents and public HTTPS links, confined to this conversation']
     ].map(([key,label,note])=><label key={key} className="flex gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
      <input type="checkbox" className="mt-1" checked={Boolean(sourceSelection[key])} disabled={busy}
        onChange={e=>setSourceSelection(old=>({...old,[key]:e.target.checked}))}/>

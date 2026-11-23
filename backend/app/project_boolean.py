@@ -168,3 +168,72 @@ def encode_boolean_project_query(expression):
     parse_boolean(expression)
     return json.dumps({"schema":SCHEMA,"expression":expression.strip()},
                       ensure_ascii=False,separators=(",",":"))
+
+
+def discover_boolean_plan(expression,max_keywords=5):
+    """Conservative candidate retrieval for SocialCrawl Prism.
+
+    Each keyword is an independent provider search (OR). Every returned row
+    must still satisfy the original Boolean AST locally. This planner only
+    emits retrieval and server-side filters that cannot exclude a true local
+    match; it makes NO promises about search-engine recall, cost or ranking.
+    """
+    tree,_=parse_boolean(expression)
+
+    def alternatives(node):
+        kind=node[0]
+        if kind=='TERM':
+            return [(node[1],)]
+        if kind=='NOT':
+            return [()]
+        left,right=alternatives(node[1]),alternatives(node[2])
+        if kind=='OR':
+            return [tuple(dict.fromkeys(a+b)) for a in left for b in right]
+        return left+right
+
+    possible=[]
+    for option in alternatives(tree):
+        if option and len(option)<=max_keywords and option not in possible:
+            possible.append(option)
+    if not possible:
+        raise ValueError('No bounded Prism search plan; use fewer independent OR terms (maximum five)')
+
+    # Search terms within a positive AND arm are alternative *sufficient*
+    # retrieval paths. Longer terms tend to be more selective, but that is a
+    # heuristic, not a measured frequency or a guarantee.
+    def rank(option):
+        lengths=[len(x) for x in option]
+        return (sum(lengths)/len(lengths) - 0.15*(len(option)-1),-len(option))
+    keywords=list(max(possible,key=rank))
+
+    def necessities(node):
+        kind=node[0]
+        if kind=='TERM':
+            return {node[1]},set()
+        if kind=='NOT':
+            # Only a directly negated literal is safe to push down.
+            return (set(),{node[1][1]}) if node[1][0]=='TERM' else (set(),set())
+        left_plus,left_minus=necessities(node[1])
+        right_plus,right_minus=necessities(node[2])
+        if kind=='AND':
+            return left_plus|right_plus,left_minus|right_minus
+        return left_plus&right_plus,left_minus&right_minus
+
+    required,forbidden=necessities(tree)
+    # Exactly one mandatory literal can be pushed down into Prism 'contains'.
+    # Do not impose OR-group members individually (would create false negatives).
+    candidates=sorted((term for term in required if term not in keywords),
+                      key=lambda s:(-len(s),s))
+    contains=candidates[0] if candidates else ''
+    return {
+        'keywords':keywords,
+        'contains':contains,
+        'exclude_terms':sorted(forbidden),
+        'search_mode':'BOOLEAN',
+        'strategy':'SELECTIVE_POSITIVE_ARM_WITH_EXACT_LOCAL_BOOLEAN_GATE',
+        'post_filter_required':True,
+        'provider_boolean_native':False,
+        'warning':'Provider keywords are separate searches, not native AND/OR/NOT. '
+                  'Server-side text filters and local Boolean checks reduce unrelated '
+                  'results, but cannot guarantee coverage or nonzero matches.',
+    }

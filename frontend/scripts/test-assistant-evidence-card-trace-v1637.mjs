@@ -21,7 +21,7 @@ assert.ok(cards.includes('mergeSocialCards(records||[],featured||[])'));
 assert.ok(cards.includes('data-evidence-citation-kind'));
 assert.ok(cards.includes('canPrepareCaseworkFromCard(r,allowAssignments)'));
 assert.ok(page.includes('citationIds={m.grounding?.grounding_audit?.displayed_citation_ids||[]}'));
-assert.ok(page.includes("allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'}"));
+assert.ok(page.includes("allowAssignments={reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'}"));
 const version=readBackendVersion(read('../backend/app/main.py'));
 assert.ok(Number(version.replace('.',''))>=1637);
 assert.ok(hasDynamicBuildVersion(read('src/components/intel/Shell.jsx'),version));

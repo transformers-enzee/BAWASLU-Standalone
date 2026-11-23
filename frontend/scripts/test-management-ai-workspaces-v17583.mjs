@@ -64,7 +64,7 @@ for(const field of [
 for(const field of [
  'normalize_workflow_request(body)',
  "if not general and response_profile!=PDF_GUIDANCE and source_choice['smartRadar']:",
- "if source_choice['legalReferences'] and",
+ "(source_choice['legalReferences'] and",
  "not source_choice['smartRadar'] and not source_choice['legalReferences']",
  "source_consultation(source_choice,evidence,cited,meta.get('external_research_urls')",
  "structured_findings(visible_findings,evidence,cited)",

@@ -160,6 +160,13 @@ def delete_thread(thread_id: str, user: User = Depends(current_user), db: Sessio
                                            AssistantThread.user_id == user.id).first()
     if not row:
         raise HTTPException(404, "Conversation unavailable")
+    # Conversation-scoped evidence and feedback must be removed before the thread.
+    # Do not rely on implicit FK cascades: Supabase/PostgreSQL schemas may differ.
+    from .assistant_attachments import delete_thread_attachments
+    from .assistant_response_feedback import AssistantResponseFeedback
+    db.query(AssistantResponseFeedback).filter_by(
+        thread_id=row.id, user_id=user.id).delete(synchronize_session=False)
+    delete_thread_attachments(db, user.id, row.id)
     db.delete(row)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "conversation_evidence_deleted": True}

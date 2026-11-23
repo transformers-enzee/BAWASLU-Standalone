@@ -14,6 +14,9 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
  const findings=Array.isArray(message?.structured_findings)?message.structured_findings:[];
  const plan=Array.isArray(message?.decision_plan)?message.decision_plan:[];
  const isDraft=message?.draft_policy==='DRAFT_ONLY_STAFF_REVIEW_AND_SEND';
+ const attachmentCitationIds=Array.from(new Set(
+  [...String(message?.text||'').matchAll(/\[(ATT-[a-f0-9]{32}-S\d+)\]/g)].map(x=>x[1])
+ )).slice(0,12);
  if(!sources.length&&!findings.length&&!plan.length&&!isDraft)return null;
  return <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-xs" data-testid="assistant-structured-workflow">
   <section className="rounded-lg border border-slate-200 bg-white p-3 space-y-2" data-testid="assistant-consulted-sources">
@@ -31,6 +34,11 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
    </div>
    {window.__BAWASLU_DEMO_REPLICA__&&<p className="font-semibold text-amber-900">Simulated demo environment. Do not treat sample records as live or independently verified.</p>}
   </section>
+  {attachmentCitationIds.length>0&&<section className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" data-testid="assistant-attachment-inline-citation-links">
+   <strong>Open attachment references cited in the answer</strong>
+   <p className="mt-1 text-slate-600">Source sections are retrieved only after checking your current conversation permissions.</p>
+   <div className="mt-2 flex flex-wrap gap-2">{attachmentCitationIds.map(ref=><AssistantAttachmentCitation key={ref} sourceId={ref} threadId={threadId}/>)}</div>
+  </section>}
   {findings.length>0&&<section className="rounded-lg border border-slate-200 bg-white p-3" data-testid="assistant-source-linked-findings">
    <h3 className="mb-2 font-semibold text-[#19364c]">Structured, source-linked findings</h3>
    <div className="space-y-2">{findings.map((f,i)=><div key={i} className="rounded-md border border-slate-100 p-3">

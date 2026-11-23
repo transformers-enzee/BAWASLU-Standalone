@@ -725,6 +725,27 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         raise HTTPException(400,'Invalid analysis mode')
     if isinstance(body.get('sourceSelection'),dict) and requested=='AUTO':
         requested='DATA'  # No silent GPT-only substitution for explicit selected sources.
+    # An explicit public-web-only choice does not read private intelligence.
+    if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences']:
+        import re
+        if re.search(r'(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+)(?!\w)',q,re.I):
+            raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
+        from .openai_triage import openai_triage_model,OPENAI_DEFAULT_BASE_URL
+        from .assistant_orchestration import research_public_web
+        key=os.getenv('OPENAI_API_KEY','').strip()
+        base=(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip('/')
+        research=(research_public_web(q,key,openai_triage_model(),base) if key else None)
+        urls=research['urls'] if research else []
+        text=(research['summary']+'\n\n'+('Public source URLs: ' if language=='en' else 'URL sumber publik: ')+
+                ' · '.join(urls) if research else
+                ('No attributable live public web research was returned. No public facts are verified by this response.'
+                 if language=='en' else 'Pencarian web publik tidak menghasilkan sumber yang dapat dikutip. Tidak ada fakta publik yang diverifikasi.'))
+        return {'answer':text,'records':[],'provider':{'mode':'WEB_ONLY_RESEARCH' if research else 'NO_ATTRIBUTABLE_WEB_RESULTS'},
+                'answer_language':language,'workflow_mode':workflow_mode,
+                'source_consultation':source_consultation(source_choice,[],[],urls),
+                'structured_findings':[],'draft_policy':drafting_notice(workflow_mode),
+                'decision_plan':[],'grounding':{'selected_count':0,'supporting_count':0,'cited_count':0,
+                'scope':'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS','limited':True}}
     # The saved PDF library is part of normal conversation context.
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.
@@ -978,6 +999,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             reference_catalog=reference_catalog,response_profile=response_profile,
             duplicate_groups=duplicate_groups,
             population_snapshot=population_snapshot,
+            workflow_mode=workflow_mode,
+            allow_public_web=source_choice['publicWeb'] if workflow_config['explicit'] else None,
             officer_scope={'geographic_scope':p.get('geographic_scope'),
                            'province':p.get('province') or '',
                            'regency_city':p.get('regency_city') or ''})
@@ -1090,6 +1113,11 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         displayed_tags=[]
     return {'answer':text,'records':support[:4] if response_profile==PDF_GUIDANCE else support[:12],
         'provider':meta,'response_profile':response_profile,
+        'workflow_mode':workflow_mode,
+        'source_consultation':source_consultation(source_choice,evidence,cited,meta.get('external_research_urls') or []),
+        'structured_findings':structured_findings(visible_findings,evidence,cited),
+        'decision_plan':meta.get('decision_plan') or [],
+        'draft_policy':drafting_notice(workflow_mode),
         'evidence_snapshot':snapshot,
         'analytical_findings':None if response_profile in (PDF_GUIDANCE,EXECUTIVE_REPORT) else visible_findings,
         'featured_sources':featured,

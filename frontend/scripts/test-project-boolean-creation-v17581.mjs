@@ -24,7 +24,7 @@ assert.ok(campaigns.includes("keywords=decode_project_query(c.primary_keywords_j
 assert.ok(campaigns.includes("'retrieval_mode':'BOOLEAN_RETRIEVAL_SEEDS'"));
 assert.ok(scheduler.includes('evaluate_boolean(search["ast"],haystack)'));
 assert.ok(prism.includes("if boolean_mode and not match['matched']"));
-assert.ok(prism.includes("Prism Discover supports up to five Boolean retrieval terms"));
+assert.ok(prism.includes("discover_boolean_plan(search['boolean_query'])"));
 assert.ok(parser.includes('SCHEMA="BAWASLU_PROJECT_BOOLEAN_V1"'));
 assert.ok(parser.includes('Boolean monitoring requires a positive search term'));
 assert.ok(ui.includes('compileBooleanProjectSearch(form.boolean_query)'));

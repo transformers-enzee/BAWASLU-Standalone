@@ -7,7 +7,7 @@ export default function AssistantWorkflowControls({
  return <section className="intel-card space-y-4 p-4 md:p-5" data-testid="assistant-workflow-mode-selector">
   <div className="flex flex-wrap items-center justify-between gap-2">
    <div><h2 className="font-semibold text-[#19364c]">AI research and decision support</h2>
-    <p className="mt-1 text-xs text-slate-600">Web-first public research for timely BAWASLU decisions; add authorized SmartRadar evidence only when needed.</p>
+    <p className="mt-1 text-xs text-slate-600">Ask freely: research, compare laws and cases, develop options, draft or revise. The assistant adapts to your question and uses only authorized selected sources.</p>
    </div>
    <div className="flex flex-wrap gap-2 text-xs">
     <Link to="/management" className="intel-ghost">Management home</Link>
@@ -16,6 +16,7 @@ export default function AssistantWorkflowControls({
   </div>
   <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Assistant workflow modes">
    {[
+    ['AUTO','Auto · recommended','Research, strategy and drafting in one continuous conversation'],
     ['RESEARCH','Research & Analysis','Investigate issues, compare evidence, identify contradictions and unresolved questions'],
     ['STRATEGY_DRAFTING','Strategy & Drafting','Compare oversight responses, propose owner roles and review points, draft management communications']
    ].map(([mode,label,description])=><button key={mode} type="button" disabled={busy}
@@ -25,7 +26,7 @@ export default function AssistantWorkflowControls({
    </button>)}
   </div>
   <fieldset className="space-y-2" data-testid="assistant-authorized-source-selection">
-   <legend className="text-sm font-semibold text-[#19364c]">Select the sources the assistant may consult</legend>
+   <legend className="text-sm font-semibold text-[#19364c]">Research settings · authorized sources</legend>
    <div className="grid gap-2 md:grid-cols-3">
     {[
      ['smartRadar','SmartRadar / saved BAWASLU intelligence','Optional private local context for explicitly requested records or stored metrics; not a live crawl'],
@@ -41,7 +42,7 @@ export default function AssistantWorkflowControls({
    {!count&&<p role="alert" className="text-xs font-semibold text-red-700">Choose at least one authorized source category.</p>}
    {sourceSelection.publicWeb&&<p className="text-xs text-amber-900">Live public web lookup may incur OpenAI search costs. Only your question—not saved private source passages—is sent to web search. Do not include confidential information in a public-search question.</p>}
   </fieldset>
-  <p className="text-xs text-slate-600" data-testid="assistant-source-truthfulness-note">Public web is the default research source. Saved SmartRadar records are optional and never supplied to public web search. Only attributable retrieved links count as consulted; public coverage is not a population-wide sentiment survey. Legal findings and officer actions require authorization.</p>
+  <p className="text-xs text-slate-600" data-testid="assistant-source-truthfulness-note">Selected sources are an allowlist, not a promise that every source will be consulted. Saved SmartRadar records are never supplied to public web search. Only attributable retrieved links count as consulted; public coverage is not a population-wide sentiment survey. Legal findings and officer actions require authorization.</p>
   {workflowMode==='STRATEGY_DRAFTING'&&<p className="text-xs font-semibold text-amber-900">Drafts and proposed decisions are for authorized staff to review, revise and send. The assistant cannot issue a legal determination, assign an officer or send an email.</p>}
  </section>;
 }

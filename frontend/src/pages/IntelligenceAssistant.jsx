@@ -70,7 +70,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  const [threads,setThreads]=useState([]),[activeId,setActiveId]=useState(null);
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
  const [analysisMode,setAnalysisMode]=useState('DATA');
- const [workflowMode,setWorkflowMode]=useState('RESEARCH');
+ const [workflowMode,setWorkflowMode]=useState('AUTO');
  const [assistantMode,setAssistantMode]=useState(()=>workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL');
  const [perspective,setPerspective]=useState('AUTO');
  const [attachments,setAttachments]=useState([]);
@@ -85,7 +85,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   }
   return attachmentSessionRef.current;
  }
- const [sourceSelection,setSourceSelection]=useState({smartRadar:false,publicWeb:true,legalReferences:false,attachments:true});
+ const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:true,legalReferences:true,attachments:true});
  const hasSelectedSources=Object.values(sourceSelection).some(Boolean);
  const [responseDepth,setResponseDepth]=useState('EXECUTIVE');
  const [showHistory,setShowHistory]=useState(false);
@@ -198,7 +198,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   try{
    const response=await base44.functions.invoke('intelligenceAssistant',{
     question:q,previousQuestion:previous,analysisMode:'DATA',responseDepth,
-    workflowMode,sourceSelection,
+    workflowMode,sourceSelection,researchIntent:'AUTO',
     workspaceMode:workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL',assistantMode,perspective,
     conversationId:activeIdRef.current,
     attachmentIds:selectedIds,
@@ -242,8 +242,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  return <div className="max-w-[1300px] mx-auto space-y-5">
   <header className="rounded-2xl bg-gradient-to-r from-[#801b24] to-[#a52a2f] px-6 py-7 text-white">
    <div className="text-[11px] uppercase tracking-[.18em] font-bold text-[#f1d9d6]">ASISTEN KERJA INTELIJEN BAWASLU</div>
-   <h1 className="text-2xl md:text-3xl font-bold mt-2">{workspace==='MANAGEMENT'?'Management AI Assistant':'Operational AI Assistant'}</h1>
-   <p className="text-sm text-[#f5dfdb] mt-2">Dari temuan menuju pekerjaan nyata: analisis, prioritas pemeriksaan, penugasan, dan draf laporan dalam satu tempat.</p>
+   <h1 className="text-2xl md:text-3xl font-bold mt-2">SmartRadar AI Research & Productivity</h1>
+   <p className="text-sm text-[#f5dfdb] mt-2">Ask, research, analyse, develop strategies and draft documents in one conversation. Your workspace only controls authorized access.</p>
    <p className="text-xs text-[#f0d0cc] mt-2">Hanya sumber yang Anda berwenang akses. Tindak lanjut disimpan setelah konfirmasi dan tetap memerlukan pemeriksaan petugas.</p>
   </header>
   <UserWorkspacePulse/>
@@ -461,7 +461,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         </details></>}
       </div>
      </div>)}
-     {messages.some(m=>m.role==='assistant')&&workflowMode==='STRATEGY_DRAFTING'&&<div className="flex flex-wrap gap-2" data-testid="assistant-draft-revision-shortcuts">
+     {messages.some(m=>m.role==='assistant')&&<div className="flex flex-wrap gap-2" data-testid="assistant-draft-revision-shortcuts">
       <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Shorten the preceding source-grounded memo into a concise executive brief. Preserve evidence citations, uncertainty and review gates.')}>Shorten memo</button>
       <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Turn the preceding findings into a professional email draft for management review. Keep source caveats and do not invent recipient addresses or send the email.')}>Turn into email</button>
       <button type="button" className="intel-ghost text-xs" disabled={busy||historyBusy} onClick={()=>ask('Rewrite the preceding memo for an executive audience. Compare oversight options, specify proposed owner roles and review points, and keep caveats.')}>Executive audience</button>
@@ -473,7 +473,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     </section>
     {showJump&&<button type="button" onClick={()=>latestRef.current?.scrollIntoView({behavior:'smooth',block:'end'})} className="fixed bottom-24 right-7 z-40 flex items-center gap-2 rounded-full bg-[#801b24] px-4 py-2 text-sm font-semibold text-white shadow-lg" aria-label="Jump to latest chat message"><ArrowDown size={16}/> Jump to latest</button>}
     <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-[#53657b]">
-      <span>AI mode: {workflowMode==='RESEARCH'?'Research & Analysis':'Strategy & Drafting'} · selected-source grounded</span>
+      <span>Task style: {workflowMode==='AUTO'?'Auto (adapts to your question)':workflowMode==='RESEARCH'?'Research & Analysis':'Strategy & Drafting'} · source-grounded</span>
       <label className="flex items-center gap-2">Officer response mode
        <select aria-label="Intelligence response depth" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-sm" value={responseDepth} onChange={e=>setResponseDepth(e.target.value)} disabled={busy}>
         <option value="EXECUTIVE">Quick Brief · Ringkasan Cepat</option>

@@ -6,16 +6,43 @@ heuristic answer routing. Source labels say what was ACTUALLY consulted.
 """
 import re
 
-WORKFLOW_MODES=('RESEARCH','STRATEGY_DRAFTING')
+WORKFLOW_MODES=('AUTO','RESEARCH','STRATEGY_DRAFTING')
 SOURCE_KEYS=('smartRadar','publicWeb','legalReferences','attachments')
 CITE=re.compile(r'\[(INT-[A-Za-z0-9:_-]+|SOCIAL-[0-9]+|DOC-[0-9]+-P[0-9]+|ATT-[a-f0-9]{32}-S[0-9]+)\]')
+
+
+def infer_workflow(question,previous='',history=None):
+    """Choose an answer workflow from the request, not the user's workspace.
+
+    This is presentation guidance, not an authorization or legal classification.
+    Follow-up editing retains the draft workflow without trusting AI answers as facts.
+    """
+    current=str(question or '').strip().casefold()
+    draft=(r'\b(draft|write|compose|memo|email|letter|report|briefing|'
+           r'summarise|summarize|rewrite|revise|polish|translate|'
+           r'surat|nota dinas|ringkas|persingkat|terjemahkan|'
+           r'buatkan laporan|buatkan memo|balas email)\b')
+    strategy=(r'\b(strategy|strategic|options|recommend|recommendation|'
+              r'tactic|tactics|action plan|roadmap|solution|milestone|'
+              r'strategi|opsi|rekomendasi|solusi|taktik|rencana aksi|'
+              r'rencana tindak lanjut|langkah tindak lanjut)\b')
+    if re.search(draft,current,re.I) or re.search(strategy,current,re.I):
+        return 'STRATEGY_DRAFTING'
+    if re.search(r'\b(shorten|make it shorter|change the tone|turn it into|'
+                 r'ubah menjadi|jadikan|perpendek)\b',current,re.I):
+        recent=[str(x.get('text') or '') for x in (history or [])
+                if isinstance(x,dict) and x.get('role')=='user']
+        recent.append(str(previous or ''))
+        if any(re.search(draft+'|'+strategy,x,re.I) for x in recent[-5:]):
+            return 'STRATEGY_DRAFTING'
+    return 'RESEARCH'
 
 
 def normalize_workflow_request(body):
     if not isinstance(body,dict):
         raise ValueError('Assistant request must be an object')
-    workflow=str(body.get('workflowMode') or 'RESEARCH').upper()
-    if workflow not in WORKFLOW_MODES:
+    requested_workflow=str(body.get('workflowMode') or 'RESEARCH').upper()
+    if requested_workflow not in WORKFLOW_MODES:
         raise ValueError('Choose Research & Analysis or Strategy & Drafting')
     raw=body.get('sourceSelection')
     explicit=raw is not None
@@ -28,7 +55,10 @@ def normalize_workflow_request(body):
     sources={k:bool(raw.get(k,False)) for k in SOURCE_KEYS}
     if not any(sources.values()):
         raise ValueError('Select at least one authorized source category')
-    return {'workflow':workflow,'sources':sources,'explicit':explicit}
+    workflow=(infer_workflow(body.get('question'),body.get('previousQuestion'),
+             body.get('conversationContext')) if requested_workflow=='AUTO' else requested_workflow)
+    return {'workflow':workflow,'requested_workflow':requested_workflow,
+            'sources':sources,'explicit':explicit}
 
 
 def workflow_system_directive(workflow):
@@ -36,14 +66,14 @@ def workflow_system_directive(workflow):
         return (
             '\n\nMANAGEMENT STRATEGY & DRAFTING WORKFLOW (DRAFT ONLY): '
             'Begin with source-supported findings and state contrary evidence and unknowns. '
-            'Compare at least two defensible nonpartisan oversight options, including '
+            'When the user requests strategic options, compare at least two defensible nonpartisan oversight options, including '
             'a lower-intervention option when plausible. State concrete trade-offs, '
             'recommend a CONDITIONAL option, and explain its evidence gate. '
-            'Produce an actionable plan with reviewing owner ROLE (never invent '
+            'For an action plan or strategy request, propose a reviewing owner ROLE (never invent '
             'a named assignee), milestone or proposed review interval (label '
             'as a proposal, not an official deadline), expected deliverable, '
             'and explicit management review checkpoint. '
-            'When the user asks for an executive summary, memo or email, provide '
+            'For a requested summary, memo, report or email, lead with the deliverable itself; provide '
             'a polished DRAFT suitable for officer review, carrying citations '
             'and unresolved caveats rather than implying approval or delivery. '
             'Follow-up edits can shorten or reformat the preceding draft, but '

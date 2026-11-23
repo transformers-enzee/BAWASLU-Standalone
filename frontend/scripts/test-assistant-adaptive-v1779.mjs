@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+const page=read('../src/pages/IntelligenceAssistant.jsx');
+const controls=read('../src/components/intel/AssistantWorkflowControls.jsx');
+const server=read('../../backend/app/main.py');
+const workflows=read('../../backend/app/assistant_workflows.py');
+assert.ok(page.includes("useState('AUTO')"),'Adaptive task style is default');
+assert.ok(page.includes('smartRadar:true,publicWeb:true,legalReferences:true,attachments:true'),'Multi-source authorized default');
+assert.ok(page.includes("researchIntent:'AUTO'"),'Adaptive routing must reach backend');
+assert.ok(controls.includes("['AUTO','Auto · recommended'"),'Manual modes must remain optional');
+assert.ok(server.includes("body.get('researchIntent')=='AUTO'"),'Server adaptive routing missing');
+assert.ok(server.includes("def _public_research_answer(no_saved_match=False):"),'Web fallback helper missing');
+assert.ok(server.includes("return _public_research_answer(no_saved_match=not general)"),'No-evidence research fallback missing');
+assert.ok(workflows.includes('def infer_workflow('),'Server-side intent recognition missing');
+assert.ok(page.includes("messages.some(m=>m.role==='assistant')&&<div"),'Draft revision shortcuts should not require a mode');
+console.log('PASS v177.9 adaptive research, multi-source selection, public fallback and draft follow-ups');

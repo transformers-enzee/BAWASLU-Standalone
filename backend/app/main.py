@@ -157,7 +157,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','177.8'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','177.9'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -749,10 +749,15 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     requested=str(body.get('analysisMode') or 'AUTO').upper()
     if requested not in ('AUTO','DATA','GENERAL'):
         raise HTTPException(400,'Invalid analysis mode')
-    if isinstance(body.get('sourceSelection'),dict) and requested=='AUTO':
-        requested='DATA'  # No silent GPT-only substitution for explicit selected sources.
+    if body.get('researchIntent')=='AUTO' and isinstance(body.get('sourceSelection'),dict):
+        # Explicitly selected categories remain an allowlist; adaptive intent
+        # controls question routing without forcing saved-data-only answers.
+        requested='AUTO'
+    if (isinstance(body.get('sourceSelection'),dict) and requested=='AUTO'
+            and body.get('researchIntent')!='AUTO'):
+        requested='DATA'  # Keep historical explicit-source client behaviour.
     # An explicit public-web-only choice does not read private intelligence.
-    if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences'] and not attachment_evidence:
+    def _public_research_answer(no_saved_match=False):
         from .assistant_web_first import safe_public_question, web_brief_text
         if not safe_public_question(q):
             raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
@@ -788,7 +793,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                     'institutional_relevance':officer_decision.get('relevance') or 'UNRESOLVED',
                     'web_source_count':len(urls),
                     'retrieved_at':research.get('retrieved_at') if research else None,
-                    'scope':'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS','limited':not bool(research)}}
+                    'scope':('PUBLIC_RESEARCH_NO_MATCHING_SAVED_RECORDS' if no_saved_match else 'PUBLIC_WEB_ONLY_NO_PRIVATE_RECORDS'),'limited':not bool(research)}}
+    if workflow_config['explicit'] and source_choice['publicWeb'] and not source_choice['smartRadar'] and not source_choice['legalReferences'] and not attachment_evidence:
+        return _public_research_answer()
     # The saved PDF library is part of normal conversation context.
     # Retrieve automatically per turn, including references from the previous
     # user topic for follow-up questions. All passages are scope-filtered.
@@ -916,6 +923,10 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         context_pdf)
     evidence=(evidence+attachment_evidence)[:55]
     if response_profile==PDF_GUIDANCE and not evidence:
+        if source_choice['publicWeb'] and not explicit_pdf_ids:
+            from .assistant_web_first import safe_public_question
+            if safe_public_question(q):
+                return _public_research_answer(no_saved_match=True)
         message=('Tidak ditemukan halaman PDF terindeks yang relevan dan dapat '
                  'diakses untuk pertanyaan ini. Saya tidak dapat menyimpulkan '
                  'isi dokumen tanpa kutipan halaman yang tersedia.'
@@ -1002,6 +1013,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     # substitute GPT general context when the ID was not authorized/found.
     explicit_saved_id=bool(explicit_social_ids or explicit_formal_ids)
     if general or (not evidence and requested=='AUTO' and not explicit_saved_id):
+        # Web research remains available when the authorized saved corpus has
+        # no relevant record; never invent an internal citation or source match.
+        if source_choice['publicWeb']:
+            from .assistant_web_first import safe_public_question
+            if safe_public_question(q):
+                return _public_research_answer(no_saved_match=not general)
         try:
             text,provider=generate_general_openai_answer(q,previous,response_depth=response_depth)
         except AssistantProviderError as exc:

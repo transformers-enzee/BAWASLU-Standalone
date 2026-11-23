@@ -651,7 +651,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
     )
     # Preserve the existing endpoint contract for older clients. The upgraded
     # Intelligence Assistant UI explicitly supplies analysisMode to select v2.
-    if 'analysisMode' not in body:
+    if 'analysisMode' not in body and 'sourceSelection' not in body and 'workflowMode' not in body:
         from .intelligence_assistant import (
             select_assistant_records, assistant_evidence_record, assistant_record_view,
             assistant_query_semantics, generate_openai_assistant_answer,

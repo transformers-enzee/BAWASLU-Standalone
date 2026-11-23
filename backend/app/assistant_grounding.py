@@ -8,7 +8,7 @@ import re
 
 # A displayed bracket reference is meaningful only if that exact ID was
 # selected from the currently authorized evidence.
-_SOURCE_REF=re.compile(r"\[((?:INT|SOCIAL)-[A-Za-z0-9:_-]+|DOC-[0-9]+-P[0-9]+)\]")
+_SOURCE_REF=re.compile(r"\[((?:INT|SOCIAL)-[A-Za-z0-9:_-]+|DOC-[0-9]+-P[0-9]+|ATT-[a-f0-9]{32}-S[0-9]+)\]")
 _LEGAL_QUESTION=re.compile(
     r"\b(?:hukum|undang.undang|pidana|pasal|perbawaslu|peraturan|sanksi|"
     r"legal|laws?|electoral law|election law|statutory|statute|regulation|"

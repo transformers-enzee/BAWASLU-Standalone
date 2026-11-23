@@ -13,7 +13,7 @@ def test_explicit_source_categories_and_two_ai_modes():
     assert cfg['explicit'] is True
     assert cfg['sources']['publicWeb'] is False
     assert normalize_workflow_request({})['sources']=={
-        'smartRadar':True,'publicWeb':False,'legalReferences':True}
+        'smartRadar':True,'publicWeb':False,'legalReferences':True,'attachments':True}
     for invalid in (
         {'workflowMode':'EXECUTION'},
         {'sourceSelection':{'smartRadar':False,'publicWeb':False,'legalReferences':False}},
@@ -33,7 +33,8 @@ def test_consulted_labels_reflect_only_retrieved_sources():
     sources={'smartRadar':True,'publicWeb':True,'legalReferences':True}
     result=source_consultation(sources,records,
           ['SOCIAL-740','DOC-3-P2'],public_urls=['https://example.org/official'])
-    saved,web,pdf=result
+    saved,web,pdf,attachments=result
+    assert attachments['status']=='NOT_SELECTED'
     assert saved['status']=='CONSULTED' and saved['basis']=='FIXED_SAVED_SNAPSHOT'
     assert saved['selected_count']==2
     assert saved['cited_source_ids']==['SOCIAL-740']

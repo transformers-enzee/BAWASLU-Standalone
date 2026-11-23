@@ -209,12 +209,31 @@ def attach_link(body:LinkRequest,user:User=Depends(current_user),db:Session=Depe
     try:page=fetch_public_source(url)
     except Exception as exc:
         raise HTTPException(422,"Public page could not be retrieved; it may require login, be blocked or be unreachable. Upload a document or paste a short excerpt") from exc
+    if urlsplit(str(page.get("retrieved_url") or url)).scheme!="https":
+        raise HTTPException(422,"Source redirected away from HTTPS; only secure links are accepted")
     value=str(page.get("original_content") or "").strip()
     if not value:raise HTTPException(422,"Page has no readable public text. Upload or paste an excerpt")
     title=str(page.get("title") or parsed.hostname)[:260]
     return _store(db,user,p,thread,"LINK",title,url,
           [{"section":"Web page retrieved at "+datetime.now(timezone.utc).isoformat(),"text":value[:MAX_TEXT]}],
           hashlib.sha256(value.encode()).hexdigest())
+
+
+@router.get("/{thread_id}/{attachment_id}/content")
+def read_attachment_section(thread_id:str,attachment_id:str,section:int=1,
+                            user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Enforce current access at citation opening; never serve original bytes."""
+    p=_user_scope(db,user);thread=_thread(db,user,thread_id)
+    row=db.query(AssistantChatAttachment).filter_by(id=attachment_id,thread_id=thread.id,user_id=user.id).first()
+    if not row:raise HTTPException(404,"Attachment unavailable")
+    _check_scope(row,p)
+    sections=json.loads(row.sections_json or "[]")
+    if section<1 or section>len(sections):raise HTTPException(404,"Attachment section unavailable")
+    content=sections[section-1]
+    return {"id":row.id,"kind":row.kind,"title":row.title,"url":row.url if row.kind=="LINK" else "",
+            "retrieved_at":row.retrieved_at.isoformat() if row.retrieved_at else "",
+            "section":content["section"],"text":content["text"],
+            "verification":"USER_SUPPLIED_UNVERIFIED","shared_case_record":False}
 
 
 @router.delete("/{thread_id}/{attachment_id}")

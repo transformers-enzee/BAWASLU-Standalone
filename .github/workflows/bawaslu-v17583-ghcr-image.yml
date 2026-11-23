@@ -1,5 +1,5 @@
 name: BAWASLU v175.83 staging Docker image
-# Phase 1: Management/Operations workspace separation, executive brief, source-grounded AI modes and no-credit QA.
+# Phase 1 QA retry: preserve Command Centre masthead; ensure source consent and draft-only execution guards.
 # Publish only after the full frontend and backend Dockerfile test gates have passed.
 
 on:

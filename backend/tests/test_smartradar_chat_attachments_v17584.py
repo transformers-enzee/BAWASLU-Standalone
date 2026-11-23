@@ -86,7 +86,8 @@ def test_owner_scoped_attachments_opening_and_deletion_redaction(monkeypatch):
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
     eng=create_engine("sqlite://",connect_args={"check_same_thread":False},poolclass=StaticPool)
-    Base.metadata.create_all(eng)
+    Base.metadata.create_all(eng,tables=[
+        User.__table__,AssistantThread.__table__,AssistantChatAttachment.__table__])
     db=sessionmaker(bind=eng)()
     try:
         u=User(email="chat-qa@example.invalid",password_hash="test")

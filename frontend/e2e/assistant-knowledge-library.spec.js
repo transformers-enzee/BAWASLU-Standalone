@@ -30,6 +30,7 @@ test('knowledge library resolves authorized national document metadata',async({p
  });
  await login(page);
  await page.goto('/assistant');
+ await page.getByRole('checkbox',{name:/Official legal\/reference sources/i}).check();
  const library=page.getByRole('region',{name:'Assistant PDF knowledge library'});
  await expect(library).toContainText('1 PDF');
  await expect(library).not.toContainText('Loading PDF library');
@@ -45,6 +46,7 @@ test('knowledge library distinguishes unavailable metadata from a true zero PDF 
    body:JSON.stringify({detail:'Service temporarily unavailable'})}));
  await login(page);
  await page.goto('/assistant');
+ await page.getByRole('checkbox',{name:/Official legal\/reference sources/i}).check();
  const library=page.getByRole('region',{name:'Assistant PDF knowledge library'});
  await expect(library).toContainText('PDF unavailable');
  await expect(library).not.toContainText('0 PDF');

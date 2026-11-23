@@ -35,8 +35,12 @@ test('50-post assessment pilot preview reads campaign captures without paid prov
   await page.getByLabel(/^password$/i).fill(password);
   await page.getByRole('button',{name:/log in|masuk/i}).click();
   await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+  const detail=await request.post('/api/functions/socialListening',{
+    headers,data:{action:'getCampaign',id:campaign.id,data:{}}
+  });
+  expect(detail.ok(), 'Newly created project must be readable by its authorized officer').toBeTruthy();
   await page.goto('/social-listening/campaigns/'+campaign.id);
-  await expect(page.getByRole('navigation',{name:'Selected campaign sections'})).toBeVisible();
+  await expect(page.getByRole('navigation',{name:'Selected project sections'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Captured Posts'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Candidate Watchlist'})).toBeVisible();
   expect(paid).toEqual([]);

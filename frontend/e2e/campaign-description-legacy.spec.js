@@ -11,10 +11,10 @@ test('current inline campaign editor preserves descriptions without paid provide
  await page.getByRole('button',{name:/log in|masuk/i}).click();
  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
  await page.goto('/social-listening');
- await page.getByRole('button',{name:/create campaign/i}).click();
- const editor=page.getByRole('form',{name:'Campaign editor'});
+ await page.getByRole('button',{name:/create project/i}).click();
+ const editor=page.getByRole('form',{name:'Project editor'});
  const name='QA Description '+Date.now();
- await editor.getByLabel(/campaign name/i).fill(name);
+ await editor.getByLabel(/project name/i).fill(name);
  const kw=editor.getByRole('textbox',{name:'Main keywords'});
  await kw.fill('pemilu');await kw.press('Enter');
  await editor.getByRole('button',{name:'Save Draft'}).click();

@@ -21,7 +21,8 @@ test('release navigation exposes every completed administrator module',async({pa
   for(const name of modules){
     await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
   }
-  await expect(nav.getByRole('link',{name:/assistant/i})).toBeVisible();
+  await expect(nav.getByRole('link',{name:'Management AI Assistant'})).toBeVisible();
+  await expect(nav.getByRole('link',{name:/BAWASLU Intelligence Assistant/i})).toBeVisible();
   await expect(nav.getByRole('link',{name:/^Watchlist$/i})).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();

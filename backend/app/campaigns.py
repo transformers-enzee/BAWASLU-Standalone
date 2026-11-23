@@ -94,7 +94,11 @@ bawaslu pemilu https http www com tiktok video post""".split())
 def _safe_json_list(value):
     try:
         result=json.loads(value or '[]')
-        return result if isinstance(result,list) else []
+        if isinstance(result,list):
+            return result
+        if isinstance(result,dict) and result.get('schema')=='BAWASLU_PROJECT_BOOLEAN_V1':
+            return decode_project_query(value)['retrieval_terms']
+        return []
     except (ValueError,TypeError):return []
 
 def _cloud_terms(text,counts):

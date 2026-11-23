@@ -5,7 +5,7 @@ are enforced in the existing authenticated Social Listening API.
 """
 import json
 import math
-from .project_boolean import decode_project_query, encode_boolean_project_query
+from .project_boolean import decode_project_query, encode_boolean_project_query, discover_boolean_plan
 from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 from .models import MonitoringCampaign, CampaignRun, CampaignEvidence
@@ -194,12 +194,16 @@ def _normalize(db,p,data,existing=None):
 
 def _view(db,c):
     search=decode_project_query(c.primary_keywords_json)
+    prism_plan=discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None
     counts=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
     evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
         CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').count()
     return {'id':str(c.id),'name':c.name,'description':c.description,
        'search_mode':search['search_mode'],'boolean_query':search['boolean_query'],
        'retrieval_terms':search['retrieval_terms'],
+       'prism_provider_keywords':prism_plan['keywords'] if prism_plan else [],
+       'prism_provider_contains':prism_plan['contains'] if prism_plan else '',
+       'prism_provider_excludes':prism_plan['exclude_terms'] if prism_plan else [],
        'primary_keywords':search['retrieval_terms'] if search['search_mode']=='KEYWORDS' else [],
        'secondary_keywords':json.loads(c.secondary_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],
        'excluded_keywords':json.loads(c.excluded_keywords_json or '[]') if search['search_mode']=='KEYWORDS' else [],

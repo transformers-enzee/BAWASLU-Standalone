@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {compileBooleanPostSearch, BooleanSearchSyntaxError} from '../src/lib/booleanPostSearch.mjs';
+import {compileBooleanPostSearch, compileBooleanProjectSearch, BooleanSearchSyntaxError} from '../src/lib/booleanPostSearch.mjs';
 
 const hit=(expression,text)=>compileBooleanPostSearch(expression)({text_content:text});
 assert.equal(hit('Gibran','Gibran terkait ijazah'),true);
@@ -31,6 +31,12 @@ for(const invalid of ['','Gibran AND','OR Gibran','Gibran Prabowo','(Gibran OR P
 assert.throws(()=>compileBooleanPostSearch('a'.repeat(513)),BooleanSearchSyntaxError);
 assert.throws(()=>compileBooleanPostSearch('(' .repeat(15)+'Gibran'+')'.repeat(15)),BooleanSearchSyntaxError);
 assert.throws(()=>compileBooleanPostSearch(Array.from({length:70},()=> 'abc').join(' AND ')),BooleanSearchSyntaxError);
+assert.deepEqual(compileBooleanProjectSearch('Gibran AND (ijazah OR pendidikan)').retrievalTerms,['gibran']);
+assert.deepEqual(compileBooleanProjectSearch('Gibran OR Prabowo').retrievalTerms,['gibran','prabowo']);
+assert.throws(()=>compileBooleanProjectSearch('NOT Gibran'),BooleanSearchSyntaxError);
+assert.throws(()=>compileBooleanProjectSearch('Gibran OR NOT hoaks'),BooleanSearchSyntaxError);
+assert.throws(()=>compileBooleanProjectSearch('Gibran AND (NOT hoaks OR NOT fitnah)'),BooleanSearchSyntaxError);
+assert.equal(compileBooleanProjectSearch('Gibran NOT hoaks')({text_content:'Gibran terkait ijazah'}),true);
 const component=readFileSync(new URL('../src/components/intel/CapturedPostList.jsx',import.meta.url),'utf8');
 assert.ok(component.includes('social-listening-search-modes'));
 assert.ok(component.includes('social-listening-boolean-query'));

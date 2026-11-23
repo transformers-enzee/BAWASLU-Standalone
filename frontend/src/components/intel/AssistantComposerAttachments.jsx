@@ -28,7 +28,13 @@ export default function AssistantComposerAttachments({
   let alive=true;
   setItems([]);
   if(threadId)call('/'+encodeURIComponent(threadId)).then(res=>{
-   if(alive)setItems(res.attachments||[]);
+   if(alive)setItems(current=>{
+    // An upload may finish while this initial GET is in flight. Never let an
+    // older empty list overwrite a successfully processed local attachment.
+    const sameThread=current.filter(item=>item.thread_id===threadId);
+    const restored=res.attachments||[];
+    return [...restored,...sameThread.filter(item=>!restored.some(row=>row.id===item.id))];
+   });
   }).catch(err=>{if(alive)setFailure(err.message)});
   return()=>{alive=false};
  },[threadId,setItems]);

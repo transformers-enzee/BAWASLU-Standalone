@@ -4,9 +4,10 @@ Pure helpers: they never query the database or send text to a third party.
 """
 import re
 from urllib.parse import urlsplit
+from ipaddress import ip_address
 
 PRIVATE_REFERENCE = re.compile(
-    r"(?<!\\w)(?:SOCIAL-\\d+|INT-[A-Za-z0-9:_-]+|DOC-\\d+-P\\d+|ATT-[a-f0-9]{32}-S\\d+)(?!\\w)",
+    r"(?<!\w)(?:SOCIAL-\d+|INT-[A-Za-z0-9:_-]+|DOC-\d+-P\d+|ATT-[a-f0-9]{32}-S\d+)(?!\w)",
     re.IGNORECASE,
 )
 
@@ -22,9 +23,19 @@ def safe_web_urls(urls):
     for value in urls or []:
         if not isinstance(value,str) or len(value)>1900:
             continue
-        parsed=urlsplit(value)
-        if (parsed.scheme!='https' or not parsed.hostname or parsed.username or
-                parsed.password or parsed.hostname.lower() in ('localhost','127.0.0.1')):
+        try:
+            parsed=urlsplit(value)
+            hostname=(parsed.hostname or '').lower().rstrip('.')
+            if (parsed.scheme!='https' or not hostname or parsed.username or parsed.password or
+                    hostname=='localhost' or hostname.endswith('.localhost')):
+                continue
+            try:
+                address=ip_address(hostname)
+            except ValueError:
+                address=None
+            if address is not None and not address.is_global:
+                continue
+        except ValueError:
             continue
         if value not in out:out.append(value)
     return out[:6]

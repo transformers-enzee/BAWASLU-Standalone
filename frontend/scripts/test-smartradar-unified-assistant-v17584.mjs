@@ -36,9 +36,9 @@ has(controls,["['attachments','Conversation attachments'","'smartRadar','SmartRa
 has(composer,[
  'data-testid="smart-radar-attachment-composer"',
  'Upload document','Add link','accept=".pdf,.docx,.txt"','multiple',
- 'FormData','thread_id','/upload','/link','/session',
+ 'FormData','thread_id','/upload','/link',
  'Remove ','Ready · {item.sections} sections',
- 'Malware','Attachment processing',
+ 'malware-scanned','Attachment processing',
 ]);
 has(citation,[
  'Open authorized attachment citation','/api/assistant-attachments/',
@@ -71,7 +71,7 @@ has(attachments,[
  'def selected_attachment_evidence(', 'scope_json','USER_SUPPLIED_UNVERIFIED',
 ]);
 has(modes,['def mode_contract(', 'def mode_directive(', 'view_intelligence',
- 'National Leadership','management','OPERATIONAL']);
+ 'National Leadership','MANAGEMENT','OPERATIONAL']);
 has(history,['"attachment_ids":','"attached_source_ids":',
  '"assistant_mode":','"perspective":']);
 has(grounding,['ATT-[a-f0-9]{32}-S[0-9]+']);

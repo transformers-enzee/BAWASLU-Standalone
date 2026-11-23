@@ -1,4 +1,5 @@
 name: BAWASLU v175.80 staging Docker image
+# Builds from the corrected, 43-check Boolean parser and dual-mode UI staging revision.
 
 on:
   push:

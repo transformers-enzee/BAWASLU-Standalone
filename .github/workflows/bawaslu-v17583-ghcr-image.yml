@@ -1,5 +1,5 @@
 name: BAWASLU v175.83 staging Docker image
-# Phase 1 QA retry: preserve Command Centre masthead; ensure source consent and draft-only execution guards.
+# Phase 1 QA retry 2: preserve familiar UI guards and formally block assignments from Strategy & Drafting.
 # Publish only after the full frontend and backend Dockerfile test gates have passed.
 
 on:

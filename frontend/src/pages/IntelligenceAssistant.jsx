@@ -5,6 +5,9 @@ import { base44 } from '@/api/base44Client';
 import AssistantRecords from '@/components/intel/AssistantRecords';
 import AssistantWorkflowEvidence from '@/components/intel/AssistantWorkflowEvidence';
 import AssistantWorkflowControls from '@/components/intel/AssistantWorkflowControls';
+import AssistantModeControls from '@/components/intel/AssistantModeControls';
+import AssistantComposerAttachments,{attachmentRequest} from '@/components/intel/AssistantComposerAttachments';
+import AssistantResponseFeedback from '@/components/intel/AssistantResponseFeedback';
 import AssistantInsights from '@/components/intel/AssistantInsights';
 import AssistantDetectedTags from '@/components/intel/AssistantDetectedTags';
 import AssistantKnowledgeLibrary from '@/components/intel/AssistantKnowledgeLibrary';
@@ -59,7 +62,21 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  const [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState('');
  const [analysisMode,setAnalysisMode]=useState('DATA');
  const [workflowMode,setWorkflowMode]=useState('RESEARCH');
- const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:false,legalReferences:true});
+ const [assistantMode,setAssistantMode]=useState(()=>workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL');
+ const [perspective,setPerspective]=useState('AUTO');
+ const [attachments,setAttachments]=useState([]);
+ const [attachmentBusy,setAttachmentBusy]=useState(false);
+ const attachmentSessionRef=useRef(null);
+ async function ensureAttachmentThread(){
+  if(activeIdRef.current)return activeIdRef.current;
+  if(!attachmentSessionRef.current){
+   attachmentSessionRef.current=attachmentRequest('/session','POST').then(({thread_id})=>{
+    setActive(thread_id);return thread_id;
+   }).finally(()=>{attachmentSessionRef.current=null});
+  }
+  return attachmentSessionRef.current;
+ }
+ const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:false,legalReferences:true,attachments:true});
  const hasSelectedSources=Object.values(sourceSelection).some(Boolean);
  const [responseDepth,setResponseDepth]=useState('DEEP');
  const [showHistory,setShowHistory]=useState(false);
@@ -79,7 +96,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  },[]);
  function newConversation(){
   if(busy||historyBusy)return;
-  setActive(null);setMessages([]);setReviewableIndexes(new Set());setScoringPacket(null);setQuestion('');setError('');setHistoryError('');
+  setActive(null);setMessages([]);setAttachments([]);setReviewableIndexes(new Set());setScoringPacket(null);setQuestion('');setError('');setHistoryError('');
+  setAssistantMode(workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL');setPerspective('AUTO');
  }
  async function openThread(id){
   if(busy||historyBusy)return;
@@ -87,6 +105,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   try{
    const thread=await historyRequest('/'+encodeURIComponent(id));
    setActive(thread.id);setMessages(thread.messages||[]);setReviewableIndexes(new Set());setScoringPacket(null);setQuestion('');
+   const last=[...(thread.messages||[])].reverse().find(m=>m?.role==='assistant');
+   if(last?.assistant_mode)setAssistantMode(last.assistant_mode);
+   if(last?.perspective)setPerspective(last.perspective);
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
@@ -96,7 +117,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   try{
    await historyRequest('/'+encodeURIComponent(id),'DELETE');
    setThreads(old=>old.filter(x=>x.id!==id));
-   if(activeIdRef.current===id){setActive(null);setMessages([]);setReviewableIndexes(new Set())}
+   if(activeIdRef.current===id){setActive(null);setMessages([]);setAttachments([]);setReviewableIndexes(new Set())}
   }catch(e){setHistoryError(e.message)}
   finally{setHistoryBusy(false)}
  }
@@ -143,16 +164,20 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
  }
  async function ask(text){
   const q=String(text||'').trim();
-  if(!q||busy||historyBusy)return;
+  if(!q||busy||historyBusy||attachmentBusy)return;
   if(!hasSelectedSources){setError('Select at least one authorized source category before asking.');return}
   setBusy(true);setError('');setQuestion('');
   const previous=messages.filter(m=>m.role==='user').at(-1)?.text||'';
-  const outgoing=[...messages,{role:'user',text:q}];
+  const selectedIds=sourceSelection.attachments?attachments.map(a=>a.id):[];
+  const outgoing=[...messages,{role:'user',text:q,attachment_ids:selectedIds}];
   setMessages(outgoing);
   try{
    const response=await base44.functions.invoke('intelligenceAssistant',{
     question:q,previousQuestion:previous,analysisMode:'DATA',responseDepth,
     workflowMode,sourceSelection,
+    workspaceMode:workspace,assistantMode,perspective,
+    conversationId:activeIdRef.current,
+    attachmentIds:selectedIds,
     conversationContext:messages.slice(-16).map(m=>({role:m.role,text:String(m.text||'').slice(0,2200)}))
    });
    const answer={
@@ -166,6 +191,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     structured_findings:response.data.structured_findings||[],
     decision_plan:response.data.decision_plan||[],
     draft_policy:response.data.draft_policy||'',
+    assistant_mode:response.data.assistant_mode||assistantMode,
+    perspective:response.data.perspective||perspective,
+    attached_source_ids:response.data.attached_source_ids||[],
     answer_language:response.data.answer_language,detected_tags:response.data.detected_tags||[],presentation_labels:response.data.presentation_labels||{}
    };
    const full=[...outgoing,answer];
@@ -194,6 +222,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
    <p className="text-xs text-[#f0d0cc] mt-2">Hanya sumber yang Anda berwenang akses. Tindak lanjut disimpan setelah konfirmasi dan tetap memerlukan pemeriksaan petugas.</p>
   </header>
   <UserWorkspacePulse/>
+  <AssistantModeControls workspace={workspace} access={access} busy={busy}
+   mode={assistantMode} setMode={setAssistantMode}
+   perspective={perspective} setPerspective={setPerspective}/>
   <AssistantWorkflowControls workspace={workspace} workflowMode={workflowMode} setWorkflowMode={setWorkflowMode}
    sourceSelection={sourceSelection} setSourceSelection={setSourceSelection} busy={busy}/>
   <AssistantKnowledgeLibrary/>
@@ -252,7 +283,9 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
         {i===messages.length-1&&reviewableIndexes.has(i)&&m.response_profile==='ACTION_REQUEST'&&m.workflow_mode!=='STRATEGY_DRAFTING'&&
          <AssistantActionDesk message={m} question={messages[i-1]?.text||''} language={m.answer_language||'id'} labels={m.presentation_labels}/>}
         <TranslatedAssistantAnswer text={m.text} language={m.answer_language||''} labels={m.presentation_labels}/>
-        <AssistantWorkflowEvidence message={m} fresh={reviewableIndexes.has(i)}/>
+        <AssistantWorkflowEvidence message={m} fresh={reviewableIndexes.has(i)} threadId={activeId}/>
+        <AssistantResponseFeedback threadId={activeId} messageIndex={i}
+         disabled={!reviewableIndexes.has(i)||busy||historyBusy}/>
         {m.grounding?.sample_not_exhaustive&&<p data-testid="assistant-sample-scope-disclosure"
           className="mt-3 rounded-lg border border-[#dce5ec] bg-white px-3 py-2 text-xs leading-relaxed text-[#52657a]">
           {(m.answer_language||'id')==='id'
@@ -417,10 +450,15 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
       </label>
       <span aria-label="Assistant answer source" className="rounded-lg border border-[#dce5e7] bg-white px-3 py-2 text-xs font-semibold">Authorized selected sources</span>
      </div>
-    <form onSubmit={e=>{e.preventDefault();ask(question)}} className="intel-card p-3 flex gap-2">
+    <div className="intel-card space-y-2 p-3">
+     <AssistantComposerAttachments threadId={activeId} ensureThread={ensureAttachmentThread}
+       items={attachments} setItems={setAttachments} disabled={busy||historyBusy}
+       selected={sourceSelection.attachments} onProcessingChange={setAttachmentBusy}/>
+     <form onSubmit={e=>{e.preventDefault();ask(question)}} className="flex gap-2">
      <input aria-label={t('assistant_question_aria')} className="intel-input flex-1" maxLength={1000} placeholder={t('assistant_placeholder')} value={question} onChange={e=>setQuestion(e.target.value)}/>
-     <button type="submit" className="intel-button" disabled={busy||historyBusy||!question.trim()||!hasSelectedSources}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
-    </form>
+     <button type="submit" className="intel-button" disabled={busy||historyBusy||attachmentBusy||!question.trim()||!hasSelectedSources}><Send size={16}/><span className="hidden sm:inline">{t('send')}</span></button>
+     </form>
+    </div>
     <p className="text-xs text-[#8192a3]">Pilih format ringkas, rencana tindak lanjut, atau kajian hukum. PDF hanya rujukan pendukung. AI menyiapkan rekomendasi; petugas memeriksa dan mengesahkan setiap tindakan resmi.</p>
    </div>
   </div>

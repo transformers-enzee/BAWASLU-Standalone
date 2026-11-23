@@ -39,7 +39,7 @@ export default function ManagementHome(){
   </header>
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div><h2 className="text-xl font-bold text-[#19364c]">Executive brief</h2><p className="text-xs text-slate-600">Permission-scoped casework metrics; report status is not source verification</p></div>
-   <label className="text-sm text-slate-700">Reporting period <select className="ml-2 rounded-md border border-slate-300 bg-white px-3 py-2" value={period} onChange={e=>setPeriod(e.target.value)}><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option></select></label>
+   <label className="text-sm text-slate-700">Reporting period <select className="ml-2 rounded-md border border-slate-300 bg-white px-3 py-2" value={period} onChange={e=>setPeriod(e.target.value)}><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="daily">Daily</option></select></label>
   </div>
   {loading&&<p role="status" className="rounded-lg border border-slate-200 bg-white p-5 text-sm">Loading authorized management brief…</p>}
   {error&&<div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm"><strong>Management data unavailable.</strong> {error} No metrics have been assumed.</div>}

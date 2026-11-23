@@ -35,7 +35,7 @@ has(page,[
 // The Operations route retains its historical name, but API requests must
 // use the canonical analytical mode. Never regress to the rejected OPERATIONS payload.
 assert.ok(page.includes("workspaceMode:workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL'"));
-assert.ok(mode.includes('if workspace=="OPERATIONS":workspace="OPERATIONAL"'));
+assert.ok(modes.includes('if workspace=="OPERATIONS":workspace="OPERATIONAL"'), 'Backend must normalize the legacy Operations workspace name');
 assert.ok(!page.includes('workspaceMode:workspace,assistantMode,perspective'));
 has(controls,["['attachments','Conversation attachments'","'smartRadar','SmartRadar"]);
 has(composer,[

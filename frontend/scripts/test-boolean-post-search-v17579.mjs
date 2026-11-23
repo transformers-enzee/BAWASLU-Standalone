@@ -24,7 +24,7 @@ assert.equal(hit('pemilu','PEMILU Nasional'),true);
 assert.equal(hit('pendidikan AND (Gibran OR KPU)','Pendidikan KPU'),true);
 assert.equal(hit('Gibran',null),false);
 assert.equal(hit('Gibran AND "tanda \\"petik\\""','Gibran tanda "petik"'),true);
-assert.equal(hit('hoaks OR "kode asing";DROP','kode asing;DROP'),true);
+assert.equal(hit('hoaks OR "kode asing;DROP"','kode asing;DROP'),true);
 for(const invalid of ['','Gibran AND','OR Gibran','Gibran Prabowo','(Gibran OR Prabowo','Gibran AND ()','"Gibran','Gibran )','AND','Gibran OR OR KPU']){
  assert.throws(()=>compileBooleanPostSearch(invalid),BooleanSearchSyntaxError,invalid);
 }

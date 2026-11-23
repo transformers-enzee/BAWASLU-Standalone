@@ -63,6 +63,12 @@ def clean_messages(messages):
         # in a bounded display snapshot. Source records must be re-opened in Inbox.
         clean.append({
             "role": item["role"], "text": text,
+            "attachment_ids":[str(x) for x in (item.get("attachment_ids") or [])[:8]
+                 if isinstance(x,str) and len(x)==36] if isinstance(item.get("attachment_ids"),list) else [],
+            "attached_source_ids":[str(x)[:100] for x in (item.get("attached_source_ids") or [])[:45]
+                 if isinstance(x,str) and x.startswith("ATT-")] if isinstance(item.get("attached_source_ids"),list) else [],
+            "assistant_mode":item.get("assistant_mode") if item.get("assistant_mode") in ("MANAGEMENT","OPERATIONAL") else "",
+            "perspective":item.get("perspective") if item.get("perspective") in ("AUTO","EXECUTIVE","OPERATIONAL","RESEARCH") else "",
             "records": [r for r in records[:12] if isinstance(r, dict)],
             "provider": item.get("provider") if isinstance(item.get("provider"), dict) else None,
             "grounding": item.get("grounding") if isinstance(item.get("grounding"), dict) else None,
@@ -85,7 +91,7 @@ def clean_messages(messages):
                 "warning":str(x.get("warning") or "")[:220],
                 "cited_source_ids":[str(y)[:50] for y in (x.get("cited_source_ids") or [])[:12] if isinstance(y,str)] if isinstance(x.get("cited_source_ids"),list) else [],
                 "urls":[str(y)[:900] for y in (x.get("urls") or [])[:6] if isinstance(y,str) and y.startswith("https://")] if isinstance(x.get("urls"),list) else [],
-            } for x in (item.get("source_consultation") or [])[:3] if isinstance(x,dict)] if isinstance(item.get("source_consultation"),list) else [],
+            } for x in (item.get("source_consultation") or [])[:4] if isinstance(x,dict)] if isinstance(item.get("source_consultation"),list) else [],
             "structured_findings":[{
                 "text":str(x.get("text") or "")[:900],
                 "source_ids":[str(y)[:50] for y in (x.get("source_ids") or [])[:4] if isinstance(y,str)] if isinstance(x.get("source_ids"),list) else [],

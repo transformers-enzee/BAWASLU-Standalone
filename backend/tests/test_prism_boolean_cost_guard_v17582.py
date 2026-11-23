@@ -77,6 +77,12 @@ def test_provider_body_uses_supported_fields_and_tighter_default_cap():
     assert params['platforms']==['instagram','tiktok','news']
     assert params['limit']==100
     assert len(signature)==64
+    c.platforms_json='["tiktok","instagram","youtube","facebook","twitter-ai-search","threads","online_news"]'
+    focused,focused_signature=prism_discover.body_for(DB(),c)
+    assert focused['platforms']==['instagram','tiktok','threads']
+    all_sources,all_signature=prism_discover.body_for(DB(),c,20,'ALL')
+    assert len(all_sources['platforms'])==7
+    assert focused_signature!=all_signature
     with pytest.raises(ValueError):
         prism_discover.body_for(DB(),c,250)
 

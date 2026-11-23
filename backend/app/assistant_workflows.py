@@ -127,3 +127,27 @@ def structured_findings(findings,evidence,cited,limit=5):
 def drafting_notice(workflow):
     return ('DRAFT_ONLY_STAFF_REVIEW_AND_SEND'
             if workflow=='STRATEGY_DRAFTING' else 'ANALYSIS_ONLY_NO_AUTOMATED_ACTION')
+
+
+_REVISE=re.compile(
+    r'\b(shorten|shorter|condense|rewrite|rephrase|polish|convert|turn (?:it|this) into|'
+    r'make (?:it|this) an? email|change (?:the )?audience|'
+    r'ringkas|persingkat|perpendek|ubah menjadi|jadikan|'
+    r'buat versi|revisi|sunting|format ulang)\b',re.I)
+
+
+def retrieval_question_for_revision(question,previous='',history=None):
+    """Follow-up drafting retains the latest substantive USER topic only.
+
+    Earlier assistant text is never used as evidence. This determines which
+    currently authorized records must be retrieved again for each turn.
+    """
+    current=str(question or '').strip()
+    if not _REVISE.search(current):
+        return current
+    earlier=[str(m.get('text') or '').strip() for m in (history or [])
+             if isinstance(m,dict) and m.get('role')=='user' and str(m.get('text') or '').strip()]
+    if previous and str(previous).strip() not in earlier:
+        earlier.append(str(previous).strip())
+    topic=next((q for q in reversed(earlier) if not _REVISE.search(q)),None)
+    return topic[:1000] if topic else current

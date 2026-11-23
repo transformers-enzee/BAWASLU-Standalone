@@ -126,7 +126,7 @@ export default function AssessmentOperationsPanel({campaignId}){
         <p role="status" className="text-amber-900">Usage integrity detail unavailable; refresh before interpreting provider lineage.</p>:
         <>
          <p>Status: {String(integrity.status).replaceAll('_',' ')} · Recorded usage rows: {fmt(integrity.usage_rows)}</p>
-         <p>Project ID mismatches: {fmt(integrity.usage_flags?.campaign_id_mismatch)} · Usage not reported: {fmt(integrity.usage_flags?.provider_usage_not_reported)}</p>
+         <p>Campaign mismatches: {fmt(integrity.usage_flags?.campaign_id_mismatch)} · Usage not reported: {fmt(integrity.usage_flags?.provider_usage_not_reported)}</p>
          <p>Negative token counts: {fmt(integrity.usage_flags?.negative_token_counts)} · Missing provider models: {fmt(integrity.usage_flags?.provider_model_missing)}</p>
          <p>Non-completed jobs with classification usage: {fmt(integrity.lifecycle_flags?.noncompleted_jobs_with_classification_usage)} · Assessments with duplicate classification usage: {fmt(integrity.lifecycle_flags?.assessments_with_duplicate_classification_usage)}</p>
          {integrity.status==='REVIEW_REQUIRED'&&<p role="status" className="font-medium text-amber-900">Provider history review required; do not automatically replay requests.</p>}

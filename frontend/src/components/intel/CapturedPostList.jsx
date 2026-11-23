@@ -91,7 +91,7 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
  },[posts,from,to,keyword,searchMode,booleanSearch,platform,sentiment,sort]);
  return <section data-i18n-exempt aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
   <div className="mb-4 space-y-2" data-testid="social-listening-search-modes">
-   {showModeTabs&&   <div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
+   {showModeTabs&&<div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
         <button type="button" aria-pressed={searchMode==='standard'} onClick={()=>setSearchMode('standard')} className={searchMode==='standard'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Standard search','Pencarian standar')}</button>
         <button type="button" aria-pressed={searchMode==='boolean'} onClick={()=>setSearchMode('boolean')} className={searchMode==='boolean'?'intel-button text-xs':'intel-ghost text-xs'}>{t('Boolean search','Pencarian Boolean')}</button>
        </div>}

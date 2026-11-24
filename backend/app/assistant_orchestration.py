@@ -398,7 +398,7 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
            if plan["freshness_check_requested"] else "")+
         "Prioritize actually published primary official notices over secondary snippets; "
         "compare publication dates and do not treat a promised future event as completed. "
-        "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, 
+        "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, "
         "kpu.go.id, jdih.kpu.go.id, dkpp.go.id, mkri.id, mahkamahagung.go.id, "
         "mpr.go.id, peraturan.bpk.go.id and official government publications when relevant. "
         "Treat news and social posts as reports, NOT verified legal findings; distinguish allegations, "

@@ -35,6 +35,8 @@ def _sources(turn):
     for row in (table.get("rows") or []):
         for cell in row if isinstance(row,list) else []:
             used.update(CITE.findall(str(cell or "")))
+    for item in (answer.get("open_questions") or []):
+        used.update(CITE.findall(str(item or "")))
     for source in turn.get("sources",[]):
         if source.get("id") in used or str(source.get("type") or "").startswith("ATTACHMENT_"):
             yield source
@@ -81,12 +83,13 @@ def _font():
     return "Helvetica"
 
 
-def create_pdf(turn,edited=""):
+def create_pdf(turn,edited="",include_research_trail=False):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle
+    from reportlab.platypus import (SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,
+                                    PageBreak,KeepTogether)
 
     output=io.BytesIO()
     doc=SimpleDocTemplate(output,pagesize=A4,leftMargin=18*mm,rightMargin=18*mm,
@@ -202,13 +205,72 @@ def create_pdf(turn,edited=""):
         label=("<link href='"+html.escape(url,quote=True)+"' color='#135F8B'>"+
                 title+"</link>") if url.startswith("https://") else title
         story.append(Paragraph(label+" — "+status+" — "+date,styles["small"]))
+    # The main answer ends with findings, caveats and the clickable source list.
+    # Audit detail is OPT-IN so a few trail lines never form an orphan final page.
     trace=turn.get("research_trace") or {}
-    if trace.get("coverage"):
-        story.append(Paragraph("Research Trail — coverage summary",styles["h2"]))
-        for item in trace["coverage"][:12]:
-            desc=str(item.get("name") or "")+" — "+str(item.get("status") or "")
-            if item.get("reason"):desc+=": "+str(item["reason"])[:240]
-            story.append(Paragraph(html.escape(desc),styles["small"]))
+    if include_research_trail and (trace.get("coverage") or trace.get("attempts")):
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix — Research Trail",styles["h1"]))
+        story.append(Paragraph(
+            "Supporting detail: what was searched, which public pages were "
+            "opened or skipped, and the excerpts sent to synthesis. This is "
+            "not a substitute for the cited findings in the main answer.",
+            styles["body"]))
+        if trace.get("evidence_intent"):
+            story.append(Paragraph("Evidence focus: "+html.escape(
+                str(trace["evidence_intent"])),styles["small"]))
+        budget=trace.get("budget") or {}
+        if budget:
+            story.append(Paragraph("Candidate pages opened: "+html.escape(
+                str(budget.get("read_pages","?"))+" / "+
+                str(budget.get("max_pages","?"))+" budget"),styles["small"]))
+        if trace.get("coverage"):
+            story.append(Paragraph("Evidence coverage",styles["h2"]))
+            for item in trace["coverage"][:12]:
+                description=str(item.get("name") or "")+" — "+str(item.get("status") or "")
+                if item.get("reason"):description+=": "+str(item["reason"])[:300]
+                story.append(Paragraph(html.escape(description),styles["small"]))
+        if trace.get("attempts"):
+            story.append(Paragraph("Search queries and page selection",styles["h2"]))
+            for attempt in trace["attempts"][:32]:
+                phrase=[str(attempt.get("phase") or "search"),
+                        str(attempt.get("dimension") or "")]
+                if attempt.get("query"):
+                    phrase.append("Query: "+str(attempt["query"])[:250])
+                phrase.append("Leads: "+str(attempt.get("discovered",0)))
+                components=[Paragraph(html.escape(" | ".join(phrase)),styles["small"])]
+                for lead in attempt.get("leads",[])[:6]:
+                    raw=str(lead.get("title") or lead.get("url") or "page")[:160]
+                    lead_status=("OPENED: "+str(lead.get("read_status") or "unknown")
+                        if lead.get("selected") else "NOT OPENED: "+str(lead.get("reason") or "budget"))
+                    url=str(lead.get("url") or "")
+                    name=html.escape(raw)
+                    if url.startswith("https://"):
+                        name="<link href='"+html.escape(url,quote=True)+"' color='#135F8B'>"+name+"</link>"
+                    components.append(Paragraph(name+" — "+html.escape(lead_status),styles["small"]))
+                story.append(KeepTogether(components))
+        if trace.get("model_passages"):
+            story.append(Paragraph("Passages given to the answer model",styles["h2"]))
+            for passage in trace["model_passages"][:34]:
+                name=str(passage.get("title") or passage.get("id") or "Source")
+                date=str(passage.get("publication_date") or "unknown")
+                kind=str(passage.get("document_type") or "")
+                detail=(name+" ("+date+"), "+
+                        str(passage.get("sent_characters") or 0)+" characters"+
+                        ("; "+kind if kind else ""))
+                block=[Paragraph(html.escape(detail),styles["small"])]
+                preview=str(passage.get("excerpt_preview") or "").strip()
+                if preview:block.append(Paragraph(html.escape(preview[:520]),styles["small"]))
+                story.append(KeepTogether(block))
+        uncited=[x for x in trace.get("model_source_ids",[])
+                 if x not in trace.get("cited_source_ids",[])]
+        if uncited:
+            story.append(Paragraph("Sent to model but not cited in answer: "+
+                html.escape(", ".join(uncited[:30])),styles["small"]))
+        if trace.get("excluded_source_ids"):
+            story.append(Paragraph("Retrieved sources outside the model input: "+
+                html.escape(", ".join(map(str,trace["excluded_source_ids"][:30]))),
+                styles["small"]))
     story.append(Spacer(1,8))
     story.append(Paragraph("Prepared for human review. No official action was executed.",
                            styles["small"]))
@@ -388,11 +450,15 @@ MIME={"pdf":"application/pdf",
       "xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 
 
-def create(turn,file_type,edited_text=""):
+def create(turn,file_type,edited_text="",include_research_trail=False):
     if file_type not in MIME:raise ValueError("Unsupported export format")
     if not isinstance(edited_text,str) or len(edited_text)>22000:
         raise ValueError("Edited document text is too long")
-    data=({"pdf":create_pdf,"docx":create_docx,"xlsx":create_xlsx}[file_type]
-          (turn,edited_text))
+    if type(include_research_trail) is not bool:
+        raise ValueError("Research Trail option must be a boolean")
+    if file_type=="pdf":
+        data=create_pdf(turn,edited_text,include_research_trail)
+    else:
+        data={"docx":create_docx,"xlsx":create_xlsx}[file_type](turn,edited_text)
     if not data or len(data)<100:raise ValueError("Empty or invalid generated file")
     return data,MIME[file_type],f"SmartRadar_AI5_{turn['turn_id'][:10]}.{file_type}"

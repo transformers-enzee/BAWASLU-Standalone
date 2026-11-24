@@ -71,7 +71,8 @@ def display(row):
     return {key:row.get(key) for key in (
         "id","type","title","url","resolved_url","read_status","basis",
         "published_at","updated_at","consulted_at","section","reason",
-        "reliability","duplicate_of","location_verified","within_period")}
+        "reliability","duplicate_of","location_verified","within_period",
+        "search_dimensions","document_type")}
 
 
 def source_mode_filter(rows,mode,attached):
@@ -118,6 +119,7 @@ def clear(conversation_id:str,user:User=Depends(current_user),db:Session=Depends
 def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     grant=grant_for(db,user)
     cfg=engine.validate(body,grant)
+    cfg["evidence_intent"]=web.evidence_intent(cfg["question"])
     conversation_id=body.get("conversationId")
     edited_draft=body.get("editedDraft") or ""
     if not isinstance(edited_draft,str) or len(edited_draft)>16000:
@@ -184,8 +186,7 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     combined=source_mode_filter(base_sources,cfg["source_mode"],attached)
     cfg["research_dimensions"]=public.get("dimensions",[])
     cfg["research_coverage"]=public.get("coverage",[])
-    incomplete=[r["name"] for r in cfg["research_coverage"] if r.get("status")!="COVERED"]
-    if incomplete:warnings.append("Research coverage still incomplete: "+", ".join(incomplete[:4]))
+
     history=state.history_context(before,cfg["source_mode"],attached_ids)
     if cfg["reference_turn_id"] and last and last not in before[-7:]:
         history.append({"question":last["question"],
@@ -208,16 +209,34 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     multi_part=len(cfg.get("research_dimensions") or [])>1 or bool(web.BROAD.search(cfg["question"]))
     if use_tools and key and multi_part and status=="COMPLETE":
         answer_audit=engine.review_scope(cfg,generated,key,model,base)
-        missing=answer_audit.get("missing_requests") or []
+        missing_evidence=answer_audit.get("missing_requests") or []
+        buried_findings=engine.main_answer_evidence_gaps(generated)
+        missing=list(dict.fromkeys(missing_evidence+buried_findings))
         if missing:
-            if cfg["source_mode"]!="SMARTRADAR_ONLY":
+            # If the model already received the evidence but relegated useful
+            # figures to caveats, rewrite first: no redundant paid search.
+            if cfg["source_mode"]!="SMARTRADAR_ONLY" and missing_evidence:
                 known={str(s.get("url") or "").split("#")[0] for s in combined}
-                rescue=web.fill_answer_gaps(cfg["question"],missing,key,model,base,
+                rescue=web.fill_answer_gaps(cfg["question"],missing_evidence,key,model,base,
                                             cfg["today"],known)
                 public["attempts"].extend(rescue.get("attempts",[]))
                 fresh=rescue.get("sources") or []
                 public["sources"].extend(fresh)
-                combined=source_mode_filter([*combined,*fresh],cfg["source_mode"],attached)
+                selected={str(r.get("url") or "").split("#")[0]:r for r in fresh}
+                for attempt in rescue.get("attempts",[]):
+                    for lead in attempt.get("leads",[]):
+                        page=selected.get(str(lead.get("url") or "").split("#")[0])
+                        lead["selected"]=bool(page)
+                        lead["read_status"]=page.get("read_status","UNKNOWN") if page else "NOT_READ"
+                        lead["reason"]=(page.get("reason","") if page else
+                            "Not opened: duplicate or bounded page selection")
+                # Newly discovered evidence must reach the revised answer model
+                # before older, less relevant pages exhaust its 34-source budget.
+                combined=source_mode_filter([*fresh,*combined],cfg["source_mode"],attached)
+                if fresh and cfg.get("research_dimensions"):
+                    cfg["research_coverage"]=web.evaluate_coverage(
+                        cfg["research_dimensions"],public["sources"],key,model,base)
+                    public["coverage"]=cfg["research_coverage"]
             cfg["answer_revision"]={
                 "unanswered_parts_to_address_or_explicitly_disclose":missing,
                 "previous_draft_to_rewrite_in_full_not_cite_as_evidence":
@@ -228,9 +247,19 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             if revision_status=="COMPLETE":
                 generated=revised
                 answer_audit=engine.review_scope(cfg,generated,key,model,base)
+                buried=engine.main_answer_evidence_gaps(generated)
+                if buried:
+                    answer_audit["status"]="GAPS_FOUND"
+                    answer_audit["missing_requests"]=list(dict.fromkeys(
+                        (answer_audit.get("missing_requests") or [])+buried))
             else:
                 warnings.append("Completeness revision unavailable ("+
                                 revision_status+"); retaining first answer.")
+    evidence_trace=engine.model_trace(cfg,combined)
+    incomplete=[r["name"] for r in cfg["research_coverage"]
+                if r.get("status")!="COVERED"]
+    if incomplete:
+        warnings.append("Research coverage remains incomplete: "+", ".join(incomplete[:6]))
     answer=engine.sanitize(generated,combined,cfg,public["status"])
     if answer_audit.get("status")=="GAPS_FOUND":
         gaps=answer_audit.get("missing_requests") or []
@@ -248,9 +277,18 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             "action_mode":cfg["action_mode"],"source_mode":cfg["source_mode"],
             "answer":answer,"sources":combined[:40],"used_saved":bool(saved),
             "used_public":bool(public.get("sources")),"searched_at":public.get("as_of"),
-            "research_trace":{"attempts":public.get("attempts",[])[:24],
+            "research_trace":{"attempts":public.get("attempts",[])[:32],
                 "dimensions":cfg.get("research_dimensions",[])[:8],
                 "coverage":cfg.get("research_coverage",[])[:8],
+                "evidence_intent":cfg.get("evidence_intent"),
+                "budget":public.get("budget",{}),
+                "model_source_ids":evidence_trace["source_ids"],
+                "cited_source_ids":sorted(set(engine.SOURCE_TAG.findall(
+                    "\n".join([answer.get("body",""),answer.get("draft",""),
+                    str(answer.get("table",{})),
+                    " ".join(answer.get("open_questions") or [])])))),
+                "model_passages":evidence_trace["passages"],
+                "excluded_source_ids":evidence_trace["excluded_source_ids"],
                 "answer_audit":answer_audit},
             "created_at":datetime.now(timezone.utc).isoformat()}
     state.add_turn(user,conversation_id,grant,record)
@@ -259,13 +297,16 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
            "attempts":public.get("attempts",[]),
            "requested_dimensions":cfg.get("research_dimensions",[]),
            "coverage":cfg.get("research_coverage",[]),
+           "evidence_intent":cfg.get("evidence_intent"),
+           "budget":public.get("budget",{}),
+           "model_passages":evidence_trace["passages"],
+           "excluded_source_ids":evidence_trace["excluded_source_ids"],
            "answer_audit":answer_audit,
-           "model_source_ids":[s["id"] for s in combined[:34]
-             if s.get("read_status") in ("READ","SAVED_SNAPSHOT")
-             and not s.get("duplicate_of")],
+           "model_source_ids":evidence_trace["source_ids"],
            "cited_source_ids":sorted(set(engine.SOURCE_TAG.findall(
                "\n".join([answer.get("body",""),answer.get("draft",""),
-               str(answer.get("table",{}))])))),
+               str(answer.get("table",{})),
+               " ".join(answer.get("open_questions") or [])])))),
            "read_public_count":sum(x.get("read_status")=="READ" and
                          str(x.get("type","")).startswith("PUBLIC_") for x in combined),
            "saved_count":sum(str(x.get("type","")).startswith("SAVED_") for x in combined),
@@ -296,7 +337,11 @@ def download(file_type:str,body:dict,user:User=Depends(current_user),
         raise HTTPException(409,"An attachment was removed. Generate an updated answer before exporting.")
     edited=body.get("editedText") or ""
     try:
-        payload,mime,filename=export.create(row,file_type,edited)
+        include_trail=body.get("includeResearchTrail",False)
+        if type(include_trail) is not bool:
+            raise ValueError("includeResearchTrail must be a boolean")
+        payload,mime,filename=export.create(row,file_type,edited,
+                                             include_research_trail=include_trail)
     except (ValueError,TypeError) as ex:
         raise HTTPException(422,str(ex)[:120]) from ex
     except Exception:

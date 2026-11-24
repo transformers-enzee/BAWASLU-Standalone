@@ -17,10 +17,42 @@ from app.unified_ai.contract import safe_for_public
 RECENT=re.compile(r"\b(latest|today|current|recent|this week|this month|"
                   r"terbaru|terkini|hari ini|minggu ini|update|news|berita|"
                   r"202[5-9]|202\d|yesterday|kemarin|last \d+|past \d+)\b",re.I)
-MAX_PAGES=20
-INITIAL_PAGES=14
-MAX_DIMENSIONS=6
+MAX_PAGES=30
+INITIAL_PAGES=20
+MAX_DIMENSIONS=8
 BROAD=re.compile(r"\b(compar(?:e|es|ed|ing|ison|ative)|versus|vs\.?|differences?|contrasts?|tradeoffs?|between|across|advantages?|disadvantages?|neighbor(?:ing|ing countries)|neighbouring|bandingkan|perbandingan|dibandingkan|perbedaan|dampak|serta|dan|and|breakdown|by province|menurut provinsi)\b|[,;]",re.I)
+
+
+# This generic classifier chooses evidence, not subject matter. It must work
+# for elections, health, transport, climate, companies, and other topics.
+OUTCOME_ASK=re.compile(
+    r"\b(what happened|what is happening|situation|current state|status|"
+    r"outcomes?|results?|effects?|impact|incidents?|violations?|complaints?|"
+    r"investigations?|prosecutions?|sanctions?|cases?|trends?|performance|"
+    r"risks?|prevalence|reported|observed|"
+    r"pelanggaran|kejadian|kasus|temuan|laporan|situasi|kondisi|dampak|"
+    r"hasil|penindakan|perkara|perbandingan|dibandingkan|bandingkan)\b",re.I)
+DESIGN_ASK=re.compile(
+    r"\b(how (?:does|do|is|are) .{0,70}work|how .{0,70}works?|framework|constitution|"
+    r"design|structure|institutions?|powers?|jurisdiction|"
+    r"regulations?|laws?|procedures?|architecture|"
+    r"bagaimana (?:cara|sistem)|kerangka|struktur|lembaga|kewenangan|"
+    r"undang-undang|peraturan|tata cara)\b",re.I)
+
+def evidence_intent(question):
+    """Use documented events for observed situations; rules for design queries."""
+    outcome=bool(OUTCOME_ASK.search(question or ""))
+    design=bool(DESIGN_ASK.search(question or ""))
+    return ("MIXED" if outcome and design else
+            "OBSERVED_OUTCOMES" if outcome else
+            "INSTITUTIONAL_DESIGN" if design else "GENERAL")
+
+
+def search_budget(dimensions):
+    """Scale bounded reading to question breadth without unbounded paid calls."""
+    n=max(1,min(MAX_DIMENSIONS,len(dimensions)))
+    initial=min(INITIAL_PAGES,4+2*n)
+    return initial,min(MAX_PAGES,initial+min(10,2+n))
 
 
 def needs_recent(question):
@@ -69,6 +101,12 @@ def discover(question,key,model,base,as_of,newest=False):
       "publication dates or numbers. Primary research and original reporting "
       "should take precedence where available; official BAWASLU/KPU/JDIH/courts "
       "matter for election/legal topics but not unrelated ones. "
+      "For what-happened/current-situation questions prioritize documented events, " 
+      "named cases, official findings, sanction outcomes, monitored incidents, " 
+      "independent observations and studies with dates, locations and denominators. "
+      "Laws and institutional descriptions are context, not evidence that " 
+      "violations occurred or that an authority performed well. "
+      "For how-it-works questions prioritize original rules and procedures. "
       "This is a source-discovery step only; application opens pages separately."
     )
     body={"model":model,"store":False,"tools":[{"type":"web_search"}],
@@ -151,11 +189,16 @@ def plan_dimensions(question,key,model,base):
         "required":["dimensions"],"additionalProperties":False}
     system=(
         "Plan web research for the user's ENTIRE question, on any lawful topic. "
-        "List two to six distinct requested dimensions for multi-part or comparative "
+        "List two to eight distinct requested dimensions for multi-part or comparative "
         "questions (entities, geographic/time scope, causes, effects, policies, "
         "trade-offs, metrics or qualitative evidence as requested). Include " 
         "independently requested outcomes, geographic or actor breakdowns, " 
         "legal frameworks and practical recommendations when the user asks. " 
+        "When asking what happened or what the situation is, explicitly plan searches " 
+        "for documented cases, incidents, measured outcomes, official handling " 
+        "and comparative examples across the named countries or groups. " 
+        "Do not spend those searches exclusively on constitutional or legal texts. " 
+        "When asking how a system works, prioritize rules, organization and process. "
         "Compare institutional design separately from observed performance; " 
         "treat older studies as historical evidence, not as current results. Do not shrink "
         "the scope to the easiest or most familiar component. If truly one-part, "
@@ -163,7 +206,7 @@ def plan_dimensions(question,key,model,base):
         "that preserves the subject and that dimension. Use the user's language "
         "unless another language is needed to find credible original sources. "
         "Do not add unrelated dimensions. Return strict JSON only.")
-    result=_provider_json(key,model,base,system,{"question":question},
+    result=_provider_json(key,model,base,system,{"question":question,"evidence_intent":evidence_intent(question)},
                           "ai5_research_dimensions",schema)
     dimensions=[]
     for item in (result or {}).get("dimensions",[])[:MAX_DIMENSIONS]:
@@ -203,14 +246,38 @@ def _read_batch(items):
     return pages
 
 
+
+def coverage_excerpt(source,dimensions,limit=1500):
+    """Summarize readable raw passages from more than the page introduction.
+
+    This selection is made from actual parsed page text; it never adds facts.
+    """
+    original=str(source.get("excerpt") or "")
+    if len(original)<=limit:return original
+    focus=" ".join(str(d.get("name") or "")+" "+str(d.get("query") or "")
+                   for d in dimensions)
+    words={w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{4,}",focus)
+           if w.lower() not in ("what","when","from","where","with","compare",
+               "yang","pada","dalam","antara","untuk","dengan")}
+    windows=[]
+    for pos in range(450,len(original),350):
+        chunk=original[pos:pos+900]
+        if not chunk:continue
+        lower=chunk.lower()
+        score=sum(w in lower for w in words)*2
+        score+=len(re.findall(r"\b(?:cases?|reports?|findings?|sanctions?|"
+               r"results?|observations?|incidents?|pelanggaran|temuan|laporan|"
+               r"kasus|putusan|sanksi)\b",chunk,re.I))
+        windows.append((score,pos,chunk))
+    picked=sorted(windows,key=lambda x:(-x[0],x[1]))
+    return (original[:480]+" […] "+(picked[0][2] if picked else original[480:]))[:limit]
+
 def evaluate_coverage(dimensions,pages,key,model,base):
     """Read-page evidence audit. Snippets and inaccessible URLs never count."""
     readable=[r for r in pages if r.get("read_status")=="READ"]
-    if len(dimensions)==1:
-        return [{"name":dimensions[0]["name"],
-                 "status":"COVERED" if readable else "MISSING",
-                 "reason":"Readable evidence available" if readable else
-                          "No readable source"}]
+    if len(dimensions)==1 and not readable:
+        return [{"name":dimensions[0]["name"],"status":"MISSING",
+                 "reason":"No readable source"}]
     review_element={"type":"object","properties":{
         "index":{"type":"integer"},"status":{"type":"string"},
         "reason":{"type":"string"}},
@@ -219,8 +286,9 @@ def evaluate_coverage(dimensions,pages,key,model,base):
         "type":"array","items":review_element}},"required":["reviews"],
         "additionalProperties":False}
     data={"dimensions":[d["name"] for d in dimensions],
+          "requested_evidence_kind":evidence_intent(" ".join(d.get("query","") for d in dimensions)),
           "read_pages":[{"title":str(r.get("title") or "")[:150],
-             "excerpt":str(r.get("excerpt") or "")[:1100],
+             "excerpt":coverage_excerpt(r,dimensions),
              "origin_dimension":r.get("search_dimensions",[])}
              for r in readable[:MAX_PAGES]]}
     system=(
@@ -234,7 +302,10 @@ def evaluate_coverage(dimensions,pages,key,model,base):
         "brief reasons and exactly one review per index, strict JSON. " 
         "Do not count evidence of historical institutional design as proof of " 
         "current performance. If a user asks for outcomes and evidence only " 
-        "addresses constitutional structures, classify outcomes as MISSING.")
+        "addresses constitutional structures, classify outcomes as MISSING. "
+        "For outcome questions, only classify as COVERED if readable content " 
+        "mentions actual observations or documented incidents/outcomes. "
+        "Legal powers alone cannot satisfy an outcome dimension.")
     result=_provider_json(key,model,base,system,data,"ai5_source_coverage",
                           schema,limit=1250)
     mapped={}
@@ -279,7 +350,9 @@ def fill_answer_gaps(question,missing,key,model,base,as_of,known_urls):
         rows=result.get("rows") or []
         attempts.append({"phase":"answer gap follow-up","dimension":q[-190:],
             "query":q,"status":result.get("status"),"discovered":len(rows),
-            "provider_queries":result.get("queries",[])[:8]})
+            "provider_queries":result.get("queries",[])[:8],
+            "leads":[{"url":r["url"],"title":r.get("title","")} for r in rows[:16]
+                     if safe_url(r.get("url"))]})
         buckets.append((q,rows))
     candidates=_select_candidates(buckets,set(known_urls),6)
     pages=_read_batch(candidates)
@@ -307,6 +380,8 @@ def research(question,key,model,base,as_of,recent=None):
     search_model=(os.getenv("OPENAI_WEB_SEARCH_MODEL") or model).strip()
     recent=needs_recent(question) if recent is None else recent
     dimensions=plan_dimensions(question,key,model,base)
+    initial_limit,total_limit=search_budget(dimensions)
+    intent=evidence_intent(question)
     attempts=[];buckets=[];seen_query=set()
     planned=[("full question",question,False)]
     planned.extend((d["name"],d["query"],False) for d in dimensions
@@ -325,8 +400,10 @@ def research(question,key,model,base,as_of,recent=None):
         buckets.append((label,rows))
         attempts.append({"phase":"initial" if label!="newest corrections" else "freshness",
           "dimension":label,"query":query[:500],"status":resp.get("status"),
-          "discovered":len(rows),"provider_queries":resp.get("queries",[])[:8]})
-    initial=_select_candidates(buckets,set(),INITIAL_PAGES)
+          "discovered":len(rows),"provider_queries":resp.get("queries",[])[:8],
+          "leads":[{"url":r["url"],"title":r.get("title","")} for r in rows[:16]
+                   if safe_url(r.get("url"))]})
+    initial=_select_candidates(buckets,set(),initial_limit)
     pages=_read_batch(initial)
     first=evaluate_coverage(dimensions,pages,key,model,base)
     gaps=[d for d,r in zip(dimensions,first) if r["status"]!="COVERED"]
@@ -334,9 +411,12 @@ def research(question,key,model,base,as_of,recent=None):
     known={row["url"].split("#")[0] for row in initial}
     follow_buckets=[]
     if gaps:
-        follow_queries=[(d["name"],(d["query"]+" independent primary evidence "
-                                  +d["name"])[:500],False) for d in gaps
-                        if safe_for_public(d["query"])]
+        kind=(" independent primary evidence documented incident findings "
+              "investigation outcomes case examples reporting period source dates"
+              if intent in ("OBSERVED_OUTCOMES","MIXED")
+              else " independent primary evidence organizational operation details")
+        follow_queries=[(d["name"],(d["query"]+kind+" "+d["name"])[:500],False)
+                        for d in gaps if safe_for_public(d["query"])]
         with ThreadPoolExecutor(max_workers=3) as pool:
             more=list(pool.map(discover_one,follow_queries))
         for label,query,resp in more:
@@ -345,8 +425,10 @@ def research(question,key,model,base,as_of,recent=None):
             attempts.append({"phase":"gap follow-up","dimension":label,
                "query":query,"status":resp.get("status"),
                "discovered":len(rows),
-               "provider_queries":resp.get("queries",[])[:8]})
-    extra=_select_candidates(follow_buckets,known,MAX_PAGES-len(pages))
+               "provider_queries":resp.get("queries",[])[:8],
+               "leads":[{"url":r["url"],"title":r.get("title","")} for r in rows[:16]
+                        if safe_url(r.get("url"))]})
+    extra=_select_candidates(follow_buckets,known,total_limit-len(pages))
     pages.extend(_read_batch(extra))
     coverage=(evaluate_coverage(dimensions,pages,key,model,base)
               if extra else first)
@@ -358,6 +440,18 @@ def research(question,key,model,base,as_of,recent=None):
         row["reliability"]=("PUBLIC_OFFICIAL_READ_NOT_ADJUDICATED"
               if row["type"]=="PUBLIC_OFFICIAL" else "PUBLIC_REPORT_READ_NOT_VERIFIED")
         row["consulted_at"]=now
+    # Preserve what was discovered, which pages were opened, and why some
+    # public leads did not reach the final evidence packet.
+    selected={str(p.get("url") or "").split("#")[0]:p for p in pages}
+    for attempt in attempts:
+        for lead in attempt.get("leads",[]):
+            page=selected.get(str(lead["url"]).split("#")[0])
+            lead["selected"]=bool(page)
+            if page:
+                lead["read_status"]=page.get("read_status","UNKNOWN")
+                lead["reason"]=page.get("reason","")
+            else:
+                lead["reason"]="Not opened: duplicate or bounded page selection"
     n=sum(x["read_status"]=="READ" for x in pages)
     result_status=("READ_SOURCES_AVAILABLE" if n else
           "SNIPPET_ONLY" if any(x["read_status"]=="SNIPPET_ONLY" for x in pages) else
@@ -366,4 +460,7 @@ def research(question,key,model,base,as_of,recent=None):
                "NO_ATTRIBUTABLE_URLS"))
     return {"status":result_status,"sources":pages,"as_of":now,
             "attempts":attempts,"dimensions":dimensions,"coverage":coverage,
+            "evidence_intent":intent,
+            "budget":{"initial":initial_limit,"max_pages":total_limit,
+                      "read_pages":len(pages)},
             "read_count":n}

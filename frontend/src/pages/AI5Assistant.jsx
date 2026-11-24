@@ -47,23 +47,47 @@ function Trail({result}){
    <p>Source mode: <strong>{result.source_mode?.replaceAll('_',' ')}</strong> · Public search: <strong>{t.public_status||'Not selected'}</strong></p>
    <p>Public pages read: {t.read_public_count??0} · Saved records: {t.saved_count??0} · Uploaded/link sections: {t.attachment_count??0}</p>
    {t.searched_at&&<p>Research consulted: {t.searched_at} (not continuously updated)</p>}
+   {t.evidence_intent&&<p>Evidence requested: <strong>{t.evidence_intent.replaceAll('_',' ')}</strong>{t.budget?.max_pages?' · Maximum selected pages: '+t.budget.max_pages:''}</p>}
    {!!t.coverage?.length&&<div className="rounded border border-slate-200 p-2">
     <strong>Coverage of the requested question</strong>
     {(t.coverage||[]).map((x,i)=><p key={i}>{x.name}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}
    </div>}
-   {(t.attempts||[]).map((x,i)=><p key={i}>{x.phase}{x.dimension?' · '+x.dimension:''}: {x.status} · {x.discovered||0} leads{x.query?' · Query: '+x.query:''}{x.provider_queries?.length?' · Provider searched: '+x.provider_queries.join(' | '):''}</p>)}
+   {(t.attempts||[]).map((x,i)=><div key={i} className="rounded border border-slate-200 p-2">
+    <p>{x.phase}{x.dimension?' · '+x.dimension:''}: {x.status} · {x.discovered||0} leads{x.query?' · Query: '+x.query:''}{x.provider_queries?.length?' · Provider searched: '+x.provider_queries.join(' | '):''}</p>
+    {!!x.leads?.length&&<details className="mt-1"><summary className="cursor-pointer">Discovered pages and reading status ({x.leads.length} shown)</summary>
+     <ul className="mt-1 space-y-1">{x.leads.map((lead,j)=><li key={j}>
+      <strong>{lead.selected?'Opened':'Not opened'}</strong>{lead.read_status?' · '+lead.read_status:''} · {lead.title||lead.url}
+      {lead.reason?' · '+lead.reason:''}
+      {lead.url?.startsWith('https://')&&<> · <a href={lead.url} target="_blank" rel="noopener noreferrer" className="text-blue-800 underline">Source</a></>}
+     </li>)}</ul>
+    </details>}
+   </div>)}
    {!!t.answer_audit?.items?.length&&<div className="rounded border border-slate-200 p-2">
     <strong>Final answer coverage check</strong>
     {t.answer_audit.items.map((x,i)=><p key={i}>{x.request}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}
    </div>}
    {!!t.model_source_ids?.length&&<p>Sources passed to answer model: {t.model_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
-   {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
+   {!!t.model_passages?.length&&<details className="rounded border border-slate-200 p-2">
+    <summary className="cursor-pointer font-semibold">Readable public passages actually passed to the answer model ({t.model_passages.length})</summary>
+    <div className="mt-2 space-y-2">
+     {t.model_passages.map((p,i)=><div key={p.id||i} className="rounded bg-slate-50 p-2">
+       <strong>{p.title||p.id}</strong> · {p.publication_date||'date unknown'} · {p.sent_characters||0} characters{p.document_type?' · '+p.document_type:''}
+       {!!p.search_dimensions?.length&&<p>Search dimensions: {p.search_dimensions.join(', ')}</p>}
+       <p className="mt-1 whitespace-pre-wrap">{p.excerpt_preview||'No preview'}</p>
+     </div>)}
+    </div>
+   </details>}
+   {!!t.excluded_source_ids?.length&&<p>Retrieved sources outside the model context limit: {t.excluded_source_ids.join(', ')}</p>}
+   {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>
+   {!!t.model_source_ids?.length&&<p>Supplied but not cited: {t.model_source_ids.filter(id=>!(t.cited_source_ids||[]).includes(id)).map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')||'None'}</p>}
    {(t.warnings||[]).map((x,i)=><p key={i} className="rounded bg-amber-50 p-2 text-amber-900">{x}</p>)}
    {(t.sources||[]).map(s=><section key={s.id} id={'ai5-source-'+s.id} data-testid="ai5-source-row" className="scroll-mt-24 rounded-lg border border-slate-200 p-3">
     <div className="flex flex-wrap justify-between gap-2"><strong>{s.id} · {s.title}</strong>
      <span className="font-semibold">{s.read_status==='READ'?'Read / extracted':s.read_status==='SAVED_SNAPSHOT'?'Fixed saved record':s.read_status==='SNIPPET_ONLY'?'Snippet only, not read':'Inaccessible / not read'}</span></div>
     <p>Type: {s.type} · Provenance: {s.basis} · Published: {s.published_at||'unknown'}</p>
     {s.section&&<p>File section: {s.section}</p>}
+    {s.document_type?.includes('PARTIAL')&&<p className="text-amber-900">Only part of this document was extracted: {s.document_type}</p>}
+    {!!s.search_dimensions?.length&&<p>Discovered for: {s.search_dimensions.join(", ")}</p>}
     {s.reason&&<p className="text-amber-900">{s.reason}</p>}
     {s.url?.startsWith('https://')&&<a className="block break-all text-blue-800 underline" href={s.resolved_url||s.url} target="_blank" rel="noopener noreferrer">Open original source</a>}
    </section>)}
@@ -75,13 +99,14 @@ function Trail({result}){
 function Response({item,conversationId,sourceMode,onFollowUp}){
  const a=item.answer||{},t=item.research_trail||{},table=a.table||{};
  const [draft,setDraft]=useState(a.draft||'');
+ const [includeTrail,setIncludeTrail]=useState(false);
  const [working,setWorking]=useState('');
  const [error,setError]=useState('');
  async function download(ext){
   setWorking('Generating '+ext.toUpperCase()+'…');setError('');
   try{
    const r=await fetch('/api/ai-5/export/'+ext,{method:'POST',headers:{'Content-Type':'application/json',...headers()},
-    body:JSON.stringify({conversationId,turnId:item.turn_id,sourceMode,editedText:a.draft?draft:''})});
+    body:JSON.stringify({conversationId,turnId:item.turn_id,sourceMode,editedText:a.draft?draft:'',includeResearchTrail:ext==='pdf'&&includeTrail})});
    if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.detail||'Export failed');}
    const blob=await r.blob();if(!blob.size)throw Error('Empty file');
    const url=URL.createObjectURL(blob),node=document.createElement('a');
@@ -118,13 +143,17 @@ function Response({item,conversationId,sourceMode,onFollowUp}){
    </div>
   </section>}
   {!!a.open_questions?.length&&<details className="text-xs"><summary className="cursor-pointer font-semibold">Open questions and assumptions</summary>
-   <ul className="list-disc pl-5">{a.open_questions.map((x,i)=><li key={i}>{x}</li>)}</ul>
+   <ul className="list-disc pl-5">{a.open_questions.map((x,i)=><li key={i}><Markdown value={x} trail={t}/></li>)}</ul>
   </details>}
   <div className="flex flex-wrap items-center gap-2">
    <span className="text-xs font-bold text-[#173950]">Download</span>
    {['pdf','docx','xlsx'].map(ext=><button type="button" key={ext} onClick={()=>download(ext)}
     disabled={working.startsWith('Generating')} className="intel-ghost text-xs">
     <Download size={14}/>{ext==='docx'?'Word':ext==='xlsx'?'Excel':'PDF'}</button>)}
+   <label className="flex items-center gap-1.5 text-xs text-slate-700">
+    <input type="checkbox" checked={includeTrail} onChange={e=>setIncludeTrail(e.target.checked)}
+      aria-label="Include detailed Research Trail appendix in PDF"/> Research Trail appendix (PDF)
+   </label>
    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Challenge this conclusion and consider alternative interpretations.',item.turn_id)}>
     <RotateCcw size={13}/> Challenge finding</button>
   </div>

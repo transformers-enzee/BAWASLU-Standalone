@@ -73,7 +73,7 @@ test('Web only first: Operational response uses newest readable official page an
  await expect(page.getByTestId('unified-ai-answer')).toContainText('Verify the latest original notice');
  await expect(page.getByTestId('unified-finding')).toContainText('WEB-1');
  await expect(page.getByTestId('unified-finding').getByRole('link')).toHaveAttribute('href',NEW);
- await page.getByTestId('unified-research-trail').locator('summary').click();
+ await page.getByTestId('unified-research-trail').locator('summary').first().click();
  await expect(page.getByTestId('unified-research-trail')).toContainText('2026-11-24');
  await expect(page.getByTestId('unified-research-trail')).toContainText('Read · original page opened');
  expect(payloads).toHaveLength(1);

@@ -43,7 +43,8 @@ test('fixed provincial analyst navigation selectors',async({page})=>{
   await uiLogin(page,ANALYST_EMAIL,ANALYST_PASSWORD);
   const nav=page.getByRole('navigation');
   await expect(nav.getByRole('link',{name:/intelligence inbox/i})).toBeVisible();
-  await expect(nav.getByRole('link',{name:/intelligence assistant/i})).toBeVisible();
+  await expect(nav.locator('a[href="/ai-assistant"]')).toBeVisible();
+  await expect(nav.locator('a[href="/assistant"]')).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/add intelligence/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/add intelligence/i})).toBeVisible();
   await expect(nav.getByRole('link',{name:/data sources/i})).toHaveCount(0);

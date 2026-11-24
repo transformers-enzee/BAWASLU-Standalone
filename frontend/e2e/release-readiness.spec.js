@@ -21,8 +21,12 @@ test('release navigation exposes every completed administrator module',async({pa
   for(const name of modules){
     await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
   }
-  await expect(nav.getByRole('link',{name:'Management AI Assistant'})).toBeVisible();
-  await expect(nav.getByRole('link',{name:/BAWASLU Intelligence Assistant/i})).toBeVisible();
+  await expect(nav.locator('a[href="/management/ai-assistant"]')).toBeVisible();
+  await expect(nav.locator('a[href="/ai-assistant"]')).toBeVisible();
+  // Older assistant direct URLs remain, but are intentionally excluded from
+  // the consolidated workspace navigation.
+  await expect(nav.locator('a[href="/management/assistant"]')).toHaveCount(0);
+  await expect(nav.locator('a[href="/assistant"]')).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Watchlist$/i})).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();

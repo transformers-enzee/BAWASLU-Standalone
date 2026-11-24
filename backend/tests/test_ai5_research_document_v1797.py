@@ -35,10 +35,10 @@ def _access(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY","offline-fixture-key")
 
 
-def _read_pdf(answer,sources,question,trace=None):
+def _read_pdf(answer,sources,question,trace=None,include_trail=False):
     t={"answer":answer,"sources":sources,"question":question,
        "research_trace":trace or {}, "turn_id":"2"*32}
-    pdf=export.create_pdf(t)
+    pdf=export.create_pdf(t,include_research_trail=include_trail)
     assert pdf[:5]==b"%PDF-"
     reader=PdfReader(io.BytesIO(pdf))
     text="\n".join(p.extract_text() or "" for p in reader.pages)
@@ -123,7 +123,7 @@ def test_actual_indonesia_question_searches_missing_aspects_before_final_answer(
                        "Present-day performance","Practical comparative lessons"))
     saved=state.get_turn(_user(),result["conversation_id"],GRANT,result["turn_id"])
     text,urls,_=_read_pdf(saved["answer"],saved["sources"],QUESTION,
-                          saved["research_trace"])
+                          saved["research_trace"],include_trail=True)
     assert all(x in text for x in ("Institutional design","Independence",
                                     "Present-day performance","Practical comparative lessons"))
     assert "Constitutional outline (2022-04-08)" in text

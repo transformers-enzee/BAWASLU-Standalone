@@ -256,7 +256,12 @@ def test_web_model_discovery_is_general_topic_and_uses_read_sources(monkeypatch)
         **source(),"url":row["url"],"title":row["title"],"read_status":"READ"})
     r=web.research("Latest scientific report", "provider-key","model",
                    "https://api.openai.com/v1","2026-11-24")
-    assert calls==[False,True]
+    assert calls.count(True)==1
+    # Searches run concurrently; one discovery and one freshness lookup are
+    # required, plus at most one targeted gap follow-up if coverage is unclear.
+    assert 1<=calls.count(False)<=2
+    if len(calls)==3:
+        assert r["attempts"][-1]["phase"]=="gap follow-up"
     assert r["read_count"]==1
     assert r["sources"][0]["id"].startswith("WEB-")
 

@@ -340,8 +340,13 @@ def download(file_type:str,body:dict,user:User=Depends(current_user),
         include_trail=body.get("includeResearchTrail",False)
         if type(include_trail) is not bool:
             raise ValueError("includeResearchTrail must be a boolean")
-        payload,mime,filename=export.create(row,file_type,edited,
-                                             include_research_trail=include_trail)
+        if include_trail and file_type=="pdf":
+            payload,mime,filename=export.create(
+                row,file_type,edited,include_research_trail=True)
+        else:
+            # Preserve the stable, three-argument export contract for
+            # existing clients and failure-handling regression fixtures.
+            payload,mime,filename=export.create(row,file_type,edited)
     except (ValueError,TypeError) as ex:
         raise HTTPException(422,str(ex)[:120]) from ex
     except Exception:

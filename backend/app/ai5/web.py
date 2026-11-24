@@ -276,7 +276,7 @@ def research(question,key,model,base,as_of,recent=None):
     gaps=gaps[:MAX_DIMENSIONS]
     known={row["url"].split("#")[0] for row in initial}
     follow_buckets=[]
-    if gaps and len(dimensions)>1:
+    if gaps:
         follow_queries=[(d["name"],(d["query"]+" independent primary evidence "
                                   +d["name"])[:500],False) for d in gaps
                         if safe_for_public(d["query"])]

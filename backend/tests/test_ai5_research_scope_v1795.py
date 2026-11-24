@@ -1,4 +1,4 @@
-"""AI-5 v179.5: deterministic whole-scope research integration tests.
+"""AI-5 v179.6: deterministic whole-scope research integration tests.
 
 No provider credits, external HTTP requests, or BAWASLU records are used.
 The original user attachment was not available to this test runner. These
@@ -137,7 +137,7 @@ def test_candidate_selection_balanced_across_dimensions():
 
 
 def test_coverage_audit_does_not_upgrade_snippets(monkeypatch):
-    monkeypatch.setattr(web,"_provider_json",lambda *args:None)
+    monkeypatch.setattr(web,"_provider_json",lambda *args,**kwargs:None)
     dims=[{"name":"A","query":"A"},{"name":"B","query":"B"}]
     pages=[{"read_status":"SNIPPET_ONLY","search_dimensions":["A"],
             "title":"A result","excerpt":""}]

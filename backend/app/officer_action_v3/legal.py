@@ -30,11 +30,13 @@ def scope_hints(question):
 def review_legal(rows,records):
     allowed={s["id"]:s for s in records if s.get("read_status") in ("READ","SAVED_SNAPSHOT")}
     legal=[]
-    for r in rows[:4] if isinstance(rows,list) else []:
+    for r in rows[:16] if isinstance(rows,list) else []:
         if not isinstance(r,dict):continue
         citations=list(dict.fromkeys(s for s in r.get("source_ids",[])
                        if isinstance(s,str) and s in allowed))[:4]
-        official=any(allowed[s].get("kind")=="OFFICIAL" and allowed[s].get("read_status")=="READ" for s in citations)
+        official=any(allowed[s].get("kind")=="OFFICIAL" and allowed[s].get("read_status")=="READ"
+                     and re.search(r"jdih|peraturan|putusan|undang|regulation|\.pdf",allowed[s].get("resolved_url") or allowed[s].get("url") or "",re.I)
+                     for s in citations)
         reference=str(r.get("legal_reference") or "")[:240]
         legal.append({
             "issue":str(r.get("issue") or "")[:240],

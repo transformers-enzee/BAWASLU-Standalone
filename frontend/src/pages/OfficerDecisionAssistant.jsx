@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import ReactMarkdown from 'react-markdown';
 import {useOutletContext} from 'react-router-dom';
 import {ArrowRight,BookOpen,ClipboardList,Copy,Database,Download,Globe2,
         Lightbulb,LoaderCircle,Scale,ShieldCheck,Search,TriangleAlert} from 'lucide-react';
@@ -37,6 +38,51 @@ function CitationText({text,sources}){
     [{item.title||item.id}]</a>:
    <span key={i} title={item.title||''} className="font-semibold text-slate-600">[{item.id} · saved]</span>;
  })}</>;
+}
+// Render a full report rather than clipping it into the officer summary cards.
+// Markdown is text-only: no raw HTML, images or arbitrary generated links.
+function ReportMarkdown({text,sources}){
+ const eligible=(sources||[]).filter(s=>s.read_status==='READ'&&safeLink(s.url));
+ const allowed=new Map(eligible.map(s=>[s.id,s.url]));
+ const urls=new Set(allowed.values());
+ const linkify=value=>String(value||'').replace(/\[((?:P|R)-\d+)\](?!\()/g,(all,id)=>
+  allowed.has(id)?'['+id+']('+allowed.get(id).replace(/[()]/g,c=>encodeURIComponent(c))+')':all);
+ const permitted=url=>urls.has(url)||eligible.some(s=>s.url.replace(/[()]/g,c=>encodeURIComponent(c))===url)?url:'';
+ const md=value=><ReactMarkdown skipHtml disallowedElements={['img']} urlTransform={permitted}
+  components={{
+   a:({href,children})=>href?<a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-teal-800 underline">{children}</a>:<span>{children}</span>,
+   h1:({children})=><h2 className="mb-2 mt-5 text-xl font-bold">{children}</h2>,
+   h2:({children})=><h3 className="mb-2 mt-5 text-lg font-bold text-slate-900">{children}</h3>,
+   h3:({children})=><h4 className="mb-2 mt-4 font-semibold text-slate-900">{children}</h4>,
+   p:({children})=><p className="my-3 leading-7">{children}</p>,
+   ul:({children})=><ul className="my-3 list-disc space-y-2 pl-6">{children}</ul>,
+   ol:({children})=><ol className="my-3 list-decimal space-y-2 pl-6">{children}</ol>,
+   blockquote:({children})=><blockquote className="my-3 border-l-4 border-slate-300 pl-3">{children}</blockquote>,
+   pre:({children})=><pre className="overflow-x-auto whitespace-pre-wrap rounded bg-slate-50 p-3">{children}</pre>
+  }}>{linkify(value)}</ReactMarkdown>;
+ // Support GFM-style tables without adding a new dependency to the lockfile.
+ const lines=String(text||'').split('\n'),blocks=[];
+ let buf=[];
+ const flush=()=>{if(buf.length){blocks.push({type:'text',value:buf.join('\n')});buf=[]}};
+ const cells=line=>line.trim().replace(/^\|/,'').replace(/\|$/,'').split(/(?<!\\)\|/).map(c=>c.trim().replace(/\\\|/g,'|'));
+ for(let i=0;i<lines.length;i++){
+  if(lines[i].includes('|')&&i+1<lines.length&&/^\s*\|?\s*:?-{3,}/.test(lines[i+1])&&cells(lines[i+1]).every(c=>/^:?-{3,}:?$/.test(c))){
+   flush();const head=cells(lines[i]);i++;const rows=[];
+   while(i+1<lines.length&&lines[i+1].includes('|')&&lines[i+1].trim()){i++;rows.push(cells(lines[i]))}
+   blocks.push({type:'table',head,rows});
+  }else buf.push(lines[i]);
+ }
+ flush();
+ return <div data-testid="officer-v3-full-report" className="min-w-0 break-words text-sm leading-7 text-slate-800">
+  {blocks.map((b,i)=>b.type==='text'?<div key={i}>{md(b.value)}</div>:
+   <div key={i} className="my-4 overflow-x-auto rounded-lg border border-slate-200">
+    <table className="w-full border-collapse text-left text-sm"><thead className="bg-slate-50">
+     <tr>{b.head.map((h,j)=><th key={j} className="min-w-24 border-b border-slate-200 px-3 py-2 align-top">{md(h)}</th>)}</tr>
+    </thead><tbody>{b.rows.map((r,j)=><tr key={j} className="border-b border-slate-100">
+     {b.head.map((_,k)=><td key={k} className="px-3 py-2 align-top">{md(r[k]||'')}</td>)}
+    </tr>)}</tbody></table>
+   </div>)}
+ </div>;
 }
 function References({ids,sources}){
  const index=new Map((sources||[]).map(s=>[s.id,s]));
@@ -126,12 +172,12 @@ function Brief({data,question}){
    </div>}
   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
    <div className="flex flex-wrap items-center justify-between gap-2">
-    <span className="text-xs font-bold uppercase tracking-widest text-[#85212d]">Evidence-led officer brief</span>
+    <span className="text-xs font-bold uppercase tracking-widest text-[#85212d]">{data.research_depth==='DEEP'?'Deep research & strategic intelligence':data.research_depth==='QUICK'?'Quick answer':'Evidence-led research'}</span>
     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
      {r.relevance==='DIRECT'?'Direct nexus proposed':r.relevance==='POSSIBLE'?'Possible BAWASLU nexus':'Jurisdiction not established'}</span>
    </div>
    <h2 className="mt-4 text-xl font-bold text-slate-900">{r.headline||'Officer briefing'}</h2>
-   <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-800"><CitationText text={r.answer} sources={sources}/></p>
+   <ReportMarkdown text={r.answer} sources={sources}/>
    <div className="mt-4 border-t border-slate-200 pt-4">
     <p className="text-xs font-bold uppercase tracking-wider text-[#85212d]">Key takeaway</p>
     <p className="mt-2 text-base font-semibold leading-7 text-slate-900"><CitationText text={r.key_takeaway} sources={sources}/></p>
@@ -141,7 +187,7 @@ function Brief({data,question}){
   </section>
   {!!r.claims?.length&&<section className="space-y-3" data-testid="officer-v3-claims">
    <h3 className="text-lg font-bold text-slate-900">What the evidence establishes</h3>
-   {r.claims.slice(0,3).map((claim,i)=><div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+   {r.claims.map((claim,i)=><div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
     <div className="flex justify-between gap-3 text-xs"><strong className="text-[#85212d]">Finding {i+1}</strong>
      <span className="text-slate-500">{CLAIM_STATUS[claim.status]||'Unresolved'}</span></div>
     <p className="mt-2 text-sm leading-6 text-slate-800"><CitationText text={claim.claim} sources={sources}/></p>
@@ -167,7 +213,13 @@ function Brief({data,question}){
    <summary className="cursor-pointer font-bold text-[#19364c]">Research Trail · sources, law, alternatives and audit</summary>
    <div className="mt-4 space-y-4 text-sm text-slate-700">
     <p>Research time: {audit.retrieved_at||'unknown'} · Web status: {audit.web_status||'unknown'} · Read pages: {audit.public_read_count||0} · Saved observations: {audit.saved_count||0}</p>
-    <p className="text-xs text-slate-500">Search requests: {(audit.search_queries||[]).join(' · ')||'No public search selected'}</p>
+    <p className="text-xs text-slate-500">Actual provider queries: {(audit.search_queries||[]).join(' · ')||'No search query recorded'}</p>
+    {!!data.requested_dimensions?.length&&<p>Requested analysis: {data.requested_dimensions.join(' · ')}</p>}
+    {!!audit.search_passes?.length&&<div className="space-y-2" data-testid="officer-v3-research-passes">
+     <h4 className="font-semibold">Research objectives and coverage</h4>
+     {audit.search_passes.map((pass,i)=><div key={i} className="rounded bg-slate-50 p-2 text-xs">
+      <strong>{pass.objective}</strong> · {pass.status} · {pass.discovered} discovered · {pass.read_count} readable
+     </div>)}</div>}
     <section className="space-y-2"><h4 className="font-semibold">Public pages and saved observations</h4>
      {sources.length?sources.map(s=><div key={s.id} className="rounded-md bg-slate-50 p-3 text-xs" data-testid="officer-v3-source-row">
       <div className="flex justify-between gap-2"><strong>{s.id} · {s.title||'Source'}</strong>
@@ -175,6 +227,9 @@ function Brief({data,question}){
         {SOURCE_STATUS[s.read_status]||s.read_status}</span></div>
       <p className="mt-1">Published: {s.published_at||'unknown'} · Updated: {s.updated_at||'unknown'}</p>
       {s.reason&&<p className="text-slate-600">{s.reason}</p>}
+      {s.document_type&&<p>Document: {s.document_type}{s.units_inspected?' · units inspected: '+s.units_inspected:''}</p>}
+      {s.extraction_notes&&<p className="text-slate-600">{s.extraction_notes}</p>}
+      {s.objective&&<p className="text-slate-500">Research focus: {s.objective}</p>}
       {s.kind==='SAVED_RECORD'&&<p>Scoped saved observation: {s.record_id}</p>}
       {safeLink(s.url)&&<a href={s.url} target="_blank" rel="noopener noreferrer" className="break-all text-teal-800 underline">Open original</a>}
      </div>):<p>No consulted source available.</p>}
@@ -229,12 +284,12 @@ export default function OfficerDecisionAssistant({workspace='OPERATIONS'}){
  return <div className="mx-auto max-w-[1160px] space-y-5 pb-12" data-testid="officer-v3-page">
   <header className="rounded-2xl bg-[#761b27] p-7 text-white">
    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-100"><ShieldCheck size={16}/> Independent new module</div>
-   <h1 className="mt-3 text-2xl font-bold md:text-3xl">AI Assistant V2 <span className="font-normal text-red-100">· Officer Decision AI</span></h1>
-   <p className="mt-2 max-w-3xl text-sm leading-6 text-red-50">Evidence → jurisdiction → meaningful BAWASLU implications → proposed next action. Every question starts fresh, without prior assistant context.</p>
+   <h1 className="mt-3 text-2xl font-bold md:text-3xl">AI Assistant V2 <span className="font-normal text-red-100">· Deep Research & Strategic Intelligence</span></h1>
+   <p className="mt-2 max-w-3xl text-sm leading-6 text-red-50">Adaptive public research, document analysis, evidence-led reports and practical BAWASLU recommendations. Every question starts fresh.</p>
   </header>
   <section className="rounded-2xl border border-slate-200 bg-white p-5 md:p-6">
    <div className="flex flex-wrap justify-between gap-3"><div>
-    <h2 className="text-lg font-bold text-slate-900">New investigation</h2>
+    <h2 className="text-lg font-bold text-slate-900">Ask a research or oversight question</h2>
     <p className="mt-1 text-xs text-slate-500">The authorized live provider receives only your public-search question, never saved SmartRadar source text.</p>
    </div><label className="text-xs text-slate-600">Perspective
     <select aria-label="Officer Decision AI perspective" value={perspective} onChange={e=>setPerspective(e.target.value)}
@@ -248,7 +303,7 @@ export default function OfficerDecisionAssistant({workspace='OPERATIONS'}){
      <m.icon size={19} className="text-[#85212d]"/><strong className="mt-2 block text-sm text-slate-900">{m.label}</strong>
      <span className="mt-1 block text-xs text-slate-600">{m.description}</span></button>)}
    </div>
-   <div className="mt-4"><p className="mb-2 text-xs font-semibold uppercase text-slate-500">Response type</p>
+   <div className="mt-4"><p className="mb-2 text-xs font-semibold uppercase text-slate-500">Response type · research depth selected automatically</p>
     <div className="flex flex-wrap gap-2">{TASKS.map(([id,label])=><button key={id} type="button"
      disabled={busy} aria-pressed={task===id} onClick={()=>setTask(id)}
      className={'rounded-full border px-3 py-1.5 text-xs '+(task===id?'border-[#85212d] bg-[#85212d] text-white':'border-slate-200 text-slate-700')}>{label}</button>)}</div>
@@ -263,7 +318,7 @@ export default function OfficerDecisionAssistant({workspace='OPERATIONS'}){
      <button className="inline-flex items-center gap-2 rounded-lg bg-[#85212d] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
       type="submit" disabled={busy||!question.trim()}>
       {busy?<LoaderCircle className="animate-spin" size={17}/>:<Search size={17}/>}
-      {busy?'Researching and checking evidence…':'Generate officer brief'}<ArrowRight size={15}/></button>
+      {busy?'Researching sources and composing your report…':'Generate officer brief'}<ArrowRight size={15}/></button>
     </div>
    </form>
    {!data&&!busy&&<div className="mt-5 grid gap-2 sm:grid-cols-2" data-testid="officer-v3-starters">

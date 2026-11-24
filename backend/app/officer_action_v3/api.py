@@ -8,6 +8,7 @@ from app.auth import current_user
 from app.db import get_db
 from app.models import User
 from .contracts import classification,validate,utc_now
+from .depth import depth_for,objectives
 from .research import public_research,saved_records
 from .legal import scope_hints
 from .decisions import synthesize
@@ -35,7 +36,7 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
     task=classification(question,cfg["task"])
     key=os.getenv("OPENAI_API_KEY","").strip()
     base=(os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
-    model=(os.getenv("OPENAI_MODEL") or "gpt-6-luna").strip()
+    model=(os.getenv("OPENAI_OFFICER_DECISION_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-6-luna").strip()
     # Fresh search precedes any optional saved-source lookup. The only data
     # sent to the search provider is the user's privacy-filtered question.
     public={"status":"NOT_SELECTED","sources":[],"queries":[],"as_of":utc_now()}
@@ -54,20 +55,26 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
     result=synthesize(question,task,cfg["perspective"],_eligible_sources(sources),
                       hints,public["status"],key,model,base)
     report=finalize(result,sources,question,task,public["status"],mode,hints)
+    if result is None and _eligible_sources(sources):
+        report["limitations"].insert(0,"Research sources were retrieved, but answer synthesis did not complete. No complete analytical report was generated.")
     # Never expose raw page text, sensitive record excerpts or credentials
     # through Research Trail. Only selected structured claims are presented.
     trail=[]
-    for src in sources[:14]:
+    for src in sources:
         trail.append({k:src.get(k,"") for k in
                       ("id","kind","record_id","title","url","published_at",
-                       "updated_at","read_status","reason","review_status")})
+                       "updated_at","read_status","reason","review_status","resolved_url",
+                       "document_type","units_inspected","extraction_notes","objective")})
     return {"module":"OFFICER_DECISION_AI_INDEPENDENT_V3",
-            "version":"1.0","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
+            "version":"2.0","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
             "task":task,"source_mode":mode,"perspective":cfg["perspective"],
+            "research_depth":depth_for(question),"requested_dimensions":[name for name,_ in objectives(question)],
+            "synthesis_status":"GENERATED" if result else "UNAVAILABLE",
             "report":report,"research_trail":{
                 "retrieved_at":public.get("as_of"),"web_status":public["status"],
-                "search_queries":public.get("queries",[])[:3],
+                "search_queries":public.get("queries",[])[:24],
+                "search_passes":public.get("search_passes",[]),
                 "sources":trail,"public_read_count":sum(s.get("read_status")=="READ" for s in sources),
-                "saved_count":len(internal),"search_is_live":mode!="RECORDS_ONLY" and public["status"]!="NOT_AVAILABLE"},
+                "saved_count":len(internal),"search_is_live":any(p.get("status") in ("DISCOVERED","NO_ATTRIBUTABLE_URLS") for p in public.get("search_passes",[]))},
             "audit":{"read_only":True,"no_case_created":True,"no_assignment_created":True,
                      "no_prior_assistant_history_retrieved":True,"human_review_required":True}}

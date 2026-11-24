@@ -2,6 +2,7 @@
 import re
 from .claims import verify_claims
 from .legal import review_legal
+from .depth import depth_for
 
 CITE=re.compile(r"\[((?:P|R)-\d+)\]")
 HTTP=re.compile(r"https?://[^\s\)\]>]+",re.I)
@@ -39,7 +40,7 @@ def finalize(raw,sources,question,task,web_status,mode,hints):
         for s in sources):
         relevance="POSSIBLE"
     actions=[];seen=set()
-    for row in (raw.get("actions") if isinstance(raw.get("actions"),list) else [])[:4]:
+    for row in (raw.get("actions") if isinstance(raw.get("actions"),list) else [])[:8]:
         if not isinstance(row,dict):continue
         task_text=prose(row.get("task"),450)
         if not task_text or UNSAFE.search(task_text) or task_text.casefold() in seen:continue
@@ -52,20 +53,23 @@ def finalize(raw,sources,question,task,web_status,mode,hints):
         if min(len(entry[k]) for k in ("owner_role","evidence_needed","deliverable","decision_gate"))<5:continue
         actions.append(entry)
     opts=[]
-    for row in (raw.get("options") if isinstance(raw.get("options"),list) else [])[:3]:
+    for row in (raw.get("options") if isinstance(raw.get("options"),list) else [])[:8]:
         if not isinstance(row,dict) or not row.get("option"):continue
         opts.append({"option":prose(row.get("option"),160),"benefit":prose(row.get("benefit"),320),
                     "tradeoff":prose(row.get("tradeoff"),320),
                     "change_trigger":prose(row.get("change_trigger"),320),
                     "source_ids":citations(row)})
-    answer=prose(raw.get("answer"),1200)
+    depth=depth_for(question)
+    answer=prose(raw.get("answer"),72000 if depth=="DEEP" else 32000)
     takeaway=prose(raw.get("key_takeaway"),500)
     headline=prose(raw.get("headline"),170)
     impact=prose(raw.get("bawaslu_implication"),600)
     decision=prose(raw.get("recommended_decision"),520)
     limits=[prose(x,260) for x in (raw.get("limitations") or [])[:5] if isinstance(x,str) and x.strip()]
     if not usable:
-        answer="No source-backed finding can be established for this question."
+        # Source-free general concepts/planning are allowed only if clearly labeled;
+        # do not promote generated text to findings or official casework.
+        answer=("General guidance only — no source-backed factual finding. "+answer if raw and answer and depth=="QUICK" else "No source-backed finding can be established for this question.")
         takeaway="Verify an authoritative source before making an institutional decision."
         impact="BAWASLU relevance cannot be established without consulted evidence."
         decision="No formal casework action. Request an official-source verification."
@@ -79,7 +83,7 @@ def finalize(raw,sources,question,task,web_status,mode,hints):
     if task=="DRAFT":
         draft=prose(raw.get("draft"),6000) if usable else ""
     else:draft=""
-    if not actions and usable and task!="DRAFT":
+    if not actions and usable and task!="DRAFT" and relevance not in ("NONE","NOT_ESTABLISHED"):
         actions=[{"task":"Verify the original source and decide whether BAWASLU has a legally relevant oversight role.",
                   "owner_role":"Authorized supervision/legal reviewer",
                   "evidence_needed":"Original dated source, relevant election stage and applicable rule",
@@ -95,8 +99,8 @@ def finalize(raw,sources,question,task,web_status,mode,hints):
         "bawaslu_implication":impact or "Confirm whether BAWASLU has jurisdiction before casework.",
         "relevance":relevance if usable else "NOT_ESTABLISHED",
         "recommended_decision":decision or "Verify primary records before escalation.",
-        "claims":claims[:5],"legal":legal,"options":opts,"actions":actions[:3],
-        "draft":draft,"limitations":limits[:5],
+        "claims":claims[:30],"legal":legal,"options":opts,"actions":actions[:8],
+        "draft":draft,"limitations":limits[:5],"research_depth":depth,
         "quality":{"read_public_count":sum(s.get("read_status")=="READ" for s in sources),
                    "saved_snapshot_count":sum(s.get("kind")=="SAVED_RECORD" for s in sources),
                    "attributed_claims":sum(bool(x["source_ids"]) for x in claims),

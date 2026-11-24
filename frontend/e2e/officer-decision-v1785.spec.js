@@ -106,3 +106,21 @@ test('fresh independent module switches sources without importing old assistant 
  await page.getByRole('button',{name:'Clear and start fresh'}).click();
  await expect(page.getByTestId('officer-v3-result')).toHaveCount(0);
 });
+
+test('deep research renders complete Markdown report with tables and linked evidence',async({page})=>{
+ const extended=JSON.parse(JSON.stringify(mocked));
+ extended.research_depth='DEEP';
+ extended.report.answer='## National overview\n\n**Synthetic evidence** [P-1]\n\n| Province | Reports |\n| --- | --- |\n| Province A | 12 |\n\n'+('A synthetic analytical paragraph.\n\n'.repeat(80))+'## Legislative review\n\nFinal report section.';
+ extended.report.claims=Array.from({length:7},(_,i)=>({claim:'Synthetic finding '+(i+1),status:'PRIMARY_SOURCE_REPORTED',source_ids:['P-1'],caveat:''}));
+ extended.research_trail.search_passes=[{objective:'National statistics',status:'DISCOVERED',discovered:3,read_count:1}];
+ await page.route('**/api/officer-decision-ai/analyze',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(extended)}));
+ await login(page);await page.goto('/ai-assistant-v2-new');
+ await page.getByRole('textbox',{name:'Ask the new Officer Decision AI'}).fill('What are the top 10 election violations by provinces, candidates, parties and laws?');
+ await page.getByRole('button',{name:/Generate officer brief/}).click();
+ const full=page.getByTestId('officer-v3-full-report');
+ await expect(full.getByRole('heading',{name:'National overview'})).toBeVisible();
+ await expect(full.getByRole('table')).toContainText('Province A');
+ await expect(full.getByRole('link',{name:'P-1'})).toHaveAttribute('href','https://dkpp.go.id/synthetic-test');
+ await expect(full).toContainText('Final report section.');
+ await expect(page.getByTestId('officer-v3-claims')).toContainText('Synthetic finding 7');
+});

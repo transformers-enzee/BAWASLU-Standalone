@@ -9,7 +9,7 @@ def verify_claims(rows,records):
     eligible={r["id"]:r for r in records if r.get("read_status") in ("READ","SAVED_SNAPSHOT")}
     output=[]
     seen=set()
-    for row in (rows if isinstance(rows,list) else [])[:8]:
+    for row in (rows if isinstance(rows,list) else [])[:30]:
         if not isinstance(row,dict):continue
         text=str(row.get("claim") or "").strip()[:700]
         if not text or text.casefold() in seen:continue

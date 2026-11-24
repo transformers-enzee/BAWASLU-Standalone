@@ -342,9 +342,11 @@ def chat(body: dict, user: User = Depends(current_user),
     # Public web search is performed FIRST. No private data or conversation
     # history is passed to the provider. Web only never invokes saved readers.
     consulted_web=None
+    web_diagnostics={}
     warnings=[]
     if selected["publicWeb"]:
         if not public_query_safe(question):
+            web_diagnostics["status"]="PUBLIC_QUERY_BLOCKED"
             warnings.append("Live search skipped: the question contains private identifiers or contact details.")
         else:
             key=os.getenv("OPENAI_API_KEY","").strip()
@@ -354,11 +356,15 @@ def chat(body: dict, user: User = Depends(current_user),
                 base=(os.getenv("OPENAI_BASE_URL",OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip("/")
                 found=research_public_web(question,key,openai_triage_model(),base,
                     assistant_mode=("MANAGEMENT" if cfg["perspective"]=="MANAGEMENT" else "OPERATIONAL"),
-                    perspective=cfg["perspective"])
+                    perspective=cfg["perspective"],diagnostics=web_diagnostics)
                 if found:
                     consulted_web=verify_public_pages(found)
+                    web_diagnostics.setdefault("status","DISCOVERY_RETURNED_URLS")
+            else:
+                web_diagnostics["status"]="PROVIDER_KEY_UNAVAILABLE"
             if not consulted_web or not consulted_web.get("read_count"):
-                warnings.append("Live public-web research could not read attributable current pages. "
+                failure=(consulted_web or {}).get("search_status") or web_diagnostics.get("status") or "UNAVAILABLE"
+                warnings.append("Live public-web research unavailable ("+failure+"). "
                                 "Saved records, if selected, are not a substitute for current verification.")
     if selected["smartRadar"] or selected["legalReferences"]:
         records,internal_warnings=gather(question,context_question,selected,db,grant)
@@ -453,7 +459,10 @@ def chat(body: dict, user: User = Depends(current_user),
             "source_mode":cfg["source_mode"],"web_pages":web_display,
             "web_queries":(consulted_web or {}).get("search_queries",[])[:12],
             "web_freshness_check_requested":bool((consulted_web or {}).get("freshness_check_requested")),
-            "web_search_status":((consulted_web or {}).get("search_status") if selected["publicWeb"] else "WEB_NOT_SELECTED"),
+            "web_search_status":(((consulted_web or {}).get("search_status") or
+                                  web_diagnostics.get("status") or "UNAVAILABLE")
+                                 if selected["publicWeb"] else "WEB_NOT_SELECTED"),
+            "web_discovery_status":(web_diagnostics.get("status") if selected["publicWeb"] else "WEB_NOT_SELECTED"),
             "answer": answer, "sources": response_records,
             "consulted_sources": consulted, "warnings": warnings,
             "research_status": "SOURCED" if records else "NO_ATTRIBUTABLE_SOURCE",

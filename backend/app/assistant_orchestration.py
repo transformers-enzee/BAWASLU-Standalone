@@ -374,14 +374,29 @@ def answer_text(result, has_evidence, language='id'):
 
 
 
-def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL', perspective='AUTO'):
-    """One attributed public web call. Do not forward saved BAWASLU records."""
-    if os.getenv("BAWASLU_ASSISTANT_WEB_SEARCH", "true").lower() not in ("true","1","yes"):
+def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL', perspective='AUTO',
+                        diagnostics=None):
+    """One attributed public web call, returning None on failure as before.
+
+    Optional diagnostic data contains status codes only, never secrets or private records.
+    """
+    def mark(status, count=0):
+        if isinstance(diagnostics, dict):
+            diagnostics.update({"status":status, "source_count":count})
+    def fail(status):
+        mark(status)
         return None
+    if os.getenv("BAWASLU_ASSISTANT_WEB_SEARCH", "true").lower() not in ("true","1","yes"):
+        return fail("SEARCH_DISABLED_BY_CONFIGURATION")
     from .assistant_web_first import safe_public_question, safe_web_urls
     from .assistant_live_web import search_plan
     question=str(question or "").strip()[:1000]
-    if not question or not safe_public_question(question):return None
+    if not question or not safe_public_question(question):
+        return fail("PUBLIC_QUERY_BLOCKED")
+    if not key:
+        return fail("PROVIDER_KEY_UNAVAILABLE")
+    # Allow a dedicated web-compatible model, without changing the private AI model.
+    model=os.getenv("OPENAI_WEB_SEARCH_MODEL","").strip() or model
     # This public query carries NO private evidence excerpts or conversation history.
     style='Management decision brief' if assistant_mode=='MANAGEMENT' else 'Operational officer brief'
     from datetime import datetime, timezone
@@ -421,15 +436,18 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "All proposals require human verification and applicable authority."
     )
     req={"model":model,"store":False,"tools":[{"type":"web_search"}],
-         "tool_choice":"required","include":["web_search_call.action.sources"],"max_output_tokens":1550,
+         "tool_choice":"required","include":["web_search_call.action.sources"],"max_output_tokens":2400,
          "input":[{"role":"system","content":direction},{"role":"user","content":question}]}
     try:
         with httpx.Client(timeout=httpx.Timeout(50.0,connect=8.0,read=50.0,write=10.0,pool=8.0)) as client:
             response=client.post(base+"/responses",headers={
                 "Authorization":"Bearer "+key,"Content-Type":"application/json"},json=req)
-        if response.status_code >= 400:return None
+        if response.status_code >= 400:
+            return fail("PROVIDER_HTTP_"+str(response.status_code))
         payload=response.json()
-        if payload.get("status")=="incomplete":return None
+        if payload.get("status")=="incomplete":
+            reason=str((payload.get("incomplete_details") or {}).get("reason") or "unknown")
+            return fail("PROVIDER_INCOMPLETE_"+re.sub(r"[^a-zA-Z0-9_]","",reason)[:35])
         annotated_urls=[]
         source_rows=[]
         searches=[]
@@ -461,7 +479,13 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
                             "snippet":"","published_at":""})
         urls=safe_web_urls(annotated_urls+[r["url"] for r in source_rows])
         summary=_response_output_text(payload).strip()
-        if not summary or not urls or not search_actions:return None
+        if not search_actions:
+            return fail("PROVIDER_SEARCH_TOOL_NOT_EXECUTED")
+        if not urls:
+            return fail("PROVIDER_NO_ATTRIBUTABLE_URLS")
+        if not summary:
+            return fail("PROVIDER_NO_OUTPUT_TEXT")
+        mark("DISCOVERY_RETURNED_URLS",len(urls))
         # Search tool results are only discovery metadata. Actual READ status
         # is assigned later after independent bounded HTTPS retrieval succeeds.
         by_url={}
@@ -478,8 +502,12 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
                 "freshness_check_requested":plan["freshness_check_requested"],
                 "search_plan":plan,
                 "retrieved_at":datetime.now(timezone.utc).isoformat()}
-    except (httpx.HTTPError,ValueError,TypeError,KeyError):
-        return None
+    except httpx.TimeoutException:
+        return fail("PROVIDER_TIMEOUT")
+    except httpx.HTTPError:
+        return fail("PROVIDER_NETWORK_ERROR")
+    except (ValueError,TypeError,KeyError):
+        return fail("PROVIDER_INVALID_RESPONSE")
 
 
 def pdf_moderation_section_is_complete(answer):
@@ -681,9 +709,11 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     web_permitted=(not evidence and mode != 'GROUNDED' if allow_public_web is None
                    else bool(allow_public_web))
     # Private source identifiers never enter a public web lookup.
+    web_diagnostics={}
     web_discovery=(research_public_web(question,key,model,base,
                   assistant_mode=(mode_config or {}).get('assistant_mode','OPERATIONAL'),
-                  perspective=(mode_config or {}).get('perspective','AUTO'))
+                  perspective=(mode_config or {}).get('perspective','AUTO'),
+                  diagnostics=web_diagnostics)
                   if web_permitted and not explicit_private_source and not pdf_guidance else None)
     from .assistant_live_web import verify_public_pages
     web_research=verify_public_pages(web_discovery) if web_discovery else None
@@ -987,7 +1017,8 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
             ("url","title","status","reason","published_at","updated_at")}
             for row in (web_research or {}).get("pages",[])[:8]],
         "external_search_queries":(web_research or {}).get("search_queries",[])[:12],
-        "external_web_search_status":(web_research or {}).get("search_status","UNAVAILABLE"),
+        "external_web_search_status":(
+            (web_research or {}).get("search_status") or web_diagnostics.get("status") or "NOT_REQUESTED"),
         "external_research_retrieved_at":(web_research or {}).get("retrieved_at"),
         "mode": "OPENAI_HYBRID" if mode == "HYBRID" else "OPENAI_GROUNDED",
         "model": payload.get("model") or model,

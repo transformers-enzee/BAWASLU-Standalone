@@ -19,6 +19,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
   Array.isArray(message?.provider?.external_research_pages)?message.provider.external_research_pages:[];
  const searchQueries=message?.grounding?.search_queries||message?.provider?.external_search_queries||[];
  const freshnessCheck=message?.grounding?.freshness_check_requested||message?.provider?.external_freshness_check_requested;
+ const webStatus=message?.grounding?.search_status||message?.provider?.web_search_status||message?.provider?.external_web_search_status||'';
  const attachmentCitationIds=Array.from(new Set(
   [...String(message?.text||'').matchAll(/\[(ATT-[a-f0-9]{32}-S\d+)\]/g)].map(x=>x[1])
  )).slice(0,12);
@@ -26,6 +27,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
  if(webOnly)return <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs" data-testid="assistant-consulted-sources">
   <summary className="cursor-pointer font-semibold text-[#19364c]">Research Trail · consulted public sources</summary>
   <p className="mt-2 text-slate-600">This is public web research, not a legally verified BAWASLU finding. Unavailable searches are explicitly disclosed.</p>
+  {webStatus&&<p className="mt-1 text-amber-800">Web research status: {webStatus.replaceAll('_',' ')}</p>}
   {message?.grounding?.retrieved_at&&<p className="mt-1 text-slate-500">Sources retrieved: {new Date(message.grounding.retrieved_at).toLocaleString()}</p>}
   {!fresh&&<p className="mt-1 font-semibold text-amber-800">Historical answer snapshot. Rerun source verification before any new official action.</p>}
   {webPages.length>0&&<section className="mt-2 space-y-2" data-testid="assistant-public-pages-audit">
@@ -62,6 +64,7 @@ export default function AssistantWorkflowEvidence({message,fresh=false,threadId=
  return <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs" data-testid="assistant-research-trail"><summary className="cursor-pointer font-semibold text-[#19364c]">Research Trail · sources, evidence and review details</summary><div className="mt-3 space-y-3" data-testid="assistant-structured-workflow">
   <section className="rounded-lg border border-slate-200 bg-white p-3 space-y-2" data-testid="assistant-consulted-sources">
    <h3 className="font-semibold text-[#19364c]">Source consultation record</h3>
+   {webStatus&&<p className="text-xs text-amber-800">Web research status: {webStatus.replaceAll('_',' ')}</p>}
   {webPages.length>0&&<section className="mt-2 space-y-2" data-testid="assistant-public-pages-audit">
    <h4 className="font-semibold text-[#19364c]">Public pages · read status, title and publication date</h4>
    {webPages.map((row,i)=><div key={row.url||i} className="rounded border border-slate-200 bg-slate-50 p-2">

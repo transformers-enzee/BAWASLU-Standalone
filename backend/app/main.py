@@ -161,7 +161,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','178.6'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','178.7'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -771,9 +771,12 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         from .assistant_decision_intelligence import synthesize_public_decision
         key=os.getenv('OPENAI_API_KEY','').strip()
         base=(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip('/')
+        web_diagnostics={}
         research=(research_public_web(q,key,openai_triage_model(),base,
                   assistant_mode=mode_config['assistant_mode'],
-                  perspective=mode_config['perspective']) if key else None)
+                  perspective=mode_config['perspective'],
+                  diagnostics=web_diagnostics) if key else None)
+        if not key:web_diagnostics['status']='PROVIDER_KEY_UNAVAILABLE'
         research=verify_public_pages(research) if research else None
         # Only successfully read pages support current factual assertions.
         # Search-only or inaccessible pages remain visible in Research Trail.
@@ -786,8 +789,9 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         officer_decision=assessment.get('officer_decision') or {}
         return {'answer':answer,'records':[],
                 'response_profile':'WEB_RESEARCH',
-                'provider':{'mode':'WEB_ONLY_RESEARCH' if research else 'NO_ATTRIBUTABLE_WEB_RESULTS',
-                            'web_attribution_count':len(urls)},
+                'provider':{'mode':'WEB_ONLY_RESEARCH' if urls else 'NO_ATTRIBUTABLE_WEB_RESULTS',
+                            'web_attribution_count':len(urls),
+                            'web_search_status':(research or {}).get('search_status') or web_diagnostics.get('status') or 'UNAVAILABLE'},
                 'answer_language':language,'workflow_mode':workflow_mode,
                 'assistant_mode':mode_config['assistant_mode'],
                 'workspace_mode':mode_config['workspace_mode'],
@@ -802,7 +806,8 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                         'published_at','updated_at')} for page in (research or {}).get('pages',[])[:8]],
                     'search_queries':(research or {}).get('search_queries',[])[:12],
                     'freshness_check_requested':bool((research or {}).get('freshness_check_requested')),
-                    'search_status':(research or {}).get('search_status','UNAVAILABLE'),
+                    'search_status':(research or {}).get('search_status') or web_diagnostics.get('status') or 'UNAVAILABLE',
+                    'discovery_status':web_diagnostics.get('status') or 'UNAVAILABLE',
                     'decision_quality':officer_decision.get('quality') or {},
                     'institutional_relevance':officer_decision.get('relevance') or 'UNRESOLVED',
                     'web_source_count':len(urls),

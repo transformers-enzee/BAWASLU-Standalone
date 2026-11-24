@@ -110,7 +110,7 @@ def test_observation_passage_later_than_numeric_introduction_is_kept():
     passage=engine.relevant_passage(source,PILOT)
     assert "observers described disinformation" in passage
     assert passage!=text[:2800]
-    assert "Recorded" in passage
+    assert "recorded reports" in passage
     assert len(passage)<=2800
 
 
@@ -250,7 +250,7 @@ def test_ai5_general_research_revises_stats_only_answer_and_exports_pdf(monkeypa
     pdf=export.create_pdf(record)
     text="\n".join(page.extract_text() or "" for page in
                    PdfReader(io.BytesIO(pdf)).pages)
-    assert "Reported counts" in text
+    assert "Main findings" in text and "Recorded counts" in text
     assert "information campaigns" in text
     assert "resource use" in text and "Philippines" in text and "Thailand" in text
     assert "Illustrative regional observer analysis" in text

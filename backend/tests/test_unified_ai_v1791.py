@@ -205,3 +205,48 @@ def test_drafting_followup_has_prior_draft_context_without_automatic_sending():
     assert answer["actions_executed"] is False
     assert answer["staff_review_required"] is True
     assert answer["draft"].startswith("DRAFT MEMO")
+
+
+def test_draft_revision_researches_the_original_topic_not_generic_edit_command(monkeypatch):
+    cfg=validate(request("Shorten the memo",workflow="DRAFTING",
+        previousDraft="Draft source [WEB-1]: needs verification",
+        history=[{"role":"user","text":"Compare official legal guidance updated in the past 2 weeks"},
+                 {"role":"assistant","text":"Old model output cannot be used as evidence"},
+                 {"role":"user","text":"Draft a memo to leadership based on the findings"}]),LEADER)
+    assert api.revision_topic(cfg)=="Compare official legal guidance updated in the past 2 weeks"
+    calls=[]
+    monkeypatch.setattr(api,"profile",lambda db,user:LEADER)
+    monkeypatch.setattr(api,"has",lambda *args:True)
+    monkeypatch.setenv("OPENAI_API_KEY","synthetic")
+    def public(q,config,*a):
+        calls.append(q)
+        assert config["window"]["start"]<=config["window"]["end"]
+        return {"status":"READ_SOURCES_AVAILABLE",
+            "sources":[source("WEB-1",when="2026-11-24")],"queries":[],"attempts":[]}
+    monkeypatch.setattr(api,"public_research",public)
+    monkeypatch.setattr(api,"saved_research",
+       lambda *a:(_ for _ in ()).throw(AssertionError("Web-only must not load saved data")))
+    def model(config,context,*a):
+        assert "[WEB-1]" not in context["previous_draft_to_edit_not_independent_evidence"]
+        assert "source to reverify" in context["previous_draft_to_edit_not_independent_evidence"]
+        return raw(["WEB-1"]),"COMPLETE"
+    monkeypatch.setattr(api,"request_ai",model)
+    reply=api.chat(request("Shorten the memo",workflow="DRAFTING",
+        previousDraft="Draft source [WEB-1]: needs verification",
+        history=[{"role":"user","text":"Compare official legal guidance updated in the past 2 weeks"},
+                 {"role":"user","text":"Draft a memo to leadership based on the findings"}]),object(),object())
+    assert len(calls)==1
+    assert reply["answer"]["findings"][0]["source_ids"]==["WEB-1"]
+    assert reply["answer"]["draft"].startswith("DRAFT MEMO")
+
+
+def test_recent_answer_does_not_assert_new_facts_from_only_outdated_sources():
+    cfg=validate(request("What changed during the past 2 weeks?"),LEADER)
+    cfg["window"]=window(cfg["question"],date(2026,11,24))
+    old=source("WEB-3","PUBLIC_OFFICIAL","READ","2026-11-05")
+    old["within_period"]=False
+    result=safe_answer(raw(["WEB-3"]),[old],cfg,"READ_SOURCES_AVAILABLE")
+    assert result["findings"]==[]
+    assert result["what_changed"]==""
+    assert result["confidence"]=="LOW"
+    assert "No readable, in-period source" in result["lead"]

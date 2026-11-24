@@ -14,7 +14,7 @@ from app.access import has, profile
 from app.auth import current_user
 from app.db import get_db
 from app.models import User
-from .contract import validate, jurisdiction, REFERENCE
+from .contract import validate, jurisdiction, REFERENCE, DRAFT, window
 from .web import run as public_research
 from .saved import collect as saved_research
 from .answer import request_ai, safe_answer, model_context
@@ -55,8 +55,10 @@ def revision_topic(cfg):
     if cfg["workflow"]!="DRAFTING" or not cfg["previous_draft"] or len(q.split())>=12:
         return q
     users=[r["text"] for r in cfg["history"] if r["role"]=="user"]
-    return next((topic for topic in reversed(users)
-                 if len(topic.split())>=5 and not REFERENCE.search(topic)),q)
+    # Re-anchor to the original SUBJECT, not to successive "draft a memo" /
+    # "shorten it" instructions. Never send a prior AI answer to public search.
+    topics=[item for item in reversed(users) if len(item.split())>=5]
+    return next((t for t in topics if not DRAFT.search(t)),topics[0] if topics else q)
 
 
 def api_result(config,grant,public,saved,answer,synthesis_status,warnings):
@@ -98,12 +100,20 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     model=(os.getenv("OPENAI_UNIFIED_ASSISTANT_MODEL") or os.getenv("OPENAI_MODEL") or
            "gpt-6-luna").strip()
     question=revision_topic(cfg)
+    if question!=cfg["question"]:
+        # Prior source IDs are turn-local. A revised draft must be re-cited from
+        # evidence read NOW; copying old IDs could misattribute a new WEB-1.
+        cfg["previous_draft"]=re.sub(r"\[(?:WEB-\d+|SOCIAL-\d+|INT-[\w:-]+|DOC-\d+-P\d+)\]",
+                                     "[source to reverify]",cfg["previous_draft"],flags=re.I)
+        if not cfg.get("window") and window(question):
+            cfg["window"]=window(question)
+            cfg["recent"]=True
     # Crucial: Web-only never calls the saved-source collector. Not even a
     # hidden SmartRadar search for recommendations, revisions or fallback.
     public=public_research(question,cfg,key,model,base)
     saved=[];warnings=[]
     if cfg["sources"]["smartRadar"] or cfg["sources"]["legalReferences"]:
-        saved,warnings=saved_research(db,grant,cfg["question"],cfg["sources"],cfg.get("window"))
+        saved,warnings=saved_research(db,grant,question,cfg["sources"],cfg.get("window"))
     if cfg["sources"]["publicWeb"] and public["status"]!="READ_SOURCES_AVAILABLE":
         warnings.insert(0,"Live public research did not return readable primary pages ("+
                         public["status"]+"). Do not treat saved records or AI general knowledge as current verification.")

@@ -50,7 +50,7 @@ test('authenticated read-only workspaces load without route errors or paid clien
 test('navigation exposes the four operational workspaces under officer permissions',async ({page})=>{
   await signIn(page);
   const nav=page.locator('nav');
-  for(const href of ['/smart-radar','/social-listening','/inbox','/assistant']) {
+  for(const href of ['/smart-radar','/social-listening','/inbox','/ai-assistant']) {
     await expect(nav.locator('a[href="'+href+'"]').first()).toBeVisible();
   }
   await page.goto('/smart-radar');

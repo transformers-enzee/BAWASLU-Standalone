@@ -209,6 +209,15 @@ def safe_answer(raw,sources,config,web_status):
               "Confirm official records and jurisdiction before acting.")
     if not has_evidence:
         findings=[]  # never promote unsupported specific model claims
+        if config.get("recent"):
+            # Even if web_search ran, no readable/in-window source supports a
+            # current factual update. Do not launder model prose as fresh news.
+            lead=(("Tidak ada sumber terbaca yang memenuhi periode untuk memverifikasi "
+                   "perkembangan terbaru. Periksa pengumuman resmi sebelum bertindak.")
+                  if lang=="id" else
+                  ("No readable, in-period source supports a current factual update. "
+                   "Verify the latest official publication before acting."))
+            if unavailable:lead=notice+lead
     attention=str(raw.get("attention") or "NONE").upper()
     confidence=str(raw.get("confidence") or "UNASSESSED").upper()
     if attention not in ATTENTION:attention="WATCH"
@@ -221,7 +230,7 @@ def safe_answer(raw,sources,config,web_status):
     return {
         "lead":lead,"attention":attention,"confidence":confidence,
         "first_step":txt(raw.get("first_step"),620),
-        "what_changed":txt(raw.get("what_changed"),1100),
+        "what_changed":(txt(raw.get("what_changed"),1100) if has_evidence or not config.get("recent") else ""),
         "why_it_matters":txt(raw.get("why_it_matters"),950),
         "geographic_implications":txt(raw.get("geographic_implications"),750),
         "institutional_implications":txt(raw.get("institutional_implications"),850),
@@ -230,7 +239,8 @@ def safe_answer(raw,sources,config,web_status):
         "legal_checks":strings("legal_checks"),
         "watch_next":strings("watch_next"),
         "uncertainties":strings("uncertainties",8),
-        "draft":txt(raw.get("draft"),8000) if config["workflow"]=="DRAFTING" else "",
+        "draft":(txt(raw.get("draft"),8000) if config["workflow"]=="DRAFTING"
+                 and (has_evidence or not config.get("recent")) else ""),
         "source_coverage":"SOURCED" if has_evidence else "NO_ELIGIBLE_SOURCE",
         "staff_review_required":True,"actions_executed":False,
     }

@@ -122,7 +122,8 @@ def parse_pdf(raw,url):
         return {"title":urlsplit(url).path.rsplit("/",1)[-1][:170],
                 "excerpt":text,"published_at":"","updated_at":"",
                 "document_type":"PDF_PARTIAL_FIRST_EIGHT_PAGES"}
-    except (ImportError,ValueError,TypeError,KeyError,IndexError,OSError):
+    except Exception:
+        # Untrusted or corrupt PDFs must never crash the officer's request.
         return None
 
 
@@ -286,7 +287,8 @@ def run(question,config,key,model,base):
     # Prefer direct official records before secondary reporting, while
     # preserving newer notices and the superseded ones for comparison.
     candidates=sorted(unique.values(),key=lambda x:(
-        not official(x["url"]),-(int((date(x.get("published_at")) or "0000")[:4]))))[:MAX_RESULTS]
+        not official(x["url"]),
+        -int((date(x.get("published_at")) or "0000-00-00").replace("-",""))))[:MAX_RESULTS]
     with ThreadPoolExecutor(max_workers=4) as pool:
         pages=list(pool.map(read_page,candidates))
     pages.sort(key=lambda x:(x.get("updated_at") or x.get("published_at") or "",

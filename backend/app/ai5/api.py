@@ -186,6 +186,13 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     combined=source_mode_filter(base_sources,cfg["source_mode"],attached)
     cfg["research_dimensions"]=public.get("dimensions",[])
     cfg["research_coverage"]=public.get("coverage",[])
+    cfg["comparative_coverage"]=public.get("comparative_coverage")
+    packet=engine.model_trace(cfg,combined)
+    cfg["comparative_evidence_summaries"]=[
+        {"title":p.get("title",""),"date":p.get("publication_date",""),
+         "dimensions":p.get("search_dimensions",[]),
+         "excerpt":p.get("excerpt_preview","")[:520]}
+        for p in packet.get("passages",[])[:14]]
 
     history=state.history_context(before,cfg["source_mode"],attached_ids)
     if cfg["reference_turn_id"] and last and last not in before[-7:]:
@@ -240,6 +247,18 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
                     cfg["research_coverage"]=web.evaluate_coverage(
                         cfg["research_dimensions"],public["sources"],key,model,base)
                     public["coverage"]=cfg["research_coverage"]
+                    criterion=web.qualitative_comparison_requirement(
+                        cfg["question"],cfg.get("evidence_intent"))
+                    if criterion:
+                        cfg["comparative_coverage"]=web.evaluate_coverage(
+                            [criterion],public["sources"],key,model,base)[0]
+                        public["comparative_coverage"]=cfg["comparative_coverage"]
+                    packet=engine.model_trace(cfg,combined)
+                    cfg["comparative_evidence_summaries"]=[
+                        {"title":p.get("title",""),"date":p.get("publication_date",""),
+                         "dimensions":p.get("search_dimensions",[]),
+                         "excerpt":p.get("excerpt_preview","")[:520]}
+                        for p in packet.get("passages",[])[:14]]
             cfg["answer_revision"]={
                 "unanswered_parts_to_address_or_explicitly_disclose":missing,
                 "previous_draft_to_rewrite_in_full_not_cite_as_evidence":
@@ -285,6 +304,7 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             "research_trace":{"attempts":public.get("attempts",[])[:32],
                 "dimensions":cfg.get("research_dimensions",[])[:8],
                 "coverage":cfg.get("research_coverage",[])[:8],
+                "comparative_coverage":cfg.get("comparative_coverage"),
                 "evidence_intent":cfg.get("evidence_intent"),
                 "budget":public.get("budget",{}),
                 "model_source_ids":evidence_trace["source_ids"],
@@ -302,6 +322,7 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
            "attempts":public.get("attempts",[]),
            "requested_dimensions":cfg.get("research_dimensions",[]),
            "coverage":cfg.get("research_coverage",[]),
+           "comparative_coverage":cfg.get("comparative_coverage"),
            "evidence_intent":cfg.get("evidence_intent"),
            "budget":public.get("budget",{}),
            "model_passages":evidence_trace["passages"],

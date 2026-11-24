@@ -45,6 +45,8 @@ test('new AI Assistant appears below the existing assistant and keeps research p
  await expect(next).toBeVisible();
  await expect(next).toHaveText('AI Assistant');
  await page.goto('/ai-assistant');
+ // This synthetic fixture contains saved evidence, so explicitly enable mixed mode.
+ await page.getByRole('button',{name:/Web \+ SmartRadar/}).click();
  await expect(page.getByTestId('ai-assistant-v2-page')).toBeVisible();
  await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Compare synthetic cases.');
  await page.getByRole('button',{name:'Ask AI'}).click();
@@ -75,5 +77,32 @@ test('draft workflow supports edit, follow-up and review-only delivery',async({p
  expect(payloads.length).toBe(2);
  expect(payloads[1].previousDraft).toBe('Revised by officer; still draft.');
  expect(payloads[1].workflow).toBe('DRAFTING');
- expect(payloads[1].sources.smartRadar).toBe(true);
+ expect(payloads[1].sourceMode).toBe('WEB_ONLY');
+ expect(payloads[1].sources.smartRadar).toBe(false);
+ expect(payloads[1].sources.publicWeb).toBe(true);
+ expect(payloads[1].sources.legalReferences).toBe(false);
+});
+
+test('Web only, mixed and saved-only modes produce exact authorized source flags',async({page})=>{
+ const payloads=[];
+ await page.route('**/api/ai-assistant/chat',async route=>{
+  payloads.push(route.request().postDataJSON());
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(demoAnswer)});
+ });
+ await login(page);await page.goto('/ai-assistant');
+ await expect(page.getByRole('button',{name:/Web only/})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('What happened recently?');
+ await page.getByRole('button',{name:'Ask AI'}).click();
+ expect(payloads[0].sourceMode).toBe('WEB_ONLY');
+ expect(payloads[0].sources).toEqual({smartRadar:false,publicWeb:true,legalReferences:false});
+ await page.getByRole('button',{name:/Web \+ SmartRadar/}).click();
+ await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Compare authorized records and public pages');
+ await page.getByRole('button',{name:'Ask AI'}).click();
+ expect(payloads[1].sourceMode).toBe('WEB_SMARTRADAR');
+ expect(payloads[1].sources).toEqual({smartRadar:true,publicWeb:true,legalReferences:true});
+ await page.getByRole('button',{name:/SmartRadar only/}).click();
+ await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Summarize local records');
+ await page.getByRole('button',{name:'Ask AI'}).click();
+ expect(payloads[2].sourceMode).toBe('SMARTRADAR_ONLY');
+ expect(payloads[2].sources).toEqual({smartRadar:true,publicWeb:false,legalReferences:true});
 });

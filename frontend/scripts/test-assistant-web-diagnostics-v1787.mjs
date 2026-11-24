@@ -14,4 +14,6 @@ for(const key of ['diagnostics=web_diagnostics','discovery_status','search_statu
 for(const key of ['diagnostics=web_diagnostics','web_discovery_status','web_search_status'])
  assert.ok(files.v2.includes(key),'AI Assistant diagnostics missing: '+key);
 assert.ok(files.trail.includes('Web research status:'));
+assert.ok(files.shared.includes('When external_public_research is supplied'),'Executive report must admit independently read web pages');
+assert.ok(!files.shared.includes('no online research or PDF assumptions'),'Conflicting internal-only executive instruction must be removed');
 console.log('PASS v178.7: search failure diagnostics wired through both assistants');

@@ -26,7 +26,7 @@ have(api,'router=APIRouter(prefix="/api/ai-5"');
 have(api,'if cfg["source_mode"]!="WEB_ONLY"');
 have(api,'saved_research(db,grant');
 have(api,'@router.post("/export/{file_type}")');
-have(api,'referenceTurnId');
+have(engine,'referenceTurnId');
 have(engine,'GENERAL_RESEARCH');
 have(engine,'BAWASLU_ACTION');
 have(engine,'Do NOT force election');

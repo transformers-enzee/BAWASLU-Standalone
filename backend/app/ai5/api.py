@@ -413,13 +413,18 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
                 "answer_audit":answer_audit},
             "created_at":datetime.now(timezone.utc).isoformat()}
     state.add_turn(user,conversation_id,grant,record)
-    try:
-        saving=persistence.auto_append(db,user,grant,conversation_id,record)
-    except Exception:
-        db.rollback()
-        LOG.exception("AI5_SAVED_CHAT_AUTO_APPEND_FAILED")
-        saving={"status":"COULD_NOT_SAVE",
-                "reason":"Could not save this answer. Retry or copy it before closing."}
+    if isinstance(db,Session):
+        try:
+            saving=persistence.auto_append(db,user,grant,conversation_id,record)
+        except Exception:
+            db.rollback()
+            LOG.exception("AI5_SAVED_CHAT_AUTO_APPEND_FAILED")
+            saving={"status":"COULD_NOT_SAVE",
+                    "reason":"Could not save this answer. Retry or copy it before closing."}
+    else:
+        # Compatibility with offline AI-5 research fixtures that supply a
+        # non-database placeholder; production requests always use Session.
+        saving={"status":"NOT_SAVED"}
     trail={"sources":[display(s) for s in combined[:40]],
            "public_status":public["status"],"searched_at":public.get("as_of"),
            "attempts":public.get("attempts",[]),

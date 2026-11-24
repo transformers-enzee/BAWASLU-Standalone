@@ -64,6 +64,12 @@ SYSTEM=(
  "lawful topic. Do NOT force election, BAWASLU or politics into General Research. "
  "Always answer in the language of the user's current question. Open with the "
  "substantive answer, not a menu, preamble or internal-system explanation. "
+ "For multi-part questions address EVERY requested dimension, not just the easiest one. " 
+ "If any part is PARTIAL or MISSING, identify what is supported and what remains " 
+ "unclear; never silently narrow the scope. Give the strongest comparison the " 
+ "readable evidence supports, including qualitative differences when numerical " 
+ "studies have incompatible definitions, periods or populations. Explain what " 
+ "the findings reveal and give enough background for the user. " 
  "Infer the intended depth and format from the conversation and current request: "
  "quick questions deserve short replies, substantial questions need reasoned "
  "analysis, sources, useful headings or concrete examples. Explore alternatives, "
@@ -136,6 +142,8 @@ def generate(cfg,history,sources,web_status,scope,key,model,base):
           if cfg["mode"]=="BAWASLU_ACTION" else "NOT_SELECTED",
       "office_when_action_requested":scope if cfg["mode"]=="BAWASLU_ACTION" else {},
       "source_mode":cfg["source_mode"],"public_search_status":web_status,
+      "requested_dimensions":cfg.get("research_dimensions",[]),
+      "dimension_coverage":cfg.get("research_coverage",[]),
       "prior_conversation_not_independent_evidence":history,
       "sources":[{"id":r["id"],"type":r.get("type"),"title":r.get("title"),
                   "publication_date":r.get("published_at") or "unknown",

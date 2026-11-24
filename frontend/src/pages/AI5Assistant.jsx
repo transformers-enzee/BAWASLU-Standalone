@@ -21,7 +21,7 @@ function Markdown({value,trail}){
  const safe=String(value||'').replace(/\[\[([A-Z0-9:_-]{3,80})\]\]/g,(_,key)=>{
   const s=byId.get(key);if(!s)return '';
   const dest=s.url?.startsWith('https://')?(s.resolved_url||s.url):'#ai5-source-'+s.id;
-  const label=String(s.type?.startsWith('ATTACHMENT_')?(s.title||s.id):s.id).replace(/[\[\]]/g,'').slice(0,90);
+  const label=String(s.title||s.id).replace(/[\[\]]/g,'').slice(0,95);
   return '['+label+']('+dest+')';
  });
  return <div className="prose prose-sm max-w-none text-slate-900 prose-headings:text-[#173950]">
@@ -47,7 +47,13 @@ function Trail({result}){
    <p>Source mode: <strong>{result.source_mode?.replaceAll('_',' ')}</strong> · Public search: <strong>{t.public_status||'Not selected'}</strong></p>
    <p>Public pages read: {t.read_public_count??0} · Saved records: {t.saved_count??0} · Uploaded/link sections: {t.attachment_count??0}</p>
    {t.searched_at&&<p>Research consulted: {t.searched_at} (not continuously updated)</p>}
-   {(t.attempts||[]).map((x,i)=><p key={i}>{x.phase}: {x.status} · {x.discovered||0} leads</p>)}
+   {!!t.coverage?.length&&<div className="rounded border border-slate-200 p-2">
+    <strong>Coverage of the requested question</strong>
+    {(t.coverage||[]).map((x,i)=><p key={i}>{x.name}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}
+   </div>}
+   {(t.attempts||[]).map((x,i)=><p key={i}>{x.phase}{x.dimension?' · '+x.dimension:''}: {x.status} · {x.discovered||0} leads{x.query?' · Query: '+x.query:''}{x.provider_queries?.length?' · Provider searched: '+x.provider_queries.join(' | '):''}</p>)}
+   {!!t.model_source_ids?.length&&<p>Sources passed to answer model: {t.model_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
+   {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
    {(t.warnings||[]).map((x,i)=><p key={i} className="rounded bg-amber-50 p-2 text-amber-900">{x}</p>)}
    {(t.sources||[]).map(s=><section key={s.id} id={'ai5-source-'+s.id} data-testid="ai5-source-row" className="scroll-mt-24 rounded-lg border border-slate-200 p-3">
     <div className="flex flex-wrap justify-between gap-2"><strong>{s.id} · {s.title}</strong>

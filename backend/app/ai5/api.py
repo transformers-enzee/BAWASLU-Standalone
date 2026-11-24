@@ -182,6 +182,10 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     else:
         base_sources=[*public["sources"],*saved,*attached]
     combined=source_mode_filter(base_sources,cfg["source_mode"],attached)
+    cfg["research_dimensions"]=public.get("dimensions",[])
+    cfg["research_coverage"]=public.get("coverage",[])
+    incomplete=[r["name"] for r in cfg["research_coverage"] if r.get("status")!="COVERED"]
+    if incomplete:warnings.append("Research coverage still incomplete: "+", ".join(incomplete[:4]))
     history=state.history_context(before,cfg["source_mode"],attached_ids)
     if cfg["reference_turn_id"] and last and last not in before[-7:]:
         history.append({"question":last["question"],
@@ -212,6 +216,14 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     trail={"sources":[display(s) for s in combined[:40]],
            "public_status":public["status"],"searched_at":public.get("as_of"),
            "attempts":public.get("attempts",[]),
+           "requested_dimensions":cfg.get("research_dimensions",[]),
+           "coverage":cfg.get("research_coverage",[]),
+           "model_source_ids":[s["id"] for s in combined[:34]
+             if s.get("read_status") in ("READ","SAVED_SNAPSHOT")
+             and not s.get("duplicate_of")],
+           "cited_source_ids":sorted(set(engine.SOURCE_TAG.findall(
+               "\n".join([answer.get("body",""),answer.get("draft",""),
+               str(answer.get("table",{}))])))),
            "read_public_count":sum(x.get("read_status")=="READ" and
                          str(x.get("type","")).startswith("PUBLIC_") for x in combined),
            "saved_count":sum(str(x.get("type","")).startswith("SAVED_") for x in combined),

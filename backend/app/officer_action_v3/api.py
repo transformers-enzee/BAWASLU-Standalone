@@ -13,6 +13,7 @@ from .research import public_research,saved_records
 from .legal import scope_hints
 from .decisions import synthesize
 from .quality import finalize
+from .intelligence_coverage import narrative_citation_audit
 
 router=APIRouter(prefix="/api/officer-decision-ai",tags=["officer-decision-ai-independent"])
 LOG=logging.getLogger(__name__)
@@ -57,6 +58,7 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
     result=synthesize(question,task,cfg["perspective"],_eligible_sources(sources),
                       hints,public["status"],key,model,base)
     report=finalize(result,sources,question,task,public["status"],mode,hints)
+    report["narrative_citation_audit"]=narrative_citation_audit(report["answer"],sources)
     if any(row.get("status")=="RESEARCH_INCOMPLETE" for row in public.get("coverage",[])):
         report["limitations"].insert(0,"Some requested research objectives could not be completed within the search budget. This is not evidence that the requested information does not exist.")
     if result is None and _eligible_sources(sources):
@@ -70,7 +72,7 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
                        "updated_at","read_status","reason","review_status","resolved_url",
                        "document_type","units_inspected","units_total","extraction_notes","extraction_code","extraction_method","objective","objectives")})
     return {"module":"OFFICER_DECISION_AI_INDEPENDENT_V3",
-            "version":"2.1","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
+            "version":"2.2","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
             "task":task,"source_mode":mode,"perspective":cfg["perspective"],
             "research_depth":depth_for(question),"requested_dimensions":[name for name,_ in objectives(question)],
             "synthesis_status":"GENERATED" if result else "UNAVAILABLE",

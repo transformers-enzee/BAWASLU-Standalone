@@ -71,6 +71,11 @@ SYSTEM=(
  "A reported statistic can be PRIMARY_SOURCE_REPORTED or PUBLIC_SOURCE_REPORTED without certifying underlying cases. "
  "Do not assert data does not exist because research timed out or extraction failed. Describe uncovered objectives as research incomplete. "
  "Use documented regional examples and publicly named decided cases if aggregate tables cannot be obtained; never equate political affiliation with liability. "
+ "For each requested dimension provide a source-backed result, a documented partial result, or explicitly identify the unresolved search objective. "
+ "Distinguish official count tables from operational incidents, vulnerability measures, and analytical intervention priorities. "
+ "For published cases give decision identifier, date, jurisdiction, subject role, outcome, and source when present. Never infer a missing association. "
+ "Explain the methodology and limitations of comparisons; do not assign evaluative scores to political actors. "
+ "Connect recommendations to specific documented problems, feasible owners, implementation measures and review triggers; avoid generic repeated summaries. "
  "For an analytical priority ranking explain the criteria and evidence, separate from official counts; do not mix overlapping legal categories and operational risks in one statistical ranking. "
  "For charts emit numeric_series only for comparable observations in the SAME source, period, election, unit and case status, with exact original source_label and verbatim source_quote containing each integer. No invented values, denominators, or aggregated estimates. "
  "For legal rows give exact source_quote from the actual provision, instrument_version and practical_gap, proposed_reform, reform_owner and tradeoff; leave unverified details empty. "
@@ -90,7 +95,7 @@ def synthesize(question,task,perspective,sources,hints,search_status,key,model,b
     for s in eligible:
         excerpt=str(s.get("excerpt") or "")
         row={field:s.get(field,"") for field in
-            ("id","kind","title","published_at","updated_at","read_status","document_type","extraction_notes","objective")}
+            ("id","kind","title","published_at","updated_at","read_status","document_type","extraction_notes","objective","objectives","units_inspected","units_total","url","resolved_url")}
         row["excerpt"]=excerpt[:each]
         if len(excerpt)>each:row["extraction_notes"]+="; synthesis received a partial excerpt"
         evidence.append(row)

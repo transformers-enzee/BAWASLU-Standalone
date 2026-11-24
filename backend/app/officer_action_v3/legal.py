@@ -1,6 +1,7 @@
 """Provisional institutional competence matrix; never declares a violation."""
 import re
 from .analytics import quote_in_source
+from .intelligence_coverage import matching_article
 
 AUTHORITIES={
  "BAWASLU":"Election supervision, prevention and certain election-law procedures",
@@ -38,7 +39,7 @@ def review_legal(rows,records):
         official=any(allowed[s].get("kind")=="OFFICIAL" and allowed[s].get("read_status")=="READ"
                      and re.search(r"jdih|peraturan|putusan|undang|regulation",allowed[s].get("resolved_url") or allowed[s].get("url") or "",re.I)
                      and quote_in_source(r.get("source_quote",""),allowed[s])
-                     and re.search(r"\b(?:pasal|article)\s+\d+",str(r.get("source_quote") or ""),re.I)
+                     and matching_article(r.get("legal_reference"),r.get("source_quote"))
                      for s in citations)
         reference=str(r.get("legal_reference") or "")[:240]
         legal.append({

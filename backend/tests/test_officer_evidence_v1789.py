@@ -25,11 +25,11 @@ def test_all_provider_timeouts_receive_bounded_independent_retries(monkeypatch):
         return {"objective":obj,"status":"PROVIDER_TIMEOUT","queries":[],"results":[]}
     monkeypatch.setattr(research,"_discover",discover)
     r=research.public_research(QUESTION,"test","test","https://example.com/v1")
-    assert len(calls)==11
+    assert len(calls)==14
     assert len(set(calls))==7
     assert r["status"]=="SEARCH_FAILED"
     assert all(row["status"]=="RESEARCH_INCOMPLETE" for row in r["coverage"])
-    assert sum(row["attempts"]==2 for row in r["coverage"])==4
+    assert sum(row["attempts"]==2 for row in r["coverage"])==7
 
 def test_real_document_worker_reads_generated_text_pdf():
     from reportlab.pdfgen import canvas

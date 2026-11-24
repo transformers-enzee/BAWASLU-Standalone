@@ -1,4 +1,4 @@
-# Officer Decision AI — independent new assistant (v178.5)
+# Officer Decision AI — independent new assistant (v178.6)
 
 ## User-defined source specification
 Implementation is based on the uploaded *SmartRadar AI Assistant — Proposed Intelligence-to-Action Upgrade*. This is an intentionally independent third assistant, not an iteration of either old assistant's prompts, history, UI, retrieval functions, schema, or generative response pipeline.

@@ -1,45 +1,25 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
-const page=read('../src/pages/AIAssistantV2.jsx');
 const app=read('../src/App.jsx');
 const nav=read('../src/components/intel/AccessNavigation.jsx');
 const home=read('../src/pages/ManagementHome.jsx');
 const main=read('../../backend/app/main.py');
-const backend=read('../../backend/app/ai_assistant_v2.py');
-
-function has(content,need,description){assert.ok(content.includes(need),description||need)}
-has(app,'path="/ai-assistant" element={<AIAssistantV2 workspace="OPERATIONS" />} />','New operational route');
-has(app,'path="/management/ai-assistant" element={<AIAssistantV2 workspace="MANAGEMENT" />} />','New management route');
-has(nav,"['/assistant','intelligence_assistant'","Legacy assistant stays");
-has(nav,"['/ai-assistant','AI Assistant'","New assistant below original");
-has(nav,"['/management/ai-assistant','AI Assistant'","Management assistant route");
-assert.ok(nav.indexOf("['/assistant','intelligence_assistant'")<nav.indexOf("['/ai-assistant','AI Assistant'"));
-has(home,'/management/ai-assistant','Management executive-brief link');
-has(page,'data-testid="ai-assistant-v2-page"','Separate assistant page');
-has(page,"{id:'RESEARCH'","Research workflow");
-has(page,"{id:'STRATEGY'","Strategy workflow");
-has(page,"{id:'DRAFTING'","Drafting workflow");
-has(page,"{id:'AUTO'","Natural question default");
-has(page,'data-testid="ai-assistant-v2-research-trail"','Source audit');
-has(page,'data-testid="ai-assistant-v2-findings"','Source-linked findings');
-has(page,'data-testid="ai-assistant-v2-draft"','Editable draft');
-has(page,'data-testid="ai-assistant-v2-strategies"','Options and tradeoffs');
-has(page,'data-testid="ai-assistant-v2-plan"','Reviewable tactical plan');
-has(page,'previousDraft','Follow-up revisions use previous draft');
-has(page,"useState('WEB_ONLY')",'Privacy-first Web only default');
-has(page,'data-testid="ai-assistant-v2-source-modes"','Three source mode choices');
-has(page,"{id:'WEB_SMARTRADAR'","Mixed web and saved sources");
-has(page,"{id:'SMARTRADAR_ONLY'","Saved only option");
-has(page,'role="status"','Copy progress');
-has(page,'This new conversation is session-only.','History limitations truthful');
-has(main,'app.include_router(ai_assistant_v2_router)','New API router included');
-has(backend,'@router.post("/chat")','New dedicated API');
-has(backend,'if not has(grant, "view_intelligence")','Server access gate');
-has(backend,'if perspective == "MANAGEMENT" and grant.get("role") not in LEADERSHIP','Management RBAC');
-has(backend,'public_query_safe(question)','No private IDs to public search');
-has(backend,'"store": False','No provider persistence');
-has(backend,'deduplicate','Source overlap control');
-has(backend,'"draft_policy": "STAFF_REVIEW_ONLY_NO_SENDING_OR_APPROVAL"','Human approval');
-has(backend,'"research_status":','Provenance status');
-console.log('PASS v178.0 independent AI Assistant UI, three workflows, authorization, evidence and draft controls');
+const replacement=read('../src/pages/UnifiedAIAssistant.jsx');
+const legacy=read('../../backend/app/ai_assistant_v2.py');
+// Historical v178.0 contract is RETIRED as of v179.1. Preserve its source
+// for rollback, but neither default route nor router may execute it.
+assert.ok(app.includes('UnifiedAIAssistant workspace="OPERATIONAL"'));
+assert.ok(app.includes('UnifiedAIAssistant workspace="MANAGEMENT"'));
+assert.ok(nav.includes("['/ai-assistant','AI Assistant'"));
+assert.ok(nav.includes("['/management/ai-assistant','AI Assistant'"));
+assert.ok(nav.includes('!retired.has(path)'),'Only unified assistant should appear in navigation');
+assert.ok(home.includes('/management/ai-assistant'),'Management homepage link');
+assert.ok(main.includes('app.include_router(unified_ai_router)'));
+assert.ok(!main.includes('app.include_router(ai_assistant_v2_router)'),
+  'Retired handler must no longer serve normal AI Assistant requests');
+assert.ok(legacy.includes('@router.post("/chat")'),'Legacy module preserved for safe migration only');
+for(const id of ['unified-ai-page','unified-research-trail','unified-ai-draft',
+                 'unified-action','WEB_ONLY','WEB_SMARTRADAR','SMARTRADAR_ONLY'])
+ assert.ok(replacement.includes(id),'Replacement missing: '+id);
+console.log('PASS v179.1: former v178.0 AI Assistant retired from primary routes');

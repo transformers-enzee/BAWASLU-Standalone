@@ -28,9 +28,13 @@ export default function AccessNavigation({access,user,build}){
  const {t,language}=useLanguage();
  const label=key=>key==='Management Home'||key==='Management AI Assistant'||key==='AI Assistant'||key==='AI Assistant V2 · New'||key==='Command Centre'?key:t(key);
  const leadership=['National Administrator','National Leadership','Provincial Administrator'].includes(access?.role);
+ // Keep historic routes for direct-link compatibility but expose only the
+ // rebuilt unified AI Assistant in both workspaces.
+ const retired=new Set(['/assistant','/management/assistant',
+                        '/ai-assistant-v2-new','/management/ai-assistant-v2-new']);
  function navigation(items,group){
   return <nav aria-label={group} className="space-y-1 px-3">
-   {items.filter(([path,,,permission])=>access.permissions?.[permission]===true&&
+   {items.filter(([path,,,permission])=>!retired.has(path)&&access.permissions?.[permission]===true&&
        (!path.startsWith('/management')||leadership))
     .map(([path,key,Icon])=><NavLink key={path} to={path} end={path==='/'}
      className={({isActive})=>'flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13px] transition-colors '+(isActive?'bg-[#a52a2f] text-white font-semibold':'text-[#f4e7e5] hover:bg-white/10 hover:text-white')}>

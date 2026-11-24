@@ -22,7 +22,7 @@ import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
 import Inbox from '@/pages/Inbox';
 import IntelligenceAssistant from '@/pages/IntelligenceAssistant';
-import AIAssistantV2 from '@/pages/AIAssistantV2';
+import UnifiedAIAssistant from '@/pages/UnifiedAIAssistant';
 import OfficerDecisionAssistant from '@/pages/OfficerDecisionAssistant';
 import ManagementHome from '@/pages/ManagementHome';
 // Legacy /casework links are redirected into Intelligence Inbox.
@@ -92,11 +92,11 @@ const AuthenticatedApp = () => {
           </Route>
           <Route element={<AccessGate permission="view_intelligence" />}>
             <Route path="/assistant" element={<IntelligenceAssistant workspace="OPERATIONS" />} />
-            <Route path="/ai-assistant" element={<AIAssistantV2 workspace="OPERATIONS" />} />
+            <Route path="/ai-assistant" element={<UnifiedAIAssistant workspace="OPERATIONAL" />} />
             <Route path="/ai-assistant-v2-new" element={<OfficerDecisionAssistant workspace="OPERATIONS" />} />
              <Route path="/management" element={<ManagementHome />} />
              <Route path="/management/assistant" element={<IntelligenceAssistant workspace="MANAGEMENT" />} />
-             <Route path="/management/ai-assistant" element={<AIAssistantV2 workspace="MANAGEMENT" />} />
+             <Route path="/management/ai-assistant" element={<UnifiedAIAssistant workspace="MANAGEMENT" />} />
              <Route path="/management/ai-assistant-v2-new" element={<OfficerDecisionAssistant workspace="MANAGEMENT" />} />
             <Route path="/casework" element={demoLocation?<Navigate to="/social-listening" replace/>:<LegacyCaseworkRedirect/>} />
           </Route>

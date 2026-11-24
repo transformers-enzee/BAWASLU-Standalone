@@ -1,7 +1,8 @@
 import {test,expect} from '@playwright/test';
 import config from '../playwright.config.js';
 
-// The examples are synthetic. No model, web, SocialCrawl or production calls.
+// Controlled simulated fixtures: NO live provider, SocialCrawl, case mutation,
+// or assertion that Bryan/Grace have performed an actual user review.
 const email='admin@bawaslu.local';
 const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
 async function login(page){
@@ -11,99 +12,117 @@ async function login(page){
  await page.getByRole('button',{name:/log in|masuk/i}).click();
  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
 }
-const demoAnswer={
- workflow:'RESEARCH',perspective:'AUTO',research_status:'SOURCED',
- answer:{summary:'A synthetic saved report discusses a qualification-document question. No violation is established.',
-  findings:[{claim:'The fictional record contains a disputed claim.',source_ids:['SOCIAL-12'],
-     evidence_class:'REPORTED_ALLEGATION_NOT_VERIFIED',
-     support:'SOURCE_LINKED_REQUIRES_REVIEW',uncertainty:'Original document is missing.'}],
-  options:[],plan:[],draft:'',
-  uncertainties:['Incident province not established.']},
- sources:[{id:'SOCIAL-12',title:'Simulated source — qualification document',type:'SOCIAL_LISTENING',
-   date:'',location:'',location_verified:false,duplicate_of:''}],
- consulted_sources:[
-  {key:'smartRadar',label:'Saved SmartRadar/BAWASLU intelligence',status:'CONSULTED',
-   basis:'FIXED_SAVED_SNAPSHOT',selected_count:1,cited_source_ids:['SOCIAL-12']},
-  {key:'publicWeb',label:'Public web/social research',status:'SELECTED_NOT_CONSULTED',
-   basis:'NOT_CONSULTED',selected_count:0},
-  {key:'legalReferences',label:'Authorized legal/reference library',status:'SELECTED_NOT_CONSULTED',
-   basis:'NOT_CONSULTED',selected_count:0},
- ],
- warnings:['Simulated fixture: no public research was performed.'],
- draft_policy:'STAFF_REVIEW_ONLY_NO_SENDING_OR_APPROVAL'
-};
-const draftAnswer={...demoAnswer,workflow:'DRAFTING',
- answer:{...demoAnswer.answer,draft:'DRAFT MEMORANDUM\n\nTo: Leadership\nSubject: Synthetic education-record review\n\nThis is a preliminary, unverified example. [SOCIAL-12]'}};
-
-test('new AI Assistant appears below the existing assistant and keeps research provenance',async({page})=>{
- await page.route('**/api/ai-assistant/chat',route=>
-  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(demoAnswer)}));
- await login(page);
- const old=page.locator('nav a[href="/assistant"]').first();
- const next=page.locator('nav a[href="/ai-assistant"]').first();
- await expect(old).toBeVisible();
- await expect(next).toBeVisible();
- await expect(next).toHaveText('AI Assistant');
- await page.goto('/ai-assistant');
- // This synthetic fixture contains saved evidence, so explicitly enable mixed mode.
- await page.getByRole('button',{name:/Web \+ SmartRadar/}).click();
- await expect(page.getByTestId('ai-assistant-v2-page')).toBeVisible();
- await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Compare synthetic cases.');
- await page.getByRole('button',{name:'Ask AI'}).click();
- await expect(page.getByTestId('ai-assistant-v2-findings')).toContainText('fictional record');
- await page.getByTestId('ai-assistant-v2-research-trail').locator('summary').click();
- await expect(page.getByTestId('ai-assistant-v2-research-trail')).toContainText('Saved snapshot');
- await expect(page.getByTestId('ai-assistant-v2-research-trail')).toContainText('Selected · no source returned');
- await expect(page.getByTestId('ai-assistant-v2-research-trail')).toContainText('not established');
-});
-
-test('draft workflow supports edit, follow-up and review-only delivery',async({page})=>{
+const NEW='https://bawaslu.go.id/notice/revised';
+const OLD='https://bawaslu.go.id/notice/older';
+function source(id,kind,url,when,status='READ'){
+ return {id,type:kind,url,title:id==='WEB-1'?'Simulated newest official correction':'Simulated earlier official notice',
+  read_status:status,basis:'LIVE_PUBLIC_LOOKUP',published_at:when,updated_at:'',location_verified:false,
+  duplicate_of:'',excerpt:'Synthetic official notice text; not a real publication',
+  reliability:'OFFICIAL_PUBLICATION_UNVERIFIED',reason:'Page content was read in this controlled fixture'};
+}
+function reply(workspace='OPERATIONAL',draft=false){
+ return {assistant_version:'UNIFIED_AI_V1',workspace,workflow:draft?'DRAFTING':'RESEARCH',
+  source_mode:'WEB_ONLY',perspective:'AUTO',
+  answer:{lead:'Controlled example: the newer official notice supersedes the earlier notice.',
+    first_step:'Verify the latest original notice before proceeding.',
+    attention:'WATCH',confidence:'MODERATE',
+    what_changed:'The newer simulated source carries a revised date.',
+    why_it_matters:'Dates affect what the officer should verify.',
+    geographic_implications:'No verified incident location.',
+    institutional_implications:'BAWASLU jurisdiction requires review.',
+    recommendation:'Use the newer substantiated notice provisionally and check authority.',
+    findings:[{claim:'The simulated newer notice supersedes the older document.',
+      source_ids:['WEB-1'],uncertainty:'No actual official case or source was queried.'}],
+    options:[{title:'Verify first',benefit:'Correct date',tradeoff:'Officer time',reason:'Lower risk',source_ids:['WEB-1']}],
+    plan:[{task:'Check revised announcement',owner_role:'Authorised legal reviewer',
+      milestone:'Proposed day 1',review_point:'Officer sign-off',evidence_needed:'Original notice',
+      decision_gate:'Escalate only with valid jurisdiction',source_ids:['WEB-1'],state:'DRAFT_NOT_ASSIGNED_OR_APPROVED'}],
+    legal_checks:['Verify controlling legal rule and deadline.'],
+    watch_next:['Possible further official correction.'],
+    uncertainties:['No national trend can be inferred.'],
+    draft:draft?'SIMULATED DRAFT MEMO\n\nThis content requires officer review [WEB-1].':'',
+  },
+  sources:[source('WEB-1','PUBLIC_OFFICIAL',NEW,'2026-11-24'),
+           source('WEB-2','PUBLIC_OFFICIAL',OLD,'2026-11-20')],
+  source_consultation:[
+   {key:'publicWeb',label:'Public web and official sources',selected:true,status:'READ_SOURCES_AVAILABLE',
+     read_count:2,snippet_count:0,inaccessible_count:0,basis:'LIVE_PUBLIC_LOOKUP'},
+   {key:'smartRadar',label:'SmartRadar records',selected:false,status:'NOT_SELECTED',basis:'NOT_SELECTED',count:0},
+   {key:'legalReferences',label:'Reference library',selected:false,status:'NOT_SELECTED',basis:'NOT_SELECTED',count:0}
+  ],
+  public_research:{status:'READ_SOURCES_AVAILABLE',read_count:2,as_of:'2026-11-24T03:00:00Z',
+   date_window:{start:'2026-11-11',end:'2026-11-24'},
+   attempts:[{phase:'discovery',status:'DISCOVERED',discovered:2},
+             {phase:'newest updates/corrections',status:'DISCOVERED',discovered:1}],
+   queries:['perubahan pengumuman terbaru','newest official correction']},
+  warnings:['SIMULATED_FIXTURE; no actual public search performed.'],
+  review_policy:'DRAFT_ONLY_AUTHORISED_OFFICER_REVIEW'}
+}
+test('Web only first: Operational response uses newest readable official page and no saved source',async({page})=>{
  const payloads=[];
- await page.route('**/api/ai-assistant/chat',async route=>{
+ await page.route('**/api/ai-assistant/chat',route=>{
   payloads.push(route.request().postDataJSON());
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(draftAnswer)});
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(reply())});
  });
  await login(page);await page.goto('/ai-assistant');
- await page.getByRole('button',{name:/Draft & revise/}).click();
- await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Draft an illustrative memo.');
- await page.getByRole('button',{name:'Ask AI'}).click();
- await expect(page.getByTestId('ai-assistant-v2-draft')).toBeVisible();
- await expect(page.getByText('For authorised staff review only.',{exact:false})).toBeVisible();
- const editor=page.getByLabel('Editable AI draft');
- await editor.fill('Revised by officer; still draft.');
- await page.getByRole('button',{name:'Shorten',exact:true}).click();
- await expect(page.getByRole('textbox',{name:'Ask AI Assistant'})).toHaveValue('Shorten the preceding draft while preserving all source caveats and citations.');
- await page.getByRole('button',{name:'Ask AI'}).click();
- expect(payloads.length).toBe(2);
- expect(payloads[1].previousDraft).toBe('Revised by officer; still draft.');
- expect(payloads[1].workflow).toBe('DRAFTING');
- expect(payloads[1].sourceMode).toBe('WEB_ONLY');
- expect(payloads[1].sources.smartRadar).toBe(false);
- expect(payloads[1].sources.publicWeb).toBe(true);
- expect(payloads[1].sources.legalReferences).toBe(false);
-});
-
-test('Web only, mixed and saved-only modes produce exact authorized source flags',async({page})=>{
- const payloads=[];
- await page.route('**/api/ai-assistant/chat',async route=>{
-  payloads.push(route.request().postDataJSON());
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(demoAnswer)});
- });
- await login(page);await page.goto('/ai-assistant');
- const modes=page.getByTestId('ai-assistant-v2-source-modes');
+ await expect(page.getByTestId('unified-ai-page')).toBeVisible();
+ const modes=page.getByTestId('unified-source-modes');
  await expect(modes.getByRole('button',{name:/Web only/})).toHaveAttribute('aria-pressed','true');
- await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('What happened recently?');
+ await page.getByLabel('Ask AI Assistant').fill('What changed in official guidance in the past 2 weeks?');
  await page.getByRole('button',{name:'Ask AI'}).click();
+ await expect(page.getByTestId('unified-ai-answer')).toContainText('Verify the latest original notice');
+ await expect(page.getByTestId('unified-finding')).toContainText('WEB-1');
+ await expect(page.getByTestId('unified-finding').getByRole('link')).toHaveAttribute('href',NEW);
+ await page.getByTestId('unified-research-trail').locator('summary').click();
+ await expect(page.getByTestId('unified-research-trail')).toContainText('2026-11-24');
+ await expect(page.getByTestId('unified-research-trail')).toContainText('Read · original page opened');
+ expect(payloads).toHaveLength(1);
  expect(payloads[0].sourceMode).toBe('WEB_ONLY');
- expect(payloads[0].sources).toEqual({smartRadar:false,publicWeb:true,legalReferences:false});
+ expect(payloads[0].workspace).toBe('OPERATIONAL');
+ expect(JSON.stringify(payloads[0])).not.toContain('SOCIAL-740');
+});
+test('Management mode leads with executive conclusion, attention and conditional plan',async({page})=>{
+ await page.route('**/api/ai-assistant/chat',route=>
+  route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(reply('MANAGEMENT'))}));
+ await login(page);await page.goto('/management');
+ await expect(page.getByTestId('executive-brief')).toBeVisible();
+ await page.goto('/management/ai-assistant');
+ await expect(page.getByTestId('unified-ai-page')).toContainText('Management intelligence');
+ await page.getByLabel('Ask AI Assistant').fill('What decision needs leadership review?');
+ await page.getByRole('button',{name:'Ask AI'}).click();
+ await expect(page.getByTestId('unified-ai-answer')).toContainText('Executive conclusion');
+ await expect(page.getByTestId('unified-ai-answer')).toContainText('Attention: WATCH');
+ await expect(page.getByTestId('unified-action')).toContainText('Authorised legal reviewer');
+});
+test('Can switch source modes, edit a memo and continue drafting without sending',async({page})=>{
+ const payloads=[];
+ await page.route('**/api/ai-assistant/chat',route=>{
+  payloads.push(route.request().postDataJSON());
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(reply('OPERATIONAL',true))});
+ });
+ await login(page);await page.goto('/ai-assistant');
+ const modes=page.getByTestId('unified-source-modes');
  await modes.getByRole('button',{name:/Web \+ SmartRadar/}).click();
- await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Compare authorized records and public pages');
+ await page.getByLabel('Assistant workflow').selectOption('DRAFTING');
+ await page.getByLabel('Ask AI Assistant').fill('Draft a redacted leadership memo.');
  await page.getByRole('button',{name:'Ask AI'}).click();
- expect(payloads[1].sourceMode).toBe('WEB_SMARTRADAR');
- expect(payloads[1].sources).toEqual({smartRadar:true,publicWeb:true,legalReferences:true});
+ await expect(page.getByTestId('unified-ai-draft')).toBeVisible();
+ await page.getByTestId('unified-ai-draft').fill('Revised draft by reviewer. Not approved.');
+ await page.getByRole('button',{name:'Shorten',exact:true}).click();
+ await expect(page.getByLabel('Ask AI Assistant')).toContainText('Shorten the draft');
+ await page.getByRole('button',{name:'Ask AI'}).click();
+ expect(payloads[0].sourceMode).toBe('WEB_SMARTRADAR');
+ expect(payloads[1].previousDraft).toBe('Revised draft by reviewer. Not approved.');
+ expect(payloads[1].workflow).toBe('DRAFTING');
  await modes.getByRole('button',{name:/SmartRadar only/}).click();
- await page.getByRole('textbox',{name:'Ask AI Assistant'}).fill('Summarize local records');
- await page.getByRole('button',{name:'Ask AI'}).click();
- expect(payloads[2].sourceMode).toBe('SMARTRADAR_ONLY');
- expect(payloads[2].sources).toEqual({smartRadar:true,publicWeb:false,legalReferences:true});
+ await expect(page.getByTestId('unified-ai-answer')).toHaveCount(0);
+});
+test('Controlled SOCIAL-740/SOCIAL-1160 walkthrough is explicitly unverified and private',async({page})=>{
+ await login(page);await page.goto('/ai-assistant');
+ await page.getByText('Controlled officer walkthrough', {exact:false}).click();
+ await page.getByRole('button',{name:/Prepare controlled review question/}).click();
+ await expect(page.getByTestId('unified-source-modes').getByRole('button',{name:/SmartRadar only/}))
+  .toHaveAttribute('aria-pressed','true');
+ await expect(page.getByLabel('Ask AI Assistant')).toHaveValue(/SOCIAL-740 and SOCIAL-1160/);
+ await expect(page.getByText('These IDs do not establish a violation',{exact:false})).toBeVisible();
 });

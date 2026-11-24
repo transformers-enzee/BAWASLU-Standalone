@@ -41,6 +41,7 @@ from .officer_sentiment import router as officer_sentiment_router
 from .assistant_knowledge import router as assistant_knowledge_router
 from .unified_ai.api import router as unified_ai_router
 from .ai4.api import router as ai4_router
+from .ai5.api import router as ai5_router
 from .officer_action_v3.api import router as officer_decision_ai_router
 from .oversight_legal import router as oversight_legal_router
 from .seed import seed
@@ -54,6 +55,7 @@ app.include_router(officer_sentiment_router)
 app.include_router(assistant_knowledge_router)
 app.include_router(unified_ai_router)
 app.include_router(ai4_router)
+app.include_router(ai5_router)
 app.include_router(officer_decision_ai_router)
 app.include_router(oversight_legal_router)
 app.include_router(smart_radar_router)
@@ -163,7 +165,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','179.3'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','179.4'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

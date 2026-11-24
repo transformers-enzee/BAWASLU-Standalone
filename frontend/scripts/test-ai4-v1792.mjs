@@ -40,5 +40,5 @@ for(const item of ['Upload document','Add link','Remove ','ai4-research-trail',
 has(core,'SYSTEM_PROMPT=');
 has(core,'Reply in the language');
 has(core,'consistent, nonpartisan evidentiary standard');
-has(docker,'ARG BAWASLU_BUILD_VERSION=179.3');
+assert.ok(/ARG BAWASLU_BUILD_VERSION=179\.[4-9]/.test(docker),'AI-4 remains enabled in AI-5 builds');
 console.log('PASS AI-4 v179.2: independent routes, permissioned sources, attachments, follow-ups and feedback; existing assistant retained');

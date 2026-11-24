@@ -220,3 +220,50 @@ def test_generation_contract_distinguishes_history_and_current_outcomes():
     assert "readable evidence" in engine.SYSTEM
     assert callable(engine.review_scope)
     assert callable(web.fill_answer_gaps)
+
+
+def test_word_and_excel_keep_readable_linked_source_names():
+    from zipfile import ZipFile
+    from openpyxl import load_workbook
+    source=_source("Official election reference","Historical source.",
+                   "https://example.org/electoral-law")
+    answer={"title":"Citation QA","body":"## Review\nA supported observation [[WEB-FIX-1]].",
+            "draft":"","table":{"title":"Options","columns":["Country","Finding"],
+                                "rows":[["A","Observation [[WEB-FIX-1]]"]]},
+            "open_questions":[]}
+    turn={"answer":answer,"sources":[source],"turn_id":"3"*32,
+          "question":"Compare a historical and a current system"}
+    word=export.create_docx(turn)
+    with ZipFile(io.BytesIO(word)) as archive:
+        xml=archive.read("word/document.xml").decode("utf-8")
+        rels=archive.read("word/_rels/document.xml.rels").decode("utf-8")
+    assert "Official election reference (2022-04-08)" in xml
+    assert "w:hyperlink" in xml
+    assert "https://example.org/electoral-law" in rels
+    assert "WEB-FIX-1" not in xml
+    workbook=load_workbook(io.BytesIO(export.create_xlsx(turn)))
+    assert "Official election reference (2022-04-08)" in str(
+        workbook["Analysis"].cell(2,2).value)
+    assert workbook["Sources"].cell(2,2).hyperlink.target==(
+        "https://example.org/electoral-law")
+
+
+def test_long_comparison_begins_on_first_pdf_page():
+    source=_source("Institutional review","Historical reading.",
+                   "https://example.org/overview")
+    paragraph=("Institutional arrangements establish the election body's "
+               "powers and appointment process. Historical comparisons should "
+               "not be mistaken for evidence of current performance.")
+    answer={"title":"Comparative election study",
+            "body":"Institutional analysis, evidence periods and current gaps.",
+            "draft":"","table":{"title":"Country comparison",
+                    "columns":["Country","Institution","Strength","Evidence limit"],
+                    "rows":[[name,paragraph,paragraph,paragraph] for name in
+                            ("Indonesia","Philippines","Malaysia","Thailand",
+                             "Timor-Leste","Singapore","Papua New Guinea")]},
+            "open_questions":[]}
+    turn={"answer":answer,"sources":[source],"turn_id":"4"*32}
+    reader=PdfReader(io.BytesIO(export.create_pdf(turn)))
+    first=reader.pages[0].extract_text() or ""
+    assert "Country comparison" in first
+    assert "Indonesia" in first, "Table must begin below its heading, not on a mostly blank second page"

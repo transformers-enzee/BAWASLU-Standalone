@@ -96,10 +96,10 @@ def create_pdf(turn,edited=""):
     navy=colors.HexColor("#173950")
     styles={
        "body":ParagraphStyle("AI5Paragraph",fontName=font,fontSize=9.5,
-                     leading=14.7,spaceAfter=8,wordWrap="CJK"),
+                     leading=14.7,spaceAfter=8,wordWrap=None),
        "list":ParagraphStyle("AI5List",fontName=font,fontSize=9.5,
                      leading=14.5,spaceAfter=5,leftIndent=13,firstLineIndent=-10,
-                     wordWrap="CJK"),
+                     wordWrap=None),
        "h1":ParagraphStyle("AI5H1",fontName=font,fontSize=16.5,
                      leading=21,spaceBefore=16,spaceAfter=9,textColor=navy,
                      keepWithNext=True),
@@ -113,7 +113,7 @@ def create_pdf(turn,edited=""):
                      leading=14.6,spaceBefore=8,spaceAfter=5,textColor=navy,
                      keepWithNext=True),
        "small":ParagraphStyle("AI5Source",fontName=font,fontSize=8,
-                     leading=11.8,spaceAfter=5,wordWrap="CJK",
+                     leading=11.8,spaceAfter=5,wordWrap=None,
                      textColor=colors.HexColor("#334155"))}
     eligible={row["id"]:row for row in turn.get("sources",[])
               if row.get("id") and row.get("read_status") in ("READ","SAVED_SNAPSHOT")
@@ -150,8 +150,10 @@ def create_pdf(turn,edited=""):
     cols=table.get("columns") or []
     rows=table.get("rows") or []
     if cols:
+        table_title_style=ParagraphStyle("AI5TableTitle",parent=styles["h2"],
+                                           keepWithNext=False)
         story.append(Paragraph(html.escape(table.get("title") or "Structured comparison"),
-                               styles["h2"]))
+                               table_title_style))
         # Wide comparisons stay readable as labeled country/subject sections.
         if len(cols)>4:
             for index,row in enumerate(rows[:100],1):
@@ -221,48 +223,88 @@ def create_pdf(turn,edited=""):
     return output.getvalue()
 
 
+def _docx_cited(paragraph,text,source_index):
+    """Insert approved clickable references into a real editable Word paragraph."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    value=str(text or "")
+    offset=0
+    for match in CITE.finditer(value):
+        if match.start()>offset:
+            paragraph.add_run(re.sub(r"(?<!\\)[*_\x60]","",value[offset:match.start()]))
+        source=source_index.get(match.group(1))
+        if source:
+            label=_source_label(source)
+            url=str(source.get("resolved_url") or source.get("url") or "")
+            if url.startswith("https://") and source.get("read_status") in ("READ","SAVED_SNAPSHOT"):
+                rid=paragraph.part.relate_to(url,RT.HYPERLINK,is_external=True)
+                link=OxmlElement("w:hyperlink")
+                link.set(qn("r:id"),rid)
+                run=OxmlElement("w:r")
+                props=OxmlElement("w:rPr")
+                color=OxmlElement("w:color");color.set(qn("w:val"),"135F8B")
+                underline=OxmlElement("w:u");underline.set(qn("w:val"),"single")
+                props.append(color);props.append(underline);run.append(props)
+                value_xml=OxmlElement("w:t");value_xml.text=label
+                run.append(value_xml);link.append(run);paragraph._p.append(link)
+            else:paragraph.add_run(label)
+        else:paragraph.add_run("[citation unavailable]")
+        offset=match.end()
+    if offset<len(value):
+        paragraph.add_run(re.sub(r"(?<!\\)[*_\x60]","",value[offset:]))
+
+
 def create_docx(turn,edited=""):
     from docx import Document
-    from docx.shared import Inches,Pt,RGBColor
+    from docx.shared import Inches
     doc=Document()
-    sec=doc.sections[0]
-    sec.top_margin=Inches(.8);sec.bottom_margin=Inches(.8)
-    sec.left_margin=Inches(.85);sec.right_margin=Inches(.85)
-    doc.add_heading(turn["answer"].get("title") or "AI-5 Research",0)
+    section=doc.sections[0]
+    section.top_margin=Inches(.8);section.bottom_margin=Inches(.8)
+    section.left_margin=Inches(.85);section.right_margin=Inches(.85)
+    index={s["id"]:s for s in turn.get("sources",[]) if s.get("id") and
+           s.get("read_status") in ("READ","SAVED_SNAPSHOT") and
+           not s.get("duplicate_of")}
+    doc.add_heading(turn.get("answer",{}).get("title") or "AI-5 Research",0)
     body,table,questions=_outline(turn,edited)
-    for line in body.split("\n"):
-        s=line.strip()
-        if not s:
-            doc.add_paragraph("");continue
-        if (m:=HEAD.match(s)):
-            doc.add_heading(_plain(m.group(2)),level=min(3,len(m.group(1))))
-        elif (m:=LIST.match(s)):
-            doc.add_paragraph(_plain(m.group(1)),style="List Bullet")
-        else:doc.add_paragraph(_plain(s))
-    columns=table.get("columns") or []
-    if columns:
+    for line in body.splitlines():
+        line=line.strip()
+        if not line:continue
+        heading=HEAD.match(line)
+        bullet=LIST.match(line)
+        numbered=re.match(r"^\d{1,3}[.)]\s+(.+)$",line)
+        if heading:
+            paragraph=doc.add_heading(level=min(4,len(heading.group(1))))
+            _docx_cited(paragraph,heading.group(2),index)
+        elif bullet or numbered:
+            paragraph=doc.add_paragraph(style="List Bullet" if bullet else "List Number")
+            _docx_cited(paragraph,bullet.group(1) if bullet else numbered.group(1),index)
+        else:_docx_cited(doc.add_paragraph(),line,index)
+    cols=table.get("columns") or []
+    if cols:
         doc.add_heading(table.get("title") or "Structured comparison",level=2)
-        grid=doc.add_table(rows=1,cols=len(columns))
+        grid=doc.add_table(rows=1,cols=len(cols))
         grid.style="Table Grid"
-        for i,c in enumerate(columns):grid.rows[0].cells[i].text=str(c)
+        for i,name in enumerate(cols):
+            _docx_cited(grid.rows[0].cells[i].paragraphs[0],name,index)
         for row in (table.get("rows") or [])[:150]:
             cells=grid.add_row().cells
-            for i in range(len(columns)):cells[i].text=str(row[i])[:1600] if i<len(row) else ""
+            for i in range(len(cols)):
+                _docx_cited(cells[i].paragraphs[0],
+                            str(row[i])[:1600] if i<len(row) else "",index)
     if questions:
-        doc.add_heading("Open questions / caveats",level=2)
-        for q in questions:doc.add_paragraph(_plain(q),style="List Bullet")
-    doc.add_heading("Research sources and provenance",level=2)
-    sources=list(_sources(turn))
-    if not sources:doc.add_paragraph("No source citations attached.")
-    for s in sources[:60]:
-        meta=(f'{s.get("id")} — {s.get("title") or "Source"}; '
-              f'{s.get("read_status") or "unknown"}; '
-              f'{s.get("published_at") or "date unknown"}')
-        doc.add_paragraph(meta)
-        if s.get("url"):doc.add_paragraph(str(s.get("resolved_url") or s.get("url")))
-    doc.add_paragraph("For authorised review only; no external communication sent.")
-    bio=io.BytesIO();doc.save(bio)
-    return bio.getvalue()
+        doc.add_heading("Open questions and evidence limits",level=2)
+        for question in questions:
+            _docx_cited(doc.add_paragraph(style="List Bullet"),question,index)
+    doc.add_heading("Sources and provenance",level=2)
+    for source in list(_sources(turn))[:60]:
+        paragraph=doc.add_paragraph()
+        _docx_cited(paragraph,"[["+str(source["id"])+"]]",index)
+        paragraph.add_run(" — "+str(source.get("read_status") or "unknown"))
+    if not list(_sources(turn)):doc.add_paragraph("No source citations attached.")
+    doc.add_paragraph("Prepared for review. No external communication was sent.")
+    result=io.BytesIO();doc.save(result)
+    return result.getvalue()
 
 
 def _literal(value):
@@ -277,20 +319,25 @@ def create_xlsx(turn,edited=""):
     from openpyxl.styles import PatternFill,Font,Alignment
     from openpyxl.utils import get_column_letter
     wb=Workbook()
+    source_index={r["id"]:r for r in turn.get("sources",[]) if r.get("id")}
+    def readable(value):
+        return CITE.sub(lambda m:_source_label(source_index[m.group(1)])
+                        if m.group(1) in source_index else "[citation unavailable]",
+                        str(value or ""))
     main=wb.active;main.title="Analysis"
     body,table,questions=_outline(turn,edited)
     columns=table.get("columns") or []
     rows=table.get("rows") or []
     if columns:
-        main.append([_literal(x) for x in columns])
+        main.append([_literal(readable(x)) for x in columns])
         for row in rows[:250]:
-            main.append([_literal(row[i]) if i<len(row) else "" for i in range(len(columns))])
+            main.append([_literal(readable(row[i])) if i<len(row) else "" for i in range(len(columns))])
     else:
         main.append(["Section","Content","Status"])
         for line in body.splitlines():
             if line.strip():
                 label="Heading" if HEAD.match(line) else "Finding / draft"
-                main.append([label,_literal(_plain(line)), "Requires review"])
+                main.append([label,_literal(_plain(readable(line))), "Requires review"])
         if main.max_row==1:main.append(["Finding","No generated content","No evidence"])
     main.freeze_panes="A2"
     main.auto_filter.ref=main.dimensions
@@ -309,6 +356,13 @@ def create_xlsx(turn,edited=""):
         sources.append([_literal(s.get(k)) for k in
                        ("id","title","type","read_status","basis","published_at","url")])
     sources.freeze_panes="A2";sources.auto_filter.ref=sources.dimensions
+    for row in range(2,sources.max_row+1):
+        url=str(sources.cell(row,7).value or "")
+        if url.startswith("https://"):
+            sources.cell(row,7).hyperlink=url
+            sources.cell(row,7).style="Hyperlink"
+            sources.cell(row,2).hyperlink=url
+            sources.cell(row,2).style="Hyperlink"
     for cell in sources[1]:
         cell.font=Font(bold=True,color="FFFFFF")
         cell.fill=PatternFill("solid",fgColor="173950")

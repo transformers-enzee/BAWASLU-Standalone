@@ -26,13 +26,41 @@ def _outline(turn,edited_text=""):
 
 
 def _sources(turn):
-    ids=set()
-    for text in (turn.get("answer",{}).get("body",""),
-                 turn.get("answer",{}).get("draft","")):
-        ids.update(CITE.findall(text))
-    for s in turn.get("sources",[]):
-        if s.get("id") in ids or s.get("type","").startswith("ATTACHMENT_"):
-            yield s
+    answer=turn.get("answer") or {}
+    used=set()
+    table=answer.get("table") or {}
+    for text in (answer.get("body",""),answer.get("draft",""),
+                 table.get("title",""),*(table.get("columns") or [])):
+        used.update(CITE.findall(str(text or "")))
+    for row in (table.get("rows") or []):
+        for cell in row if isinstance(row,list) else []:
+            used.update(CITE.findall(str(cell or "")))
+    for source in turn.get("sources",[]):
+        if source.get("id") in used or str(source.get("type") or "").startswith("ATTACHMENT_"):
+            yield source
+
+
+def _source_label(source):
+    title=str(source.get("title") or source.get("id") or "Source").strip()[:115]
+    publication=str(source.get("published_at") or "")[:10]
+    return title+(" ("+publication+")" if publication else "")
+
+
+def _markup(text,sources):
+    """Safe ReportLab inline markup; only application-verified URLs become links."""
+    value=html.escape(str(text or ""))
+    value=re.sub(r"\*\*([^*]{1,900})\*\*",r"<b>\1</b>",value)
+    value=re.sub(r"(?<!\*)\*([^*]{1,900})\*",r"<i>\1</i>",value)
+    def cite(match):
+        source=sources.get(match.group(1))
+        if not source:return "[citation unavailable]"
+        label=html.escape(_source_label(source))
+        url=str(source.get("resolved_url") or source.get("url") or "")
+        if url.startswith("https://") and source.get("read_status") in ("READ","SAVED_SNAPSHOT"):
+            return ('<link href="'+html.escape(url,quote=True)+'" color="#135F8B">'
+                    +label+"</link>")
+        return label
+    return CITE.sub(cite,value)
 
 
 def _font():
@@ -55,75 +83,142 @@ def _font():
 
 def create_pdf(turn,edited=""):
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether
+    from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle
 
-    out=io.BytesIO()
-    doc=SimpleDocTemplate(out,pagesize=A4,leftMargin=19*mm,rightMargin=19*mm,
-                           topMargin=19*mm,bottomMargin=19*mm,title="AI-5 Research Export")
+    output=io.BytesIO()
+    doc=SimpleDocTemplate(output,pagesize=A4,leftMargin=18*mm,rightMargin=18*mm,
+                          topMargin=18*mm,bottomMargin=20*mm,
+                          title=turn.get("answer",{}).get("title") or "AI-5 Research")
     font=_font()
-    normal=ParagraphStyle("AI5Body",fontName=font,fontSize=9.4,leading=14,spaceAfter=7,
-                          wordWrap="CJK")
-    heading=ParagraphStyle("AI5Heading",parent=normal,fontSize=13,leading=17,
-                           spaceBefore=11,spaceAfter=8,textColor=colors.HexColor("#173950"))
-    small=ParagraphStyle("AI5Source",parent=normal,fontSize=8,leading=12,
-                         textColor=colors.HexColor("#4B5563"))
-    story=[Paragraph(html.escape(turn["answer"].get("title") or "AI-5 Research"),
-                     heading),Spacer(1,5)]
+    navy=colors.HexColor("#173950")
+    styles={
+       "body":ParagraphStyle("AI5Paragraph",fontName=font,fontSize=9.5,
+                     leading=14.7,spaceAfter=8,wordWrap="CJK"),
+       "list":ParagraphStyle("AI5List",fontName=font,fontSize=9.5,
+                     leading=14.5,spaceAfter=5,leftIndent=13,firstLineIndent=-10,
+                     wordWrap="CJK"),
+       "h1":ParagraphStyle("AI5H1",fontName=font,fontSize=16.5,
+                     leading=21,spaceBefore=16,spaceAfter=9,textColor=navy,
+                     keepWithNext=True),
+       "h2":ParagraphStyle("AI5H2",fontName=font,fontSize=13.2,
+                     leading=18,spaceBefore=13,spaceAfter=7,textColor=navy,
+                     keepWithNext=True),
+       "h3":ParagraphStyle("AI5H3",fontName=font,fontSize=11.3,
+                     leading=15.4,spaceBefore=10,spaceAfter=6,textColor=navy,
+                     keepWithNext=True),
+       "h4":ParagraphStyle("AI5H4",fontName=font,fontSize=10.1,
+                     leading=14.6,spaceBefore=8,spaceAfter=5,textColor=navy,
+                     keepWithNext=True),
+       "small":ParagraphStyle("AI5Source",fontName=font,fontSize=8,
+                     leading=11.8,spaceAfter=5,wordWrap="CJK",
+                     textColor=colors.HexColor("#334155"))}
+    eligible={row["id"]:row for row in turn.get("sources",[])
+              if row.get("id") and row.get("read_status") in ("READ","SAVED_SNAPSHOT")
+              and not row.get("duplicate_of")}
+    story=[Paragraph(html.escape(turn.get("answer",{}).get("title") or "AI-5 Research"),
+                     styles["h1"]),Spacer(1,4)]
     body,table,questions=_outline(turn,edited)
-    for line in body.split("\n"):
-        x=line.strip()
-        if not x:
-            story.append(Spacer(1,4));continue
-        m=HEAD.match(x)
-        if m:story.append(Paragraph(html.escape(_plain(m.group(2))),heading))
+    paragraph=[]
+    def flush():
+        if paragraph:
+            story.append(Paragraph(_markup(" ".join(paragraph),eligible),styles["body"]))
+            paragraph.clear()
+    for line in body.splitlines():
+        line=line.strip()
+        if not line:
+            flush()
+            continue
+        heading=HEAD.match(line)
+        unordered=LIST.match(line)
+        numbered=re.match(r"^\d{1,3}[.)]\s+(.+)$",line)
+        if heading:
+            flush()
+            level=min(4,len(heading.group(1)))
+            story.append(Paragraph(_markup(heading.group(2),eligible),
+                                   styles["h"+str(level)]))
+        elif unordered or numbered:
+            flush()
+            story.append(Paragraph("&#8226; "+_markup(
+                 unordered.group(1) if unordered else numbered.group(1),eligible),
+                 styles["list"]))
         else:
-            li=LIST.match(x)
-            story.append(Paragraph(html.escape(("• "+_plain(li.group(1))) if li else _plain(x)),normal))
+            paragraph.append(line)
+    flush()
     cols=table.get("columns") or []
     rows=table.get("rows") or []
     if cols:
-        story.append(Paragraph(html.escape(table.get("title") or "Structured comparison"),heading))
-        # Long/wide tables are presented as individual rows to preserve
-        # legibility on portrait A4 rather than silently dropping columns.
-        if len(cols)>5:
-            for i,row in enumerate(rows[:100],1):
-                story.append(Paragraph(f"Row {i}",heading))
-                for j,name in enumerate(cols):
+        story.append(Paragraph(html.escape(table.get("title") or "Structured comparison"),
+                               styles["h2"]))
+        # Wide comparisons stay readable as labeled country/subject sections.
+        if len(cols)>4:
+            for index,row in enumerate(rows[:100],1):
+                title=str(row[0]) if row else "Item "+str(index)
+                story.append(Paragraph(_markup(title,eligible),styles["h3"]))
+                for j,label in enumerate(cols[1:],1):
                     value=str(row[j]) if j<len(row) else ""
-                    story.append(Paragraph(html.escape(str(name)+": "+value[:900]),normal))
+                    story.append(Paragraph("<b>"+html.escape(str(label))+":</b> "+
+                         _markup(value[:1400],eligible),styles["body"]))
         else:
-            cells=[[Paragraph(html.escape(str(x)),small) for x in cols]]
-            for row in rows[:100]:
-                cells.append([Paragraph(html.escape(str(row[i])[:800] if i<len(row) else ""),small)
+            cells=[[Paragraph(_markup(str(name),eligible),styles["small"])
+                    for name in cols]]
+            for row in rows[:120]:
+                cells.append([Paragraph(_markup(str(row[i])[:1800] if i<len(row) else "",
+                                               eligible),styles["small"])
                               for i in range(len(cols))])
-            width=(A4[0]-38*mm)/len(cols)
-            sheet=Table(cells,colWidths=[width]*len(cols),repeatRows=1,hAlign="LEFT")
+            usable=A4[0]-36*mm
+            weights=([1.25]+[1]*(len(cols)-1)) if len(cols)>1 else [1]
+            width=[usable*w/sum(weights) for w in weights]
+            sheet=Table(cells,colWidths=width,repeatRows=1,hAlign="LEFT",
+                        splitByRow=1)
             sheet.setStyle(TableStyle([
-                ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#E7EDF1")),
-                ("GRID",(0,0),(-1,-1),.25,colors.HexColor("#CFD8DF")),
-                ("VALIGN",(0,0),(-1,-1),"TOP"),("LEFTPADDING",(0,0),(-1,-1),5),
-                ("RIGHTPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),6)
+                ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#E7EEF3")),
+                ("LINEBELOW",(0,0),(-1,0),.75,colors.HexColor("#B8C8D2")),
+                ("LINEBELOW",(0,1),(-1,-1),.25,colors.HexColor("#E1E8EE")),
+                ("VALIGN",(0,0),(-1,-1),"TOP"),
+                ("LEFTPADDING",(0,0),(-1,-1),7),
+                ("RIGHTPADDING",(0,0),(-1,-1),7),
+                ("TOPPADDING",(0,0),(-1,-1),7),
+                ("BOTTOMPADDING",(0,0),(-1,-1),7)
             ]))
             story.append(sheet)
     if questions:
-        story.append(Paragraph("Open questions / caveats",heading))
-        for q in questions:story.append(Paragraph(html.escape(_plain(q)),normal))
-    story.append(Paragraph("Research sources and provenance",heading))
+        story.append(Paragraph("Open questions and evidence limits",styles["h2"]))
+        for question in questions[:15]:
+            story.append(Paragraph("&#8226; "+_markup(question,eligible),styles["list"]))
+    story.append(Paragraph("Sources and provenance",styles["h2"]))
     selected=list(_sources(turn))
-    if not selected:story.append(Paragraph("No source citations attached.",small))
-    for s in selected[:50]:
-        desc=(str(s.get("id"))+" — "+str(s.get("title") or "")+
-              " | "+str(s.get("read_status") or "")+
-              " | "+str(s.get("published_at") or "date unknown")+
-              (" | "+str(s.get("resolved_url") or s.get("url")) if s.get("url") else ""))
-        story.append(Paragraph(html.escape(desc[:700]),small))
-    story.append(Paragraph("Generated for review. No official decision or communication was executed.",small))
-    doc.build(story)
-    return out.getvalue()
+    if not selected:
+        story.append(Paragraph("No verified sources were cited.",styles["small"]))
+    for source in selected[:70]:
+        title=html.escape(_source_label(source))
+        date=html.escape(str(source.get("published_at") or "publication date unknown")[:30])
+        status=html.escape(str(source.get("read_status") or "unknown"))
+        url=str(source.get("resolved_url") or source.get("url") or "")
+        label=("<link href='"+html.escape(url,quote=True)+"' color='#135F8B'>"+
+                title+"</link>") if url.startswith("https://") else title
+        story.append(Paragraph(label+" — "+status+" — "+date,styles["small"]))
+    trace=turn.get("research_trace") or {}
+    if trace.get("coverage"):
+        story.append(Paragraph("Research Trail — coverage summary",styles["h2"]))
+        for item in trace["coverage"][:12]:
+            desc=str(item.get("name") or "")+" — "+str(item.get("status") or "")
+            if item.get("reason"):desc+=": "+str(item["reason"])[:240]
+            story.append(Paragraph(html.escape(desc),styles["small"]))
+    story.append(Spacer(1,8))
+    story.append(Paragraph("Prepared for human review. No official action was executed.",
+                           styles["small"]))
+    def footer(canvas,document):
+        canvas.saveState()
+        canvas.setFont(font,8)
+        canvas.setFillColor(colors.HexColor("#66788A"))
+        canvas.drawString(18*mm,12*mm,"AI-5 Research | For review")
+        canvas.drawRightString(A4[0]-18*mm,12*mm,"Page "+str(document.page))
+        canvas.restoreState()
+    doc.build(story,onFirstPage=footer,onLaterPages=footer)
+    return output.getvalue()
 
 
 def create_docx(turn,edited=""):

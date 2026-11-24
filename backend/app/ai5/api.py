@@ -202,7 +202,44 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
                         "mode":last.get("mode") if last else "GENERAL_RESEARCH"})
     generated,status=engine.generate(cfg,history,combined,public["status"],
                                      profile_context(grant),key,model,base)
+    answer_audit={"status":"NOT_RUN","items":[],"missing_requests":[]}
+    # An independent completeness pass prevents the synthesis model from silently
+    # abandoning individual parts of a broad user question.
+    multi_part=len(cfg.get("research_dimensions") or [])>1 or bool(web.BROAD.search(cfg["question"]))
+    if use_tools and key and multi_part and status=="COMPLETE":
+        answer_audit=engine.review_scope(cfg,generated,key,model,base)
+        missing=answer_audit.get("missing_requests") or []
+        if missing:
+            if cfg["source_mode"]!="SMARTRADAR_ONLY":
+                known={str(s.get("url") or "").split("#")[0] for s in combined}
+                rescue=web.fill_answer_gaps(cfg["question"],missing,key,model,base,
+                                            cfg["today"],known)
+                public["attempts"].extend(rescue.get("attempts",[]))
+                fresh=rescue.get("sources") or []
+                public["sources"].extend(fresh)
+                combined=source_mode_filter([*combined,*fresh],cfg["source_mode"],attached)
+            cfg["answer_revision"]={
+                "unanswered_parts_to_address_or_explicitly_disclose":missing,
+                "previous_draft_to_rewrite_in_full_not_cite_as_evidence":
+                    engine._answer_text(generated)[:9000]}
+            revised,revision_status=engine.generate(cfg,history,combined,
+                                   public["status"],profile_context(grant),
+                                   key,model,base)
+            if revision_status=="COMPLETE":
+                generated=revised
+                answer_audit=engine.review_scope(cfg,generated,key,model,base)
+            else:
+                warnings.append("Completeness revision unavailable ("+
+                                revision_status+"); retaining first answer.")
     answer=engine.sanitize(generated,combined,cfg,public["status"])
+    if answer_audit.get("status")=="GAPS_FOUND":
+        gaps=answer_audit.get("missing_requests") or []
+        warnings.append("Some requested answer sections remain incomplete: "+
+                        "; ".join(gaps[:5]))
+        for part in gaps[:4]:
+            note="Unresolved request: "+part
+            if note not in answer["open_questions"]:
+                answer["open_questions"].append(note)
     if status!="COMPLETE":
         warnings.append("AI-5 answer generation is unavailable ("+status+
                         "); no fabricated source-based reply was substituted.")
@@ -211,6 +248,10 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             "action_mode":cfg["action_mode"],"source_mode":cfg["source_mode"],
             "answer":answer,"sources":combined[:40],"used_saved":bool(saved),
             "used_public":bool(public.get("sources")),"searched_at":public.get("as_of"),
+            "research_trace":{"attempts":public.get("attempts",[])[:24],
+                "dimensions":cfg.get("research_dimensions",[])[:8],
+                "coverage":cfg.get("research_coverage",[])[:8],
+                "answer_audit":answer_audit},
             "created_at":datetime.now(timezone.utc).isoformat()}
     state.add_turn(user,conversation_id,grant,record)
     trail={"sources":[display(s) for s in combined[:40]],
@@ -218,6 +259,7 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
            "attempts":public.get("attempts",[]),
            "requested_dimensions":cfg.get("research_dimensions",[]),
            "coverage":cfg.get("research_coverage",[]),
+           "answer_audit":answer_audit,
            "model_source_ids":[s["id"] for s in combined[:34]
              if s.get("read_status") in ("READ","SAVED_SNAPSHOT")
              and not s.get("duplicate_of")],

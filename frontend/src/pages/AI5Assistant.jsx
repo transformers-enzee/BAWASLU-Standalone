@@ -21,7 +21,7 @@ function Markdown({value,trail}){
  const safe=String(value||'').replace(/\[\[([A-Z0-9:_-]{3,80})\]\]/g,(_,key)=>{
   const s=byId.get(key);if(!s)return '';
   const dest=s.url?.startsWith('https://')?(s.resolved_url||s.url):'#ai5-source-'+s.id;
-  const label=String(s.title||s.id).replace(/[\[\]]/g,'').slice(0,95);
+  const label=String((s.title||s.id)+(s.published_at?' ('+String(s.published_at).slice(0,10)+')':'')).replace(/[\[\]]/g,'').slice(0,118);
   return '['+label+']('+dest+')';
  });
  return <div className="prose prose-sm max-w-none text-slate-900 prose-headings:text-[#173950]">
@@ -52,6 +52,10 @@ function Trail({result}){
     {(t.coverage||[]).map((x,i)=><p key={i}>{x.name}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}
    </div>}
    {(t.attempts||[]).map((x,i)=><p key={i}>{x.phase}{x.dimension?' · '+x.dimension:''}: {x.status} · {x.discovered||0} leads{x.query?' · Query: '+x.query:''}{x.provider_queries?.length?' · Provider searched: '+x.provider_queries.join(' | '):''}</p>)}
+   {!!t.answer_audit?.items?.length&&<div className="rounded border border-slate-200 p-2">
+    <strong>Final answer coverage check</strong>
+    {t.answer_audit.items.map((x,i)=><p key={i}>{x.request}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}
+   </div>}
    {!!t.model_source_ids?.length&&<p>Sources passed to answer model: {t.model_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
    {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
    {(t.warnings||[]).map((x,i)=><p key={i} className="rounded bg-amber-50 p-2 text-amber-900">{x}</p>)}

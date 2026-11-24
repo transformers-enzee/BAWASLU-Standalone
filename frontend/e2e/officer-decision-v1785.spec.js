@@ -113,6 +113,7 @@ test('deep research renders complete Markdown report with tables and linked evid
  extended.report.answer='## National overview\n\n**Synthetic evidence** [P-1]\n\n| Province | Reports |\n| --- | --- |\n| Province A | 12 |\n\n'+('A synthetic analytical paragraph.\n\n'.repeat(80))+'## Legislative review\n\nFinal report section.';
  extended.report.claims=Array.from({length:7},(_,i)=>({claim:'Synthetic finding '+(i+1),status:'PRIMARY_SOURCE_REPORTED',source_ids:['P-1'],caveat:''}));
  extended.research_trail.search_passes=[{objective:'National statistics',status:'DISCOVERED',discovered:3,read_count:1}];
+ extended.report.numeric_series=[{title:'Synthetic provincial counts',election_type:'Pemilu',period:'2024',case_status:'Reports',unit:'reports',rows:[{label:'Province A',value:12,source_id:'P-1',source_quote:'Province A 12 reports'},{label:'Province B',value:8,source_id:'P-1',source_quote:'Province B 8 reports'}]}];
  await page.route('**/api/officer-decision-ai/analyze',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(extended)}));
  await login(page);await page.goto('/ai-assistant-v2-new');
  await page.getByRole('textbox',{name:'Ask the new Officer Decision AI'}).fill('What are the top 10 election violations by provinces, candidates, parties and laws?');
@@ -122,5 +123,7 @@ test('deep research renders complete Markdown report with tables and linked evid
  await expect(full.getByRole('table')).toContainText('Province A');
  await expect(full.getByRole('link',{name:'P-1'})).toHaveAttribute('href','https://dkpp.go.id/synthetic-test');
  await expect(full).toContainText('Final report section.');
+ await expect(page.getByTestId('officer-v3-numeric-series')).toContainText('Synthetic provincial counts');
+ await page.getByTestId('officer-v3-claims').locator('summary').click();
  await expect(page.getByTestId('officer-v3-claims')).toContainText('Synthetic finding 7');
 });

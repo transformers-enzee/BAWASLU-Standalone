@@ -52,9 +52,13 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
             internal=[]
     sources=public["sources"]+internal
     hints=scope_hints(question)
+    hints["research_coverage"]=public.get("coverage",[])
+    hints["coverage_rule"]="Readable leads are not proof of comprehensive coverage. Explain failed searches as research incomplete, not data nonexistence."
     result=synthesize(question,task,cfg["perspective"],_eligible_sources(sources),
                       hints,public["status"],key,model,base)
     report=finalize(result,sources,question,task,public["status"],mode,hints)
+    if any(row.get("status")=="RESEARCH_INCOMPLETE" for row in public.get("coverage",[])):
+        report["limitations"].insert(0,"Some requested research objectives could not be completed within the search budget. This is not evidence that the requested information does not exist.")
     if result is None and _eligible_sources(sources):
         report["limitations"].insert(0,"Research sources were retrieved, but answer synthesis did not complete. No complete analytical report was generated.")
     # Never expose raw page text, sensitive record excerpts or credentials
@@ -64,16 +68,16 @@ def analyze(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)
         trail.append({k:src.get(k,"") for k in
                       ("id","kind","record_id","title","url","published_at",
                        "updated_at","read_status","reason","review_status","resolved_url",
-                       "document_type","units_inspected","extraction_notes","objective")})
+                       "document_type","units_inspected","units_total","extraction_notes","extraction_code","extraction_method","objective","objectives")})
     return {"module":"OFFICER_DECISION_AI_INDEPENDENT_V3",
-            "version":"2.0","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
+            "version":"2.1","scope":"CURRENT_AUTHORIZED_USER_NO_SHARED_ASSISTANT_CONTEXT",
             "task":task,"source_mode":mode,"perspective":cfg["perspective"],
             "research_depth":depth_for(question),"requested_dimensions":[name for name,_ in objectives(question)],
             "synthesis_status":"GENERATED" if result else "UNAVAILABLE",
             "report":report,"research_trail":{
                 "retrieved_at":public.get("as_of"),"web_status":public["status"],
                 "search_queries":public.get("queries",[])[:24],
-                "search_passes":public.get("search_passes",[]),
+                "search_passes":public.get("search_passes",[]),"coverage":public.get("coverage",[]),
                 "sources":trail,"public_read_count":sum(s.get("read_status")=="READ" for s in sources),
                 "saved_count":len(internal),"search_is_live":any(p.get("status") in ("DISCOVERED","NO_ATTRIBUTABLE_URLS") for p in public.get("search_passes",[]))},
             "audit":{"read_only":True,"no_case_created":True,"no_assignment_created":True,

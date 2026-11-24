@@ -3,6 +3,7 @@ import json
 import httpx
 from .contracts import utc_now,safe_public_query
 from .depth import depth_for,objectives,output_budget
+from .language import requested_language,wrong_language
 
 def _schema():
     s={"type":"string"}
@@ -13,12 +14,16 @@ def _schema():
     return obj({
         "headline":s,"answer":s,"key_takeaway":s,"bawaslu_implication":s,
         "relevance":s,"recommended_decision":s,
-        "claims":arr({"claim":s,"status":s,"source_ids":ids,"caveat":s}),
+        "claims":arr({"claim":s,"status":{"type":"string","enum":["PRIMARY_SOURCE_REPORTED","PUBLIC_SOURCE_REPORTED","SAVED_OBSERVATION","INDEPENDENTLY_CORROBORATED","ATTRIBUTED_ALLEGATION","CONFLICTING","INFERRED","UNRESOLVED"]},"source_ids":ids,"caveat":s}),
         "legal":arr({"issue":s,"institution":s,"legal_reference":s,
-                     "applicability":s,"verification_needed":s,"source_ids":ids}),
+                     "applicability":s,"verification_needed":s,"source_ids":ids,
+                     "instrument_version":s,"source_quote":s,"practical_gap":s,"proposed_reform":s,"reform_owner":s,"tradeoff":s}),
         "options":arr({"option":s,"benefit":s,"tradeoff":s,"change_trigger":s,"source_ids":ids}),
         "actions":arr({"task":s,"owner_role":s,"evidence_needed":s,
-                       "deliverable":s,"decision_gate":s,"source_ids":ids}),
+                       "deliverable":s,"decision_gate":s,"source_ids":ids,"target_period":s,"priority_reason":s,"success_metric":s}),
+        "numeric_series":arr({"title":s,"election_type":s,"period":s,"case_status":s,"unit":s,
+            "group_by":{"type":"string","enum":["CATEGORY","PROVINCE","STAGE"]},
+            "rows":arr({"label":s,"source_label":s,"value":{"type":"integer"},"source_id":s,"source_quote":s})}),
         "draft":s,"limitations":{"type":"array","items":s},
     })
 
@@ -61,7 +66,15 @@ SYSTEM=(
  "For actions identify reviewer role, required evidence, deliverable, and an escalation or closure gate. No automatic enforcement. "
  "General conceptual explanations and clearly labeled planning suggestions may be given without sources; do not invent specifics. "
  "All legal applicability and official actions require human approval. Keep structured claims and actions as useful audit/work products, "
- "not a substitute for a full main answer. Avoid repeating the entire report in key_takeaway or claims."
+ "not a substitute for a full main answer. Avoid repeating the entire report in key_takeaway or claims. "
+ "Answer in the explicitly requested language, regardless of the source language. Use exact enum claim status values. "
+ "A reported statistic can be PRIMARY_SOURCE_REPORTED or PUBLIC_SOURCE_REPORTED without certifying underlying cases. "
+ "Do not assert data does not exist because research timed out or extraction failed. Describe uncovered objectives as research incomplete. "
+ "Use documented regional examples and publicly named decided cases if aggregate tables cannot be obtained; never equate political affiliation with liability. "
+ "For an analytical priority ranking explain the criteria and evidence, separate from official counts; do not mix overlapping legal categories and operational risks in one statistical ranking. "
+ "For charts emit numeric_series only for comparable observations in the SAME source, period, election, unit and case status, with exact original source_label and verbatim source_quote containing each integer. No invented values, denominators, or aggregated estimates. "
+ "For legal rows give exact source_quote from the actual provision, instrument_version and practical_gap, proposed_reform, reform_owner and tradeoff; leave unverified details empty. "
+ "For action rows include a proposed target period, priority reason and success metric; distinguish proposed management targets from statutory deadlines."
 )
 
 def synthesize(question,task,perspective,sources,hints,search_status,key,model,base):
@@ -83,19 +96,21 @@ def synthesize(question,task,perspective,sources,hints,search_status,key,model,b
         evidence.append(row)
     payload={
         "question":question,"task":task,"perspective":perspective,
-        "answer_language_hint":("Indonesian" if __import__("re").search(r"\b(apa|bagaimana|berapa|tolong|jelaskan|mengapa|sebutkan)\b",question.casefold()) and not __import__("re").search(r"\b(what|how|please|which|why|can you)\b",question.casefold()) else "Match the language of the question, not the sources"),
+        "answer_language":requested_language(question),
         "research_depth":depth,"requested_dimensions":[name for name,_ in objectives(question)],
         "research_as_of":utc_now(),"web_status":search_status,
         "evidence":evidence,"institutional_context":hints,
         "instruction":"Cite only evidence IDs present in this response input. Do not use prior chat context."
     }
-    try:
+    language=requested_language(question)
+    language_instruction={"en":"Write every substantive answer field in English.","id":"Tulis seluruh jawaban substantif dalam Bahasa Indonesia."}.get(language,"Match the requested language.")
+    def generate(retry=False):
         response=httpx.post(base.rstrip("/")+"/responses",
            headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},
            json={"model":model,"store":False,"max_output_tokens":output_budget(question),
                  "text":{"format":{"type":"json_schema","name":"officer_decision_ai_independent_v3",
                                    "strict":True,"schema":_schema()}},
-                 "input":[{"role":"system","content":SYSTEM},
+                 "input":[{"role":"system","content":SYSTEM+" "+language_instruction+(" Your previous response used the wrong language. Regenerate fully in the required language." if retry else "")},
                           {"role":"user","content":json.dumps(payload,ensure_ascii=False)}]},
            timeout=httpx.Timeout(100 if depth=="DEEP" else 55,connect=8))
         response.raise_for_status()
@@ -103,5 +118,9 @@ def synthesize(question,task,perspective,sources,hints,search_status,key,model,b
         if result.get("status")=="incomplete":return None
         parsed=json.loads(_output_text(result))
         return parsed if isinstance(parsed,dict) else None
+    try:
+        parsed=generate()
+        if wrong_language(parsed,language):parsed=generate(retry=True)
+        return None if wrong_language(parsed,language) else parsed
     except (httpx.HTTPError,ValueError,TypeError,KeyError):
         return None

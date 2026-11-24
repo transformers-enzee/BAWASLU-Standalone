@@ -24,21 +24,23 @@ def test_multi_objective_discovery_and_gap_resolution(monkeypatch):
         # A separate result for each research objective.
         slug=str(len(calls))
         return {"objective":obj,"status":"DISCOVERED","queries":[obj],
-                "results":[{"url":"https://bawaslu.go.id/official-"+slug,"title":obj}]}
+                "results":[{"url":"https://bawaslu.go.id/official-"+slug,"title":obj+(" (retry)" if calls.count(obj)>1 else "")}]}
     def read(url,snippet="",title="",question=""):
-        fail="provincial breakdown" in title and not title.startswith("gap resolution:")
+        fail="provincial breakdown" in title and "(retry)" not in title
         return {"url":url,"title":title,"read_status":"INACCESSIBLE" if fail else "READ",
                 "excerpt":"" if fail else "Synthetic source excerpt", "published_at":"2024-11-24"}
     monkeypatch.setattr(research,"_discover",discover)
     monkeypatch.setattr(research,"read_page",read)
     result=research.public_research(QUESTION,"test","test-model","https://api.openai.com/v1")
     assert result["research_depth"]=="DEEP"
-    assert len(calls)==5 and any(x.startswith("gap resolution:") for x in calls)
+    assert len(calls)==8 and calls.count("provincial breakdown")==2
     assert result["status"]=="READ"
     assert len(result["sources"])<=research.DEEP_MAX_PAGES
     assert len({r["id"] for r in result["sources"]})==len(result["sources"])
     assert any(r["read_status"]=="INACCESSIBLE" for r in result["sources"])
-    assert len(result["search_passes"])==5
+    assert len(result["search_passes"])==8
+    assert len(result["coverage"])==7
+    assert all(row["status"]=="READABLE_LEADS" for row in result["coverage"])
 
 def test_pdf_extraction_retains_page_labels():
     from reportlab.pdfgen import canvas

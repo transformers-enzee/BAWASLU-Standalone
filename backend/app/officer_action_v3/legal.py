@@ -1,5 +1,6 @@
 """Provisional institutional competence matrix; never declares a violation."""
 import re
+from .analytics import quote_in_source
 
 AUTHORITIES={
  "BAWASLU":"Election supervision, prevention and certain election-law procedures",
@@ -35,7 +36,9 @@ def review_legal(rows,records):
         citations=list(dict.fromkeys(s for s in r.get("source_ids",[])
                        if isinstance(s,str) and s in allowed))[:4]
         official=any(allowed[s].get("kind")=="OFFICIAL" and allowed[s].get("read_status")=="READ"
-                     and re.search(r"jdih|peraturan|putusan|undang|regulation|\.pdf",allowed[s].get("resolved_url") or allowed[s].get("url") or "",re.I)
+                     and re.search(r"jdih|peraturan|putusan|undang|regulation",allowed[s].get("resolved_url") or allowed[s].get("url") or "",re.I)
+                     and quote_in_source(r.get("source_quote",""),allowed[s])
+                     and re.search(r"\b(?:pasal|article)\s+\d+",str(r.get("source_quote") or ""),re.I)
                      for s in citations)
         reference=str(r.get("legal_reference") or "")[:240]
         legal.append({
@@ -45,6 +48,13 @@ def review_legal(rows,records):
             "applicability":str(r.get("applicability") or "Human legal review required")[:380],
             "verification_needed":str(r.get("verification_needed") or "Read controlling rule and check applicable stage")[:350],
             "source_ids":citations,
+            "instrument_version":str(r.get("instrument_version") or "")[:200] if official else "",
+            "source_quote":str(r.get("source_quote") or "")[:700] if official else "",
+            "practical_gap":str(r.get("practical_gap") or "")[:350],
+            "proposed_reform":str(r.get("proposed_reform") or "")[:350],
+            "reform_owner":str(r.get("reform_owner") or "")[:160],
+            "tradeoff":str(r.get("tradeoff") or "")[:300],
             "primary_legal_text_confirmed":False,
+            "primary_text_excerpt_matched":official,
             "officer_review_required":True})
     return legal

@@ -20,7 +20,7 @@ const SAMPLES=[
 ];
 const SOURCE_STATUS={READ:'Read page',SNIPPET_ONLY:'Snippet only',
  INACCESSIBLE:'Inaccessible',SAVED_SNAPSHOT:'Saved snapshot — not independently verified'};
-const CLAIM_STATUS={PRIMARY_SOURCE_REPORTED:'Officially reported',
+const CLAIM_STATUS={PRIMARY_SOURCE_REPORTED:'Officially reported',PUBLIC_SOURCE_REPORTED:'Public source reported',SAVED_OBSERVATION:'Saved observation',
  INDEPENDENTLY_CORROBORATED:'Multiple read sources',ATTRIBUTED_ALLEGATION:'Allegation reported',
  CONFLICTING:'Sources conflict',INFERRED:'Interpretation',UNRESOLVED:'Unresolved'};
 const safeLink=url=>typeof url==='string'&&/^https:\/\/[a-z0-9]/i.test(url);
@@ -117,7 +117,7 @@ function makeProduct(kind,r,data,question){
   lines=['PROPOSED OFFICER ACTION PLAN','Decision: '+r.recommended_decision];
   actions.forEach((a,i)=>lines.push((i+1)+'. '+a.task,'  Reviewer: '+a.owner_role,
     '  Evidence: '+a.evidence_needed,'  Output: '+a.deliverable,
-    '  Escalation or closure: '+a.decision_gate));
+    '  Escalation or closure: '+a.decision_gate,'  Proposed target: '+(a.target_period||'To be agreed'),'  Success measure: '+(a.success_metric||'To be agreed')));
  }else{
   lines=['DRAFT LEADERSHIP MEMO','Subject: '+r.headline,'Key takeaway: '+r.key_takeaway,
     'BAWASLU implications: '+r.bawaslu_implication,
@@ -157,6 +157,26 @@ function WorkProduct({data,question}){
  </section>;
 }
 
+function NumericSeries({series,sources}){
+ return <section className="space-y-4" data-testid="officer-v3-numeric-series">
+  <h3 className="text-lg font-semibold text-slate-900">Source-matched quantitative analysis</h3>
+  {series.map((item,i)=>{
+   const max=Math.max(1,...item.rows.map(x=>x.value));
+   return <figure key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+    <figcaption className="font-semibold text-slate-900">{item.title}</figcaption>
+    <p className="mb-3 text-xs text-slate-600">{item.election_type} · {item.period} · {item.case_status} · {item.unit}</p>
+    {item.rows.map((row,j)=><div key={j} className="mb-2">
+     <div className="flex justify-between gap-2 text-sm"><span>{row.label}</span><strong>{row.value.toLocaleString()}</strong></div>
+     <div className="h-3 overflow-hidden rounded bg-slate-100"><div className="h-3 bg-teal-700" style={{width:(100*row.value/max)+'%'}}/></div>
+    </div>)}
+    <References ids={[...new Set(item.rows.map(row=>row.source_id))]} sources={sources}/>
+    <p className="mt-2 text-xs text-slate-500">Source-matched values only; not a complete national dataset. Grouping and comparability require review.</p>
+    <details className="mt-2 text-xs"><summary className="cursor-pointer">Original numeric evidence</summary>
+     {item.rows.map((row,j)=><p key={j} className="mt-1">{row.source_id}: {row.source_quote}</p>)}</details>
+   </figure>;
+  })}
+ </section>;
+}
 function Brief({data,question}){
  const r=data.report||{},audit=data.research_trail||{},sources=audit.sources||[];
  return <article className="space-y-5" data-testid="officer-v3-result">
@@ -173,20 +193,21 @@ function Brief({data,question}){
   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
    <div className="flex flex-wrap items-center justify-between gap-2">
     <span className="text-xs font-bold uppercase tracking-widest text-[#85212d]">{data.research_depth==='DEEP'?'Deep research & strategic intelligence':data.research_depth==='QUICK'?'Quick answer':'Evidence-led research'}</span>
-    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-     {r.relevance==='DIRECT'?'Direct nexus proposed':r.relevance==='POSSIBLE'?'Possible BAWASLU nexus':'Jurisdiction not established'}</span>
+    {data.task==='LEGAL'&&data.research_depth!=='DEEP'&&<span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+     {r.relevance==='DIRECT'?'Direct nexus proposed':r.relevance==='POSSIBLE'?'Possible BAWASLU nexus':'Jurisdiction not established'}</span>}
    </div>
    <h2 className="mt-4 text-xl font-bold text-slate-900">{r.headline||'Officer briefing'}</h2>
-   <ReportMarkdown text={r.answer} sources={sources}/>
-   <div className="mt-4 border-t border-slate-200 pt-4">
+   {data.research_depth!=='DEEP'&&<div className="mt-4 border-t border-slate-200 pt-4">
     <p className="text-xs font-bold uppercase tracking-wider text-[#85212d]">Key takeaway</p>
     <p className="mt-2 text-base font-semibold leading-7 text-slate-900"><CitationText text={r.key_takeaway} sources={sources}/></p>
     <p className="mt-2 text-sm leading-6 text-slate-700"><CitationText text={r.bawaslu_implication} sources={sources}/></p>
     <p className="mt-3 text-sm"><strong>Recommended decision:</strong> <CitationText text={r.recommended_decision} sources={sources}/></p>
-   </div>
+   </div>}
+   <ReportMarkdown text={r.answer} sources={sources}/>
   </section>
-  {!!r.claims?.length&&<section className="space-y-3" data-testid="officer-v3-claims">
-   <h3 className="text-lg font-bold text-slate-900">What the evidence establishes</h3>
+  {!!r.numeric_series?.length&&<NumericSeries series={r.numeric_series} sources={sources}/>}
+  {!!r.claims?.length&&<details className="space-y-3 rounded-xl border border-slate-200 bg-white p-4" data-testid="officer-v3-claims" open={data.research_depth!=='DEEP'}>
+   <summary className="cursor-pointer text-lg font-bold text-slate-900">Claim evidence and review notes</summary>
    {r.claims.map((claim,i)=><div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
     <div className="flex justify-between gap-3 text-xs"><strong className="text-[#85212d]">Finding {i+1}</strong>
      <span className="text-slate-500">{CLAIM_STATUS[claim.status]||'Unresolved'}</span></div>
@@ -194,31 +215,41 @@ function Brief({data,question}){
     <References ids={claim.source_ids} sources={sources}/>
     {claim.caveat&&<p className="mt-2 text-xs text-slate-600">Verification: {claim.caveat}</p>}
    </div>)}
-  </section>}
-  {!!r.actions?.length&&<section className="space-y-3" data-testid="officer-v3-actions">
-   <h3 className="text-lg font-bold text-slate-900">Proposed officer next steps</h3>
+  </details>}
+  {!!r.actions?.length&&<details className="space-y-3 rounded-xl border border-slate-200 bg-white p-4" data-testid="officer-v3-actions" open={data.research_depth!=='DEEP'}>
+   <summary className="cursor-pointer text-lg font-bold text-slate-900">Proposed officer next steps</summary>
    {r.actions.map((a,i)=><div key={i} className="rounded-xl border border-[#e7d5d6] bg-white p-4">
     <div className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#85212d] text-xs font-bold text-white">{i+1}</span>
      <div className="space-y-1 text-xs text-slate-700">
       <strong className="block text-sm text-slate-900">{a.task}</strong>
       <p>Proposed reviewer: {a.owner_role}</p><p>Required evidence: {a.evidence_needed}</p>
       <p>Expected output: {a.deliverable}</p>
+      {a.target_period&&<p>Proposed management target: {a.target_period}</p>}
+      {a.priority_reason&&<p>Priority rationale: {a.priority_reason}</p>}
+      {a.success_metric&&<p>Success measure: {a.success_metric}</p>}
       <p className="font-semibold text-[#85212d]">Escalation / closure gate: {a.decision_gate}</p>
       <References ids={a.source_ids} sources={sources}/>
      </div></div>
    </div>)}
-  </section>}
-  <WorkProduct data={data} question={question}/>
+  </details>}
+  <details className="rounded-xl border border-slate-200 bg-white p-4" open={data.research_depth!=='DEEP'}>
+   <summary className="cursor-pointer font-semibold">Prepare or download an officer work product</summary>
+   <div className="mt-3"><WorkProduct data={data} question={question}/></div>
+  </details>
   <details className="rounded-xl border border-slate-200 bg-white p-4" data-testid="officer-v3-research-trail">
    <summary className="cursor-pointer font-bold text-[#19364c]">Research Trail · sources, law, alternatives and audit</summary>
    <div className="mt-4 space-y-4 text-sm text-slate-700">
     <p>Research time: {audit.retrieved_at||'unknown'} · Web status: {audit.web_status||'unknown'} · Read pages: {audit.public_read_count||0} · Saved observations: {audit.saved_count||0}</p>
     <p className="text-xs text-slate-500">Actual provider queries: {(audit.search_queries||[]).join(' · ')||'No search query recorded'}</p>
     {!!data.requested_dimensions?.length&&<p>Requested analysis: {data.requested_dimensions.join(' · ')}</p>}
+    {!!audit.coverage?.length&&<section className="space-y-1" data-testid="officer-v3-coverage">
+     <h4 className="font-semibold">Requested objective coverage (not proof of completeness)</h4>
+     {audit.coverage.map(row=><p key={row.objective} className="text-xs">{row.objective}: {row.status==='READABLE_LEADS'?'Readable leads':'Research incomplete'} · {row.read_count} readable sources · {row.attempts} attempts</p>)}
+    </section>}
     {!!audit.search_passes?.length&&<div className="space-y-2" data-testid="officer-v3-research-passes">
      <h4 className="font-semibold">Research objectives and coverage</h4>
      {audit.search_passes.map((pass,i)=><div key={i} className="rounded bg-slate-50 p-2 text-xs">
-      <strong>{pass.objective}</strong> · {pass.status} · {pass.discovered} discovered · {pass.read_count} readable
+      <strong>{pass.objective}</strong> · attempt {pass.attempt||1} · {pass.status} · {pass.discovered} discovered · {pass.read_count} readable
      </div>)}</div>}
     <section className="space-y-2"><h4 className="font-semibold">Public pages and saved observations</h4>
      {sources.length?sources.map(s=><div key={s.id} className="rounded-md bg-slate-50 p-3 text-xs" data-testid="officer-v3-source-row">
@@ -229,6 +260,7 @@ function Brief({data,question}){
       {s.reason&&<p className="text-slate-600">{s.reason}</p>}
       {s.document_type&&<p>Document: {s.document_type}{s.units_inspected?' · units inspected: '+s.units_inspected:''}</p>}
       {s.extraction_notes&&<p className="text-slate-600">{s.extraction_notes}</p>}
+      {s.extraction_code&&<p>Extraction diagnostic: {s.extraction_code}{s.extraction_method?' · '+s.extraction_method:''}</p>}
       {s.objective&&<p className="text-slate-500">Research focus: {s.objective}</p>}
       {s.kind==='SAVED_RECORD'&&<p>Scoped saved observation: {s.record_id}</p>}
       {safeLink(s.url)&&<a href={s.url} target="_blank" rel="noopener noreferrer" className="break-all text-teal-800 underline">Open original</a>}
@@ -238,6 +270,12 @@ function Brief({data,question}){
      {r.legal.map((l,i)=><div key={i} className="rounded-md border border-slate-200 p-3 text-xs">
       <strong>{l.issue} — {l.institution}</strong><p>Reference: {l.legal_reference}</p>
       <p>Applicability: {l.applicability}</p><p className="text-amber-800">Verify: {l.verification_needed}</p>
+      {l.instrument_version&&<p>Instrument version: {l.instrument_version}</p>}
+      {l.source_quote&&<p>Matched primary text excerpt: {l.source_quote}</p>}
+      {l.practical_gap&&<p>Practical gap: {l.practical_gap}</p>}
+      {l.proposed_reform&&<p>Proposed reform: {l.proposed_reform}</p>}
+      {l.reform_owner&&<p>Responsible institution: {l.reform_owner}</p>}
+      {l.tradeoff&&<p>Trade-off: {l.tradeoff}</p>}
       <References ids={l.source_ids} sources={sources}/></div>)}
     </section>}
     {!!r.options?.length&&<section className="space-y-2"><h4 className="font-semibold">Options and trade-offs</h4>
@@ -248,7 +286,12 @@ function Brief({data,question}){
     {!!r.limitations?.length&&<section><h4 className="font-semibold">Evidence gaps</h4>
      <ul className="list-disc pl-5 text-xs">{r.limitations.map((g,i)=><li key={i}>{g}</li>)}</ul></section>}
     <div className="rounded-md bg-slate-50 p-3 text-xs">
-     <p>Attributed claims: {r.quality?.attributed_claims||0} · Unsupported claims: {r.quality?.unsupported_claims||0}</p>
+     <p>Structured claims with linked sources: {r.quality?.attributed_claims||0} · Without source links: {r.quality?.unsupported_claims||0}</p>
+     {r.report_audit&&<div className="mt-2" data-testid="officer-v3-report-audit">
+      <p>Numeric text lines matched to cited excerpts: {r.report_audit.numeric_lines_matched}/{r.report_audit.numeric_lines_checked}. This is not full claim verification.</p>
+      {!!r.report_audit.review_flags?.length&&<details><summary className="cursor-pointer">Numeric text requiring review (may include proposed targets)</summary>
+       {r.report_audit.review_flags.map((f,i)=><p key={i} className="mt-2">{f.reason}: {f.passage}</p>)}</details>}
+     </div>}
      <p>Officer-verified legal applicability: No · Automated actions: None · Previous assistant history: Not accessed</p>
     </div>
    </div>

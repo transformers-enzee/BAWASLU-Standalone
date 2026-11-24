@@ -1,7 +1,7 @@
 """Claim-level evidence review and independent-source classification."""
 from urllib.parse import urlsplit
 
-KNOWN_STATUSES={"PRIMARY_SOURCE_REPORTED","INDEPENDENTLY_CORROBORATED",
+KNOWN_STATUSES={"PRIMARY_SOURCE_REPORTED","PUBLIC_SOURCE_REPORTED","SAVED_OBSERVATION","INDEPENDENTLY_CORROBORATED",
                 "ATTRIBUTED_ALLEGATION","CONFLICTING","INFERRED","UNRESOLVED"}
 
 
@@ -27,7 +27,9 @@ def verify_claims(rows,records):
                     eligible[s].get("read_status")=="READ" for s in ids) else "UNRESOLVED"
         if status=="PRIMARY_SOURCE_REPORTED" and not any(eligible[s].get("kind")=="OFFICIAL" and
                     eligible[s].get("read_status")=="READ" for s in ids):
-            status="ATTRIBUTED_ALLEGATION" if ids else "UNRESOLVED"
+            status="PUBLIC_SOURCE_REPORTED" if any(eligible[s].get("read_status")=="READ" for s in ids) else "UNRESOLVED"
+        if status=="PUBLIC_SOURCE_REPORTED" and not any(eligible[s].get("read_status")=="READ" for s in ids):status="UNRESOLVED"
+        if status=="SAVED_OBSERVATION" and not any(eligible[s].get("kind")=="SAVED_RECORD" for s in ids):status="UNRESOLVED"
         # A saved snapshot is never independently certified by retrieval.
         if status=="INDEPENDENTLY_CORROBORATED" and any(eligible[s].get("kind")=="SAVED_RECORD" for s in ids):
             status="UNRESOLVED"

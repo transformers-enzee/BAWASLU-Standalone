@@ -78,7 +78,7 @@ function Trail({result}){
     </div>
    </details>}
    {!!t.excluded_source_ids?.length&&<p>Retrieved sources outside the model context limit: {t.excluded_source_ids.join(', ')}</p>}
-   {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>
+   {!!t.cited_source_ids?.length&&<p>Sources cited in reply: {t.cited_source_ids.map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')}</p>}
    {!!t.model_source_ids?.length&&<p>Supplied but not cited: {t.model_source_ids.filter(id=>!(t.cited_source_ids||[]).includes(id)).map(id=>(t.sources||[]).find(s=>s.id===id)?.title||id).join('; ')||'None'}</p>}
    {(t.warnings||[]).map((x,i)=><p key={i} className="rounded bg-amber-50 p-2 text-amber-900">{x}</p>)}
    {(t.sources||[]).map(s=><section key={s.id} id={'ai5-source-'+s.id} data-testid="ai5-source-row" className="scroll-mt-24 rounded-lg border border-slate-200 p-3">

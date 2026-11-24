@@ -20,11 +20,15 @@ RECENT=re.compile(r"\b(latest|today|current|recent|this week|this month|"
 MAX_PAGES=20
 INITIAL_PAGES=14
 MAX_DIMENSIONS=6
-BROAD=re.compile(r"\b(compare|comparison|versus|vs\.?|differences?|contrasts?|tradeoffs?|between|across|advantages?|disadvantages?|bandingkan|perbandingan|dibandingkan|perbedaan|dampak|serta|dan|and)\b|[,;]",re.I)
+BROAD=re.compile(r"\b(compar(?:e|es|ed|ing|ison|ative)|versus|vs\.?|differences?|contrasts?|tradeoffs?|between|across|advantages?|disadvantages?|neighbor(?:ing|ing countries)|neighbouring|bandingkan|perbandingan|dibandingkan|perbedaan|dampak|serta|dan|and|breakdown|by province|menurut provinsi)\b|[,;]",re.I)
 
 
 def needs_recent(question):
-    return bool(RECENT.search(question or ""))
+    value=question or ""
+    if RECENT.search(value):return True
+    if re.search(r"\b(situation|state of|situasi|kondisi|keadaan)\b",value,re.I):
+        return not bool(re.search(r"\b(?:19\d\d|20[01]\d|202[0-4])\b",value))
+    return False
 
 
 def _source_rows(payload):
@@ -122,7 +126,15 @@ def _fallback_dimensions(question):
     parts=[p.strip(" .?") for p in re.split(
         r"[,;]|\s+\b(?:versus|vs\.?|and|dan|serta)\b\s+",
         question,flags=re.I) if len(p.strip(" .?"))>=5]
-    if len(parts)<2:return [{"name":"Full question","query":question[:500]}]
+    if len(parts)<2:
+        if BROAD.search(question):
+            return [{"name":"Definitions and structural differences",
+                     "query":(question[:330]+" definitions structure differences")[:500]},
+                    {"name":"Evidence of current outcomes",
+                     "query":(question[:330]+" current outcomes empirical evidence")[:500]},
+                    {"name":"Comparative implications and limitations",
+                     "query":(question[:330]+" comparison implications limitations")[:500]}]
+        return [{"name":"Full question","query":question[:500]}]
     return [{"name":p[:95],"query":(question[:230]+" "+p[:120])[:420]}
             for p in parts[:MAX_DIMENSIONS]]
 

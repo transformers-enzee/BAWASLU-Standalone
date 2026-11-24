@@ -267,3 +267,23 @@ def test_long_comparison_begins_on_first_pdf_page():
     first=reader.pages[0].extract_text() or ""
     assert "Country comparison" in first
     assert "Indonesia" in first, "Table must begin below its heading, not on a mostly blank second page"
+
+
+def test_exact_original_comparing_question_activates_planning_and_current_evidence(monkeypatch):
+    assert web.BROAD.search(QUESTION), "Comparing must not bypass scope planning"
+    assert web.needs_recent(QUESTION), "Situation implies a present-day assessment"
+    monkeypatch.setattr(web,"_provider_json",lambda *args,**kwargs:None)
+    dims=web.plan_dimensions(QUESTION,"offline-key","model","base")
+    assert len(dims)>=3, "When planning fails, a comparison still needs distinct searches"
+    assert any("current" in d["query"].lower() for d in dims)
+    assert any("comparison" in d["query"].lower() for d in dims)
+    assert not web.needs_recent(
+        "Describe the situation of election commissions in Indonesia in 2019")
+
+
+def test_comparative_prefix_variations_trigger_full_scope():
+    for q in ("Compare election commissions","Comparing election commissions",
+              "Comparison of election commissions",
+              "How do the commissions compare across countries?",
+              "Bandingkan sistem pemilihan Indonesia dan Malaysia"):
+        assert web.BROAD.search(q),q

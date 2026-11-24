@@ -6,6 +6,7 @@ const management=[
  ['/management','Management Home',BriefcaseBusiness,'view_intelligence'],
  ['/management/assistant','Management AI Assistant',Sparkles,'view_intelligence'],
  ['/management/ai-assistant','AI Assistant',Sparkles,'view_intelligence'],
+ ['/management/ai-assistant-v2-new','AI Assistant V2 · New',FileText,'view_intelligence'],
 ];
 const operations=[
  ['/','home',HomeIcon,'view_intelligence'],
@@ -14,6 +15,7 @@ const operations=[
  ['/inbox','intelligence_inbox',Inbox,'view_intelligence'],
  ['/assistant','intelligence_assistant',Sparkles,'view_intelligence'],
  ['/ai-assistant','AI Assistant',Sparkles,'view_intelligence'],
+ ['/ai-assistant-v2-new','AI Assistant V2 · New',FileText,'view_intelligence'],
 ];
 const secondary=[
  ['/sources','data_sources',Database,'administration'],
@@ -24,7 +26,7 @@ const future=['future_risk_warning','future_action_center','future_reporting'];
 
 export default function AccessNavigation({access,user,build}){
  const {t,language}=useLanguage();
- const label=key=>key==='Management Home'||key==='Management AI Assistant'||key==='AI Assistant'||key==='Command Centre'?key:t(key);
+ const label=key=>key==='Management Home'||key==='Management AI Assistant'||key==='AI Assistant'||key==='AI Assistant V2 · New'||key==='Command Centre'?key:t(key);
  const leadership=['National Administrator','National Leadership','Provincial Administrator'].includes(access?.role);
  function navigation(items,group){
   return <nav aria-label={group} className="space-y-1 px-3">

@@ -1,7 +1,7 @@
 import {Link} from 'react-router-dom';
 
 export default function AssistantWorkflowControls({
- workspace,workflowMode,setWorkflowMode,sourceSelection,setSourceSelection,busy
+ workspace,workflowMode,setWorkflowMode,sourceSelection,setSourceSelection,sourceMode,setSourceMode,busy
 }){
  const count=Object.values(sourceSelection||{}).filter(Boolean).length;
  return <section className="intel-card space-y-4 p-4 md:p-5" data-testid="assistant-workflow-mode-selector">
@@ -25,8 +25,21 @@ export default function AssistantWorkflowControls({
     <strong className="block text-sm">{label}</strong><span className="mt-1 block text-xs">{description}</span>
    </button>)}
   </div>
+  <div className="space-y-2" role="group" aria-label="Public research source modes" data-testid="assistant-source-modes">
+   <p className="text-sm font-semibold text-[#19364c]">Research source mode</p>
+   <div className="grid gap-2 sm:grid-cols-3">
+    {[
+     ['WEB_ONLY','Web only',{smartRadar:false,publicWeb:true,legalReferences:false,attachments:false}],
+     ['WEB_SMARTRADAR','Web + SmartRadar',{smartRadar:true,publicWeb:true,legalReferences:true,attachments:false}],
+     ['SMARTRADAR_ONLY','SmartRadar only',{smartRadar:true,publicWeb:false,legalReferences:true,attachments:false}]
+    ].map(([id,label,preset])=><button key={id} type="button" disabled={busy} aria-pressed={sourceMode===id}
+     onClick={()=>{setSourceMode(id);setSourceSelection({...preset});}}
+     className={'rounded-lg border p-3 text-left text-sm '+(sourceMode===id?'border-[#801b24] bg-[#fff5f4] font-semibold text-[#801b24]':'border-slate-200 bg-white text-slate-700')}>
+     {label}</button>)}
+   </div>
+  </div>
   <fieldset className="space-y-2" data-testid="assistant-authorized-source-selection">
-   <legend className="text-sm font-semibold text-[#19364c]">Research settings · authorized sources</legend>
+   <legend className="text-sm font-semibold text-[#19364c]">Advanced source selection {sourceMode==='CUSTOM'?'· custom':''}</legend>
    <div className="grid gap-2 md:grid-cols-3">
     {[
      ['smartRadar','SmartRadar / saved BAWASLU intelligence','Optional private local context for explicitly requested records or stored metrics; not a live crawl'],
@@ -35,7 +48,7 @@ export default function AssistantWorkflowControls({
      ['attachments','Conversation attachments','Private scanned documents and public HTTPS links, confined to this conversation']
     ].map(([key,label,note])=><label key={key} className="flex gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
      <input type="checkbox" className="mt-1" checked={Boolean(sourceSelection[key])} disabled={busy}
-       onChange={e=>setSourceSelection(old=>({...old,[key]:e.target.checked}))}/>
+       onChange={e=>{setSourceMode('CUSTOM');setSourceSelection(old=>({...old,[key]:e.target.checked}));}}/>
      <span><strong className="block text-slate-800">{label}</strong><span className="mt-1 block text-slate-600">{note}</span></span>
     </label>)}
    </div>

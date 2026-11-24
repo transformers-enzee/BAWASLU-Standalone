@@ -379,16 +379,26 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
     if os.getenv("BAWASLU_ASSISTANT_WEB_SEARCH", "true").lower() not in ("true","1","yes"):
         return None
     from .assistant_web_first import safe_public_question, safe_web_urls
+    from .assistant_live_web import search_plan
     question=str(question or "").strip()[:1000]
     if not question or not safe_public_question(question):return None
     # This public query carries NO private evidence excerpts or conversation history.
     style='Management decision brief' if assistant_mode=='MANAGEMENT' else 'Operational officer brief'
     from datetime import datetime, timezone
     utc_date=datetime.now(timezone.utc).date().isoformat()
+    plan=search_plan(question,utc_date)
     direction=(
         "You are a neutral public-research analyst supporting Indonesian BAWASLU election supervisors. "
         "Current UTC date: "+utc_date+". Interpret recent periods relative to this date. "
-        "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, "
+        "A live web search MUST be performed before answering. "
+        "Use separate queries in Bahasa Indonesia and English where useful; search tasks: "
+        +"; ".join(plan["queries"])+". "
+        +( "Explicitly run a latest-update check for newer official statements, corrected dates, "
+           "postponements or revised schedules: "+plan["freshness_query"]+". "
+           if plan["freshness_check_requested"] else "")+
+        "Prioritize actually published primary official notices over secondary snippets; "
+        "compare publication dates and do not treat a promised future event as completed. "
+        "Use live web search; prioritize actual official material from bawaslu.go.id, jdih.bawaslu.go.id, 
         "kpu.go.id, jdih.kpu.go.id, dkpp.go.id, mkri.id, mahkamahagung.go.id, "
         "mpr.go.id, peraturan.bpk.go.id and official government publications when relevant. "
         "Treat news and social posts as reports, NOT verified legal findings; distinguish allegations, "
@@ -411,7 +421,7 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         "All proposals require human verification and applicable authority."
     )
     req={"model":model,"store":False,"tools":[{"type":"web_search"}],
-         "tool_choice":"auto","max_output_tokens":1550,
+         "tool_choice":"required","include":["web_search_call.action.sources"],"max_output_tokens":1550,
          "input":[{"role":"system","content":direction},{"role":"user","content":question}]}
     try:
         with httpx.Client(timeout=httpx.Timeout(50.0,connect=8.0,read=50.0,write=10.0,pool=8.0)) as client:
@@ -421,15 +431,52 @@ def research_public_web(question, key, model, base, assistant_mode='OPERATIONAL'
         payload=response.json()
         if payload.get("status")=="incomplete":return None
         annotated_urls=[]
+        source_rows=[]
+        searches=[]
+        search_actions=0
         for item in payload.get("output",[]):
+            if item.get("type")=="web_search_call" and item.get("status")=="completed":
+                search_actions+=1
+                action=item.get("action") or {}
+                search_type=str(action.get("type") or "")
+                queries=action.get("queries") or action.get("query") or []
+                if isinstance(queries,str):queries=[queries]
+                for q_run in queries if isinstance(queries,list) else []:
+                    if isinstance(q_run,str) and q_run.strip():
+                        searches.append(q_run[:260])
+                for source in action.get("sources") or []:
+                    if isinstance(source,dict) and source.get("url"):
+                        source_rows.append({
+                            "url":source["url"],
+                            "title":str(source.get("title") or "")[:180],
+                            "snippet":str(source.get("snippet") or "")[:500],
+                            "published_at":str(source.get("published_at") or source.get("date") or "")[:40]})
             for part in item.get("content",[]):
                 for annotation in part.get("annotations",[]):
-                    if annotation.get("type")=="url_citation":
-                        annotated_urls.append(annotation.get("url"))
-        urls=safe_web_urls(annotated_urls)
+                    if annotation.get("type")=="url_citation" and annotation.get("url"):
+                        annotated_urls.append(annotation["url"])
+                        source_rows.append({
+                            "url":annotation["url"],
+                            "title":str(annotation.get("title") or "")[:180],
+                            "snippet":"","published_at":""})
+        urls=safe_web_urls(annotated_urls+[r["url"] for r in source_rows])
         summary=_response_output_text(payload).strip()
-        if not summary or not urls:return None
-        return {"summary":summary[:4700],"urls":urls[:6],
+        if not summary or not urls or not search_actions:return None
+        # Search tool results are only discovery metadata. Actual READ status
+        # is assigned later after independent bounded HTTPS retrieval succeeds.
+        by_url={}
+        for row in source_rows:
+            if row.get("url") in urls:
+                original=by_url.setdefault(row["url"],{"url":row["url"],"title":"",
+                                                        "snippet":"","published_at":""})
+                for field in ("title","snippet","published_at"):
+                    if row.get(field) and not original[field]:original[field]=row[field]
+        return {"summary":summary[:4700],"urls":urls[:8],
+                "sources":[by_url.get(url,{"url":url}) for url in urls[:8]],
+                "search_queries":searches[:12],
+                "search_action_count":search_actions,
+                "freshness_check_requested":plan["freshness_check_requested"],
+                "search_plan":plan,
                 "retrieved_at":datetime.now(timezone.utc).isoformat()}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):
         return None
@@ -634,13 +681,20 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     web_permitted=(not evidence and mode != 'GROUNDED' if allow_public_web is None
                    else bool(allow_public_web))
     # Private source identifiers never enter a public web lookup.
-    web_research=(research_public_web(question,key,model,base,
+    web_discovery=(research_public_web(question,key,model,base,
                   assistant_mode=(mode_config or {}).get('assistant_mode','OPERATIONAL'),
                   perspective=(mode_config or {}).get('perspective','AUTO'))
                   if web_permitted and not explicit_private_source and not pdf_guidance else None)
+    from .assistant_live_web import verify_public_pages
+    web_research=verify_public_pages(web_discovery) if web_discovery else None
+    # The model receives only pages independently opened and read. Provider
+    # narrative is a search lead, not permission to claim page verification.
+    model_web_research=({"summary":web_research["summary"],
+        "urls":web_research["urls"],"read_count":web_research["read_count"]}
+        if web_research and web_research.get("read_count") else None)
     user_data = {
         "ui_label_keys_for_non_id_en": list(UI_KEYS),
-        "external_public_research": web_research,
+        "external_public_research": model_web_research,
         "public_web_first_guidance": (
             "When external_public_research has attributable live URLs and the question asks about external "
             "events or public issues, lead with public findings and specific neutral BAWASLU actions. "
@@ -929,6 +983,12 @@ def generate(question, previous, evidence, mode, history=None, response_depth='E
     }
     meta = {
         "external_research_urls": web_research["urls"] if web_research else [],
+        "external_research_pages":[{k:row.get(k) for k in
+            ("url","title","status","reason","published_at","updated_at")}
+            for row in (web_research or {}).get("pages",[])[:8]],
+        "external_search_queries":(web_research or {}).get("search_queries",[])[:12],
+        "external_web_search_status":(web_research or {}).get("search_status","UNAVAILABLE"),
+        "external_research_retrieved_at":(web_research or {}).get("retrieved_at"),
         "mode": "OPENAI_HYBRID" if mode == "HYBRID" else "OPENAI_GROUNDED",
         "model": payload.get("model") or model,
         "response_id": payload.get("id") or "",

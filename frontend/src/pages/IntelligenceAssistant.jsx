@@ -85,7 +85,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   }
   return attachmentSessionRef.current;
  }
- const [sourceSelection,setSourceSelection]=useState({smartRadar:true,publicWeb:true,legalReferences:true,attachments:true});
+ const [sourceMode,setSourceMode]=useState('WEB_ONLY');
+ const [sourceSelection,setSourceSelection]=useState({smartRadar:false,publicWeb:true,legalReferences:false,attachments:false});
  const hasSelectedSources=Object.values(sourceSelection).some(Boolean);
  const [responseDepth,setResponseDepth]=useState('EXECUTIVE');
  const [showHistory,setShowHistory]=useState(false);
@@ -198,7 +199,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
   try{
    const response=await base44.functions.invoke('intelligenceAssistant',{
     question:q,previousQuestion:previous,analysisMode:'DATA',responseDepth,
-    workflowMode,sourceSelection,researchIntent:'AUTO',
+    workflowMode,sourceSelection,sourceMode,researchIntent:'AUTO',
     workspaceMode:workspace==='MANAGEMENT'?'MANAGEMENT':'OPERATIONAL',assistantMode,perspective,
     conversationId:activeIdRef.current,
     attachmentIds:selectedIds,
@@ -212,6 +213,7 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
     response_profile:response.data.response_profile||'SOCIAL_ANALYSIS',
     workflow_mode:response.data.workflow_mode||workflowMode,
     source_consultation:response.data.source_consultation||[],
+    source_mode:response.data.source_mode||sourceMode,
     structured_findings:response.data.structured_findings||[],
     decision_plan:response.data.decision_plan||[],
     officer_decision:response.data.officer_decision||null,
@@ -251,7 +253,8 @@ export default function IntelligenceAssistant({workspace='OPERATIONS'}){
    mode={assistantMode} setMode={setAssistantMode}
    perspective={perspective} setPerspective={setPerspective}/>
   <AssistantWorkflowControls workspace={workspace} workflowMode={workflowMode} setWorkflowMode={setWorkflowMode}
-   sourceSelection={sourceSelection} setSourceSelection={setSourceSelection} busy={busy}/>
+   sourceSelection={sourceSelection} setSourceSelection={setSourceSelection}
+    sourceMode={sourceMode} setSourceMode={setSourceMode} busy={busy}/>
   {sourceSelection.legalReferences&&<AssistantKnowledgeLibrary/>}
   {canViewQa&&<section data-testid="assistant-qa-tools" className="rounded-xl border border-[#e5e9ee] bg-white">
    <button type="button" data-testid="assistant-qa-tools-toggle" aria-expanded={qaOpen}

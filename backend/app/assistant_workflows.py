@@ -8,6 +8,7 @@ import re
 
 WORKFLOW_MODES=('AUTO','RESEARCH','STRATEGY_DRAFTING')
 SOURCE_KEYS=('smartRadar','publicWeb','legalReferences','attachments')
+from .assistant_live_web import SOURCE_PRESETS, SOURCE_MODES
 CITE=re.compile(r'\[(INT-[A-Za-z0-9:_-]+|SOCIAL-[0-9]+|DOC-[0-9]+-P[0-9]+|ATT-[a-f0-9]{32}-S[0-9]+)\]')
 
 
@@ -53,12 +54,19 @@ def normalize_workflow_request(body):
     if any(type(v) is not bool for v in raw.values()):
         raise ValueError('Source selection must use true/false values')
     sources={k:bool(raw.get(k,False)) for k in SOURCE_KEYS}
+    source_mode=str(body.get('sourceMode') or 'CUSTOM').upper()
+    if source_mode not in SOURCE_MODES:
+        raise ValueError('Invalid source mode')
+    if source_mode!='CUSTOM':
+        # Enforced server side: a Web-only request cannot silently retrieve
+        # private sources, even if stale checkbox state sends true flags.
+        sources=dict(SOURCE_PRESETS[source_mode])
     if not any(sources.values()):
         raise ValueError('Select at least one authorized source category')
     workflow=(infer_workflow(body.get('question'),body.get('previousQuestion'),
              body.get('conversationContext')) if requested_workflow=='AUTO' else requested_workflow)
     return {'workflow':workflow,'requested_workflow':requested_workflow,
-            'sources':sources,'explicit':explicit}
+            'sources':sources,'explicit':explicit,'source_mode':source_mode}
 
 
 def workflow_system_directive(workflow):

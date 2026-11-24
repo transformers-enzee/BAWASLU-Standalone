@@ -9,6 +9,11 @@ const WORKFLOWS=[
  {id:'STRATEGY',title:'Strategy & planning',subtitle:'Options, tactics, milestones',icon:Lightbulb},
  {id:'DRAFTING',title:'Draft & revise',subtitle:'Briefs, memos, emails',icon:FilePenLine},
 ];
+const SOURCE_MODES=[
+ {id:'WEB_ONLY',label:'Web only',sources:{smartRadar:false,publicWeb:true,legalReferences:false}},
+ {id:'WEB_SMARTRADAR',label:'Web + SmartRadar',sources:{smartRadar:true,publicWeb:true,legalReferences:true}},
+ {id:'SMARTRADAR_ONLY',label:'SmartRadar only',sources:{smartRadar:true,publicWeb:false,legalReferences:true}},
+];
 const SOURCE_CHOICES=[
  {key:'smartRadar',label:'SmartRadar records',detail:'Authorised saved intelligence and social records'},
  {key:'publicWeb',label:'Public web / indexed social',detail:'Live attributed public search; not a complete social crawl'},
@@ -33,13 +38,28 @@ function idsFor(sourceIds,sources){
  const known=new Map((sources||[]).map(s=>[s.id,s]));
  return (sourceIds||[]).filter(id=>known.has(id)).map(id=>known.get(id));
 }
+function CitedText({text,sources}){
+ const known=new Map((sources||[]).map(r=>[r.id,r]));
+ return <>{String(text||'').split(/(\[WEB-\d+\]|\[[^\]\n]{1,100}\]\(https:\/\/[^\s)]+\))/g).map((part,i)=>{
+  const ref=part.match(/^\[(WEB-\d+)\]$/);
+  if(ref){
+   const row=known.get(ref[1]);
+   if(row?.read_status==='READ')return <a key={i} href={row.url} target="_blank" rel="noopener noreferrer"
+    className="font-medium text-teal-800 underline" title={row.published_at||'Publication unknown'}>[{row.title||row.id}]</a>;
+  }
+  const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);
+  const matched=(sources||[]).find(r=>r.type==='PUBLIC_WEB'&&r.read_status==='READ'&&r.url===link?.[2]);
+  if(matched)return <a key={i} href={matched.url} target="_blank" rel="noopener noreferrer" className="text-teal-800 underline">{link[1]}</a>;
+  return part;
+ })}</>;
+}
 function SourceChips({ids,sources}){
  const items=idsFor(ids,sources);
  return items.length?<div className="mt-2 flex flex-wrap gap-1.5">
   {items.map(s=>s.url?.startsWith('https://')?
    <a key={s.id} href={s.url} target="_blank" rel="noreferrer noopener"
     className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-800 hover:underline"
-    title={s.title}>{s.id} · source</a>:
+    title={s.title}>{s.title||s.id} · {s.published_at||s.date||'date unknown'} · {s.read_status||'unknown'}</a>:
    <span key={s.id} title={s.title}
     className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">{s.id} · saved</span>)}
  </div>:<span className="mt-1 block text-[11px] text-amber-700">No validated supporting citation · inference only</span>;
@@ -78,13 +98,13 @@ function Result({data,index,draftEdits,setDraftEdits,onFollowUp}){
    </section>}
   <section className="space-y-1">
    <h3 className="text-sm font-semibold text-[#19364c]">{answer.draft?'Supporting research assessment':'Research assessment'}</h3>
-   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{answer.summary||'No summary could be generated.'}</p>
+   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800"><CitedText text={answer.summary||'No summary could be generated.'} sources={sources}/></p>
    <p className="text-[11px] text-slate-500">AI synthesis. Confirm case-specific facts against the source-linked findings below.</p>
   </section>
   {!!answer.findings?.length&&<section className="space-y-3" data-testid="ai-assistant-v2-findings">
    <h3 className="font-semibold text-[#19364c]">Structured findings</h3>
-   {answer.findings.map((f,i)=><div className="rounded-lg bg-slate-50 p-3" key={i}>
-    <p className="text-sm leading-6 text-slate-800">{f.claim}</p>
+   {answer.findings.slice(0,3).map((f,i)=><div className="rounded-lg bg-slate-50 p-3" key={i}>
+    <p className="text-sm leading-6 text-slate-800"><CitedText text={f.claim} sources={sources}/></p>
     <SourceChips ids={f.source_ids} sources={sources}/>
     <p className="mt-2 text-[11px] text-slate-600">{String(f.evidence_class||'').replaceAll('_',' ')} · {f.support}</p>
     {f.uncertainty&&<p className="mt-1 text-xs text-amber-800">Limit: {f.uncertainty}</p>}
@@ -120,6 +140,24 @@ function Result({data,index,draftEdits,setDraftEdits,onFollowUp}){
   <details className="rounded-lg border border-slate-200 p-3" data-testid="ai-assistant-v2-research-trail">
    <summary className="cursor-pointer text-sm font-semibold text-[#19364c]">Research trail · sources actually consulted</summary>
    <div className="mt-3 space-y-3">
+    <section className="rounded-lg bg-slate-50 p-2 text-xs" data-testid="ai-assistant-v2-search-audit">
+     <strong>Live public search: {data.web_search_status||'Not selected'}</strong>
+     {data.web_retrieved_at&&<p>Retrieved: {new Date(data.web_retrieved_at).toLocaleString()}</p>}
+     {data.web_freshness_check_requested&&<p>Latest updates, corrections and postponements were requested. Confirm individual dates below.</p>}
+     {(data.web_queries||[]).length>0&&<p>Search queries: {data.web_queries.join(' · ')}</p>}
+    </section>
+    {(data.web_pages||[]).map((row,i)=><section key={row.url||i} data-testid="ai-assistant-v2-web-page-status"
+     className="rounded-md border border-slate-200 p-2 text-xs">
+     <div className="flex flex-wrap justify-between gap-2">
+      <strong>{row.title||'Public web source'}</strong>
+      <span className={row.status==='READ'?'font-semibold text-green-800':'font-semibold text-amber-800'}>
+       {row.status==='READ'?'Read':row.status==='SNIPPET_ONLY'?'Snippet only':'Inaccessible'}</span>
+     </div>
+     <p className="mt-1 text-slate-600">Published: {row.published_at||'unknown'} · Updated: {row.updated_at||'unknown'}</p>
+     {row.reason&&<p className="text-slate-600">{row.reason}</p>}
+     {row.url?.startsWith('https://')&&<a href={row.url} target="_blank" rel="noopener noreferrer"
+      className="break-all text-teal-800 underline">Open public page</a>}
+    </section>)}
     {(data.consulted_sources||[]).map(s=><div className="border-b border-slate-100 pb-2" key={s.key}>
      <div className="flex items-center justify-between gap-2 text-xs"><strong>{s.label}</strong><span>{STATUS[s.status]||s.status}</span></div>
      <p className="mt-1 text-[11px] text-slate-600">{BASIS[s.basis]||s.basis} · {s.selected_count} sources</p>
@@ -128,7 +166,7 @@ function Result({data,index,draftEdits,setDraftEdits,onFollowUp}){
     <div className="space-y-2">
      {sources.map(s=><div key={s.id} className="rounded-lg bg-slate-50 p-2.5 text-xs">
       <strong>{s.id}</strong> — {s.title||'Untitled source'}
-      <p className="mt-1 text-slate-600">Type: {s.type} · Date: {s.date||'unknown'} · Incident location: {s.location_verified?s.location:'not established'}{s.duplicate_of?' · Possible repeat of '+s.duplicate_of:''}</p>
+      <p className="mt-1 text-slate-600">Type: {s.type} · Published: {s.published_at||s.date||'unknown'} · Read: {s.read_status||'saved snapshot'} · Incident location: {s.location_verified?s.location:'not established'}{s.duplicate_of?' · Possible repeat of '+s.duplicate_of:''}</p>
       {s.url?.startsWith('https://')&&<a href={s.url} target="_blank" rel="noreferrer noopener" className="text-blue-700 underline">Open attributed source</a>}
      </div>)}
     </div>
@@ -143,7 +181,8 @@ export default function AIAssistantV2({workspace='OPERATIONS'}){
  const leader=['National Administrator','National Leadership','Provincial Administrator'].includes(access?.role);
  const [workflow,setWorkflow]=useState('AUTO');
  const [perspective,setPerspective]=useState(workspace==='MANAGEMENT'?'MANAGEMENT':'AUTO');
- const [sources,setSources]=useState({smartRadar:true,publicWeb:true,legalReferences:true});
+ const [sourceMode,setSourceMode]=useState('WEB_ONLY');
+ const [sources,setSources]=useState({...SOURCE_MODES[0].sources});
  const [question,setQuestion]=useState(new URLSearchParams(window.location.search).get('q')||'');
  const [messages,setMessages]=useState([]);
  const [draftEdits,setDraftEdits]=useState({});
@@ -164,7 +203,7 @@ export default function AIAssistantV2({workspace='OPERATIONS'}){
    if(!token)throw Error('Sign in to access authorised research.');
    const response=await fetch('/api/ai-assistant/chat',{method:'POST',
     headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-    body:JSON.stringify({question:q,workflow,perspective,sources,previousDraft,
+    body:JSON.stringify({question:q,workflow,perspective,sources,sourceMode,previousDraft,
      history:before.slice(-10).map(m=>({role:m.role,
       text:m.role==='assistant'?(m.result?.answer?.summary||'').slice(0,1500):m.text.slice(0,1500)}))})});
    const data=await response.json().catch(()=>({}));
@@ -212,14 +251,22 @@ export default function AIAssistantV2({workspace='OPERATIONS'}){
     </button>)}
    </div>
    <div className="mt-3 border-t border-slate-100 pt-3">
+    <div className="mb-3 grid gap-2 sm:grid-cols-3" role="group" aria-label="AI Assistant source modes" data-testid="ai-assistant-v2-source-modes">
+     {SOURCE_MODES.map(m=><button key={m.id} type="button" disabled={busy} aria-pressed={sourceMode===m.id}
+      onClick={()=>{setSourceMode(m.id);setSources({...m.sources});}}
+      className={'rounded-lg border p-3 text-left '+(sourceMode===m.id?'border-[#801b24] bg-[#fff5f4]':'border-slate-200 bg-slate-50')}>
+      <strong className="block text-sm">{m.label}</strong>
+      <span className="block text-xs text-slate-600">{m.id==='WEB_ONLY'?'Fresh public pages, no internal records':m.id==='WEB_SMARTRADAR'?'Public sources plus separately attributed saved observations':'Authorized saved records, no public search'}</span>
+     </button>)}
+    </div>
     <button type="button" onClick={()=>setShowSources(v=>!v)} aria-expanded={showSources}
      className="flex items-center gap-2 text-sm font-medium text-[#19364c]"><BookOpen size={16}/> Research sources
-     <span className="text-xs font-normal text-slate-500">{Object.values(sources).filter(Boolean).length}/3 enabled · {showSources?'Hide':'Manage'}</span>
+     <span className="text-xs font-normal text-slate-500">{sourceMode==='CUSTOM'?'Custom':SOURCE_MODES.find(m=>m.id===sourceMode)?.label} · {showSources?'Hide':'Advanced'}</span>
     </button>
     {showSources&&<div className="mt-3 grid gap-2 md:grid-cols-3" data-testid="ai-assistant-v2-sources">
      {SOURCE_CHOICES.map(s=><label key={s.key} className="flex gap-2 rounded-lg border border-slate-200 p-3">
       <input type="checkbox" className="mt-1" disabled={busy} checked={sources[s.key]}
-       onChange={e=>setSources(old=>({...old,[s.key]:e.target.checked}))}/>
+       onChange={e=>{setSourceMode('CUSTOM');setSources(old=>({...old,[s.key]:e.target.checked}));}}/>
       <span className="text-xs"><strong className="block text-slate-900">{s.label}</strong><span className="mt-1 block text-slate-500">{s.detail}</span></span>
      </label>)}
     </div>}

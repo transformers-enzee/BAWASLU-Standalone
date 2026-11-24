@@ -159,7 +159,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','178.0'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','178.1'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -765,12 +765,16 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             raise HTTPException(400,'Private record identifiers cannot be sent to public web research.')
         from .openai_triage import openai_triage_model,OPENAI_DEFAULT_BASE_URL
         from .assistant_orchestration import research_public_web
+        from .assistant_live_web import verify_public_pages
         from .assistant_decision_intelligence import synthesize_public_decision
         key=os.getenv('OPENAI_API_KEY','').strip()
         base=(os.getenv('OPENAI_BASE_URL',OPENAI_DEFAULT_BASE_URL) or OPENAI_DEFAULT_BASE_URL).rstrip('/')
         research=(research_public_web(q,key,openai_triage_model(),base,
                   assistant_mode=mode_config['assistant_mode'],
                   perspective=mode_config['perspective']) if key else None)
+        research=verify_public_pages(research) if research else None
+        # Only successfully read pages support current factual assertions.
+        # Search-only or inaccessible pages remain visible in Research Trail.
         urls=research['urls'] if research else []
         assessment=synthesize_public_decision(
             q,research,key,openai_triage_model(),base,language=language,
@@ -790,7 +794,13 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
                 'structured_findings':[],'draft_policy':drafting_notice(workflow_mode),
                 'decision_plan':assessment.get('decision_plan') or [],
                 'officer_decision':officer_decision,
+                'source_mode':workflow_config['source_mode'],
                 'grounding':{'selected_count':0,'supporting_count':0,'cited_count':0,
+                    'web_pages':[{k:page.get(k) for k in ('url','title','status','reason',
+                        'published_at','updated_at')} for page in (research or {}).get('pages',[])[:8]],
+                    'search_queries':(research or {}).get('search_queries',[])[:12],
+                    'freshness_check_requested':bool((research or {}).get('freshness_check_requested')),
+                    'search_status':(research or {}).get('search_status','UNAVAILABLE'),
                     'decision_quality':officer_decision.get('quality') or {},
                     'institutional_relevance':officer_decision.get('relevance') or 'UNRESOLVED',
                     'web_source_count':len(urls),
@@ -1152,6 +1162,16 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
             source_warning=''  # Avoid mixing language in the generated answer.
         if source_warning:
             text=source_warning+'\n\n'+text
+    # If public research was selected but no page was independently read,
+    # disclose that before presenting any saved-record conclusions.
+    if source_choice['publicWeb'] and not (meta.get('external_research_urls') or []):
+        disclaimer=('Pencarian web langsung belum menghasilkan halaman publik yang berhasil dibaca. '
+                    'Jawaban berikut hanya berdasarkan catatan tersimpan yang diizinkan, '
+                    'bukan verifikasi peristiwa terkini.\n\n' if language=='id' else
+                    'Live web research could not read attributable public pages. '
+                    'The following answer uses authorized saved observations only; '
+                    'it is not verification of current developments.\n\n')
+        text=disclaimer+text
     # Only social-analysis questions receive sample statistics and plots.
     # PDF/procedure and casework answers retain source cards but don't show
     # unrelated candidate tags, social graphs or assignment widgets.
@@ -1198,6 +1218,7 @@ def intelligence_assistant(body:dict,user:User=Depends(current_user),db:Session=
         'attached_source_count':len(attachment_evidence),
         'attached_source_ids':[x['record_id'] for x in attachment_evidence][:45],
         'source_consultation':source_consultation(source_choice,evidence,cited,meta.get('external_research_urls') or []),
+        'source_mode':workflow_config['source_mode'],
         'structured_findings':structured_findings(visible_findings,evidence,cited),
         'decision_plan':meta.get('decision_plan') or [],
         'draft_policy':drafting_notice(workflow_mode),

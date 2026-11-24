@@ -48,6 +48,7 @@ function Trail({result}){
    <p>Public pages read: {t.read_public_count??0} · Saved records: {t.saved_count??0} · Uploaded/link sections: {t.attachment_count??0}</p>
    {t.searched_at&&<p>Research consulted: {t.searched_at} (not continuously updated)</p>}
    {t.evidence_intent&&<p>Evidence requested: <strong>{t.evidence_intent.replaceAll('_',' ')}</strong>{t.budget?.max_pages?' · Maximum selected pages: '+t.budget.max_pages:''}</p>}
+   {t.comparative_coverage&&<p>Qualitative comparison coverage: <strong>{t.comparative_coverage.status}</strong>{t.comparative_coverage.reason?' · '+t.comparative_coverage.reason:''}</p>}
    {!!t.coverage?.length&&<div className="rounded border border-slate-200 p-2">
     <strong>Coverage of the requested question</strong>
     {(t.coverage||[]).map((x,i)=><p key={i}>{x.name}: <strong>{x.status}</strong>{x.reason?' · '+x.reason:''}</p>)}

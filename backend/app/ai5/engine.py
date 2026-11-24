@@ -294,6 +294,33 @@ def _answer_text(raw):
 
 
 
+
+def undiscussed_comparative_observations(cfg,raw,sources):
+    """Signal qualitative sources delivered to synthesis but omitted from its body.
+
+    Only an independently COVERED comparative audit activates this guard;
+    merely finding a search title is not proof of an observation.
+    """
+    comparison=cfg.get("comparative_coverage") or {}
+    if comparison.get("status")!="COVERED" or not isinstance(raw,dict):
+        return []
+    main=_answer_text(raw)
+    used=set(SOURCE_TAG.findall(main))
+    observations=[
+        row for row in sources
+        if row.get("read_status")=="READ" and not row.get("duplicate_of")
+        and str(row.get("type") or "").startswith("PUBLIC_")
+        and any("comparative observation" in str(label).lower()
+                for label in row.get("search_dimensions",[]))
+    ]
+    if not observations or any(row["id"] in used for row in observations):
+        return []
+    return ["Discuss relevant, readable cross-subject observations, examples "
+            "and institutional responses already supplied to the answer model; "
+            "do not replace these findings with a statement about missing "
+            "comparable statistics. Cite the supporting sources or explain "
+            "why their observations are not comparable."]
+
 def main_answer_evidence_gaps(raw):
     """Detect concrete sourced figures relegated exclusively to open questions.
 

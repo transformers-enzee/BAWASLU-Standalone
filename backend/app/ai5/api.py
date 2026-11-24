@@ -211,7 +211,10 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
         answer_audit=engine.review_scope(cfg,generated,key,model,base)
         missing_evidence=answer_audit.get("missing_requests") or []
         buried_findings=engine.main_answer_evidence_gaps(generated)
-        missing=list(dict.fromkeys(missing_evidence+buried_findings))
+        unused_observations=engine.undiscussed_comparative_observations(
+            cfg,generated,combined)
+        missing=list(dict.fromkeys(
+            missing_evidence+buried_findings+unused_observations))
         if missing:
             # If the model already received the evidence but relegated useful
             # figures to caveats, rewrite first: no redundant paid search.
@@ -247,7 +250,9 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             if revision_status=="COMPLETE":
                 generated=revised
                 answer_audit=engine.review_scope(cfg,generated,key,model,base)
-                buried=engine.main_answer_evidence_gaps(generated)
+                buried=(engine.main_answer_evidence_gaps(generated)+
+                        engine.undiscussed_comparative_observations(
+                            cfg,generated,combined))
                 if buried:
                     answer_audit["status"]="GAPS_FOUND"
                     answer_audit["missing_requests"]=list(dict.fromkeys(

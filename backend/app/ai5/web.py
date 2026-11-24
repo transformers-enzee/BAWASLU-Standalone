@@ -55,6 +55,34 @@ def search_budget(dimensions):
     return initial,min(MAX_PAGES,initial+min(10,2+n))
 
 
+
+def qualitative_comparison_requirement(question,intent=None):
+    """Require observation-based peer evidence, not merely comparable counts.
+
+    This is topic-neutral: applies to institutional, health, climate, market,
+    and other comparisons about observed situations. Rules-only queries retain
+    their usual institutional focus.
+    """
+    kind=intent or evidence_intent(question)
+    if not BROAD.search(question) or kind not in ("OBSERVED_OUTCOMES","MIXED"):
+        return None
+    return {
+        "name":"Qualitative cross-subject observations and responses",
+        "query":(question[:290]+" independent observer reports documented examples "
+                 "other compared subjects institutional responses case studies")[:500],
+    }
+
+
+def comparative_observation_queries(question,requirement):
+    """Two bounded, independently targeted public evidence discovery queries."""
+    topic=question[:255]
+    return [
+       (topic+" qualitative firsthand observations comparative case studies "
+        "different subjects independent monitoring reports")[:500],
+       (topic+" other compared countries regions organizations observed incidents "
+        "reactions enforcement responses independent investigations")[:500],
+    ]
+
 def needs_recent(question):
     value=question or ""
     if RECENT.search(value):return True
@@ -305,7 +333,12 @@ def evaluate_coverage(dimensions,pages,key,model,base):
         "addresses constitutional structures, classify outcomes as MISSING. "
         "For outcome questions, only classify as COVERED if readable content " 
         "mentions actual observations or documented incidents/outcomes. "
-        "Legal powers alone cannot satisfy an outcome dimension.")
+        "Legal powers alone cannot satisfy an outcome dimension. "
+        "For a qualitative cross-subject comparison, COVERED requires specific "
+        "readable observations, examples or institutional responses involving "
+        "more than one compared subject; counts for only one subject are MISSING, "
+        "even when they are detailed or recent. Comparable numbers are not "
+        "required for qualitative coverage.")
     result=_provider_json(key,model,base,system,data,"ai5_source_coverage",
                           schema,limit=1250)
     mapped={}
@@ -370,7 +403,8 @@ def fill_answer_gaps(question,missing,key,model,base,as_of,known_urls):
 def research(question,key,model,base,as_of,recent=None):
     now=datetime.now(timezone.utc).isoformat()
     base_result={"status":"PUBLIC_QUERY_BLOCKED","sources":[],"as_of":now,
-                 "attempts":[],"dimensions":[],"coverage":[],"read_count":0}
+                 "attempts":[],"dimensions":[],"coverage":[],
+                 "comparative_coverage":None,"read_count":0}
     if not safe_for_public(question):
         return {**base_result,"warning":"Private identifiers must not be sent to public search."}
     if not key:return {**base_result,"status":"SEARCH_NOT_CONFIGURED"}
@@ -382,8 +416,11 @@ def research(question,key,model,base,as_of,recent=None):
     dimensions=plan_dimensions(question,key,model,base)
     initial_limit,total_limit=search_budget(dimensions)
     intent=evidence_intent(question)
+    observation=qualitative_comparison_requirement(question,intent)
     attempts=[];buckets=[];seen_query=set()
     planned=[("full question",question,False)]
+    if observation:
+        planned.append(("comparative observations",observation["query"],False))
     planned.extend((d["name"],d["query"],False) for d in dimensions
                    if len(dimensions)>1)
     if recent:planned.append(("newest corrections",question,True))
@@ -406,18 +443,28 @@ def research(question,key,model,base,as_of,recent=None):
     initial=_select_candidates(buckets,set(),initial_limit)
     pages=_read_batch(initial)
     first=evaluate_coverage(dimensions,pages,key,model,base)
+    observed=(evaluate_coverage([observation],pages,key,model,base)[0]
+              if observation else None)
     gaps=[d for d,r in zip(dimensions,first) if r["status"]!="COVERED"]
     gaps=gaps[:MAX_DIMENSIONS]
     known={row["url"].split("#")[0] for row in initial}
     follow_buckets=[]
-    if gaps:
+    if gaps or (observed and observed["status"]!="COVERED"):
         kind=(" independent primary evidence documented incident findings "
               "investigation outcomes case examples reporting period source dates"
               if intent in ("OBSERVED_OUTCOMES","MIXED")
               else " independent primary evidence organizational operation details")
         follow_queries=[(d["name"],(d["query"]+kind+" "+d["name"])[:500],False)
                         for d in gaps if safe_for_public(d["query"])]
-        with ThreadPoolExecutor(max_workers=3) as pool:
+        if observed and observed["status"]!="COVERED":
+            # The normal scope audit can be satisfied by figures for only
+            # one subject. A separate observational audit prevents this.
+            follow_queries.extend(
+                ("comparative observation follow-up "+str(index+1),query,False)
+                for index,query in enumerate(
+                    comparative_observation_queries(question,observation))
+                if safe_for_public(query))
+        with ThreadPoolExecutor(max_workers=4) as pool:
             more=list(pool.map(discover_one,follow_queries))
         for label,query,resp in more:
             rows=resp.get("rows") or []
@@ -432,6 +479,8 @@ def research(question,key,model,base,as_of,recent=None):
     pages.extend(_read_batch(extra))
     coverage=(evaluate_coverage(dimensions,pages,key,model,base)
               if extra else first)
+    comparative_coverage=(evaluate_coverage([observation],pages,key,model,base)[0]
+                          if observation and extra else observed)
     token=secrets.token_hex(3).upper()
     for i,row in enumerate(pages,1):
         row["id"]=f"WEB-{token}-{i}"
@@ -460,6 +509,7 @@ def research(question,key,model,base,as_of,recent=None):
                "NO_ATTRIBUTABLE_URLS"))
     return {"status":result_status,"sources":pages,"as_of":now,
             "attempts":attempts,"dimensions":dimensions,"coverage":coverage,
+            "comparative_coverage":comparative_coverage,
             "evidence_intent":intent,
             "budget":{"initial":initial_limit,"max_pages":total_limit,
                       "read_pages":len(pages)},

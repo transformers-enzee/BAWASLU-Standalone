@@ -18,7 +18,7 @@ from app.models import User
 from app.ai4 import attachments as parsers
 from app.unified_ai.saved import collect as saved_research
 from app.ai4.core import profile_context
-from . import state,web,engine,export
+from . import state,web,engine,export,persistence
 
 router=APIRouter(prefix="/api/ai-5",tags=["AI-5 general research"])
 LOG=logging.getLogger(__name__)
@@ -77,6 +77,100 @@ def display(row):
 
 def source_mode_filter(rows,mode,attached):
     return state.filter_evidence(rows,mode,{s["id"] for s in attached})
+
+
+
+
+@router.get("/saved")
+def saved_list(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.list_saved(db,user,grant)
+
+
+@router.post("/saved")
+def saved_create(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.create_saved(db,user,grant,body.get("conversationId"),
+        body.get("title") or "",body.get("draftRevisions") or {})
+
+
+
+
+@router.post("/saved/{saved_id}/sync")
+def saved_sync(saved_id:str,user:User=Depends(current_user),
+               db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.sync_pending(db,user,grant,saved_id)
+
+
+@router.get("/saved/{saved_id}")
+def saved_open(saved_id:str,user:User=Depends(current_user),
+               db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.open_saved(db,user,grant,saved_id)
+
+
+@router.patch("/saved/{saved_id}")
+def saved_rename(saved_id:str,body:dict,user:User=Depends(current_user),
+                 db:Session=Depends(get_db)):
+    grant_for(db,user)
+    return persistence.rename_saved(db,user,saved_id,body.get("title"))
+
+
+@router.patch("/saved/{saved_id}/draft")
+def saved_draft(saved_id:str,body:dict,user:User=Depends(current_user),
+                db:Session=Depends(get_db)):
+    grant_for(db,user)
+    return persistence.save_draft(db,user,saved_id,body.get("turnId"),
+                                  body.get("editedDraft"))
+
+
+@router.delete("/saved/{saved_id}")
+def saved_delete(saved_id:str,user:User=Depends(current_user),
+                 db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    owned=persistence._owned(db,user,saved_id)
+    cid=owned.conversation_id
+    result=persistence.delete_saved(db,user,saved_id)
+    try:state.remove_conversation(user,cid,grant)
+    except HTTPException:pass
+    return result
+
+
+@router.post("/shared/preview")
+def shared_preview(body:dict,user:User=Depends(current_user),
+                   db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.share_preview(db,user,grant,body.get("conversationId"),
+        body.get("scope"),body.get("turnId"),body.get("recipients"),
+        body.get("includeResearchTrail",False))
+
+
+@router.post("/shared")
+def shared_create(body:dict,user:User=Depends(current_user),
+                  db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.create_share(db,user,grant,body)
+
+
+@router.get("/shared")
+def shared_list(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    grant_for(db,user)
+    return persistence.list_shares(db,user)
+
+
+@router.get("/shared/view/{token}")
+def shared_open(token:str,user:User=Depends(current_user),
+                db:Session=Depends(get_db)):
+    grant=grant_for(db,user)
+    return persistence.open_share(db,user,grant,token)
+
+
+@router.delete("/shared/{share_id}")
+def shared_revoke(share_id:str,user:User=Depends(current_user),
+                  db:Session=Depends(get_db)):
+    grant_for(db,user)
+    return persistence.revoke_share(db,user,share_id)
 
 
 @router.post("/upload")
@@ -300,7 +394,9 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     record={"turn_id":turn_id,"question":cfg["question"],"mode":cfg["mode"],
             "action_mode":cfg["action_mode"],"source_mode":cfg["source_mode"],
             "answer":answer,"sources":combined[:40],"used_saved":bool(saved),
-            "used_public":bool(public.get("sources")),"searched_at":public.get("as_of"),
+            "used_public":bool(public.get("sources")),
+            "used_attachment":bool(attached),
+            "searched_at":public.get("as_of"),
             "research_trace":{"attempts":public.get("attempts",[])[:32],
                 "dimensions":cfg.get("research_dimensions",[])[:8],
                 "coverage":cfg.get("research_coverage",[])[:8],
@@ -317,6 +413,13 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
                 "answer_audit":answer_audit},
             "created_at":datetime.now(timezone.utc).isoformat()}
     state.add_turn(user,conversation_id,grant,record)
+    try:
+        saving=persistence.auto_append(db,user,grant,conversation_id,record)
+    except Exception:
+        db.rollback()
+        LOG.exception("AI5_SAVED_CHAT_AUTO_APPEND_FAILED")
+        saving={"status":"COULD_NOT_SAVE",
+                "reason":"Could not save this answer. Retry or copy it before closing."}
     trail={"sources":[display(s) for s in combined[:40]],
            "public_status":public["status"],"searched_at":public.get("as_of"),
            "attempts":public.get("attempts",[]),
@@ -342,6 +445,9 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
             "mode":cfg["mode"],"action_mode":cfg["action_mode"],
             "source_mode":cfg["source_mode"],"answer":answer,
             "research_trail":trail,"synthesis_status":status,
+            "save_status":saving["status"],
+            "save_error":saving.get("reason"),
+            "saved_chat_id":saving.get("saved_chat_id"),
             "actions_executed":False}
 
 

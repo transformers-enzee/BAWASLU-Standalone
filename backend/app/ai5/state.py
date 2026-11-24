@@ -9,7 +9,7 @@ import json
 from fastapi import HTTPException
 from app.ai4 import attachments as storage
 
-MAX_TURNS=14
+MAX_TURNS=50
 MAX_HISTORY_CHARS=18000
 
 
@@ -41,6 +41,29 @@ def conversation(user,conversation_id,grant,create=False):
         record.setdefault("ai5_turns",[])
         return record
 
+
+
+def restore(user,conversation_id,grant,saved_turns):
+    """Rebuild only the bounded working context from durable turns.
+
+    The saved snapshot is viewable, but previously uploaded file contents and
+    internal saved records are NOT reintroduced as trusted model context.
+    """
+    key=owner(user)
+    with storage.LOCK:
+        try:storage.clear(key,conversation_id,grant)
+        except HTTPException:
+            # Clearing a stale in-process cache must not prevent a safe
+            # public-only saved chat from reopening under current access.
+            pass
+        record=conversation(user,conversation_id,grant,True)
+        restored=[]
+        for source in saved_turns[-MAX_TURNS:]:
+            t=copy.deepcopy(source)
+            t["restored_from_saved"]=True
+            restored.append(t)
+        record["ai5_turns"]=restored
+        return len(restored)
 
 def remove_conversation(user,conversation_id,grant):
     conversation(user,conversation_id,grant,False)
@@ -115,6 +138,13 @@ def history_context(prior,source_mode,valid_attachment_ids):
     summaries=[]
     remaining=MAX_HISTORY_CHARS
     for t in reversed(prior[-7:]):
+        # Saved private sources must be re-retrieved under current permissions
+        # before they can support new synthesis.
+        if t.get("restored_from_saved") and (
+            t.get("used_saved") or
+            any(str(x.get("type","")).startswith("ATTACHMENT_")
+                for x in t.get("sources",[]))):
+            continue
         if source_mode=="WEB_ONLY" and t.get("used_saved"):
             continue
         if source_mode=="SMARTRADAR_ONLY" and t.get("used_public"):
@@ -142,6 +172,11 @@ def history_context(prior,source_mode,valid_attachment_ids):
 
 def latest_relevant(prior,source_mode,valid_attachment_ids):
     for t in reversed(prior):
+        if t.get("restored_from_saved") and (
+            t.get("used_saved") or
+            any(str(x.get("type","")).startswith("ATTACHMENT_")
+                for x in t.get("sources",[]))):
+            continue
         if source_mode=="WEB_ONLY" and t.get("used_saved"):continue
         if source_mode=="SMARTRADAR_ONLY" and t.get("used_public"):
             # A transform may use earlier original words, but cannot treat

@@ -23,6 +23,12 @@ jobs:
         run: python -m pip install -r backend/requirements.txt
       - name: Compile backend and CLI
         run: python -m compileall -q backend/app backend/scripts
+      - name: AI-5 saved chat and share privacy regression
+        working-directory: backend
+        run: python -m pytest -q tests/test_ai5_saved_shares_v1808.py
+        env:
+          OPENAI_API_KEY: ''
+          DATABASE_URL: sqlite:////tmp/bawaslu-ai5-save-share-qa.sqlite3
       - name: AI-5 qualitative research cross-topic regression
         working-directory: backend
         run: python -m pytest -q tests/test_ai5_qualitative_regression_v1803.py tests/test_ai5_evidence_flow_v1800.py
@@ -59,6 +65,9 @@ jobs:
       - name: Install frontend
         working-directory: frontend
         run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: AI-5 Saved Chats and share navigation contract
+        working-directory: frontend
+        run: node scripts/test-ai5-saved-shares-v1808.mjs
       - name: Build frontend
         working-directory: frontend
         run: npm run build

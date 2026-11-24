@@ -1,7 +1,7 @@
-import {useState,useRef} from 'react';
+import {useState,useRef,useEffect} from 'react';
 import {useOutletContext} from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import {ArrowRight,Paperclip,Link2,Trash2,Plus,BriefcaseBusiness,Download,FileText,Loader2,Sparkles,ShieldCheck,Globe2,RotateCcw} from 'lucide-react';
+import {ArrowRight,Paperclip,Link2,Trash2,Plus,BriefcaseBusiness,Download,FileText,Loader2,Sparkles,ShieldCheck,Globe2,RotateCcw,Save,Share2,Bookmark,Mail,MessageCircle,Copy,Check,X,Pencil} from 'lucide-react';
 
 const MODES=[['WEB_ONLY','Web only','Public research; no saved SmartRadar records'],
  ['WEB_SMARTRADAR','Web + SmartRadar','Read public and authorised saved sources'],
@@ -97,7 +97,7 @@ function Trail({result}){
   </div>
  </details>;
 }
-function Response({item,conversationId,sourceMode,onFollowUp}){
+function Response({item,conversationId,sourceMode,onFollowUp,onShare,onDraftChange,onDraftSave}){
  const a=item.answer||{},t=item.research_trail||{},table=a.table||{};
  const [draft,setDraft]=useState(a.draft||'');
  const [includeTrail,setIncludeTrail]=useState(false);
@@ -135,7 +135,8 @@ function Response({item,conversationId,sourceMode,onFollowUp}){
   </section>}
   {!!a.draft&&<section className="space-y-2">
    <h3 className="text-sm font-bold">Editable deliverable · review before use</h3>
-   <textarea aria-label="AI-5 editable draft" rows={9} value={draft} onChange={e=>setDraft(e.target.value)}
+   <textarea aria-label="AI-5 editable draft" rows={9} value={draft} onChange={e=>{setDraft(e.target.value);onDraftChange?.(item.turn_id,e.target.value);}}
+     onBlur={()=>onDraftSave?.(item.turn_id,draft)}
     className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-6"/>
    <div className="flex flex-wrap gap-2">
     <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Shorten the previous draft while retaining evidence caveats.',item.turn_id,draft)}>Shorten</button>
@@ -155,6 +156,8 @@ function Response({item,conversationId,sourceMode,onFollowUp}){
     <input type="checkbox" checked={includeTrail} onChange={e=>setIncludeTrail(e.target.checked)}
       aria-label="Include detailed Research Trail appendix in PDF"/> Research Trail appendix (PDF)
    </label>
+   <button type="button" className="intel-ghost text-xs" onClick={()=>onShare?.(item.turn_id)}>
+    <Share2 size={14}/> Share</button>
    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Challenge this conclusion and consider alternative interpretations.',item.turn_id)}>
     <RotateCcw size={13}/> Challenge finding</button>
   </div>
@@ -164,6 +167,163 @@ function Response({item,conversationId,sourceMode,onFollowUp}){
   <p className="text-[11px] text-slate-500">Exports are authenticated. AI-5 has not sent any messages or official actions.</p>
  </article>;
 }
+
+function SharedAnswers({snapshot}){
+ const answers=snapshot?.answers||[];
+ return <div className="space-y-4">
+  {answers.map((t,i)=><article key={t.turn_id||i} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+   <div className="rounded-lg bg-slate-50 p-3 text-sm"><strong>Question {i+1}:</strong> {t.question}</div>
+   <Markdown value={t.answer?.body} trail={{sources:t.sources||[]}}/>
+   {!!t.answer?.table?.columns?.length&&<div className="overflow-auto">
+    <h3 className="mb-2 text-sm font-semibold">{t.answer.table.title||'Comparison'}</h3>
+    <table className="w-full border text-left text-xs"><thead><tr>{t.answer.table.columns.map((c,k)=><th key={k} className="border p-2">{c}</th>)}</tr></thead>
+     <tbody>{(t.answer.table.rows||[]).map((row,j)=><tr key={j}>{row.map((v,k)=><td className="border p-2 align-top" key={k}>
+      <Markdown value={v} trail={{sources:t.sources||[]}}/></td>)}</tr>)}</tbody></table>
+   </div>}
+   {!!t.answer?.draft&&<section><h3 className="text-sm font-semibold">Draft (read-only)</h3><Markdown value={t.answer.draft} trail={{sources:t.sources||[]}}/></section>}
+   {!!t.answer?.open_questions?.length&&<details className="text-xs"><summary>Evidence limits</summary>
+    {t.answer.open_questions.map((q,k)=><Markdown key={k} value={q} trail={{sources:t.sources||[]}}/>)}</details>}
+   {!!t.research_trail&&<details className="rounded-lg border border-slate-200 p-3 text-xs"><summary className="cursor-pointer font-semibold">Research Trail</summary>
+    <Trail result={{source_mode:'WEB_ONLY',research_trail:t.research_trail}}/>
+   </details>}
+  </article>)}
+ </div>;
+}
+
+function ShareDialog({initial,conversationId,messages,onClose,onShared}){
+ const answers=messages.filter(m=>m.role==='assistant').map(m=>m.data);
+ const answerLabel=(answer,index)=>{
+  const position=messages.findIndex(m=>m.role==='assistant'&&m.data.turn_id===answer.turn_id);
+  const previous=messages[position-1];
+  return 'Answer '+(index+1)+' · '+String(previous?.role==='user'?previous.text:(answer.answer?.title||'Research')).slice(0,70);
+ };
+ const [scope,setScope]=useState(initial.scope);
+ const [turnId,setTurnId]=useState(initial.turnId||answers.at(-1)?.turn_id||'');
+ const [recipients,setRecipients]=useState('');
+ const [includeTrail,setIncludeTrail]=useState(false);
+ const [expiryDays,setExpiryDays]=useState(7);
+ const [preview,setPreview]=useState(null);
+ const [created,setCreated]=useState(null);
+ const [working,setWorking]=useState('');
+ const [error,setError]=useState('');
+ const addresses=recipients.split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
+ const data=()=>({conversationId,scope,turnId,recipients:addresses,
+                   includeResearchTrail:includeTrail,expiryDays});
+ function invalidate(next){setPreview(null);setCreated(null);setError('');next?.()}
+ async function check(){
+  setWorking('Checking recipients and evidence…');setError('');setCreated(null);
+  try{const r=await request('/api/ai-5/shared/preview',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(data())});
+   setPreview(r);
+  }catch(e){setError(e.message);setPreview(null)}
+  finally{setWorking('')}
+ }
+ async function create(){
+  if(!preview?.can_share)return;
+  setWorking('Creating a frozen, read-only copy…');setError('');
+  try{const r=await request('/api/ai-5/shared',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...data(),previewDigest:preview.preview_digest})});
+   const link=window.location.origin+'/ai-5?share='+encodeURIComponent(r.token);
+   setCreated({...r,link});onShared?.();
+  }catch(e){setError(e.message);setPreview(null)}
+  finally{setWorking('')}
+ }
+ async function copyLink(){
+  try{await navigator.clipboard.writeText(created.link);setWorking('Link copied')}
+  catch{setError('Copy not available. Select and copy the link below.')}
+ }
+ function draftMail(){
+  const subject='SmartRadar AI-5 — shared research';
+  const body='A read-only SmartRadar research copy was shared with you. Sign in with your authorised account to open it:\n'+created.link+'\nExpires: '+created.expires_at;
+  window.location.href='mailto:'+addresses.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+ }
+ function draftWhatsApp(){
+  const body='SmartRadar AI-5 read-only research (sign-in required): '+created.link+'\nExpires: '+created.expires_at;
+  window.open('https://wa.me/?text='+encodeURIComponent(body),'_blank','noopener,noreferrer');
+ }
+ return <div role="dialog" aria-modal="true" aria-label="Share AI-5 content"
+    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-3">
+  <div className="max-h-[95vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl space-y-3">
+   <div className="flex items-center justify-between gap-2">
+    <h2 className="flex items-center gap-2 text-lg font-bold text-[#173950]"><Share2 size={19}/> Share AI-5 research</h2>
+    <button type="button" aria-label="Close share" onClick={onClose}><X size={20}/></button>
+   </div>
+   <p className="text-sm text-slate-600">Create a frozen read-only copy for selected signed-in colleagues. Uploaded files and restricted SmartRadar data cannot be shared through this flow.</p>
+   <div className="grid gap-3 sm:grid-cols-2">
+    <label className="text-xs font-semibold">Content to share
+     <select value={scope} onChange={e=>invalidate(()=>setScope(e.target.value))} className="mt-1 w-full rounded border p-2 text-sm">
+      <option value="ANSWER">This answer only</option><option value="CONVERSATION">Conversation so far</option>
+     </select></label>
+    {scope==='ANSWER'&&<label className="text-xs font-semibold">Choose answer
+     <select value={turnId} onChange={e=>invalidate(()=>setTurnId(e.target.value))}
+       className="mt-1 w-full rounded border p-2 text-sm">
+      {answers.map((a,i)=><option key={a.turn_id} value={a.turn_id}>{answerLabel(a,i)}</option>)}
+     </select></label>}
+   </div>
+   <label className="block text-xs font-semibold">Colleague emails (comma or new line separated)
+    <textarea rows={2} value={recipients} onChange={e=>invalidate(()=>setRecipients(e.target.value))}
+     placeholder="analyst@organisation.gov, reviewer@organisation.gov"
+     className="mt-1 w-full rounded border p-2 text-sm"/></label>
+   <div className="flex flex-wrap gap-3 text-xs">
+    <label className="flex items-center gap-2"><input type="checkbox" checked={includeTrail}
+      onChange={e=>invalidate(()=>setIncludeTrail(e.target.checked))}/> Include Research Trail</label>
+    <label className="flex items-center gap-2">Link expires after
+     <select value={expiryDays} onChange={e=>invalidate(()=>setExpiryDays(Number(e.target.value)))}
+      className="rounded border p-1"><option value={1}>1 day</option><option value={7}>7 days</option><option value={30}>30 days</option></select>
+    </label>
+   </div>
+   <div className="flex gap-2">
+    <button type="button" className="intel-button" disabled={!addresses.length||!!working} onClick={check}>Preview & check access</button>
+    <button type="button" className="intel-ghost" onClick={onClose}>Close</button>
+   </div>
+   {preview&&<div className="space-y-2 rounded-xl border border-slate-200 p-3">
+    <h3 className="text-sm font-semibold">Exactly what recipients will receive ({preview.selected_count} answer(s))</h3>
+    <p className="text-xs">Recipients: {preview.recipients?.join(', ')}</p>
+    {!!preview.blocked_recipients?.length&&<p role="alert" className="rounded bg-amber-50 p-2 text-xs text-red-800">Access blocked: {preview.blocked_recipients.join('; ')}</p>}
+    {!!preview.blocked_content?.length&&<div role="alert" className="rounded bg-amber-50 p-2 text-xs text-red-800">
+      <strong>Content blocked — narrow to an eligible answer:</strong>
+      {preview.blocked_content.map((x,i)=><p key={i}>{x.question} — {x.reason}</p>)}
+    </div>}
+    <div className="max-h-72 overflow-auto border-t pt-3"><SharedAnswers snapshot={preview.preview}/></div>
+    <button type="button" className="intel-button" disabled={!preview.can_share||!!working||!!created}
+     onClick={create}>Create read-only share</button>
+   </div>}
+   {created&&<div className="space-y-2 rounded-xl bg-emerald-50 p-3 text-sm">
+    <p><Check size={15} className="inline"/> Shared copy created. Expires {new Date(created.expires_at).toLocaleString()}. You can revoke it under Shared links.</p>
+    <input readOnly aria-label="Read-only share link" value={created.link} className="w-full rounded border p-2 text-xs"/>
+    <div className="flex flex-wrap gap-2">
+     <button className="intel-ghost text-xs" type="button" onClick={copyLink}><Copy size={14}/> Copy link</button>
+     <button className="intel-ghost text-xs" type="button" onClick={draftMail}><Mail size={14}/> Email draft</button>
+     <button className="intel-ghost text-xs" type="button" onClick={draftWhatsApp}><MessageCircle size={14}/> WhatsApp draft</button>
+    </div>
+   </div>}
+   {working&&<p role="status" className="text-xs">{working}</p>}
+   {error&&<p role="alert" className="text-xs text-red-800">{error}</p>}
+  </div>
+ </div>;
+}
+
+function SharedReadOnly({token}){
+ const [view,setView]=useState(null);
+ const [error,setError]=useState('');
+ useEffect(()=>{
+  let active=true;
+  request('/api/ai-5/shared/view/'+encodeURIComponent(token)).then(x=>{if(active)setView(x)})
+   .catch(e=>{if(active)setError(e.message)});
+  return ()=>{active=false};
+ },[token]);
+ return <main className="mx-auto max-w-[1120px] space-y-4 pb-6">
+  <header className="rounded-xl bg-[#173950] p-5 text-white"><h1 className="text-xl font-bold">SmartRadar AI-5 · Shared research</h1>
+   <p className="mt-1 text-xs">Sign-in required · Frozen read-only copy · No access to the original conversation</p></header>
+  {error&&<div role="alert" className="rounded border border-red-300 bg-red-50 p-4 text-red-900">{error}</div>}
+  {!view&&!error&&<p role="status">Verifying your access…</p>}
+  {view&&<><div className="rounded border border-slate-200 bg-white p-3 text-xs">
+   Read-only share · Expires {new Date(view.expires_at).toLocaleString()} · {view.snapshot.scope==='ANSWER'?'One selected answer':'Conversation snapshot'}
+   </div><SharedAnswers snapshot={view.snapshot}/></>}
+ </main>;
+}
+
 export default function AI5Assistant({workspace='OPERATIONAL'}){
  const {access}=useOutletContext()||{};
  const leader=['National Administrator','National Leadership','Provincial Administrator'].includes(access?.role);
@@ -181,11 +341,107 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  const [error,setError]=useState('');
  const [refTurn,setRefTurn]=useState(null);
  const [editedRefDraft,setEditedRefDraft]=useState('');
+ const [savedChats,setSavedChats]=useState([]);
+ const [currentSavedId,setCurrentSavedId]=useState(null);
+ const [saveStatus,setSaveStatus]=useState('');
+ const [showSaved,setShowSaved]=useState(false);
+ const [sharedLinks,setSharedLinks]=useState([]);
+ const [showShares,setShowShares]=useState(false);
+ const [shareDialog,setShareDialog]=useState(null);
+ const [draftRevisions,setDraftRevisions]=useState({});
+ const [reopenNote,setReopenNote]=useState('');
+ const shareToken=new URLSearchParams(window.location.search).get('share');
  const chooser=useRef(null);
+ useEffect(()=>{
+  if(shareToken)return;
+  let active=true;
+  request('/api/ai-5/saved').then(r=>{if(active)setSavedChats(r.saved_chats||[])}).catch(()=>{});
+  request('/api/ai-5/shared').then(r=>{if(active)setSharedLinks(r.shares||[])}).catch(()=>{});
+  return ()=>{active=false};
+ },[shareToken]);
+ async function refreshSaved(){
+  const r=await request('/api/ai-5/saved');setSavedChats(r.saved_chats||[]);
+ }
+ async function refreshShares(){
+  const r=await request('/api/ai-5/shared');setSharedLinks(r.shares||[]);
+ }
+ async function saveChat(){
+  if(!messages.length||busy)return;
+  if(currentSavedId){
+   setSaveStatus('Saving…');setError('');
+   try{
+    const r=await request('/api/ai-5/saved/'+encodeURIComponent(currentSavedId)+'/sync',{method:'POST'});
+    setSaveStatus(r.status==='SAVED'?'Saved':'Couldn’t save');
+    await refreshSaved();
+   }catch(e){setSaveStatus('Couldn’t save');setError(e.message)}
+   return;
+  }
+  const proposed=messages.find(m=>m.role==='user')?.text?.slice(0,100)||'AI-5 research';
+  const title=window.prompt('Name this saved chat',proposed);
+  if(title===null)return;
+  setSaveStatus('Saving…');setError('');
+  try{
+   const r=await request('/api/ai-5/saved',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({conversationId,title,draftRevisions})});
+   setCurrentSavedId(r.id);setSaveStatus('Saved');
+   await refreshSaved();
+  }catch(e){setSaveStatus('Couldn’t save');setError(e.message)}
+ }
+ async function reopen(id){
+  if(busy)return;
+  setProcessing(true);setError('');
+  try{
+   const r=await request('/api/ai-5/saved/'+encodeURIComponent(id));
+   setConversationId(r.conversation_id);setMessages(r.messages||[]);
+   setAttachments([]);setCurrentSavedId(r.id);setSaveStatus('Saved');
+   const last=[...(r.messages||[])].reverse().find(m=>m.role==='assistant')?.data;
+   if(last){setMode(last.mode||'GENERAL_RESEARCH');setSourceMode(last.source_mode||'WEB_ONLY');
+    setActionMode(last.action_mode||'OPERATIONAL')}
+   setQuestion('');setRefTurn(null);setEditedRefDraft('');
+   setDraftRevisions({});setShowSaved(false);setReopenNote(r.attachments_note||'');
+  }catch(e){setError(e.message);setSaveStatus('Couldn’t reopen')}
+  finally{setProcessing(false)}
+ }
+ async function renameChat(item){
+  const title=window.prompt('Rename saved chat',item.title);if(title===null)return;
+  try{await request('/api/ai-5/saved/'+encodeURIComponent(item.id),{
+    method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title})});
+    await refreshSaved();
+  }catch(e){setError(e.message)}
+ }
+ async function deleteChat(item){
+  if(!window.confirm('Delete saved chat "'+item.title+'"? Any shared links from this chat will also be revoked.'))return;
+  try{await request('/api/ai-5/saved/'+encodeURIComponent(item.id),{method:'DELETE'});
+   await refreshSaved();await refreshShares();
+   if(item.id===currentSavedId)reset();
+  }catch(e){setError(e.message)}
+ }
+ async function saveDraft(turnId,draft){
+  if(!currentSavedId)return;
+  setSaveStatus('Saving…');
+  try{await request('/api/ai-5/saved/'+encodeURIComponent(currentSavedId)+'/draft',{
+   method:'PATCH',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({turnId,editedDraft:draft})});
+   setSaveStatus('Saved');
+  }catch(e){setSaveStatus('Couldn’t save');setError(e.message)}
+ }
+ async function revokeShare(id){
+  if(!window.confirm('Revoke this link? Colleagues will immediately lose access.'))return;
+  try{await request('/api/ai-5/shared/'+encodeURIComponent(id),{method:'DELETE'});
+   await refreshShares();
+  }catch(e){setError(e.message)}
+ }
+ async function copyOldShare(token){
+  const link=window.location.origin+'/ai-5?share='+encodeURIComponent(token);
+  try{await navigator.clipboard.writeText(link);setSaveStatus('Link copied')}
+  catch{setError('Copy unavailable: '+link)}
+ }
  function reset(){
   fetch('/api/ai-5/conversation/'+conversationId,{method:'DELETE',headers:headers()}).catch(()=>{});
   setConversationId(makeId());setMessages([]);setAttachments([]);setQuestion('');
   setMode('GENERAL_RESEARCH');setSourceMode('WEB_ONLY');setRefTurn(null);setEditedRefDraft('');setError('');
+  setCurrentSavedId(null);setSaveStatus('');setDraftRevisions({});setReopenNote('');
  }
  async function upload(event){
   const items=Array.from(event.target.files||[]);event.target.value='';
@@ -218,17 +474,66 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     body:JSON.stringify({question:q,mode,actionMode,sourceMode,conversationId,
       referenceTurnId:refTurn,editedDraft:editedRefDraft})});
    setMessages([...old,{role:'user',text:q},{role:'assistant',data:r}]);setRefTurn(null);setEditedRefDraft('');
+   if(currentSavedId){
+    setSaveStatus(r.save_status==='SAVED'?'Saved':'Couldn’t save');
+    if(r.save_status!=='SAVED')setError(r.save_error||'This new answer was not saved.');
+    else refreshSaved().catch(()=>{});
+   }
   }catch(e){setMessages(old);setQuestion(q);setError(e.message)}
   finally{setBusy(false)}
  }
  function followup(value,id,draft=''){setQuestion(value);setRefTurn(id);setEditedRefDraft(draft);}
+ if(shareToken)return <SharedReadOnly token={shareToken}/>;
  if(workspace==='MANAGEMENT'&&!leader)return <div role="alert" className="rounded-lg border border-amber-200 p-5">Management access requires authorised leadership. Use AI-5 in Operations for General Research.</div>;
  return <main data-testid="ai5-page" className="mx-auto max-w-[1160px] space-y-4 pb-6">
   <header className="rounded-2xl bg-[#173950] px-6 py-6 text-white">
    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-sky-100"><Sparkles size={16}/> Independent SmartRadar assistant</p>
    <h1 className="mt-2 text-3xl font-bold">AI-5 Assistant</h1>
    <p className="mt-2 text-sm text-sky-100">Explore any topic, follow a new angle, and create working documents. Apply findings to BAWASLU when you choose.</p>
+   <div className="mt-4 flex flex-wrap gap-2">
+    <button type="button" data-testid="ai5-save-chat" disabled={!messages.length||busy||processing}
+     onClick={saveChat} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#173950]">
+     <Save size={14} className="mr-1 inline"/>{currentSavedId?'Saved chat':'Save chat'}</button>
+    <button type="button" data-testid="ai5-share-chat" disabled={!messages.length||busy||processing}
+     onClick={()=>setShareDialog({scope:'CONVERSATION',turnId:null})}
+     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
+     <Share2 size={14} className="mr-1 inline"/> Share chat</button>
+    <button type="button" data-testid="ai5-saved-navigation" onClick={()=>setShowSaved(v=>!v)}
+     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
+     <Bookmark size={14} className="mr-1 inline"/> Saved Chats ({savedChats.length})</button>
+    <button type="button" onClick={()=>setShowShares(v=>!v)}
+     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
+     <Share2 size={14} className="mr-1 inline"/> Shared links ({sharedLinks.length})</button>
+    {!!saveStatus&&<span role="status" className={'rounded-lg px-3 py-2 text-xs font-semibold '+(
+     saveStatus==='Couldn’t save'?'bg-red-200 text-red-900':'bg-sky-100 text-[#173950]')}>
+     {saveStatus}</span>}
+   </div>
   </header>
+  {showSaved&&<nav aria-label="AI-5 Saved Chats" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4" data-testid="ai5-saved-chats">
+   <h2 className="text-sm font-bold">Saved Chats · Private to you</h2>
+   {!savedChats.length&&<p className="text-xs text-slate-500">No saved chats yet.</p>}
+   {savedChats.map(item=><div key={item.id} className="flex items-center justify-between gap-2 border-b border-slate-100 py-2">
+    <button type="button" className="min-w-0 flex-1 text-left" onClick={()=>reopen(item.id)} disabled={processing||busy}>
+     <span className="block truncate text-sm font-semibold">{item.title}</span>
+     <span className="text-xs text-slate-500">Updated {new Date(item.updated_at).toLocaleString()}</span>
+    </button>
+    <button type="button" className="intel-ghost text-xs" aria-label={'Rename '+item.title} onClick={()=>renameChat(item)}><Pencil size={13}/></button>
+    <button type="button" className="intel-ghost text-xs" aria-label={'Delete '+item.title} onClick={()=>deleteChat(item)}><Trash2 size={13}/></button>
+   </div>)}
+  </nav>}
+  {showShares&&<section aria-label="AI-5 Shared links" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+   <h2 className="text-sm font-bold">Shared links · Read-only copies</h2>
+   {!sharedLinks.length&&<p className="text-xs text-slate-500">No shared links yet.</p>}
+   {sharedLinks.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2">
+    <div><p className="text-xs font-semibold">{item.scope==='ANSWER'?'One answer':'Conversation snapshot'} · {item.revoked?'Revoked':item.expired?'Expired':'Active'}</p>
+     <p className="text-xs text-slate-600">Expires {new Date(item.expires_at).toLocaleString()}</p></div>
+    <div className="flex gap-2">
+     {!item.revoked&&!item.expired&&<button type="button" className="intel-ghost text-xs" onClick={()=>copyOldShare(item.token)}><Copy size={13}/> Copy link</button>}
+     {!item.revoked&&<button type="button" className="intel-ghost text-xs" onClick={()=>revokeShare(item.id)}><X size={13}/> Revoke</button>}
+    </div>
+   </div>)}
+  </section>}
+  {!!reopenNote&&<p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{reopenNote}</p>}
   <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
    <div>
     <h2 className="mb-2 text-xs font-bold uppercase tracking-wide">Conversation mode — change without losing context</h2>
@@ -281,7 +586,10 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
   <div className="space-y-4">{messages.map((m,i)=>m.role==='user'?
    <div key={i} className="ml-auto max-w-3xl rounded-2xl bg-red-50 p-4 text-sm">{m.text}</div>:
    <Response key={m.data.turn_id||i} item={m.data} conversationId={conversationId}
-    sourceMode={sourceMode} onFollowUp={followup}/>)}</div>
+    sourceMode={m.data.source_mode||sourceMode} onFollowUp={followup}
+    onShare={id=>setShareDialog({scope:'ANSWER',turnId:id})}
+    onDraftChange={(id,text)=>setDraftRevisions(v=>({...v,[id]:text}))}
+    onDraftSave={saveDraft}/>)}</div>
   {error&&<p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">{error}</p>}
   <section data-testid="ai5-composer" className="sticky bottom-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
    {!!attachments.length&&<div data-testid="ai5-attachments" className="mb-2 flex flex-wrap gap-2">
@@ -317,7 +625,10 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
      </button>
     </div>
    </form>
-   <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-500"><ShieldCheck size={12}/> PDF/DOCX/TXT up to 5 MB and public HTTPS links. Extracted attachment text is provided to the configured AI model when answering, not to public search. Conversations are temporary (up to 12 hours) and may be lost on restart.</p>
+   <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-500"><ShieldCheck size={12}/> PDF/DOCX/TXT up to 5 MB and public HTTPS links. Extracted attachment text is provided to the configured AI model when answering, not to public search. Unsaved conversations remain temporary (up to 12 hours). Save chat to keep your turns, drafts and citations beyond the session. Uploaded files themselves are not retained.</p>
   </section>
+  {shareDialog&&<ShareDialog key={shareDialog.scope+String(shareDialog.turnId||'')}
+    initial={shareDialog} conversationId={conversationId} messages={messages}
+    onClose={()=>setShareDialog(null)} onShared={()=>refreshShares().catch(()=>{})}/>}
  </main>;
 }

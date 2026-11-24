@@ -27,7 +27,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>
-      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview} onClick={onConfirm}>Confirm Activation</button>}
+      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview} onClick={onConfirm}>Activate</button>}
      </div>
      {loading&&<p role="status" className="text-xs text-slate-500">Submitting activation request…</p>}
     </div>}

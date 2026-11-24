@@ -9,7 +9,7 @@ for(const field of ["discover_boolean_plan(search['boolean_query'])","'max_credi
 assert.ok(!service.includes("params['contains']=plan['contains']"));
 assert.ok(!service.includes("group['exclude_terms']=plan['exclude_terms']"));
 assert.ok(planner.includes('POSITIVE_COMPOUND_SEARCH_WITH_LOCAL_BOOLEAN_GATE'));
-assert.ok(dialog.includes('Confirm Activation'));
+assert.ok(dialog.includes('onClick={onConfirm}>Activate</button>'));
 assert.ok(dialog.includes('disabled={loading||previewLoading||!preview}'));
 for(const field of ['Maximum SocialCrawl credits','Provider source scope','zeroYieldAcknowledged'])assert.ok(!dialog.includes(field),field);
 assert.ok(project.includes('signature:discoverPreview.signature'));

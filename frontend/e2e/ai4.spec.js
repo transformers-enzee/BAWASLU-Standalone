@@ -40,10 +40,13 @@ test('AI-4 and old AI Assistant remain separate navigation entries',async({page}
  await login(page);
  const op=page.getByRole('navigation',{name:'Operational workspace'});
  const mgmt=page.getByRole('navigation',{name:'Management workspace'});
- await expect(op.locator('a[href="/ai-assistant"]')).toBeVisible();
- await expect(op.locator('a[href="/ai-4"]')).toBeVisible();
- await expect(mgmt.locator('a[href="/management/ai-assistant"]')).toBeVisible();
- await expect(mgmt.locator('a[href="/management/ai-4"]')).toBeVisible();
+ for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4']){
+  await expect(op.locator('a[href="'+href+'"]')).toBeVisible();
+ }
+ for(const href of ['/management/assistant','/management/ai-assistant',
+                    '/management/ai-assistant-v2-new','/management/ai-4']){
+  await expect(mgmt.locator('a[href="'+href+'"]')).toBeVisible();
+ }
  await page.goto('/ai-4');
  await expect(page.getByTestId('ai4-page')).toContainText('AI Assistant (New)');
  await page.goto('/ai-assistant');

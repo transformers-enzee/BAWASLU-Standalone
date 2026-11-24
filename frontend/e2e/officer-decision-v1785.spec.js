@@ -48,7 +48,7 @@ const mocked={
  },
  audit:{read_only:true,no_prior_assistant_history_retrieved:true}
 };
-test('retired independent assistant remains direct-link accessible but is absent from primary navigation',async({page})=>{
+test('all previous assistants remain visible and independently reachable alongside AI-4',async({page})=>{
  const submissions=[];
  await page.route('**/api/officer-decision-ai/analyze',async route=>{
   submissions.push(route.request().postDataJSON());
@@ -59,12 +59,11 @@ test('retired independent assistant remains direct-link accessible but is absent
  const legacy=nav.locator('a[href="/assistant"]');
  const previous=nav.locator('a[href="/ai-assistant"]');
  const fresh=nav.locator('a[href="/ai-assistant-v2-new"]');
- await expect(legacy).toHaveCount(0);
+ await expect(legacy).toBeVisible();
  await expect(previous).toBeVisible();
- await expect(fresh).toHaveCount(0);
- // Keep legacy independent mode reachable via a direct link for rollback
- // without presenting multiple competing assistants to BAWASLU officers.
- await page.goto('/ai-assistant-v2-new');
+ await expect(fresh).toBeVisible();
+ await expect(nav.locator('a[href="/ai-4"]')).toBeVisible();
+ await fresh.click();
  await expect(page.getByTestId('officer-v3-page')).toBeVisible();
  const choose=page.getByTestId('officer-v3-source-modes');
  await expect(choose.getByRole('button',{name:/Public web only/})).toHaveAttribute('aria-pressed','true');

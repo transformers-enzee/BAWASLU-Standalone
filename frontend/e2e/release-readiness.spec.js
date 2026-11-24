@@ -23,10 +23,12 @@ test('release navigation exposes every completed administrator module',async({pa
   }
   await expect(nav.locator('a[href="/management/ai-assistant"]')).toBeVisible();
   await expect(nav.locator('a[href="/ai-assistant"]')).toBeVisible();
-  // Older assistant direct URLs remain, but are intentionally excluded from
-  // the consolidated workspace navigation.
-  await expect(nav.locator('a[href="/management/assistant"]')).toHaveCount(0);
-  await expect(nav.locator('a[href="/assistant"]')).toHaveCount(0);
+  // Existing assistant versions must remain visible; AI-4 is additive only.
+  for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4',
+                      '/management/assistant','/management/ai-assistant',
+                      '/management/ai-assistant-v2-new','/management/ai-4']){
+    await expect(nav.locator('a[href="'+href+'"]')).toBeVisible();
+  }
   await expect(nav.getByRole('link',{name:/^Watchlist$/i})).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();

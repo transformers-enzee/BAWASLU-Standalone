@@ -13,7 +13,11 @@ assert.ok(app.includes('UnifiedAIAssistant workspace="OPERATIONAL"'));
 assert.ok(app.includes('UnifiedAIAssistant workspace="MANAGEMENT"'));
 assert.ok(nav.includes("['/ai-assistant','AI Assistant'"));
 assert.ok(nav.includes("['/management/ai-assistant','AI Assistant'"));
-assert.ok(nav.includes('!retired.has(path)'),'Only unified assistant should appear in navigation');
+assert.ok(!nav.includes('retired.has(path)'),'No assistant may be hidden by a retirement filter');
+for(const path of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4',
+                  '/management/assistant','/management/ai-assistant',
+                  '/management/ai-assistant-v2-new','/management/ai-4'])
+ assert.ok(nav.includes("'"+path+"'"),'Previous assistant is missing from navigation: '+path);
 assert.ok(home.includes('/management/ai-assistant'),'Management homepage link');
 assert.ok(main.includes('app.include_router(unified_ai_router)'));
 assert.ok(!main.includes('app.include_router(ai_assistant_v2_router)'),
@@ -22,4 +26,4 @@ assert.ok(legacy.includes('@router.post("/chat")'),'Legacy module preserved for 
 for(const id of ['unified-ai-page','unified-research-trail','unified-ai-draft',
                  'unified-action','WEB_ONLY','WEB_SMARTRADAR','SMARTRADAR_ONLY'])
  assert.ok(replacement.includes(id),'Replacement missing: '+id);
-console.log('PASS v179.1: former v178.0 AI Assistant retired from primary routes');
+console.log('PASS: primary AI Assistant route preserved, all prior assistants visible alongside AI-4');

@@ -15,8 +15,12 @@ has(app,'path="/ai-4" element={<AI4Assistant workspace="OPERATIONAL" />}');
 has(app,'path="/management/ai-4" element={<AI4Assistant workspace="MANAGEMENT" />}');
 has(app,'path="/ai-assistant" element={<UnifiedAIAssistant workspace="OPERATIONAL" />}');
 has(app,'path="/management/ai-assistant" element={<UnifiedAIAssistant workspace="MANAGEMENT" />}');
-has(nav,"['/ai-4','AI Assistant (New)'");
-has(nav,"['/management/ai-4','AI Assistant (New)'");
+has(nav,"['/ai-4','AI-4 · AI Assistant (New)'");
+has(nav,"['/management/ai-4','AI-4 · AI Assistant (New)'");
+for(const route of ['/assistant','/ai-assistant','/ai-assistant-v2-new',
+                    '/management/assistant','/management/ai-assistant',
+                    '/management/ai-assistant-v2-new'])
+ has(nav,"'"+route+"'");
 has(main,'app.include_router(ai4_router)');
 has(main,'app.include_router(unified_ai_router)');
 has(api,'router=APIRouter(prefix="/api/ai-4"');
@@ -36,5 +40,5 @@ for(const item of ['Upload document','Add link','Remove ','ai4-research-trail',
 has(core,'SYSTEM_PROMPT=');
 has(core,'Reply in the language');
 has(core,'consistent, nonpartisan evidentiary standard');
-has(docker,'ARG BAWASLU_BUILD_VERSION=179.2');
+has(docker,'ARG BAWASLU_BUILD_VERSION=179.3');
 console.log('PASS AI-4 v179.2: independent routes, permissioned sources, attachments, follow-ups and feedback; existing assistant retained');

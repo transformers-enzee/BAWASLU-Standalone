@@ -42,7 +42,10 @@ has(ai,'owner_role','Action plan owner roles');
 has(ai,'"store":False','No provider persistence');
 has(app,'path="/ai-assistant" element={<UnifiedAIAssistant workspace="OPERATIONAL" />} />');
 has(app,'path="/management/ai-assistant" element={<UnifiedAIAssistant workspace="MANAGEMENT" />} />');
-has(nav,'!retired.has(path)','Only primary assistant in navigation');
+assert.ok(!nav.includes('retired.has(path)'),'No earlier assistant should be hidden from the sidebar');
+for(const route of ['/assistant','/ai-assistant-v2-new','/ai-4',
+                    '/management/assistant','/management/ai-assistant-v2-new','/management/ai-4'])
+ has(nav,"'"+route+"'","Preserve previous assistant route in navigation: "+route);
 has(home,'/management/ai-assistant','Executive brief links to management AI');
 for(const feature of ['unified-ai-page','unified-research-trail','unified-finding',
   'unified-action','unified-ai-draft','WEB_ONLY','WEB_SMARTRADAR','SMARTRADAR_ONLY',

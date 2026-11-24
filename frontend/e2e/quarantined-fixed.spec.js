@@ -44,7 +44,9 @@ test('fixed provincial analyst navigation selectors',async({page})=>{
   const nav=page.getByRole('navigation');
   await expect(nav.getByRole('link',{name:/intelligence inbox/i})).toBeVisible();
   await expect(nav.locator('a[href="/ai-assistant"]')).toBeVisible();
-  await expect(nav.locator('a[href="/assistant"]')).toHaveCount(0);
+  await expect(nav.locator('a[href="/assistant"]')).toBeVisible();
+  await expect(nav.locator('a[href="/ai-assistant-v2-new"]')).toBeVisible();
+  await expect(nav.locator('a[href="/ai-4"]')).toBeVisible();
   await expect(nav.getByRole('link',{name:/add intelligence/i})).toHaveCount(0);
   await expect(page.locator('header').getByRole('link',{name:/add intelligence/i})).toBeVisible();
   await expect(nav.getByRole('link',{name:/data sources/i})).toHaveCount(0);

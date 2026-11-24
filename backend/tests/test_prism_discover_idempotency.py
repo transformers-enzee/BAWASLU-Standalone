@@ -223,10 +223,11 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
         'Gibran AND (ijazah OR pendidikan) NOT hoaks')
     db.commit()
     params,_=prism_discover.body_for(db,campaign)
-    assert params['groups'][0]['keywords']==['ijazah','pendidikan']
-    assert params['contains']=='gibran'
-    assert params['groups'][0]['exclude_terms']==['hoaks']
-    assert params['max_credits']==20
+    assert params['groups'][0]['keywords']==['gibran ijazah','gibran pendidikan']
+    assert 'contains' not in params
+    assert 'exclude_terms' not in params['groups'][0]
+    assert params['max_credits']==100
+    assert params['relevance']=='score'
 
     matched=post('boolean-true','https://instagram.com/p/boolean-true')
     matched['text']='Warga membahas ijazah Gibran.'

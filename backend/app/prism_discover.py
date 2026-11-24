@@ -1,7 +1,7 @@
 """SocialCrawl Prism Discover: separate, manually confirmed 100-post workflow."""
 import os,json,hashlib,re
 from collections import Counter
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta,date
 from urllib.parse import urlsplit,urljoin
 import httpx
 from sqlalchemy import or_
@@ -29,7 +29,7 @@ def campaign(db,p,cid,write=False):
 def body_for(db,c,max_credits=None,platform_mode=None):
     search=decode_project_query(c.primary_keywords_json)
     boolean_mode=search['search_mode']=='BOOLEAN'
-    default_cap=20 if boolean_mode else 100
+    default_cap=100
     cap=default_cap if max_credits is None else max_credits
     if type(cap) is not int or cap not in (10,20,35,50,100):
         raise ValueError('Select a supported SocialCrawl credit cap: 10, 20, 35, 50 or 100')
@@ -38,25 +38,30 @@ def body_for(db,c,max_credits=None,platform_mode=None):
     if not words:raise ValueError('Configure positive search terms first')
     platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
     if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']
-    mode=platform_mode or ('FOCUSED' if boolean_mode else 'ALL')
-    if mode not in ('FOCUSED','ALL') or (not boolean_mode and mode!='ALL'):
-        raise ValueError('Choose Focused Sources or All Sources for this Boolean project')
-    if mode=='FOCUSED':
-        # Limit the initial exploration to three configured social sources.
-        # This is a cost-control choice, not a claim about completeness.
-        preferred=('instagram','tiktok','threads','twitter','facebook','youtube','news')
-        platforms=[p for p in preferred if p in platforms][:3]
+    mode=platform_mode or 'ALL'
+    if mode!='ALL':
+        raise ValueError('Collection uses all configured sources')
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
     if boolean_mode and not c.description:
         context=('Indonesian public discussion matching the topic of '+search['boolean_query'])[:1000]
     group={'id':'campaign-'+str(c.id),'keywords':words,'context':context}
-    if plan and plan['exclude_terms']:
-        group['exclude_terms']=plan['exclude_terms']
     params={'groups':[group],
             'platforms':platforms,'country':['ID'],'period':'7d','label':['stance'],
             'limit':CAP,'retention_days':7,'max_credits':cap}
-    if plan and plan['contains']:
-        params['contains']=plan['contains']
+    if boolean_mode:
+        # Keep provider relevance metadata without provider-side rejection.
+        params['relevance']='score'
+        start=str(getattr(c,'date_from','') or '')
+        end=str(getattr(c,'date_to','') or '')
+        if start or end:
+            today=datetime.now(timezone.utc).date()
+            until=date.fromisoformat(end) if end else today
+            since=date.fromisoformat(start) if start else until-timedelta(days=29)
+            if since>until:raise ValueError('Monitoring start date must not follow end date')
+            params.pop('period')
+            params.update(since=since.isoformat(),until=until.isoformat())
+        else:
+            params['period']='30d'
     signature=hashlib.sha256(json.dumps(params,sort_keys=True).encode()).hexdigest()
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -101,6 +106,7 @@ def latest_collection_outcome(db,c,params=None):
         'excluded_by_boolean':diag.get('excluded_by_boolean'),
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
+        'provider_diagnostics':meta.get('provider_diagnostics'),
         'counts_basis':'provider_item_diagnostics' if diag else 'legacy_new_source_rows_only',
     }
 
@@ -175,24 +181,17 @@ def action(db,p,verb,data,cid):
             'provider_contains':params.get('contains',''),
             'provider_exclude_terms':params['groups'][0].get('exclude_terms',[]),
             'provider_plan':plan,'last_run':last,
-            'zero_yield_ack_required':bool(last and last['zero_yield_paid_run']),
+            'zero_yield_ack_required':False,
             'keywords_total':len(search['retrieval_terms']),
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
             'platforms':params['platforms'],
-            'platform_mode':(data or {}).get('platform_mode') or ('FOCUSED' if search['search_mode']=='BOOLEAN' else 'ALL'),
+            'platform_mode':(data or {}).get('platform_mode') or 'ALL',
             'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
-    if search['search_mode']=='BOOLEAN':
-        if type((data or {}).get('confirmed_max_credits')) is not int or (data or {}).get('confirmed_max_credits')!=params['max_credits']:
-            raise ValueError('Credit cap changed; request and approve a new free preview')
-        if (data or {}).get('confirmed_platform_mode')!=((data or {}).get('platform_mode') or 'FOCUSED'):
-            raise ValueError('Source selection changed; request and approve a new free preview')
-        if last and last['zero_yield_paid_run'] and (data or {}).get('acknowledge_zero_yield') is not True:
-            raise ValueError('The last paid collection matched zero posts. Review the new retrieval plan and explicitly acknowledge the zero-yield risk')
     active=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
                 SocialListeningRun.status.in_(['QUEUED','RUNNING'])).first())
@@ -393,6 +392,24 @@ def store(db,run,c,items,full_assessment=False):
         enrich(db,c,new)
     return len(accepted_ids)
 
+def provider_diagnostics(data):
+    """Retain aggregate diagnostics, never raw rejected posts or credentials."""
+    summary=data.get('summary') or {}
+    if not isinstance(summary,dict) or not summary:return None
+    rows=summary.get('rows') or {}
+    dropped=summary.get('dropped') or {}
+    reasons=dropped.get('by_filter') or {}
+    return {
+        'returned':rows.get('returned'),'collected':rows.get('collected'),
+        'kept':rows.get('kept'),'dropped':rows.get('dropped'),
+        'out_of_window':dropped.get('out_of_window'),
+        'off_topic':dropped.get('off_topic'),'filter':dropped.get('filter'),
+        'by_filter':{k:v for k,v in reasons.items() if isinstance(v,int) and k!='base'},
+        'by_platform':{k:(v.get('rows') or {}).get('collected') for k,v in
+                       (summary.get('by_platform') or {}).items() if isinstance(v,dict)},
+    }
+
+
 def execute(run_id):
     db=SessionLocal()
     try:
@@ -416,7 +433,10 @@ def execute(run_id):
         if status.get('status') in ('queued','running'):raise ValueError('Provider run not yet settled')
         if status.get('status') not in ('completed','partial','paused'):
             raise ValueError('Provider status: '+str(status.get('status')))
+        upstream=provider_diagnostics(data)
         items=list(data.get('items') or [])
+        # Status responses can include the first page; the export starts again.
+        export_items=[]
         if nxt.get('results_url') and len(items)<100:
             url=str(nxt['results_url']).rstrip('/')+'/results.jsonl'
             cursor=None
@@ -431,14 +451,16 @@ def execute(run_id):
                     if not line.strip():continue
                     obj=json.loads(line)
                     if 'next_cursor' in obj:cursor=str(obj['next_cursor'])
-                    elif 'complete' not in obj:items.append(obj)
-                    if len(items)>=100:break
-                if not cursor or len(items)>=100:break
+                    elif 'complete' not in obj:export_items.append(obj)
+                    if len(export_items)>=100:break
+                if not cursor or len(export_items)>=100:break
+            if export_items:items=export_items
         run.result_count=store(db,run,c,items,full_assessment=True)
         run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
         run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
         meta=json.loads(run.query_json or '{}')
         meta['watermark']=nxt.get('watermark')
+        if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
         c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()

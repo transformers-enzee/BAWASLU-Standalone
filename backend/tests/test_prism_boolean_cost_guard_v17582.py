@@ -31,11 +31,11 @@ def new_campaign(db, expression='BAWASLU AND (Bandung OR "Jawa Barat") AND NOT h
     return c
 
 
-def test_bandung_queries_geography_instead_of_broad_bawaslu():
+def test_bandung_compound_queries_instead_of_geographic_only():
     plan=discover_boolean_plan('BAWASLU AND (Bandung OR "Jawa Barat") AND NOT hoaks')
-    assert plan['keywords']==['bandung','jawa barat']
-    assert plan['contains']=='bawaslu'
-    assert plan['exclude_terms']==['hoaks']
+    assert plan['keywords']==['bawaslu bandung','bawaslu jawa barat']
+    assert plan['contains']==''
+    assert plan['exclude_terms']==[]
     assert plan['provider_boolean_native'] is False
 
 
@@ -44,8 +44,7 @@ def test_safe_retrieval_never_requires_or_branch_literal_as_mandatory():
     assert len(plan['keywords'])<=5
     assert plan['contains']==''
     assert plan['exclude_terms']==[]
-    assert any(w in plan['keywords'] for w in ('bawaslu','bandung'))
-    assert any(w in plan['keywords'] for w in ('jawa barat','kpu'))
+    assert plan['keywords']==['bawaslu bandung','jawa barat kpu']
 
 
 def test_negated_or_arm_cannot_be_the_only_retrieval_path():
@@ -55,7 +54,7 @@ def test_negated_or_arm_cannot_be_the_only_retrieval_path():
     assert plan['exclude_terms']==[]
 
 
-def test_provider_body_uses_supported_fields_and_tighter_default_cap():
+def test_provider_body_uses_supported_fields_and_standard_cap():
     c=SimpleNamespace(id=22,name='Bandung BAWASLU',description='',
          primary_keywords_json=encode_boolean_project_query(
              'BAWASLU AND (Bandung OR "Jawa Barat") AND NOT hoaks'),
@@ -70,24 +69,28 @@ def test_provider_body_uses_supported_fields_and_tighter_default_cap():
     class DB:
         def query(self,*args):return Query()
     params,signature=prism_discover.body_for(DB(),c)
-    assert params['groups'][0]['keywords']==['bandung','jawa barat']
-    assert params['groups'][0]['exclude_terms']==['hoaks']
-    assert params['contains']=='bawaslu'
-    assert params['max_credits']==20
+    assert params['groups'][0]['keywords']==['bawaslu bandung','bawaslu jawa barat']
+    assert 'exclude_terms' not in params['groups'][0]
+    assert 'contains' not in params
+    assert params['relevance']=='score'
+    assert params['period']=='30d'
+    assert params['max_credits']==100
     assert params['platforms']==['instagram','tiktok','news']
     assert params['limit']==100
     assert len(signature)==64
     c.platforms_json='["tiktok","instagram","youtube","facebook","twitter-ai-search","threads","online_news"]'
-    focused,focused_signature=prism_discover.body_for(DB(),c)
-    assert focused['platforms']==['instagram','tiktok','threads']
-    all_sources,all_signature=prism_discover.body_for(DB(),c,20,'ALL')
+    all_sources,all_signature=prism_discover.body_for(DB(),c)
     assert len(all_sources['platforms'])==7
-    assert focused_signature!=all_signature
+    c.date_from='2025-07-16';c.date_to='2026-11-24'
+    dated,dated_signature=prism_discover.body_for(DB(),c)
+    assert dated['since']=='2025-07-16' and dated['until']=='2026-11-24'
+    assert 'period' not in dated and dated_signature!=all_signature
+    with pytest.raises(ValueError):prism_discover.body_for(DB(),c,20,'FOCUSED')
     with pytest.raises(ValueError):
         prism_discover.body_for(DB(),c,250)
 
 
-def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgement(monkeypatch):
+def test_preview_is_free_and_signature_guard_remains_without_extra_ack(monkeypatch):
     db=SessionLocal()
     c=new_campaign(db)
     previous=SocialListeningRun(provider='SOCIALCRAWL_PRISM',executed_by='qa-officer',
@@ -111,40 +114,41 @@ def test_preview_is_free_and_zero_yield_requires_explicit_cap_and_acknowledgemen
         assert body['dry_run'] is True
         return {'estimate':{'max_credits':body['max_credits'],'dry_run':True}}, {'request_id':'mock-free-preview'}
     monkeypatch.setattr(prism_discover,'call',no_credit_provider)
-    args={'max_credits':20}
+    args={}
     preview=prism_discover.action(db,{},'campaignDiscoverPreview',args,c.id)
-    assert preview['credit_cap']==20
-    assert preview['platform_mode']=='FOCUSED'
-    assert preview['keywords_used']==['bandung','jawa barat']
-    assert preview['provider_contains']=='bawaslu'
-    assert preview['provider_exclude_terms']==['hoaks']
+    assert preview['credit_cap']==100
+    assert preview['platform_mode']=='ALL'
+    assert preview['keywords_used']==['bawaslu bandung','bawaslu jawa barat']
+    assert preview['provider_contains']==''
+    assert preview['provider_exclude_terms']==[]
     assert preview['last_run']['newly_saved_source_rows']==1
     assert preview['last_run']['matched']==0
     assert preview['last_run']['credits_used']==35
     assert preview['last_run']['plan_changed'] is True
-    assert preview['zero_yield_ack_required'] is True
+    assert preview['zero_yield_ack_required'] is False
     assert calls and all(x.get('dry_run') for x in calls)
     assert db.query(SocialListeningRun).count()==1
 
-    valid={'max_credits':20,'confirm_cost':True,
-           'signature':preview['signature'],'confirmed_max_credits':20,
-           'platform_mode':'FOCUSED','confirmed_platform_mode':'FOCUSED'}
-    with pytest.raises(ValueError,match='zero posts'):
-        prism_discover.action(db,{},'campaignDiscoverStart',valid,c.id)
-    with pytest.raises(ValueError,match='Credit cap changed'):
-        prism_discover.action(db,{},'campaignDiscoverStart',
-            {**valid,'confirmed_max_credits':100,'acknowledge_zero_yield':True},c.id)
+    valid={'confirm_cost':True,'signature':preview['signature']}
     with pytest.raises(ValueError,match='free credit preview'):
-        prism_discover.action(db,{},'campaignDiscoverStart',
-            {**valid,'max_credits':35,'acknowledge_zero_yield':True},c.id)
-    with pytest.raises(ValueError,match='Source selection changed'):
-        prism_discover.action(db,{},'campaignDiscoverStart',
-            {**valid,'confirmed_platform_mode':'ALL','acknowledge_zero_yield':True},c.id)
+        prism_discover.action(db,{},'campaignDiscoverStart',{**valid,'max_credits':35},c.id)
+    with pytest.raises(ValueError,match='free credit preview'):
+        prism_discover.action(db,{},'campaignDiscoverStart',{**valid,'confirm_cost':False},c.id)
     assert db.query(SocialListeningRun).count()==1
-    accepted=prism_discover.action(db,{},'campaignDiscoverStart',
-        {**valid,'acknowledge_zero_yield':True},c.id)
+    accepted=prism_discover.action(db,{},'campaignDiscoverStart',valid,c.id)
     assert accepted['started'] is True
-    assert accepted['credit_cap']==20
+    assert accepted['credit_cap']==100
     assert db.query(SocialListeningRun).count()==2
     assert len(calls)==1  # Starting enqueues; does not itself make provider calls.
     db.close()
+
+
+def test_run39_aggregate_diagnostics_without_provider_calls():
+    d=prism_discover.provider_diagnostics({'summary':{
+        'rows':{'returned':521,'collected':519,'kept':0,'dropped':519},
+        'dropped':{'out_of_window':82,'off_topic':1,'filter':436,
+                   'by_filter':{'base':'collected_rows','filter:contains':429,'filter:country':7}},
+        'by_platform':{'instagram':{'rows':{'collected':77}}}}})
+    assert d['returned']==521 and d['kept']==0
+    assert d['by_filter']=={'filter:contains':429,'filter:country':7}
+    assert d['by_platform']=={'instagram':77}

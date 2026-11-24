@@ -88,3 +88,17 @@ def test_boolean_project_creation_does_not_require_keyword_tags_or_db_migration(
     assert values['secondary_keywords_json']=='[]'
     assert values['excluded_keywords_json']=='[]'
     assert decode_project_query(values['primary_keywords_json'])['retrieval_terms']==['gibran']
+
+
+def test_literal_boundaries_and_whitespace():
+    for expression, text, expected in [
+        ('KPU','KPUX',False),('KPU','#KPU',True),
+        ('"politik uang"','politik uangan',False),
+        ('"politik uang"','Politik  uang',True),
+        ('BAWASLU AND NOT hoaks','BAWASLU hoaksnya',True),
+        ('BAWASLU AND NOT hoaks','BAWASLU hoaks',False),
+    ]:
+        tree,_=parse_boolean(expression)
+        assert evaluate_boolean(tree,text)==expected
+    with pytest.raises(ValueError,match='five'):
+        encode_boolean_project_query('a OR b OR c OR d OR e OR f')

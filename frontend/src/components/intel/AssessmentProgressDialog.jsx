@@ -6,7 +6,7 @@ const since=value=>{if(!value)return 'No successful AI activity recorded';const 
 const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment in progress',
  COMPLETED:'Assessment complete',NEEDS_ATTENTION:'Paused — action required',
  FAILED:'Run failed',NO_NEW_POSTS:'No new posts captured'};
-export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null,booleanMode=false,creditCap=20,onCreditCapChange=null,zeroYieldAcknowledged=false,onAcknowledgeZeroYield=null,platformMode='FOCUSED',onPlatformModeChange=null}){
+export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null,booleanExpression=''}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
  // Collection percentage is unknown until results are saved.
@@ -23,38 +23,11 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
    <div className="space-y-5 overflow-y-auto p-5">
     {!run&&<div className="space-y-3">
      <p className="text-sm text-slate-700">Activate this project to collect posts and assess the saved results?</p>
-     {booleanMode&&<label className="block text-sm font-medium text-[#19324a]">Provider source scope
-       <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" aria-label="SocialCrawl source scope" value={platformMode} disabled={loading} onChange={e=>onPlatformModeChange?.(e.target.value)}>
-        <option value="FOCUSED">Focused Sources — up to 3 social platforms (lower exposure)</option>
-        <option value="ALL">All configured sources — broader, potentially costlier</option>
-       </select>
-       <span className="mt-1 block text-xs font-normal text-slate-600">The free preflight shows exactly which platforms will be searched.</span>
-      </label>}
-      {booleanMode&&<label className="block text-sm font-medium text-[#19324a]">Maximum SocialCrawl credits for this provider run
-       <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" aria-label="Maximum SocialCrawl credits" value={creditCap} disabled={loading} onChange={e=>onCreditCapChange?.(Number(e.target.value))}>
-        {[10,20,35,50,100].map(n=><option value={n} key={n}>{n} credits</option>)}
-       </select>
-       <span className="mt-1 block text-xs font-normal text-slate-600">This is a hard maximum, not a promise of matching posts. Changing it requests a new free estimate.</span>
-      </label>}
-      {preview&&<div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="prism-actual-retrieval-plan">
-       <p><strong>Actual SocialCrawl search keywords:</strong> {(preview.keywords_used||[]).join(', ')}</p>
-       {preview.provider_contains&&<p><strong>Provider text must contain:</strong> {preview.provider_contains}</p>}
-       {(preview.provider_exclude_terms||[]).length>0&&<p><strong>Provider excludes text containing:</strong> {preview.provider_exclude_terms.join(', ')}</p>}
-       <p><strong>Platforms:</strong> {(preview.platforms||[]).join(', ')}</p>
-       <p><strong>Maximum SocialCrawl exposure:</strong> {preview.credit_cap} credits · <strong>Free preview:</strong> no collection started</p>
-       {preview.boolean_local_screening&&<p className="text-amber-800"><strong>Important:</strong> Provider keywords are independent searches, not full Boolean syntax. The complete AND/OR/NOT expression is checked on saved source text after retrieval. Paid searches may still match zero posts.</p>}
-       {preview.estimate&&<details><summary className="cursor-pointer font-semibold">Provider free estimate details</summary><pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(preview.estimate,null,2).slice(0,3000)}</pre></details>}
-      </div>}
-      {preview?.last_run&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs" data-testid="prism-previous-collection-outcome">
-       <p className="font-semibold">Previous collection · run #{preview.last_run.run_id}</p>
-       <p className="mt-1">{preview.last_run.newly_saved_source_rows} newly saved source rows · {preview.last_run.matched} accepted posts · {preview.last_run.credits_used} credits spent</p>
-       {preview.last_run.plan_changed&&<p className="mt-1">The retrieval terms or provider text filters have changed since that run; costs and yield remain uncertain.</p>}
-       {preview.zero_yield_ack_required&&<label className="mt-2 flex items-start gap-2 font-semibold"><input type="checkbox" checked={zeroYieldAcknowledged} onChange={e=>onAcknowledgeZeroYield?.(e.target.checked)} className="mt-0.5"/>I understand the last paid run matched zero posts, and this run can spend up to {preview.credit_cap} credits even if nothing matches.</label>}
-      </div>}
+     {booleanExpression&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><p className="text-xs text-slate-500">Boolean expression</p><p className="mt-1 break-words font-mono">{booleanExpression}</p></div>}
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>
-      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview||(booleanMode&&(Number(preview.credit_cap)!==Number(creditCap)||preview.platform_mode!==platformMode||(preview.zero_yield_ack_required&&!zeroYieldAcknowledged)))} onClick={onConfirm}>Activate</button>}
+      {onConfirm&&<button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={loading||previewLoading||!preview} onClick={onConfirm}>Confirm Activation</button>}
      </div>
      {loading&&<p role="status" className="text-xs text-slate-500">Submitting activation request…</p>}
     </div>}

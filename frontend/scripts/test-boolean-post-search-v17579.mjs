@@ -47,3 +47,9 @@ assert.ok(component.includes('setBooleanQuery('));
 assert.ok(component.includes("action:'campaignCapturedPosts'"));
 assert.ok(!component.includes('Boolean Search credits'));
 console.log('PASS BAWASLU v175.79: Boolean parser, guardrails, legacy search mode and saved-post-only UI contracts');
+
+assert.equal(hit('KPU','KPUX'),false);
+assert.equal(hit('KPU','#KPU'),true);
+assert.equal(hit('"politik uang"','politik uangan'),false);
+assert.equal(hit('"politik uang"','Politik  uang'),true);
+assert.throws(()=>compileBooleanProjectSearch('a OR b OR c OR d OR e OR f'),BooleanSearchSyntaxError);

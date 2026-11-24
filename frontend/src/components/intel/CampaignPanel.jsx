@@ -70,8 +70,6 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
- const [discoverCreditCap,setDiscoverCreditCap]=useState(20),[discoverZeroYieldAcknowledged,setDiscoverZeroYieldAcknowledged]=useState(false);
- const [discoverPlatformMode,setDiscoverPlatformMode]=useState('FOCUSED');
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
  // Persisted run IDs are accessible via explicit campaign activation, but a
@@ -157,9 +155,9 @@ export default function CampaignPanel({campaignId=null}){
   return ()=>{active=false;clearInterval(timer)};
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
- async function checkDiscover(c,cap=c.search_mode==='BOOLEAN'?20:100,mode=c.search_mode==='BOOLEAN'?'FOCUSED':'ALL'){
-   setDiscoverCampaign(c);setDiscoverCreditCap(cap);setDiscoverPlatformMode(mode);setDiscoverZeroYieldAcknowledged(false);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
-   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{max_credits:cap,platform_mode:mode}});
+ async function checkDiscover(c){
+   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
@@ -168,11 +166,7 @@ export default function CampaignPanel({campaignId=null}){
    if(!discoverCampaign||!discoverPreview||discoverBusy||discoverPreviewBusy)return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature,...(discoverCampaign.search_mode==='BOOLEAN'?{
-         max_credits:discoverCreditCap,confirmed_max_credits:discoverCreditCap,
-         platform_mode:discoverPlatformMode,confirmed_platform_mode:discoverPlatformMode,
-         acknowledge_zero_yield:discoverZeroYieldAcknowledged
-       }:{})}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
       window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
       setActivationSaved(saved)}
@@ -619,7 +613,7 @@ export default function CampaignPanel({campaignId=null}){
     {form.search_mode==='BOOLEAN'
      ?<div className="md:col-span-2 space-y-1">
        <label className="block text-sm font-medium">Boolean expression *<textarea data-testid="project-boolean-expression" rows={3} className="intel-input mt-1 w-full font-mono text-sm" maxLength={512} required value={form.boolean_query} onChange={e=>set('boolean_query',e.target.value)} placeholder={'Gibran AND (ijazah OR pendidikan) AND NOT hoaks'}/></label>
-       <p className="text-xs text-slate-500">Use AND, OR, NOT, exact phrases in quotation marks, and parentheses. The expression is saved with the project and filters retrieved posts. Provider coverage may vary; paid collection still requires a credit preview and confirmation.</p>
+       <p className="text-xs text-slate-500">Use AND, OR, NOT, exact phrases in quotation marks, and parentheses. The expression is saved with the project and filters retrieved posts. Provider coverage may vary; collection requires confirmation.</p>
        {booleanFormError&&<p role="alert" className="text-xs text-red-700">{booleanFormError}</p>}
       </div>
      :<>
@@ -670,13 +664,7 @@ export default function CampaignPanel({campaignId=null}){
     }
     setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');
   }}
-  booleanMode={discoverCampaign.search_mode==='BOOLEAN'}
-  creditCap={discoverCreditCap}
-  onCreditCapChange={cap=>checkDiscover(discoverCampaign,cap,discoverPlatformMode)}
-  platformMode={discoverPlatformMode}
-  onPlatformModeChange={mode=>checkDiscover(discoverCampaign,discoverCreditCap,mode)}
-  zeroYieldAcknowledged={discoverZeroYieldAcknowledged}
-  onAcknowledgeZeroYield={setDiscoverZeroYieldAcknowledged}
+  booleanExpression={discoverCampaign.search_mode==='BOOLEAN'?discoverCampaign.boolean_query:''}
  />}{!visible.length&&<p className="rounded-xl border border-dashed border-[#bcd0d5] p-8 text-center text-sm text-[#60768c]">No projects match your search.</p>}</div>}
    </section>
    <section className="rounded-xl border border-[#c7e5dc] bg-[#fcf5f4] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold text-[#19324a]">New here? Start with a project.</h3><p className="mt-2 text-xs text-[#60768c]">Create a project using keywords or Boolean Search, then open its dashboard to explore saved posts.</p></div><button type="button" className="rounded-lg bg-[#a52a2f] px-4 py-2.5 text-sm font-semibold text-white" onClick={newCampaign}>＋ Create a project</button></div></section>
@@ -689,12 +677,7 @@ export default function CampaignPanel({campaignId=null}){
      <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
       <strong>Boolean Search</strong>
       <p className="mt-1 whitespace-pre-wrap break-words font-mono text-xs">{selected.boolean_query}</p>
-      <p className="mt-2 text-xs text-slate-600">
-       Prism provider search keywords: {(selected.prism_provider_keywords||[]).join(', ')||'Unavailable'}.
-       {selected.prism_provider_contains ? ' Must contain '+selected.prism_provider_contains+'.' : ''}
-       {(selected.prism_provider_excludes||[]).length>0 ? ' Excludes '+(selected.prism_provider_excludes||[]).join(', ')+'.' : ''}
-       The full expression is still checked locally after retrieval.
-      </p>
+      <p className="mt-2 text-xs text-slate-600">Collected posts are checked against this expression.</p>
       {selected.prism_plan_error&&<p role="alert" className="mt-2 text-xs text-amber-800">Prism plan unavailable: {selected.prism_plan_error}</p>}
      </div>
     )}
@@ -713,8 +696,9 @@ export default function CampaignPanel({campaignId=null}){
      <span><strong>{latestPrismCollection.matched}</strong> accepted into project</span>
      <span><strong>{latestPrismCollection.credits_used}</strong> SocialCrawl credits charged</span>
     </div>
+    {latestPrismCollection.provider_diagnostics&&<details className="text-xs"><summary>Collection diagnostics</summary><p>Provider collected {latestPrismCollection.provider_diagnostics.collected??'Unknown'}; retained {latestPrismCollection.provider_diagnostics.kept??'Unknown'} before delivery.</p></details>}
     {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by Boolean query: {latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
-    {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">The previous provider request incurred charges but no posts satisfied this project's search. Review the free preflight before repeating paid collection.</p>}
+    {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}
    </section>}
    <AssessmentOperationsPanel key={selected.id} campaignId={selected.id} />

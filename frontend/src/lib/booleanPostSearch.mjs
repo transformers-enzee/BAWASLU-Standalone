@@ -94,12 +94,22 @@ export function compileBooleanPostSearch(raw) {
   return left.length<=right.length?left:right;
  }
  function matches(node,text) {
-  if(node.type==='TERM')return text.includes(node.value);
+  if(node.type==='TERM'){
+   const term=node.value.trim().replace(/\s+/gu,' ');
+   if(!term)return false;
+   const isWord=c=>Boolean(c&&/[\p{L}\p{N}_]/u.test(c));
+   let at=text.indexOf(term);
+   while(at>=0){
+    if((!isWord(term[0])||!isWord(text[at-1]))&&(!isWord(term[term.length-1])||!isWord(text[at+term.length])))return true;
+    at=text.indexOf(term,at+1);
+   }
+   return false;
+  }
   if(node.type==='NOT')return !matches(node.child,text);
   if(node.type==='AND')return matches(node.left,text)&&matches(node.right,text);
   return matches(node.left,text)||matches(node.right,text);
  }
- const predicate=post=>matches(ast,String(post?.text_content||'').toLocaleLowerCase('id-ID'));
+ const predicate=post=>matches(ast,String(post?.text_content||'').toLocaleLowerCase('id-ID').trim().replace(/\s+/gu,' '));
  predicate.retrievalTerms=retrievalAnchors(ast);
  return predicate;
 }
@@ -110,7 +120,7 @@ export function compileBooleanProjectSearch(raw) {
  const anchors=predicate.retrievalTerms;
  if(!anchors?.length)throw new BooleanSearchSyntaxError(
   'A monitoring project needs a positive search term in every OR branch.');
- if(anchors.length>30)throw new BooleanSearchSyntaxError(
-  'Too many independent retrieval terms (maximum 30).');
+ if(anchors.length>5)throw new BooleanSearchSyntaxError(
+  'Use at most five independent positive search alternatives for collection.');
  return predicate;
 }

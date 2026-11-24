@@ -150,3 +150,25 @@ test('Management workspace opens AI-5 in General Research until BAWASLU is selec
  await page.getByTestId('ai5-use-bawaslu').click();
  await expect(page.getByLabel('BAWASLU Action emphasis')).toHaveValue('MANAGEMENT');
 });
+
+
+test('An officer-edited draft is used for a natural revision without losing context',async({page})=>{
+ const requests=[];
+ await page.route('**/api/ai-5/chat',route=>{
+  requests.push(route.request().postDataJSON());
+  return route.fulfill({status:200,contentType:'application/json',
+    body:JSON.stringify(answer('GENERAL_RESEARCH',true))});
+ });
+ await login(page);await page.goto('/ai-5');
+ await page.getByLabel('Ask AI-5').fill('Draft a source-linked briefing.');
+ await page.getByRole('button',{name:'Ask AI-5'}).click();
+ await expect(page.getByLabel('AI-5 editable draft')).toBeVisible();
+ await page.getByLabel('AI-5 editable draft').fill('REVIEWER EDIT: source needs verification.');
+ await page.getByRole('button',{name:'Shorten',exact:true}).click();
+ await expect(page.getByLabel('Ask AI-5')).toHaveValue(/Shorten the previous draft/);
+ await page.getByRole('button',{name:'Ask AI-5'}).click();
+ expect(requests).toHaveLength(2);
+ expect(requests[1].conversationId).toBe(requests[0].conversationId);
+ expect(requests[1].referenceTurnId).toBe('a'.repeat(32));
+ expect(requests[1].editedDraft).toContain('REVIEWER EDIT');
+});

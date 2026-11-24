@@ -57,8 +57,10 @@ def grant_for(db,user):
 
 def needs_tools(cfg,prior,attached):
     q=cfg["question"]
-    if prior and (REWRITE.search(q) or APPLY.search(q) or
-                  (ATTACHMENT_ONLY.search(q) and attached and not NEW_EXTERNAL.search(q))):
+    # Pure follow-up formatting or applying prior work NEVER starts a new
+    # public search, including when source-mode permissions made the prior
+    # answer unavailable. Disclose that missing context rather than searching.
+    if REWRITE.search(q) or APPLY.search(q):
         return False
     if attached and ATTACHMENT_ONLY.search(q) and not NEW_EXTERNAL.search(q):
         return False
@@ -117,6 +119,11 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
     grant=grant_for(db,user)
     cfg=engine.validate(body,grant)
     conversation_id=body.get("conversationId")
+    edited_draft=body.get("editedDraft") or ""
+    if not isinstance(edited_draft,str) or len(edited_draft)>16000:
+        raise HTTPException(422,"Edited draft must be at most 16000 characters")
+    if edited_draft and not cfg["reference_turn_id"]:
+        raise HTTPException(422,"Edited draft requires a referenced AI-5 turn")
     state.conversation(user,conversation_id,grant,True)
     before=state.turns(user,conversation_id,grant)
     attached=state.attachments_for(user,conversation_id,grant)
@@ -163,6 +170,9 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
                         "); no internal records were substituted for a Web-only request.")
     if public["status"]=="PRIOR_READ_SNAPSHOT":
         warnings.append("This revision uses earlier read public pages; no new search was run.")
+    if not use_tools and not last and before:
+        warnings.append("Earlier material is unavailable under this source setting. "
+                        "Switch back to a permitted source mode or provide a redacted excerpt.")
     if not use_tools and last:
         # Preserve manually provided file/link content (active only), and
         # sources from the referenced result rather than creating new links.
@@ -177,8 +187,15 @@ def chat(body:dict,user:User=Depends(current_user),db:Session=Depends(get_db)):
         history.append({"question":last["question"],
                         "answer":str(last["answer"].get("body") or "")[:3500],
                         "draft":str(last["answer"].get("draft") or "")[:2200],
+                        "open_questions":(last["answer"].get("open_questions") or [])[:4],
+                        "comparison":(last["answer"].get("table") or {}).get("rows",[])[:6],
                         "source_ids":[x["id"] for x in combined][:16],
                         "mode":last.get("mode")})
+    if edited_draft:
+        history.append({"question":"User-edited previous draft, not a new factual source",
+                        "draft":edited_draft,
+                        "source_ids":[x["id"] for x in combined][:16],
+                        "mode":last.get("mode") if last else "GENERAL_RESEARCH"})
     generated,status=engine.generate(cfg,history,combined,public["status"],
                                      profile_context(grant),key,model,base)
     answer=engine.sanitize(generated,combined,cfg,public["status"])

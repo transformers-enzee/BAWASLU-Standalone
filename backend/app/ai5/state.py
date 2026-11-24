@@ -129,6 +129,8 @@ def history_context(prior,source_mode,valid_attachment_ids):
         detail={"question":str(t.get("question") or "")[:1000],
                 "answer":excerpt,
                 "draft":str(answer.get("draft") or "")[:2300],
+                "open_questions":[str(x)[:220] for x in (answer.get("open_questions") or [])[:4]],
+                "comparison":(answer.get("table") or {}).get("rows",[])[:6],
                 "mode":t.get("mode"),
                 "source_ids":[r["id"] for r in old_sources][:12]}
         size=len(json.dumps(detail,ensure_ascii=False))

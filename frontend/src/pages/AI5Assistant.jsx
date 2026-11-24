@@ -102,8 +102,8 @@ function Response({item,conversationId,sourceMode,onFollowUp}){
    <textarea aria-label="AI-5 editable draft" rows={9} value={draft} onChange={e=>setDraft(e.target.value)}
     className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-6"/>
    <div className="flex flex-wrap gap-2">
-    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Shorten the previous draft while retaining evidence caveats.',item.turn_id)}>Shorten</button>
-    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Change the audience for the earlier draft and preserve citations.',item.turn_id)}>Change audience</button>
+    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Shorten the previous draft while retaining evidence caveats.',item.turn_id,draft)}>Shorten</button>
+    <button type="button" className="intel-ghost text-xs" onClick={()=>onFollowUp('Change the audience for the earlier draft and preserve citations.',item.turn_id,draft)}>Change audience</button>
     <button type="button" className="intel-ghost text-xs" onClick={async()=>{try{await navigator.clipboard.writeText(draft);setWorking('Copied')}catch{setError('Copy unavailable')}}}>Copy</button>
    </div>
   </section>}
@@ -140,11 +140,12 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  const [linkValue,setLinkValue]=useState('');
  const [error,setError]=useState('');
  const [refTurn,setRefTurn]=useState(null);
+ const [editedRefDraft,setEditedRefDraft]=useState('');
  const chooser=useRef(null);
  function reset(){
   fetch('/api/ai-5/conversation/'+conversationId,{method:'DELETE',headers:headers()}).catch(()=>{});
   setConversationId(makeId());setMessages([]);setAttachments([]);setQuestion('');
-  setMode('GENERAL_RESEARCH');setSourceMode('WEB_ONLY');setRefTurn(null);setError('');
+  setMode('GENERAL_RESEARCH');setSourceMode('WEB_ONLY');setRefTurn(null);setEditedRefDraft('');setError('');
  }
  async function upload(event){
   const items=Array.from(event.target.files||[]);event.target.value='';
@@ -174,12 +175,13 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
   try{
    const r=await request('/api/ai-5/chat',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({question:q,mode,actionMode,sourceMode,conversationId,referenceTurnId:refTurn})});
-   setMessages([...old,{role:'user',text:q},{role:'assistant',data:r}]);setRefTurn(null);
+    body:JSON.stringify({question:q,mode,actionMode,sourceMode,conversationId,
+      referenceTurnId:refTurn,editedDraft:editedRefDraft})});
+   setMessages([...old,{role:'user',text:q},{role:'assistant',data:r}]);setRefTurn(null);setEditedRefDraft('');
   }catch(e){setMessages(old);setQuestion(q);setError(e.message)}
   finally{setBusy(false)}
  }
- function followup(value,id){setQuestion(value);setRefTurn(id);}
+ function followup(value,id,draft=''){setQuestion(value);setRefTurn(id);setEditedRefDraft(draft);}
  if(workspace==='MANAGEMENT'&&!leader)return <div role="alert" className="rounded-lg border border-amber-200 p-5">Management access requires authorised leadership. Use AI-5 in Operations for General Research.</div>;
  return <main data-testid="ai5-page" className="mx-auto max-w-[1160px] space-y-4 pb-6">
   <header className="rounded-2xl bg-[#173950] px-6 py-6 text-white">
@@ -218,7 +220,7 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     <h2 className="mb-2 text-xs font-bold uppercase tracking-wide">Source access — independent of conversation mode</h2>
     <div data-testid="ai5-source-modes" role="group" aria-label="AI-5 source mode" className="grid gap-2 sm:grid-cols-3">
      {MODES.map(([value,name,caption])=><button type="button" key={value} disabled={busy}
-      aria-pressed={sourceMode===value} onClick={()=>{setSourceMode(value);setRefTurn(null)}}
+      aria-pressed={sourceMode===value} onClick={()=>{setSourceMode(value);setRefTurn(null);setEditedRefDraft('')}}
       className={'rounded-lg border p-3 text-left '+(sourceMode===value?'border-red-800 bg-red-50':'border-slate-200 bg-slate-50')}>
       <strong className="block text-sm">{name}</strong><span className="mt-1 block text-xs text-slate-600">{caption}</span>
      </button>)}
@@ -259,7 +261,7 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
    </div>}
    <form className="space-y-2" onSubmit={e=>{e.preventDefault();submit()}}>
     <textarea rows={3} maxLength={3200} aria-label="Ask AI-5" value={question}
-     onChange={e=>{setQuestion(e.target.value);setRefTurn(null)}}
+     onChange={e=>setQuestion(e.target.value)}
      placeholder="Ask anything, challenge a finding, return to an earlier draft, or request a document…"
      className="w-full rounded-lg border border-slate-300 p-3 text-sm"/>
     <div className="flex flex-wrap items-center justify-between gap-2">

@@ -127,6 +127,8 @@ def test_mixed_mode_uses_public_then_authorised_and_filters_on_switch(monkeypatc
     web_only=api.chat({"question":"Shorten this explanation",
                        "conversationId":conversation,"sourceMode":"WEB_ONLY"},user(),object())
     assert calls==[]
+    assert any("Earlier material is unavailable" in warning
+               for warning in web_only["research_trail"]["warnings"])
     assert web_only["research_trail"]["saved_count"]==0
     assert "SAVED_SOCIAL" not in model_context[-1]["source_types"]
     assert all("SAVED_SOCIAL" not in str(x) for x in model_context[-1]["history"])
@@ -266,3 +268,23 @@ def test_unapproved_management_mode_rejected_at_api(monkeypatch):
                  "mode":"BAWASLU_ACTION","actionMode":"MANAGEMENT",
                  "conversationId":cid()},user(),object())
     assert exc.value.status_code==403
+
+
+def test_edited_draft_carries_into_followup_with_open_questions(monkeypatch):
+    mock_access(monkeypatch)
+    no_network(monkeypatch)
+    observed=[]
+    def model(cfg,hist,*args):
+        observed.append(hist)
+        return payload([],"DRAFT original memo"),"COMPLETE"
+    monkeypatch.setattr(api.engine,"generate",model)
+    conversation=cid()
+    first=api.chat({"question":"Draft an example memo","conversationId":conversation},user(),object())
+    next_turn=api.chat({"question":"Shorten the earlier draft",
+        "conversationId":conversation,
+        "referenceTurnId":first["turn_id"],
+        "editedDraft":"REVIEWER EDIT: preserve evidence caveats"},user(),object())
+    assert next_turn["conversation_id"]==conversation
+    assert observed[-1][-1]["draft"]=="REVIEWER EDIT: preserve evidence caveats"
+    assert any("Open questions" in str(item) or item.get("open_questions")
+               for item in observed[-1][:-1])

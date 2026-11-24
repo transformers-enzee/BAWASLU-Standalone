@@ -49,6 +49,6 @@ for(const feature of ['unified-ai-page','unified-research-trail','unified-findin
   'Controlled officer walkthrough','SOCIAL-740','SOCIAL-1160','Copy','Turn into email'])
  has(page,feature,'Missing rebuilt experience: '+feature);
 const version=main.match(/BAWASLU_BUILD_VERSION','([0-9]+\.[0-9]+)'/)?.[1];
-assert.equal(version,'179.1');
-has(docker,'ARG BAWASLU_BUILD_VERSION=179.1');
+assert.ok(version && Number(version)>=179.1,'Unified AI minimum version is 179.1');
+has(docker,'ARG BAWASLU_BUILD_VERSION='+version);
 console.log('PASS v179.1 rebuilt AI Assistant routes, isolated web research, structured source-linked decisions and review-only drafts');

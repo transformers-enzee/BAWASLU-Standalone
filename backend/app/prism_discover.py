@@ -268,6 +268,7 @@ def latest_collection_outcome(db,c,params=None):
         'candidate_limit':None if meta.get('full_collection') else candidate_limit(meta),
         'accepted_target':None if meta.get('full_collection') else CAP,
         'full_export_complete':bool(meta.get('full_export_complete')),
+        'provider_limit_reached':bool(meta.get('provider_limit_reached')),
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
         'provider_diagnostics':meta.get('provider_diagnostics'),
@@ -795,6 +796,10 @@ def execute(run_id):
             if not recovery:execute_run(run.id)
             from .inbox_read_cache import invalidate
             invalidate()
+            try:
+                from .smart_radar import invalidate_dashboard_cache
+                invalidate_dashboard_cache()
+            except (ImportError, AttributeError):pass
             return
         items=list(data.get('items') or [])
         # Status responses can include the first page; the export starts again.

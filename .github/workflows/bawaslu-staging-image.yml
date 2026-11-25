@@ -45,9 +45,13 @@ jobs:
           tags: |
             ghcr.io/transformers-enzee/bawaslu-standalone:staging-${{ steps.version.outputs.version }}
             ghcr.io/transformers-enzee/bawaslu-standalone:staging-${{ github.sha }}
+            ghcr.io/transformers-enzee/bawaslu-standalone:sha-${{ github.sha }}
+            ghcr.io/transformers-enzee/bawaslu-standalone:staging
           build-args: |
             BAWASLU_BUILD_VERSION=${{ steps.version.outputs.version }}
             BAWASLU_BUILD_COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=bawaslu-staging
+          cache-to: type=gha,mode=max,scope=bawaslu-staging
           provenance: true
       - name: Confirm image identity
         run: |

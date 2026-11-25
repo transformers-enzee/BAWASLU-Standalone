@@ -4,15 +4,6 @@ name: BAWASLU Option B - prebuilt staging image
 # Changing this workflow triggers an image build; Render deployment remains manual.
 # Normal application changes do not automatically deploy to Render.
 on:
-  push:
-    branches: [architecture-v2-foundation-20261015]
-    paths:
-      - '.github/workflows/bawaslu-option-b-image.yml'
-      - 'Dockerfile'
-      - 'backend/app/main.py'
-      - 'backend/app/assessment_completion_audit.py'
-      - 'backend/tests/test_assessment_completion_audit_v1661.py'
-      - 'backend/tests/test_option_b_safe_startup.py'
   workflow_dispatch:
     inputs:
       deploy_staging:

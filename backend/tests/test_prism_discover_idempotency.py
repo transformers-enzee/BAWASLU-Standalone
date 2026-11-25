@@ -531,3 +531,32 @@ def test_full_export_restarts_from_committed_cursor(monkeypatch):
     assert run.result_count==2 and db.query(CampaignEvidence).count()==2
     assert json.loads(run.query_json)['full_export_complete']
     db.close()
+
+
+def test_full_export_does_not_advance_watermark_at_provider_limit(monkeypatch):
+    from app import prism_full_export
+    db=SessionLocal();c,run=seed(db)
+    run.status='RUNNING';run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':1},'full_collection':True,'provider_diagnostics':{'kept':1}})
+    db.commit()
+    def checkpoint(*args,**kwargs):return run,json.loads(run.query_json)
+    prism_full_export.ingest_full_export(db,c,run,json.loads(run.query_json),{'items':[post('cap','https://instagram.com/p/cap')]}, {'watermark':'must-not-advance'}, {'status':'completed'},checkpoint,prism_discover.store,lambda x:x)
+    meta=json.loads(run.query_json)
+    assert meta['full_export_complete'] and meta['provider_limit_reached']
+    assert meta['watermark'] is None and run.result_count==1
+    db.close()
+
+
+def test_full_export_rejects_false_completion_marker(monkeypatch):
+    import pytest
+    from app import prism_full_export
+    db=SessionLocal();c,run=seed(db)
+    run.status='RUNNING';run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300},'full_collection':True,'provider_diagnostics':{'kept':2}})
+    db.commit()
+    def checkpoint(*args,**kwargs):return run,json.loads(run.query_json)
+    monkeypatch.setattr(prism_full_export,'read_export_page',lambda *args:([post('short','https://instagram.com/p/short')],None,True))
+    with pytest.raises(ValueError,match='additional retained rows'):
+        prism_full_export.ingest_full_export(db,c,run,json.loads(run.query_json),{}, {'results_url':'https://www.socialcrawl.dev/v1/prism/discover/runs/run_test'}, {'status':'completed'},checkpoint,prism_discover.store,lambda x:x)
+    db.rollback()
+    assert not json.loads(db.get(SocialListeningRun,run.id).query_json).get('full_export_complete')
+    assert db.query(CampaignEvidence).count()==0
+    db.close()

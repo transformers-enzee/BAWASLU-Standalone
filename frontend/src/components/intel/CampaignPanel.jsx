@@ -784,6 +784,7 @@ export default function CampaignPanel({campaignId=null}){
     <button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(false)}>Refresh collection status</button>
     {latestPrismCollection.error&&<p className="text-xs text-red-800">{latestPrismCollection.error}</p>}
     {recoveryMessage&&<p role="status" className="text-xs text-slate-600">{recoveryMessage}</p>}
+    {latestPrismCollection.provider_limit_reached&&<p className="text-xs text-amber-900">All delivered results were screened, but the provider retrieval limit may have been reached. Coverage is not confirmed exhaustive.</p>}
     {latestPrismCollection.candidate_limit_reached&&<p className="text-xs text-amber-900">Candidate limit reached; this is not exhaustive coverage.</p>}
     {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}

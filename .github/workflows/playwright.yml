@@ -1,33 +1,46 @@
 name: Playwright QA
-
 on:
   push:
     branches: [architecture-v2-foundation-20261015]
   pull_request:
     branches: [main]
   workflow_dispatch:
-
-# Cancel obsolete browser runs on newer branch pushes.
 concurrency:
   group: playwright-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  e2e:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+      shards: ${{ steps.scope.outputs.shards }}
+      specs: ${{ steps.scope.outputs.specs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select affected scope; unknown changes run full regression
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.before }}
+        run: python3 .github/scripts/playwright_scope.py
+  backend-regression:
+    needs: plan
+    if: needs.plan.outputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install backend dependencies
-        working-directory: backend
-        run: pip install -r requirements.txt
-
-      - name: Run backend QA
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: Full offline backend regression
         working-directory: backend
         env:
           PYTHONPATH: .
@@ -35,26 +48,41 @@ jobs:
           OPENAI_API_KEY: ""
           SOCIALCRAWL_API_KEY: ""
         run: pytest -q
-
+  e2e:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    env:
+      OPENAI_API_KEY: ""
+      SOCIALCRAWL_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      # Cache downloaded npm tarballs across QA runs; keep installations isolated.
-      # The frontend has no committed package-lock.json, so use package.json as the cache key.
-      - name: Cache frontend npm downloads
+      - name: Cache npm downloads
         uses: actions/cache@v4
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-node22-${{ hashFiles('frontend/package.json') }}
-          restore-keys: |
-            npm-${{ runner.os }}-node22-
-
+          restore-keys: npm-${{ runner.os }}-node22-
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm install --prefer-offline --no-audit --no-fund
-
       - name: Administrator exception review frontend contracts
+        if: needs.plan.outputs.scope == 'full' && matrix.shard == '1/2'
         working-directory: frontend
         run: |
           node scripts/test-assessment-exception-review-v1714.mjs
@@ -74,47 +102,44 @@ jobs:
           node scripts/test-jurisdiction-navigation-v1729.mjs
           node scripts/test-jurisdiction-contract-v1730.mjs
           node scripts/test-jurisdiction-bulk-v1731.mjs
-
-      - name: Build production frontend
+      - name: Resolve exact installed Playwright version
+        id: pw
         working-directory: frontend
-        env:
-          VITE_OPENAI_API_KEY: ""
-          VITE_SOCIALCRAWL_API_KEY: ""
-        run: npm run build
-
-      - name: Cache Playwright browser binaries
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache browser binaries
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-node22-${{ hashFiles('frontend/package.json') }}
-          restore-keys: |
-            playwright-chromium-${{ runner.os }}-node22-
-
-      - name: Install Playwright Chromium
+          key: playwright-chromium-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install Chromium
         timeout-minutes: 8
         working-directory: frontend
         run: |
           npx playwright install-deps chromium
           npx playwright install --only-shell chromium
-
-      - name: Run Playwright QA
+      # Each runner has its own fresh database. No same-server worker races.
+      - name: Run selected Playwright tests
         working-directory: frontend
-        run: npx playwright test --grep-invert "provincial analyst only sees permitted navigation|Data Sources create and edit persists|unresolved jurisdiction blocks final validation" --max-failures=5 --retries=0 --reporter=line,html
-
+        env:
+          SPECS: ${{ needs.plan.outputs.specs }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          read -r -a specs <<< "$SPECS"
+          npx playwright test "${specs[@]}" --shard="$SHARD" --grep-invert "provincial analyst only sees permitted navigation|Data Sources create and edit persists|unresolved jurisdiction blocks final validation" --max-failures=5 --retries=0 --reporter=line,html
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ strategy.job-index }}
           path: frontend/playwright-report/
           if-no-files-found: ignore
           retention-days: 14
-
-      - name: Upload Playwright failure artifacts
+      - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-test-results
+          name: playwright-test-results-${{ strategy.job-index }}
           path: frontend/test-results/
           if-no-files-found: ignore
           retention-days: 14

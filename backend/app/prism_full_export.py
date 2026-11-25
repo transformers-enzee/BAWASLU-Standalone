@@ -32,6 +32,14 @@ def ingest_full_export(db,c,run,meta,data,nxt,status,checkpoint,store,safe_url):
             run.result_count=store(db,run,c,items[offset:offset+100],full_assessment=True,commit=False)
             db.flush()
         meta=json.loads(run.query_json or '{}')
+        diag=meta.get('collection_diagnostics') or {}
+        kept=(meta.get('provider_diagnostics') or {}).get('kept')
+        scanned=int(diag.get('raw_provider_items') or 0)
+        if complete and type(kept) is int and kept>scanned:
+            raise ValueError('Provider reports additional retained rows; export completeness cannot be verified')
+        requested=(meta.get('body') or {}).get('limit')
+        meta['provider_limit_reached']=bool(type(requested) is int and requested>0 and
+            (scanned>=requested or (type(kept) is int and kept>=requested)))
         meta['full_export_cursor']=next_cursor
         meta['full_export_complete']=complete
         meta['export_incomplete']=not complete
@@ -40,7 +48,8 @@ def ingest_full_export(db,c,run,meta,data,nxt,status,checkpoint,store,safe_url):
         if complete:
             run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
             if run.status=='COMPLETED':
-                meta['watermark']=nxt.get('watermark')
+                if not meta.get('provider_limit_reached'):
+                    meta['watermark']=nxt.get('watermark')
                 c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
         run.query_json=json.dumps(meta,ensure_ascii=False)
         db.commit()

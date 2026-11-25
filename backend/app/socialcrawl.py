@@ -89,15 +89,17 @@ def _result_in_scope(db:Session,p,row):
         return False
     assigned_p=assigned.get('province_code') or province_code_for(assigned.get('province'))
     original_p=original.get('province_code') or province_code_for(query.get('province'))
-    if assigned_p and original_p!=assigned_p:
-        return False
+    if assigned_p and original_p:
+        if original_p!=assigned_p:return False
+    elif not (str(assigned.get('province') or '').strip() and str(assigned.get('province') or '').strip().casefold()==str(original.get('province') or '').strip().casefold()):return False
     if p.get('geographic_scope')=='Regency/City':
         if not query.get('regency_city'):
             return False
         assigned_r=assigned.get('regency_city_code') or regency_code_for(assigned.get('regency_city'),assigned_p)
         original_r=original.get('regency_city_code') or regency_code_for(query.get('regency_city'),original_p)
-        if assigned_r and original_r!=assigned_r:
-            return False
+        if assigned_r and original_r:
+            if assigned_r!=original_r:return False
+        elif not (str(assigned.get('regency_city') or '').strip() and str(assigned.get('regency_city') or '').strip().casefold()==str(original.get('regency_city') or '').strip().casefold()):return False
     return True
 
 def _scope_filters(p,filters):
@@ -726,7 +728,7 @@ def serialize_result(x):
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     # Fail closed before routing any collection, inspection or mutation action.
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-    if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverRecover','campaignDiscoverStatus','campaignDiscoverLastRunDiagnostics','campaignCandidateSuggestions'}:
+    if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverRecover','campaignDiscoverQuarantine','campaignDiscoverStatus','campaignDiscoverLastRunDiagnostics','campaignCandidateSuggestions'}:
         from .prism_discover import action as prism_action
         return prism_action(db,p,action,data,id)
     if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignSearchEvidenceAudit','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAssessmentInterruptedPreview','campaignAssessmentInterruptedQuarantine','campaignAssessmentCompletionAudit','campaignAssessmentOperationsOverview','campaignAssessmentSupersededPreview','campaignAssessmentSupersededApply','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:

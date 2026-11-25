@@ -24,6 +24,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
     {!run&&<div className="space-y-3">
      <p className="text-sm text-slate-700">Activate this project to collect posts and assess the saved results?</p>
      <p className="text-xs text-slate-500">This starts a one-time collection; scheduled monitoring is currently disabled.</p>
+     {preview?.collection_budget&&<p className="text-xs text-slate-500">Monthly collection allowance remaining: {Number(preview.collection_budget.monthly_remaining).toLocaleString()} · Source storage available: {Number(preview.collection_budget.storage_remaining).toLocaleString()}. Provider collection counts can exceed the local candidate limit.</p>}
      {booleanExpression&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><p className="text-xs text-slate-500">Boolean expression</p><p className="mt-1 break-words font-mono">{booleanExpression}</p></div>}
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">

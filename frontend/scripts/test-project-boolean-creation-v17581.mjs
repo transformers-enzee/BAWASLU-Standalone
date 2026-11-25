@@ -22,7 +22,7 @@ assert.ok(campaigns.includes("encoded_primary=encode_boolean_project_query(expre
 assert.ok(campaigns.includes("'search_mode':search['search_mode'],'boolean_query':search['boolean_query']"));
 assert.ok(campaigns.includes("keywords=decode_project_query(c.primary_keywords_json)['retrieval_terms']"));
 assert.ok(campaigns.includes("'retrieval_mode':'BOOLEAN_RETRIEVAL_SEEDS'"));
-assert.ok(scheduler.includes('evaluate_boolean(search["ast"],haystack)'));
+assert.ok(scheduler.includes('evaluate_boolean(search["ast"],str(row.get('));
 assert.ok(prism.includes("if not match['matched']"),"both search modes must enforce local matching");
 assert.ok(prism.includes("discover_boolean_plan(search['boolean_query'])"));
 assert.ok(parser.includes('SCHEMA="BAWASLU_PROJECT_BOOLEAN_V1"'));

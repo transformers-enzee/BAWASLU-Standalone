@@ -116,6 +116,8 @@ def keyword_screen(c,row):
     comment_text=''
     if isinstance(comments,list):
         comment_text=' '.join(str(x.get('text') or '') for x in comments if isinstance(x,dict))
+    # A Boolean match must be reproducible from the stored source text, not
+    # from an unsaved comment on a different source record.
     haystack=((row.get('text_content') or '')+' '+comment_text).casefold()
     search=decode_project_query(c.primary_keywords_json)
     primary=search["retrieval_terms"]
@@ -125,7 +127,7 @@ def keyword_screen(c,row):
     matched_secondary=[word for word in secondary if word.casefold() in haystack]
     matched_excluded=[word for word in excluded if word.casefold() in haystack]
     boolean_mode=search["search_mode"]=="BOOLEAN"
-    matched=(evaluate_boolean(search["ast"],haystack) if boolean_mode
+    matched=(evaluate_boolean(search["ast"],str(row.get('text_content') or '').casefold()) if boolean_mode
              else bool(matched_main) and not bool(matched_excluded))
     return {'matched':matched,
             'main_keywords':matched_main,'secondary_keywords':matched_secondary,

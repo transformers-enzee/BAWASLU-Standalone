@@ -1,5 +1,5 @@
 """SocialCrawl Prism Discover: separate, manually confirmed 100-post workflow."""
-import os,json,hashlib,re
+import os,json,hashlib,re,uuid
 from collections import Counter
 from datetime import datetime,timezone,timedelta,date
 from urllib.parse import urlsplit,urljoin,urlencode
@@ -9,6 +9,7 @@ from .db import SessionLocal
 from .project_boolean import decode_project_query, discover_boolean_plan
 from types import SimpleNamespace
 from .access import has,allowed
+from . import prism_collection_budget as collection_budget
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
 BASE='https://www.socialcrawl.dev/v1'
@@ -45,11 +46,13 @@ def locked_campaign(db,cid):
     return db.query(MonitoringCampaign).filter_by(id=cid).populate_existing().with_for_update().first()
 
 
-def ensure_no_active_collection(db,cid):
-    active=(db.query(SocialListeningRun.id).join(CampaignRun,
+def ensure_no_active_collection(db,cid,exclude_run_id=None):
+    q=(db.query(SocialListeningRun.id).join(CampaignRun,
         CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==cid,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
-                SocialListeningRun.status.in_(['QUEUED','RUNNING'])).first())
+                SocialListeningRun.status.in_(['QUEUED','RUNNING'])))
+    if exclude_run_id is not None:q=q.filter(SocialListeningRun.id!=exclude_run_id)
+    active=q.first()
     if active:raise ValueError('Discover run already active; review its status before changing this project')
 
 
@@ -72,12 +75,16 @@ def body_for(db,c,max_credits=None,platform_mode=None):
     mode=platform_mode or 'ALL'
     if mode!='ALL':
         raise ValueError('Collection uses all configured sources')
-    context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
+    context=str(c.description or 'Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates').strip()[:1000]
     if boolean_mode and not c.description:
         context=('Indonesian public discussion matching the topic of '+search['boolean_query'])[:1000]
     # POST supports long keyword lists in a background run. Keep all terms
     # in one group so the provider's result and credit cap applies once.
-    group={'id':'campaign-'+str(c.id),'keywords':words,'context':context}
+    # Stable provider subject identity enables provider-side reuse for identical
+    # requests in the same monitoring geography; no cross-scope access grant.
+    group_key=snapshot_signature({'keywords':words,'context':context,'province':getattr(c,'province','') or '',
+                                 'regency_city':getattr(c,'regency_city','') or ''})[:24]
+    group={'id':'query-'+group_key,'keywords':words,'context':context}
     params={'groups':[group],
             'platforms':platforms,'country':['ID'],'period':'30d','label':['stance'],
             'limit':CANDIDATE_CAP,'retention_days':7,'max_credits':cap,'relevance':'score'}
@@ -109,8 +116,17 @@ def candidate_limit(meta):
     return min(CANDIDATE_CAP,max(CAP,limit)) if type(limit) is int else CAP
 
 
+def heartbeat_stale(run,meta,now=None):
+    if run.status not in ('QUEUED','RUNNING'):return False
+    now=now or datetime.now(timezone.utc).replace(tzinfo=None)
+    try:stamp=datetime.fromisoformat(meta.get('worker_heartbeat_at') or '')
+    except (TypeError,ValueError):stamp=run.executed_at
+    if stamp and stamp.tzinfo:stamp=stamp.astimezone(timezone.utc).replace(tzinfo=None)
+    return bool(stamp and now-stamp>timedelta(minutes=90))
+
+
 def can_recover(run,meta,c):
-    return bool(run.status=='FAILED' and c.status=='DRAFT'
+    return bool((run.status=='FAILED' or (run.status=='PARTIAL' and meta.get('export_incomplete')) or heartbeat_stale(run,meta)) and c.status=='DRAFT'
         and re.fullmatch(r'run_[A-Za-z0-9_-]+',str(run.provider_request_id or ''))
         and meta.get('search_snapshot')
         and meta.get('query_revision')==snapshot_signature(search_snapshot(c)))
@@ -142,6 +158,11 @@ def latest_collection_outcome(db,c,params=None):
         'status':run.status,
         'recovery_available':can_recover(run,meta,c),
         'recovery_only':bool(meta.get('recovery_only')),
+        'worker_stale':heartbeat_stale(run,meta),
+        'submission_uncertain':bool(meta.get('submission_uncertain')) or (heartbeat_stale(run,meta) and not str(run.provider_request_id or '').startswith('run_')),
+        'provider_spent_total':meta.get('provider_spent_total'),
+        'shared_provider_run':bool(run.cached),
+        'monitoring_geography':{'province':getattr(c,'province','') or '', 'regency_city':getattr(c,'regency_city','') or '', 'incident_location_verified':False},
         'error':run.error_text or '',
         'credits_used':int(run.credits_used or 0),
         'matched':int(run.result_count or 0),
@@ -150,6 +171,7 @@ def latest_collection_outcome(db,c,params=None):
         'newly_saved_source_rows':newly_saved,
         'excluded_by_boolean':diag.get('excluded_by_boolean'),
         'excluded_by_search':diag.get('excluded_by_search',diag.get('excluded_by_boolean')),
+        'scope_incompatible_reused_rows':diag.get('scope_incompatible_reused_rows'),
         'new_evidence_links':diag.get('new_evidence_links'),
         'already_linked_matches':diag.get('already_linked_matches'),
         'candidate_limit_reached':diag.get('candidate_limit_reached'),
@@ -232,20 +254,31 @@ def action(db,p,verb,data,cid):
         return activation_status(db,p,c.id,run.id)
     if verb=='campaignDiscoverLastRunDiagnostics':
         return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
-    if verb=='campaignDiscoverRecover':
+    if verb in ('campaignDiscoverRecover','campaignDiscoverQuarantine'):
         c=locked_campaign(db,c.id)
         if not c or not allowed(p,c) or c.status!='DRAFT':
             raise ValueError('Campaign unavailable for recovery')
-        ensure_no_active_collection(db,c.id)
         rid=(data or {}).get('run_id')
         if not str(rid or '').isdigit():raise ValueError('Run id required')
         run=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
              .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.id==int(rid),
-                     SocialListeningRun.provider=='SOCIALCRAWL_PRISM').first())
+                     SocialListeningRun.provider=='SOCIALCRAWL_PRISM').populate_existing().with_for_update().first())
         meta=json.loads(run.query_json or '{}') if run else {}
-        if not run or not can_recover(run,meta,c):
+        if not run:raise ValueError('Discover run unavailable')
+        ensure_no_active_collection(db,c.id,exclude_run_id=run.id)
+        if verb=='campaignDiscoverQuarantine':
+            if not heartbeat_stale(run,meta):raise ValueError('Collection worker is not stale')
+            if can_recover(run,meta,c):raise ValueError('Recover the known provider run instead')
+            if (data or {}).get('confirm_uncertain') is not True:raise ValueError('Confirm that the original provider charge may be unknown')
+            meta['submission_uncertain']=True;meta['worker_token']=''
+            run.query_json=json.dumps(meta,ensure_ascii=False);run.status='FAILED'
+            run.error_text='Stale collection quarantined; provider submission and charge could not be verified. No retry was sent.'
+            db.commit()
+            return {'quarantined':True,'run_id':run.id,'paid_provider_called':False}
+        if not can_recover(run,meta,c):
             raise ValueError('Recovery requires a failed provider run ID and the unchanged collection configuration')
         meta['recovery_only']=True
+        meta['worker_token']='';meta['worker_heartbeat_at']=datetime.now(timezone.utc).isoformat()
         run.query_json=json.dumps(meta,ensure_ascii=False)
         run.status='QUEUED';run.error_text=''
         db.commit()
@@ -261,6 +294,7 @@ def action(db,p,verb,data,cid):
     last=latest_collection_outcome(db,c,params)
     plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverPreview':
+        budget=collection_budget.assert_capacity(db,params['limit'])
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
             'post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
@@ -271,7 +305,7 @@ def action(db,p,verb,data,cid):
             'keywords_total':len(search['retrieval_terms']),
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
-            'local_screening':True,'collection_mode':'ONE_TIME',
+            'local_screening':True,'collection_mode':'ONE_TIME','collection_budget':budget,
             'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',
@@ -280,12 +314,15 @@ def action(db,p,verb,data,cid):
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
+    collection_budget.lock(db)
+    collection_budget.assert_capacity(db,params['limit'])
     snapshot=search_snapshot(c)
     plan_body={k:v for k,v in params.items() if k!='since_watermark'}
     plan_signature=snapshot_signature({'body':plan_body,'configuration':snapshot})
     run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',executed_by=str(p.get('id') or ''),
             query_json=json.dumps({'body':params,'signature':sig,'plan_signature':plan_signature,
                                   'search_snapshot':snapshot,'query_revision':snapshot_signature(snapshot),'campaign_id':c.id,
+                                  'worker_heartbeat_at':datetime.now(timezone.utc).isoformat(),
                                   'province':c.province,'regency_city':c.regency_city}),
             status='QUEUED')
     db.add(run);db.flush()
@@ -369,9 +406,12 @@ def enrich(db,c,entries):
             record.explanation='AI suggestion only; original source remains unverified.'
         db.commit()
 
-def store(db,run,c,items,full_assessment=False):
+def store(db,run,c,items,full_assessment=False,commit=True):
     run_meta=json.loads(run.query_json or '{}')
     scan_cap=candidate_limit(run_meta)
+    collection_budget.lock(db)
+    # Reserve the maximum possible new source rows before writing any.
+    collection_budget.assert_storage(db,min(scan_cap,len(items)),exclude_run_id=run.id)
     kept=[x for x in items[:scan_cap] if isinstance(x,dict) and x.get('id') and x.get('platform')]
     ids=[str(x['id']) for x in kept]
     urls=[str(x.get('url') or '') for x in kept if x.get('url')]
@@ -385,10 +425,20 @@ def store(db,run,c,items,full_assessment=False):
     by_url={str(x.canonical_url):x for x in existing if x.canonical_url}
     pairs=[]
     seen_result_ids=set()
+    scope_skipped=0
+    from .socialcrawl import _result_in_scope
+    province=getattr(c,'province','') or '';regency=getattr(c,'regency_city','') or ''
+    scope_principal={'geographic_scope':'Regency/City' if regency else 'Province','province':province,'regency_city':regency}
+    scope_cache={}
     for raw in kept:
         source_id=str(raw['id'])[:255];platform=str(raw['platform'])[:100]
         url=str(raw.get('url') or '')[:2000]
         row=by_id.get((platform.casefold(),source_id)) or (by_url.get(url) if url else None)
+        if row is not None and province and row.run_id!=run.id:
+            if row.run_id not in scope_cache:scope_cache[row.run_id]=_result_in_scope(db,scope_principal,row)
+            if not scope_cache[row.run_id]:
+                scope_skipped+=1
+                continue
         if row is None:
             author=raw.get('author') if isinstance(raw.get('author'),dict) else {}
             from .author_recovery import source_candidate
@@ -484,6 +534,7 @@ def store(db,run,c,items,full_assessment=False):
         'accepted_boolean_matches':len(accepted_ids),
         'excluded_by_boolean':rejected if boolean_mode else 0,
         'excluded_by_search':rejected,
+        'scope_incompatible_reused_rows':scope_skipped,
         'matched_over_target':matched_over_target,
         'candidate_limit':scan_cap,
         'accepted_target':CAP,
@@ -496,7 +547,7 @@ def store(db,run,c,items,full_assessment=False):
         'paid_provider_called':False,
     }
     run.query_json=json.dumps(meta,ensure_ascii=False)
-    db.commit()
+    if commit:db.commit()
     # Legacy manual store still supports topic-only enrichment. The Activate
     # pipeline uses the full intelligence assessor instead of two paid passes.
     if not full_assessment:
@@ -523,13 +574,40 @@ def provider_diagnostics(data):
 
 def execute(run_id):
     db=SessionLocal()
+    token=uuid.uuid4().hex
+    submitted=False
+    recovery=False
+    def checkpoint(status=None,provider_id=None,persist=True):
+        # Fence an old worker after explicit stale-run recovery/quarantine.
+        row=db.query(SocialListeningRun).filter_by(id=int(run_id)).populate_existing().with_for_update().first()
+        current=json.loads(row.query_json or '{}') if row else {}
+        if not row or row.status!='RUNNING' or current.get('worker_token')!=token:
+            raise RuntimeError('Collection worker claim superseded')
+        current['worker_heartbeat_at']=datetime.now(timezone.utc).isoformat()
+        if provider_id:row.provider_request_id=str(provider_id)[:255]
+        if status is not None:
+            spent=max(0,int((status.get('credits') or {}).get('spent') or 0))
+            current['provider_spent_total']=max(spent,int(current.get('provider_spent_total') or 0))
+            # A deduplicated provider run reports cumulative credits. Attribute
+            # only the amount not already recorded on another local run.
+            collection_budget.lock(db)
+            from sqlalchemy import func
+            others=db.query(SocialListeningRun).filter(SocialListeningRun.provider=='SOCIALCRAWL_PRISM',SocialListeningRun.provider_request_id==row.provider_request_id,SocialListeningRun.id!=row.id) if str(row.provider_request_id or '').startswith('run_') else None
+            prior=int(others.with_entities(func.sum(SocialListeningRun.credits_used)).scalar() or 0) if others is not None else 0
+            row.cached=bool(others is not None and others.first())
+            row.credits_used=max(int(row.credits_used or 0),max(0,current['provider_spent_total']-prior))
+        row.query_json=json.dumps(current,ensure_ascii=False)
+        if persist:db.commit()
+        return row,current
     try:
         # Atomic claim: a duplicate worker cannot submit the same paid request.
         claimed=db.query(SocialListeningRun).filter_by(id=int(run_id),status='QUEUED',provider='SOCIALCRAWL_PRISM').update({'status':'RUNNING'},synchronize_session=False)
-        db.commit()
-        if claimed!=1:return
+        if claimed!=1:
+            db.rollback();return
         run=db.get(SocialListeningRun,int(run_id))
         meta=json.loads(run.query_json or '{}')
+        meta['worker_token']=token;meta['worker_heartbeat_at']=datetime.now(timezone.utc).isoformat()
+        run.query_json=json.dumps(meta,ensure_ascii=False);db.commit()
         c=db.get(MonitoringCampaign,int(meta['campaign_id']))
         if not c:raise ValueError('Campaign no longer available')
         if c.status!='DRAFT':raise ValueError('Campaign no longer available for collection')
@@ -540,30 +618,29 @@ def execute(run_id):
                 raise ValueError('Recovery cannot submit a new collection')
             data,env=call('GET',BASE+'/prism/discover/runs/'+run.provider_request_id,timeout=45)
         else:
+            submitted=True
             data,env=call('POST',BASE+'/prism/discover',meta['body'],60)
         status=data.get('run') or {}
-        run.provider_request_id=str(status.get('run_id') or run.provider_request_id or env.get('request_id') or '')[:255]
-        run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
-        db.commit()
+        run,meta=checkpoint(status,status.get('run_id') or run.provider_request_id or env.get('request_id') or '')
         nxt=data.get('next') or {}
         for _ in range(45):
             if status.get('status') not in ('running','queued'):break
             if not nxt.get('status_url'):raise ValueError('Missing provider status URL')
             data,_=call('GET',nxt['status_url'],timeout=45)
             status=data.get('run') or {}
-            run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
-            db.commit()
+            run,meta=checkpoint(status,status.get('run_id'))
             nxt=data.get('next') or nxt
         if status.get('status') in ('queued','running'):raise ValueError('Provider run not yet settled')
         if status.get('status') not in ('completed','partial','paused'):
             raise ValueError('Provider status: '+str(status.get('status')))
         upstream=provider_diagnostics(data)
+        run,meta=checkpoint()
         if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
         db.commit()
         items=list(data.get('items') or [])
         # Status responses can include the first page; the export starts again.
-        export_items=[]
+        export_items=[];export_incomplete=False
         if nxt.get('results_url') and len(items)<scan_cap:
             url=str(nxt['results_url']).rstrip('/')+'/results.jsonl'
             cursor=None
@@ -573,6 +650,7 @@ def execute(run_id):
                 with httpx.Client(timeout=55,follow_redirects=False) as client:
                     resp=client.get(safe_url(q),headers={'x-api-key':key})
                 resp.raise_for_status()
+                run,meta=checkpoint()
                 cursor=None
                 for line in resp.text.split('\n'):
                     if not line.strip():continue
@@ -581,12 +659,17 @@ def execute(run_id):
                     elif 'complete' not in obj:export_items.append(obj)
                     if len(export_items)>=scan_cap:break
                 if not cursor or len(export_items)>=scan_cap:break
+            if cursor and len(export_items)<scan_cap:export_incomplete=True
             if export_items:items=export_items
-        run.result_count=store(db,run,c,items,full_assessment=True)
-        run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
-        run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
+        # Keep the claim row and capacity lock until evidence and final run
+        # status commit together. An interrupted transaction can be replayed.
+        run,meta=checkpoint(status,status.get('run_id'),persist=False)
+        run.result_count=store(db,run,c,items,full_assessment=True,commit=False)
+        run.status='COMPLETED' if status.get('status')=='completed' and not export_incomplete else 'PARTIAL'
         meta=json.loads(run.query_json or '{}')
         # Never advance incremental coverage after a partial or capped run.
+        meta['export_incomplete']=export_incomplete
+        meta['submission_uncertain']=False
         meta['watermark']=nxt.get('watermark') if run.status=='COMPLETED' and len(items)<scan_cap and not meta.get('collection_diagnostics',{}).get('matched_over_target') else None
         if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
@@ -604,9 +687,14 @@ def execute(run_id):
         except ImportError:pass
     except Exception as exc:
         db.rollback()
-        run=db.get(SocialListeningRun,int(run_id))
+        run=db.query(SocialListeningRun).filter_by(id=int(run_id)).populate_existing().with_for_update().first()
         if run:
+            current=json.loads(run.query_json or '{}')
+            if current.get('worker_token')!=token:return
             # Preserve a successfully collected run if the independent AI stage failed.
             if run.status not in ('COMPLETED','PARTIAL'):run.status='FAILED'
+            if submitted and not str(run.provider_request_id or '').startswith('run_'):
+                current['submission_uncertain']=True
+                run.query_json=json.dumps(current,ensure_ascii=False)
             run.error_text=str(exc)[:500];db.commit()
     finally:db.close()

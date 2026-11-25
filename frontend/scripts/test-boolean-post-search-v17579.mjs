@@ -57,3 +57,5 @@ assert.throws(()=>compileBooleanProjectSearch('a OR b OR c OR d OR e OR f'),Bool
 assert.ok(component.includes('server_filtered!==true'));
 assert.ok(component.includes('Next page'));
 assert.ok(!component.includes('while(active)'));
+
+assert.throws(()=>compileBooleanPostSearch('('.repeat(65)+'a'+')'.repeat(65)),BooleanSearchSyntaxError);

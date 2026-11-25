@@ -219,9 +219,15 @@ def discover_boolean_plan(expression,max_keywords=5):
     phrases=list(dict.fromkeys(' '.join(x) for x in (options or []) if x))
     fallback=not phrases or len(phrases)>max_keywords or any(len(x)>120 for x in phrases)
     if fallback:phrases=anchors
+    # Reserve a retrieval lane for every independent positive anchor. Add
+    # compound phrases within the existing five-keyword ceiling. This improves
+    # recall when terms are distant/reversed, while preserving local semantics.
+    compound_phrases=list(phrases)
+    phrases=list(dict.fromkeys(anchors+compound_phrases))[:max_keywords]
     return {
         'keywords':phrases,'contains':'','exclude_terms':[],
-        'positive_retrieval_anchors':anchors,'uses_anchor_fallback':bool(fallback),
+        'positive_retrieval_anchors':anchors,'compound_phrases':compound_phrases,
+        'uses_anchor_fallback':bool(fallback),'coverage_strategy':'ANCHOR_AND_COMPOUND_WITHIN_EXISTING_CAP',
         'search_mode':'BOOLEAN',
         'strategy':'POSITIVE_COMPOUND_SEARCH_WITH_LOCAL_BOOLEAN_GATE',
         'post_filter_required':True,'provider_boolean_native':False,

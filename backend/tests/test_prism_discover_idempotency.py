@@ -369,3 +369,60 @@ def test_recovery_only_reads_original_run_without_ai(monkeypatch):
     assert db.query(CampaignEvidence).count()==1
     assert db.query(SocialListeningRun).count()==1
     db.close()
+
+
+def test_stale_known_run_can_recover_without_post(monkeypatch):
+    from datetime import datetime,timedelta,timezone
+    from app import activation_assessment
+    db=SessionLocal();c,run=seed(db)
+    snapshot=prism_discover.search_snapshot(c)
+    run.status='RUNNING';run.provider_request_id='run_stale'
+    run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300},'search_snapshot':snapshot,
+        'query_revision':prism_discover.snapshot_signature(snapshot),'worker_token':'old-worker',
+        'worker_heartbeat_at':(datetime.now(timezone.utc)-timedelta(hours=2)).isoformat()})
+    db.commit()
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    assert prism_discover.latest_collection_outcome(db,c)['recovery_available']
+    result=prism_discover.action(db,{},'campaignDiscoverRecover',{'run_id':run.id},c.id)
+    assert result['recovery_only']
+    calls=[]
+    def read(method,url,body=None,timeout=50):
+        calls.append(method)
+        return {'run':{'run_id':'run_stale','status':'completed','credits':{'spent':4}},'items':[]},{}
+    monkeypatch.setattr(prism_discover,'call',read)
+    monkeypatch.setattr(activation_assessment,'execute_run',lambda *a: (_ for _ in ()).throw(AssertionError('No AI')))
+    prism_discover.execute(run.id);db.expire_all()
+    assert calls==['GET']
+    assert db.get(SocialListeningRun,run.id).status=='COMPLETED'
+    db.close()
+
+
+def test_reused_provider_run_credits_not_double_counted(monkeypatch):
+    from app import activation_assessment
+    from app.prism_collection_budget import snapshot
+    db=SessionLocal();c,first=seed(db)
+    first.status='COMPLETED';first.provider_request_id='run_shared';first.credits_used=12
+    first.query_json=json.dumps({'campaign_id':c.id,'provider_diagnostics':{'collected':420}})
+    second=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='QUEUED',query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300}}))
+    db.add(second);db.flush();db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=second.id));db.commit()
+    monkeypatch.setattr(prism_discover,'call',lambda *a,**k:({'run':{'run_id':'run_shared','status':'completed','credits':{'spent':12}},'items':[],
+        'summary':{'rows':{'collected':420}}},{}))
+    monkeypatch.setattr(activation_assessment,'execute_run',lambda *a:None)
+    prism_discover.execute(second.id);db.expire_all()
+    assert db.get(SocialListeningRun,second.id).credits_used==0
+    assert db.get(SocialListeningRun,second.id).cached
+    assert snapshot(db)['monthly_counted']==420
+    db.close()
+
+
+def test_unknown_failed_submission_is_flagged_without_retry(monkeypatch):
+    db=SessionLocal();c,run=seed(db);calls=[]
+    def timeout(method,url,body=None,timeout=50):
+        calls.append(method);raise RuntimeError('provider request timeout')
+    monkeypatch.setattr(prism_discover,'call',timeout)
+    prism_discover.execute(run.id);prism_discover.execute(run.id);db.expire_all()
+    saved=db.get(SocialListeningRun,run.id)
+    assert calls==['POST'] and saved.status=='FAILED'
+    assert json.loads(saved.query_json)['submission_uncertain']
+    db.close()

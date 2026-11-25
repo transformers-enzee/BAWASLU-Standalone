@@ -295,7 +295,7 @@ def test_backend_search_and_suggestions_keep_regional_scope():
     assert second['total']==2 and not second['has_more']
     assert second['evidence'][0]['id']!=result['evidence'][0]['id']
     suggestions=action(db,p,'campaignCandidateSuggestions',{},cid)['candidates']
-    assert [row['name'] for row in suggestions]==['Gibran']
+    assert [row['name'] for row in suggestions]==['Gibran Rakabuming Raka']
     assert suggestions[0]['matching_posts']==2
     db.close()
 
@@ -312,4 +312,21 @@ def test_backend_search_respects_officer_sentiment_override():
     neutral=action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'neutral'}},cid)
     assert neutral['total']==1 and neutral['evidence'][0]['sentiment']=='Neutral'
     assert action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'negative'}},cid)['total']==0
+    db.close()
+
+
+def test_boolean_dashboard_counts_full_expression_not_only_retrieval_anchor():
+    from app.models import MonitoringCampaign
+    from app.project_boolean import encode_boolean_project_query
+    db=SessionLocal();p=user(db,'booleanDashboard');cid=campaign(db,p,'Boolean analytics')
+    add(db,cid,3);c=db.get(MonitoringCampaign,int(cid))
+    c.primary_keywords_json=encode_boolean_project_query('BAWASLU AND Bandung AND NOT hoaks')
+    rows=db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==int(cid)).order_by(SocialListeningResult.id).all()
+    for row,txt in zip(rows,['BAWASLU Bandung','BAWASLU Bandung hoaks','BAWASLU Jakarta']):row.text_content=txt
+    db.commit()
+    result=action(db,p,'campaignDashboard',{},cid)
+    assert result['statistics']['messages']==3
+    assert result['statistics']['main_keyword_messages']==1
+    assert result['main_keywords']['bandung']==2 and 'hoaks' not in result['main_keywords']
+    assert result['historical_evidence_preserved']
     db.close()

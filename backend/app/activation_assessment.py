@@ -82,6 +82,13 @@ def status(db, principal, campaign_id, run_id):
         meta = json.loads(run.query_json or "{}")
     except (ValueError, TypeError):
         meta = {}
+    if run.provider=='SOCIALCRAWL_PRISM' and run.status in ('QUEUED','RUNNING'):
+        from .prism_discover import heartbeat_stale
+        if heartbeat_stale(run,meta):
+            return {'run_id':run.id,'status':run.status,'stage':'NEEDS_ATTENTION','posts_saved':int(run.result_count or 0),
+                'total':0,'completed':0,'queued':0,'processing':0,'failed':0,'blocked':0,'progress_percent':0,
+                'credits_used':int(run.credits_used or 0),'status_reason':'Collection worker stopped updating. Open the project dashboard to recover or quarantine the original run; no new crawl was started.',
+                'collection_diagnostics':meta.get('collection_diagnostics') or {},'budget':remaining_budget(db,c.id)}
     ids = [int(x) for x in meta.get("assessment_result_ids", [])[:500]
            if str(x).isdigit()]
     diag=meta.get("collection_diagnostics")

@@ -33,7 +33,7 @@ def new_campaign(db, expression='BAWASLU AND (Bandung OR "Jawa Barat") AND NOT h
 
 def test_bandung_compound_queries_instead_of_geographic_only():
     plan=discover_boolean_plan('BAWASLU AND (Bandung OR "Jawa Barat") AND NOT hoaks')
-    assert plan['keywords']==['bawaslu bandung','bawaslu jawa barat']
+    assert plan['keywords']==['bawaslu','bawaslu bandung','bawaslu jawa barat']
     assert plan['contains']==''
     assert plan['exclude_terms']==[]
     assert plan['provider_boolean_native'] is False
@@ -44,7 +44,7 @@ def test_safe_retrieval_never_requires_or_branch_literal_as_mandatory():
     assert len(plan['keywords'])<=5
     assert plan['contains']==''
     assert plan['exclude_terms']==[]
-    assert plan['keywords']==['bawaslu bandung','jawa barat kpu']
+    assert plan['keywords']==['bawaslu','jawa barat','bawaslu bandung','jawa barat kpu']
 
 
 def test_negated_or_arm_cannot_be_the_only_retrieval_path():
@@ -69,7 +69,7 @@ def test_provider_body_uses_supported_fields_and_standard_cap():
     class DB:
         def query(self,*args):return Query()
     params,signature=prism_discover.body_for(DB(),c)
-    assert params['groups'][0]['keywords']==['bawaslu bandung','bawaslu jawa barat']
+    assert params['groups'][0]['keywords']==['bawaslu','bawaslu bandung','bawaslu jawa barat']
     assert 'exclude_terms' not in params['groups'][0]
     assert 'contains' not in params
     assert params['relevance']=='score'
@@ -119,7 +119,7 @@ def test_preview_is_free_and_signature_guard_remains_without_extra_ack(monkeypat
     preview=prism_discover.action(db,{},'campaignDiscoverPreview',args,c.id)
     assert preview['credit_cap']==100
     assert preview['platform_mode']=='ALL'
-    assert preview['keywords_used']==['bawaslu bandung','bawaslu jawa barat']
+    assert preview['keywords_used']==['bawaslu','bawaslu bandung','bawaslu jawa barat']
     assert preview['provider_contains']==''
     assert preview['provider_exclude_terms']==[]
     assert preview['last_run']['newly_saved_source_rows']==1
@@ -166,4 +166,30 @@ def test_duplicate_start_is_blocked(monkeypatch):
     with pytest.raises(ValueError,match='already active'):
         prism_discover.action(db,{},'campaignDiscoverStart',data,c.id)
     assert db.query(SocialListeningRun).count()==1
+    db.close()
+
+
+def test_identical_same_scope_provider_group_and_anchor_coverage():
+    db=SessionLocal();a=new_campaign(db);b=new_campaign(db)
+    pa,_=prism_discover.body_for(db,a);pb,_=prism_discover.body_for(db,b)
+    assert pa==pb
+    b.province='Jawa Barat';db.commit()
+    other,_=prism_discover.body_for(db,b)
+    assert other['groups'][0]['id']!=pa['groups'][0]['id']
+    assert 'bawaslu' in pa['groups'][0]['keywords']
+    assert len(pa['groups'][0]['keywords'])<=5
+    db.close()
+
+
+def test_monthly_and_storage_guard_blocks_before_provider_preview(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','200')
+    monkeypatch.setattr(prism_discover,'call',lambda *a,**k:pytest.fail('no provider call allowed'))
+    with pytest.raises(ValueError,match='Monthly collection allowance'):
+        prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','3000000')
+    monkeypatch.setenv('BAWASLU_ACTIVE_SOURCE_STORAGE_LIMIT','200')
+    with pytest.raises(ValueError,match='Active source storage allowance'):
+        prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
     db.close()

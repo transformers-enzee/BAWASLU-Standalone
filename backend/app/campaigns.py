@@ -1605,7 +1605,7 @@ def campaign_action(db:Session,p,action,data,id=None):
         correction_revision=db.query(func.count(OfficerSentimentCorrection.id),
             func.max(OfficerSentimentCorrection.id)).filter(
                 OfficerSentimentCorrection.campaign_id==c.id).one()
-        cache_key=(principal, str(p.get('role')), str(c.id), from_day, to_day, keyword,
+        cache_key=(principal, str(p.get('role')),str(p.get('geographic_scope')),str(p.get('province_code') or p.get('province') or ''),str(p.get('regency_city_code') or p.get('regency_city') or ''),str(c.updated_at), str(c.id), from_day, to_day, keyword,
                    int(evidence_revision[0] or 0), int(evidence_revision[1] or 0),
                    int(assessment_revision[0] or 0), int(assessment_revision[1] or 0),
                    int(correction_revision[0] or 0), int(correction_revision[1] or 0))
@@ -1634,7 +1634,10 @@ def campaign_action(db:Session,p,action,data,id=None):
             SocialListeningResult.canonical_url)
         links=query.with_entities(*columns).order_by(CampaignEvidence.id.desc()).yield_per(1000)
         platforms=Counter(); main=Counter(); secondary=Counter(); states=Counter(); daily=Counter(); daily_types={}; sentiment=Counter(); geographies=Counter(); cloud_terms=Counter(); languages=Counter(); demographic_coverage=Counter(); daily_platform={}; total_engagement=0; total_views=0; accounts=set(); metrics_available=Counter()
-        primary_terms=decode_project_query(c.primary_keywords_json)['retrieval_terms']
+        saved_search=decode_project_query(c.primary_keywords_json)
+        is_boolean=saved_search['search_mode']=='BOOLEAN'
+        from .project_boolean import boolean_term_trace,evaluate_boolean
+        primary_terms=saved_search['retrieval_terms']
         secondary_terms=json.loads(c.secondary_keywords_json or '[]')
         # Compile once: avoid 516 individual substring scans per evidence record.
         import re
@@ -1682,7 +1685,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             if visible<=1000:
                 for word in set((primary_pattern.findall(lowered) if primary_pattern else [])+(secondary_pattern.findall(lowered) if secondary_pattern else [])):
                     cloud_terms[word]+=1
-            if primary_pattern and primary_pattern.search(lowered):primary_message_count+=1
+            if is_boolean:
+                if evaluate_boolean(saved_search['ast'],item.text_content):primary_message_count+=1
+            elif primary_pattern and primary_pattern.search(lowered):primary_message_count+=1
             if secondary_pattern and secondary_pattern.search(lowered):secondary_message_count+=1
             else:secondary_absent_count+=1
             if source_day: daily[source_day]+=1
@@ -1753,7 +1758,9 @@ def campaign_action(db:Session,p,action,data,id=None):
             states[item.review_state or 'UNKNOWN']+=1
             try: matched=json.loads(matched_fields or '{}')
             except (ValueError,TypeError): matched={}
-            if isinstance(matched,dict):
+            if is_boolean:
+                for term in {entry['term'] for entry in boolean_term_trace(saved_search['ast'],item.text_content) if entry['present'] and not entry['negated']}:main[term]+=1
+            elif isinstance(matched,dict):
                 for word in set(matched.get('main_keywords') or []): main[str(word)]+=1
                 for word in set(matched.get('secondary_keywords') or []): secondary[str(word)]+=1
         runs=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
@@ -1793,6 +1800,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'secondary_word_counts':{word:cloud_terms.get(word,0) for word in secondary_terms if cloud_terms.get(word,0)>0},
                 'date_from':from_day,'date_to':to_day,
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
+                'search_mode':saved_search['search_mode'],'search_match_basis':'CURRENT_BOOLEAN_EXPRESSION' if is_boolean else 'STANDARD_MAIN_KEYWORDS',
+                'historical_evidence_preserved':True,
                 'limited_to':None,'truncated':False,
                 'paid_provider_called':False}
         _dashboard_cache_put(cache_key,result)

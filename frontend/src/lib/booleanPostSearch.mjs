@@ -17,7 +17,7 @@ function tokenize(input) {
  for(let i=0;i<input.length;) {
   if(/\s/u.test(input[i])){i++;continue;}
   const char=input[i];
-  if(char==='('||char===')'){tokens.push({type:char,value:char});i++;continue;}
+  if(char==='('||char===')'){tokens.push({type:char,value:char});i++;if(tokens.length>MAX_TOKENS)throw new BooleanSearchSyntaxError('Use 64 words/operators or fewer.');continue;}
   if(char==='"') {
    i++;let term='';let closed=false;
    while(i<input.length) {

@@ -212,6 +212,14 @@ export default function CampaignPanel({campaignId=null}){
   finally{setSearchAuditBusy(false)}
  }
  const [recoveryBusy,setRecoveryBusy]=useState(false),[recoveryMessage,setRecoveryMessage]=useState('');
+ async function quarantineCollection(){
+  if(!selected||!latestPrismCollection||recoveryBusy)return;
+  if(!window.confirm('The original provider request or charge is unknown. Quarantine this stale run without submitting another crawl?'))return;
+  setRecoveryBusy(true);setRecoveryMessage('');
+  try{await base44.functions.invoke('socialListening',{action:'campaignDiscoverQuarantine',id:selected.id,data:{run_id:latestPrismCollection.run_id,confirm_uncertain:true}});
+   const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverLastRunDiagnostics',id:selected.id,data:{}});setLatestPrismCollection(r.data.last_run);setRecoveryMessage('Stale run quarantined. No new crawl started.');
+  }catch(e){setRecoveryMessage(e.response?.data?.detail||e.message||'Quarantine failed')}finally{setRecoveryBusy(false)}
+ }
  async function recoverCollection(start){
   if(!selected||!latestPrismCollection||recoveryBusy)return;
   setRecoveryBusy(true);setRecoveryMessage('');
@@ -722,6 +730,10 @@ export default function CampaignPanel({campaignId=null}){
     {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by search rules: {latestPrismCollection.excluded_by_search??latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
     {latestPrismCollection.new_evidence_links!=null&&<p className="text-xs">New project links: {latestPrismCollection.new_evidence_links} · Previously linked matches: {latestPrismCollection.already_linked_matches??0}</p>}
     {latestPrismCollection.matched_over_target>0&&<p className="text-xs">Additional matches beyond this run’s accepted-post target: {latestPrismCollection.matched_over_target}.</p>}
+    {latestPrismCollection.worker_stale&&!latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={quarantineCollection}>Quarantine stale collection</button>}
+    {latestPrismCollection.submission_uncertain&&<p className="text-xs text-amber-900">Original provider submission or charge is uncertain. Review before starting another collection.</p>}
+    {latestPrismCollection.shared_provider_run&&<p className="text-xs">Provider run reused. Credits shown are attributed to this local run; the upstream total may include earlier usage.</p>}
+    {latestPrismCollection.scope_incompatible_reused_rows>0&&<p className="text-xs text-amber-900">{latestPrismCollection.scope_incompatible_reused_rows} existing source candidates skipped because their original collection scope differs.</p>}
     {latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(true)}>Recover existing collection</button>}
     <button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(false)}>Refresh collection status</button>
     {latestPrismCollection.error&&<p className="text-xs text-red-800">{latestPrismCollection.error}</p>}
@@ -758,7 +770,7 @@ export default function CampaignPanel({campaignId=null}){
     {humanVerifiedError&&<p role="alert" className="mt-2 text-red-700">{humanVerifiedError}</p>}
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected project sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
-    {campaignSection==='posts'&&<CapturedPostList campaignId={selected.id} showModeTabs={false} refreshKey={authorRefreshKey}
+    {campaignSection==='posts'&&<CapturedPostList key={selected.id} campaignId={selected.id} initialSearchMode={selected.search_mode==='BOOLEAN'?'boolean':'standard'} showModeTabs={false} refreshKey={authorRefreshKey}
       onSentimentCorrected={()=>refreshSentimentViews().catch(e=>
        setDashboardError(e.response?.data?.detail||e.message||'Sentiment was saved but dashboard refresh failed'))}/>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected project" scrolling="no" onLoad={event=>{

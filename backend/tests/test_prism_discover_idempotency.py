@@ -223,7 +223,8 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
         'Gibran AND (ijazah OR pendidikan) NOT hoaks')
     db.commit()
     params,_=prism_discover.body_for(db,campaign)
-    assert params['groups'][0]['keywords']==['gibran ijazah','gibran pendidikan']
+    # The positive anchor broadens retrieval; only complete Boolean matches enter evidence.
+    assert params['groups'][0]['keywords']==['gibran','gibran ijazah','gibran pendidikan']
     assert 'contains' not in params
     assert 'exclude_terms' not in params['groups'][0]
     assert params['max_credits']==100

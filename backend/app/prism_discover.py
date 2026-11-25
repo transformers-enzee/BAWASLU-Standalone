@@ -2,11 +2,12 @@
 import os,json,hashlib,re
 from collections import Counter
 from datetime import datetime,timezone,timedelta,date
-from urllib.parse import urlsplit,urljoin
+from urllib.parse import urlsplit,urljoin,urlencode
 import httpx
 from sqlalchemy import or_
 from .db import SessionLocal
 from .project_boolean import decode_project_query, discover_boolean_plan
+from types import SimpleNamespace
 from .access import has,allowed
 from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListeningRun,SocialListeningResult,EvidenceAssessment,WatchlistItem
 
@@ -26,6 +27,31 @@ def campaign(db,p,cid,write=False):
     if write and c.status!='DRAFT':raise ValueError('Only draft campaigns can run Discover')
     return c
 
+def search_snapshot(c):
+    """Immutable matching configuration, stored with each new collection."""
+    return {key:getattr(c,key,'') or default for key,default in (
+        ('primary_keywords_json','[]'),('secondary_keywords_json','[]'),
+        ('excluded_keywords_json','[]'),('platforms_json','[]'),
+        ('language',''),('date_from',''),('date_to',''),
+        ('province',''),('regency_city',''),('description',''))}
+
+
+def snapshot_signature(snapshot):
+    return hashlib.sha256(json.dumps(snapshot,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+
+
+def locked_campaign(db,cid):
+    return db.query(MonitoringCampaign).filter_by(id=cid).populate_existing().with_for_update().first()
+
+
+def ensure_no_active_collection(db,cid):
+    active=(db.query(SocialListeningRun.id).join(CampaignRun,
+        CampaignRun.social_listening_run_id==SocialListeningRun.id)
+        .filter(CampaignRun.campaign_id==cid,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
+                SocialListeningRun.status.in_(['QUEUED','RUNNING'])).first())
+    if active:raise ValueError('Discover run already active; review its status before changing this project')
+
+
 def body_for(db,c,max_credits=None,platform_mode=None):
     search=decode_project_query(c.primary_keywords_json)
     boolean_mode=search['search_mode']=='BOOLEAN'
@@ -34,45 +60,47 @@ def body_for(db,c,max_credits=None,platform_mode=None):
     if type(cap) is not int or cap not in (10,20,35,50,100):
         raise ValueError('Select a supported SocialCrawl credit cap: 10, 20, 35, 50 or 100')
     plan=discover_boolean_plan(search['boolean_query']) if boolean_mode else None
-    words=plan['keywords'] if plan else list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))[:5]
+    words=plan['keywords'] if plan else list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))
     if not words:raise ValueError('Configure positive search terms first')
-    platforms=list(dict.fromkeys(MAPPING[p] for p in json.loads(c.platforms_json or '[]') if p in MAPPING))
-    if not platforms:platforms=['twitter','instagram','tiktok','youtube','threads','facebook']
+    if len(words)>30:raise ValueError('This project has more than 30 retrieval terms; split it into smaller monitoring projects. No search terms were silently omitted.')
+    configured=json.loads(c.platforms_json or '[]')
+    unsupported=[p for p in configured if p not in MAPPING]
+    if unsupported:raise ValueError('Prism does not support configured sources: '+', '.join(unsupported))
+    platforms=list(dict.fromkeys(MAPPING[p] for p in configured))
+    if not platforms:raise ValueError('Configure at least one supported platform')
     mode=platform_mode or 'ALL'
     if mode!='ALL':
         raise ValueError('Collection uses all configured sources')
     context=str(c.description or ('Indonesian election oversight, BAWASLU public concerns, electoral operations and political candidates for '+c.name)).strip()[:1000]
     if boolean_mode and not c.description:
         context=('Indonesian public discussion matching the topic of '+search['boolean_query'])[:1000]
+    # POST supports long keyword lists in a background run. Keep all terms
+    # in one group so the provider's result and credit cap applies once.
     group={'id':'campaign-'+str(c.id),'keywords':words,'context':context}
     params={'groups':[group],
-            'platforms':platforms,'country':['ID'],'period':'7d','label':['stance'],
-            'limit':CAP,'retention_days':7,'max_credits':cap}
-    if boolean_mode:
-        # Keep provider relevance metadata without provider-side rejection.
-        params['relevance']='score'
-        start=str(getattr(c,'date_from','') or '')
-        end=str(getattr(c,'date_to','') or '')
-        if start or end:
-            today=datetime.now(timezone.utc).date()
-            until=date.fromisoformat(end) if end else today
-            since=date.fromisoformat(start) if start else until-timedelta(days=29)
-            if since>until:raise ValueError('Monitoring start date must not follow end date')
-            params.pop('period')
-            params.update(since=since.isoformat(),until=until.isoformat())
-        else:
-            params['period']='30d'
-    signature=hashlib.sha256(json.dumps(params,sort_keys=True).encode()).hexdigest()
+            'platforms':platforms,'country':['ID'],'period':'30d','label':['stance'],
+            'limit':CAP,'retention_days':7,'max_credits':cap,'relevance':'score'}
+    if getattr(c,'language',''):params['languages']=[c.language]
+    start=str(getattr(c,'date_from','') or '')
+    end=str(getattr(c,'date_to','') or '')
+    if start or end:
+        today=datetime.now(timezone.utc).date()
+        until=date.fromisoformat(end) if end else today
+        since=date.fromisoformat(start) if start else until-timedelta(days=29)
+        if since>until:raise ValueError('Monitoring start date must not follow end date')
+        params.pop('period')
+        params.update(since=since.isoformat(),until=until.isoformat())
+    signature=snapshot_signature({'body':params,'configuration':search_snapshot(c)})
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
-                SocialListeningRun.status.in_(['COMPLETED','PARTIAL']))
+                SocialListeningRun.status=='COMPLETED')
         .order_by(SocialListeningRun.id.desc()).limit(5).all())
     for run in prior:
         try:meta=json.loads(run.query_json or '{}')
         except ValueError:continue
-        if meta.get('signature')==signature and meta.get('watermark'):
+        if meta.get('plan_signature')==signature and meta.get('watermark'):
             params['since_watermark']=meta['watermark'];break
-    return params,signature
+    return params,snapshot_signature({'plan_signature':signature,'watermark':params.get('since_watermark')})
 
 def latest_collection_outcome(db,c,params=None):
     """Read-only aggregate of latest Prism run; never spends provider credits."""
@@ -104,6 +132,10 @@ def latest_collection_outcome(db,c,params=None):
         'provider_returned_rows':diag.get('raw_provider_items'),
         'newly_saved_source_rows':newly_saved,
         'excluded_by_boolean':diag.get('excluded_by_boolean'),
+        'excluded_by_search':diag.get('excluded_by_search',diag.get('excluded_by_boolean')),
+        'new_evidence_links':diag.get('new_evidence_links'),
+        'already_linked_matches':diag.get('already_linked_matches'),
+        'candidate_limit_reached':diag.get('candidate_limit_reached'),
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
         'provider_diagnostics':meta.get('provider_diagnostics'),
@@ -170,9 +202,15 @@ def action(db,p,verb,data,cid):
         return activation_status(db,p,c.id,run.id)
     if verb=='campaignDiscoverLastRunDiagnostics':
         return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
+    if verb=='campaignDiscoverStart':
+        # Serialize start with other starts and campaign edits in PostgreSQL.
+        c=locked_campaign(db,c.id)
+        if not c or not allowed(p,c) or c.status!='DRAFT':
+            raise ValueError('Campaign unavailable for collection')
+        ensure_no_active_collection(db,c.id)
     search=decode_project_query(c.primary_keywords_json)
     params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'))
-    last=latest_collection_outcome(db,c,params) if search['search_mode']=='BOOLEAN' else None
+    last=latest_collection_outcome(db,c,params)
     plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
@@ -185,6 +223,8 @@ def action(db,p,verb,data,cid):
             'keywords_total':len(search['retrieval_terms']),
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
+            'local_screening':True,'collection_mode':'ONE_TIME',
+            'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',
             'incremental':bool(params.get('since_watermark')),
@@ -192,12 +232,12 @@ def action(db,p,verb,data,cid):
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
-    active=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
-        .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
-                SocialListeningRun.status.in_(['QUEUED','RUNNING'])).first())
-    if active:raise ValueError('Discover run already active')
+    snapshot=search_snapshot(c)
+    plan_body={k:v for k,v in params.items() if k!='since_watermark'}
+    plan_signature=snapshot_signature({'body':plan_body,'configuration':snapshot})
     run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',executed_by=str(p.get('id') or ''),
-            query_json=json.dumps({'body':params,'signature':sig,'campaign_id':c.id,
+            query_json=json.dumps({'body':params,'signature':sig,'plan_signature':plan_signature,
+                                  'search_snapshot':snapshot,'query_revision':snapshot_signature(snapshot),'campaign_id':c.id,
                                   'province':c.province,'regency_city':c.regency_city}),
             status='QUEUED')
     db.add(run);db.flush()
@@ -339,10 +379,14 @@ def store(db,run,c,items,full_assessment=False):
     accepted_ids=[]
     new_evidence_links=0
     from .campaign_scheduler import keyword_screen
-    boolean_mode=decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
+    meta=json.loads(run.query_json or '{}')
+    snapshot=meta.get('search_snapshot') or search_snapshot(c)
+    matching_config=SimpleNamespace(**snapshot)
+    revision=snapshot_signature(snapshot)
+    boolean_mode=decode_project_query(matching_config.primary_keywords_json)['search_mode']=='BOOLEAN'
     for row,raw in pairs:
-        match=keyword_screen(c,{'text_content':row.text_content}) if boolean_mode else None
-        if boolean_mode and not match['matched']:
+        match=keyword_screen(matching_config,{'text_content':row.text_content})
+        if not match['matched']:
             # Provider retrieval is broad; only Boolean-confirmed posts
             # enter the project, its Inbox and billable assessment path.
             continue
@@ -350,7 +394,8 @@ def store(db,run,c,items,full_assessment=False):
         if row.id not in links:
             db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
-                    match if boolean_mode else {'matched_keywords':raw.get('matched_keywords') or []})))
+                    {**match,'query_revision':revision,'collection_run_id':run.id,
+                     'provider_matched_keywords':raw.get('matched_keywords') or []})))
             links.add(row.id)
             new_evidence_links+=1
         # Preserve existing human/AI assessment versions and never create a
@@ -371,6 +416,8 @@ def store(db,run,c,items,full_assessment=False):
         db.add(assessment);new.append((row,assessment))
         assessed.add(row.id)
     meta=json.loads(run.query_json or '{}')
+    meta['search_snapshot']=snapshot
+    meta['query_revision']=revision
     meta['assessment_result_ids']=accepted_ids
     from collections import Counter as _Counter
     meta['collection_diagnostics']={
@@ -379,6 +426,10 @@ def store(db,run,c,items,full_assessment=False):
         'unique_candidates':len(pairs),
         'accepted_boolean_matches':len(accepted_ids),
         'excluded_by_boolean':len(pairs)-len(accepted_ids) if boolean_mode else 0,
+        'excluded_by_search':len(pairs)-len(accepted_ids),
+        'already_linked_matches':len(accepted_ids)-new_evidence_links,
+        'search_mode':'BOOLEAN' if boolean_mode else 'KEYWORDS',
+        'candidate_limit_reached':len(items)>=CAP,
         'new_evidence_links':new_evidence_links,
         'candidate_platforms':dict(_Counter(row.platform for row,_ in pairs)),
         'counts_basis':'scanned_provider_candidates',
@@ -413,15 +464,19 @@ def provider_diagnostics(data):
 def execute(run_id):
     db=SessionLocal()
     try:
+        # Atomic claim: a duplicate worker cannot submit the same paid request.
+        claimed=db.query(SocialListeningRun).filter_by(id=int(run_id),status='QUEUED',provider='SOCIALCRAWL_PRISM').update({'status':'RUNNING'},synchronize_session=False)
+        db.commit()
+        if claimed!=1:return
         run=db.get(SocialListeningRun,int(run_id))
-        if not run or run.status!='QUEUED':return
         meta=json.loads(run.query_json or '{}')
         c=db.get(MonitoringCampaign,int(meta['campaign_id']))
         if not c:raise ValueError('Campaign no longer available')
-        run.status='RUNNING';db.commit()
+        if c.status!='DRAFT':raise ValueError('Campaign no longer available for collection')
         data,env=call('POST',BASE+'/prism/discover',meta['body'],60)
         status=data.get('run') or {}
         run.provider_request_id=str(status.get('run_id') or env.get('request_id') or '')[:255]
+        run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
         db.commit()
         nxt=data.get('next') or {}
         for _ in range(45):
@@ -429,11 +484,16 @@ def execute(run_id):
             if not nxt.get('status_url'):raise ValueError('Missing provider status URL')
             data,_=call('GET',nxt['status_url'],timeout=45)
             status=data.get('run') or {}
+            run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
+            db.commit()
             nxt=data.get('next') or nxt
         if status.get('status') in ('queued','running'):raise ValueError('Provider run not yet settled')
         if status.get('status') not in ('completed','partial','paused'):
             raise ValueError('Provider status: '+str(status.get('status')))
         upstream=provider_diagnostics(data)
+        if upstream is not None:meta['provider_diagnostics']=upstream
+        run.query_json=json.dumps(meta,ensure_ascii=False)
+        db.commit()
         items=list(data.get('items') or [])
         # Status responses can include the first page; the export starts again.
         export_items=[]
@@ -441,7 +501,7 @@ def execute(run_id):
             url=str(nxt['results_url']).rstrip('/')+'/results.jsonl'
             cursor=None
             for _ in range(5):
-                q=url+('?cursor='+cursor if cursor else '')
+                q=url+('?'+urlencode({'cursor':cursor}) if cursor else '')
                 key=os.getenv('SOCIALCRAWL_API_KEY','').strip()
                 with httpx.Client(timeout=55,follow_redirects=False) as client:
                     resp=client.get(safe_url(q),headers={'x-api-key':key})
@@ -456,13 +516,14 @@ def execute(run_id):
                 if not cursor or len(export_items)>=100:break
             if export_items:items=export_items
         run.result_count=store(db,run,c,items,full_assessment=True)
-        run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
+        run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
         run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
         meta=json.loads(run.query_json or '{}')
-        meta['watermark']=nxt.get('watermark')
+        # Never advance incremental coverage after a partial or capped run.
+        meta['watermark']=nxt.get('watermark') if run.status=='COMPLETED' and len(items)<CAP else None
         if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
-        c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
+        if run.status=='COMPLETED':c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         # The full read-only classification worker tracks every captured result
         # as a durable assessment job, not only the initial PRISM relevance pass.
@@ -478,5 +539,7 @@ def execute(run_id):
         db.rollback()
         run=db.get(SocialListeningRun,int(run_id))
         if run:
-            run.status='FAILED';run.error_text=str(exc)[:500];db.commit()
+            # Preserve a successfully collected run if the independent AI stage failed.
+            if run.status not in ('COMPLETED','PARTIAL'):run.status='FAILED'
+            run.error_text=str(exc)[:500];db.commit()
     finally:db.close()

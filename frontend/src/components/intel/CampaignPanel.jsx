@@ -530,15 +530,14 @@ export default function CampaignPanel({campaignId=null}){
    primary_keywords:[...(c.primary_keywords||[])],
    secondary_keywords:[...(c.secondary_keywords||[])],
    excluded_keywords:[...(c.excluded_keywords||[])],
-   platforms:[...campaignPlatforms],language:'',date_from:c.date_from||'',date_to:'',
-   interval_minutes:120});
+   platforms:[...(c.platforms||campaignPlatforms)],language:c.language||'',date_from:c.date_from||'',date_to:c.date_to||'',
+   interval_minutes:c.interval_minutes||120});
   setEditing(c);setCreating(true);setSelected(null);setError('');setNotice('');
  }
  async function save(e){
   e.preventDefault();
   setSaving(true);setError('');setNotice('');
-  // Platform, language and open-ended date coverage are system defaults.
-  // Save only these hidden defaults, never overwrite existing jurisdiction.
+  // Preserve existing hidden settings; only send explicitly changed fields.
   const fields=['name','description','search_mode','boolean_query','primary_keywords','secondary_keywords','excluded_keywords','platforms','language','date_from','date_to'];
   const data=editing
    ? Object.fromEntries(fields.filter(key=>JSON.stringify(form[key])!==JSON.stringify(editing[key]??(Array.isArray(form[key])?[]:''))).map(key=>[key,form[key]]))
@@ -688,6 +687,7 @@ export default function CampaignPanel({campaignId=null}){
      </details>
     ))}
    </div>
+   <p className="text-xs text-slate-600">Saved evidence includes historical collections and authorized imports; it may predate the current search configuration.</p>
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
    {latestPrismCollection&&<section className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm space-y-2" aria-label="Latest SocialCrawl collection outcome" data-testid="prism-latest-collection-outcome">
     <strong>Latest SocialCrawl collection · Run #{latestPrismCollection.run_id}</strong>
@@ -697,7 +697,9 @@ export default function CampaignPanel({campaignId=null}){
      <span><strong>{latestPrismCollection.credits_used}</strong> SocialCrawl credits charged</span>
     </div>
     {latestPrismCollection.provider_diagnostics&&<details className="text-xs"><summary>Collection diagnostics</summary><p>Provider collected {latestPrismCollection.provider_diagnostics.collected??'Unknown'}; retained {latestPrismCollection.provider_diagnostics.kept??'Unknown'} before delivery.</p></details>}
-    {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by Boolean query: {latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
+    {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by search rules: {latestPrismCollection.excluded_by_search??latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
+    {latestPrismCollection.new_evidence_links!=null&&<p className="text-xs">New project links: {latestPrismCollection.new_evidence_links} · Previously linked matches: {latestPrismCollection.already_linked_matches??0}</p>}
+    {latestPrismCollection.candidate_limit_reached&&<p className="text-xs text-amber-900">Candidate limit reached; this is not exhaustive coverage.</p>}
     {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}
    </section>}

@@ -253,3 +253,70 @@ def test_boolean_project_discover_links_only_true_matches(monkeypatch):
     assert diagnostics['excluded_by_boolean']==2
     assert diagnostics['new_evidence_links']==1
     db.close()
+
+
+def test_standard_matching_and_revision_without_paid_calls(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();c,run=seed(db)
+    c.primary_keywords_json='["Gibran","KPU"]'
+    c.secondary_keywords_json='["Pilkada"]'
+    c.excluded_keywords_json='["concert"]'
+    snapshot=prism_discover.search_snapshot(c)
+    run.query_json=json.dumps({'campaign_id':c.id,'search_snapshot':snapshot})
+    c.primary_keywords_json='["Prabowo"]'
+    db.commit()
+    yes=post('qa-yes','https://instagram.com/p/qa-yes')
+    no=post('qa-no','https://instagram.com/p/qa-no');no['text']='Gibran concert'
+    unrelated=post('qa-other','https://instagram.com/p/qa-other');unrelated['text']='Prabowo speaks'
+    assert prism_discover.store(db,run,c,[yes,no,unrelated],full_assessment=True)==1
+    link=db.query(CampaignEvidence).one()
+    fields=json.loads(link.matched_fields_json)
+    assert fields['search_mode']=='KEYWORDS'
+    assert fields['query_revision']==prism_discover.snapshot_signature(snapshot)
+    assert db.query(EvidenceAssessment).count()==1
+    diag=json.loads(run.query_json)['collection_diagnostics']
+    assert diag['excluded_by_search']==2 and diag['new_evidence_links']==1
+    assert prism_discover.store(db,run,c,[yes],full_assessment=True)==1
+    assert json.loads(run.query_json)['collection_diagnostics']['already_linked_matches']==1
+    db.close()
+
+
+def test_all_standard_keywords_dates_and_credit_ledger():
+    import pytest
+    from datetime import datetime
+    from app.campaign_scheduler import used_credits_24h
+    from app.models import SocialListeningProviderUsage
+    db=SessionLocal();c,run=seed(db)
+    words=['topic'+str(i) for i in range(30)]
+    c.primary_keywords_json=json.dumps(words)
+    c.date_from='2026-10-01';c.date_to='2026-11-20'
+    run.credits_used=16
+    db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',credits_used=3))
+    db.commit()
+    body,sig=prism_discover.body_for(db,c)
+    assert body['groups'][0]['keywords']==words
+    assert body['since']=='2026-10-01' and body['until']=='2026-11-20'
+    assert body['relevance']=='score'
+    c.excluded_keywords_json='["hoaks"]'
+    assert prism_discover.body_for(db,c)[1]!=sig
+    assert used_credits_24h(db,datetime.utcnow())==19
+    c.primary_keywords_json=json.dumps(words+['extra'])
+    with pytest.raises(ValueError,match='more than 30'):
+        prism_discover.body_for(db,c)
+    db.close()
+
+
+def test_worker_claim_prevents_duplicate_paid_submission(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();c,run=seed(db)
+    calls=[]
+    def fake(method,url,body=None,timeout=50):
+        calls.append(method)
+        return {'run':{'run_id':'mock','status':'completed','credits':{'spent':4}},'items':[]},{}
+    monkeypatch.setattr(prism_discover,'call',fake)
+    prism_discover.execute(run.id)
+    prism_discover.execute(run.id)
+    db.expire_all()
+    assert calls==['POST']
+    assert db.get(SocialListeningRun,run.id).credits_used==4
+    db.close()

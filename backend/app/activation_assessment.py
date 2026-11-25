@@ -104,7 +104,7 @@ def status(db, principal, campaign_id, run_id):
                 "progress_percent":0,"credits_used":int(run.credits_used or 0),
                 "collection_diagnostics":diag,
                 "status_reason":("Provider returned source rows, but none entered this monitoring project. "
-                                 "Boolean matching may have excluded all candidates; provider credits still apply."
+                                 "Local search matching may have excluded all candidates; provider credits still apply."
                                  if run.provider=="SOCIALCRAWL_PRISM" and
                                     int(diag.get('raw_provider_items') or diag.get('newly_saved_source_rows') or 0)>0
                                     and not int(run.result_count or 0) else ""),

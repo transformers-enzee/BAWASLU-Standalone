@@ -108,6 +108,7 @@ def test_preview_is_free_and_signature_guard_remains_without_extra_ack(monkeypat
     # Authorization is tested by the real campaign() elsewhere; isolate
     # the billing/preview gates here and never use real provider credentials.
     monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
     calls=[]
     def no_credit_provider(method,url,body=None,timeout=50):
         calls.append(body)
@@ -152,3 +153,17 @@ def test_run39_aggregate_diagnostics_without_provider_calls():
     assert d['returned']==521 and d['kept']==0
     assert d['by_filter']=={'filter:contains':429,'filter:country':7}
     assert d['by_platform']=={'instagram':77}
+
+
+def test_duplicate_start_is_blocked(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    monkeypatch.setattr(prism_discover,'call',lambda *a,**k: ({'estimate':{}},{}))
+    preview=prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
+    data={'signature':preview['signature'],'confirm_cost':True}
+    assert prism_discover.action(db,{},'campaignDiscoverStart',data,c.id)['started']
+    with pytest.raises(ValueError,match='already active'):
+        prism_discover.action(db,{},'campaignDiscoverStart',data,c.id)
+    assert db.query(SocialListeningRun).count()==1
+    db.close()

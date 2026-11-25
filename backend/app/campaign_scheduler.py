@@ -50,7 +50,10 @@ def used_credits_24h(db,now):
     val=db.query(func.sum(SocialListeningProviderUsage.credits_used)).filter(
         SocialListeningProviderUsage.created_at>=earliest
     ).scalar()
-    return max(0,int(val or 0))
+    # Prism records cumulative run credits separately from the legacy ledger.
+    prism=db.query(func.sum(SocialListeningRun.credits_used)).filter(
+        SocialListeningRun.provider=='SOCIALCRAWL_PRISM',SocialListeningRun.executed_at>=earliest).scalar()
+    return max(0,int(val or 0))+max(0,int(prism or 0))
 
 def campaign_schedule_preview(db,c,now=None):
     now=now or utc_now()

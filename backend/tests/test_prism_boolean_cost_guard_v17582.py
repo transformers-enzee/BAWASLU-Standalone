@@ -193,3 +193,36 @@ def test_monthly_and_storage_guard_blocks_before_provider_preview(monkeypatch):
     with pytest.raises(ValueError,match='Active source storage allowance'):
         prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
     db.close()
+
+
+def test_exact_recent_collection_reuse_is_explicit_and_free(monkeypatch):
+    from app.models import CampaignEvidence,EvidenceAssessment
+    db=SessionLocal();source=new_campaign(db);target=new_campaign(db)
+    body,_=prism_discover.body_for(db,source)
+    config=prism_discover.search_snapshot(source)
+    run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='COMPLETED',provider_request_id='run_original',credits_used=8,result_count=1)
+    db.add(run);db.flush()
+    db.add(CampaignRun(campaign_id=source.id,social_listening_run_id=run.id))
+    row=SocialListeningResult(run_id=run.id,platform='instagram',text_content='BAWASLU Bandung',provider_result_id='reuse-1')
+    db.add(row);db.flush()
+    db.add(CampaignEvidence(campaign_id=source.id,result_id=row.id,match_method='PRISM_DISCOVER'))
+    db.add(EvidenceAssessment(campaign_id=source.id,result_id=row.id,assessment_version=1,relevance_label='RELEVANT'))
+    run.query_json=json.dumps({'body':body,'search_snapshot':config,'query_revision':prism_discover.snapshot_signature(config),
+        'assessment_result_ids':[row.id],'collection_diagnostics':{'unique_candidates':1}})
+    db.commit()
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:target)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    calls=[]
+    def free(method,url,body=None,timeout=50):
+        calls.append(method);assert body['dry_run'] is True
+        return {'estimate':{}},{}
+    monkeypatch.setattr(prism_discover,'call',free)
+    principal={'geographic_scope':'Nationwide'}
+    preview=prism_discover.action(db,principal,'campaignDiscoverPreview',{},target.id)
+    assert preview['reuse_offer']['source_run_id']==run.id
+    result=prism_discover.action(db,principal,'campaignDiscoverReuse',{'signature':preview['signature'],'source_run_id':run.id},target.id)
+    assert result['new_links']==1 and result['credits_used']==0
+    assert not result['paid_provider_called'] and not result['paid_ai_executed'] and calls==['POST']
+    assert db.query(EvidenceAssessment).filter_by(campaign_id=target.id).count()==0
+    assert db.query(CampaignEvidence).filter_by(campaign_id=target.id).count()==1
+    db.close()

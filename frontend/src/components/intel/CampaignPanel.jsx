@@ -79,7 +79,7 @@ export default function CampaignPanel({campaignId=null}){
  const [allCampaign,setAllCampaign]=useState(null);
  async function launchAssessAll(importOnly=false){
   if(!selected||allBusy)return;
-  const scopeLabel=importOnly?'the 434 imported ZocialEye posts':'all remaining unassessed posts';
+  const scopeLabel=importOnly?'the 434 imported ZocialEye posts':'the next eligible batch of remaining unassessed posts (up to 500 queued, subject to the AI per-run cap)';
   if(!window.confirm('Assess '+scopeLabel+' for '+selected.name+'? Only unassessed eligible posts are billed; each GPT request may incur charges. Processing respects daily and lifetime request limits. Failed/ambiguous calls are not automatically retried. SocialCrawl credits: 0.'))return;
   setAllBusy(true);setAllError('');
   try{
@@ -161,6 +161,16 @@ export default function CampaignPanel({campaignId=null}){
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
+ }
+ async function reuseDiscover(){
+   if(!discoverCampaign||!discoverPreview?.reuse_offer||discoverBusy)return;
+   setDiscoverBusy(true);setDiscoverError('');
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverReuse',id:discoverCampaign.id,
+      data:{signature:discoverPreview.signature,source_run_id:discoverPreview.reuse_offer.source_run_id}});
+      setNotice('Reused '+r.data.posts+' saved posts ('+r.data.new_links+' new links). No new crawl or AI charges. Use Assess All to process pending evidence.');
+      setDiscoverCampaign(null);setDiscoverPreview(null);setDiscoverRun(null);refresh();
+   }catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Saved collection reuse unavailable')}
+   finally{setDiscoverBusy(false)}
  }
  async function launchDiscover(){
    if(!discoverCampaign||!discoverPreview||discoverBusy||discoverPreviewBusy)return;
@@ -685,7 +695,7 @@ export default function CampaignPanel({campaignId=null}){
      </article>)}{discoverCampaign&&<AssessmentProgressDialog
   title={'Activate · '+discoverCampaign.name}
   preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy} previewLoading={discoverPreviewBusy}
-  onConfirm={launchDiscover} onRefresh={()=>refreshDiscover()}
+  onConfirm={discoverPreview?.paid_collection_blocked?null:launchDiscover} onReuse={reuseDiscover} onRefresh={()=>refreshDiscover()}
   onResume={()=>resumeAssessment(discoverRun,discoverCampaign)}
   onClose={()=>{
     if(['COMPLETED','NO_NEW_POSTS','FAILED'].includes(discoverRun?.stage)){

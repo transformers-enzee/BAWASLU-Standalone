@@ -41,11 +41,12 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
     latest_id=(db.query(EvidenceAssessment.id)
         .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
                 EvidenceAssessment.result_id==CampaignEvidence.result_id)
-        .order_by(EvidenceAssessment.assessment_version.desc(),
-                  EvidenceAssessment.id.desc()).limit(1)
+        .order_by(case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
+                  EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).limit(1)
         .correlate(CampaignEvidence).scalar_subquery())
     unassessed=or_(EvidenceAssessment.id.is_(None),
-       func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).in_(['','UNASSESSED']))
+       func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),
+       func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).notin_(['RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN']))
     assessed=~unassessed
     def amount(condition):
         return func.coalesce(func.sum(case((condition,1),else_=0)),0)
@@ -136,8 +137,8 @@ def campaign_manual_batch_preview(db,campaign_id,requested_limit,env=None):
     latest_id=(db.query(EvidenceAssessment.id)
         .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
                 EvidenceAssessment.result_id==CampaignEvidence.result_id)
-        .order_by(EvidenceAssessment.assessment_version.desc(),
-                  EvidenceAssessment.id.desc()).limit(1)
+        .order_by(case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
+                  EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).limit(1)
         .correlate(CampaignEvidence).scalar_subquery())
     label=func.upper(func.coalesce(EvidenceAssessment.relevance_label,''))
     eligible=(db.query(func.count(AIAssessmentJob.id))
@@ -152,7 +153,8 @@ def campaign_manual_batch_preview(db,campaign_id,requested_limit,env=None):
                 AIAssessmentJob.attempts<3,
                 func.length(func.trim(func.coalesce(SocialListeningResult.text_content,'')))>0,
                 or_(EvidenceAssessment.id.is_(None),
-                    label.in_(['','UNASSESSED']))).scalar()) or 0
+                    func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),
+                    label.notin_(['RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN']))).scalar()) or 0
     postgres=db.bind.dialect.name=='postgresql'
     configured=bool(str(settings.get('OPENAI_API_KEY','')).strip())
     cap=min(int(eligible),requested_limit,run_limit,

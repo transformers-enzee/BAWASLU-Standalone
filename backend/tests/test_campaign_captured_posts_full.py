@@ -330,3 +330,16 @@ def test_boolean_dashboard_counts_full_expression_not_only_retrieval_anchor():
     assert result['main_keywords']['bandung']==2 and 'hoaks' not in result['main_keywords']
     assert result['historical_evidence_preserved']
     db.close()
+
+
+def test_assess_all_selects_older_unassessed_beyond_newest_500():
+    from app.activation_assessment import _scope_ids
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'oldBacklog');cid=campaign(db,p,'Older backlog')
+    add(db,cid,510)
+    ids=[row[0] for row in db.query(CampaignEvidence.result_id).filter_by(campaign_id=int(cid)).order_by(CampaignEvidence.id).all()]
+    for rid in ids[10:]:
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=rid,assessment_version=1,model_version='gpt-4o-mini',relevance_label='IRRELEVANT'))
+    db.commit()
+    assert _scope_ids(db,p,int(cid))==ids[:10]
+    db.close()

@@ -132,6 +132,83 @@ def can_recover(run,meta,c):
         and meta.get('query_revision')==snapshot_signature(search_snapshot(c)))
 
 
+def recent_reuse_offer(db,p,c,params,source_run_id=None):
+    """Reuse an exact, authorized, complete saved collection within a two-hour window.
+
+    No provider lookup or paid request is needed. Incomplete, capped, mismatched
+    and legacy runs without a trustworthy saved revision are deliberately excluded.
+    """
+    cutoff=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(hours=2)
+    q=(db.query(SocialListeningRun,MonitoringCampaign)
+       .join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
+       .join(MonitoringCampaign,MonitoringCampaign.id==CampaignRun.campaign_id)
+       .filter(SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
+               SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff,
+               MonitoringCampaign.id!=c.id))
+    if source_run_id is not None:q=q.filter(SocialListeningRun.id==source_run_id)
+    for run,source in q.order_by(SocialListeningRun.id.desc()).limit(200).all():
+        if not allowed(p,source):continue
+        meta=collection_budget.meta_for(run)
+        if meta.get('local_reuse') or meta.get('body')!=params:continue
+        if meta.get('query_revision')!=snapshot_signature(search_snapshot(c)):continue
+        diag=meta.get('collection_diagnostics') or {}
+        if not diag or diag.get('candidate_limit_reached') or diag.get('matched_over_target') or meta.get('export_incomplete'):continue
+        ids=meta.get('assessment_result_ids')
+        if not isinstance(ids,list) or not ids or len(ids)>CAP or len(set(ids))!=len(ids):continue
+        if any(type(rid) is not int or rid<1 for rid in ids):continue
+        if run.result_count!=len(ids):continue
+        from .socialcrawl import _result_in_scope
+        rows=(db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+              .filter(CampaignEvidence.campaign_id==source.id,CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',
+                      SocialListeningResult.id.in_(ids)).all())
+        if len(rows)!=len(ids) or any(not _result_in_scope(db,p,row) for row in rows):continue
+        # Re-evaluate exact saved text; never promote an old imported override.
+        from .campaign_scheduler import keyword_screen
+        if any(not keyword_screen(c,{'text_content':row.text_content})['matched'] for row in rows):continue
+        return {'source_run_id':run.id,'posts':len(rows),'collected_at':run.executed_at.isoformat()},run,rows
+    return None,None,[]
+
+
+def reuse_collection(db,p,c,params,payload):
+    rid=payload.get('source_run_id')
+    if not str(rid or '').isdigit():raise ValueError('Select a recent saved collection')
+    offer,source,rows=recent_reuse_offer(db,p,c,params,int(rid))
+    if not offer:raise ValueError('Saved collection is no longer eligible; refresh the preview')
+    snapshot=search_snapshot(c);revision=snapshot_signature(snapshot)
+    existing={r[0] for r in db.query(CampaignEvidence.result_id).filter(
+        CampaignEvidence.campaign_id==c.id,CampaignEvidence.result_id.in_([row.id for row in rows])).all()}
+    from .campaign_scheduler import keyword_screen
+    from .project_boolean import boolean_term_trace
+    search=decode_project_query(c.primary_keywords_json)
+    run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='COMPLETED',cached=True,
+        credits_used=0,result_count=len(rows),executed_by=str(p.get('id') or ''),
+        provider_request_id=source.provider_request_id or '',
+        query_json=json.dumps({'campaign_id':c.id,'body':params,'search_snapshot':snapshot,
+            'query_revision':revision,'province':c.province,'regency_city':c.regency_city,
+            'local_reuse':True,'reused_from_run_id':source.id,'assessment_worker_complete':True,
+            'assessment_result_ids':[row.id for row in rows],'collection_diagnostics':{
+                'raw_provider_items':0,'unique_candidates':len(rows),'accepted_boolean_matches':len(rows),
+                'new_evidence_links':len(rows)-len(existing),'already_linked_matches':len(existing),
+                'excluded_by_search':0,'candidate_limit_reached':False,'counts_basis':'LOCAL_SAVED_COLLECTION_REUSE'}}))
+    db.add(run);db.flush()
+    db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_LOCAL_REUSE'))
+    for row in rows:
+        if row.id in existing:continue
+        match=keyword_screen(c,{'text_content':row.text_content})
+        if search['search_mode']=='BOOLEAN':match['boolean_terms']=boolean_term_trace(search['ast'],row.text_content)
+        db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,match_method='PRISM_DISCOVER',
+            matched_fields_json=json.dumps({**match,'query_revision':revision,'collection_run_id':run.id,
+                'reused_from_run_id':source.id,'provenance':'LOCAL_SAVED_COLLECTION_REUSE'})))
+    # No cross-project AI classification or human decision is copied.
+    db.commit()
+    from .inbox_read_cache import invalidate
+    invalidate()
+    from .smart_radar import invalidate_dashboard_cache
+    invalidate_dashboard_cache()
+    return {'reused':True,'run_id':run.id,'posts':len(rows),'new_links':len(rows)-len(existing),
+            'credits_used':0,'paid_provider_called':False,'paid_ai_executed':False}
+
+
 def latest_collection_outcome(db,c,params=None):
     """Read-only aggregate of latest Prism run; never spends provider credits."""
     run=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
@@ -162,6 +239,7 @@ def latest_collection_outcome(db,c,params=None):
         'submission_uncertain':bool(meta.get('submission_uncertain')) or (heartbeat_stale(run,meta) and not str(run.provider_request_id or '').startswith('run_')),
         'provider_spent_total':meta.get('provider_spent_total'),
         'shared_provider_run':bool(run.cached),
+        'local_reuse':bool(meta.get('local_reuse')),
         'monitoring_geography':{'province':getattr(c,'province','') or '', 'regency_city':getattr(c,'regency_city','') or '', 'incident_location_verified':False},
         'error':run.error_text or '',
         'credits_used':int(run.credits_used or 0),
@@ -283,7 +361,7 @@ def action(db,p,verb,data,cid):
         run.status='QUEUED';run.error_text=''
         db.commit()
         return {'started':True,'run_id':run.id,'status':'QUEUED','recovery_only':True,'paid_provider_called':False}
-    if verb=='campaignDiscoverStart':
+    if verb in ('campaignDiscoverStart','campaignDiscoverReuse'):
         # Serialize start with other starts and campaign edits in PostgreSQL.
         c=locked_campaign(db,c.id)
         if not c or not allowed(p,c) or c.status!='DRAFT':
@@ -293,9 +371,15 @@ def action(db,p,verb,data,cid):
     params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'))
     last=latest_collection_outcome(db,c,params)
     plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
+    if verb=='campaignDiscoverReuse':
+        if (data or {}).get('signature')!=sig:raise ValueError('Refresh the collection preview first')
+        return reuse_collection(db,p,c,params,data or {})
     if verb=='campaignDiscoverPreview':
-        budget=collection_budget.assert_capacity(db,params['limit'])
-        info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
+        offer,_,_=recent_reuse_offer(db,p,c,params)
+        budget=collection_budget.snapshot(db)
+        blocked=params['limit']>min(budget['monthly_remaining'],budget['storage_remaining'])
+        if blocked and not offer:collection_budget.assert_capacity(db,params['limit'])
+        info,meta=({}, {}) if blocked else call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
             'post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
             'provider_contains':params.get('contains',''),
@@ -305,7 +389,7 @@ def action(db,p,verb,data,cid):
             'keywords_total':len(search['retrieval_terms']),
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
-            'local_screening':True,'collection_mode':'ONE_TIME','collection_budget':budget,
+            'local_screening':True,'collection_mode':'ONE_TIME','collection_budget':budget,'reuse_offer':offer,'paid_collection_blocked':blocked,
             'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',

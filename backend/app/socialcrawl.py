@@ -553,20 +553,47 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         ensure_result_id_sequence_ready(db)
     if provider_client is None and estimate['estimated_credits']>0 and not confirmed_cost:
         raise ValueError(f"COST_CONFIRMATION_REQUIRED: estimated maximum {estimate['estimated_credits']} SocialCrawl credits")
-    run=SocialListeningRun(rule_id=rule_id,query_json=_json(f),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
+    from . import prism_collection_budget as collection_budget
+    requested=collection_budget.legacy_requested(f)
+    collection_budget.lock(db)
+    collection_budget.assert_capacity(db,requested)
+    receipt={'reserved_posts':requested,'observed_rows':0,'ledger_mapped':0,'submission_uncertain':False}
+    run=SocialListeningRun(rule_id=rule_id,query_json=_json({**f,'legacy_collection':receipt}),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
     wants_news='online_news' in selected
     social_sources=[x for x in selected if x!='online_news' and x!='search_everywhere']
     endpoint='/v1/search/multi + /v1/google_news/search' if social_sources and wants_news else '/v1/google_news/search' if wants_news else '/v1/search/multi'
     if everywhere: endpoint='/v1/search/everywhere'
+    ledger_id=None
+    def before_submission():
+        receipt['submission_uncertain']=True
+        run.query_json=_json({**f,'legacy_collection':receipt});db.commit()
+    def record_receipt(env):
+        # Persist known provider consumption before mapping or a second endpoint.
+        nonlocal ledger_id
+        receipt['observed_rows']+=len(_extract_items(env))
+        receipt['submission_uncertain']=False
+        run.query_json=_json({**f,'legacy_collection':receipt})
+        run.credits_used=int(run.credits_used or 0)+int(env.get('credits_used') or 0)
+        request=str(env.get('request_id') or '')
+        run.provider_request_id=','.join(x for x in [run.provider_request_id,request] if x)[:255]
+        if env.get('credits_remaining') is not None:run.credits_remaining=int(env['credits_remaining'])
+        ledger=db.get(SocialListeningProviderUsage,ledger_id) if ledger_id is not None else None
+        if ledger is None:
+            ledger=SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,user_id=p['id'],result_count=0)
+            db.add(ledger)
+        ledger.provider_request_id=run.provider_request_id;ledger.credits_used=run.credits_used
+        ledger.credits_remaining=run.credits_remaining
+        db.flush();ledger_id=ledger.id;db.commit()
     try:
         if provider_client:
-            envelope=provider_client(f)
+            before_submission();envelope=provider_client(f);record_receipt(envelope)
         else:
             if not SOCIALCRAWL_API_KEY: raise ValueError('SOCIALCRAWL_API_KEY is not configured in Render')
             headers={'x-api-key':SOCIALCRAWL_API_KEY,'Accept':'application/json'}
             envelopes=[]
             def call_provider(path,params):
+                before_submission()
                 with httpx.Client(timeout=75) as client:
                     res=client.get(SOCIALCRAWL_BASE_URL+path,params=params,headers=headers)
                     try: env=res.json()
@@ -579,6 +606,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
                         detail=env.get('error') or env.get('message') or 'SocialCrawl returned success=false'
                         if isinstance(detail,dict): detail=detail.get('message') or detail.get('type') or json.dumps(detail)
                         raise ValueError(f'SocialCrawl request failed: {detail}')
+                    record_receipt(env)
                     return env
             if everywhere:
                 envelopes.append(call_provider('/v1/search/everywhere',_provider_params(f)))
@@ -607,6 +635,8 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
               'data':{'items':[item for x in envelopes for item in _extract_items(x)]}
             }
         items=_extract_items(envelope)
+        collection_budget.lock(db)
+        collection_budget.assert_storage(db,len(items),exclude_run_id=run.id)
         mapped=[]
         sample=items[0] if items else {}
         sample_keys=sorted(list(sample.keys()))[:20] if isinstance(sample,dict) else []
@@ -656,7 +686,14 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         diagnostics['linked_candidates']=len(mapped)
         diagnostics['provider_page_only']=True
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
-        db.add(SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,provider_request_id=run.provider_request_id,credits_used=run.credits_used,credits_remaining=run.credits_remaining,cached=run.cached,result_count=len(mapped),user_id=p['id'])); db.commit()
+        receipt['ledger_mapped']=len(mapped)
+        run.query_json=_json({**f,'legacy_collection':receipt})
+        ledger=db.get(SocialListeningProviderUsage,ledger_id) if ledger_id is not None else None
+        if ledger is None:
+            ledger=SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,user_id=p['id']);db.add(ledger)
+        ledger.provider_request_id=run.provider_request_id;ledger.credits_used=run.credits_used
+        ledger.credits_remaining=run.credits_remaining;ledger.cached=run.cached;ledger.result_count=len(mapped)
+        db.commit()
         audit(db,p,'SocialListeningRun',run.id,'SOCIAL_LISTENING_SEARCH_EXECUTED',{'filters':{'new':f},'results':{'new':new_rows,'reused':reused_rows},'diagnostics':{'new':diagnostics}})
         return {'run':serialize_run(run),'results':mapped,'provider':capabilities(),'diagnostics':diagnostics}
     except Exception as e:
@@ -728,7 +765,7 @@ def serialize_result(x):
 def social_listening_action(db,p,action,data,id=None,provider_client=None):
     # Fail closed before routing any collection, inspection or mutation action.
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
-    if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverRecover','campaignDiscoverQuarantine','campaignDiscoverStatus','campaignDiscoverLastRunDiagnostics','campaignCandidateSuggestions'}:
+    if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverReuse','campaignDiscoverRecover','campaignDiscoverQuarantine','campaignDiscoverStatus','campaignDiscoverLastRunDiagnostics','campaignCandidateSuggestions'}:
         from .prism_discover import action as prism_action
         return prism_action(db,p,action,data,id)
     if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignSearchEvidenceAudit','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAssessmentInterruptedPreview','campaignAssessmentInterruptedQuarantine','campaignAssessmentCompletionAudit','campaignAssessmentOperationsOverview','campaignAssessmentSupersededPreview','campaignAssessmentSupersededApply','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:

@@ -27,3 +27,7 @@ assert.ok(dialog.includes('scheduled monitoring is currently disabled'));
 assert.ok(service.includes('CANDIDATE_CAP=300'));
 assert.ok(service.includes('campaignDiscoverRecover'));
 assert.ok(service.includes("if not recovery:execute_run(run.id)"));
+
+assert.ok(service.includes('campaignDiscoverReuse'));
+assert.ok(dialog.includes('Reuse saved collection'));
+assert.ok(project.includes('paid_collection_blocked?null:launchDiscover'));

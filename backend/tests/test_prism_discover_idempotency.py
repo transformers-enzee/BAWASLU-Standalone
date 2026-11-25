@@ -427,3 +427,29 @@ def test_unknown_failed_submission_is_flagged_without_retry(monkeypatch):
     assert calls==['POST'] and saved.status=='FAILED'
     assert json.loads(saved.query_json)['submission_uncertain']
     db.close()
+
+
+def test_legacy_collection_guard_reserves_and_counts_raw_results(monkeypatch):
+    import pytest
+    from app import socialcrawl
+    from app.prism_collection_budget import snapshot
+    db=SessionLocal()
+    principal={'id':'qa','status':'Active','role':'National Administrator','geographic_scope':'Nationwide','permissions':{'view_intelligence':True}}
+    calls=[]
+    def fake(filters):
+        calls.append(filters)
+        return {'success':True,'request_id':'legacy-mock','credits_used':1,'data':{'items':[
+            {'id':'a','platform':'tiktok','text':'pemilu','url':'https://example.com/a'},
+            {'id':'a','platform':'tiktok','text':'pemilu','url':'https://example.com/a'}]}}
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','1')
+    with pytest.raises(ValueError,match='Monthly collection allowance'):
+        socialcrawl.execute_search(db,principal,{'query':'pemilu','platforms':['tiktok'],'limit':2},provider_client=fake)
+    assert not calls
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','3000000')
+    monkeypatch.setenv('MEDIA_THUMBNAIL_CACHE_ENABLED','false')
+    result=socialcrawl.execute_search(db,principal,{'query':'pemilu','platforms':['tiktok'],'limit':2},provider_client=fake)
+    assert len(calls)==1
+    assert result['diagnostics']['provider_items']==2
+    assert snapshot(db)['monthly_counted']==2
+    assert snapshot(db)['monthly_reserved']==0
+    db.close()

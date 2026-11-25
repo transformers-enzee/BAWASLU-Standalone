@@ -47,6 +47,7 @@ def snapshot(db,now=None,exclude_run_id=None):
     for run in rows:
         if run.id==exclude_run_id:continue
         meta=meta_for(run)
+        if meta.get('local_reuse'):continue
         provider=meta.get('provider_diagnostics') or {}
         diag=meta.get('collection_diagnostics') or {}
         if not isinstance(provider,dict):provider={}
@@ -63,6 +64,23 @@ def snapshot(db,now=None,exclude_run_id=None):
             if not known:unknown+=1
             if active or uncertain:reserved+=max(0,reservation-actual)
         if active:storage_reserved+=reservation
+    # New legacy runs reserve capacity before dispatch and preserve provider
+    # receipt counts even when mapping/storage fails. Existing usage rows retain
+    # their historical delivered-result semantics.
+    legacy_runs=db.query(SocialListeningRun).filter(SocialListeningRun.provider=='SOCIALCRAWL',
+        (SocialListeningRun.executed_at>=month)|SocialListeningRun.status.in_(['QUEUED','RUNNING'])).yield_per(200)
+    for run in legacy_runs:
+        if run.id==exclude_run_id:continue
+        info=meta_for(run).get('legacy_collection')
+        if not isinstance(info,dict):continue
+        actual=nonnegative(info.get('observed_rows'));mapped=nonnegative(info.get('ledger_mapped'))
+        allowance=nonnegative(info.get('reserved_posts'))
+        active=run.status in ('QUEUED','RUNNING')
+        if run.executed_at and run.executed_at>=month:
+            # The legacy ledger already counts mapped rows.
+            legacy+=max(0,actual-mapped)
+            if active or info.get('submission_uncertain'):reserved+=max(0,allowance-actual)
+        if active:storage_reserved+=allowance
     stored=int(db.query(func.count(SocialListeningResult.id)).scalar() or 0)
     used=legacy+sum(grouped.values())
     return {'monthly_limit':monthly_cap,'monthly_counted':used,'monthly_reserved':reserved,
@@ -70,6 +88,11 @@ def snapshot(db,now=None,exclude_run_id=None):
             'runs_without_upstream_count':unknown,'count_basis':'REPORTED_PRISM_ROWS_PLUS_LEGACY_LEDGER_AND_RESERVATIONS',
             'monthly_remaining':max(0,monthly_cap-used-reserved),
             'storage_remaining':max(0,storage_cap-stored-storage_reserved)}
+
+def legacy_requested(filters):
+    platforms=filters.get('platforms') or []
+    return max(1,min(200,int(filters.get('limit',50))))*max(1,len(platforms))
+
 
 def assert_capacity(db,requested,exclude_run_id=None):
     value=snapshot(db,exclude_run_id=exclude_run_id)

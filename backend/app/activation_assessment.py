@@ -194,16 +194,42 @@ def status(db, principal, campaign_id, run_id):
 
 
 def _scope_ids(db, principal, campaign_id, limit=500):
+    """Select unassessed evidence throughout the project, not its latest 500 rows.
+
+    Prefer dispatchable work and preserve blocked/ambiguous requests for status
+    review. Only one bounded list of IDs is passed to the durable worker.
+    """
     from .models import SocialListeningResult
     from .socialcrawl import _result_in_scope
-    links = (db.query(CampaignEvidence, SocialListeningResult)
-             .join(SocialListeningResult,
-                   SocialListeningResult.id == CampaignEvidence.result_id)
-             .filter(CampaignEvidence.campaign_id == int(campaign_id),
-                     CampaignEvidence.match_method != "WATCHLIST_ACCOUNT")
-             .order_by(CampaignEvidence.id.desc()).limit(limit).all())
-    return list(dict.fromkeys(int(post.id) for _,post in links
-                              if _result_in_scope(db, principal, post)))
+    from sqlalchemy import case,func,or_,and_
+    from types import SimpleNamespace
+    latest_id=(db.query(EvidenceAssessment.id).filter(
+        EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+        EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
+            EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc())
+        .limit(1).correlate(CampaignEvidence).scalar_subquery())
+    incomplete=or_(EvidenceAssessment.id.is_(None),
+        func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),
+        func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).notin_(['RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN']))
+    dispatchable=and_(func.length(func.trim(func.coalesce(SocialListeningResult.text_content,'')))>0,
+        or_(AIAssessmentJob.id.is_(None),and_(AIAssessmentJob.state=='PENDING',AIAssessmentJob.attempts<3)))
+    rows=(db.query(CampaignEvidence.result_id,SocialListeningResult.run_id,
+                   case((dispatchable,0),else_=1))
+        .join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+        .outerjoin(AIAssessmentJob,and_(AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,AIAssessmentJob.result_id==CampaignEvidence.result_id))
+        .filter(CampaignEvidence.campaign_id==int(campaign_id),
+            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',incomplete)
+        .order_by(case((dispatchable,0),else_=1),CampaignEvidence.id.asc()))
+    if principal.get('geographic_scope')=='Nationwide':
+        return [rid for rid,_,_ in rows.limit(limit).all()]
+    ids=[];scope={}
+    for rid,run_id,_ in rows.yield_per(200):
+        if run_id not in scope:scope[run_id]=_result_in_scope(db,principal,SimpleNamespace(run_id=run_id))
+        if scope[run_id]:ids.append(rid)
+        if len(ids)>=limit:break
+    return ids
 
 
 def start_all(db, principal, campaign_id, payload):
@@ -248,12 +274,12 @@ def start_all(db, principal, campaign_id, payload):
                                 if _result_in_scope(db, principal, post)))
     else:
         ids = _scope_ids(db, principal, c.id)
-    candidates = [rid for rid in ids if needs_full_assessment(_latest(db,c.id,rid))]
+    candidates = [rid for rid in ids if needs_full_assessment(_latest(db,c.id,rid))] if source_prefix else ids
     jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
         AIAssessmentJob.campaign_id == c.id,
         AIAssessmentJob.result_id.in_(candidates)).all()} if candidates else {}
     eligible = [rid for rid in candidates
-                if rid not in jobs or jobs[rid].state == "PENDING"]
+                if rid not in jobs or (jobs[rid].state == "PENDING" and jobs[rid].attempts<3)]
     budget = remaining_budget(db, c.id)
     if not budget["provider_ready"] or not budget["database_ready"] or not budget["per_run"]:
         raise ValueError("AI provider, per-run limit or protected database budget unavailable")
@@ -313,6 +339,7 @@ def execute_run(run_id):
         raise
     finally:
         db.close()
+    attempted=0
     for rid in ids:
         db = SessionLocal()
         try:
@@ -320,7 +347,7 @@ def execute_run(run_id):
             job = db.query(AIAssessmentJob).filter_by(
                 campaign_id=campaign_id,result_id=rid).first()
             # No retry of a failed or ambiguous provider request.
-            if not needs_full_assessment(previous) or not job or job.state != "PENDING":
+            if not needs_full_assessment(previous) or not job or job.state != "PENDING" or job.attempts>=3:
                 continue
         finally:
             db.close()
@@ -331,8 +358,9 @@ def execute_run(run_id):
             budget = remaining_budget(quota_db,campaign_id)
         finally:
             quota_db.close()
-        if not budget["available"] or not budget["provider_ready"]:
+        if not budget["available"] or not budget["provider_ready"] or attempted>=budget['per_run']:
             break
+        attempted+=1
         assess_pending_campaign(campaign_id,requested_limit=1,target_result_id=rid)
     db = SessionLocal()
     try:

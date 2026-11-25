@@ -6,7 +6,7 @@ const since=value=>{if(!value)return 'No successful AI activity recorded';const 
 const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment in progress',
  COMPLETED:'Assessment complete',NEEDS_ATTENTION:'Paused — action required',
  FAILED:'Run failed',NO_NEW_POSTS:'No new posts captured'};
-export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,preview=null,booleanExpression=''}){
+export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,onReuse=null,preview=null,booleanExpression=''}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
  // Collection percentage is unknown until results are saved.
@@ -26,6 +26,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
      <p className="text-xs text-slate-500">This starts a one-time collection; scheduled monitoring is currently disabled.</p>
      {preview?.collection_budget&&<p className="text-xs text-slate-500">Monthly collection allowance remaining: {Number(preview.collection_budget.monthly_remaining).toLocaleString()} · Source storage available: {Number(preview.collection_budget.storage_remaining).toLocaleString()}. Provider collection counts can exceed the local candidate limit.</p>}
      {booleanExpression&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><p className="text-xs text-slate-500">Boolean expression</p><p className="mt-1 break-words font-mono">{booleanExpression}</p></div>}
+     {preview?.reuse_offer&&onReuse&&<div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs"><strong>Identical recent saved collection available</strong><p className="mt-1">{preview.reuse_offer.posts} matching posts. Reuse without a new SocialCrawl or AI charge. New collection remains a separate option if quota allows.</p><button type="button" className="intel-ghost mt-2" disabled={loading||previewLoading} onClick={onReuse}>Reuse saved collection</button></div>}
      {previewLoading&&<p role="status" className="text-xs text-slate-500">Checking project readiness…</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold" disabled={loading} onClick={onClose}>Cancel</button>

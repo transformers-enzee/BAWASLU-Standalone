@@ -20,8 +20,11 @@ for(const count of [4,5,12,40]){
     'Collapsed view must show three most recent chats');
   assert.deepEqual(savedChatsForDisplay(list,true),list,
     'Expanded view must show all saved conversations');
-  assert.deepEqual(savedChatsForDisplay(list,true,'chat 4'),[list[3]],
-    'Expanded search must find chats beyond the first three');
+  const matches=savedChatsForDisplay(list,true,'chat 4');
+  assert.ok(matches.some(chat=>chat.id==='4'),
+    'Expanded search must find the fourth saved chat');
+  assert.deepEqual(matches,list.filter(chat=>chat.title.toLowerCase().includes('chat 4')),
+    'Search uses substring matching, so Chat 40 is also a valid result');
 }
 const mixed=[{id:'1',title:'Regional Research'},{id:'2',title:'INCIDENT Reports'},
              {id:'3',title:'Climate Notes'},{id:'4',title:'incident review'}];

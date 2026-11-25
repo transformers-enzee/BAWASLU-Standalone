@@ -251,3 +251,65 @@ def test_search_audit_obeys_existing_regional_scope():
     assert result['page_visible']==2 and len(result['rows'])==2
     assert result['writes']==0
     db.close()
+
+
+def test_backend_search_filters_entire_saved_corpus_and_pages():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'serverSearch');cid=campaign(db,p,'Server search')
+    add(db,cid,225)
+    rows=db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==int(cid)).order_by(SocialListeningResult.id).all()
+    for i,row in enumerate(rows):
+        row.text_content='BAWASLU Bandung' if i%2==0 else 'BAWASLU Bandung hoaks'
+        row.engagement_json=json.dumps({'likes':i})
+        row.published_at='2026-10-29' if i<200 else '2026-11-01'
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=row.id,assessment_version=1,relevance_label='RELEVANT',sentiment='NEGATIVE' if i%2==0 else 'POSITIVE'))
+    db.commit()
+    spec={'mode':'boolean','query':'BAWASLU AND Bandung AND NOT hoaks','sentiment':'negative','sort':'engagement'}
+    cursor=None;ids=[];counts=[]
+    for _ in range(5):
+        result=action(db,p,'campaignCapturedPosts',{'search':spec,'page_size':50,'cursor':cursor},cid)
+        assert result['server_filtered'] and result['total']==113 and not result['paid_provider_called']
+        ids.extend(int(row['id']) for row in result['evidence']);counts.append(len(result['evidence']))
+        cursor=result['next_cursor']
+        if not result['has_more']:break
+    assert counts==[50,50,13] and len(set(ids))==113 and ids==sorted(ids,reverse=True)
+    dates=action(db,p,'campaignCapturedPosts',{'search':{'mode':'standard','query':'hoaks','from':'2026-11-01','sort':'oldest'}},cid)
+    assert dates['total']==12
+    not_only=action(db,p,'campaignCapturedPosts',{'search':{'mode':'boolean','query':'NOT hoaks'}},cid)
+    assert not_only['total']==113
+    db.close()
+
+
+def test_backend_search_and_suggestions_keep_regional_scope():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'regionSearch','Provincial Analyst','Province','Bali');cid=campaign(db,p,'Scoped search')
+    add(db,cid,2,'Bali');add(db,cid,2,'Jawa Barat')
+    links=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).order_by(CampaignEvidence.id).all()
+    for i,link in enumerate(links):
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=link.result_id,assessment_version=1,relevance_label='RELEVANT',
+            candidate_signals_json='["Gibran"]' if i<2 else '["Prabowo"]'))
+    db.commit()
+    result=action(db,p,'campaignCapturedPosts',{'search':{'mode':'boolean','query':'Original'},'page_size':1},cid)
+    assert result['total']==2 and len(result['evidence'])==1 and result['has_more']
+    second=action(db,p,'campaignCapturedPosts',{'search':{'mode':'boolean','query':'Original'},'page_size':1,'cursor':result['next_cursor']},cid)
+    assert second['total']==2 and not second['has_more']
+    assert second['evidence'][0]['id']!=result['evidence'][0]['id']
+    suggestions=action(db,p,'campaignCandidateSuggestions',{},cid)['candidates']
+    assert [row['name'] for row in suggestions]==['Gibran']
+    assert suggestions[0]['matching_posts']==2
+    db.close()
+
+
+def test_backend_search_respects_officer_sentiment_override():
+    from app.models import EvidenceAssessment,User
+    from app.officer_sentiment import OfficerSentimentCorrection
+    db=SessionLocal();p=user(db,'serverCorrection');cid=campaign(db,p,'Correction search');add(db,cid,1)
+    link=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).one()
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=link.result_id,assessment_version=1,relevance_label='RELEVANT',sentiment='NEGATIVE'))
+    actor=db.query(User).filter(User.email=='serverCorrection@captured-qa.test').one()
+    db.add(OfficerSentimentCorrection(campaign_id=int(cid),result_id=link.result_id,sentiment='NEUTRAL',rationale='',actor_id=actor.id))
+    db.commit()
+    neutral=action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'neutral'}},cid)
+    assert neutral['total']==1 and neutral['evidence'][0]['sentiment']=='Neutral'
+    assert action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'negative'}},cid)['total']==0
+    db.close()

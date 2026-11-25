@@ -188,14 +188,24 @@ def action(db,p,verb,data,cid):
     c=campaign(db,p,cid,verb not in ('campaignDiscoverStatus','campaignCandidateSuggestions','campaignDiscoverLastRunDiagnostics'))
     if verb=='campaignCandidateSuggestions':
         from .processing_hints import normalize_candidate_signals
-        ids=[x[0] for x in db.query(CampaignEvidence.result_id).filter(
-            CampaignEvidence.campaign_id==c.id,
-            CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
-            .order_by(CampaignEvidence.id.desc()).limit(500).all()]
+        from .socialcrawl import _result_in_scope
+        from types import SimpleNamespace
+        source_query=(db.query(CampaignEvidence.result_id,SocialListeningResult.run_id)
+            .join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+            .filter(CampaignEvidence.campaign_id==c.id,CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
+            .order_by(CampaignEvidence.id.desc()))
+        if p.get('geographic_scope')=='Nationwide':ids=[x[0] for x in source_query.limit(500).all()]
+        else:
+            ids=[];scope={}
+            for result_id,run_id in source_query.yield_per(200):
+                if run_id not in scope:scope[run_id]=_result_in_scope(db,p,SimpleNamespace(run_id=run_id))
+                if scope[run_id]:ids.append(result_id)
+                if len(ids)>=500:break
         if not ids:return {'candidates':[]}
         rows=(db.query(EvidenceAssessment).filter(EvidenceAssessment.campaign_id==c.id,
             EvidenceAssessment.result_id.in_(ids)).order_by(EvidenceAssessment.result_id,
-            EvidenceAssessment.assessment_version.desc()).all())
+            __import__('sqlalchemy').case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
+            EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).all())
         counts=Counter();sources={};seen=set()
         for row in rows:
             if row.result_id in seen:continue

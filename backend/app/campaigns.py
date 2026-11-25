@@ -1833,7 +1833,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                    CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
            .order_by(CampaignEvidence.id.desc()))
         start=(page-1)*page_size
-        if p.get('geographic_scope')=='Nationwide':
+        server_search='search' in opts
+        next_cursor=None;platforms=None
+        if server_search:
+            from .saved_post_search import search_page
+            links,total,has_more,next_cursor,platforms=search_page(db,p,c,q,opts,page_size)
+        elif p.get('geographic_scope')=='Nationwide':
             total=q.order_by(None).count()
             links=q.offset(start).limit(page_size).all()
         else:
@@ -1863,7 +1868,9 @@ def campaign_action(db:Session,p,action,data,id=None):
                          'sentiment_correction':correction_view(correction),
                          'can_correct_sentiment':has(p,'edit_intelligence')})
         return {'evidence':rows,'total':total,'page':page,'page_size':page_size,
-                'has_more':page*page_size<total,'paid_provider_called':False}
+                'has_more':has_more if server_search else page*page_size<total,
+                'next_cursor':next_cursor,'platforms':platforms,'server_filtered':server_search,
+                'paid_provider_called':False}
     if action=='campaignEvidenceById':
         from .models import SocialListeningResult, EvidenceAssessment
         from .socialcrawl import _result_in_scope

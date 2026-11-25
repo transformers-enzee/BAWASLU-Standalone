@@ -115,3 +115,9 @@ def test_boolean_trace_distinguishes_required_and_negated_terms():
     plan=discover_boolean_plan('BAWASLU AND (Bandung OR "Jawa Barat")')
     assert plan['positive_retrieval_anchors']==['bawaslu']
     assert not plan['uses_anchor_fallback']
+
+
+def test_saved_post_parser_allows_negative_only_without_relaxing_collection():
+    tree,_=parse_boolean('NOT hoaks',require_positive=False)
+    assert evaluate_boolean(tree,'pemilu') and not evaluate_boolean(tree,'hoaks')
+    with pytest.raises(ValueError):parse_boolean('NOT hoaks')

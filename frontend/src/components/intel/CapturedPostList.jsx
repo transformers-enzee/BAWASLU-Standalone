@@ -34,6 +34,8 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
  const isEnglish=language==='en';
  const t=(en,id)=>isEnglish?en:id;
  const [posts,setPosts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [total,setTotal]=useState(0),[platforms,setPlatforms]=useState([]),[nextCursor,setNextCursor]=useState(null);
+ const [paging,setPaging]=useState({key:'',history:[]}),[correctionRevision,setCorrectionRevision]=useState(0);
  // Feed pagination can finish after an officer saves a correction. Preserve
  // that correction in every subsequent page merge without another refresh.
  const savedCorrections=useRef(new Map());
@@ -42,6 +44,7 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
   setPosts(rows=>rows.map(row=>String(row.id)===String(post.id)?
     correctedSentimentPost(row,correction):row));
   onSentimentCorrected?.(correction);
+  setCorrectionRevision(v=>v+1);
  };
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[keyword,setKeyword]=useState('');
  const [searchMode,setSearchMode]=useState(initialSearchMode==='boolean'?'boolean':'standard'),[booleanQuery,setBooleanQuery]=useState('');
@@ -51,44 +54,29 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
   catch(error){return {test:null,error:error.message||'Invalid Boolean expression'}}
  },[searchMode,booleanQuery]);
  const [platform,setPlatform]=useState(''),[sentiment,setSentiment]=useState(''),[sort,setSort]=useState('newest');
+ const queryKey=JSON.stringify({mode:searchMode,query:searchMode==='standard'?keyword:booleanQuery,from,to,platform,sentiment,sort});
+ const pagingKey=String(campaignId)+'|'+queryKey+'|'+String(refreshKey)+'|'+String(correctionRevision);
+ const history=paging.key===pagingKey?paging.history:[];
+ const cursor=history.length?history[history.length-1]:null;
  useEffect(()=>{
-  let active=true;setPosts([]);setLoading(true);setError('');
-  async function load(){
+  let active=true;setPosts([]);setTotal(0);setNextCursor(null);setLoading(true);setError('');
+  if(booleanSearch.error){setLoading(false);return}
+  const timer=setTimeout(async()=>{
    try{
-    const all=[],seen=new Set();let page=1;
-    while(active){
-     const response=await base44.functions.invoke('socialListening',{action:'campaignCapturedPosts',id:campaignId,data:{page,page_size:200}});
-     const result=response.data||{};
-     if(!Array.isArray(result.evidence)||typeof result.has_more!=='boolean')throw Error('Invalid campaign feed');
-     for(const post of result.evidence){if(!seen.has(String(post.id))){seen.add(String(post.id));all.push(post)}}
-     if(active)setPosts(overlaySentimentCorrections(all,campaignId,savedCorrections.current)); // Pages never overwrite officer edits.
-     if(!result.has_more)break;
-     if(!result.evidence.length||page>=100000)throw Error('Incomplete campaign feed');
-     page++;
+    const response=await base44.functions.invoke('socialListening',{action:'campaignCapturedPosts',id:campaignId,data:{page_size:100,search:JSON.parse(queryKey),cursor}});
+    const result=response.data||{};
+    if(!Array.isArray(result.evidence)||result.server_filtered!==true||typeof result.has_more!=='boolean')throw Error('Invalid paginated search response');
+    if(active){
+     const all=result.evidence;
+     setPosts(overlaySentimentCorrections(all,campaignId,savedCorrections.current));
+     setTotal(Number(result.total||0));setPlatforms(result.platforms||[]);setNextCursor(result.next_cursor||null);
     }
-    if(active)setPosts(overlaySentimentCorrections(all,campaignId,savedCorrections.current));
    }catch(e){if(active)setError(e.response?.data?.detail||e.response?.data?.error||e.message||'Unable to load posts')}
    finally{if(active)setLoading(false)}
-  }
-  if(campaignId)load();
-  return()=>{active=false};
- },[campaignId,refreshKey]);
- const platforms=useMemo(()=>[...new Set(posts.map(p=>p.platform).filter(Boolean))].sort(),[posts]);
- const visible=useMemo(()=>{
-  const q=searchMode==='standard'?keyword.toLocaleLowerCase('id-ID').trim():'';
-  if(searchMode==='boolean'&&booleanSearch.error)return [];
-  const items=posts.filter(p=>{
-   const day=String(p.published_at||'').slice(0,10);
-   return (!from||(day&&day>=from))&&(!to||(day&&day<=to))&&
-    (!platform||p.platform===platform)&&(!sentiment||String(p.sentiment||'').toLowerCase()===sentiment)&&
-    (searchMode==='boolean'
-      ?(!booleanSearch.test||booleanSearch.test(p))
-      :(!q||String(p.text_content||'').toLocaleLowerCase('id-ID').includes(q)));
-  });
-  const score=p=>{try{const e=typeof p.engagement==='object'?p.engagement:JSON.parse(p.engagement_json||'{}');return Number(e.engagement_total||e.likes||0)}catch{return 0}};
-  return items.sort((a,b)=>sort==='oldest'?String(a.published_at||'').localeCompare(String(b.published_at||'')):
-   sort==='engagement'?score(b)-score(a):String(b.published_at||'').localeCompare(String(a.published_at||'')));
- },[posts,from,to,keyword,searchMode,booleanSearch,platform,sentiment,sort]);
+  },300);
+  return()=>{active=false;clearTimeout(timer)};
+ },[campaignId,refreshKey,queryKey,cursor,correctionRevision,booleanSearch.error]);
+ const visible=posts;
  return <section data-i18n-exempt aria-label={t('Captured posts list','Daftar unggahan tersimpan')} lang={isEnglish?'en':'id'} className="rounded-[13px] border border-[#dce5ed] bg-white px-5 py-4">
   <div className="mb-4 space-y-2" data-testid="social-listening-search-modes">
    {showModeTabs&&<div className="flex flex-wrap gap-2" role="group" aria-label={t('Saved-post search mode','Mode pencarian unggahan tersimpan')}>
@@ -114,11 +102,16 @@ export default function CapturedPostList({campaignId,refreshKey=0,onSentimentCor
    {booleanSearch.error&&<p role="alert" data-testid="social-listening-boolean-error" className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-red-700">{t('Check the Boolean expression: ','Periksa ekspresi Boolean: ')}{booleanSearch.error}</p>}
   </div>}
   <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-600"><span role="status">{isEnglish?
-    `${visible.length.toLocaleString()} of ${posts.length.toLocaleString()} captured posts`:
-    `${visible.length.toLocaleString()} dari ${posts.length.toLocaleString()} unggahan tersimpan`}
-    {loading ? t(' · Loading more…',' · Memuat lainnya…'):
-      error ? t(' · Partial results (loading failed)',' · Hasil tidak lengkap (gagal memuat)') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setBooleanQuery('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
-  {error&&<p role="alert" className="py-3 text-sm text-red-700">{t('Unable to load the complete post list:','Gagal memuat seluruh unggahan:')} {error}. {t('Showing any records retrieved before the failure.','Menampilkan unggahan yang berhasil diambil sebelumnya.')}</p>}
+    `${visible.length.toLocaleString()} on this page · ${total.toLocaleString()} matching captured posts`:
+    `${visible.length.toLocaleString()} di halaman ini · ${total.toLocaleString()} unggahan tersimpan cocok`}
+    {loading ? t(' · Loading…',' · Memuat…'):
+      error ? t(' · Search failed',' · Pencarian gagal') : ''}</span><button type="button" className="intel-ghost text-xs" onClick={()=>{setFrom('');setTo('');setKeyword('');setBooleanQuery('');setPlatform('');setSentiment('');setSort('newest')}}>{t('Clear filters','Hapus filter')}</button></div>
+  {error&&<p role="alert" className="py-3 text-sm text-red-700">{t('Unable to load saved post search:','Gagal memuat pencarian unggahan:')} {error}.</p>}
   {searchMode==='boolean'&&booleanSearch.error?null:visible.length?visible.map(post=><Post key={post.id} post={post} isEnglish={isEnglish} campaignId={campaignId} onCorrected={correction=>onCorrectionSaved(post,correction)}/>):loading?<p role="status" className="py-6 text-sm text-[#60768c]">{t('Loading captured posts…','Memuat unggahan…')}</p>:<p className="py-6 text-sm text-[#60768c]">{t('No captured posts match these filters.','Tidak ada unggahan yang cocok dengan filter ini.')}</p>}
+  {!loading&&!error&&!booleanSearch.error&&(history.length>0||nextCursor)&&<div className="mt-4 flex items-center justify-between gap-2 text-xs">
+   <button type="button" className="intel-ghost" disabled={!history.length} onClick={()=>setPaging({key:pagingKey,history:history.slice(0,-1)})}>{t('Previous page','Halaman sebelumnya')}</button>
+   <span>{t('Page','Halaman')} {history.length+1}</span>
+   <button type="button" className="intel-ghost" disabled={!nextCursor} onClick={()=>setPaging({key:pagingKey,history:[...history,nextCursor]})}>{t('Next page','Halaman berikutnya')}</button>
+  </div>}
  </section>;
 }

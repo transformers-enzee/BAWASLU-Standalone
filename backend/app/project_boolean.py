@@ -49,7 +49,7 @@ def _tokens(raw):
     return values
 
 
-def parse_boolean(expression):
+def parse_boolean(expression,require_positive=True):
     """Return (AST, minimal positive retrieval anchors).
 
     A single positive anchor set is sufficient for AND; OR requires union.
@@ -124,9 +124,9 @@ def parse_boolean(expression):
         return left if len(left)<=len(right) else right
 
     anchors=covers(tree)
-    if not anchors:
+    if require_positive and not anchors:
         raise ValueError("Boolean monitoring requires a positive search term in every OR branch")
-    if len(anchors)>30:
+    if require_positive and len(anchors or [])>30:
         raise ValueError("Boolean query requires too many retrieval terms (maximum 30)")
     return tree,anchors
 

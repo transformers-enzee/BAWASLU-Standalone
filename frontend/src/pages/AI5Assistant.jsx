@@ -379,27 +379,23 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  async function refreshShares(){
   const r=await request('/api/ai-5/shared');setSharedLinks(r.shares||[]);
  }
- async function saveChat(){
-  if(!messages.length||busy)return;
-  if(currentSavedId){
-   setSaveStatus('Saving…');setError('');
-   try{
-    const r=await request('/api/ai-5/saved/'+encodeURIComponent(currentSavedId)+'/sync',{method:'POST'});
-    setSaveStatus(r.status==='SAVED'?'Saved':'Couldn’t save');
-    await refreshSaved();
-   }catch(e){setSaveStatus('Couldn’t save');setError(e.message)}
-   return;
-  }
-  const proposed=messages.find(m=>m.role==='user')?.text?.slice(0,100)||'AI-5 research';
-  const title=window.prompt('Name this saved chat',proposed);
-  if(title===null)return;
+ async function retrySave(){
+  // The server saves every completed reply; this is recovery on database failure.
+  if(!messages.some(m=>m.role==='assistant')||busy||processing)return;
   setSaveStatus('Saving…');setError('');
   try{
-   const r=await request('/api/ai-5/saved',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({conversationId,title,draftRevisions})});
-   setCurrentSavedId(r.id);setSaveStatus('Saved');
-   await refreshSaved();
+   if(currentSavedId){
+    const r=await request('/api/ai-5/saved/'+encodeURIComponent(currentSavedId)+'/sync',{method:'POST'});
+    if(r.status!=='SAVED')throw Error('The chat was not saved. Please retry.');
+   }else{
+    const title=messages.find(m=>m.role==='assistant')?.data?.answer?.title||
+      messages.find(m=>m.role==='user')?.text?.slice(0,100)||'AI-5 research';
+    const r=await request('/api/ai-5/saved',{method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({conversationId,title,draftRevisions})});
+    setCurrentSavedId(r.id);
+   }
+   setSaveStatus('Saved');refreshSaved().catch(()=>{});
   }catch(e){setSaveStatus('Couldn’t save');setError(e.message)}
  }
  async function reopen(id){
@@ -481,20 +477,27 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  }
  async function submit(){
   const q=question.trim();if(!q||busy)return;
-  const old=messages;setMessages([...old,{role:'user',text:q}]);setBusy(true);setQuestion('');setError('');
+  const old=messages,previousSaveStatus=saveStatus;
+  setMessages([...old,{role:'user',text:q}]);setBusy(true);
+  setSaveStatus('Saving…');setQuestion('');setError('');
   try{
    const r=await request('/api/ai-5/chat',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({question:q,mode,actionMode,sourceMode,conversationId,
       referenceTurnId:refTurn,editedDraft:editedRefDraft})});
-   setMessages([...old,{role:'user',text:q},{role:'assistant',data:r}]);setRefTurn(null);setEditedRefDraft('');
-   if(currentSavedId){
-    setSaveStatus(r.save_status==='SAVED'?'Saved':'Couldn’t save');
-    if(r.save_status!=='SAVED')setError(r.save_error||'This new answer was not saved.');
-    else refreshSaved().catch(()=>{});
+   setMessages([...old,{role:'user',text:q},{role:'assistant',data:r}]);
+   setRefTurn(null);setEditedRefDraft('');
+   if(r.save_status==='SAVED'&&r.saved_chat_id){
+    // The first completed answer creates its owner-private history record.
+    setCurrentSavedId(r.saved_chat_id);
+    setSaveStatus('Saved');refreshSaved().catch(()=>{});
+   }else{
+    setSaveStatus('Couldn’t save');
+    setError(r.save_error||'The answer is available, but it could not be saved. Retry before leaving.');
    }
-  }catch(e){setMessages(old);setQuestion(q);setError(e.message)}
-  finally{setBusy(false)}
+  }catch(e){
+   setMessages(old);setQuestion(q);setSaveStatus(previousSaveStatus);setError(e.message);
+  }finally{setBusy(false)}
  }
  function followup(value,id,draft=''){setQuestion(value);setRefTurn(id);setEditedRefDraft(draft);}
  if(shareToken)return <SharedReadOnly token={shareToken}/>;
@@ -508,25 +511,26 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     <button type="button" data-testid="ai5-new-chat-header" disabled={busy||processing}
      onClick={reset} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#173950] shadow-sm transition hover:bg-sky-50">
      <Plus size={17}/> New chat</button>
-    <button type="button" data-testid="ai5-save-chat" disabled={!messages.length||busy||processing}
-     onClick={saveChat} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition '+
-       (!messages.length?'cursor-not-allowed border-white/20 text-sky-100/60':
-        currentSavedId?'border-sky-200 bg-sky-100 text-[#173950] hover:bg-white':
-        'border-white bg-white/10 text-white hover:bg-white/20')}>
-     {currentSavedId?<Check size={17}/>:<Save size={17}/>}
-     {currentSavedId?(saveStatus==='Couldn’t save'?'Retry save':'Saved'):'Save chat'}</button>
+    <span data-testid="ai5-auto-save-indicator"
+     className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-3 py-2.5 text-xs font-semibold text-white">
+     <Check size={16}/> Auto-save is on
+    </span>
+    {saveStatus==='Couldn’t save'&&messages.some(m=>m.role==='assistant')&&
+     <button type="button" data-testid="ai5-retry-save" disabled={busy||processing}
+      onClick={retrySave} className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-950">
+      <RotateCcw size={15}/> Retry save
+     </button>}
     <button type="button" data-testid="ai5-share-chat" aria-label="Share chat" disabled={!messages.length||busy||processing}
      onClick={()=>setShareDialog({scope:'CONVERSATION',turnId:null})}
      className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
      <Share2 size={16}/> Share</button>
     {messages.length>0&&<span data-testid="ai5-save-status" role="status" className={'rounded-lg px-3 py-2 text-xs font-semibold '+
-     (saveStatus==='Couldn’t save'?'bg-red-100 text-red-900':
-      currentSavedId&&saveStatus!=='Saving…'?'bg-emerald-50 text-emerald-950':'bg-white/10 text-white')}>
-     {saveStatus==='Couldn’t save'?'Couldn’t save · Retry above':
-      saveStatus==='Saving…'?'Saving…':
-      currentSavedId?'Saved automatically after each reply':
-      'Not saved · Save to return later'}
-    </span>}
+      (saveStatus==='Couldn’t save'?'bg-red-100 text-red-900':
+       saveStatus==='Saved'?'bg-emerald-50 text-emerald-950':'bg-white/10 text-white')}>
+      {saveStatus==='Couldn’t save'?'Couldn’t save · Retry':
+       saveStatus==='Saving…'?'Saving…':
+       saveStatus==='Saved'?'Saved automatically':'Saving chat history…'}
+     </span>}
    </div>
   </header>
   <nav aria-label="AI-5 Saved Chats" data-testid="ai5-saved-chats"
@@ -536,7 +540,7 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
      <span className="rounded-lg bg-sky-50 p-2 text-[#173950]"><History size={21}/></span>
      <div>
       <h2 className="text-base font-bold text-[#173950]">Your conversations</h2>
-      <p className="mt-0.5 text-xs text-slate-600">Open a saved chat to pick up where you left off. Only you can see your saved chats.</p>
+      <p className="mt-0.5 text-xs text-slate-600">Chats save automatically after the first answer. Only you can see your conversations.</p>
      </div>
     </div>
     <div className="flex items-center gap-2">
@@ -563,10 +567,8 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     {savedLoadError&&<div role="alert" className="flex items-center gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
       {savedLoadError}<button type="button" className="font-semibold underline" onClick={()=>refreshSaved().catch(()=>{})}>Retry</button>
      </div>}
-    {!savedLoading&&!savedLoadError&&savedChats.length===0&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3">
-      <p className="text-sm text-slate-600">Your saved conversations will appear here. Save a chat to find it again after signing out.</p>
-      {!!messages.length&&<button type="button" className="intel-button text-xs" onClick={saveChat}>
-       <Save size={14}/> Save current chat</button>}
+    {!savedLoading&&!savedLoadError&&savedChats.length===0&&<div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3">
+      <p className="text-sm text-slate-600">Your first conversation will appear here automatically after AI-5 answers.</p>
      </div>}
     {savedChatsForDisplay(savedChats,showSaved,savedSearch).map(item=>
      <div key={item.id} data-testid="ai5-saved-chat-item" className={'flex items-center gap-2 rounded-lg border p-2 transition '+
@@ -679,16 +681,20 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     <button type="button" className="intel-button" disabled={processing||!linkValue.trim()} onClick={addLink}>Add</button>
     <button type="button" className="intel-ghost" onClick={()=>setLinkOpen(false)}>Cancel</button>
    </div>}
-   {messages.length>0&&<div className={'mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs '+
-       (currentSavedId?'bg-emerald-50 text-emerald-950':'bg-amber-50 text-amber-950')}>
+   {messages.length>0&&<div data-testid="ai5-chat-save-banner"
+     className={'mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs '+
+       (saveStatus==='Couldn’t save'?'bg-red-50 text-red-900':
+        saveStatus==='Saved'?'bg-emerald-50 text-emerald-950':'bg-sky-50 text-sky-950')}>
      <span className="inline-flex items-center gap-2">
-      {currentSavedId?<Check size={15}/>:<Bookmark size={15}/>}
-      {currentSavedId?'Saved conversation · New replies are saved automatically':
-       'This conversation isn’t saved yet. Save it to return after signing out.'}
+      {saveStatus==='Couldn’t save'?<Bookmark size={15}/>:<Check size={15}/>}
+      {saveStatus==='Couldn’t save'?'Couldn’t save this conversation. Retry before leaving.':
+       saveStatus==='Saving…'?'Saving this conversation…':
+       'Chat history is saved automatically — no action needed'}
      </span>
-     <button type="button" className="font-semibold underline" disabled={busy||processing} onClick={saveChat}>
-      {currentSavedId?'Sync now':'Save this chat'}
-     </button>
+     {saveStatus==='Couldn’t save'&&<button type="button" data-testid="ai5-retry-save-composer"
+      className="font-semibold underline" disabled={busy||processing} onClick={retrySave}>
+      Retry save
+     </button>}
     </div>}
    <form className="space-y-2" onSubmit={e=>{e.preventDefault();submit()}}>
     <textarea rows={3} maxLength={3200} aria-label="Ask AI-5" value={question}
@@ -708,7 +714,7 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
      </button>
     </div>
    </form>
-   <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-500"><ShieldCheck size={12}/> PDF/DOCX/TXT up to 5 MB and public HTTPS links. Extracted attachment text is provided to the configured AI model when answering, not to public search. Unsaved conversations remain temporary (up to 12 hours). Save chat to keep your turns, drafts and citations beyond the session. Uploaded files themselves are not retained.</p>
+   <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-500"><ShieldCheck size={12}/> PDF/DOCX/TXT up to 5 MB and public HTTPS links. Extracted attachment text is provided to the configured AI model when answering, not to public search. AI-5 automatically saves completed chats, drafts and citations to your private history. Uploaded files themselves are not retained; reattach files if needed.</p>
   </section>
   {shareDialog&&<ShareDialog key={shareDialog.scope+String(shareDialog.turnId||'')}
     initial={shareDialog} conversationId={conversationId} messages={messages}

@@ -8,7 +8,7 @@ const state=read('../../backend/app/ai5/state.py');
 const migration=read('../../database/migrations/20261124090000_ai5_saved_shares_v1808.sql');
 const requireText=(source,value)=>assert.ok(source.includes(value),'Missing AI-5 saved/share contract: '+value);
 
-for(const text of ['Save chat','Saved Chats','Share chat','Shared links',
+for(const text of ['Auto-save is on','Saved Chats','Share chat','Shared links',
  'Couldn’t save','Preview & check access','Create read-only share',
  'Share','Copy link','Email draft','WhatsApp draft','Revoke',
  'Sign-in required','Frozen read-only copy','includeResearchTrail',
@@ -32,6 +32,9 @@ for(const text of ['def restore','restored_from_saved','MAX_TURNS=50'])
 for(const text of ['ENABLE ROW LEVEL SECURITY','REVOKE ALL ON TABLE',
  'ai5_saved_chats','ai5_shared_snapshots','uq_ai5_saved_owner_conversation'])
  requireText(migration,text);
+requireText(data,'def auto_append(');
+requireText(data,'if row is None:');
+requireText(data,'created":True');
 // No route may expose shared content by a naked public token without signed-in user.
 assert.match(api,/@router\.get\("\/shared\/view\/\{token\}"\)[\s\S]*?Depends\(current_user\)/);
 assert.ok(!/service_role|SUPABASE_SERVICE_ROLE_KEY/i.test(ui),'No server credential in frontend');

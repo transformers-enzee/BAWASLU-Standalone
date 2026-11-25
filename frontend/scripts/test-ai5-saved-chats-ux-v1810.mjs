@@ -5,17 +5,18 @@ const ai=readFileSync(new URL('../src/pages/AI5Assistant.jsx',import.meta.url),'
 const expect=(needle)=>assert.ok(ai.includes(needle),'Missing AI-5 saved-chat UX contract: '+needle);
 
 for(const part of [
- 'Your conversations','Open a saved chat to pick up where you left off.',
- 'New chat','Save chat','Saved automatically after each reply',
- 'Not saved · Save to return later','Saved conversation · New replies are saved automatically',
- 'This conversation isn’t saved yet. Save it to return after signing out.',
- 'data-testid="ai5-new-chat-header"','data-testid="ai5-save-chat"',
+ 'Your conversations','Chats save automatically after the first answer.',
+ 'New chat','Auto-save is on','Saved automatically',
+ 'Chat history is saved automatically — no action needed',
+ 'Couldn’t save this conversation. Retry before leaving.',
+ 'data-testid="ai5-new-chat-header"','data-testid="ai5-auto-save-indicator"',
+ 'data-testid="ai5-save-status"','data-testid="ai5-retry-save"',
  'data-testid="ai5-saved-chats"','data-testid="ai5-saved-chat-item"',
  'data-testid="ai5-saved-navigation"','Open saved chat ',
  'Search saved chats','View all chats','Show recent',
- 'Saved conversation ·','Couldn’t save','Retry save','Shared links',
+ 'Couldn’t save','Retry save','Shared links',
  'onClick={()=>reopen(item.id)}','onClick={()=>renameChat(item)}',
- 'onClick={()=>deleteChat(item)}','await refreshSaved()'
+ 'onClick={()=>deleteChat(item)}','refreshSaved().catch(()=>{})'
 ])expect(part);
 
 assert.match(ai,/<nav aria-label="AI-5 Saved Chats" data-testid="ai5-saved-chats"/,
@@ -30,4 +31,6 @@ assert.ok(ai.includes('canExpandSavedChats(savedChats.length)'),
  'View-all and search must be available only for libraries above three');
 assert.ok(ai.includes('aria-current={currentSavedId===item.id'),
  'The current saved conversation must remain visibly and accessibly highlighted');
-console.log('PASS AI-5 v181.0 saved conversation visibility, discoverability, status and navigation UX');
+assert.ok(!ai.includes('data-testid="ai5-save-chat"'),'Manual Save chat control must be removed');
+assert.ok(!ai.includes("window.prompt('Name this saved chat'"),'Automatic saving cannot prompt for a title');
+console.log('PASS AI-5 v183.4 automatic history, visible saved chats and private sharing UX');

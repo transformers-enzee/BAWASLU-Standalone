@@ -88,6 +88,19 @@ def _title(value,fallback="Saved AI-5 chat"):
     return clean or fallback[:TITLE_LIMIT]
 
 
+def _auto_title(turn):
+    """Use the title already generated with the answer; never call paid AI again."""
+    answer=turn.get("answer") or {}
+    proposed=answer.get("title")
+    if not isinstance(proposed,str) or len(proposed.strip())<6:
+        proposed=turn.get("question") or "AI-5 conversation"
+    candidate=re.sub(r"\s+"," ",proposed).strip(" .-")
+    if candidate.lower() in ("general research","research","ai-5 assistant",
+                              "response","answer","untitled"):
+        candidate=str(turn.get("question") or "AI-5 conversation")
+    return _title(candidate[:96],"AI-5 conversation")
+
+
 def _owned(db,user,chat_id):
     row=db.query(AI5SavedChat).filter(
         AI5SavedChat.id==chat_id,AI5SavedChat.owner_user_id==user.id).first()
@@ -186,8 +199,13 @@ def list_saved(db,user,grant):
 
 def create_saved(db,user,grant,conversation_id,title,draft_revisions=None):
     cid=_validated_id(conversation_id)
-    if _by_conversation(db,user,cid):
-        raise HTTPException(409,"This conversation is already saved")
+    existing=_by_conversation(db,user,cid)
+    if existing:
+        # Backward-compatible retry for an interrupted first auto-save.
+        # Never overwrite a user-renamed conversation or duplicate turns.
+        sync_pending(db,user,grant,existing.id)
+        db.refresh(existing)
+        return _view(existing,True,grant)
     n=db.query(func.count(AI5SavedChat.id)).filter(
         AI5SavedChat.owner_user_id==user.id).scalar() or 0
     if n>=MAX_SAVED:raise HTTPException(409,"Saved-chat limit reached. Delete an old chat.")
@@ -256,18 +274,43 @@ def save_draft(db,user,chat_id,turn_id,text):
 
 
 def auto_append(db,user,grant,conversation_id,turn):
-    """Server-side append is authoritative; never trust client-provided replies."""
-    row=_by_conversation(db,user,conversation_id)
-    if not row:return {"status":"NOT_SAVED"}
+    """Persist every completed AI-5 answer automatically, including the first.
+
+    The conversation identifier is owner-scoped; shares remain opt-in. This is
+    a normal database write and does not invoke any additional AI model.
+    """
+    cid=_validated_id(conversation_id)
+    row=_by_conversation(db,user,cid)
+    record=_durable_turn(turn,cid)
+    if row is None:
+        count=db.query(func.count(AI5SavedChat.id)).filter(
+            AI5SavedChat.owner_user_id==user.id).scalar() or 0
+        if count>=MAX_SAVED:
+            return {"status":"COULD_NOT_SAVE",
+                    "reason":"You have 40 saved chats. Delete an older chat and retry saving."}
+        row=AI5SavedChat(id=str(uuid.uuid4()),owner_user_id=user.id,
+            conversation_id=cid,title=_auto_title(record),
+            turns_json=_bounded([record]),draft_revisions_json="{}",
+            scope_fingerprint=state.fingerprint(grant))
+        db.add(row)
+        db.commit()
+        return {"status":"SAVED","saved_chat_id":row.id,
+                "created":True,"title":row.title}
+
     prior=_assert_current_scope(row,grant)
+    # A retry or network replay must not create a duplicate turn.
+    if any(t.get("turn_id")==record.get("turn_id") for t in prior):
+        return {"status":"SAVED","saved_chat_id":row.id,
+                "created":False,"title":row.title}
     if len(prior)>=MAX_MESSAGES//2:
-        return {"status":"COULD_NOT_SAVE","reason":"Saved conversation reached 50 answers"}
-    record=_durable_turn(turn,conversation_id)
+        return {"status":"COULD_NOT_SAVE",
+                "reason":"Saved conversation reached 50 answers. Start a new chat."}
     prior.append(record)
     row.turns_json=_bounded(prior)
     row.updated_at=datetime.utcnow()
     db.commit()
-    return {"status":"SAVED","saved_chat_id":row.id}
+    return {"status":"SAVED","saved_chat_id":row.id,
+            "created":False,"title":row.title}
 
 
 

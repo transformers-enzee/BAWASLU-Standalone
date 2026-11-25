@@ -31,6 +31,8 @@ GROUPS = {
             "frontend/src/pages/WatchlistProfile.jsx",
             "frontend/src/components/intel/CampaignPanel.jsx",
             "frontend/src/components/intel/CapturedPostList.jsx",
+            "backend/app/saved_post_search.py", "backend/app/saved_post_facets.py",
+            "backend/tests/test_campaign_captured_posts_full.py",
             "frontend/src/components/intel/CampaignScheduleSummary.jsx",
             "frontend/src/components/intel/AssessmentProgressDialog.jsx",
             "frontend/src/components/intel/WatchlistMatchRow.jsx",

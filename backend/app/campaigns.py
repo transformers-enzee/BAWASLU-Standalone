@@ -1905,10 +1905,10 @@ def campaign_action(db:Session,p,action,data,id=None):
            .order_by(CampaignEvidence.id.desc()))
         start=(page-1)*page_size
         server_search='search' in opts
-        next_cursor=None;platforms=None
+        next_cursor=None;platforms=None;facets=None
         if server_search:
             from .saved_post_search import search_page
-            links,total,has_more,next_cursor,platforms=search_page(db,p,c,q,opts,page_size)
+            links,total,has_more,next_cursor,platforms,facets=search_page(db,p,c,q,opts,page_size)
         elif p.get('geographic_scope')=='Nationwide':
             total=q.order_by(None).count()
             links=q.offset(start).limit(page_size).all()
@@ -1926,6 +1926,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             correction=corrections.get((c.id,item.id))
             rows.append({'id':str(item.id),'platform':item.platform,
                          'content_type':item.content_type,'published_at':item.published_at,
+                         **_captured_post_metrics(item.engagement_json),
                          'author_name':item.author_name,'observed_handle':item.observed_handle,
                          'author_display':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[0],
                          'author_attribution':__import__('app.author_recovery',fromlist=['display_author']).display_author(item)[1],
@@ -1940,7 +1941,7 @@ def campaign_action(db:Session,p,action,data,id=None):
                          'can_correct_sentiment':has(p,'edit_intelligence')})
         return {'evidence':rows,'total':total,'page':page,'page_size':page_size,
                 'has_more':has_more if server_search else page*page_size<total,
-                'next_cursor':next_cursor,'platforms':platforms,'server_filtered':server_search,
+                'next_cursor':next_cursor,'platforms':platforms,'facets':facets,'server_filtered':server_search,
                 'paid_provider_called':False}
     if action=='campaignEvidenceById':
         from .models import SocialListeningResult, EvidenceAssessment

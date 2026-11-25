@@ -820,7 +820,7 @@ export default function CampaignPanel({campaignId=null}){
     {humanVerifiedError&&<p role="alert" className="mt-2 text-red-700">{humanVerifiedError}</p>}
    </details>
    <nav className="flex flex-wrap border-b border-[#dce5ed] gap-2 mt-3" aria-label="Selected project sections">{[['overview','Overview'],['posts','Captured Posts'],['watchlist','Candidate Watchlist']].map(([id,label])=><button type="button" key={id} className={'px-4 py-3 border-b-[3px] text-sm font-semibold '+(campaignSection===id?'text-[#087564] border-[#0d8a73] bg-[#f0faf6]':'text-[#627b8a] border-transparent')} onClick={()=>setCampaignSection(id)}>{label}</button>)}</nav>
-    {campaignSection==='posts'&&<CapturedPostList key={selected.id} campaignId={selected.id} initialSearchMode={selected.search_mode==='BOOLEAN'?'boolean':'standard'} showModeTabs={false} refreshKey={authorRefreshKey}
+    {campaignSection==='posts'&&<CapturedPostList key={selected.id} campaignId={selected.id} initialSearchMode={selected.search_mode==='BOOLEAN'?'boolean':'standard'} showModeTabs={true} refreshKey={authorRefreshKey}
       onSentimentCorrected={()=>refreshSentimentViews().catch(e=>
        setDashboardError(e.response?.data?.detail||e.message||'Sentiment was saved but dashboard refresh failed'))}/>}
    {campaignSection==='watchlist'&&<iframe title="Candidate Watchlist within selected project" scrolling="no" onLoad={event=>{

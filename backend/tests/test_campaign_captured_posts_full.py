@@ -421,3 +421,34 @@ def test_candidate_suggestions_include_older_classified_post_beyond_500():
     assert report['candidates'][0]['matching_posts']==1
     assert report['candidates'][0]['name']=='Gibran Rakabuming Raka'
     db.close()
+
+
+def test_extended_saved_search_multiselect_suggestions_and_missing_metrics():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'extendedSearch');cid=campaign(db,p,'Extended search');add(db,cid,3)
+    rows=db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==int(cid)).order_by(SocialListeningResult.id).all()
+    for i,row in enumerate(rows):
+        row.platform=['tiktok','instagram','facebook'][i]
+        row.text_content=['Politik uang #Pemilu Bali','Bandung BAWASLU','Other'][i]
+        row.author_name=['Alice','Bob','Other'][i];row.engagement_json=['{"likes":100}','{"likes":5}','{}'][i]
+        db.add(EvidenceAssessment(campaign_id=int(cid),result_id=row.id,assessment_version=1,model_version='gpt-4o-mini',relevance_label='RELEVANT',sentiment=['NEGATIVE','NEUTRAL','POSITIVE'][i],topic_labels_json='["Election monitoring"]'))
+    db.commit()
+    out=action(db,p,'campaignCapturedPosts',{'search':{'platform':['tiktok','instagram'],'sentiment':['negative','neutral'],'topic':['Election monitoring'],'likes_min':10},'include_facets':True},cid)
+    assert out['total']==1 and out['evidence'][0]['author_name']=='Alice'
+    assert out['facets']['hashtags']==[{'value':'#Pemilu','count':1}]
+    assert not out['paid_provider_called']
+    assert action(db,p,'campaignCapturedPosts',{'search':{'query':'Bob'}},cid)['total']==1
+    assert action(db,p,'campaignCapturedPosts',{'search':{'likes_min':0}},cid)['total']==2
+    assert action(db,p,'campaignCapturedPosts',{'search':{'province':['Bali']}},cid)['total']==1
+    db.close()
+
+
+def test_extended_facets_never_suggest_out_of_scope_authors():
+    db=SessionLocal();p=user(db,'facetRegion','Provincial Analyst','Province','Bali');cid=campaign(db,p,'Scoped facets')
+    add(db,cid,1,'Bali');add(db,cid,1,'Jawa Barat')
+    rows=db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==int(cid)).order_by(SocialListeningResult.id).all()
+    rows[0].author_name='Visible author';rows[1].author_name='Hidden author';db.commit()
+    result=action(db,p,'campaignCapturedPosts',{'search':{},'include_facets':True},cid)
+    assert result['total']==1
+    assert result['facets']['author']==[{'value':'Visible author','count':1}]
+    db.close()

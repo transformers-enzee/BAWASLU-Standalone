@@ -35,6 +35,14 @@ test('V3 campaign captured posts and candidate watchlist stay in the selected ca
  await expect(sections.getByRole('button',{name:'Overview'})).toBeVisible();
  await sections.getByRole('button',{name:'Captured Posts'}).click();
  await expect(page.getByRole('region',{name:'Captured posts'})).toBeVisible();
+ await page.getByRole('button',{name:'Standard search',exact:true}).click();
+ await expect(page.getByLabel('Search captured posts',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:/Advanced filters/}).click();
+ await expect(page.getByText('Candidate / actor',{exact:true})).toBeVisible();
+ await expect(page.getByText('Location evidence',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Boolean search',exact:true}).click();
+ await expect(page.getByTestId('social-listening-boolean-query')).toBeVisible();
+ await page.getByRole('button',{name:'Standard search',exact:true}).click();
  await sections.getByRole('button',{name:'Candidate Watchlist'}).click();
  await expect(page.locator('iframe[src*="watchlist-v2_2.html"]')).toHaveCount(1);
 });

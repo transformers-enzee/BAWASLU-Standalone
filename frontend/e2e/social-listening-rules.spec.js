@@ -1,4 +1,5 @@
 import { test as base, expect } from '@playwright/test';
+import {test} from './fixtures/local-admin.js';
 import config from '../playwright.config.js';
 
 const email='admin@bawaslu.local';
@@ -10,25 +11,6 @@ async function login(page){
  await page.getByRole('button',{name:/log in|masuk/i}).click();
  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
 }
-// Authenticate once per worker against the disposable local QA backend.
-// Never reuse a live environment's browser session or write credentials to disk.
-const test=base.extend({
- localAdmin:[async({playwright},use)=>{
-  const origin=config.use.baseURL;
-  if(!config.webServer||!['127.0.0.1','localhost'].includes(new URL(origin).hostname))throw new Error('Social Listening fixture requires isolated local QA');
-  const api=await playwright.request.newContext({baseURL:origin});
-  try{
-   const auth=await api.post('/api/auth/login',{data:{email,password}});
-   expect(auth.ok()).toBeTruthy();
-   const token=(await auth.json()).access_token;
-   expect(token).toBeTruthy();
-   await use({origin,token});
-  }finally{await api.dispose();}
- },{scope:'worker'}],
- storageState:async({localAdmin},use)=>{
-  await use({cookies:[],origins:[{origin:localAdmin.origin,localStorage:[{name:'bawaslu_access_token',value:localAdmin.token}]}]});
- }
-});
 async function makeCampaign(request, name, token){
  const created=await request.post('/api/functions/socialListening',{
   headers:{Authorization:'Bearer '+token},

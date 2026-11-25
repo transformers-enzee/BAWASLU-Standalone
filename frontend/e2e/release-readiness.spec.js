@@ -1,19 +1,9 @@
-import { test, expect } from '@playwright/test';
-import config from '../playwright.config.js';
+import {test, expect} from './fixtures/local-admin.js';
 
-const ADMIN_EMAIL='admin@bawaslu.local';
-const ADMIN_PASSWORD=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
-
-async function uiLogin(page){
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill(ADMIN_EMAIL);
-  await page.getByLabel(/^password$/i).fill(ADMIN_PASSWORD);
-  await page.getByRole('button',{name:/log in|masuk/i}).click();
-  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
-}
 
 test('release navigation exposes every completed administrator module',async({page})=>{
-  await uiLogin(page);
+
+  await page.goto('/');
   const nav=page.getByRole('navigation');
   // V3 navigation embeds Candidate Watchlist inside Social Listening.
   const modules=['Command Centre','Social Listening','Intelligence Inbox',
@@ -34,27 +24,23 @@ test('release navigation exposes every completed administrator module',async({pa
   await expect(page.locator('header').getByRole('link',{name:/^Add Intelligence$/i})).toBeVisible();
 });
 
-test('completed module routes remain authenticated after direct navigation',async({page})=>{
-  await uiLogin(page);
+test('completed module routes remain authenticated, error-free and free of paid-provider navigation calls',async({page})=>{
+  const paidCalls=[],pageErrors=[];
+  page.on('request',request=>{
+    if(/socialcrawl\.dev|api\.openai\.com/i.test(request.url())) paidCalls.push(request.url());
+  });
+  page.on('pageerror',error=>pageErrors.push(String(error)));
   const routes=['/','/command-center','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration'];
+  // One traversal preserves the former three route-health checks.
   for(const route of routes){
     const response=await page.goto(route);
     expect(response?.status()||200).toBeLessThan(500);
+    await expect(page).toHaveURL(new RegExp(route==='/'?'/$':route.replace('/','\\/')));
     await expect(page.getByRole('button',{name:/log out|keluar/i})).toBeVisible();
-    await expect(page.locator('body')).not.toContainText(/page not found|uncaught runtime error|application error/i);
+    await expect(page.getByText(/page not found/i)).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({hasText:/access denied/i})).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(/application error|uncaught runtime error/i);
   }
-});
-
-test('release build does not expose paid-provider execution during navigation',async({page})=>{
-  const paidCalls=[];
-  page.on('request',request=>{
-    const url=request.url();
-    if(/socialcrawl\.dev|api\.openai\.com/i.test(url)) paidCalls.push(url);
-  });
-  await uiLogin(page);
-  for(const route of ['/','/command-center','/watchlist','/social-listening','/inbox','/assistant','/add','/sources','/validation','/administration']){
-    await page.goto(route);
-    await page.waitForLoadState('domcontentloaded');
-  }
+  expect(pageErrors).toEqual([]);
   expect(paidCalls).toEqual([]);
 });

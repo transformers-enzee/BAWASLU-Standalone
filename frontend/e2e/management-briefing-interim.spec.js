@@ -1,15 +1,5 @@
-import {test, expect} from '@playwright/test';
-import config from '../playwright.config.js';
+import {test, expect} from './fixtures/local-admin.js';
 
-const email='admin@bawaslu.local';
-const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
-async function login(page){
- await page.goto('/login');
- await page.getByLabel(/email/i).fill(email);
- await page.getByLabel(/^password$/i).fill(password);
- await page.getByRole('button',{name:/log in|masuk/i}).click();
- await page.waitForURL(url=>!url.pathname.startsWith('/login'));
-}
 
 const sample={
  period:'weekly',topic_filter:'',window_start_utc:'2026-11-01T00:00:00Z',
@@ -54,7 +44,7 @@ test('Command Centre interim template renders source-backed preview and PDF down
    'Content-Type':'application/pdf',
    'Content-Disposition':'attachment; filename="bawaslu-interim-briefing-weekly.pdf"'
   },body:Buffer.from('%PDF-1.4 test fixture')}));
- await login(page);
+
  await page.goto('/smart-radar');
  await page.getByRole('button',{name:/Reports & Briefings|Laporan & Ringkasan/}).click();
  const template=page.getByTestId('interim-report-template');
@@ -112,7 +102,7 @@ test('Optional Inbox monitoring is independent, sampled and export-consistent',a
    'Content-Disposition':'attachment; filename="bawaslu-interim-briefing-weekly.docx"'
   },body:Buffer.from('PK synthetic fixture')});
  });
- await login(page);
+
  await page.goto('/smart-radar');
  await page.getByRole('button',{name:/Reports & Briefings|Laporan & Ringkasan/}).click();
  await expect(page.getByTestId('briefing-monitoring-option')).toBeVisible();

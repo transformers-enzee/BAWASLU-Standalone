@@ -1,17 +1,7 @@
-import {test,expect} from '@playwright/test';
-import config from '../playwright.config.js';
+import {test, expect} from './fixtures/local-admin.js';
 
 // Explicitly synthetic browser fixtures; live provider and actual Office/PDF
 // file validity are checked separately at the authenticated API boundary.
-const account='admin@bawaslu.local';
-const password=config.webServer?.[0]?.env?.BAWASLU_BOOTSTRAP_ADMIN_PASSWORD;
-async function login(page){
- await page.goto('/login');
- await page.getByLabel(/email/i).fill(account);
- await page.getByLabel(/^password$/i).fill(password);
- await page.getByRole('button',{name:/log in|masuk/i}).click();
- await page.waitForURL(url=>!url.pathname.startsWith('/login'));
-}
 const u='https://example.org/synthetic-source';
 function answer(mode='GENERAL_RESEARCH',draft=false){
  const id='WEB-T3ST-1';
@@ -35,7 +25,8 @@ function answer(mode='GENERAL_RESEARCH',draft=false){
 }
 
 test('AI-5 is additive: all earlier assistants are still visible',async({page})=>{
- await login(page);
+ await page.goto('/');
+
  for(const route of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4','/ai-5']){
   await expect(page.getByRole('navigation',{name:'Operational workspace'}).locator('a[href="'+route+'"]')).toBeVisible();
  }
@@ -56,7 +47,7 @@ test('Open-ended multi-topic conversation changes direction and toggles BAWASLU 
   return route.fulfill({status:200,contentType:'application/json',
    body:JSON.stringify(answer(body.mode))});
  });
- await login(page);await page.goto('/ai-5');
+ await page.goto('/ai-5');
  await expect(page.getByTestId('ai5-modes').getByRole('button',{name:/General Research/})).toHaveAttribute('aria-pressed','true');
  await page.getByLabel('Ask AI-5').fill('Explain rainfall in one sentence.');
  await page.getByRole('button',{name:'Ask AI-5'}).click();
@@ -94,7 +85,7 @@ test('Source mode is independent, attachments survive followups and can be remov
   return route.fulfill({status:200,contentType:'application/json',
    body:JSON.stringify(answer('GENERAL_RESEARCH',true))});
  });
- await login(page);await page.goto('/ai-5');
+ await page.goto('/ai-5');
  await page.locator('input[type="file"]').setInputFiles({
   name:'analysis.txt',mimeType:'text/plain',buffer:Buffer.from('Synthetic case description')});
  await expect(page.getByTestId('ai5-attachments')).toContainText('analysis.txt');
@@ -127,7 +118,7 @@ test('PDF, Word and Excel buttons produce browser downloads; export requests sel
    'content-type':ext==='pdf'?'application/pdf':'application/octet-stream',
    'content-disposition':'attachment; filename="sample.'+ext+'"'}});
  });
- await login(page);await page.goto('/ai-5');
+ await page.goto('/ai-5');
  await page.getByLabel('Ask AI-5').fill('Write a source-linked memo.');
  await page.getByRole('button',{name:'Ask AI-5'}).click();
  const panel=page.getByTestId('ai5-response');
@@ -144,7 +135,7 @@ test('PDF, Word and Excel buttons produce browser downloads; export requests sel
 });
 
 test('Management workspace opens AI-5 in General Research until BAWASLU is selected',async({page})=>{
- await login(page);await page.goto('/management/ai-5');
+ await page.goto('/management/ai-5');
  await expect(page.getByTestId('ai5-page')).toBeVisible();
  await expect(page.getByTestId('ai5-modes').getByRole('button',{name:/General Research/})).toHaveAttribute('aria-pressed','true');
  await page.getByTestId('ai5-use-bawaslu').click();
@@ -159,7 +150,7 @@ test('An officer-edited draft is used for a natural revision without losing cont
   return route.fulfill({status:200,contentType:'application/json',
     body:JSON.stringify(answer('GENERAL_RESEARCH',true))});
  });
- await login(page);await page.goto('/ai-5');
+ await page.goto('/ai-5');
  await page.getByLabel('Ask AI-5').fill('Draft a source-linked briefing.');
  await page.getByRole('button',{name:'Ask AI-5'}).click();
  await expect(page.getByLabel('AI-5 editable draft')).toBeVisible();

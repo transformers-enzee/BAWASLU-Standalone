@@ -1,0 +1,7 @@
+# BAWASLU browser QA (v183.1)
+
+Routine staging pushes use a verified previous Playwright commit as the baseline. Explicitly mapped module changes select a union of affected browser specs plus a short authenticated shell smoke. Unknown/shared changes, missing or failed baseline, pull requests and manual runs select the full browser suite. Full offline backend regression remains mandatory. Three independent full browser shards use disposable SQLite databases and one worker each. Targeted tests use one or two runners. Ubuntu 24.04 and Playwright 1.65.0 are pinned; Chromium is cached and checked with an actual launch, with dependency repair only on failure. No live provider credits are used in QA.
+
+The shared administrator fixture obtains a token against the isolated local QA API once per worker; each test gets a fresh context. Dedicated login and authorization tests retain their original flows. Route-health assertions use a single traversal. Failure traces and shard reports remain available. Rerun only failed jobs after infrastructure failures.
+
+Manual workflow_dispatch still provides full regression. A scheduled full regression needs workflow installation on default branch main; this staging-only release does not change main. The historical three excluded browser scenarios retain their existing exclusions; they have not been newly disabled. Benchmark actual CI before claiming a speed target.

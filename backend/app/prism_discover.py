@@ -56,14 +56,17 @@ def ensure_no_active_collection(db,cid,exclude_run_id=None):
     if active:raise ValueError('Discover or legacy collection run already active; review its status before changing this project')
 
 
-def body_for(db,c,max_credits=None,platform_mode=None):
+def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None):
     search=decode_project_query(c.primary_keywords_json)
     boolean_mode=search['search_mode']=='BOOLEAN'
     default_cap=100
     cap=default_cap if max_credits is None else max_credits
     if type(cap) is not int or cap not in (10,20,35,50,100):
         raise ValueError('Select a supported SocialCrawl credit cap: 10, 20, 35, 50 or 100')
-    plan=discover_boolean_plan(search['boolean_query']) if boolean_mode else None
+    strategy=retrieval_strategy or 'BALANCED'
+    if strategy not in ('BALANCED','FOCUSED') or (not boolean_mode and strategy!='BALANCED'):
+        raise ValueError('Invalid retrieval strategy for this project')
+    plan=discover_boolean_plan(search['boolean_query'],strategy=strategy) if boolean_mode else None
     words=plan['keywords'] if plan else list(dict.fromkeys(str(x).strip() for x in search['retrieval_terms'] if str(x).strip()))
     if not words:raise ValueError('Configure positive search terms first')
     if len(words)>30:raise ValueError('This project has more than 30 retrieval terms; split it into smaller monitoring projects. No search terms were silently omitted.')
@@ -260,6 +263,8 @@ def latest_collection_outcome(db,c,params=None):
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
         'provider_diagnostics':meta.get('provider_diagnostics'),
+        'upstream_candidates_not_screened':max(0,int((meta.get('provider_diagnostics') or {}).get('kept') or 0)-int(diag.get('considered_items') or 0)) if diag.get('considered_items') is not None else None,
+        'assessment_worker_exit_reason':meta.get('assessment_worker_exit_reason'),
         'counts_basis':'provider_item_diagnostics' if diag else 'legacy_new_source_rows_only',
     }
 
@@ -370,12 +375,12 @@ def action(db,p,verb,data,cid):
             raise ValueError('Campaign unavailable for collection')
         ensure_no_active_collection(db,c.id)
     search=decode_project_query(c.primary_keywords_json)
-    params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'))
+    params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'),(data or {}).get('retrieval_strategy'))
     last=latest_collection_outcome(db,c,params)
     from .legacy_collection_guard import view as legacy_view
     legacy_batch=legacy_view(db,c)
     prior_uncertain=bool(legacy_batch and legacy_batch['uncertain'])
-    plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
+    plan=(discover_boolean_plan(search['boolean_query'],strategy=(data or {}).get('retrieval_strategy') or 'BALANCED') if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverReuse':
         if (data or {}).get('signature')!=sig:raise ValueError('Refresh the collection preview first')
         return reuse_collection(db,p,c,params,data or {})
@@ -405,6 +410,7 @@ def action(db,p,verb,data,cid):
             'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',
+            'retrieval_strategy':(data or {}).get('retrieval_strategy') or 'BALANCED',
             'incremental':bool(params.get('since_watermark')),
             'paid':False,'request_id':meta.get('request_id')}
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')

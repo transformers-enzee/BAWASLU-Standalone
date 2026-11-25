@@ -189,7 +189,7 @@ def encode_boolean_project_query(expression):
                       ensure_ascii=False,separators=(",",":"))
 
 
-def discover_boolean_plan(expression,max_keywords=5):
+def discover_boolean_plan(expression,max_keywords=5,strategy='BALANCED'):
     """Bounded positive compound searches; final Boolean matching is local.
 
     Search phrases are retrieval heuristics, not native Boolean syntax.
@@ -223,11 +223,16 @@ def discover_boolean_plan(expression,max_keywords=5):
     # compound phrases within the existing five-keyword ceiling. This improves
     # recall when terms are distant/reversed, while preserving local semantics.
     compound_phrases=list(phrases)
-    phrases=list(dict.fromkeys(anchors+compound_phrases))[:max_keywords]
+    if strategy not in ('BALANCED','FOCUSED'):raise ValueError('Invalid Boolean retrieval strategy')
+    # Focused mode omits broad anchors only when all positive branch phrases
+    # fit the provider keyword ceiling. Complex expressions fall back safely.
+    focused=strategy=='FOCUSED' and not fallback
+    phrases=compound_phrases if focused else list(dict.fromkeys(anchors+compound_phrases))[:max_keywords]
     return {
         'keywords':phrases,'contains':'','exclude_terms':[],
         'positive_retrieval_anchors':anchors,'compound_phrases':compound_phrases,
-        'uses_anchor_fallback':bool(fallback),'coverage_strategy':'ANCHOR_AND_COMPOUND_WITHIN_EXISTING_CAP',
+        'uses_anchor_fallback':bool(fallback),'coverage_strategy':'COMPOUND_ONLY' if focused else 'ANCHOR_AND_COMPOUND_WITHIN_EXISTING_CAP',
+        'requested_strategy':strategy,'effective_strategy':'FOCUSED' if focused else 'BALANCED',
         'search_mode':'BOOLEAN',
         'strategy':'POSITIVE_COMPOUND_SEARCH_WITH_LOCAL_BOOLEAN_GATE',
         'post_filter_required':True,'provider_boolean_native':False,

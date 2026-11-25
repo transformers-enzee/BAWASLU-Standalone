@@ -48,3 +48,28 @@ def test_dashboard_omits_unscreened_prism_preliminary_from_inbox():
     source=Path(campaigns.__file__).read_text()
     assert "preliminary=bool(assessment and assessment.model_version=='PRISM_PENDING_OPENAI')" in source
     assert "if preliminary or not assessment" in source
+
+
+def test_ai_budget_diagnostics_distinguish_unconfigured_and_exhausted(monkeypatch):
+    from app.activation_assessment import remaining_budget,budget_blocker_message
+    from app.db import Base,engine,SessionLocal
+    Base.metadata.create_all(engine)
+    db=SessionLocal()
+    try:
+        for key in ("OPENAI_API_KEY","BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN","BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN","BAWASLU_AI_ASSESSMENTS_PER_RUN"):
+            monkeypatch.delenv(key,raising=False)
+        b=remaining_budget(db,987654)
+        assert "AI_PROVIDER_NOT_CONFIGURED" in b["blockers"]
+        assert "DAILY_LIMIT_NOT_CONFIGURED" in b["blockers"]
+        assert "LIFETIME_LIMIT_NOT_CONFIGURED" in b["blockers"]
+        assert "PER_RUN_LIMIT_NOT_CONFIGURED" in b["blockers"]
+        assert b["available"]==0
+        assert "not configured" in budget_blocker_message(b)
+        monkeypatch.setenv("OPENAI_API_KEY","mock-test-key")
+        monkeypatch.setenv("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN","12")
+        monkeypatch.setenv("BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN","24")
+        monkeypatch.setenv("BAWASLU_AI_ASSESSMENTS_PER_RUN","6")
+        b=remaining_budget(db,987654)
+        assert b["available"]==12 and b["per_run"]==6
+        assert "DAILY_LIMIT_NOT_CONFIGURED" not in b["blockers"]
+    finally:db.close()

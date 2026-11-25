@@ -47,11 +47,33 @@ def remaining_budget(db, campaign_id):
         AIBudgetReservation.campaign_id == int(campaign_id)).all()
     today = datetime.utcnow().strftime("%Y-%m-%d")
     reserved = {r.budget_period: int(r.reserved_requests or 0) for r in rows}
-    return {"available": max(0, min(daily - reserved.get(today, 0),
-                                      lifetime - reserved.get("lifetime", 0))),
-            "daily_limit": daily, "lifetime_limit": lifetime,
-            "per_run": per_run, "provider_ready": bool(os.getenv("OPENAI_API_KEY", "").strip()),
-            "database_ready": db.bind.dialect.name == "postgresql"}
+    provider_ready=bool(os.getenv("OPENAI_API_KEY", "").strip())
+    database_ready=db.bind.dialect.name == "postgresql"
+    daily_remaining=max(0,daily-reserved.get(today,0))
+    lifetime_remaining=max(0,lifetime-reserved.get("lifetime",0))
+    blockers=[]
+    if not provider_ready:blockers.append("AI_PROVIDER_NOT_CONFIGURED")
+    if not database_ready:blockers.append("PROTECTED_DATABASE_REQUIRED")
+    if not daily:blockers.append("DAILY_LIMIT_NOT_CONFIGURED")
+    elif not daily_remaining:blockers.append("DAILY_LIMIT_EXHAUSTED")
+    if not lifetime:blockers.append("LIFETIME_LIMIT_NOT_CONFIGURED")
+    elif not lifetime_remaining:blockers.append("LIFETIME_LIMIT_EXHAUSTED")
+    if not per_run:blockers.append("PER_RUN_LIMIT_NOT_CONFIGURED")
+    return {"available":min(daily_remaining,lifetime_remaining),
+            "daily_limit":daily,"lifetime_limit":lifetime,"per_run":per_run,
+            "daily_remaining":daily_remaining,"lifetime_remaining":lifetime_remaining,
+            "provider_ready":provider_ready,"database_ready":database_ready,"blockers":blockers}
+
+
+def budget_blocker_message(budget):
+    labels={"AI_PROVIDER_NOT_CONFIGURED":"AI provider is not configured.",
+            "PROTECTED_DATABASE_REQUIRED":"Protected PostgreSQL budget storage is unavailable.",
+            "DAILY_LIMIT_NOT_CONFIGURED":"Daily AI request limit is zero or not configured.",
+            "DAILY_LIMIT_EXHAUSTED":"Daily AI request allowance is exhausted.",
+            "LIFETIME_LIMIT_NOT_CONFIGURED":"Lifetime AI request limit is zero or not configured.",
+            "LIFETIME_LIMIT_EXHAUSTED":"Lifetime AI request allowance is exhausted.",
+            "PER_RUN_LIMIT_NOT_CONFIGURED":"Per-run AI request limit is zero or not configured."}
+    return " ".join(labels[x] for x in budget.get("blockers",[]) if x in labels)
 
 
 def _run(db, principal, campaign_id, run_id):
@@ -142,8 +164,10 @@ def status(db, principal, campaign_id, run_id):
                     totals["stalled"] += 1
                 else:
                     totals["processing"] += 1
-            elif job and job.state == "PENDING":
+            elif job and job.state == "PENDING" and job.attempts<3:
                 totals["queued"] += 1
+            elif job and job.state == "PENDING":
+                totals["failed"] += 1
             elif job and job.state in ("FAILED","COMPLETED"):
                 totals["failed"] += 1
             else:
@@ -160,7 +184,7 @@ def status(db, principal, campaign_id, run_id):
         budget = remaining_budget(db, c.id)
         stage = ("NEEDS_ATTENTION" if totals["queued"] and not totals["processing"]
                  and (meta.get("assessment_worker_complete") or not budget["provider_ready"] or not budget["database_ready"]
-                      or budget["available"] == 0) else "ASSESSING")
+                      or budget["available"] == 0 or not budget["per_run"]) else "ASSESSING")
     elif totals["failed"] or totals["blocked"]:
         stage = "NEEDS_ATTENTION"
     else:
@@ -174,6 +198,8 @@ def status(db, principal, campaign_id, run_id):
               else "The current AI request allowance is exhausted."
                    if stage == "NEEDS_ATTENTION" and not budget["available"]
               else "")
+    if stage=="NEEDS_ATTENTION" and totals["queued"] and not totals["stalled"]:
+        reason=budget_blocker_message(budget) or ("Per-run request limit reached. Resume the saved queue without another crawl." if meta.get("assessment_worker_exit_reason")=="PER_RUN_LIMIT_REACHED" else reason)
     finished_at = [j.updated_at for j in jobs.values()
                    if j.state == "COMPLETED" and j.updated_at]
     last_activity = max(finished_at) if finished_at else None
@@ -186,6 +212,8 @@ def status(db, principal, campaign_id, run_id):
             "last_activity_at":last_activity.isoformat()+"Z" if last_activity else None,
             "completed_per_minute":throughput,"eta_seconds":eta_seconds,
             "status_reason":reason,
+            "assessment_worker_exit_reason":meta.get("assessment_worker_exit_reason"),
+            "resume_available":bool(totals["queued"] and not totals["processing"] and not totals["stalled"] and not budget.get("blockers")),
             "posts_saved":int(run.result_count or 0), "total":len(ids),
             **totals,"progress_percent":round(100*totals["completed"]/len(ids)),
             "credits_used":int(run.credits_used or 0),
@@ -282,7 +310,7 @@ def start_all(db, principal, campaign_id, payload):
                 if rid not in jobs or (jobs[rid].state == "PENDING" and jobs[rid].attempts<3)]
     budget = remaining_budget(db, c.id)
     if not budget["provider_ready"] or not budget["database_ready"] or not budget["per_run"]:
-        raise ValueError("AI provider, per-run limit or protected database budget unavailable")
+        raise ValueError(budget_blocker_message(budget) or "AI provider, per-run limit or protected database budget unavailable")
     if eligible and budget["available"] <= 0:
         raise ValueError("AI request budget is exhausted. The remaining posts can be "
                          "assessed once the daily allowance is restored.")
@@ -321,6 +349,7 @@ def execute_run(run_id):
         ids = [int(x) for x in meta.get("assessment_result_ids",[])[:500]
                if str(x).isdigit()]
         meta["assessment_worker_complete"] = False
+        meta.pop("assessment_worker_exit_reason",None)
         run.query_json = json.dumps(meta,ensure_ascii=False)
         if run.provider == "AI_ASSESS_ALL":
             run.status = "RUNNING"
@@ -340,6 +369,7 @@ def execute_run(run_id):
     finally:
         db.close()
     attempted=0
+    exit_reason="QUEUE_SCANNED"
     for rid in ids:
         db = SessionLocal()
         try:
@@ -358,7 +388,8 @@ def execute_run(run_id):
             budget = remaining_budget(quota_db,campaign_id)
         finally:
             quota_db.close()
-        if not budget["available"] or not budget["provider_ready"] or attempted>=budget['per_run']:
+        if not budget["available"] or not budget["provider_ready"] or not budget["database_ready"] or not budget["per_run"] or attempted>=budget['per_run']:
+            exit_reason="BUDGET_OR_CONFIGURATION_BLOCKED" if budget.get("blockers") else "PER_RUN_LIMIT_REACHED"
             break
         attempted+=1
         assess_pending_campaign(campaign_id,requested_limit=1,target_result_id=rid)
@@ -368,6 +399,8 @@ def execute_run(run_id):
         if run:
             meta=json.loads(run.query_json or "{}")
             meta["assessment_worker_complete"]=True
+            meta["assessment_worker_exit_reason"]=exit_reason
+            meta["assessment_dispatch_attempts"]=attempted
             run.query_json=json.dumps(meta,ensure_ascii=False)
             if run.provider == "AI_ASSESS_ALL":run.status="COMPLETED"
             db.commit()

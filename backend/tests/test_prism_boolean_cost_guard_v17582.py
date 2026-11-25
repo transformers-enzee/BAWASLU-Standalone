@@ -250,3 +250,23 @@ def test_uncertain_previous_charge_requires_explicit_ack_and_active_preview_is_r
     assert resumed['active_run_id']==str(started['run_id']) and resumed['paid_collection_blocked']
     assert calls==['POST']
     db.close()
+
+
+def test_focused_boolean_strategy_and_credit_cap_are_signature_bound(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    calls=[]
+    def free(method,url,body=None,timeout=50):
+        assert body['dry_run'];calls.append(body);return {'estimate':{}},{}
+    monkeypatch.setattr(prism_discover,'call',free)
+    preview=prism_discover.action(db,{},'campaignDiscoverPreview',{'max_credits':10,'retrieval_strategy':'FOCUSED'},c.id)
+    assert preview['keywords_used']==['bawaslu bandung','bawaslu jawa barat']
+    assert preview['credit_cap']==10
+    assert preview['provider_plan']['effective_strategy']=='FOCUSED'
+    with pytest.raises(ValueError,match='free credit preview'):
+        prism_discover.action(db,{},'campaignDiscoverStart',{'confirm_cost':True,'signature':preview['signature'],'max_credits':20,'retrieval_strategy':'FOCUSED'},c.id)
+    with pytest.raises(ValueError,match='free credit preview'):
+        prism_discover.action(db,{},'campaignDiscoverStart',{'confirm_cost':True,'signature':preview['signature'],'max_credits':10,'retrieval_strategy':'BALANCED'},c.id)
+    assert db.query(SocialListeningRun).count()==0 and len(calls)==1
+    db.close()

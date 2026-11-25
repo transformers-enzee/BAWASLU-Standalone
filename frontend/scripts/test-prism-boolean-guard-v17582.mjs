@@ -5,7 +5,7 @@ const project=read('../src/components/intel/CampaignPanel.jsx');
 const dialog=read('../src/components/intel/AssessmentProgressDialog.jsx');
 const service=read('../../backend/app/prism_discover.py');
 const planner=read('../../backend/app/project_boolean.py');
-for(const field of ["discover_boolean_plan(search['boolean_query'])","'max_credits':cap","'relevance':'score'","dry_run':True","'zero_yield_ack_required':False","confirm_cost","collection_diagnostics","provider_diagnostics","excluded_by_boolean"])assert.ok(service.includes(field),field);
+for(const field of ["discover_boolean_plan(search['boolean_query'],strategy=","'max_credits':cap","'relevance':'score'","dry_run':True","'zero_yield_ack_required':False","confirm_cost","collection_diagnostics","provider_diagnostics","excluded_by_boolean"])assert.ok(service.includes(field),field);
 assert.ok(!service.includes("params['contains']=plan['contains']"));
 assert.ok(!service.includes("group['exclude_terms']=plan['exclude_terms']"));
 assert.ok(planner.includes('POSITIVE_COMPOUND_SEARCH_WITH_LOCAL_BOOLEAN_GATE'));
@@ -35,3 +35,8 @@ assert.ok(project.includes('paid_collection_blocked?null:launchDiscover'));
 assert.ok(service.includes('acknowledge_prior_collection'));
 assert.ok(project.includes('Resume project'));
 assert.ok(project.includes('r.data.active_run_id'));
+
+assert.ok(dialog.includes('SocialCrawl credit ceiling'));
+assert.ok(dialog.includes('Focused compound phrases'));
+assert.ok(project.includes('max_credits:discoverPreview.credit_cap'));
+assert.ok(project.includes('View saved assessment progress'));

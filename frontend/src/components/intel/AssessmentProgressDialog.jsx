@@ -6,7 +6,7 @@ const since=value=>{if(!value)return 'No successful AI activity recorded';const 
 const labels={COLLECTING:'Collecting SocialCrawl posts',ASSESSING:'AI assessment in progress',
  COMPLETED:'Assessment complete',NEEDS_ATTENTION:'Paused — action required',
  FAILED:'Run failed',NO_NEW_POSTS:'No new posts captured'};
-export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,onReuse=null,preview=null,booleanExpression=''}){
+export default function AssessmentProgressDialog({title,run,onRefresh,onResume,onClose,loading=false,previewLoading=false,error='',showCost=false,onConfirm=null,onReuse=null,preview=null,booleanExpression='',creditCap=20,retrievalStrategy='BALANCED',onCollectionOptions=null}){
  const stage=run?.stage||(run?.status==='QUEUED'||run?.status==='RUNNING'?'COLLECTING':'ASSESSING');
  const count=Number(run?.total||0),done=Number(run?.completed||0);
  // Collection percentage is unknown until results are saved.
@@ -24,6 +24,7 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
     {!run&&<div className="space-y-3">
      <p className="text-sm text-slate-700">Activate this project to collect posts and assess the saved results?</p>
      <p className="text-xs text-slate-500">This starts a one-time collection; scheduled monitoring is currently disabled.</p>
+     {onCollectionOptions&&<div className="space-y-2 rounded-lg border border-slate-200 p-3 text-xs"><label className="block font-semibold">SocialCrawl credit ceiling <select aria-label="SocialCrawl credit ceiling" className="ml-2 rounded border p-1" value={creditCap} disabled={loading||previewLoading} onChange={e=>onCollectionOptions(Number(e.target.value),retrievalStrategy)}>{[10,20,35,50,100].map(n=><option key={n} value={n}>{n}</option>)}</select></label>{booleanExpression&&<label className="block font-semibold">Retrieval strategy <select className="ml-2 rounded border p-1" aria-label="Boolean retrieval strategy" value={retrievalStrategy} disabled={loading||previewLoading} onChange={e=>onCollectionOptions(creditCap,e.target.value)}><option value="FOCUSED">Focused compound phrases</option><option value="BALANCED">Balanced anchors and phrases</option></select><span className="block mt-1 font-normal text-slate-500">Focused may reduce unrelated candidates, but can miss non-adjacent or reversed terms. Exact Boolean matching remains local.</span></label>}{preview&&<p>Confirmed preview ceiling: {preview.credit_cap} credits · {preview.candidate_limit} candidates · up to {preview.post_limit} accepted. {preview.provider_plan?.effective_strategy&&'Effective strategy: '+preview.provider_plan.effective_strategy+'.'} {preview.keywords_used?.length>0&&'Provider phrases: '+preview.keywords_used.join(' · ')}</p>}</div>}
      {preview?.collection_budget&&<p className="text-xs text-slate-500">Monthly collection allowance remaining: {Number(preview.collection_budget.monthly_remaining).toLocaleString()} · Source storage available: {Number(preview.collection_budget.storage_remaining).toLocaleString()}. Provider collection counts can exceed the local candidate limit.</p>}
      {booleanExpression&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><p className="text-xs text-slate-500">Boolean expression</p><p className="mt-1 break-words font-mono">{booleanExpression}</p></div>}
      {preview?.prior_collection_ack_required&&<p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Previous collection may be recoverable or its charge is uncertain. Review the project dashboard before requesting another paid collection.</p>}
@@ -77,14 +78,14 @@ export default function AssessmentProgressDialog({title,run,onRefresh,onResume,o
        <p className="mt-1"><strong>Estimated completion:</strong> {run.eta_seconds!=null&&stage==='ASSESSING'?Math.ceil(run.eta_seconds/60)+' min':'Paused or insufficient live activity — no reliable estimate'}</p>
        <p className="mt-1"><strong>Worker status:</strong> {run.stalled?'Stalled — review required':run.processing?'Processing':run.queued?'Queued / awaiting worker':'Idle'}</p>
      </div>
-     {run.budget&&<p className="text-xs text-slate-600">Remaining controlled AI request allowance: {run.budget.available||0}. The actual charge depends on provider token usage.</p>}
+     {run.budget&&<div className="text-xs text-slate-600 space-y-1"><p>Remaining controlled AI request allowance: {run.budget.available||0}. The actual charge depends on provider token usage.</p><p>Daily remaining: {run.budget.daily_remaining??'Unknown'} · Lifetime remaining: {run.budget.lifetime_remaining??'Unknown'} · Per run: {run.budget.per_run??'Unknown'}</p>{!!run.budget.blockers?.length&&<p role="alert" className="text-amber-900">AI execution blocked: {run.budget.blockers.map(x=>x.toLowerCase().replaceAll('_',' ')).join(' · ')}</p>}</div>}
      </>}
      {run.error&&<p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">{run.error}</p>}
      {run.status_reason&&<p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{run.status_reason}</p>}
      {stage==='NEEDS_ATTENTION'&&<p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Assessment is paused or requires review, not actively advancing. Failed and ambiguous paid requests are never retried automatically. Only never-sent queued work can resume, with your confirmation.</p>}
      <div className="flex flex-wrap gap-2">
       <button type="button" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" disabled={loading} onClick={onRefresh}>Refresh status</button>
-      {!!run.queued&&!run.processing&&onResume&&<button type="button" className="rounded-lg bg-[#a52a2f] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={loading} onClick={onResume}>Resume queued assessments</button>}
+      {!!run.queued&&!run.processing&&run.resume_available!==false&&onResume&&<button type="button" className="rounded-lg bg-[#a52a2f] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={loading} onClick={onResume}>Resume queued assessments</button>}
      </div>
      {stage==='COMPLETED'&&<p className="text-xs text-emerald-800">All eligible sources in this run have been fully assessed. Review relevant findings in Intelligence Inbox; not all captured posts become Inbox cases.</p>}
     </>}

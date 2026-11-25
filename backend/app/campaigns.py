@@ -551,6 +551,10 @@ def campaign_action(db:Session,p,action,data,id=None):
                 raise ValueError('Assessment processing already active; refresh status')
             if not result['queued']:
                 raise ValueError('No saved queued posts to resume')
+            from .activation_assessment import budget_blocker_message
+            if result.get('stalled'):raise ValueError('Review interrupted AI requests before resuming')
+            if result['budget'].get('blockers'):
+                raise ValueError(budget_blocker_message(result['budget']))
             if result['budget']['available']<=0:
                 raise ValueError('AI request budget exhausted; queued work must wait for quota')
             return {**result,'resume_accepted':True}

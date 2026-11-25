@@ -14,6 +14,8 @@ import { deduplicateInboxEvidence } from '@/lib/inboxExactDedup';
 const platformLabel=value=>({youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',facebook:'Facebook',threads:'Threads',x:'X',twitter:'X',reddit:'Reddit',linkedin:'LinkedIn'}[String(value||'').toLowerCase()]||String(value||'Unknown'));
 const safeOriginalUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}};
 
+const needsOfficerReview=item=>Boolean(item.is_flagged??((item.potential_issues||[]).length>0))&&!['FLAG_CONFIRMED','FLAG_DISMISSED'].includes(String(item.flag_review_status||'').toUpperCase());
+
 function SocialEvidenceInbox({onOpenCasework}){
  const {language}=useLanguage();
  const deepLink=new URLSearchParams(window.location.search);
@@ -42,6 +44,7 @@ function SocialEvidenceInbox({onOpenCasework}){
  const [correctionType,setCorrectionType]=useState('TOPICS'),[correctionTopics,setCorrectionTopics]=useState([]),[correctionQuote,setCorrectionQuote]=useState(''),[correctionConcern,setCorrectionConcern]=useState(''),[correctionRationale,setCorrectionRationale]=useState(''),[correctionBusy,setCorrectionBusy]=useState(false),[correctionMessage,setCorrectionMessage]=useState('');
  const [reviewDecision,setReviewDecision]=useState(''),[reviewRationale,setReviewRationale]=useState(''),[reviewBusy,setReviewBusy]=useState(false),[reviewError,setReviewError]=useState(''),[reviewNotice,setReviewNotice]=useState('');
  const [confirmedReview,setConfirmedReview]=useState(null);
+ const [reviewMode,setReviewMode]=useState(false);
  // Keep the latest server-acknowledged decision for the active drawer stable
  // even when an older cached Inbox response finishes out of order.
  const acknowledgedReview=useRef(new Map());
@@ -447,6 +450,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
   if(chosenCandidate==='__no_candidate__'&&candidatesFor(x).length>0)return false;
   if(chosenCandidate&&chosenCandidate!=='__no_candidate__'&&!candidatesFor(x).includes(chosenCandidate))return false;
   if(view==='violation'&&!(x.is_flagged??((x.potential_issues||[]).length>0)))return false;
+  if(view==='review'&&!needsOfficerReview(x))return false;
    if(sentimentFilter!=='ALL'&&(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(x.sentiment||'').toUpperCase())?String(x.sentiment||'').toUpperCase():'UNCLASSIFIED')!==sentimentFilter)return false;
   if(reviewStatusFilter==='AWAITING_REVIEW'&&(x.flag_review_status||((x.is_flagged??((x.potential_issues||[]).length>0))?'AWAITING_REVIEW':'NONE'))!=='AWAITING_REVIEW')return false;
   if(reviewStatusFilter&&reviewStatusFilter!=='AWAITING_REVIEW'&&x.flag_review_status!==reviewStatusFilter)return false;
@@ -481,6 +485,15 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  const [showAdvancedFilters,setShowAdvancedFilters]=useState(false);
  const issueGroups=signals=>Object.entries((signals||[]).reduce((groups,signal)=>{const category=String(signal.category_name||'Uncategorized potential issue');(groups[category] ||= []).push(signal);return groups;},{}));
  const activeFilters=[jurisdiction!=='national',Boolean(chosenLocation),Boolean(chosenRegency),Boolean(chosenCandidate),Boolean(reviewStatusFilter),sentimentFilter!=='ALL'].filter(Boolean).length;
+ const openAssessmentPost=(item,review=false)=>{
+  setSelected(item);setReviewMode(Boolean(review));
+  setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('');
+  setCorrectionMessage('');setJurisdictionMessage('');setManualCue(null);setManualRationale('');setManualCategory('');
+ };
+ const jumpToReview=part=>{
+  const element=document.getElementById('inbox-human-review-'+part);
+  if(element){element.scrollIntoView({behavior:'smooth',block:'start'});element.focus({preventScroll:true})}
+ };
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
   <div data-testid="jurisdiction-review-toolbar" className="rounded-lg border border-slate-200 bg-white p-3 text-xs space-y-2">
@@ -516,6 +529,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
     <label className="text-xs flex-1 min-w-[125px]">Sentiment<select className="intel-input mt-1 w-full" aria-label="Filter by sentiment" value={sentimentFilter} onChange={e=>{setSentimentFilter(e.target.value);setSelected(null)}}><option value="ALL">All sentiments</option><option value="POSITIVE">Positive</option><option value="NEUTRAL">Neutral</option><option value="NEGATIVE">Negative</option></select></label>
      <label className="text-xs flex-1 min-w-[125px]">Sort by date<select className="intel-input mt-1 w-full" value={sortDate} onChange={e=>setSortDate(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
   <label className="flex items-center gap-2 text-xs font-medium whitespace-nowrap min-h-10"><input type="checkbox" checked={view==='violation'} onChange={e=>{setView(e.target.checked?'violation':'all');setSelected(null)}}/>Potential violation only</label>
+   <label className="flex items-center gap-2 text-xs font-semibold whitespace-nowrap min-h-10"><input data-testid="inbox-pending-human-review-filter" type="checkbox" checked={view==='review'} onChange={e=>{setView(e.target.checked?'review':'all');setSelected(null)}}/>Awaiting officer review</label>
    </div>
   </div>
   {processingSummary&&new URLSearchParams(window.location.search).get("debug")==="qa"&&<section className="intel-card p-3 space-y-2" aria-label="Processing and QA diagnostics">
@@ -578,7 +592,8 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
    <section aria-label="Scrollable intelligence posts" className="min-w-0 flex flex-col gap-2 xl:relative xl:min-h-[680px]">
     <div className="flex items-center justify-between text-xs text-slate-500 px-1"><span>Posts · {filtered.length} unique matching loaded · {findings.length} source records loaded · {duplicatesCollapsed} exact duplicate(s) collapsed{inboxPagination.total_eligible!=null?' of '+inboxPagination.total_eligible+' eligible':''}</span></div>
     <div className="max-h-[680px] xl:max-h-none xl:absolute xl:inset-x-0 xl:top-6 xl:bottom-0 overflow-y-auto overscroll-contain pr-1 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" tabIndex={0} aria-label="Post list, scroll to see more">
-     {ordered.map(item=><button key={item.campaign_id+'-'+item.id} type="button" onClick={()=>{setSelected(item);setReviewDecision('');setReviewRationale('');setReviewError('');setReviewNotice('')}} className="w-full min-h-[84px] text-left intel-card p-3 space-y-1 hover:border-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
+     {ordered.map(item=><div key={item.campaign_id+'-'+item.id} className="intel-card p-3 space-y-2" data-testid="inbox-source-review-card">
+      <button type="button" onClick={()=>openAssessmentPost(item,false)} className="w-full min-h-[66px] text-left space-y-1 rounded-md hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
          <div className="text-xs text-slate-500">{item.campaign_name} · {platformLabel(item.platform)}</div>
@@ -592,7 +607,12 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
          {reviewState(item)&&<span className={'text-[10px] max-w-[125px] '+reviewState(item).cls}>{reviewState(item).label}</span>}
         </div>
        </div>
-     </button>)}
+     </button>
+     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
+      <span className="text-[11px] text-slate-600">{needsOfficerReview(item)?'Officer review pending':item.flag_review_status==='FLAG_DISMISSED'?'Preliminary flag dismissed':item.flag_review_status==='FLAG_CONFIRMED'?'Preliminary flag reviewed':'Saved AI assessment'}</span>
+      <button type="button" data-testid="inbox-review-ai-assessment" className="shrink-0 rounded-lg bg-[#8b2430] px-3 py-2 text-xs font-semibold text-white hover:bg-[#701a24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8b2430]" onClick={()=>openAssessmentPost(item,true)}>Review AI Assessment</button>
+     </div>
+    </div>)}
      {!filtered.length&&<p className="intel-card p-5 text-sm text-slate-500">{chosenLocation?'No assessed posts match this province in your authorized campaign scope. Source mentions are unverified until officer review.':inboxPagination.has_more?'No matching posts in the loaded set. Load older posts to continue searching.':'No campaign-assessed findings match this view yet. New Social Listening evidence will appear here after collection and assessment.'}</p>}
      {inboxPagination.has_more&&<button type="button" className="intel-ghost w-full py-3 font-semibold" disabled={loadingMore} onClick={loadOlderInboxPosts}>{loadingMore?'Loading older posts…':'Load 100 older posts'}</button>}
      {loadMoreError&&<p role="alert" className="text-sm text-red-700">{loadMoreError}</p>}
@@ -623,11 +643,18 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
 
   </div>}
   {selected&&<div className="fixed inset-0 z-50 flex justify-end"><button type="button" aria-label="Close finding preview" className="absolute inset-0 bg-slate-900/40" onClick={()=>setSelected(null)}/>
-   <section role="dialog" aria-modal="true" aria-label="Finding details" className="relative bg-white w-full max-w-xl h-full shadow-2xl flex flex-col">
-    <div className="p-4 border-b flex justify-between gap-3 items-center"><h3 className="font-semibold">Post preview · AI assessment</h3><button autoFocus type="button" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button></div>
+   <section role="dialog" aria-modal="true" aria-label={reviewMode?'Human Review Centre':'Finding details'} className="relative bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col">
+    <div className="p-4 border-b flex flex-wrap justify-between gap-3 items-center">
+     <div><h3 className="font-semibold">{reviewMode?'Human Review Centre':'Post preview · AI assessment'}</h3><p className="text-xs text-slate-500">Post #{selected.id} · Assessment v{selected.assessment_version||'—'}</p></div>
+     <div className="flex flex-wrap gap-2">
+      <button type="button" data-testid="inbox-toggle-review-centre" className={reviewMode?'intel-ghost text-xs':'intel-button text-xs'} onClick={()=>setReviewMode(true)}>Review AI Assessment</button>
+      <button type="button" className={reviewMode?'intel-button text-xs':'intel-ghost text-xs'} onClick={()=>setReviewMode(false)}>Full details</button>
+      <button type="button" aria-label="Close finding preview" className="intel-ghost text-xs" onClick={()=>setSelected(null)}>Close ×</button>
+     </div>
+    </div>
     <div className="p-4 overflow-y-auto space-y-3 text-sm">
       {String(selected.model_version||'').toLowerCase()==='mock-fixture'&&<div role="note" className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><strong>Synthetic QA example.</strong> This is not a real social-media post. Officer review is required; do not treat this fixture as election evidence.</div>}
-     <section className="rounded-xl border border-[#dce6e8] bg-[#f5f9f9] p-4 space-y-2">
+     <section id="inbox-human-review-evidence" tabIndex={-1} className="rounded-xl border border-[#dce6e8] bg-[#f5f9f9] p-4 space-y-2">
       <h4 className="font-bold text-sm text-[#7f3038]">Original source provenance</h4>
       <p className="text-xs text-slate-600">Source post ID: <code className="break-all">{selected.id||'Not supplied'}</code></p>
       <p className="text-xs text-slate-600">Platform: {platformLabel(selected.platform)} · Publisher: {selected.observed_handle||selected.author_name||'Not recorded'}</p>
@@ -645,7 +672,22 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        </button>
       </div>}
      </section>
-     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> <TranslatedIntelligenceText text={selected.explanation||'No explanation stored'}/></p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation&&<> · <TranslatedIntelligenceText text={selected.sentiment_explanation}/></>} · {selected.sentiment_correction||selected.sentiment_model==='OFFICER_CORRECTION'?'Officer corrected':selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><SentimentCorrection campaignId={selected.campaign_id} resultId={selected.id}
+     {reviewMode&&<section data-testid="inbox-human-review-centre" className="rounded-xl border-2 border-[#a52a2f] bg-[#fffaf9] p-4 space-y-3" aria-label="Review AI Assessment guided controls">
+      <h4 className="font-bold text-[#801b24]">Review AI Assessment · officer checklist</h4>
+      <p className="text-xs text-slate-700">Check the original source against the AI suggestions, then select a review area to reach its existing correction and decision controls.</p>
+      <div className="rounded-lg border bg-white p-3 text-xs space-y-1">
+       <p><strong>AI relevance:</strong> {selected.relevance_label||'Not assessed'} · Confidence: {selected.relevance_confidence||'Not provided'}</p>
+       <p><strong>Potential issue:</strong> {(selected.potential_issues||[]).length?'Preliminary signal · not verified':'No saved potential issue signal'}</p>
+       <p><strong>Flag review:</strong> {selected.flag_review_status||((selected.is_flagged||(selected.potential_issues||[]).length)?'Awaiting review':'Not flagged')}</p>
+       <p><strong>Incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?'Officer reviewed':'Not officer verified'}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+       {[["evidence","1. Original evidence"],["assessment","2. AI suggestions"],["sentiment","Correct sentiment"],["jurisdiction","Verify location"],["classification","Correct topic / concern"],["flag","Decide on issue flag"]].map(([part,label])=><button type="button" key={part} className="rounded-lg border border-[#deb6b8] bg-white px-2 py-3 text-left font-semibold text-[#801b24] hover:bg-[#fbeaec] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2430]" onClick={()=>jumpToReview(part)}>{label}</button>)}
+      </div>
+      <p className="text-xs text-amber-900"><strong>Review decisions are saved individually.</strong> There is no overall approval button. The original AI assessment and source remain preserved; confirming a preliminary issue flag does not establish a legal violation.</p>
+      {!selected.can_review_flag&&<p className="text-xs text-slate-700">Flag review requires human-validation permission. Other correction actions also enforce their own permissions.</p>}
+     </section>}
+     <p className="text-xs text-slate-500">{selected.campaign_name} · {platformLabel(selected.platform)}</p><p className="whitespace-pre-wrap">{selected.text_content||'No text available'}</p><div id="inbox-human-review-assessment" tabIndex={-1} className="border-t pt-3 space-y-2"><p><strong>Why relevant:</strong> <TranslatedIntelligenceText text={selected.explanation||'No explanation stored'}/></p><p><strong>AI assessment:</strong> {selected.relevance_label} · Confidence: {selected.relevance_confidence||'Not provided'}</p><p id="inbox-human-review-sentiment" tabIndex={-1}><strong>Saved sentiment:</strong> {selected.sentiment||'UNCLASSIFIED'} · Confidence: {selected.sentiment_confidence||'Not provided'}{selected.sentiment_explanation&&<> · <TranslatedIntelligenceText text={selected.sentiment_explanation}/></>} · {selected.sentiment_correction||selected.sentiment_model==='OFFICER_CORRECTION'?'Officer corrected':selected.sentiment_model?'AI processed':'Not sentiment-assessed'}</p><SentimentCorrection campaignId={selected.campaign_id} resultId={selected.id}
         value={selected.sentiment} canEdit={selected.can_correct_sentiment}
         onSaved={correction=>{
          const previous=String(selected.sentiment||'UNCLASSIFIED').toUpperCase();
@@ -670,7 +712,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
        {selected.sentiment_correction.rationale?' · '+selected.sentiment_correction.rationale:''}
       </p>}
      <p><strong>Location signals:</strong> {signalNames(selected.location_signals).join(', ')||'None'}</p>
-     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
+     <div id="inbox-human-review-jurisdiction" tabIndex={-1} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2" aria-label="Officer incident jurisdiction review">
       <p><strong>Human incident location:</strong> {selected.incident_jurisdiction_review?.incident_jurisdiction_verified?selected.incident_jurisdiction_review.incident_province:'Not verified'} · {selected.incident_jurisdiction_review?.decision||'UNREVIEWED'} · Profile location does not establish incident jurisdiction.</p>
       <p data-testid="reviewed-regency-city"><strong>Human Kabupaten/Kota decision:</strong> {selected.incident_jurisdiction_review?.regency_city_review?.incident_regency_city_verified?selected.incident_jurisdiction_review.regency_city_review.incident_regency_city:'Not verified'} · {selected.incident_jurisdiction_review?.regency_city_review?.decision||'UNREVIEWED'} · Review is separate from regional access.</p>
       <button type="button" className="intel-ghost text-xs" disabled={jurisdictionReadinessBusy} onClick={()=>loadJurisdictionReadiness()}>View campaign jurisdiction readiness (free)</button>
@@ -731,7 +773,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
       </div>}{selected.can_review_flag&&jurisdictionPreview.source_post_relevance_assessed&&<div className="flex flex-wrap gap-2"><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy||(jurisdictionPreview.source_context_provinces_unverified||[]).length!==1} onClick={()=>confirmIncidentJurisdiction('CONFIRMED')}>Verify incident province</button><button type="button" className="intel-ghost text-xs" disabled={jurisdictionBusy} onClick={()=>confirmIncidentJurisdiction('REJECTED')}>Reject location cue</button></div>}</div>}
       {jurisdictionMessage&&<p role="status" className="text-slate-600">{jurisdictionMessage}</p>}
      </div><p><strong>Communication context (review hint):</strong> {selected.processing_hints?.communication_context?.category||'UNRESOLVED'} · Actionability not established; existing AI and human decisions remain unchanged.</p><p><strong>Topic suggestions (text-only):</strong> {(selected.processing_hints?.topic_suggestions||[]).join(', ')||'None'}</p><p><strong>Province mentions (not verified incident location):</strong> {(selected.processing_hints?.province_mentions||[]).join(', ')||'None'}</p><p><strong>Candidate signals:</strong> {signalNames(selected.candidate_signals).join(', ')||'None'}</p>{(selected.topic_labels||[]).length>0&&<p><strong>AI topic classification:</strong> {selected.topic_labels.join(', ')} · Based on saved assessment, not keyword hints.</p>}
-     {selected.can_review_flag&&<section className="rounded-lg border border-teal-200 p-3 space-y-2" aria-label="Officer classification corrections">
+     {selected.can_review_flag&&<section id="inbox-human-review-classification" tabIndex={-1} className="rounded-lg border border-teal-200 p-3 space-y-2" aria-label="Officer classification corrections">
       <h4 className="font-semibold">Officer topic / Public Concerns correction</h4>
       <p className="text-xs text-slate-500">Creates a new audited assessment version. Does not replace the original AI output or prove wrongdoing.</p>
       <select aria-label="Correction type" className="intel-input w-full" value={correctionType} onChange={e=>setCorrectionType(e.target.value)}><option value="TOPICS">Correct topic classification</option><option value="PUBLIC_CONCERN">Record source-grounded Public Concern</option></select>
@@ -751,7 +793,7 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
           onClick={()=>selectKeywordCueForReview(lead)}>Escalate source cue for officer review</button>
         </div>)}</div>}
      </div>}{(selected.potential_issues||[]).length>0&&<div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2" aria-label="Potential issue evidence"><h4 className="text-sm font-semibold">Why this was flagged · preliminary evidence</h4>{issueGroups(selected.potential_issues).map(([category,signals])=><div key={category} className="text-xs space-y-2"><p className="font-semibold">{category} · {signals.length} {signals.length===1?'signal':'signals'} · Unverified</p>{signals.map((signal,index)=><div key={index} className="pl-2 border-l-2 border-amber-400 space-y-1"><p className="font-medium">{signal.signal_type==='REPORTED_INCIDENT'?'Reported incident · '+(signal.time_context||'UNKNOWN').toLowerCase():'Potential violation'}</p>{signal.evidence_quote&&<blockquote className="whitespace-pre-wrap"><span>{language==='id'?'Kutipan sumber: ':'Source excerpt: '}</span>“{signal.evidence_quote}”</blockquote>}<p><TranslatedIntelligenceText text={signal.explanation||'Requires human review against the original source.'}/></p></div>)}</div>)}<p className="text-xs text-amber-800">Source-supported text is not proof of a legal violation. Verify independently before acting.</p></div>}{(selected.potential_issues||[]).some(x=>x.signal_provenance==='LEGACY_MISSING_TYPE')&&<p className="text-xs text-amber-700" role="note">Legacy AI signal (original type missing) · Source quotation validated · Human verification required</p>}<p className="text-xs text-slate-500">Assessment v{selected.assessment_version} · Model {selected.model_version||'unspecified'} · Human verification required</p></div>
-    {<div className="border-t pt-3 space-y-3">
+    {<div id="inbox-human-review-flag" tabIndex={-1} className="border-t pt-3 space-y-3">
      <h4 className="font-semibold">Human flag review</h4>
      <p className="text-xs text-slate-500">Flag decisions do not establish legal violations and do not change the original AI assessment.</p>
      <p className="text-xs">Current status: <strong data-testid="flag-review-current-status" data-i18n-exempt="true" aria-live="polite">{

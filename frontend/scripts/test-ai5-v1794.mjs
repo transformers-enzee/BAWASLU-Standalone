@@ -50,7 +50,9 @@ for(const x of ['ai5-page','ai5-modes','ai5-use-bawaslu',
  'ai5-research-trail','ai5-response','AI-5 editable draft',
  "['pdf','docx','xlsx']"])
  have(ai,x);
-have(docker,'ARG BAWASLU_BUILD_VERSION=183.4');
+const dockerVersion=docker.match(/^ARG BAWASLU_BUILD_VERSION=([0-9]+\\.[0-9]+)$/m)?.[1];
+const mainVersion=main.match(/BAWASLU_BUILD_VERSION','([0-9]+\\.[0-9]+)'/)?.[1];
+assert.ok(dockerVersion,'Missing versioned Docker build argument');
+assert.equal(mainVersion,dockerVersion,'Backend and Docker versions must match');
 have(docker,'tests/test_ai5_v1794.py');
-have(main,"BAWASLU_BUILD_VERSION','183.4'");
 console.log('PASS AI-5 v179.4 independent routes, unrestricted general mode, permissioned research and real export contracts');

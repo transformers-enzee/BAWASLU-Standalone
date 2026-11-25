@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   verify-and-publish:
+    if: github.ref == 'refs/heads/architecture-v2-foundation-20261015'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout staging source

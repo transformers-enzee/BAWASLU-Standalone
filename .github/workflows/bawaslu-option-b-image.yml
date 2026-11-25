@@ -1,7 +1,7 @@
 name: BAWASLU Option B - prebuilt staging image
 
 # v175.60: image publication remains explicit and staging-only.
-# Changing this workflow triggers an image build; Render deployment remains manual.
+# Manual fallback only; the primary staging image workflow handles automatic publication.
 # Normal application changes do not automatically deploy to Render.
 on:
   workflow_dispatch:

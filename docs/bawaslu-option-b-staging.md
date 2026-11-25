@@ -7,13 +7,14 @@ Use GitHub Actions to build the **existing Dockerfile** and publish a prebuilt s
 - Current URL to preserve: `https://bawaslu-standalone-staging.onrender.com`
 - Image: `ghcr.io/transformers-enzee/bawaslu-standalone:staging`
 - Immutable release tags: `ghcr.io/transformers-enzee/bawaslu-standalone:sha-<commit SHA>`
-- Workflow: `.github/workflows/bawaslu-option-b-image.yml`
+- Automatic publisher: `.github/workflows/bawaslu-staging-image.yml`
+- Manual fallback: `.github/workflows/bawaslu-option-b-image.yml`
 - Branch: `architecture-v2-foundation-20261015`
 
 ## Phase 1 — Verify GitHub image build (no Render deploy)
-1. Open the **BAWASLU Option B - prebuilt staging image** GitHub Actions workflow on the development branch.
-2. The initial push of this workflow triggers one image build. Later use **Run workflow** with **deploy_staging = false** to build release batches on demand.
-3. Confirm the `Build and publish immutable staging image` step succeeds. Confirm the GHCR package exists and contains a `staging` tag and an immutable `sha-...` tag.
+1. Open the **BAWASLU staging Docker image (verified)** GitHub Actions workflow on the staging branch.
+2. Each staging push triggers a single automatic BAWASLU image publication. The Option B fallback is manual only; do not run it redundantly.
+3. Confirm the primary image build and publication step succeeds. Confirm the GHCR package exists and contains a `staging` tag and an immutable `sha-...` tag.
 4. GitHub Actions may require organization permission to publish packages. Resolve any permission issue in GitHub, not by switching Render back to source builds.
 5. Keep the GHCR package **private** unless the project owner explicitly approves publishing the built image. For a private package, Render needs a GitHub registry credential with `read:packages` access. If public visibility is approved, Render can pull a public GHCR image without a credential.
 
@@ -22,7 +23,7 @@ Use GitHub Actions to build the **existing Dockerfile** and publish a prebuilt s
 ## Phase 2 — One-time Render dashboard change (human intervention)
 This connected Render tool does not expose an update-source operation, so a Render workspace administrator must complete the following on the existing service:
 
-1. Confirm that **staging** uses the intended isolated database and that a backup exists. The existing Dockerfile startup command runs `alembic upgrade head` automatically; a new image can perform schema migrations when first started. Do not switch sources until this risk is reviewed.
+1. Confirm that **staging** uses the intended isolated database and that a backup exists. The Dockerfile defaults to `BAWASLU_STARTUP_READ_ONLY=1`; `alembic upgrade head` is opt-in only. Do not override this setting without a separately approved migration review.
 2. Open `https://dashboard.render.com/web/srv-dbhfo9gu01pc73b7am6g`, then **Settings → Build → Source → Edit**.
 3. Change the source from the Git repository to **Existing Image**, using `ghcr.io/transformers-enzee/bawaslu-standalone:staging`. Attach a GitHub Container Registry credential if the image is private.
 4. Keep the same service, URL, environment variables, region and access settings. Do not create a replacement public service or modify production.
@@ -33,8 +34,8 @@ Never place the deploy hook, registry token, database credentials or officer rec
 
 ## Phase 3 — Future bulk deployments
 1. Complete normal GitHub offline QA and Playwright checks for the staged release commit.
-2. On GitHub Actions, open **BAWASLU Option B - prebuilt staging image**, select the approved development branch, and run with **deploy_staging = true**.
-3. The workflow builds and pushes a prebuilt `linux/amd64` image, then uses the **staging-only** deploy hook to request the exact `sha-...` image. It refuses to deploy unless the ready variable and hook secret are configured.
+2. Verify the automatic publisher succeeded for the exact release commit and QA checks passed.
+3. In the existing Render staging service, select the verified immutable image, save, and deploy according to the agreed staging process. The manual Option B deploy-hook workflow is a fallback only and requires the ready variable and hook secret.
 4. Verify Render's final deploy status and the application's health, login, data access, API, AI Assistant and PDF behavior. A successful GitHub deploy-hook request is **not** proof the web app became healthy.
 5. If verification fails, use Render's existing rollback or redeploy a previously successful immutable GHCR tag. Keep older image tags available for rollback.
 

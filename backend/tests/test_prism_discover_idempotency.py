@@ -483,3 +483,51 @@ def test_candidate_cap_prioritizes_new_project_links(monkeypatch):
     assert db.query(CampaignEvidence).count()==125
     assert json.loads(run.query_json)['collection_diagnostics']['new_evidence_links']==25
     db.close()
+
+
+def test_production_export_ingests_more_than_300_and_queues_all_matches(monkeypatch):
+    from app import prism_full_export
+    from app.models import AIAssessmentJob
+    db=SessionLocal();c,run=seed(db)
+    run.status='RUNNING';run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300},'full_collection':True})
+    db.commit()
+    pages={None:([post(str(i),'https://instagram.com/p/full-'+str(i)) for i in range(250)],'page2',False),
+           'page2':([post(str(i),'https://instagram.com/p/full-'+str(i)) for i in range(250,620)],None,True)}
+    monkeypatch.setattr(prism_full_export,'read_export_page',lambda url,cursor,safe:pages[cursor])
+    def checkpoint(*args,**kwargs):return run,json.loads(run.query_json)
+    prism_full_export.ingest_full_export(db,c,run,json.loads(run.query_json),{}, {'results_url':'https://www.socialcrawl.dev/v1/prism/discover/runs/run_test'}, {'status':'completed'},checkpoint,prism_discover.store,lambda x:x)
+    assert run.result_count==620 and run.status=='COMPLETED'
+    assert db.query(CampaignEvidence).count()==620
+    assert db.query(AIAssessmentJob).count()==620
+    meta=json.loads(run.query_json)
+    assert meta['full_export_complete'] and len(meta['assessment_result_ids'])==620
+    assert meta['collection_diagnostics']['accepted_boolean_matches']==620
+    db.close()
+
+
+def test_full_export_restarts_from_committed_cursor(monkeypatch):
+    import pytest
+    from app import prism_full_export
+    db=SessionLocal();c,run=seed(db)
+    run.status='RUNNING';run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300},'full_collection':True})
+    db.commit()
+    one=post('first','https://instagram.com/p/first')
+    two=post('second','https://instagram.com/p/second')
+    def interrupted(url,cursor,safe):
+        if cursor is None:return [one],'page2',False
+        raise RuntimeError('mock interrupted read')
+    def checkpoint(*args,**kwargs):return run,json.loads(run.query_json)
+    kwargs=(db,c,run,json.loads(run.query_json),{}, {'results_url':'https://www.socialcrawl.dev/v1/prism/discover/runs/run_test'}, {'status':'completed'},checkpoint,prism_discover.store,lambda x:x)
+    monkeypatch.setattr(prism_full_export,'read_export_page',interrupted)
+    with pytest.raises(RuntimeError):prism_full_export.ingest_full_export(*kwargs)
+    meta=json.loads(run.query_json)
+    assert meta['full_export_cursor']=='page2' and not meta['full_export_complete']
+    assert db.query(CampaignEvidence).count()==1
+    def resumed(url,cursor,safe):
+        assert cursor=='page2'
+        return [two],None,True
+    monkeypatch.setattr(prism_full_export,'read_export_page',resumed)
+    prism_full_export.ingest_full_export(db,c,run,meta,*kwargs[4:])
+    assert run.result_count==2 and db.query(CampaignEvidence).count()==2
+    assert json.loads(run.query_json)['full_export_complete']
+    db.close()

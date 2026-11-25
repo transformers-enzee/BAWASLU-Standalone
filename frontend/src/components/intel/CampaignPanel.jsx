@@ -70,7 +70,7 @@ export default function CampaignPanel({campaignId=null}){
  const [query,setQuery]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [expandedCampaignKeywords,setExpandedCampaignKeywords]=useState({});
  const [discoverCampaign,setDiscoverCampaign]=useState(null),[discoverPreview,setDiscoverPreview]=useState(null);
- const [discoverCap,setDiscoverCap]=useState(20),[discoverStrategy,setDiscoverStrategy]=useState('BALANCED');
+
  const [discoverRun,setDiscoverRun]=useState(null),[discoverBusy,setDiscoverBusy]=useState(false),[discoverPreviewBusy,setDiscoverPreviewBusy]=useState(false),[discoverError,setDiscoverError]=useState('');
  const activationRestoreOnce=useRef(false);
  // Persisted run IDs are accessible via explicit campaign activation, but a
@@ -156,9 +156,9 @@ export default function CampaignPanel({campaignId=null}){
   return ()=>{active=false;clearInterval(timer)};
  },[discoverRun?.run_id,discoverRun?.stage,discoverCampaign?.id]);
 
- async function checkDiscover(c,cap=20,strategy=c.search_mode==='BOOLEAN'?'FOCUSED':'BALANCED'){
-   setDiscoverCampaign(c);setDiscoverCap(cap);setDiscoverStrategy(strategy);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
-   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{max_credits:cap,retrieval_strategy:strategy}});
+ async function checkDiscover(c){
+   setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
+   try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{production_collection:true}});
      if(r.data.active_run_id){setDiscoverRun({run_id:r.data.active_run_id,status:'RUNNING',stage:'COLLECTING'});return}
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
@@ -179,7 +179,7 @@ export default function CampaignPanel({campaignId=null}){
    if(discoverPreview.prior_collection_ack_required&&!window.confirm('A previous collection can be recovered or its charge is uncertain. Check the project dashboard first. Starting a new collection can incur additional charges. Continue?'))return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature,max_credits:discoverPreview.credit_cap,retrieval_strategy:discoverPreview.retrieval_strategy,acknowledge_prior_collection:!!discoverPreview.prior_collection_ack_required}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      data:{confirm_cost:true,signature:discoverPreview.signature,production_collection:true,acknowledge_prior_collection:!!discoverPreview.prior_collection_ack_required}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
       window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
       setActivationSaved(saved)}
@@ -726,7 +726,7 @@ export default function CampaignPanel({campaignId=null}){
      </article>)}{discoverCampaign&&<AssessmentProgressDialog
   title={'Activate · '+discoverCampaign.name}
   preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy} previewLoading={discoverPreviewBusy}
-  creditCap={discoverCap} retrievalStrategy={discoverStrategy} onCollectionOptions={(cap,strategy)=>checkDiscover(discoverCampaign,cap,strategy)}
+
   onConfirm={discoverPreview?.paid_collection_blocked?null:launchDiscover} onReuse={reuseDiscover} onRefresh={()=>refreshDiscover()}
   onResume={()=>resumeAssessment(discoverRun,discoverCampaign)}
   onClose={()=>{
@@ -778,7 +778,7 @@ export default function CampaignPanel({campaignId=null}){
     {latestPrismCollection.submission_uncertain&&<p className="text-xs text-amber-900">Original provider submission or charge is uncertain. Review before starting another collection.</p>}
     {latestPrismCollection.shared_provider_run&&<p className="text-xs">Provider run reused. Credits shown are attributed to this local run; the upstream total may include earlier usage.</p>}
     {latestPrismCollection.scope_incompatible_reused_rows>0&&<p className="text-xs text-amber-900">{latestPrismCollection.scope_incompatible_reused_rows} existing source candidates skipped because their original collection scope differs.</p>}
-    {latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(true)}>Recover existing collection</button>}
+    {latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(true)}>{latestPrismCollection.candidate_limit_reached||latestPrismCollection.matched_over_target?'Retrieve remaining paid results':'Recover existing collection'}</button>}
     {['COMPLETED','PARTIAL'].includes(latestPrismCollection.status)&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={openSavedAssessment}>View saved assessment progress</button>}
     {latestPrismCollection.upstream_candidates_not_screened>0&&<p className="text-xs text-amber-900">{latestPrismCollection.upstream_candidates_not_screened} upstream kept candidates were not screened. Coverage is incomplete; avoid automatically repeating a paid crawl.</p>}
     <button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(false)}>Refresh collection status</button>

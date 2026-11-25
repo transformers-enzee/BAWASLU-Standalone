@@ -56,7 +56,7 @@ def ensure_no_active_collection(db,cid,exclude_run_id=None):
     if active:raise ValueError('Discover or legacy collection run already active; review its status before changing this project')
 
 
-def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None):
+def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None,production=False):
     search=decode_project_query(c.primary_keywords_json)
     boolean_mode=search['search_mode']=='BOOLEAN'
     default_cap=100
@@ -101,6 +101,7 @@ def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None):
         if since>until:raise ValueError('Monitoring start date must not follow end date')
         params.pop('period')
         params.update(since=since.isoformat(),until=until.isoformat())
+    if production:params.pop('max_credits',None)
     signature=snapshot_signature({'body':params,'configuration':search_snapshot(c)})
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -112,6 +113,12 @@ def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None):
         if meta.get('plan_signature')==signature and meta.get('watermark'):
             params['since_watermark']=meta['watermark'];break
     return params,snapshot_signature({'plan_signature':signature,'watermark':params.get('since_watermark')})
+
+def estimated_credit_allowance(info):
+    value=info.get('suggested_max_credits') or ((info.get('estimate') or {}).get('credits') or {}).get('max')
+    if type(value) is not int or value<1:raise ValueError('Provider did not supply a full-run credit estimate; no paid request was submitted')
+    return value
+
 
 def candidate_limit(meta):
     """Honor the original run's bounded retrieval contract, including legacy runs."""
@@ -129,7 +136,7 @@ def heartbeat_stale(run,meta,now=None):
 
 
 def can_recover(run,meta,c):
-    return bool((run.status=='FAILED' or (run.status=='PARTIAL' and meta.get('export_incomplete')) or heartbeat_stale(run,meta)) and c.status=='DRAFT'
+    return bool((run.status=='FAILED' or (run.status=='PARTIAL' and meta.get('export_incomplete')) or (run.status=='COMPLETED' and not meta.get('full_export_complete') and bool((meta.get('collection_diagnostics') or {}).get('candidate_limit_reached') or (meta.get('collection_diagnostics') or {}).get('matched_over_target'))) or heartbeat_stale(run,meta)) and c.status=='DRAFT'
         and re.fullmatch(r'run_[A-Za-z0-9_-]+',str(run.provider_request_id or ''))
         and meta.get('search_snapshot')
         and meta.get('query_revision')==snapshot_signature(search_snapshot(c)))
@@ -258,8 +265,9 @@ def latest_collection_outcome(db,c,params=None):
         'already_linked_matches':diag.get('already_linked_matches'),
         'candidate_limit_reached':diag.get('candidate_limit_reached'),
         'matched_over_target':diag.get('matched_over_target'),
-        'candidate_limit':candidate_limit(meta),
-        'accepted_target':CAP,
+        'candidate_limit':None if meta.get('full_collection') else candidate_limit(meta),
+        'accepted_target':None if meta.get('full_collection') else CAP,
+        'full_export_complete':bool(meta.get('full_export_complete')),
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
         'provider_diagnostics':meta.get('provider_diagnostics'),
@@ -363,6 +371,7 @@ def action(db,p,verb,data,cid):
         if not can_recover(run,meta,c):
             raise ValueError('Recovery requires a failed provider run ID and the unchanged collection configuration')
         meta['recovery_only']=True
+        if run.status=='COMPLETED':meta['full_collection']=True
         meta['worker_token']='';meta['worker_heartbeat_at']=datetime.now(timezone.utc).isoformat()
         run.query_json=json.dumps(meta,ensure_ascii=False)
         run.status='QUEUED';run.error_text=''
@@ -375,7 +384,8 @@ def action(db,p,verb,data,cid):
             raise ValueError('Campaign unavailable for collection')
         ensure_no_active_collection(db,c.id)
     search=decode_project_query(c.primary_keywords_json)
-    params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'),(data or {}).get('retrieval_strategy'))
+    production=(data or {}).get('production_collection') is True
+    params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'),(data or {}).get('retrieval_strategy'),production)
     last=latest_collection_outcome(db,c,params)
     from .legacy_collection_guard import view as legacy_view
     legacy_batch=legacy_view(db,c)
@@ -391,13 +401,14 @@ def action(db,p,verb,data,cid):
             raise ValueError('Legacy collection already active. Review its status in the project dashboard.')
         if last and last['status'] in ('QUEUED','RUNNING'):
             return {'active_run_id':last['run_id'],'last_run':last,'paid':False,'paid_collection_blocked':True}
-        offer,_,_=recent_reuse_offer(db,p,c,params)
+        offer,_,_=recent_reuse_offer(db,p,c,params) if not production else (None,None,[])
         budget=collection_budget.snapshot(db)
-        blocked=params['limit']>min(budget['monthly_remaining'],budget['storage_remaining'])
+        blocked=any(v is not None and params['limit']>v for v in (budget['monthly_remaining'],budget['storage_remaining']))
         if blocked and not offer:collection_budget.assert_capacity(db,params['limit'])
         info,meta=({}, {}) if blocked else call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
+        allowance=estimated_credit_allowance(info) if production and not blocked else params.get('max_credits')
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
-            'post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
+            'production_collection':production,'post_limit':None if production else CAP,'candidate_limit':None if production else params['limit'],'credit_cap':allowance,'keywords_used':params['groups'][0]['keywords'],
             'provider_contains':params.get('contains',''),
             'provider_exclude_terms':params['groups'][0].get('exclude_terms',[]),
             'provider_plan':plan,'last_run':last,
@@ -418,6 +429,9 @@ def action(db,p,verb,data,cid):
         raise ValueError('Run the free credit preview and explicitly confirm it first')
     if (prior_uncertain or (last and (last.get('submission_uncertain') or last.get('recovery_available')))) and (data or {}).get('acknowledge_prior_collection') is not True:
         raise ValueError('Review the previous recoverable or uncertain collection and explicitly acknowledge the risk of additional charges before starting a new crawl')
+    if production:
+        info,_=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
+        params['max_credits']=estimated_credit_allowance(info)
     collection_budget.lock(db)
     collection_budget.assert_capacity(db,params['limit'])
     snapshot=search_snapshot(c)
@@ -426,6 +440,7 @@ def action(db,p,verb,data,cid):
     run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',executed_by=str(p.get('id') or ''),
             query_json=json.dumps({'body':params,'signature':sig,'plan_signature':plan_signature,
                                   'search_snapshot':snapshot,'query_revision':snapshot_signature(snapshot),'campaign_id':c.id,
+                                  'full_collection':production,
                                   'worker_heartbeat_at':datetime.now(timezone.utc).isoformat(),
                                   'prior_collection_acknowledged':bool((data or {}).get('acknowledge_prior_collection')),
                                   'province':c.province,'regency_city':c.regency_city}),
@@ -433,7 +448,7 @@ def action(db,p,verb,data,cid):
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_DISCOVER'))
     db.commit()
-    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits']}
+    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':None if production else CAP,'candidate_limit':None if production else params['limit'],'credit_cap':params['max_credits']}
 
 def ai_text(payload):
     if isinstance(payload.get('output_text'),str):return payload['output_text']
@@ -513,7 +528,8 @@ def enrich(db,c,entries):
 
 def store(db,run,c,items,full_assessment=False,commit=True):
     run_meta=json.loads(run.query_json or '{}')
-    scan_cap=candidate_limit(run_meta)
+    full_collection=bool(run_meta.get('full_collection'))
+    scan_cap=len(items) if full_collection else candidate_limit(run_meta)
     collection_budget.lock(db)
     # Reserve the maximum possible new source rows before writing any.
     collection_budget.assert_storage(db,min(scan_cap,len(items)),exclude_run_id=run.id)
@@ -607,7 +623,7 @@ def store(db,run,c,items,full_assessment=False,commit=True):
             # Only locally matched posts may enter the project and AI path.
             rejected+=1
             continue
-        if len(accepted_ids)>=CAP:
+        if not full_collection and len(accepted_ids)>=CAP:
             matched_over_target+=1
             continue
         accepted_ids.append(row.id)
@@ -639,7 +655,15 @@ def store(db,run,c,items,full_assessment=False,commit=True):
     meta=json.loads(run.query_json or '{}')
     meta['search_snapshot']=snapshot
     meta['query_revision']=revision
-    meta['assessment_result_ids']=accepted_ids
+    prior_ids=meta.get('assessment_result_ids') or []
+    meta['assessment_result_ids']=list(dict.fromkeys(prior_ids+accepted_ids)) if full_collection else accepted_ids
+    if full_collection:
+        from .models import AIAssessmentJob
+        pending=[rid for rid in accepted_ids if rid not in set(prior_ids)]
+        existing_jobs={j.result_id for j in db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==c.id,AIAssessmentJob.result_id.in_(pending)).all()} if pending else set()
+        for rid in pending:
+            if rid not in existing_jobs:db.add(AIAssessmentJob(campaign_id=c.id,result_id=rid,state='PENDING',attempts=0))
+    previous=meta.get('collection_diagnostics') or {}
     from collections import Counter as _Counter
     meta['collection_diagnostics']={
         'raw_provider_items':len(items),
@@ -651,23 +675,34 @@ def store(db,run,c,items,full_assessment=False,commit=True):
         'excluded_by_publication_date':date_rejected,
         'scope_incompatible_reused_rows':scope_skipped,
         'matched_over_target':matched_over_target,
-        'candidate_limit':scan_cap,
-        'accepted_target':CAP,
+        'candidate_limit':None if full_collection else scan_cap,
+        'accepted_target':None if full_collection else CAP,
         'already_linked_matches':len(accepted_ids)-new_evidence_links,
         'search_mode':'BOOLEAN' if boolean_mode else 'KEYWORDS',
-        'candidate_limit_reached':len(items)>=scan_cap,
+        'candidate_limit_reached':False if full_collection else len(items)>=scan_cap,
         'new_evidence_links':new_evidence_links,
         'candidate_platforms':dict(_Counter(row.platform for row,_ in pairs)),
         'counts_basis':'scanned_provider_candidates',
         'paid_provider_called':False,
     }
+    if full_collection:
+        diag=meta['collection_diagnostics']
+        if meta.get('full_export_started'):
+            for key in ('raw_provider_items','considered_items','unique_candidates','excluded_by_boolean','excluded_by_search','excluded_by_publication_date','scope_incompatible_reused_rows','new_evidence_links'):
+                diag[key]+=int(previous.get(key) or 0)
+            diag['candidate_platforms']=dict(_Counter(previous.get('candidate_platforms') or {})+_Counter(diag['candidate_platforms']))
+        else:diag['new_evidence_links']+=int(previous.get('new_evidence_links') or 0)
+        diag['accepted_boolean_matches']=len(meta['assessment_result_ids'])
+        diag['already_linked_matches']=max(0,diag['accepted_boolean_matches']-diag['new_evidence_links'])
+        diag['counts_basis']='full_export_screened_rows'
+        meta['full_export_started']=True
     run.query_json=json.dumps(meta,ensure_ascii=False)
     if commit:db.commit()
     # Legacy manual store still supports topic-only enrichment. The Activate
     # pipeline uses the full intelligence assessor instead of two paid passes.
     if not full_assessment:
         enrich(db,c,new)
-    return len(accepted_ids)
+    return len(meta['assessment_result_ids']) if full_collection else len(accepted_ids)
 
 def provider_diagnostics(data):
     """Retain aggregate diagnostics, never raw rejected posts or credentials."""
@@ -753,6 +788,14 @@ def execute(run_id):
         if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
         db.commit()
+        if meta.get('full_collection'):
+            from .prism_full_export import ingest_full_export
+            ingest_full_export(db,c,run,meta,data,nxt,status,checkpoint,store,safe_url)
+            from .activation_assessment import execute_run
+            if not recovery:execute_run(run.id)
+            from .inbox_read_cache import invalidate
+            invalidate()
+            return
         items=list(data.get('items') or [])
         # Status responses can include the first page; the export starts again.
         export_items=[];export_incomplete=False

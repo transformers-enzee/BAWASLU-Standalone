@@ -23,7 +23,9 @@ def nonnegative(value):
     return value if type(value) is int and value>=0 else 0
 
 def cap(name,maximum):
-    try:return max(0,min(maximum,int(os.getenv(name,str(maximum)))))
+    value=os.getenv(name,'').strip()
+    if not value or value.lower()=='unlimited':return None
+    try:return max(0,int(value))
     except (TypeError,ValueError):return 0
 
 def meta_for(run):
@@ -88,8 +90,8 @@ def snapshot(db,now=None,exclude_run_id=None):
     return {'monthly_limit':monthly_cap,'monthly_counted':used,'monthly_reserved':reserved,
             'storage_limit':storage_cap,'stored_source_rows':stored,'storage_reserved':storage_reserved,
             'runs_without_upstream_count':unknown,'count_basis':'REPORTED_PRISM_ROWS_PLUS_LEGACY_LEDGER_AND_RESERVATIONS',
-            'monthly_remaining':max(0,monthly_cap-used-reserved),
-            'storage_remaining':max(0,storage_cap-stored-storage_reserved)}
+            'monthly_remaining':None if monthly_cap is None else max(0,monthly_cap-used-reserved),
+            'storage_remaining':None if storage_cap is None else max(0,storage_cap-stored-storage_reserved)}
 
 def legacy_requested(filters):
     platforms=filters.get('platforms') or []
@@ -98,11 +100,11 @@ def legacy_requested(filters):
 
 def assert_capacity(db,requested,exclude_run_id=None):
     value=snapshot(db,exclude_run_id=exclude_run_id)
-    if requested>value['monthly_remaining']:raise ValueError('Monthly collection allowance reached; no additional paid collection was started')
-    if requested>value['storage_remaining']:raise ValueError('Active source storage allowance reached; no additional paid collection was started')
+    if value['monthly_remaining'] is not None and requested>value['monthly_remaining']:raise ValueError('Monthly collection allowance reached; no additional paid collection was started')
+    if value['storage_remaining'] is not None and requested>value['storage_remaining']:raise ValueError('Active source storage allowance reached; no additional paid collection was started')
     return value
 
 def assert_storage(db,requested,exclude_run_id=None):
     value=snapshot(db,exclude_run_id=exclude_run_id)
-    if requested>value['storage_remaining']:raise ValueError('Active source storage allowance reached; existing provider results can be recovered after capacity is available')
+    if value['storage_remaining'] is not None and requested>value['storage_remaining']:raise ValueError('Active source storage allowance reached; existing provider results can be recovered after capacity is available')
     return value

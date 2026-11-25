@@ -111,7 +111,7 @@ def status(db, principal, campaign_id, run_id):
                 'total':0,'completed':0,'queued':0,'processing':0,'failed':0,'blocked':0,'progress_percent':0,
                 'credits_used':int(run.credits_used or 0),'status_reason':'Collection worker stopped updating. Open the project dashboard to recover or quarantine the original run; no new crawl was started.',
                 'collection_diagnostics':meta.get('collection_diagnostics') or {},'budget':remaining_budget(db,c.id)}
-    ids = [int(x) for x in meta.get("assessment_result_ids", [])[:500]
+    ids = [int(x) for x in (meta.get("assessment_result_ids", []) if meta.get("full_collection") else meta.get("assessment_result_ids", [])[:500])
            if str(x).isdigit()]
     diag=meta.get("collection_diagnostics")
     if not isinstance(diag,dict):diag={}
@@ -346,7 +346,7 @@ def execute_run(run_id):
         if not meta.get("cost_confirmed") and run.provider == "AI_ASSESS_ALL":
             return
         campaign_id = int(meta["campaign_id"])
-        ids = [int(x) for x in meta.get("assessment_result_ids",[])[:500]
+        ids = [int(x) for x in (meta.get("assessment_result_ids",[]) if meta.get("full_collection") else meta.get("assessment_result_ids",[])[:500])
                if str(x).isdigit()]
         meta["assessment_worker_complete"] = False
         meta.pop("assessment_worker_exit_reason",None)

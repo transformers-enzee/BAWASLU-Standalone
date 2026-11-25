@@ -36,7 +36,7 @@ assert.ok(service.includes('acknowledge_prior_collection'));
 assert.ok(project.includes('Resume project'));
 assert.ok(project.includes('r.data.active_run_id'));
 
-assert.ok(dialog.includes('SocialCrawl credit ceiling'));
-assert.ok(dialog.includes('Focused compound phrases'));
-assert.ok(project.includes('max_credits:discoverPreview.credit_cap'));
+assert.ok(dialog.includes('No fixed accepted-post ceiling'));
+assert.ok(service.includes('estimated_credit_allowance'));
+assert.ok(project.includes('production_collection:true'));
 assert.ok(project.includes('View saved assessment progress'));

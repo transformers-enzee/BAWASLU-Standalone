@@ -270,3 +270,32 @@ def test_focused_boolean_strategy_and_credit_cap_are_signature_bound(monkeypatch
         prism_discover.action(db,{},'campaignDiscoverStart',{'confirm_cost':True,'signature':preview['signature'],'max_credits':10,'retrieval_strategy':'BALANCED'},c.id)
     assert db.query(SocialListeningRun).count()==0 and len(calls)==1
     db.close()
+
+
+def test_production_collection_uses_provider_estimate_without_fixed_cap(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    def free(method,url,body=None,timeout=50):
+        assert body['dry_run'] and 'max_credits' not in body
+        return {'suggested_max_credits':987,'estimate':{'credits':{'max':987}}},{}
+    monkeypatch.setattr(prism_discover,'call',free)
+    preview=prism_discover.action(db,{},'campaignDiscoverPreview',{'production_collection':True},c.id)
+    assert preview['credit_cap']==987 and preview['post_limit'] is None
+    result=prism_discover.action(db,{},'campaignDiscoverStart',{'production_collection':True,'confirm_cost':True,'signature':preview['signature']},c.id)
+    run=db.get(SocialListeningRun,result['run_id'])
+    meta=json.loads(run.query_json)
+    assert meta['full_collection'] and meta['body']['max_credits']==987
+    db.close()
+
+
+def test_quota_policy_is_optional_not_hardcoded(monkeypatch):
+    from app import prism_collection_budget as budget
+    db=SessionLocal()
+    monkeypatch.delenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT',raising=False)
+    monkeypatch.delenv('BAWASLU_ACTIVE_SOURCE_STORAGE_LIMIT',raising=False)
+    state=budget.assert_capacity(db,10000000)
+    assert state['monthly_remaining'] is None and state['storage_remaining'] is None
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','7000000')
+    assert budget.snapshot(db)['monthly_limit']==7000000
+    db.close()

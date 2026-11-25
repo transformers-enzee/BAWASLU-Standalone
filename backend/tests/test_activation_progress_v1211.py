@@ -18,4 +18,29 @@ def test_stale_job_does_not_trigger_implicit_paid_retries():
     import app.activation_assessment as activation
     src=Path(activation.__file__).read_text()
     assert 'recover_stale_jobs' not in src # only an authorized resume quarantines claims
-    assert 'requested_limit=1,target_result_id=rid' in src
+    assert 'pending_campaign_job_links(db,campaign_id,limit=200,result_ids=chunk)' in src
+    assert 'target_result_ids=batch' in src
+
+
+def test_scoped_batch_excludes_interrupted_and_uncertain_claims():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db import Base
+    from app.models import CampaignEvidence,AIAssessmentJob
+    from app.assessment_job_reconcile import pending_campaign_job_links,enqueue_scoped_jobs
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    db=Session(engine)
+    try:
+        for rid in range(1,6):
+            db.add(CampaignEvidence(campaign_id=91,result_id=rid,match_method='KEYWORD'))
+        old=datetime.utcnow()-timedelta(minutes=30)
+        for rid,state,attempts in [(1,'PROCESSING',1),(2,'FAILED',1),(3,'PENDING',3),(4,'PENDING',0),(5,'PENDING',0)]:
+            db.add(AIAssessmentJob(campaign_id=91,result_id=rid,state=state,attempts=attempts,updated_at=old))
+        db.commit()
+        assert enqueue_scoped_jobs(db,91,[1,2,3,4])==0
+        assert [row.result_id for row in pending_campaign_job_links(db,91,result_ids=[1,2,3,4])]==[4]
+        assert [(j.state,j.attempts) for j in db.query(AIAssessmentJob).order_by(AIAssessmentJob.result_id).all()]==[
+            ('PROCESSING',1),('FAILED',1),('PENDING',3),('PENDING',0),('PENDING',0)]
+    finally:db.close();engine.dispose()
+

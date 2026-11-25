@@ -68,6 +68,9 @@ jobs:
       - name: AI-5 Saved Chats and share navigation contract
         working-directory: frontend
         run: node scripts/test-ai5-saved-shares-v1808.mjs
+      - name: AI-5 Saved Chats user experience regression
+        working-directory: frontend
+        run: node scripts/test-ai5-saved-chats-ux-v1810.mjs
       - name: Build frontend
         working-directory: frontend
         run: npm run build

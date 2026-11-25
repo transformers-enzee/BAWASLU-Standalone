@@ -1,7 +1,7 @@
 import {useState,useRef,useEffect} from 'react';
 import {useOutletContext} from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import {ArrowRight,Paperclip,Link2,Trash2,Plus,BriefcaseBusiness,Download,FileText,Loader2,Sparkles,ShieldCheck,Globe2,RotateCcw,Save,Share2,Bookmark,Mail,MessageCircle,Copy,Check,X,Pencil} from 'lucide-react';
+import {ArrowRight,Paperclip,Link2,Trash2,Plus,BriefcaseBusiness,Download,FileText,Loader2,Sparkles,ShieldCheck,Globe2,RotateCcw,Save,Share2,Bookmark,Mail,MessageCircle,Copy,Check,X,Pencil,MessagesSquare,History,Search,ChevronDown,ChevronUp} from 'lucide-react';
 
 const MODES=[['WEB_ONLY','Web only','Public research; no saved SmartRadar records'],
  ['WEB_SMARTRADAR','Web + SmartRadar','Read public and authorised saved sources'],
@@ -345,6 +345,9 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  const [currentSavedId,setCurrentSavedId]=useState(null);
  const [saveStatus,setSaveStatus]=useState('');
  const [showSaved,setShowSaved]=useState(false);
+ const [savedSearch,setSavedSearch]=useState('');
+ const [savedLoading,setSavedLoading]=useState(true);
+ const [savedLoadError,setSavedLoadError]=useState('');
  const [sharedLinks,setSharedLinks]=useState([]);
  const [showShares,setShowShares]=useState(false);
  const [shareDialog,setShareDialog]=useState(null);
@@ -355,12 +358,22 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
  useEffect(()=>{
   if(shareToken)return;
   let active=true;
-  request('/api/ai-5/saved').then(r=>{if(active)setSavedChats(r.saved_chats||[])}).catch(()=>{});
+  request('/api/ai-5/saved')
+    .then(r=>{if(active){setSavedChats(r.saved_chats||[]);setSavedLoadError('')}})
+    .catch(()=>{if(active)setSavedLoadError("Couldn't load saved chats")})
+    .finally(()=>{if(active)setSavedLoading(false)});
   request('/api/ai-5/shared').then(r=>{if(active)setSharedLinks(r.shares||[])}).catch(()=>{});
   return ()=>{active=false};
  },[shareToken]);
  async function refreshSaved(){
-  const r=await request('/api/ai-5/saved');setSavedChats(r.saved_chats||[]);
+  setSavedLoadError('');
+  try{
+   const r=await request('/api/ai-5/saved');
+   setSavedChats(r.saved_chats||[]);
+  }catch(e){
+   setSavedLoadError("Couldn't load saved chats");
+   throw e;
+  }finally{setSavedLoading(false)}
  }
  async function refreshShares(){
   const r=await request('/api/ai-5/shared');setSharedLinks(r.shares||[]);
@@ -490,37 +503,90 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-sky-100"><Sparkles size={16}/> Independent SmartRadar assistant</p>
    <h1 className="mt-2 text-3xl font-bold">AI-5 Assistant</h1>
    <p className="mt-2 text-sm text-sky-100">Explore any topic, follow a new angle, and create working documents. Apply findings to BAWASLU when you choose.</p>
-   <div className="mt-4 flex flex-wrap gap-2">
+   <div className="mt-5 flex flex-wrap items-center gap-2">
+    <button type="button" data-testid="ai5-new-chat-header" disabled={busy||processing}
+     onClick={reset} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#173950] shadow-sm transition hover:bg-sky-50">
+     <Plus size={17}/> New chat</button>
     <button type="button" data-testid="ai5-save-chat" disabled={!messages.length||busy||processing}
-     onClick={saveChat} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#173950]">
-     <Save size={14} className="mr-1 inline"/>{currentSavedId?'Saved chat':'Save chat'}</button>
+     onClick={saveChat} className={'inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition '+
+       (!messages.length?'cursor-not-allowed border-white/20 text-sky-100/60':
+        currentSavedId?'border-sky-200 bg-sky-100 text-[#173950] hover:bg-white':
+        'border-white bg-white/10 text-white hover:bg-white/20')}>
+     {currentSavedId?<Check size={17}/>:<Save size={17}/>}
+     {currentSavedId?(saveStatus==='Couldn’t save'?'Retry save':'Saved'):'Save chat'}</button>
     <button type="button" data-testid="ai5-share-chat" disabled={!messages.length||busy||processing}
      onClick={()=>setShareDialog({scope:'CONVERSATION',turnId:null})}
-     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
-     <Share2 size={14} className="mr-1 inline"/> Share chat</button>
-    <button type="button" data-testid="ai5-saved-navigation" onClick={()=>setShowSaved(v=>!v)}
-     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
-     <Bookmark size={14} className="mr-1 inline"/> Saved Chats ({savedChats.length})</button>
-    <button type="button" onClick={()=>setShowShares(v=>!v)}
-     className="rounded-lg border border-white/40 px-3 py-2 text-xs font-semibold text-white">
-     <Share2 size={14} className="mr-1 inline"/> Shared links ({sharedLinks.length})</button>
-    {!!saveStatus&&<span role="status" className={'rounded-lg px-3 py-2 text-xs font-semibold '+(
-     saveStatus==='Couldn’t save'?'bg-red-200 text-red-900':'bg-sky-100 text-[#173950]')}>
-     {saveStatus}</span>}
+     className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
+     <Share2 size={16}/> Share</button>
+    {messages.length>0&&<span data-testid="ai5-save-status" role="status" className={'rounded-lg px-3 py-2 text-xs font-semibold '+
+     (saveStatus==='Couldn’t save'?'bg-red-100 text-red-900':
+      currentSavedId&&saveStatus!=='Saving…'?'bg-emerald-50 text-emerald-950':'bg-white/10 text-white')}>
+     {saveStatus==='Couldn’t save'?'Couldn’t save · Retry above':
+      saveStatus==='Saving…'?'Saving…':
+      currentSavedId?'Saved automatically after each reply':
+      'Not saved · Save to return later'}
+    </span>}
    </div>
   </header>
-  {showSaved&&<nav aria-label="AI-5 Saved Chats" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4" data-testid="ai5-saved-chats">
-   <h2 className="text-sm font-bold">Saved Chats · Private to you</h2>
-   {!savedChats.length&&<p className="text-xs text-slate-500">No saved chats yet.</p>}
-   {savedChats.map(item=><div key={item.id} className="flex items-center justify-between gap-2 border-b border-slate-100 py-2">
-    <button type="button" className="min-w-0 flex-1 text-left" onClick={()=>reopen(item.id)} disabled={processing||busy}>
-     <span className="block truncate text-sm font-semibold">{item.title}</span>
-     <span className="text-xs text-slate-500">Updated {new Date(item.updated_at).toLocaleString()}</span>
-    </button>
-    <button type="button" className="intel-ghost text-xs" aria-label={'Rename '+item.title} onClick={()=>renameChat(item)}><Pencil size={13}/></button>
-    <button type="button" className="intel-ghost text-xs" aria-label={'Delete '+item.title} onClick={()=>deleteChat(item)}><Trash2 size={13}/></button>
-   </div>)}
-  </nav>}
+  <nav aria-label="AI-5 Saved Chats" data-testid="ai5-saved-chats"
+   className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+   <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex items-start gap-3">
+     <span className="rounded-lg bg-sky-50 p-2 text-[#173950]"><History size={21}/></span>
+     <div>
+      <h2 className="text-base font-bold text-[#173950]">Your conversations</h2>
+      <p className="mt-0.5 text-xs text-slate-600">Open a saved chat to pick up where you left off. Only you can see your saved chats.</p>
+     </div>
+    </div>
+    <div className="flex items-center gap-2">
+     <button type="button" data-testid="ai5-saved-navigation"
+      onClick={()=>{setShowSaved(v=>!v);setSavedSearch('');refreshSaved().catch(()=>{})}}
+      className="intel-ghost inline-flex items-center gap-1.5 text-xs font-semibold">
+      {showSaved?'Show recent':'View all chats'} {showSaved?<ChevronUp size={14}/>:<ChevronDown size={14}/>}</button>
+     <button type="button" onClick={()=>{setShowShares(v=>!v);refreshShares().catch(()=>{})}}
+      className="intel-ghost inline-flex items-center gap-1.5 text-xs">
+      <Share2 size={14}/> Shared links</button>
+    </div>
+   </div>
+   {showSaved&&savedChats.length>3&&<label className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-500">
+     <Search size={16}/><input value={savedSearch} onChange={e=>setSavedSearch(e.target.value)}
+      aria-label="Search saved chats" placeholder="Search your saved conversations"
+      className="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-900 outline-none"/>
+   </label>}
+   <div className="mt-3 space-y-2">
+    {savedLoading&&<p role="status" className="p-3 text-xs text-slate-600">Loading your saved conversations…</p>}
+    {savedLoadError&&<div role="alert" className="flex items-center gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+      {savedLoadError}<button type="button" className="font-semibold underline" onClick={()=>refreshSaved().catch(()=>{})}>Retry</button>
+     </div>}
+    {!savedLoading&&!savedLoadError&&savedChats.length===0&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3">
+      <p className="text-sm text-slate-600">Your saved conversations will appear here. Save a chat to find it again after signing out.</p>
+      {!!messages.length&&<button type="button" className="intel-button text-xs" onClick={saveChat}>
+       <Save size={14}/> Save current chat</button>}
+     </div>}
+    {(showSaved?savedChats.filter(x=>x.title.toLowerCase().includes(savedSearch.toLowerCase())):savedChats.slice(0,3)).map(item=>
+     <div key={item.id} data-testid="ai5-saved-chat-item" className={'flex items-center gap-2 rounded-lg border p-2 transition '+
+       (currentSavedId===item.id?'border-sky-300 bg-sky-50':'border-slate-100 bg-slate-50/60 hover:bg-slate-50')}>
+      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 text-left"
+       onClick={()=>reopen(item.id)} disabled={processing||busy} aria-label={'Open saved chat '+item.title}>
+       <MessagesSquare size={17} className="shrink-0 text-slate-500"/>
+       <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-[#173950]">{item.title}</span>
+        <span className="block text-xs text-slate-500">{currentSavedId===item.id?'Current chat · ':''}
+         Updated {new Date(item.updated_at).toLocaleString()}</span>
+       </span>
+       {currentSavedId===item.id&&<span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-800"><Check size={13}/> Open</span>}
+      </button>
+      <button type="button" className="rounded-md border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-100"
+       aria-label={'Rename '+item.title} title="Rename chat" onClick={()=>renameChat(item)}><Pencil size={15}/></button>
+      <button type="button" className="rounded-md border border-slate-200 bg-white p-2 text-slate-600 hover:bg-red-50"
+       aria-label={'Delete '+item.title} title="Delete saved chat" onClick={()=>deleteChat(item)}><Trash2 size={15}/></button>
+     </div>)}
+    {showSaved&&savedChats.length>0&&savedSearch.trim()&&!savedChats.some(x=>x.title.toLowerCase().includes(savedSearch.toLowerCase()))&&
+     <p className="p-3 text-xs text-slate-500">No saved chats match your search.</p>}
+    {!showSaved&&savedChats.length>3&&<button type="button" className="px-2 py-1 text-xs font-semibold text-[#173950] underline"
+     onClick={()=>setShowSaved(true)}>See all {savedChats.length} saved chats</button>}
+   </div>
+  </nav>
   {showShares&&<section aria-label="AI-5 Shared links" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
    <h2 className="text-sm font-bold">Shared links · Read-only copies</h2>
    {!sharedLinks.length&&<p className="text-xs text-slate-500">No shared links yet.</p>}
@@ -607,6 +673,17 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
     <button type="button" className="intel-button" disabled={processing||!linkValue.trim()} onClick={addLink}>Add</button>
     <button type="button" className="intel-ghost" onClick={()=>setLinkOpen(false)}>Cancel</button>
    </div>}
+   {messages.length>0&&<div className={'mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs '+
+       (currentSavedId?'bg-emerald-50 text-emerald-950':'bg-amber-50 text-amber-950')}>
+     <span className="inline-flex items-center gap-2">
+      {currentSavedId?<Check size={15}/>:<Bookmark size={15}/>}
+      {currentSavedId?'Saved conversation · New replies are saved automatically':
+       'This conversation isn’t saved yet. Save it to return after signing out.'}
+     </span>
+     <button type="button" className="font-semibold underline" disabled={busy||processing} onClick={saveChat}>
+      {currentSavedId?'Sync now':'Save this chat'}
+     </button>
+    </div>}
    <form className="space-y-2" onSubmit={e=>{e.preventDefault();submit()}}>
     <textarea rows={3} maxLength={3200} aria-label="Ask AI-5" value={question}
      onChange={e=>setQuestion(e.target.value)}

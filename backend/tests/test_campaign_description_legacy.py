@@ -20,14 +20,24 @@ def test_changed_overlimit_keyword_lists_remain_rejected():
     with pytest.raises(ValueError, match='exceeds 30'):
         _campaign_edit_keywords(changed,'Main keywords',True,json.dumps(original))
 
+def mock_campaign_db(c,active=False):
+    """Represent the two distinct ORM queries used by the edit guard."""
+    db=MagicMock()
+    db.get.return_value=c
+    locked=db.query.return_value.filter_by.return_value.populate_existing.return_value.with_for_update.return_value
+    locked.first.return_value=c
+    collection=db.query.return_value.join.return_value.filter.return_value
+    collection.first.return_value=(123,) if active else None
+    return db
+
+
 def test_description_only_update_keeps_existing_keywords_and_saves():
     primary=json.dumps(['main '+str(n) for n in range(191)])
     secondary=json.dumps(['secondary '+str(n) for n in range(325)])
     c=SimpleNamespace(id=12, name='BAWASLU Demo', description='',
                       primary_keywords_json=primary,secondary_keywords_json=secondary,
                       excluded_keywords_json='[]',status='DRAFT',updated_at=None)
-    db=MagicMock()
-    db.get.return_value=c
+    db=mock_campaign_db(c)
     principal={'status':'Active','role':'National Administrator',
                'geographic_scope':'Nationwide',
                'permissions':{'view_intelligence':True,'administration':True}}
@@ -42,11 +52,23 @@ def test_description_only_update_keeps_existing_keywords_and_saves():
 
 def test_oversized_description_rejected_without_mutation():
     c=SimpleNamespace(id=12,description='Existing',status='DRAFT')
-    db=MagicMock();db.get.return_value=c
+    db=mock_campaign_db(c)
     principal={'status':'Active','role':'National Administrator',
                'geographic_scope':'Nationwide',
                'permissions':{'view_intelligence':True,'administration':True}}
     with pytest.raises(ValueError, match='2000'):
         campaign_action(db,principal,'updateCampaign',{'description':'X'*2001},id='12')
+    assert c.description=='Existing'
+    db.commit.assert_not_called()
+
+
+def test_description_edit_blocked_while_collection_active():
+    c=SimpleNamespace(id=12,description='Existing',status='DRAFT')
+    db=mock_campaign_db(c,active=True)
+    principal={'status':'Active','role':'National Administrator',
+               'geographic_scope':'Nationwide',
+               'permissions':{'view_intelligence':True,'administration':True}}
+    with pytest.raises(ValueError,match='already active'):
+        campaign_action(db,principal,'updateCampaign',{'description':'New'},id='12')
     assert c.description=='Existing'
     db.commit.assert_not_called()

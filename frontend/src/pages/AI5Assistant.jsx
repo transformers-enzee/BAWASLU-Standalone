@@ -514,7 +514,7 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
         'border-white bg-white/10 text-white hover:bg-white/20')}>
      {currentSavedId?<Check size={17}/>:<Save size={17}/>}
      {currentSavedId?(saveStatus==='Couldn’t save'?'Retry save':'Saved'):'Save chat'}</button>
-    <button type="button" data-testid="ai5-share-chat" disabled={!messages.length||busy||processing}
+    <button type="button" data-testid="ai5-share-chat" aria-label="Share chat" disabled={!messages.length||busy||processing}
      onClick={()=>setShareDialog({scope:'CONVERSATION',turnId:null})}
      className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
      <Share2 size={16}/> Share</button>

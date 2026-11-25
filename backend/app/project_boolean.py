@@ -151,6 +151,21 @@ def evaluate_boolean(tree,text):
     return check(tree)
 
 
+def boolean_term_trace(tree,text):
+    """Literal term presence and polarity, not a substitute for AST evaluation."""
+    result=[]
+    def visit(node,negated=False):
+        kind=node[0]
+        if kind=='TERM':
+            term={'term':node[1],'negated':negated,'present':evaluate_boolean(node,text)}
+            if term not in result:result.append(term)
+        elif kind=='NOT':visit(node[1],not negated)
+        else:
+            visit(node[1],negated);visit(node[2],negated)
+    visit(tree)
+    return result
+
+
 def decode_project_query(primary_keywords_json):
     """Read legacy keyword arrays or a versioned Boolean project query."""
     try:
@@ -202,10 +217,11 @@ def discover_boolean_plan(expression,max_keywords=5):
 
     options=branches(tree)
     phrases=list(dict.fromkeys(' '.join(x) for x in (options or []) if x))
-    if not phrases or len(phrases)>max_keywords or any(len(x)>120 for x in phrases):
-        phrases=anchors
+    fallback=not phrases or len(phrases)>max_keywords or any(len(x)>120 for x in phrases)
+    if fallback:phrases=anchors
     return {
         'keywords':phrases,'contains':'','exclude_terms':[],
+        'positive_retrieval_anchors':anchors,'uses_anchor_fallback':bool(fallback),
         'search_mode':'BOOLEAN',
         'strategy':'POSITIVE_COMPOUND_SEARCH_WITH_LOCAL_BOOLEAN_GATE',
         'post_filter_required':True,'provider_boolean_native':False,

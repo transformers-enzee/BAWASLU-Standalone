@@ -1936,6 +1936,11 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'scan_limit':5000,'truncated':len(links)==5000,
                 'ranking':'combined_log_engagement_75_views_25',
                 'date':on_day,'paid_provider_called':False}
+    if action=='campaignSearchEvidenceAudit':
+        from .search_evidence_audit import audit_page
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c):raise ValueError('Campaign not available')
+        return audit_page(db,p,c,data if isinstance(data,dict) else {})
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None

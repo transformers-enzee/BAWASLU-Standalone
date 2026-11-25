@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy import select
 from .db import SessionLocal
-from .models import SocialListeningRun, SocialListeningResult, CampaignEvidence
+from .models import SocialListeningRun, SocialListeningResult, CampaignEvidence, MonitoringCampaign
 
 def iter_rows(path):
     path=Path(path)
@@ -94,9 +94,14 @@ def run_import(run_id,campaign_id,source_path):
     if not run:
         db.close();path.unlink(missing_ok=True);return
     count=0;skipped=0;linked=0;processed=0;existing_count=0
+    initial=json.loads(run.query_json or '{}')
+    campaign=db.get(MonitoringCampaign,campaign_id)
+    from .prism_discover import search_snapshot
+    from .search_evidence_audit import import_match_fields
+    snapshot=initial.get('search_snapshot') or (search_snapshot(campaign) if campaign else None)
     from datetime import datetime,timezone
     def progress():
-        return json.dumps({'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE','heartbeat_utc':datetime.now(timezone.utc).isoformat(),'resume_method':'reupload_same_file'})
+        return json.dumps({**initial,'search_snapshot':snapshot,'campaign_id':campaign_id,'processed':processed,'inserted':count,'linked':linked,'skipped':skipped,'already_present':existing_count,'provider':'ZOCIALEYE','heartbeat_utc':datetime.now(timezone.utc).isoformat(),'resume_method':'reupload_same_file'})
     try:
         prior=db.execute(select(SocialListeningResult.platform,SocialListeningResult.provider_result_id,SocialListeningResult.id).where(SocialListeningResult.provider=='ZOCIALEYE')).all()
         known={(platform,pid):rid for platform,pid,rid in prior if pid}
@@ -128,8 +133,12 @@ def run_import(run_id,campaign_id,source_path):
                 db.add(result);db.flush();rid=result.id
                 known[key]=rid;count+=1
             if rid not in already:
+                # Preserve every authorized import, including non-matching text.
+                # Existing reused IDs are compared using their persisted text.
+                source=db.get(SocialListeningResult,rid)
+                fields=import_match_fields(campaign,source.text_content,'EXTERNAL_PROVIDER_IMPORT',run_id,snapshot) if campaign else {'provenance':'EXTERNAL_PROVIDER_IMPORT','import_policy':'AUTHORIZED_IMPORT_PRESERVE_ALL'}
                 db.add(CampaignEvidence(campaign_id=campaign_id,result_id=rid,
-                    match_method='EXTERNAL_PROVIDER_IMPORT',matched_fields_json='["admin_requested"]'))
+                    match_method='EXTERNAL_PROVIDER_IMPORT',matched_fields_json=json.dumps(fields,ensure_ascii=False)))
                 already.add(rid);linked+=1
             if number%250==0:
                 run.result_count=count

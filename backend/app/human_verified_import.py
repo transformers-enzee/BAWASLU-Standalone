@@ -91,8 +91,11 @@ def preview(content):
 
 def import_rows(db,campaign,content,actor_id):
     sheet,rows=read_rows(content)
+    from .prism_discover import search_snapshot
+    from .search_evidence_audit import import_match_fields
+    snapshot=search_snapshot(campaign)
     run=SocialListeningRun(provider=PROVIDER,provider_request_id='human-'+hashlib.sha256(content).hexdigest()[:24],
-        query_json=json.dumps({'campaign_id':campaign.id,'sheet':sheet,'method':'HUMAN_REVIEWED_EXCEL'}),
+        query_json=json.dumps({'campaign_id':campaign.id,'sheet':sheet,'method':'HUMAN_REVIEWED_EXCEL','search_snapshot':snapshot}),
         status='COMPLETED',credits_used=0,credits_remaining=0,
         result_count=len(rows),executed_by=str(actor_id))
     db.add(run)
@@ -126,7 +129,7 @@ def import_rows(db,campaign,content,actor_id):
         if link is None:
             db.add(CampaignEvidence(campaign_id=campaign.id,result_id=result.id,
                 match_method='HUMAN_REVIEWED_IMPORT',
-                matched_fields_json=json.dumps(['Sample ID','Relevancy'])))
+                matched_fields_json=json.dumps(import_match_fields(campaign,result.text_content,'HUMAN_REVIEWED_IMPORT',run.id,snapshot),ensure_ascii=False)))
             linked+=1
         latest=(db.query(EvidenceAssessment).filter_by(campaign_id=campaign.id,result_id=result.id)
                 .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())

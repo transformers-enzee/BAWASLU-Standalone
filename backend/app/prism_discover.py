@@ -420,11 +420,13 @@ def store(db,run,c,items,full_assessment=False):
     new_evidence_links=0
     rejected=0;matched_over_target=0
     from .campaign_scheduler import keyword_screen
+    from .project_boolean import boolean_term_trace
     meta=json.loads(run.query_json or '{}')
     snapshot=meta.get('search_snapshot') or search_snapshot(c)
     matching_config=SimpleNamespace(**snapshot)
     revision=snapshot_signature(snapshot)
-    boolean_mode=decode_project_query(matching_config.primary_keywords_json)['search_mode']=='BOOLEAN'
+    saved_query=decode_project_query(matching_config.primary_keywords_json)
+    boolean_mode=saved_query['search_mode']=='BOOLEAN'
     for row,raw in pairs:
         match=keyword_screen(matching_config,{'text_content':row.text_content})
         if not match['matched']:
@@ -436,6 +438,7 @@ def store(db,run,c,items,full_assessment=False):
             continue
         accepted_ids.append(row.id)
         if row.id not in links:
+            if boolean_mode:match['boolean_terms']=boolean_term_trace(saved_query['ast'],row.text_content)
             db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
                 match_method='PRISM_DISCOVER',matched_fields_json=json.dumps(
                     {**match,'query_revision':revision,'collection_run_id':run.id,

@@ -165,7 +165,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','181.6'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','181.7'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str
@@ -455,9 +455,10 @@ def start_external_campaign_import(campaign_id:int,background_tasks:BackgroundTa
             raise HTTPException(400,'No eligible rows: verify IDs, messages, platform URLs and source fields')
         if not result['mapped_fields'].get('provider_result_id') or not result['mapped_fields'].get('text_content'):
             raise HTTPException(400,'Provider ID and message columns required')
+        from .prism_discover import search_snapshot
         run=SocialListeningRun(provider='ZOCIALEYE',provider_request_id=uuid.uuid4().hex,
             query_json=json.dumps({'campaign_id':campaign_id,'source_filename':Path(file.filename or '').name,
-                                    'provider':'ZOCIALEYE','processed':0,'inserted':0,'linked':0,'skipped':0,'heartbeat_utc':datetime.now(timezone.utc).isoformat()}),
+                                    'provider':'ZOCIALEYE','search_snapshot':search_snapshot(campaign),'processed':0,'inserted':0,'linked':0,'skipped':0,'heartbeat_utc':datetime.now(timezone.utc).isoformat()}),
             credits_used=0,credits_remaining=0,result_count=0,status='QUEUED',
             executed_by=str(user.id))
         db.add(run);db.commit();db.refresh(run)

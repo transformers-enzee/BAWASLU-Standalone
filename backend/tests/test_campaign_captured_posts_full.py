@@ -213,3 +213,41 @@ def test_inbox_full_statistics_cover_all_pages_without_changing_saved_evidence()
     assert len(older['findings'])==25
     assert older['full_statistics'] is None
     db.close()
+
+
+def test_current_search_audit_is_read_only_and_distinguishes_imports():
+    from app.models import MonitoringCampaign
+    from app.prism_discover import search_snapshot,snapshot_signature
+    from app.search_evidence_audit import import_match_fields
+    db=SessionLocal();p=user(db,'searchAudit');cid=campaign(db,p,'Reconciliation')
+    add(db,cid,3)
+    c=db.get(MonitoringCampaign,int(cid))
+    links=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).order_by(CampaignEvidence.id).all()
+    items=[db.get(SocialListeningResult,link.result_id) for link in links]
+    items[0].text_content='pemilu news'
+    links[0].matched_fields_json=json.dumps({'query_revision':snapshot_signature(search_snapshot(c))})
+    links[1].match_method='HUMAN_REVIEWED_IMPORT'
+    links[1].matched_fields_json=json.dumps(import_match_fields(c,items[1].text_content,'HUMAN_REVIEWED_IMPORT',items[1].run_id))
+    links[2].matched_fields_json=json.dumps({'query_revision':'old'})
+    db.commit()
+    first=action(db,p,'campaignSearchEvidenceAudit',{'page_size':2},cid)
+    assert first['page_counts']=={'matching':1,'not_matching':1,'imports':1,'historical_revision':0,'unknown_revision':0}
+    assert first['has_more'] and first['writes']==0 and not first['paid_provider_called']
+    assert first['rows'][1]['provenance']=='AUTHORIZED_IMPORT'
+    second=action(db,p,'campaignSearchEvidenceAudit',{'page_size':2,'cursor':first['next_cursor'],'query_revision':first['query_revision']},cid)
+    assert second['page_counts']['historical_revision']==1 and not second['has_more']
+    c.primary_keywords_json='["new"]';db.commit()
+    with pytest.raises(ValueError,match='configuration changed'):
+        action(db,p,'campaignSearchEvidenceAudit',{'query_revision':first['query_revision']},cid)
+    assert db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).count()==3
+    db.close()
+
+
+def test_search_audit_obeys_existing_regional_scope():
+    db=SessionLocal();p=user(db,'auditBali','Provincial Analyst','Province','Bali')
+    cid=campaign(db,p,'Bali audit')
+    add(db,cid,2,'Bali');add(db,cid,2)
+    result=action(db,p,'campaignSearchEvidenceAudit',{},cid)
+    assert result['page_visible']==2 and len(result['rows'])==2
+    assert result['writes']==0
+    db.close()

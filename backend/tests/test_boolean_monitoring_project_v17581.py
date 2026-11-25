@@ -102,3 +102,16 @@ def test_literal_boundaries_and_whitespace():
         assert evaluate_boolean(tree,text)==expected
     with pytest.raises(ValueError,match='five'):
         encode_boolean_project_query('a OR b OR c OR d OR e OR f')
+
+
+def test_boolean_trace_distinguishes_required_and_negated_terms():
+    from app.project_boolean import boolean_term_trace,discover_boolean_plan
+    tree,_=parse_boolean('BAWASLU AND (Bandung OR "Jawa Barat") AND NOT hoaks')
+    trace=boolean_term_trace(tree,'Bandung diawasi BAWASLU')
+    assert trace==[{'term':'bawaslu','negated':False,'present':True},
+                   {'term':'bandung','negated':False,'present':True},
+                   {'term':'jawa barat','negated':False,'present':False},
+                   {'term':'hoaks','negated':True,'present':False}]
+    plan=discover_boolean_plan('BAWASLU AND (Bandung OR "Jawa Barat")')
+    assert plan['positive_retrieval_anchors']==['bawaslu']
+    assert not plan['uses_anchor_fallback']

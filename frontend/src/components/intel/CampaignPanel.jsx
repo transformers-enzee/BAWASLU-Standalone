@@ -202,6 +202,15 @@ export default function CampaignPanel({campaignId=null}){
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [latestPrismCollection,setLatestPrismCollection]=useState(null);
+ const [searchAudit,setSearchAudit]=useState(null),[searchAuditBusy,setSearchAuditBusy]=useState(false),[searchAuditError,setSearchAuditError]=useState('');
+ async function inspectSearchEvidence(next=false){
+  if(!selected||searchAuditBusy)return;
+  setSearchAuditBusy(true);setSearchAuditError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSearchEvidenceAudit',id:selected.id,data:{page_size:100,...(next?{cursor:searchAudit.next_cursor,query_revision:searchAudit.query_revision}:{})}});
+   setSearchAudit(r.data);
+  }catch(e){setSearchAuditError(e.response?.data?.detail||e.message||'Unable to inspect saved evidence');}
+  finally{setSearchAuditBusy(false)}
+ }
  const [recoveryBusy,setRecoveryBusy]=useState(false),[recoveryMessage,setRecoveryMessage]=useState('');
  async function recoverCollection(start){
   if(!selected||!latestPrismCollection||recoveryBusy)return;
@@ -314,7 +323,7 @@ export default function CampaignPanel({campaignId=null}){
  }).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
   setCampaignSection(['watchlist','posts'].includes(new URLSearchParams(window.location.search).get('tab'))?new URLSearchParams(window.location.search).get('tab'):'overview');
-  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setRecoveryMessage('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setSearchAudit(null);setSearchAuditError('');setRecoveryMessage('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
@@ -721,6 +730,19 @@ export default function CampaignPanel({campaignId=null}){
     {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}
    </section>}
+   <details className="rounded-lg border border-slate-200 bg-white p-4 text-sm" data-testid="project-search-evidence-audit">
+    <summary className="cursor-pointer font-semibold">Search evidence consistency</summary>
+    <p className="mt-2 text-xs text-slate-600">Compare stored post text against the current search rules. This does not remove evidence, change human assessments or start a crawl.</p>
+    <div className="mt-2 flex gap-2"><button type="button" className="intel-ghost text-xs" disabled={searchAuditBusy} onClick={()=>inspectSearchEvidence()}>Check saved evidence</button>
+     {searchAudit?.has_more&&<button type="button" className="intel-ghost text-xs" disabled={searchAuditBusy} onClick={()=>inspectSearchEvidence(true)}>Next audit page</button>}</div>
+    {searchAuditBusy&&<p role="status" className="text-xs">Checking saved text…</p>}
+    {searchAuditError&&<p role="alert" className="text-xs text-red-700">{searchAuditError}</p>}
+    {searchAudit&&<div className="mt-3 space-y-2">
+     <p className="text-xs">This page: {searchAudit.page_visible} visible posts · {searchAudit.page_counts.matching} match · {searchAudit.page_counts.not_matching} do not match · {searchAudit.page_counts.imports} imports · {searchAudit.page_counts.historical_revision} older revisions · {searchAudit.page_counts.unknown_revision} unknown revisions.</p>
+     <div className="max-h-60 overflow-auto"><table className="w-full text-left text-xs"><thead><tr><th>Post</th><th>Current text</th><th>Provenance</th><th>Revision</th></tr></thead><tbody>{searchAudit.rows.map(row=><tr key={row.evidence_id}><td>#{row.result_id}</td><td>{row.matches_current_text?'Match':'No match'}</td><td>{row.provenance==='AUTHORIZED_IMPORT'?'Authorized import':row.match_method}</td><td>{row.revision_status}</td></tr>)}</tbody></table></div>
+     <p className="text-xs text-slate-500">Page counts only; historical evidence remains included in existing project views.</p>
+    </div>}
+   </details>
    <AssessmentOperationsPanel key={selected.id} campaignId={selected.id} />
 
    <details className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 text-xs" aria-label="Human-verified relevance import">

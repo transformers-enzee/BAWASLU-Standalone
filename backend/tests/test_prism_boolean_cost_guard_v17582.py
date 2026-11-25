@@ -76,7 +76,7 @@ def test_provider_body_uses_supported_fields_and_standard_cap():
     assert params['period']=='30d'
     assert params['max_credits']==100
     assert params['platforms']==['instagram','tiktok','news']
-    assert params['limit']==100
+    assert params['limit']==prism_discover.CANDIDATE_CAP
     assert len(signature)==64
     c.platforms_json='["tiktok","instagram","youtube","facebook","twitter-ai-search","threads","online_news"]'
     all_sources,all_signature=prism_discover.body_for(DB(),c)

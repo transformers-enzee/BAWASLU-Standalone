@@ -202,6 +202,19 @@ export default function CampaignPanel({campaignId=null}){
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [latestPrismCollection,setLatestPrismCollection]=useState(null);
+ const [recoveryBusy,setRecoveryBusy]=useState(false),[recoveryMessage,setRecoveryMessage]=useState('');
+ async function recoverCollection(start){
+  if(!selected||!latestPrismCollection||recoveryBusy)return;
+  setRecoveryBusy(true);setRecoveryMessage('');
+  try{
+   if(start)await base44.functions.invoke('socialListening',{action:'campaignDiscoverRecover',id:selected.id,data:{run_id:latestPrismCollection.run_id}});
+   const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverLastRunDiagnostics',id:selected.id,data:{}});
+   const next=r.data.last_run;setLatestPrismCollection(next);
+   if(start)setRecoveryMessage('Recovery requested. No new crawl or automatic AI assessment will be started. Refresh collection status to check progress.');
+   else if(next&&['COMPLETED','PARTIAL'].includes(next.status)){await viewEvidence(selected);setRecoveryMessage('Collection results refreshed. Use Assess All to process any pending posts.');}
+  }catch(e){setRecoveryMessage(e.response?.data?.detail||e.message||'Collection recovery unavailable');}
+  finally{setRecoveryBusy(false)}
+ }
  const [singlePreview,setSinglePreview]=useState(null),[singleBusy,setSingleBusy]=useState(false),[singleNotice,setSingleNotice]=useState('');
  const [postLookup,setPostLookup]=useState(''),[lookupBusy,setLookupBusy]=useState(false),[lookupError,setLookupError]=useState(''),[lookupPost,setLookupPost]=useState(null);
  async function findPostById(){
@@ -301,7 +314,7 @@ export default function CampaignPanel({campaignId=null}){
  }).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
   setCampaignSection(['watchlist','posts'].includes(new URLSearchParams(window.location.search).get('tab'))?new URLSearchParams(window.location.search).get('tab'):'overview');
-  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setRecoveryMessage('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
@@ -690,7 +703,7 @@ export default function CampaignPanel({campaignId=null}){
    <p className="text-xs text-slate-600">Saved evidence includes historical collections and authorized imports; it may predate the current search configuration.</p>
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
    {latestPrismCollection&&<section className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm space-y-2" aria-label="Latest SocialCrawl collection outcome" data-testid="prism-latest-collection-outcome">
-    <strong>Latest SocialCrawl collection · Run #{latestPrismCollection.run_id}</strong>
+    <strong>Latest SocialCrawl collection · Run #{latestPrismCollection.run_id} · {latestPrismCollection.status}</strong>
     <div className="flex flex-wrap gap-4 text-xs">
      <span><strong>{latestPrismCollection.provider_candidate_rows??latestPrismCollection.newly_saved_source_rows??'Unknown'}</strong> {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'?'new source rows saved':'unique provider candidates'}</span>
      <span><strong>{latestPrismCollection.matched}</strong> accepted into project</span>
@@ -699,6 +712,11 @@ export default function CampaignPanel({campaignId=null}){
     {latestPrismCollection.provider_diagnostics&&<details className="text-xs"><summary>Collection diagnostics</summary><p>Provider collected {latestPrismCollection.provider_diagnostics.collected??'Unknown'}; retained {latestPrismCollection.provider_diagnostics.kept??'Unknown'} before delivery.</p></details>}
     {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by search rules: {latestPrismCollection.excluded_by_search??latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
     {latestPrismCollection.new_evidence_links!=null&&<p className="text-xs">New project links: {latestPrismCollection.new_evidence_links} · Previously linked matches: {latestPrismCollection.already_linked_matches??0}</p>}
+    {latestPrismCollection.matched_over_target>0&&<p className="text-xs">Additional matches beyond this run’s accepted-post target: {latestPrismCollection.matched_over_target}.</p>}
+    {latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(true)}>Recover existing collection</button>}
+    <button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={()=>recoverCollection(false)}>Refresh collection status</button>
+    {latestPrismCollection.error&&<p className="text-xs text-red-800">{latestPrismCollection.error}</p>}
+    {recoveryMessage&&<p role="status" className="text-xs text-slate-600">{recoveryMessage}</p>}
     {latestPrismCollection.candidate_limit_reached&&<p className="text-xs text-amber-900">Candidate limit reached; this is not exhaustive coverage.</p>}
     {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}

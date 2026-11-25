@@ -14,7 +14,7 @@ COPY database/migrations/20261124090000_ai5_saved_shares_v1808.sql /src/database
 RUN node scripts/test-ai5-saved-chat-toggle-v1812.mjs && node scripts/test-ai5-saved-chats-ux-v1810.mjs && node scripts/test-ai5-saved-shares-v1808.mjs && npm run build
 
 FROM python:3.12-slim
-ARG BAWASLU_BUILD_VERSION=181.5
+ARG BAWASLU_BUILD_VERSION=181.6
 ARG BAWASLU_BUILD_COMMIT=unknown
 ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 WORKDIR /app

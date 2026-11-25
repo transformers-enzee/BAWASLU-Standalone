@@ -13,6 +13,7 @@ from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListen
 
 BASE='https://www.socialcrawl.dev/v1'
 CAP=100
+CANDIDATE_CAP=300
 MAPPING={'twitter-ai-search':'twitter','online_news':'news','instagram':'instagram',
          'twitter':'twitter','facebook':'facebook','youtube':'youtube','tiktok':'tiktok',
          'threads':'threads','reddit':'reddit'}
@@ -79,7 +80,7 @@ def body_for(db,c,max_credits=None,platform_mode=None):
     group={'id':'campaign-'+str(c.id),'keywords':words,'context':context}
     params={'groups':[group],
             'platforms':platforms,'country':['ID'],'period':'30d','label':['stance'],
-            'limit':CAP,'retention_days':7,'max_credits':cap,'relevance':'score'}
+            'limit':CANDIDATE_CAP,'retention_days':7,'max_credits':cap,'relevance':'score'}
     if getattr(c,'language',''):params['languages']=[c.language]
     start=str(getattr(c,'date_from','') or '')
     end=str(getattr(c,'date_to','') or '')
@@ -102,11 +103,24 @@ def body_for(db,c,max_credits=None,platform_mode=None):
             params['since_watermark']=meta['watermark'];break
     return params,snapshot_signature({'plan_signature':signature,'watermark':params.get('since_watermark')})
 
+def candidate_limit(meta):
+    """Honor the original run's bounded retrieval contract, including legacy runs."""
+    limit=(meta.get('body') or {}).get('limit',CAP)
+    return min(CANDIDATE_CAP,max(CAP,limit)) if type(limit) is int else CAP
+
+
+def can_recover(run,meta,c):
+    return bool(run.status=='FAILED' and c.status=='DRAFT'
+        and re.fullmatch(r'run_[A-Za-z0-9_-]+',str(run.provider_request_id or ''))
+        and meta.get('search_snapshot')
+        and meta.get('query_revision')==snapshot_signature(search_snapshot(c)))
+
+
 def latest_collection_outcome(db,c,params=None):
     """Read-only aggregate of latest Prism run; never spends provider credits."""
     run=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
          .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
-                 SocialListeningRun.status.in_(['COMPLETED','PARTIAL','FAILED']))
+                 SocialListeningRun.status.in_(['QUEUED','RUNNING','COMPLETED','PARTIAL','FAILED']))
          .order_by(SocialListeningRun.id.desc()).first())
     if not run:
         return None
@@ -126,6 +140,9 @@ def latest_collection_outcome(db,c,params=None):
     return {
         'run_id':str(run.id),
         'status':run.status,
+        'recovery_available':can_recover(run,meta,c),
+        'recovery_only':bool(meta.get('recovery_only')),
+        'error':run.error_text or '',
         'credits_used':int(run.credits_used or 0),
         'matched':int(run.result_count or 0),
         'provider_candidate_rows':diag.get('unique_candidates'),
@@ -136,6 +153,9 @@ def latest_collection_outcome(db,c,params=None):
         'new_evidence_links':diag.get('new_evidence_links'),
         'already_linked_matches':diag.get('already_linked_matches'),
         'candidate_limit_reached':diag.get('candidate_limit_reached'),
+        'matched_over_target':diag.get('matched_over_target'),
+        'candidate_limit':candidate_limit(meta),
+        'accepted_target':CAP,
         'plan_changed':bool(plan_changed),
         'zero_yield_paid_run':bool(run.credits_used and not run.result_count),
         'provider_diagnostics':meta.get('provider_diagnostics'),
@@ -202,6 +222,24 @@ def action(db,p,verb,data,cid):
         return activation_status(db,p,c.id,run.id)
     if verb=='campaignDiscoverLastRunDiagnostics':
         return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
+    if verb=='campaignDiscoverRecover':
+        c=locked_campaign(db,c.id)
+        if not c or not allowed(p,c) or c.status!='DRAFT':
+            raise ValueError('Campaign unavailable for recovery')
+        ensure_no_active_collection(db,c.id)
+        rid=(data or {}).get('run_id')
+        if not str(rid or '').isdigit():raise ValueError('Run id required')
+        run=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
+             .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.id==int(rid),
+                     SocialListeningRun.provider=='SOCIALCRAWL_PRISM').first())
+        meta=json.loads(run.query_json or '{}') if run else {}
+        if not run or not can_recover(run,meta,c):
+            raise ValueError('Recovery requires a failed provider run ID and the unchanged collection configuration')
+        meta['recovery_only']=True
+        run.query_json=json.dumps(meta,ensure_ascii=False)
+        run.status='QUEUED';run.error_text=''
+        db.commit()
+        return {'started':True,'run_id':run.id,'status':'QUEUED','recovery_only':True,'paid_provider_called':False}
     if verb=='campaignDiscoverStart':
         # Serialize start with other starts and campaign edits in PostgreSQL.
         c=locked_campaign(db,c.id)
@@ -215,7 +253,7 @@ def action(db,p,verb,data,cid):
     if verb=='campaignDiscoverPreview':
         info,meta=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
         return {'signature':sig,'estimate':info.get('estimate') or info.get('plan') or info,
-            'post_limit':CAP,'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
+            'post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits'],'keywords_used':params['groups'][0]['keywords'],
             'provider_contains':params.get('contains',''),
             'provider_exclude_terms':params['groups'][0].get('exclude_terms',[]),
             'provider_plan':plan,'last_run':last,
@@ -243,7 +281,7 @@ def action(db,p,verb,data,cid):
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,triggered_by='PRISM_DISCOVER'))
     db.commit()
-    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'credit_cap':params['max_credits']}
+    return {'started':True,'run_id':run.id,'status':'QUEUED','post_limit':CAP,'candidate_limit':params['limit'],'credit_cap':params['max_credits']}
 
 def ai_text(payload):
     if isinstance(payload.get('output_text'),str):return payload['output_text']
@@ -322,7 +360,9 @@ def enrich(db,c,entries):
         db.commit()
 
 def store(db,run,c,items,full_assessment=False):
-    kept=[x for x in items[:100] if isinstance(x,dict) and x.get('id') and x.get('platform')]
+    run_meta=json.loads(run.query_json or '{}')
+    scan_cap=candidate_limit(run_meta)
+    kept=[x for x in items[:scan_cap] if isinstance(x,dict) and x.get('id') and x.get('platform')]
     ids=[str(x['id']) for x in kept]
     urls=[str(x.get('url') or '') for x in kept if x.get('url')]
     existing=(db.query(SocialListeningResult).filter(or_(
@@ -378,6 +418,7 @@ def store(db,run,c,items,full_assessment=False):
     new=[]
     accepted_ids=[]
     new_evidence_links=0
+    rejected=0;matched_over_target=0
     from .campaign_scheduler import keyword_screen
     meta=json.loads(run.query_json or '{}')
     snapshot=meta.get('search_snapshot') or search_snapshot(c)
@@ -387,8 +428,11 @@ def store(db,run,c,items,full_assessment=False):
     for row,raw in pairs:
         match=keyword_screen(matching_config,{'text_content':row.text_content})
         if not match['matched']:
-            # Provider retrieval is broad; only Boolean-confirmed posts
-            # enter the project, its Inbox and billable assessment path.
+            # Only locally matched posts may enter the project and AI path.
+            rejected+=1
+            continue
+        if len(accepted_ids)>=CAP:
+            matched_over_target+=1
             continue
         accepted_ids.append(row.id)
         if row.id not in links:
@@ -425,11 +469,14 @@ def store(db,run,c,items,full_assessment=False):
         'considered_items':len(kept),
         'unique_candidates':len(pairs),
         'accepted_boolean_matches':len(accepted_ids),
-        'excluded_by_boolean':len(pairs)-len(accepted_ids) if boolean_mode else 0,
-        'excluded_by_search':len(pairs)-len(accepted_ids),
+        'excluded_by_boolean':rejected if boolean_mode else 0,
+        'excluded_by_search':rejected,
+        'matched_over_target':matched_over_target,
+        'candidate_limit':scan_cap,
+        'accepted_target':CAP,
         'already_linked_matches':len(accepted_ids)-new_evidence_links,
         'search_mode':'BOOLEAN' if boolean_mode else 'KEYWORDS',
-        'candidate_limit_reached':len(items)>=CAP,
+        'candidate_limit_reached':len(items)>=scan_cap,
         'new_evidence_links':new_evidence_links,
         'candidate_platforms':dict(_Counter(row.platform for row,_ in pairs)),
         'counts_basis':'scanned_provider_candidates',
@@ -473,10 +520,17 @@ def execute(run_id):
         c=db.get(MonitoringCampaign,int(meta['campaign_id']))
         if not c:raise ValueError('Campaign no longer available')
         if c.status!='DRAFT':raise ValueError('Campaign no longer available for collection')
-        data,env=call('POST',BASE+'/prism/discover',meta['body'],60)
+        recovery=bool(meta.get('recovery_only'))
+        scan_cap=candidate_limit(meta)
+        if recovery:
+            if not re.fullmatch(r'run_[A-Za-z0-9_-]+',str(run.provider_request_id or '')):
+                raise ValueError('Recovery cannot submit a new collection')
+            data,env=call('GET',BASE+'/prism/discover/runs/'+run.provider_request_id,timeout=45)
+        else:
+            data,env=call('POST',BASE+'/prism/discover',meta['body'],60)
         status=data.get('run') or {}
-        run.provider_request_id=str(status.get('run_id') or env.get('request_id') or '')[:255]
-        run.credits_used=int((status.get('credits') or {}).get('spent') or 0)
+        run.provider_request_id=str(status.get('run_id') or run.provider_request_id or env.get('request_id') or '')[:255]
+        run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
         db.commit()
         nxt=data.get('next') or {}
         for _ in range(45):
@@ -497,10 +551,10 @@ def execute(run_id):
         items=list(data.get('items') or [])
         # Status responses can include the first page; the export starts again.
         export_items=[]
-        if nxt.get('results_url') and len(items)<100:
+        if nxt.get('results_url') and len(items)<scan_cap:
             url=str(nxt['results_url']).rstrip('/')+'/results.jsonl'
             cursor=None
-            for _ in range(5):
+            for _ in range(10):
                 q=url+('?'+urlencode({'cursor':cursor}) if cursor else '')
                 key=os.getenv('SOCIALCRAWL_API_KEY','').strip()
                 with httpx.Client(timeout=55,follow_redirects=False) as client:
@@ -512,15 +566,15 @@ def execute(run_id):
                     obj=json.loads(line)
                     if 'next_cursor' in obj:cursor=str(obj['next_cursor'])
                     elif 'complete' not in obj:export_items.append(obj)
-                    if len(export_items)>=100:break
-                if not cursor or len(export_items)>=100:break
+                    if len(export_items)>=scan_cap:break
+                if not cursor or len(export_items)>=scan_cap:break
             if export_items:items=export_items
         run.result_count=store(db,run,c,items,full_assessment=True)
         run.credits_used=max(run.credits_used or 0,int((status.get('credits') or {}).get('spent') or 0))
         run.status='COMPLETED' if status.get('status')=='completed' else 'PARTIAL'
         meta=json.loads(run.query_json or '{}')
         # Never advance incremental coverage after a partial or capped run.
-        meta['watermark']=nxt.get('watermark') if run.status=='COMPLETED' and len(items)<CAP else None
+        meta['watermark']=nxt.get('watermark') if run.status=='COMPLETED' and len(items)<scan_cap and not meta.get('collection_diagnostics',{}).get('matched_over_target') else None
         if upstream is not None:meta['provider_diagnostics']=upstream
         run.query_json=json.dumps(meta,ensure_ascii=False)
         if run.status=='COMPLETED':c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
@@ -528,7 +582,7 @@ def execute(run_id):
         # The full read-only classification worker tracks every captured result
         # as a durable assessment job, not only the initial PRISM relevance pass.
         from .activation_assessment import execute_run
-        execute_run(run.id)
+        if not recovery:execute_run(run.id)
         from .inbox_read_cache import invalidate
         invalidate()
         try:

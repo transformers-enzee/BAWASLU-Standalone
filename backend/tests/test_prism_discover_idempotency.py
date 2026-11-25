@@ -177,7 +177,7 @@ def test_activate_defaults_seven_platforms_100_posts_without_provider_calls(monk
         created_by='qa-admin',status='DRAFT')
     db.add(campaign);db.commit()
     params,signature=prism_discover.body_for(db,campaign)
-    assert params['limit']==100
+    assert params['limit']==prism_discover.CANDIDATE_CAP
     assert params['max_credits']==100
     assert params['platforms']==['tiktok','instagram','youtube','facebook','twitter','threads','news']
     assert len(signature)==64
@@ -319,4 +319,53 @@ def test_worker_claim_prevents_duplicate_paid_submission(monkeypatch):
     db.expire_all()
     assert calls==['POST']
     assert db.get(SocialListeningRun,run.id).credits_used==4
+    db.close()
+
+
+def test_candidate_scan_can_find_matches_after_first_hundred(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();c,run=seed(db)
+    run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300}})
+    db.commit()
+    noise=[post('noise-'+str(i),'https://instagram.com/p/noise-'+str(i)) for i in range(150)]
+    for item in noise:item['text']='Unrelated topic'
+    matches=[post('match-'+str(i),'https://instagram.com/p/match-'+str(i)) for i in range(120)]
+    assert prism_discover.store(db,run,c,noise+matches,full_assessment=True)==100
+    assert db.query(CampaignEvidence).count()==100
+    assert db.query(EvidenceAssessment).count()==100
+    diag=json.loads(run.query_json)['collection_diagnostics']
+    assert diag['excluded_by_search']==150
+    assert diag['matched_over_target']==20
+    assert diag['candidate_limit']==300
+    db.close()
+
+
+def test_recovery_only_reads_original_run_without_ai(monkeypatch):
+    from app import activation_assessment
+    db=SessionLocal();c,run=seed(db)
+    snapshot=prism_discover.search_snapshot(c)
+    run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300},'search_snapshot':snapshot,
+        'query_revision':prism_discover.snapshot_signature(snapshot)})
+    run.status='FAILED';run.provider_request_id='run_existing';run.credits_used=8
+    db.commit()
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    calls=[]
+    def fake(method,url,body=None,timeout=50):
+        calls.append((method,url))
+        assert method=='GET'
+        return {'run':{'run_id':'run_existing','status':'completed','credits':{'spent':8}},
+                'items':[post('recovered','https://instagram.com/p/recovered')]},{}
+    monkeypatch.setattr(prism_discover,'call',fake)
+    def no_ai(*args):raise AssertionError('Recovery must not submit AI requests')
+    monkeypatch.setattr(activation_assessment,'execute_run',no_ai)
+    result=prism_discover.action(db,{},'campaignDiscoverRecover',{'run_id':run.id},c.id)
+    assert result['recovery_only'] and result['run_id']==run.id
+    prism_discover.execute(run.id)
+    db.expire_all()
+    assert calls==[('GET',prism_discover.BASE+'/prism/discover/runs/run_existing')]
+    assert db.get(SocialListeningRun,run.id).status=='COMPLETED'
+    assert db.get(SocialListeningRun,run.id).credits_used==8
+    assert db.query(CampaignEvidence).count()==1
+    assert db.query(SocialListeningRun).count()==1
     db.close()

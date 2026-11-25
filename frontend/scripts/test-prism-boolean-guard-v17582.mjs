@@ -23,3 +23,7 @@ assert.ok(service.includes('search_snapshot'));
 assert.ok(service.includes("if not match['matched']"));
 assert.ok(project.includes('language:c.language'));
 assert.ok(dialog.includes('scheduled monitoring is currently disabled'));
+
+assert.ok(service.includes('CANDIDATE_CAP=300'));
+assert.ok(service.includes('campaignDiscoverRecover'));
+assert.ok(service.includes("if not recovery:execute_run(run.id)"));

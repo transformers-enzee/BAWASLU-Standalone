@@ -31,6 +31,7 @@ def fake_provider(_):
             'credits_remaining':999,'cached':False,'data':{'items':[
                 {'id':'post-1','platform':'tiktok','url':'https://tiktok.com/@a/video/1',
                  'text':'Pemilu update on Gibran and election monitoring',
+                 'published_at':'2026-10-15T12:00:00Z',
                  'language':'id','author':{'name':'A','handle':'@a'}}]}}
 
 def test_preview_is_read_only_and_default_denies_paid_crawling(monkeypatch):
@@ -143,4 +144,21 @@ def test_keyword_exclusion_does_not_link_unrelated_post():
     assert outcome['status']=='COMPLETED'
     assert outcome['linked_new_evidence']==0
     assert db.query(CampaignEvidence).count()==0
+    db.close()
+
+
+@pytest.mark.parametrize('published_at',['','2026-09-30T23:59:59Z','2026-10-23T00:00:00Z'])
+def test_explicit_date_window_rejects_undated_or_out_of_range_scheduler_candidates(published_at):
+    db=SessionLocal();p=actor(db,'admin','National Administrator')
+    c=active(db,p)
+    def outside(filters):
+        response=fake_provider(filters)
+        response['data']['items'][0]['published_at']=published_at
+        return response
+    result=simulate_campaign_cycle(db,p,c,outside,datetime.utcnow(),daily_budget=5,per_run_limit=2)
+    assert result['status']=='COMPLETED'
+    assert result['linked_new_evidence']==0
+    assert db.query(CampaignEvidence).count()==0
+    assert db.query(SocialListeningResult).count()==0
+    assert db.query(SocialListeningProviderUsage).count()==1
     db.close()

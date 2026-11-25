@@ -107,3 +107,26 @@ def test_watchlist_feed_routes_through_saved_classifications():
     assert 'saved_classifications_for_posts(db,p,rows)' in block
     assert "'saved_assessments':saved_views.get(item.id,[])" in block
     assert "'paid_provider_called':False" in block
+
+
+def test_pending_provider_relevance_does_not_appear_as_saved_intelligence():
+    db,post,_=setup_saved_rows()
+    try:
+        db.add(EvidenceAssessment(campaign_id=10,result_id=1,assessment_version=3,
+            relevance_label='RELEVANT',model_version='PRISM_PENDING_OPENAI'))
+        db.commit()
+        assert saved_classifications_for_posts(db,national_profile(),[post])=={1:[]}
+    finally:db.close()
+
+
+def test_saved_annotation_uses_officer_sentiment_without_changing_original():
+    from app.officer_sentiment import OfficerSentimentCorrection
+    db,post,assessment=setup_saved_rows()
+    try:
+        db.add(OfficerSentimentCorrection(campaign_id=10,result_id=1,sentiment='NEUTRAL',
+            rationale='Officer checked context',actor_id=1))
+        db.commit()
+        result=saved_classifications_for_posts(db,national_profile(),[post])[1][0]
+        assert result['sentiment']=='NEUTRAL' and result['ai_sentiment_original']=='NEGATIVE'
+        assert result['sentiment_origin']=='OFFICER_CORRECTION' and assessment.sentiment=='NEGATIVE'
+    finally:db.close()

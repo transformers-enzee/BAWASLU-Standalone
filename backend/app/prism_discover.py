@@ -331,7 +331,8 @@ def action(db,p,verb,data,cid):
         from .activation_assessment import status as activation_status
         return activation_status(db,p,c.id,run.id)
     if verb=='campaignDiscoverLastRunDiagnostics':
-        return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False}
+        return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False,
+                'collection_mode':'ONE_TIME','automatic_paid_crawling_enabled':False}
     if verb in ('campaignDiscoverRecover','campaignDiscoverQuarantine'):
         c=locked_campaign(db,c.id)
         if not c or not allowed(p,c) or c.status!='DRAFT':
@@ -375,6 +376,10 @@ def action(db,p,verb,data,cid):
         if (data or {}).get('signature')!=sig:raise ValueError('Refresh the collection preview first')
         return reuse_collection(db,p,c,params,data or {})
     if verb=='campaignDiscoverPreview':
+        # A refresh from another browser must reveal the existing run rather
+        # than invite another collection or perform an unnecessary preflight.
+        if last and last['status'] in ('QUEUED','RUNNING'):
+            return {'active_run_id':last['run_id'],'last_run':last,'paid':False,'paid_collection_blocked':True}
         offer,_,_=recent_reuse_offer(db,p,c,params)
         budget=collection_budget.snapshot(db)
         blocked=params['limit']>min(budget['monthly_remaining'],budget['storage_remaining'])
@@ -390,6 +395,7 @@ def action(db,p,verb,data,cid):
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
             'local_screening':True,'collection_mode':'ONE_TIME','collection_budget':budget,'reuse_offer':offer,'paid_collection_blocked':blocked,
+            'prior_collection_ack_required':bool(last and (last.get('submission_uncertain') or last.get('recovery_available'))),
             'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',
@@ -398,6 +404,8 @@ def action(db,p,verb,data,cid):
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
+    if last and (last.get('submission_uncertain') or last.get('recovery_available')) and (data or {}).get('acknowledge_prior_collection') is not True:
+        raise ValueError('Review the previous recoverable or uncertain collection and explicitly acknowledge the risk of additional charges before starting a new crawl')
     collection_budget.lock(db)
     collection_budget.assert_capacity(db,params['limit'])
     snapshot=search_snapshot(c)
@@ -407,6 +415,7 @@ def action(db,p,verb,data,cid):
             query_json=json.dumps({'body':params,'signature':sig,'plan_signature':plan_signature,
                                   'search_snapshot':snapshot,'query_revision':snapshot_signature(snapshot),'campaign_id':c.id,
                                   'worker_heartbeat_at':datetime.now(timezone.utc).isoformat(),
+                                  'prior_collection_acknowledged':bool((data or {}).get('acknowledge_prior_collection')),
                                   'province':c.province,'regency_city':c.regency_city}),
             status='QUEUED')
     db.add(run);db.flush()

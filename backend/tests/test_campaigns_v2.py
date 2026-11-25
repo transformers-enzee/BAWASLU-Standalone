@@ -243,3 +243,14 @@ def test_edit_switches_to_defaults_without_erasing_regional_security_scope():
     assert changed['date_from']==prior['date_from']
     assert db.query(SocialListeningRun).count()==0
     db.close()
+
+
+def test_resume_paused_project_is_configuration_only():
+    db=SessionLocal();p=actor(db,'resume','National Administrator')
+    c=action(db,p,'createCampaign',payload())['campaign']
+    action(db,p,'updateCampaign',{'status':'PAUSED'},c['id'])
+    resumed=action(db,p,'updateCampaign',{'status':'DRAFT'},c['id'])['campaign']
+    assert resumed['status']=='DRAFT' and resumed['next_run_at'] is None
+    assert db.query(SocialListeningRun).count()==0
+    assert db.query(CampaignRun).count()==0
+    db.close()

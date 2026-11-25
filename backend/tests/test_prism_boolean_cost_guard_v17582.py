@@ -226,3 +226,27 @@ def test_exact_recent_collection_reuse_is_explicit_and_free(monkeypatch):
     assert db.query(EvidenceAssessment).filter_by(campaign_id=target.id).count()==0
     assert db.query(CampaignEvidence).filter_by(campaign_id=target.id).count()==1
     db.close()
+
+
+def test_uncertain_previous_charge_requires_explicit_ack_and_active_preview_is_read_only(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='FAILED',
+        query_json=json.dumps({'campaign_id':c.id,'submission_uncertain':True}))
+    db.add(run);db.flush();db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id));db.commit()
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    calls=[]
+    def free(method,url,body=None,timeout=50):
+        assert body['dry_run'];calls.append(method);return {'estimate':{}},{}
+    monkeypatch.setattr(prism_discover,'call',free)
+    preview=prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
+    assert preview['prior_collection_ack_required']
+    payload={'confirm_cost':True,'signature':preview['signature']}
+    with pytest.raises(ValueError,match='explicitly acknowledge'):
+        prism_discover.action(db,{},'campaignDiscoverStart',payload,c.id)
+    assert db.query(SocialListeningRun).count()==1
+    started=prism_discover.action(db,{},'campaignDiscoverStart',{**payload,'acknowledge_prior_collection':True},c.id)
+    resumed=prism_discover.action(db,{},'campaignDiscoverPreview',{},c.id)
+    assert resumed['active_run_id']==str(started['run_id']) and resumed['paid_collection_blocked']
+    assert calls==['POST']
+    db.close()

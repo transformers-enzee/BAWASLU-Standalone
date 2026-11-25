@@ -31,3 +31,7 @@ assert.ok(service.includes("if not recovery:execute_run(run.id)"));
 assert.ok(service.includes('campaignDiscoverReuse'));
 assert.ok(dialog.includes('Reuse saved collection'));
 assert.ok(project.includes('paid_collection_blocked?null:launchDiscover'));
+
+assert.ok(service.includes('acknowledge_prior_collection'));
+assert.ok(project.includes('Resume project'));
+assert.ok(project.includes('r.data.active_run_id'));

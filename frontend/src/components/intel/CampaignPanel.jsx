@@ -158,6 +158,7 @@ export default function CampaignPanel({campaignId=null}){
  async function checkDiscover(c){
    setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun(null);setDiscoverError('');setDiscoverPreviewBusy(true);
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverPreview',id:c.id,data:{}});
+     if(r.data.active_run_id){setDiscoverRun({run_id:r.data.active_run_id,status:'RUNNING',stage:'COLLECTING'});return}
      setDiscoverPreview(r.data)}
    catch(e){setDiscoverError(e.response?.data?.detail||e.message||'Project readiness check failed')}
    finally{setDiscoverPreviewBusy(false)}
@@ -174,9 +175,10 @@ export default function CampaignPanel({campaignId=null}){
  }
  async function launchDiscover(){
    if(!discoverCampaign||!discoverPreview||discoverBusy||discoverPreviewBusy)return;
+   if(discoverPreview.prior_collection_ack_required&&!window.confirm('A previous collection can be recovered or its charge is uncertain. Check the project dashboard first. Starting a new collection can incur additional charges. Continue?'))return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      data:{confirm_cost:true,signature:discoverPreview.signature,acknowledge_prior_collection:!!discoverPreview.prior_collection_ack_required}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
       window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
       setActivationSaved(saved)}
@@ -616,6 +618,12 @@ export default function CampaignPanel({campaignId=null}){
   }catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}
   finally{setSaving(false)}
  }
+ async function resumeProject(c){
+  if(c.status!=='PAUSED'||saving)return;
+  setSaving(true);setError('');
+  try{await base44.functions.invoke('socialListening',{action:'updateCampaign',id:c.id,data:{status:'DRAFT'}});await refresh();setNotice('Project resumed for manual collection. No crawl started.');}
+  catch(e){setError(e.response?.data?.detail||e.response?.data?.error||e.message)}finally{setSaving(false)}
+ }
  const visible=campaigns.filter(x=>(statusFilter==='all'||x.status===statusFilter)&&(x.name+' '+x.description+' '+(x.primary_keywords||[]).join(' ')+' '+(x.boolean_query||'')).toLowerCase().includes(query.toLowerCase()));
  return <section className="v10-campaign space-y-5" aria-label="Monitoring projects">
   {campaignId&&<style>{`.v10-campaign .intel-card {border-radius:13px}`}</style>}
@@ -691,7 +699,7 @@ export default function CampaignPanel({campaignId=null}){
         if(activationSaved&&String(activationSaved.campaign_id)===String(c.id)){
          setDiscoverCampaign(c);setDiscoverPreview(null);setDiscoverRun({run_id:activationSaved.run_id,status:'RUNNING',stage:'COLLECTING'});setDiscoverError('');
         }else checkDiscover(c)
-       }}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove project "+c.name} title={"Remove project "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}</div>
+       }}>Activate</button><button type="button" className="intel-ghost" onClick={()=>editCampaign(c)}>Edit</button><button type="button" className="intel-ghost border-red-200 text-red-700 hover:bg-red-50" aria-label={"Remove project "+c.name} title={"Remove project "+c.name} disabled={saving} onClick={()=>removeCampaign(c)}><Trash2 size={16}/></button>{c.status==='DRAFT'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>pause(c)}>Pause</button>}{c.status==='PAUSED'&&<button type="button" className="intel-ghost" disabled={saving} onClick={()=>resumeProject(c)}>Resume project</button>}</div>
      </article>)}{discoverCampaign&&<AssessmentProgressDialog
   title={'Activate · '+discoverCampaign.name}
   preview={discoverPreview} run={discoverRun} error={discoverError} loading={discoverBusy} previewLoading={discoverPreviewBusy}
@@ -727,7 +735,8 @@ export default function CampaignPanel({campaignId=null}){
      </details>
     ))}
    </div>
-   <p className="text-xs text-slate-600">Saved evidence includes historical collections and authorized imports; it may predate the current search configuration.</p>
+   <p className="text-xs text-slate-600">Saved evidence includes historical collections and authorized imports; it may predate the current search configuration. Monitoring jurisdiction is not verified incident location.</p>
+   {dashboard?.current_search_consistency&&<p className="text-xs text-slate-600">Current saved-text match: {dashboard.current_search_consistency.matching.toLocaleString()} of {dashboard.current_search_consistency.total.toLocaleString()} posts in the dashboard scope. {dashboard.current_search_consistency.not_matching.toLocaleString()} do not match the current rules and remain preserved.</p>}
    <p className="text-sm"><span>Collection runs:</span> {selected.run_count} · <span>Evidence records:</span> {selected.evidence_count}</p>
    {latestPrismCollection&&<section className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm space-y-2" aria-label="Latest SocialCrawl collection outcome" data-testid="prism-latest-collection-outcome">
     <strong>Latest SocialCrawl collection · Run #{latestPrismCollection.run_id} · {latestPrismCollection.status}</strong>

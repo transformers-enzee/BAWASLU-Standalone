@@ -343,3 +343,46 @@ def test_assess_all_selects_older_unassessed_beyond_newest_500():
     db.commit()
     assert _scope_ids(db,p,int(cid))==ids[:10]
     db.close()
+
+
+def test_regional_project_card_total_matches_authorized_captured_feed():
+    db=SessionLocal();p=user(db,'cardRegion','Provincial Analyst','Province','Bali');cid=campaign(db,p,'Regional total')
+    add(db,cid,3,'Bali');add(db,cid,2,'Jawa Barat')
+    assert action(db,p,'getCampaign',{},cid)['campaign']['evidence_count']==3
+    assert action(db,p,'listCampaigns',{})['campaigns'][0]['evidence_count']==3
+    assert feed(db,p,cid)['total']==3
+    db.close()
+
+
+def test_latest_saved_sentiment_matches_feed_filter_dashboard_and_annotations():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'latestTone');cid=campaign(db,p,'Sentiment parity')
+    add(db,cid,1)
+    link=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).one()
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=link.result_id,assessment_version=1,
+        model_version='gpt-4o-mini',relevance_label='RELEVANT',sentiment='NEGATIVE'))
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=link.result_id,assessment_version=2,
+        model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT',sentiment='POSITIVE',sentiment_model='socialcrawl-prism-stance'))
+    db.commit()
+    result=action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'positive'}},cid)
+    assert result['total']==1 and result['evidence'][0]['sentiment']=='Positive'
+    assert action(db,p,'campaignCapturedPosts',{'search':{'sentiment':'negative'}},cid)['total']==0
+    assert action(db,p,'campaignDashboard',{},cid)['sentiment']['Positive']==1
+    assert action(db,p,'campaignEvidence',{},cid)['evidence'][0]['sentiment']=='Positive'
+    db.close()
+
+
+def test_standard_current_match_count_honors_exclusion_without_removing_evidence():
+    from app.models import MonitoringCampaign
+    db=SessionLocal();p=user(db,'currentMatches');cid=campaign(db,p,'Current search')
+    c=db.get(MonitoringCampaign,int(cid));c.excluded_keywords_json='["hoaks"]'
+    add(db,cid,3)
+    rows=db.query(SocialListeningResult).join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id).filter(CampaignEvidence.campaign_id==int(cid)).order_by(SocialListeningResult.id).all()
+    for row,value in zip(rows,['Pemilu update','Pemilu hoaks','Unrelated']):row.text_content=value
+    db.commit()
+    report=action(db,p,'campaignDashboard',{},cid)
+    assert report['statistics']['messages']==3 and report['statistics']['main_keyword_messages']==2
+    assert report['current_search_consistency']['matching']==1
+    assert report['current_search_consistency']['not_matching']==2
+    assert feed(db,p,cid)['total']==3
+    db.close()

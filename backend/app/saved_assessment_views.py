@@ -24,8 +24,11 @@ def saved_classifications_for_posts(db, user_profile, posts):
     result={post.id:[] for post in posts}
     if not result or not has(user_profile,'view_intelligence'):
         return result
-    ids=set(result)
-    links=db.query(CampaignEvidence).filter(CampaignEvidence.result_id.in_(ids)).all()
+    from .socialcrawl import _result_in_scope
+    ids={post.id for post in posts if _result_in_scope(db,user_profile,post)}
+    if not ids:return result
+    links=db.query(CampaignEvidence).filter(CampaignEvidence.result_id.in_(ids),
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').all()
     campaigns={cid:db.get(MonitoringCampaign,cid)
                for cid in {link.campaign_id for link in links}}
     permitted={(link.campaign_id,link.result_id) for link in links
@@ -45,7 +48,8 @@ def saved_classifications_for_posts(db, user_profile, posts):
         if key in permitted and key not in latest:
             latest[key]=assessment
     relevant={key:item for key,item in latest.items()
-              if str(item.relevance_label or '').upper() in RELEVANT}
+              if str(item.relevance_label or '').upper() in RELEVANT
+              and item.model_version!='PRISM_PENDING_OPENAI'}
     if not relevant:
         return result
 
@@ -64,6 +68,8 @@ def saved_classifications_for_posts(db, user_profile, posts):
         key=(campaign_id,result_id)
         if key in relevant and key not in decisions:
             decisions[key]=review.decision
+    from .officer_sentiment import latest_corrections
+    sentiment_corrections=latest_corrections(db,relevant.keys())
     from .candidate_registry import candidate_index, resolve_post_candidate_mentions
     scoped_candidate_index=candidate_index(db,user_profile)
     posts_by_id={post.id:post for post in posts}
@@ -86,6 +92,7 @@ def saved_classifications_for_posts(db, user_profile, posts):
         decision=decisions.get((campaign_id,result_id))
         location_review=scoped_statuses[(campaign_id,result_id)]
         shared=shared_violation_decision(signals if source=='SAVED_ASSESSMENT' else [],decision)
+        correction=sentiment_corrections.get((campaign_id,result_id))
         result[result_id].append({
             'canonical_source_id':canonical_source_id('social',result_id),
             'campaign_id':str(campaign_id),
@@ -93,10 +100,12 @@ def saved_classifications_for_posts(db, user_profile, posts):
             'assessment_version':assessment.assessment_version,
             'model_version':assessment.model_version,
             'relevance_label':assessment.relevance_label,
-            'sentiment':str(assessment.sentiment or 'UNCLASSIFIED').upper(),
-            'sentiment_confidence':assessment.sentiment_confidence or '',
-            'sentiment_explanation':assessment.sentiment_explanation or '',
-            'sentiment_model':assessment.sentiment_model or '',
+            'sentiment':correction.sentiment if correction else str(assessment.sentiment or 'UNCLASSIFIED').upper(),
+            'sentiment_origin':'OFFICER_CORRECTION' if correction else 'SAVED_ASSESSMENT',
+            'ai_sentiment_original':str(assessment.sentiment or 'UNCLASSIFIED').upper(),
+            'sentiment_confidence':'HUMAN_REVIEWED' if correction else assessment.sentiment_confidence or '',
+            'sentiment_explanation':correction.rationale if correction else assessment.sentiment_explanation or '',
+            'sentiment_model':'OFFICER_CORRECTION' if correction else assessment.sentiment_model or '',
             'candidate_identity_matches':resolve_post_candidate_mentions(
                 _safe_candidate_signals(assessment.candidate_signals_json),
                 post.text_content,scoped_candidate_index),

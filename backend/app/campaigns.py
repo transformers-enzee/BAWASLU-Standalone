@@ -192,7 +192,7 @@ def _normalize(db,p,data,existing=None):
        'province':filters.get('province',''),'regency_city':filters.get('regency_city',''),
        'interval_minutes':interval}
 
-def _view(db,c):
+def _view(db,c,principal=None):
     search=decode_project_query(c.primary_keywords_json)
     prism_plan=None
     prism_plan_error=''
@@ -200,8 +200,20 @@ def _view(db,c):
         try:prism_plan=discover_boolean_plan(search['boolean_query'])
         except ValueError as exc:prism_plan_error=str(exc)  # Listing a saved project must never fail because its paid plan is unsupported.
     counts=db.query(CampaignRun).filter(CampaignRun.campaign_id==c.id).count()
-    evidence=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
-        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').count()
+    evidence_query=db.query(CampaignEvidence).filter(CampaignEvidence.campaign_id==c.id,
+        CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
+    if principal is not None and principal.get('geographic_scope')!='Nationwide':
+        from .models import SocialListeningResult
+        from .socialcrawl import _result_in_scope
+        from types import SimpleNamespace
+        from sqlalchemy import func
+        # Project cards must count the same authorized corpus as Captured Posts.
+        # Aggregate by source run instead of loading every post into memory.
+        grouped=(evidence_query.join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+            .with_entities(SocialListeningResult.run_id,func.count(CampaignEvidence.id))
+            .group_by(SocialListeningResult.run_id).all())
+        evidence=sum(n for rid,n in grouped if _result_in_scope(db,principal,SimpleNamespace(run_id=rid)))
+    else:evidence=evidence_query.count()
     return {'id':str(c.id),'name':c.name,'description':c.description,
        'search_mode':search['search_mode'],'boolean_query':search['boolean_query'],
        'retrieval_terms':search['retrieval_terms'],
@@ -323,9 +335,17 @@ def _current_assessment(db,campaign_id,result_id):
                 else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
                       EvidenceAssessment.id.desc()).first())
 
+def _latest_sentiment_record(db,campaign_id,result_id):
+    # Sentiment is independent of full relevance classification. All source
+    # views use the newest saved version, with the officer correction above it.
+    from .models import EvidenceAssessment
+    return (db.query(EvidenceAssessment).filter_by(campaign_id=campaign_id,result_id=result_id)
+            .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).first())
+
+
 def _latest_sentiment(db,campaign_id,result_id):
     from .officer_sentiment import effective_sentiment
-    record=_current_assessment(db,campaign_id,result_id)
+    record=_latest_sentiment_record(db,campaign_id,result_id)
     label=effective_sentiment(db,campaign_id,result_id,record.sentiment if record else 'UNCLASSIFIED')
     return label.title() if label in ('POSITIVE','NEGATIVE','NEUTRAL') else 'Unclassified'
 
@@ -337,7 +357,7 @@ def _sentiment_details(db,campaign_id,result_id):
         return {'confidence':'HUMAN_REVIEWED','explanation':correction.rationale,
                 'model':'OFFICER_CORRECTION','status':'OFFICER_CORRECTED',
                 'actor_id':correction.actor_id,'corrected_at':correction.created_at.isoformat()}
-    record=_current_assessment(db,campaign_id,result_id)
+    record=_latest_sentiment_record(db,campaign_id,result_id)
     if not sentiment_is_assessed(record):return None
     return {'confidence':record.sentiment_confidence or '',
             'explanation':record.sentiment_explanation or '',
@@ -1530,6 +1550,11 @@ def campaign_action(db:Session,p,action,data,id=None):
             raise ValueError('Recent duplicate search requires acknowledgement')
         if selected_everywhere and str((data or {}).get('confirmed_query') or '').strip()!=preview['query']:
             raise ValueError('Search query changed; review the 20-credit preview again')
+        from .prism_discover import search_snapshot,snapshot_signature,ensure_no_active_collection
+        from types import SimpleNamespace
+        ensure_no_active_collection(db,c.id)
+        snapshot=search_snapshot(c);revision=snapshot_signature(snapshot)
+        immutable_query=SimpleNamespace(**snapshot)
         runs=[]; linked=0; new_results=0; credits_used=0; provider_received=0; reused_results=0
         # Independent searches ensure each main keyword can retrieve content.
         # Existing fingerprints and CampaignEvidence uniqueness deduplicate overlap.
@@ -1549,13 +1574,14 @@ def campaign_action(db:Session,p,action,data,id=None):
             for item in response.get('results') or []:
                 row=db.get(SocialListeningResult,int(item['id']))
                 if not row or not _result_in_scope(db,p,row): continue
-                match=keyword_screen(c,{'text_content':row.text_content,
+                match=keyword_screen(immutable_query,{'text_content':row.text_content,
                                         'raw':json.loads(row.raw_payload_json or '{}')})
                 if not match['matched']: continue
                 existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
                 if existing: continue
                 db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
-                      matched_fields_json=json.dumps(match,ensure_ascii=False)))
+                      matched_fields_json=json.dumps({**match,'query_revision':revision,'collection_run_id':run_id,
+                          'provenance':'LEGACY_MANUAL_COLLECTION'},ensure_ascii=False)))
                 linked+=1
             db.commit()
         c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
@@ -1646,6 +1672,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             return re.compile('|'.join(re.escape(term) for term in terms)) if terms else None
         primary_pattern=keyword_pattern(primary_terms)
         secondary_pattern=keyword_pattern(secondary_terms)
+        excluded_pattern=keyword_pattern(json.loads(c.excluded_keywords_json or '[]')) if not is_boolean else None
+        current_search_matches=0
         # Match province mentions in campaign posts, never treat mentions as proven origin.
         province_names=('Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau','Jambi','Bengkulu','Sumatera Selatan','Kepulauan Bangka Belitung','Lampung','Banten','DKI Jakarta','Jawa Barat','Jawa Tengah','DI Yogyakarta','Jawa Timur','Bali','Nusa Tenggara Barat','Nusa Tenggara Timur','Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara','Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara','Maluku','Maluku Utara','Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya')
         # Explicit Indonesian province aliases are unverified *mentions*, not
@@ -1686,8 +1714,11 @@ def campaign_action(db:Session,p,action,data,id=None):
                 for word in set((primary_pattern.findall(lowered) if primary_pattern else [])+(secondary_pattern.findall(lowered) if secondary_pattern else [])):
                     cloud_terms[word]+=1
             if is_boolean:
-                if evaluate_boolean(saved_search['ast'],item.text_content):primary_message_count+=1
-            elif primary_pattern and primary_pattern.search(lowered):primary_message_count+=1
+                if evaluate_boolean(saved_search['ast'],item.text_content):
+                    primary_message_count+=1;current_search_matches+=1
+            elif primary_pattern and primary_pattern.search(lowered):
+                primary_message_count+=1
+                if not excluded_pattern or not excluded_pattern.search(lowered):current_search_matches+=1
             if secondary_pattern and secondary_pattern.search(lowered):secondary_message_count+=1
             else:secondary_absent_count+=1
             if source_day: daily[source_day]+=1
@@ -1802,6 +1833,8 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'main_keywords':dict(main),'secondary_keywords':dict(secondary),
                 'search_mode':saved_search['search_mode'],'search_match_basis':'CURRENT_BOOLEAN_EXPRESSION' if is_boolean else 'STANDARD_MAIN_KEYWORDS',
                 'historical_evidence_preserved':True,
+                'current_search_consistency':{'matching':current_search_matches,'not_matching':visible-current_search_matches,
+                    'total':visible,'basis':'CURRENT_STORED_TEXT_ONLY','historical_evidence_preserved':True},
                 'limited_to':None,'truncated':False,
                 'paid_provider_called':False}
         _dashboard_cache_put(cache_key,result)
@@ -2000,7 +2033,7 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action=='listCampaigns':
         rows=db.query(MonitoringCampaign).order_by(MonitoringCampaign.created_at.desc(),MonitoringCampaign.id.desc()).all()
         visible=[r for r in rows if allowed(p,r)]
-        return {'campaigns':[_view(db,r) for r in visible[:MAX_CAMPAIGNS_PER_LIST]],'total':len(visible),
+        return {'campaigns':[_view(db,r,p) for r in visible[:MAX_CAMPAIGNS_PER_LIST]],'total':len(visible),
                 'automatic_paid_crawling_enabled':False}
     if action in ('campaignSchedulePreview','campaignHistory'):
         from .campaign_scheduler import campaign_schedule_preview, campaign_history
@@ -2012,14 +2045,14 @@ def campaign_action(db:Session,p,action,data,id=None):
     if action=='getCampaign':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
-        return {'campaign':_view(db,c)}
+        return {'campaign':_view(db,c,p)}
     if action=='createCampaign':
         if not has(p,'add_intelligence'): raise PermissionError('Not permitted to create campaigns')
         values=_normalize(db,p,data)
         c=MonitoringCampaign(**values,status='DRAFT',created_by=p['id'])
         db.add(c);db.commit();db.refresh(c)
         audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_CREATED',{'name':{'new':c.name},'status':{'new':'DRAFT'}})
-        return {'campaign':_view(db,c),'message':'Campaign saved in draft; scheduled paid crawling is not enabled'}
+        return {'campaign':_view(db,c,p),'message':'Campaign saved in draft; scheduled paid crawling is not enabled'}
     if action=='deleteCampaign':
         from .prism_discover import locked_campaign,ensure_no_active_collection
         c=locked_campaign(db,int(id)) if str(id or '').isdigit() else None
@@ -2061,7 +2094,7 @@ def campaign_action(db:Session,p,action,data,id=None):
             audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_UPDATED',{
                 'status':{'old':previous_status,'new':c.status},
                 'description_changed':{'new':old_description!=c.description}})
-            return {'campaign':_view(db,c)}
+            return {'campaign':_view(db,c,p)}
         values=_normalize(db,p,{**_view(db,c),**payload},existing=c)
         for k,v in values.items(): setattr(c,k,v)
         # PAUSED is a configuration state, not a scheduler activation.
@@ -2070,5 +2103,5 @@ def campaign_action(db:Session,p,action,data,id=None):
         previous_status=c.status;c.status=desired;c.updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_UPDATED',{'status':{'old':previous_status,'new':c.status}})
-        return {'campaign':_view(db,c)}
+        return {'campaign':_view(db,c,p)}
     raise ValueError('Unsupported campaign action')

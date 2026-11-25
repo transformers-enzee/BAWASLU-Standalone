@@ -50,7 +50,7 @@ for(const x of ['ai5-page','ai5-modes','ai5-use-bawaslu',
  'ai5-research-trail','ai5-response','AI-5 editable draft',
  "['pdf','docx','xlsx']"])
  have(ai,x);
-have(docker,'ARG BAWASLU_BUILD_VERSION=182.1');
+have(docker,'ARG BAWASLU_BUILD_VERSION=182.2');
 have(docker,'tests/test_ai5_v1794.py');
-have(main,"BAWASLU_BUILD_VERSION','182.1'");
+have(main,"BAWASLU_BUILD_VERSION','182.2'");
 console.log('PASS AI-5 v179.4 independent routes, unrestricted general mode, permissioned research and real export contracts');

@@ -55,10 +55,9 @@ def search_page(db,p,c,q,opts,page_size):
     if start:base=base.filter(day>=start)
     if end:base=base.filter(day!='',day<=end)
     if sentiment:
-        # Mirror the existing captured-feed assessment precedence and officer overrides.
+        # Mirror the latest saved sentiment version and officer overrides.
         a=EvidenceAssessment;correction=OfficerSentimentCorrection
         assessed=select(a.sentiment).where(a.campaign_id==c.id,a.result_id==SocialListeningResult.id).order_by(
-            case((a.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
             a.assessment_version.desc(),a.id.desc()).limit(1).correlate(SocialListeningResult).scalar_subquery()
         officer=select(correction.sentiment).where(correction.campaign_id==c.id,correction.result_id==SocialListeningResult.id).order_by(
             correction.id.desc()).limit(1).correlate(SocialListeningResult).scalar_subquery()

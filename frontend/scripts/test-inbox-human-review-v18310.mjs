@@ -15,7 +15,7 @@ for(const fragment of [
  'data-testid="inbox-toggle-review-centre"',
  'data-testid="inbox-human-review-centre"',
  'Review AI Assessment · officer checklist',
- 'No overall approval button',
+ 'no overall approval button',
  'Original source provenance',
  'Officer topic / Public Concerns correction',
  'Human flag review',

@@ -54,7 +54,7 @@ def snapshot(db,now=None,exclude_run_id=None):
         if not isinstance(diag,dict):diag={}
         reported=provider.get('collected')
         known=type(reported) is int and reported>=0
-        actual=reported if known else max(nonnegative(diag.get('raw_provider_items')),nonnegative(run.result_count))
+        actual=max(nonnegative(reported),nonnegative(diag.get('raw_provider_items')),nonnegative(run.result_count))
         reservation=min(300,max(100,nonnegative((meta.get('body') or {}).get('limit'))))
         active=run.status in ('QUEUED','RUNNING')
         uncertain=bool(meta.get('submission_uncertain'))
@@ -63,6 +63,7 @@ def snapshot(db,now=None,exclude_run_id=None):
             grouped[key]=max(grouped.get(key,0),actual)
             if not known:unknown+=1
             if active or uncertain:reserved+=max(0,reservation-actual)
+        if active and (not run.executed_at or run.executed_at<month):reserved+=reservation
         if active:storage_reserved+=reservation
     # New legacy runs reserve capacity before dispatch and preserve provider
     # receipt counts even when mapping/storage fails. Existing usage rows retain
@@ -80,6 +81,7 @@ def snapshot(db,now=None,exclude_run_id=None):
             # The legacy ledger already counts mapped rows.
             legacy+=max(0,actual-mapped)
             if active or info.get('submission_uncertain'):reserved+=max(0,allowance-actual)
+        if active and (not run.executed_at or run.executed_at<month):reserved+=allowance
         if active:storage_reserved+=allowance
     stored=int(db.query(func.count(SocialListeningResult.id)).scalar() or 0)
     used=legacy+sum(grouped.values())

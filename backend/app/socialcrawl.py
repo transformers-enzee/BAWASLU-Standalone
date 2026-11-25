@@ -166,7 +166,7 @@ def search_preflight(db:Session,p,filters):
     estimate=estimate_search_cost(scoped)
     fingerprint=_filter_fingerprint(estimate['filters'])
     cutoff=utc_now_naive()-timedelta(minutes=10)
-    recent_q=db.query(SocialListeningRun).filter(SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff)
+    recent_q=db.query(SocialListeningRun).filter(SocialListeningRun.provider=='SOCIALCRAWL',SocialListeningRun.status=='COMPLETED',SocialListeningRun.executed_at>=cutoff)
     if p.get('role')!='National Administrator':
         recent_q=recent_q.filter(SocialListeningRun.executed_by==p['id'])
     recent=recent_q.order_by(SocialListeningRun.executed_at.desc()).limit(50).all()
@@ -315,6 +315,8 @@ def _value(item,*paths,default=''):
 def _matches_local_filters(r, filters):
     f=_normalize_filters(filters)
     txt=(r.get('text_content') or '').lower()
+    from .collection_date_scope import publication_in_window
+    if not publication_in_window(r.get('published_at'),f.get('date_from',''),f.get('date_to','')):return False
     if f.get('language') and (r.get('language') or '').lower()!=str(f['language']).lower(): return False
     if f.get('accounts'):
         h=(r.get('observed_handle') or '').lower(); a=(r.get('author_name') or '').lower()
@@ -542,7 +544,7 @@ def ensure_result_id_sequence_ready(db):
             raise ValueError('Social Listening database ID sequence repair verification failed')
     db.commit()
 
-def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False):
+def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confirmed_cost=False,legacy_batch_id=None):
     if not has(p,'view_intelligence'): raise PermissionError('Not permitted')
     f=_scope_filters(p,filters)
     everywhere=f.get('platforms')==['search_everywhere']
@@ -558,7 +560,16 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
     collection_budget.lock(db)
     collection_budget.assert_capacity(db,requested)
     receipt={'reserved_posts':requested,'observed_rows':0,'ledger_mapped':0,'submission_uncertain':False}
-    run=SocialListeningRun(rule_id=rule_id,query_json=_json({**f,'legacy_collection':receipt}),executed_by=p['id'],status='RUNNING'); db.add(run); db.commit(); db.refresh(run)
+    stored_filters={**f,'legacy_collection':receipt}
+    if legacy_batch_id is not None:
+        from .legacy_collection_guard import checkpoint
+        parent,parent_meta=checkpoint(db,legacy_batch_id,persist=False)
+        stored_filters['legacy_batch_id']=parent.id
+    run=SocialListeningRun(rule_id=rule_id,query_json=_json(stored_filters),executed_by=p['id'],status='RUNNING'); db.add(run);db.flush()
+    if legacy_batch_id is not None:
+        from .models import CampaignRun
+        db.add(CampaignRun(campaign_id=int(parent_meta['campaign_id']),social_listening_run_id=run.id,triggered_by='MANUAL'))
+    db.commit(); db.refresh(run)
     selected=f.get('platforms') or DEFAULT_PLATFORMS
     wants_news='online_news' in selected
     social_sources=[x for x in selected if x!='online_news' and x!='search_everywhere']
@@ -566,14 +577,15 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
     if everywhere: endpoint='/v1/search/everywhere'
     ledger_id=None
     def before_submission():
+        if legacy_batch_id is not None:checkpoint(db,legacy_batch_id,persist=False,submitting=True)
         receipt['submission_uncertain']=True
-        run.query_json=_json({**f,'legacy_collection':receipt});db.commit()
+        run.query_json=_json(stored_filters);db.commit()
     def record_receipt(env):
         # Persist known provider consumption before mapping or a second endpoint.
         nonlocal ledger_id
         receipt['observed_rows']+=len(_extract_items(env))
         receipt['submission_uncertain']=False
-        run.query_json=_json({**f,'legacy_collection':receipt})
+        run.query_json=_json(stored_filters)
         run.credits_used=int(run.credits_used or 0)+int(env.get('credits_used') or 0)
         request=str(env.get('request_id') or '')
         run.provider_request_id=','.join(x for x in [run.provider_request_id,request] if x)[:255]
@@ -635,6 +647,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
               'data':{'items':[item for x in envelopes for item in _extract_items(x)]}
             }
         items=_extract_items(envelope)
+        if legacy_batch_id is not None:checkpoint(db,legacy_batch_id,persist=False)
         collection_budget.lock(db)
         collection_budget.assert_storage(db,len(items),exclude_run_id=run.id)
         mapped=[]
@@ -673,6 +686,12 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
             existing=db.query(SocialListeningResult).filter(SocialListeningResult.content_fingerprint==m['content_fingerprint']).first()
             if existing:
                 diagnostics['duplicate_items']+=1
+                # A shared fingerprint is not permission to read evidence from another scope.
+                geography={'geographic_scope':'Regency/City' if f.get('regency_city') else 'Province',
+                           'province':f.get('province'),'regency_city':f.get('regency_city')}
+                if not _result_in_scope(db,p,existing) or (f.get('province') and not _result_in_scope(db,geography,existing)):
+                    diagnostics['scope_incompatible_reused_rows']=diagnostics.get('scope_incompatible_reused_rows',0)+1
+                    continue
                 reused_rows+=1
                 mapped.append(serialize_result(existing))
                 continue
@@ -687,7 +706,7 @@ def execute_search(db:Session,p,filters,rule_id=None,provider_client=None,confir
         diagnostics['provider_page_only']=True
         run.provider_request_id=str(envelope.get('request_id') or ''); run.credits_used=int(envelope.get('credits_used') or 0); run.credits_remaining=int(envelope.get('credits_remaining') or 0); run.cached=bool(envelope.get('cached')); run.result_count=len(mapped); run.status='COMPLETED'
         receipt['ledger_mapped']=len(mapped)
-        run.query_json=_json({**f,'legacy_collection':receipt})
+        run.query_json=_json(stored_filters)
         ledger=db.get(SocialListeningProviderUsage,ledger_id) if ledger_id is not None else None
         if ledger is None:
             ledger=SocialListeningProviderUsage(provider='SOCIALCRAWL',endpoint=endpoint,user_id=p['id']);db.add(ledger)
@@ -768,7 +787,7 @@ def social_listening_action(db,p,action,data,id=None,provider_client=None):
     if action in {'campaignDiscoverPreview','campaignDiscoverStart','campaignDiscoverReuse','campaignDiscoverRecover','campaignDiscoverQuarantine','campaignDiscoverStatus','campaignDiscoverLastRunDiagnostics','campaignCandidateSuggestions'}:
         from .prism_discover import action as prism_action
         return prism_action(db,p,action,data,id)
-    if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignSearchEvidenceAudit','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAssessmentInterruptedPreview','campaignAssessmentInterruptedQuarantine','campaignAssessmentCompletionAudit','campaignAssessmentOperationsOverview','campaignAssessmentSupersededPreview','campaignAssessmentSupersededApply','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:
+    if action in {'listCampaigns','createCampaign','updateCampaign','deleteCampaign','getCampaign','campaignSchedulePreview','campaignHistory','campaignCostPreview','campaignKeywordPreview','campaignSearchEvidenceAudit','campaignEvidence','campaignCapturedPosts','campaignEvidenceById','campaignDateTopPosts','campaignDashboard','campaignRunReadiness','campaignManualPreflight','campaignManualRun','campaignLegacyCollectionStatus','campaignLegacyCollectionQuarantine','campaignSentimentClassify','campaignSentimentBatchPreview','campaignTopicRefresh','campaignThumbnailRecovery','campaignAuthorRecoveryPreview','campaignAuthorRecoveryApply','campaignMediaCapabilityPreview','campaignIntelligenceInbox','campaignClassificationBatchPreview','campaignSingleAssessmentPreview','campaignSingleAssessmentStart','campaignSingleReanalysisPreview','campaignSingleReanalysisStart','campaignAssessmentBacklogPreview','campaignAssessmentBacklogStart','campaignAssessmentAudit','campaignAssessmentCorrection','campaignOfficerClassificationCorrection','campaignFlagReview','campaignAssessmentJobReconcile','campaignAssessmentInterruptedPreview','campaignAssessmentInterruptedQuarantine','campaignAssessmentCompletionAudit','campaignAssessmentOperationsOverview','campaignAssessmentSupersededPreview','campaignAssessmentSupersededApply','campaignAIWorkerReadiness','campaignAssessmentPilotPreview','campaignAssessmentPilotStart','campaignAssessmentAllStart','campaignAssessmentAllStatus','campaignAssessmentAllResume','campaignFindingGroupsPreview','campaignFindingGroupsSave','campaignFindingGroupsList','campaignFindingGroupsReview','campaignFindingGroupsReadiness','campaignFindingGroupSources','campaignUsageDiagnostics','campaignQAHistorySummary','campaignAcceptanceSnapshot','campaignSummaryReadiness','campaignJurisdictionPreview','campaignJurisdictionReview'}:
         from .campaigns import campaign_action
         return campaign_action(db,p,action,data,id)
     if action=='capabilities': return capabilities()

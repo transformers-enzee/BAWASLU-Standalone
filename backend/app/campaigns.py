@@ -1530,18 +1530,33 @@ def campaign_action(db:Session,p,action,data,id=None):
                 report['failure_reasons'][reason]=report['failure_reasons'].get(reason,0)+1
         db.commit()
         return report
+    if action in ('campaignLegacyCollectionStatus','campaignLegacyCollectionQuarantine'):
+        from .legacy_collection_guard import view as legacy_view,quarantine
+        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        if not c or not allowed(p,c):raise ValueError('Campaign not available')
+        if action=='campaignLegacyCollectionQuarantine':return quarantine(db,c,p,data or {})
+        return {'legacy_batch':legacy_view(db,c),'paid_provider_called':False}
     if action in ('campaignManualPreflight','campaignManualRun'):
         from .campaign_scheduler import campaign_query, keyword_screen
         from .socialcrawl import execute_search
         from .models import SocialListeningResult
         from .socialcrawl import _result_in_scope
-        c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
+        from .prism_discover import locked_campaign
+        from . import legacy_collection_guard as legacy_guard
+        c=(locked_campaign(db,int(id)) if action=='campaignManualRun' else db.get(MonitoringCampaign,int(id))) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
         if not _editable(p,c): raise PermissionError('Only campaign owner or national administrator can run collection')
         if c.status!='DRAFT': raise ValueError('Only draft campaigns can be crawled manually')
         selected_everywhere=json.loads(c.platforms_json or '[]')==['search_everywhere']
         preview=_manual_preflight(db,p,c,(data or {}).get('everywhere_query',''))
+        prior_batch=legacy_guard.view(db,c)
+        from .prism_discover import latest_collection_outcome
+        prior_prism=latest_collection_outcome(db,c)
+        prior_uncertain=bool(prior_batch and prior_batch['uncertain']) or bool(prior_prism and (prior_prism.get('submission_uncertain') or prior_prism.get('recovery_available')))
+        preview['prior_collection_ack_required']=prior_uncertain
         if action=='campaignManualPreflight': return preview
+        if prior_uncertain and (data or {}).get('acknowledge_prior_collection') is not True:
+            raise ValueError('Review the prior uncertain collection and explicitly acknowledge potential additional charges')
         if not preview['can_run']: raise ValueError(preview.get('blocked_reason') or 'Estimated crawl exceeds the 5-credit manual limit')
         if (data or {}).get('confirm_cost') is not True: raise ValueError('Explicit credit confirmation required')
         if int((data or {}).get('confirmed_credits',-1))!=preview['estimated_credits']:
@@ -1561,38 +1576,48 @@ def campaign_action(db:Session,p,action,data,id=None):
         searches=([{'filters':{**__import__('app.campaign_scheduler',fromlist=['campaign_query']).campaign_query(c),
                               'platforms':['search_everywhere'],'query':preview['query']}}]
                   if selected_everywhere else _keyword_search_plan(db,p,c))
-        for search in searches:
-            response=execute_search(db,p,search['filters'],confirmed_cost=True)
-            run_id=int(response['run']['id'])
-            runs.append(response['run'])
-            credits_used+=int(response['run'].get('credits_used') or 0)
-            diagnostics=response.get('diagnostics') or {}
-            new_results+=int(diagnostics.get('new_rows',len(response.get('results') or [])))
-            provider_received+=int(diagnostics.get('provider_items',len(response.get('results') or [])))
-            reused_results+=int(diagnostics.get('reused_rows',0))
-            db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run_id,triggered_by='MANUAL'))
-            for item in response.get('results') or []:
-                row=db.get(SocialListeningResult,int(item['id']))
-                if not row or not _result_in_scope(db,p,row): continue
-                match=keyword_screen(immutable_query,{'text_content':row.text_content,
-                                        'raw':json.loads(row.raw_payload_json or '{}')})
-                if not match['matched']: continue
-                existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
-                if existing: continue
-                db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
-                      matched_fields_json=json.dumps({**match,'query_revision':revision,'collection_run_id':run_id,
-                          'provenance':'LEGACY_MANUAL_COLLECTION'},ensure_ascii=False)))
-                linked+=1
-            db.commit()
-        c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
-        db.commit()
-        audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'runs':{'new':len(runs)},'linked_evidence':{'new':linked}})
-        return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
-                'credits_used':credits_used,'provider_received':provider_received,'reused_results':reused_results,
-                'manual_only':True,'estimated_credits':preview['estimated_credits'],
-                'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else
-                    'BOOLEAN_RETRIEVAL_SEEDS' if decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
-                    else 'PER_KEYWORD_OR'}
+        batch_id=legacy_guard.begin(db,c,p,snapshot,revision,len(searches))
+        committed_links=0
+        try:
+            for search in searches:
+                legacy_guard.checkpoint(db,batch_id)
+                response=execute_search(db,p,search['filters'],confirmed_cost=True,legacy_batch_id=batch_id)
+                run_id=int(response['run']['id'])
+                runs.append(response['run'])
+                credits_used+=int(response['run'].get('credits_used') or 0)
+                diagnostics=response.get('diagnostics') or {}
+                new_results+=int(diagnostics.get('new_rows',len(response.get('results') or [])))
+                provider_received+=int(diagnostics.get('provider_items',len(response.get('results') or [])))
+                reused_results+=int(diagnostics.get('reused_rows',0))
+                # The child run was linked before the paid request.
+                legacy_guard.checkpoint(db,batch_id,persist=False)
+                for item in response.get('results') or []:
+                    row=db.get(SocialListeningResult,int(item['id']))
+                    if not row or not _result_in_scope(db,p,row): continue
+                    match=keyword_screen(immutable_query,{'text_content':row.text_content,
+                                            'raw':json.loads(row.raw_payload_json or '{}')})
+                    if not match['matched']: continue
+                    existing=db.query(CampaignEvidence).filter_by(campaign_id=c.id,result_id=row.id).first()
+                    if existing: continue
+                    db.add(CampaignEvidence(campaign_id=c.id,result_id=row.id,
+                          matched_fields_json=json.dumps({**match,'query_revision':revision,'collection_run_id':run_id,
+                              'provenance':'LEGACY_MANUAL_COLLECTION'},ensure_ascii=False)))
+                    linked+=1
+                legacy_guard.checkpoint(db,batch_id,child_id=run_id,persist=False)
+                db.commit();committed_links=linked
+            c.last_success_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            legacy_guard.finish(db,batch_id,'COMPLETED',linked)
+            audit(db,p,'MonitoringCampaign',c.id,'CAMPAIGN_MANUAL_CRAWL',{'runs':{'new':len(runs)},'linked_evidence':{'new':linked}})
+            return {'runs':runs,'run':runs[-1],'linked_evidence':linked,'result_count':new_results,
+                    'credits_used':credits_used,'provider_received':provider_received,'reused_results':reused_results,
+                    'manual_only':True,'estimated_credits':preview['estimated_credits'],
+                    'retrieval_mode':'SEARCH_EVERYWHERE' if selected_everywhere else
+                        'BOOLEAN_RETRIEVAL_SEEDS' if decode_project_query(c.primary_keywords_json)['search_mode']=='BOOLEAN'
+                        else 'PER_KEYWORD_OR'}
+        except Exception as exc:
+            db.rollback()
+            legacy_guard.finish(db,batch_id,'FAILED',committed_links,error=str(exc))
+            raise
     if action=='campaignSentimentBatchPreview':
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c): raise ValueError('Campaign not available')
@@ -1641,8 +1666,8 @@ def campaign_action(db:Session,p,action,data,id=None):
             CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
         # Push date limits down to SQL before transferring large post payloads.
         # Values are ISO dates and published_at begins with YYYY-MM-DD.
-        if from_day:query=query.filter(SocialListeningResult.published_at>=from_day)
-        if to_day:query=query.filter(SocialListeningResult.published_at<=(to_day+'T23:59:59.999999Z'))
+        if from_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)>=from_day)
+        if to_day:query=query.filter(func.substr(SocialListeningResult.published_at,1,10)<=to_day)
         if keyword:query=query.filter(SocialListeningResult.text_content.ilike('%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%',escape='\\'))
         # Stream only dashboard columns, not full ORM entities and their large payloads.
         # The original full-entity query was expensive on 40k+ evidence rows.
@@ -1986,10 +2011,12 @@ def campaign_action(db:Session,p,action,data,id=None):
                 'ranking':'combined_log_engagement_75_views_25',
                 'date':on_day,'paid_provider_called':False}
     if action=='campaignSearchEvidenceAudit':
-        from .search_evidence_audit import audit_page
+        from .search_evidence_audit import audit_page,aggregate_audit
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None
         if not c or not allowed(p,c):raise ValueError('Campaign not available')
-        return audit_page(db,p,c,data if isinstance(data,dict) else {})
+        opts=data if isinstance(data,dict) else {}
+        if opts.get('aggregate') is True:return aggregate_audit(db,p,c,opts)
+        return audit_page(db,p,c,opts)
     if action=='campaignKeywordPreview':
         from .campaign_scheduler import keyword_screen
         c=db.get(MonitoringCampaign,int(id)) if str(id or '').isdigit() else None

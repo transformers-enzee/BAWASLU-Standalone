@@ -386,3 +386,38 @@ def test_standard_current_match_count_honors_exclusion_without_removing_evidence
     assert report['current_search_consistency']['not_matching']==2
     assert feed(db,p,cid)['total']==3
     db.close()
+
+
+def test_whole_project_reconciliation_matches_latest_inbox_eligibility():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'wholeAudit');cid=campaign(db,p,'Whole audit')
+    add(db,cid,4)
+    links=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).order_by(CampaignEvidence.id).all()
+    for index,link in enumerate(links):
+        db.get(SocialListeningResult,link.result_id).text_content='Pemilu' if index<2 else 'Other'
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=links[0].result_id,assessment_version=1,relevance_label='RELEVANT',sentiment='NEGATIVE'))
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=links[1].result_id,assessment_version=1,relevance_label='RELEVANT',model_version='PRISM_PENDING_OPENAI'))
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=links[2].result_id,assessment_version=1,relevance_label='IRRELEVANT'))
+    db.commit()
+    report=action(db,p,'campaignSearchEvidenceAudit',{'aggregate':True},cid)
+    counts=report['counts']
+    assert counts['captured']==4 and counts['matching_current_search']==2
+    assert counts['assessed_relevance']==2 and counts['pending_relevance']==2
+    assert counts['inbox_eligible']==1 and report['inbox_eligible_sentiment']['NEGATIVE']==1
+    assert report['count_integrity'] and report['writes']==0
+    assert feed(db,p,cid)['total']==4
+    db.close()
+
+
+def test_candidate_suggestions_include_older_classified_post_beyond_500():
+    from app.models import EvidenceAssessment
+    db=SessionLocal();p=user(db,'olderCandidate');cid=campaign(db,p,'Old candidate')
+    add(db,cid,501)
+    first=db.query(CampaignEvidence).filter_by(campaign_id=int(cid)).order_by(CampaignEvidence.id).first()
+    db.add(EvidenceAssessment(campaign_id=int(cid),result_id=first.result_id,assessment_version=1,
+        relevance_label='RELEVANT',candidate_signals_json='["Gibran"]'))
+    db.commit()
+    report=action(db,p,'campaignCandidateSuggestions',{},cid)
+    assert report['candidates'][0]['matching_posts']==1
+    assert report['candidates'][0]['name']=='Gibran Rakabuming Raka'
+    db.close()

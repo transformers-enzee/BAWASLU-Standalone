@@ -254,3 +254,62 @@ def test_resume_paused_project_is_configuration_only():
     assert db.query(SocialListeningRun).count()==0
     assert db.query(CampaignRun).count()==0
     db.close()
+
+
+def test_legacy_collection_claim_blocks_prism_start_and_project_edits():
+    from app import legacy_collection_guard as guard,prism_discover
+    db=SessionLocal();p=actor(db,'legacyGuard','National Administrator')
+    c=action(db,p,'createCampaign',payload())['campaign']
+    row=prism_discover.locked_campaign(db,int(c['id']))
+    snapshot=prism_discover.search_snapshot(row)
+    rid=guard.begin(db,row,p,snapshot,prism_discover.snapshot_signature(snapshot),2)
+    with pytest.raises(ValueError,match='already active'):
+        action(db,p,'updateCampaign',{'description':'changed'},c['id'])
+    db.rollback()
+    with pytest.raises(ValueError,match='already active'):
+        prism_discover.ensure_no_active_collection(db,row.id)
+    assert guard.view(db,row)['status']=='RUNNING'
+    guard.finish(db,rid,'COMPLETED',0)
+    assert guard.view(db,row)['status']=='COMPLETED'
+    assert action(db,p,'updateCampaign',{'description':'changed'},c['id'])['campaign']['description']=='changed'
+    db.close()
+
+
+def test_legacy_stale_quarantine_fences_worker_without_provider_retry():
+    from datetime import datetime,timedelta
+    from app import legacy_collection_guard as guard,prism_discover
+    db=SessionLocal();p=actor(db,'legacyStale','National Administrator')
+    c=action(db,p,'createCampaign',payload())['campaign']
+    row=prism_discover.locked_campaign(db,int(c['id']))
+    snapshot=prism_discover.search_snapshot(row)
+    rid=guard.begin(db,row,p,snapshot,prism_discover.snapshot_signature(snapshot),2)
+    run=db.get(SocialListeningRun,rid);meta=json.loads(run.query_json)
+    meta['heartbeat_at']=(datetime.utcnow()-timedelta(hours=2)).isoformat()
+    run.query_json=json.dumps(meta);db.commit()
+    result=action(db,p,'campaignLegacyCollectionQuarantine',{'run_id':rid,'confirm_uncertain':True},c['id'])
+    assert result['quarantined'] and not result['paid_provider_called']
+    assert result['legacy_batch']['uncertain']
+    with pytest.raises(ValueError,match='no longer active'):guard.checkpoint(db,rid,submitting=True)
+    db.rollback();db.close()
+
+
+def test_legacy_child_receipt_linked_before_mock_provider_submission(monkeypatch):
+    from app import legacy_collection_guard as guard,prism_discover,socialcrawl
+    db=SessionLocal();p=actor(db,'legacyReceipt','National Administrator')
+    c=action(db,p,'createCampaign',payload())['campaign']
+    row=prism_discover.locked_campaign(db,int(c['id']))
+    snapshot=prism_discover.search_snapshot(row)
+    rid=guard.begin(db,row,p,snapshot,prism_discover.snapshot_signature(snapshot),1)
+    monkeypatch.setenv('MEDIA_THUMBNAIL_CACHE_ENABLED','false')
+    def fake(filters):
+        child=db.query(SocialListeningRun).filter_by(provider='SOCIALCRAWL',status='RUNNING').one()
+        assert json.loads(child.query_json)['legacy_batch_id']==rid
+        assert db.query(CampaignRun).filter_by(campaign_id=row.id,social_listening_run_id=child.id).count()==1
+        return {'success':True,'credits_used':1,'request_id':'mock-child','data':{'items':[]}}
+    response=socialcrawl.execute_search(db,p,{'query':'pemilu','platforms':['tiktok']},provider_client=fake,legacy_batch_id=rid)
+    guard.checkpoint(db,rid,child_id=int(response['run']['id']))
+    guard.finish(db,rid,'COMPLETED')
+    assert guard.view(db,row)['completed_searches']==1
+    assert db.query(SocialListeningRun).filter_by(provider=guard.PROVIDER).one().credits_used==0
+    assert db.query(SocialListeningRun).filter_by(provider='SOCIALCRAWL').one().credits_used==1
+    db.close()

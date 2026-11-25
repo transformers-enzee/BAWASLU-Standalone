@@ -69,3 +69,72 @@ def audit_page(db,p,c,opts):
                 'historical_revision':versions['HISTORICAL'],'unknown_revision':versions['UNKNOWN']},
             'has_more':len(batch)>limit,'next_cursor':str(page[-1][0].id) if len(batch)>limit and page else None,
             'paid_provider_called':False,'writes':0,'scope':'CURRENT_SAVED_TEXT_ONLY'}
+
+
+def aggregate_audit(db,p,c,opts):
+    """Whole authorized project reconciliation; explicitly requested, no writes.
+
+    Match the latest-version Inbox relevance contract while keeping collection
+    matching and AI relevance independent. Count links, not cross-project sums.
+    """
+    from sqlalchemy import func
+    from .models import EvidenceAssessment
+    from .socialcrawl import _result_in_scope
+    from .prism_discover import search_snapshot,snapshot_signature
+    from .campaign_scheduler import keyword_screen
+    from .collection_date_scope import publication_in_window
+    from .officer_sentiment import OfficerSentimentCorrection
+    revision=snapshot_signature(search_snapshot(c))
+    start=str(opts.get('date_from') or '');end=str(opts.get('date_to') or '')
+    from datetime import date
+    for value in (start,end):
+        if value and (len(value)!=10 or date.fromisoformat(value).isoformat()!=value):raise ValueError('Invalid reconciliation date')
+    if start and end and start>end:raise ValueError('Start date must not follow end date')
+    latest_id=(db.query(EvidenceAssessment.id).filter(
+        EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+        EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc())
+        .limit(1).correlate(CampaignEvidence).scalar_subquery())
+    latest_tone=(db.query(OfficerSentimentCorrection.sentiment).filter(
+        OfficerSentimentCorrection.campaign_id==CampaignEvidence.campaign_id,
+        OfficerSentimentCorrection.result_id==CampaignEvidence.result_id)
+        .order_by(OfficerSentimentCorrection.id.desc()).limit(1).correlate(CampaignEvidence).scalar_subquery())
+    q=(db.query(SocialListeningResult.run_id,SocialListeningResult.text_content,
+        SocialListeningResult.published_at,CampaignEvidence.match_method,CampaignEvidence.matched_fields_json,
+        EvidenceAssessment.relevance_label,EvidenceAssessment.model_version,
+        func.coalesce(latest_tone,EvidenceAssessment.sentiment))
+        .select_from(SocialListeningResult)
+        .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+        .filter(CampaignEvidence.campaign_id==c.id,CampaignEvidence.match_method!='WATCHLIST_ACCOUNT'))
+    day=func.substr(SocialListeningResult.published_at,1,10)
+    if start:q=q.filter(day>=start)
+    if end:q=q.filter(day<=end)
+    counts=Counter();sentiment=Counter();scope={}
+    for rid,text,stamp,method,fields,label,model,tone in q.yield_per(500):
+        if rid not in scope:scope[rid]=_result_in_scope(db,p,SimpleNamespace(run_id=rid))
+        if not scope[rid] or not publication_in_window(stamp,start,end):continue
+        counts['captured']+=1
+        counts['matching_current_search' if keyword_screen(c,{'text_content':text})['matched'] else 'not_matching_current_search']+=1
+        if method in IMPORT_METHODS:counts['authorized_imports']+=1
+        try:meta=json.loads(fields or '{}')
+        except (ValueError,TypeError):meta={}
+        saved=meta.get('query_revision') if isinstance(meta,dict) else None
+        counts['unknown_revision' if not saved else 'current_revision' if saved==revision else 'historical_revision']+=1
+        label=str(label or '').upper()
+        if model=='PRISM_PENDING_OPENAI' or label not in ('RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN'):
+            counts['pending_relevance']+=1
+        else:
+            counts['assessed_relevance']+=1
+            if label in ('RELEVANT','HIGHLY_RELEVANT'):
+                counts['inbox_eligible']+=1
+                tone=str(tone or '').upper()
+                sentiment[tone if tone in ('POSITIVE','NEUTRAL','NEGATIVE') else 'UNCLASSIFIED']+=1
+            else:counts['not_inbox_eligible_after_assessment']+=1
+    keys=('captured','matching_current_search','not_matching_current_search','authorized_imports','unknown_revision',
+          'current_revision','historical_revision','pending_relevance','assessed_relevance','inbox_eligible','not_inbox_eligible_after_assessment')
+    return {'query_revision':revision,'counts':{key:counts[key] for key in keys},
+            'inbox_eligible_sentiment':{key:sentiment[key] for key in ('POSITIVE','NEUTRAL','NEGATIVE','UNCLASSIFIED')},
+            'date_from':start,'date_to':end,'scope':'AUTHORIZED_PROJECT_LINKS',
+            'count_integrity':counts['captured']==counts['matching_current_search']+counts['not_matching_current_search']==counts['pending_relevance']+counts['assessed_relevance'] and counts['assessed_relevance']==counts['inbox_eligible']+counts['not_inbox_eligible_after_assessment'] and sum(sentiment.values())==counts['inbox_eligible'],
+            'historical_evidence_preserved':True,'paid_provider_called':False,'writes':0}

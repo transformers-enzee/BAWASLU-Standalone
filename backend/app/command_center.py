@@ -605,7 +605,7 @@ def build_command_center(db,p,data=None):
             'regional_intelligence':regional_intelligence[:38],
             'regional_intelligence_period':'ALL_TIME_AUTHORIZED',
             'regional_inbox_signals':regional_inbox_signals,
-            'regional_inbox_signals_period':'ALL_TIME_AUTHORIZED',
+            'regional_inbox_signals_period':'SELECTED_PUBLICATION_PERIOD',
             'signal_intelligence':{'candidate_mentions':candidate_coverage,
                 'issue_categories':issue_volume,'flagged_assessment_volume':review_volume,
                 'volume_band':activity_band,'thresholds':{'elevated':5,'high':20},

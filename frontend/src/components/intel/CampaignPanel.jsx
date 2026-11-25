@@ -214,6 +214,20 @@ export default function CampaignPanel({campaignId=null}){
  const [topAccountsMetric,setTopAccountsMetric]=useState('engagement');
  const [dashboard,setDashboard]=useState(null),[dashboardError,setDashboardError]=useState('');
  const [latestPrismCollection,setLatestPrismCollection]=useState(null);
+ const [legacyBatch,setLegacyBatch]=useState(null),[legacyBusy,setLegacyBusy]=useState(false),[legacyError,setLegacyError]=useState('');
+ const [aggregateAudit,setAggregateAudit]=useState(null);
+ async function inspectWholeProject(){
+  if(!selected||searchAuditBusy)return;setSearchAuditBusy(true);setSearchAuditError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignSearchEvidenceAudit',id:selected.id,data:{aggregate:true,date_from:analyticsFrom,date_to:analyticsTo}});setAggregateAudit(r.data)}
+  catch(e){setSearchAuditError(e.response?.data?.detail||e.message||'Reconciliation unavailable')}finally{setSearchAuditBusy(false)}
+ }
+ async function legacyStatus(quarantine=false){
+  if(!selected||legacyBusy)return;
+  if(quarantine&&!window.confirm('Quarantine the stale legacy batch? The original provider charge may remain uncertain. No new crawl will be started.'))return;
+  setLegacyBusy(true);setLegacyError('');
+  try{const r=await base44.functions.invoke('socialListening',{action:quarantine?'campaignLegacyCollectionQuarantine':'campaignLegacyCollectionStatus',id:selected.id,data:quarantine?{run_id:legacyBatch.run_id,confirm_uncertain:true}:{}});setLegacyBatch(r.data.legacy_batch||null)}
+  catch(e){setLegacyError(e.response?.data?.detail||e.message||'Legacy collection status unavailable')}finally{setLegacyBusy(false)}
+ }
  const [searchAudit,setSearchAudit]=useState(null),[searchAuditBusy,setSearchAuditBusy]=useState(false),[searchAuditError,setSearchAuditError]=useState('');
  async function inspectSearchEvidence(next=false){
   if(!selected||searchAuditBusy)return;
@@ -343,7 +357,7 @@ export default function CampaignPanel({campaignId=null}){
  }).sort((a,b)=>capturedSentimentSort==='CLASSIFIED_FIRST'?(Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(b.sentiment||'').toUpperCase()))-Number(['POSITIVE','NEUTRAL','NEGATIVE'].includes(String(a.sentiment||'').toUpperCase()))):0);
  async function viewEvidence(c){
   setCampaignSection(['watchlist','posts'].includes(new URLSearchParams(window.location.search).get('tab'))?new URLSearchParams(window.location.search).get('tab'):'overview');
-  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setSearchAudit(null);setSearchAuditError('');setRecoveryMessage('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
+  setCapturedSentimentFilter('ALL');setCapturedSentimentSort('HOTTEST');setCapturedSourceFilter('ALL');setCapturedTextFilter('');resetKeywordPreview();setManualPreview(null);setManualDuplicate(false);setManualNotice('');setSelected(c);setExternalFile(null);setExternalPreview(null);setHumanVerifiedFile(null);setHumanVerifiedPreview(null);setHumanVerifiedResult(null);setHumanVerifiedError('');setExternalRun(null);setExternalImportError('');setExternalError('');setPostLookup('');setLookupPost(null);setLookupError('');setEvidence([]);setChartDay(null);setDashboard(null);setDashboardError('');setLatestPrismCollection(null);setLegacyBatch(null);setLegacyError('');setAggregateAudit(null);setSearchAudit(null);setSearchAuditError('');setRecoveryMessage('');setAnalyticsFrom('');setAnalyticsTo('');setAnalyticsKeyword('');setAppliedKeyword('');setEvidenceError('');setEvidenceLoading(true);
   try{
    const results=await Promise.allSettled([
     base44.functions.invoke('socialListening',{action:'campaignEvidence',id:c.id,data:{}}),
@@ -354,7 +368,7 @@ export default function CampaignPanel({campaignId=null}){
    else setEvidenceError(results[0].reason?.response?.data?.detail||results[0].reason?.message||'Unable to load evidence');
    if(results[1].status==='fulfilled')setDashboard(results[1].value.data);
    else setDashboardError(results[1].reason?.response?.data?.detail||results[1].reason?.message||'Dashboard request failed');
-   if(results[2].status==='fulfilled')setLatestPrismCollection(results[2].value.data.last_run||null);
+   if(results[2].status==='fulfilled'){setLatestPrismCollection(results[2].value.data.last_run||null);setLegacyBatch(results[2].value.data.legacy_batch||null)}
   }finally{setEvidenceLoading(false)}
  }
  function exportEvidenceCsv(){
@@ -371,7 +385,7 @@ export default function CampaignPanel({campaignId=null}){
   if(!selected||!day)return;
   setChartDay({date:day,loading:true,posts:[],error:'',truncated:false,total:0});
   try{
-   const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day}});
+   const response=await base44.functions.invoke('socialListening',{action:'campaignDateTopPosts',id:selected.id,data:{date:day,keyword:appliedKeyword}});
    setChartDay({date:day,loading:false,posts:response.data.evidence||[],total:response.data.total||0,
                 truncated:Boolean(response.data.truncated),error:''});
   }catch(e){setChartDay({date:day,loading:false,posts:[],error:e.response?.data?.detail||e.message||'Could not load posts',total:0,truncated:false})}
@@ -444,8 +458,10 @@ export default function CampaignPanel({campaignId=null}){
   finally{setManualBusy(false)}
  }
  async function executeManualCrawl(){
-  if(!selected||!manualPreview?.can_run)return;setManualBusy(true);setManualNotice('');
-  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate,everywhere_query:manualPreview.query,confirmed_query:manualPreview.query}});
+  if(!selected||!manualPreview?.can_run)return;
+  if(manualPreview.prior_collection_ack_required&&!window.confirm('The previous collection may have an uncertain charge. Review its status before requesting another paid crawl. Continue?'))return;
+  setManualBusy(true);setManualNotice('');
+  try{const r=await base44.functions.invoke('socialListening',{action:'campaignManualRun',id:selected.id,data:{confirm_cost:true,confirmed_credits:manualPreview.estimated_credits,acknowledge_duplicate:manualDuplicate,acknowledge_prior_collection:!!manualPreview.prior_collection_ack_required,everywhere_query:manualPreview.query,confirmed_query:manualPreview.query}});
    setManualPreview(null);setManualNotice('Completed: '+r.data.result_count+' new results, '+r.data.linked_evidence+' linked project evidence. Actual credits: '+r.data.credits_used+'.');
    await refresh();await viewEvidence(selected);
   }catch(e){setManualNotice(e.response?.data?.detail||e.response?.data?.error||e.message)}
@@ -747,6 +763,7 @@ export default function CampaignPanel({campaignId=null}){
     </div>
     {latestPrismCollection.provider_diagnostics&&<details className="text-xs"><summary>Collection diagnostics</summary><p>Provider collected {latestPrismCollection.provider_diagnostics.collected??'Unknown'}; retained {latestPrismCollection.provider_diagnostics.kept??'Unknown'} before delivery.</p></details>}
     {latestPrismCollection.provider_candidate_rows!=null&&<p className="text-xs">Filtered by search rules: {latestPrismCollection.excluded_by_search??latestPrismCollection.excluded_by_boolean??0}. Provider candidates are not guaranteed to cover all relevant posts.</p>}
+    {latestPrismCollection.excluded_by_publication_date>0&&<p className="text-xs text-amber-900">{latestPrismCollection.excluded_by_publication_date} candidates lacked a verified publication date within the requested range.</p>}
     {latestPrismCollection.new_evidence_links!=null&&<p className="text-xs">New project links: {latestPrismCollection.new_evidence_links} · Previously linked matches: {latestPrismCollection.already_linked_matches??0}</p>}
     {latestPrismCollection.matched_over_target>0&&<p className="text-xs">Additional matches beyond this run’s accepted-post target: {latestPrismCollection.matched_over_target}.</p>}
     {latestPrismCollection.worker_stale&&!latestPrismCollection.recovery_available&&<button type="button" className="intel-ghost text-xs" disabled={recoveryBusy} onClick={quarantineCollection}>Quarantine stale collection</button>}
@@ -761,13 +778,16 @@ export default function CampaignPanel({campaignId=null}){
     {latestPrismCollection.zero_yield_paid_run&&<p className="text-xs text-amber-900">No posts matched this collection. Review the monitoring expression or date range before trying again.</p>}
     {latestPrismCollection.counts_basis==='legacy_new_source_rows_only'&&<p className="text-xs text-slate-600">Historical diagnostic: saved source rows are known, but the provider's full returned-item count was not retained.</p>}
    </section>}
+   {legacyBatch&&<section className="rounded-lg border border-slate-200 bg-white p-4 text-sm space-y-2"><strong>Legacy collection batch #{legacyBatch.run_id} · {legacyBatch.status}</strong><p className="text-xs">{legacyBatch.completed_searches} of {legacyBatch.planned_searches} searches linked. Actual provider charges are recorded on individual runs.</p>{legacyBatch.uncertain&&<p className="text-xs text-amber-800">Previous provider submission may be uncertain.</p>}{legacyBatch.error&&<p className="text-xs text-red-800">{legacyBatch.error}</p>}<button type="button" className="intel-ghost text-xs" disabled={legacyBusy} onClick={()=>legacyStatus()}>Refresh legacy status</button>{legacyBatch.stale&&<button type="button" className="intel-ghost text-xs" disabled={legacyBusy} onClick={()=>legacyStatus(true)}>Quarantine stale legacy batch</button>}{legacyError&&<p role="alert" className="text-xs text-red-800">{legacyError}</p>}</section>}
    <details className="rounded-lg border border-slate-200 bg-white p-4 text-sm" data-testid="project-search-evidence-audit">
     <summary className="cursor-pointer font-semibold">Search evidence consistency</summary>
     <p className="mt-2 text-xs text-slate-600">Compare stored post text against the current search rules. This does not remove evidence, change human assessments or start a crawl.</p>
     <div className="mt-2 flex gap-2"><button type="button" className="intel-ghost text-xs" disabled={searchAuditBusy} onClick={()=>inspectSearchEvidence()}>Check saved evidence</button>
+     <button type="button" className="intel-ghost text-xs" disabled={searchAuditBusy} onClick={inspectWholeProject}>Reconcile project totals</button>
      {searchAudit?.has_more&&<button type="button" className="intel-ghost text-xs" disabled={searchAuditBusy} onClick={()=>inspectSearchEvidence(true)}>Next audit page</button>}</div>
     {searchAuditBusy&&<p role="status" className="text-xs">Checking saved text…</p>}
     {searchAuditError&&<p role="alert" className="text-xs text-red-700">{searchAuditError}</p>}
+    {aggregateAudit&&<div className="mt-3 space-y-1 text-xs"><p>Authorized project totals ({aggregateAudit.date_from||'earliest'} to {aggregateAudit.date_to||'latest'}): {aggregateAudit.counts.captured.toLocaleString()} captured · {aggregateAudit.counts.matching_current_search.toLocaleString()} current query matches · {aggregateAudit.counts.assessed_relevance.toLocaleString()} assessed · {aggregateAudit.counts.inbox_eligible.toLocaleString()} eligible Inbox links · {aggregateAudit.counts.pending_relevance.toLocaleString()} pending relevance.</p><p>{aggregateAudit.count_integrity?'Count checks reconcile.':'Count checks require review.'} Project links are not the same as distinct sources across all campaigns. No evidence was changed.</p></div>}
     {searchAudit&&<div className="mt-3 space-y-2">
      <p className="text-xs">This page: {searchAudit.page_visible} visible posts · {searchAudit.page_counts.matching} match · {searchAudit.page_counts.not_matching} do not match · {searchAudit.page_counts.imports} imports · {searchAudit.page_counts.historical_revision} older revisions · {searchAudit.page_counts.unknown_revision} unknown revisions.</p>
      <div className="max-h-60 overflow-auto"><table className="w-full text-left text-xs"><thead><tr><th>Post</th><th>Current text</th><th>Provenance</th><th>Revision</th></tr></thead><tbody>{searchAudit.rows.map(row=><tr key={row.evidence_id}><td>#{row.result_id}</td><td>{row.matches_current_text?'Match':'No match'}</td><td>{row.provenance==='AUTHORIZED_IMPORT'?'Authorized import':row.match_method}</td><td>{row.revision_status}</td></tr>)}</tbody></table></div>

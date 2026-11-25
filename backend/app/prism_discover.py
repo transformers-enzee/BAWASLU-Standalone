@@ -49,11 +49,11 @@ def locked_campaign(db,cid):
 def ensure_no_active_collection(db,cid,exclude_run_id=None):
     q=(db.query(SocialListeningRun.id).join(CampaignRun,
         CampaignRun.social_listening_run_id==SocialListeningRun.id)
-        .filter(CampaignRun.campaign_id==cid,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
+        .filter(CampaignRun.campaign_id==cid,SocialListeningRun.provider.in_(['SOCIALCRAWL_PRISM','SOCIALCRAWL_MANUAL_BATCH']),
                 SocialListeningRun.status.in_(['QUEUED','RUNNING'])))
     if exclude_run_id is not None:q=q.filter(SocialListeningRun.id!=exclude_run_id)
     active=q.first()
-    if active:raise ValueError('Discover run already active; review its status before changing this project')
+    if active:raise ValueError('Discover or legacy collection run already active; review its status before changing this project')
 
 
 def body_for(db,c,max_credits=None,platform_mode=None):
@@ -249,6 +249,7 @@ def latest_collection_outcome(db,c,params=None):
         'newly_saved_source_rows':newly_saved,
         'excluded_by_boolean':diag.get('excluded_by_boolean'),
         'excluded_by_search':diag.get('excluded_by_search',diag.get('excluded_by_boolean')),
+        'excluded_by_publication_date':diag.get('excluded_by_publication_date'),
         'scope_incompatible_reused_rows':diag.get('scope_incompatible_reused_rows'),
         'new_evidence_links':diag.get('new_evidence_links'),
         'already_linked_matches':diag.get('already_linked_matches'),
@@ -290,30 +291,29 @@ def action(db,p,verb,data,cid):
         from .processing_hints import normalize_candidate_signals
         from .socialcrawl import _result_in_scope
         from types import SimpleNamespace
-        source_query=(db.query(CampaignEvidence.result_id,SocialListeningResult.run_id)
-            .join(SocialListeningResult,SocialListeningResult.id==CampaignEvidence.result_id)
+        from sqlalchemy import case
+        latest_id=(db.query(EvidenceAssessment.id).filter(
+            EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+            EvidenceAssessment.result_id==CampaignEvidence.result_id)
+            .order_by(case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
+                EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc())
+            .limit(1).correlate(CampaignEvidence).scalar_subquery())
+        rows=(db.query(SocialListeningResult.run_id,EvidenceAssessment.result_id,EvidenceAssessment.candidate_signals_json)
+            .select_from(SocialListeningResult)
+            .join(CampaignEvidence,CampaignEvidence.result_id==SocialListeningResult.id)
+            .join(EvidenceAssessment,EvidenceAssessment.id==latest_id)
             .filter(CampaignEvidence.campaign_id==c.id,CampaignEvidence.match_method!='WATCHLIST_ACCOUNT')
-            .order_by(CampaignEvidence.id.desc()))
-        if p.get('geographic_scope')=='Nationwide':ids=[x[0] for x in source_query.limit(500).all()]
-        else:
-            ids=[];scope={}
-            for result_id,run_id in source_query.yield_per(200):
-                if run_id not in scope:scope[run_id]=_result_in_scope(db,p,SimpleNamespace(run_id=run_id))
-                if scope[run_id]:ids.append(result_id)
-                if len(ids)>=500:break
-        if not ids:return {'candidates':[]}
-        rows=(db.query(EvidenceAssessment).filter(EvidenceAssessment.campaign_id==c.id,
-            EvidenceAssessment.result_id.in_(ids)).order_by(EvidenceAssessment.result_id,
-            __import__('sqlalchemy').case((EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),else_=0).asc(),
-            EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc()).all())
-        counts=Counter();sources={};seen=set()
-        for row in rows:
-            if row.result_id in seen:continue
-            seen.add(row.result_id)
-            try:signals=json.loads(row.candidate_signals_json or '[]')
+            .order_by(CampaignEvidence.id.desc()).yield_per(500))
+        counts=Counter();sources={};scope={}
+        for run_id,result_id,signals_json in rows:
+            if run_id not in scope:scope[run_id]=_result_in_scope(db,p,SimpleNamespace(run_id=run_id))
+            if not scope[run_id]:continue
+            try:signals=json.loads(signals_json or '[]')
             except (TypeError,ValueError):continue
             for name in normalize_candidate_signals(signals):
-                counts[name]+=1;sources.setdefault(name,[]).append(row.result_id)
+                counts[name]+=1
+                ids=sources.setdefault(name,[])
+                if len(ids)<5:ids.append(result_id)
         tracked={w.name.casefold():w for w in db.query(WatchlistItem).filter(
             WatchlistItem.type=='Candidate',WatchlistItem.status!='Inactive').all() if allowed(p,w)}
         return {'candidates':[{'name':name,'matching_posts':n,'source_ids':sources[name][:5],
@@ -331,7 +331,8 @@ def action(db,p,verb,data,cid):
         from .activation_assessment import status as activation_status
         return activation_status(db,p,c.id,run.id)
     if verb=='campaignDiscoverLastRunDiagnostics':
-        return {'last_run':latest_collection_outcome(db,c),'paid_provider_called':False,
+        from .legacy_collection_guard import view as legacy_view
+        return {'last_run':latest_collection_outcome(db,c),'legacy_batch':legacy_view(db,c),'paid_provider_called':False,
                 'collection_mode':'ONE_TIME','automatic_paid_crawling_enabled':False}
     if verb in ('campaignDiscoverRecover','campaignDiscoverQuarantine'):
         c=locked_campaign(db,c.id)
@@ -371,6 +372,9 @@ def action(db,p,verb,data,cid):
     search=decode_project_query(c.primary_keywords_json)
     params,sig=body_for(db,c,(data or {}).get('max_credits'),(data or {}).get('platform_mode'))
     last=latest_collection_outcome(db,c,params)
+    from .legacy_collection_guard import view as legacy_view
+    legacy_batch=legacy_view(db,c)
+    prior_uncertain=bool(legacy_batch and legacy_batch['uncertain'])
     plan=(discover_boolean_plan(search['boolean_query']) if search['search_mode']=='BOOLEAN' else None)
     if verb=='campaignDiscoverReuse':
         if (data or {}).get('signature')!=sig:raise ValueError('Refresh the collection preview first')
@@ -378,6 +382,8 @@ def action(db,p,verb,data,cid):
     if verb=='campaignDiscoverPreview':
         # A refresh from another browser must reveal the existing run rather
         # than invite another collection or perform an unnecessary preflight.
+        if legacy_batch and legacy_batch['status']=='RUNNING':
+            raise ValueError('Legacy collection already active. Review its status in the project dashboard.')
         if last and last['status'] in ('QUEUED','RUNNING'):
             return {'active_run_id':last['run_id'],'last_run':last,'paid':False,'paid_collection_blocked':True}
         offer,_,_=recent_reuse_offer(db,p,c,params)
@@ -395,7 +401,7 @@ def action(db,p,verb,data,cid):
             'search_mode':search['search_mode'],
             'boolean_local_screening':search['search_mode']=='BOOLEAN',
             'local_screening':True,'collection_mode':'ONE_TIME','collection_budget':budget,'reuse_offer':offer,'paid_collection_blocked':blocked,
-            'prior_collection_ack_required':bool(last and (last.get('submission_uncertain') or last.get('recovery_available'))),
+            'prior_collection_ack_required':prior_uncertain or bool(last and (last.get('submission_uncertain') or last.get('recovery_available'))),
             'date_window':{k:params[k] for k in ('period','since','until') if k in params},
             'platforms':params['platforms'],
             'platform_mode':(data or {}).get('platform_mode') or 'ALL',
@@ -404,7 +410,7 @@ def action(db,p,verb,data,cid):
     if verb!='campaignDiscoverStart':raise ValueError('Unknown Discover action')
     if (data or {}).get('confirm_cost') is not True or (data or {}).get('signature')!=sig:
         raise ValueError('Run the free credit preview and explicitly confirm it first')
-    if last and (last.get('submission_uncertain') or last.get('recovery_available')) and (data or {}).get('acknowledge_prior_collection') is not True:
+    if (prior_uncertain or (last and (last.get('submission_uncertain') or last.get('recovery_available')))) and (data or {}).get('acknowledge_prior_collection') is not True:
         raise ValueError('Review the previous recoverable or uncertain collection and explicitly acknowledge the risk of additional charges before starting a new crawl')
     collection_budget.lock(db)
     collection_budget.assert_capacity(db,params['limit'])
@@ -571,7 +577,7 @@ def store(db,run,c,items,full_assessment=False,commit=True):
     new=[]
     accepted_ids=[]
     new_evidence_links=0
-    rejected=0;matched_over_target=0
+    rejected=0;matched_over_target=0;date_rejected=0
     from .campaign_scheduler import keyword_screen
     from .project_boolean import boolean_term_trace
     meta=json.loads(run.query_json or '{}')
@@ -580,7 +586,16 @@ def store(db,run,c,items,full_assessment=False,commit=True):
     revision=snapshot_signature(snapshot)
     saved_query=decode_project_query(matching_config.primary_keywords_json)
     boolean_mode=saved_query['search_mode']=='BOOLEAN'
+    from .collection_date_scope import publication_in_window
+    body=meta.get('body') or {}
+    # Prefer new project links when the candidate pool contains previously
+    # collected matches. Preserve the original selection on a recovery replay.
+    original=set(meta.get('assessment_result_ids') or [])
+    pairs.sort(key=lambda pair:0 if pair[0].id in original else 2 if pair[0].id in links else 1)
     for row,raw in pairs:
+        if not publication_in_window(row.published_at,body.get('since',''),body.get('until','')):
+            date_rejected+=1
+            continue
         match=keyword_screen(matching_config,{'text_content':row.text_content})
         if not match['matched']:
             # Only locally matched posts may enter the project and AI path.
@@ -627,6 +642,7 @@ def store(db,run,c,items,full_assessment=False,commit=True):
         'accepted_boolean_matches':len(accepted_ids),
         'excluded_by_boolean':rejected if boolean_mode else 0,
         'excluded_by_search':rejected,
+        'excluded_by_publication_date':date_rejected,
         'scope_incompatible_reused_rows':scope_skipped,
         'matched_over_target':matched_over_target,
         'candidate_limit':scan_cap,

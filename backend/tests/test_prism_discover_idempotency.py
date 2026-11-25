@@ -453,3 +453,33 @@ def test_legacy_collection_guard_reserves_and_counts_raw_results(monkeypatch):
     assert snapshot(db)['monthly_counted']==2
     assert snapshot(db)['monthly_reserved']==0
     db.close()
+
+
+def test_explicit_prism_date_window_never_accepts_outside_or_undated_candidate(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();c,run=seed(db)
+    run.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300,'since':'2026-10-01','until':'2026-10-31'}})
+    db.commit()
+    yes=post('date-yes','https://instagram.com/p/date-yes')
+    old=post('date-old','https://instagram.com/p/date-old');old['published_at']='2026-09-30T23:59:59Z'
+    unknown=post('date-unknown','https://instagram.com/p/date-unknown');unknown['published_at']=''
+    assert prism_discover.store(db,run,c,[yes,old,unknown],full_assessment=True)==1
+    assert db.query(CampaignEvidence).count()==1
+    assert json.loads(run.query_json)['collection_diagnostics']['excluded_by_publication_date']==2
+    db.close()
+
+
+def test_candidate_cap_prioritizes_new_project_links(monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    db=SessionLocal();c,first=seed(db)
+    first.query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300}})
+    db.commit()
+    old=[post('old-'+str(i),'https://instagram.com/p/old-'+str(i)) for i in range(100)]
+    assert prism_discover.store(db,first,c,old,full_assessment=True)==100
+    run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='QUEUED',query_json=json.dumps({'campaign_id':c.id,'body':{'limit':300}}))
+    db.add(run);db.flush();db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id));db.commit()
+    new=[post('new-'+str(i),'https://instagram.com/p/new-'+str(i)) for i in range(25)]
+    assert prism_discover.store(db,run,c,old+new,full_assessment=True)==100
+    assert db.query(CampaignEvidence).count()==125
+    assert json.loads(run.query_json)['collection_diagnostics']['new_evidence_links']==25
+    db.close()

@@ -15,9 +15,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-and-publish:
+  backend-regression:
     if: github.ref == 'refs/heads/architecture-v2-foundation-20261015'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: Full offline backend regression (authoritative release gate)
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+          OPENAI_API_KEY: ""
+          SOCIALCRAWL_API_KEY: ""
+        run: pytest -q
+  verify-and-publish:
+    needs: backend-regression
+    if: github.ref == 'refs/heads/architecture-v2-foundation-20261015'
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout staging source
         uses: actions/checkout@v4
@@ -38,10 +59,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build, run Dockerfile QA, and publish only if all checks pass
+      - name: Package runtime and publish after backend QA and frontend build checks
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
           push: true
           tags: |
             ghcr.io/transformers-enzee/bawaslu-standalone:staging-${{ steps.version.outputs.version }}
@@ -52,7 +74,7 @@ jobs:
             BAWASLU_BUILD_VERSION=${{ steps.version.outputs.version }}
             BAWASLU_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=bawaslu-staging
-          cache-to: type=gha,mode=max,scope=bawaslu-staging
+          cache-to: type=gha,mode=max,scope=bawaslu-staging,ignore-error=true
           provenance: true
       - name: Confirm image identity
         run: |

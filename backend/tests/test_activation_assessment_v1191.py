@@ -73,3 +73,51 @@ def test_ai_budget_diagnostics_distinguish_unconfigured_and_exhausted(monkeypatc
         assert b["available"]==12 and b["per_run"]==6
         assert "DAILY_LIMIT_NOT_CONFIGURED" not in b["blockers"]
     finally:db.close()
+
+
+def test_assess_all_has_no_500_post_ceiling_and_scoped_queue_is_idempotent():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db import Base
+    from app.models import CampaignEvidence,SocialListeningResult,AIAssessmentJob,EvidenceAssessment
+    from app.activation_assessment import _scope_ids
+    from app.assessment_job_reconcile import enqueue_scoped_jobs,pending_campaign_job_links
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    db=Session(engine)
+    try:
+        for rid in range(1,1001):
+            db.add(SocialListeningResult(id=rid,run_id=1,text_content='synthetic electoral evidence'))
+            db.add(CampaignEvidence(campaign_id=99,result_id=rid,match_method='KEYWORD'))
+        db.commit()
+        ids=_scope_ids(db,{'geographic_scope':'Nationwide'},99)
+        assert len(ids)==1000
+        for start in range(0,len(ids),200):
+            assert enqueue_scoped_jobs(db,99,ids[start:start+200])==200
+        assert enqueue_scoped_jobs(db,99,ids[:200])==0
+        assert db.query(AIAssessmentJob).count()==1000
+        assert [x.result_id for x in pending_campaign_job_links(db,99,result_ids=[999,1000])]==[999,1000]
+    finally:db.close();engine.dispose()
+
+
+def test_scoped_queue_never_reopens_paid_or_unrelated_work():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db import Base
+    from app.models import CampaignEvidence,AIAssessmentJob,EvidenceAssessment
+    from app.assessment_job_reconcile import enqueue_scoped_jobs
+    engine=create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    db=Session(engine)
+    try:
+        for rid in (1,2,3,4,5):
+            db.add(CampaignEvidence(campaign_id=7,result_id=rid,
+                match_method='WATCHLIST_ACCOUNT' if rid==4 else 'KEYWORD'))
+        db.add(CampaignEvidence(campaign_id=8,result_id=6,match_method='KEYWORD'))
+        db.add(AIAssessmentJob(campaign_id=7,result_id=2,state='FAILED',attempts=1))
+        db.add(EvidenceAssessment(campaign_id=7,result_id=3,assessment_version=1,
+            model_version='HUMAN',relevance_label='RELEVANT'))
+        db.commit()
+        assert enqueue_scoped_jobs(db,7,[1,2,3,4,6])==1
+        assert [(x.result_id,x.state) for x in db.query(AIAssessmentJob).order_by(AIAssessmentJob.result_id)]==[(1,'PENDING'),(2,'FAILED')]
+    finally:db.close();engine.dispose()

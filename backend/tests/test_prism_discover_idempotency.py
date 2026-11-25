@@ -560,3 +560,15 @@ def test_full_export_rejects_false_completion_marker(monkeypatch):
     assert not json.loads(db.get(SocialListeningRun,run.id).query_json).get('full_export_complete')
     assert db.query(CampaignEvidence).count()==0
     db.close()
+
+
+def test_legacy_completed_export_can_recover_previously_unscreened_retained_rows():
+    db=SessionLocal();c,run=seed(db)
+    run.status='COMPLETED';run.provider_request_id='run_legacy_coverage'
+    snapshot=prism_discover.search_snapshot(c)
+    meta={'search_snapshot':snapshot,'query_revision':prism_discover.snapshot_signature(snapshot),
+          'collection_diagnostics':{'considered_items':300},'provider_diagnostics':{'kept':513}}
+    assert prism_discover.can_recover(run,meta,c)
+    meta['full_export_complete']=True
+    assert not prism_discover.can_recover(run,meta,c)
+    db.close()

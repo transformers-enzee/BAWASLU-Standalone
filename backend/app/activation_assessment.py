@@ -139,16 +139,20 @@ def status(db, principal, campaign_id, run_id):
                                     and not int(run.result_count or 0) else ""),
                 "error":run.error_text or "", "budget":remaining_budget(db,c.id)}
     assessments = {}
-    for row in (db.query(EvidenceAssessment).filter(
-            EvidenceAssessment.campaign_id == c.id,
-            EvidenceAssessment.result_id.in_(ids))
-            .order_by(__import__('sqlalchemy').case(
-                (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
-                else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
-                      EvidenceAssessment.id.desc()).all()):
-        assessments.setdefault(row.result_id, row)
-    jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
-        AIAssessmentJob.campaign_id == c.id, AIAssessmentJob.result_id.in_(ids)).all()}
+    jobs = {}
+    # Bound each database query; the run is not bounded to the first page.
+    for offset in range(0,len(ids),500):
+        chunk=ids[offset:offset+500]
+        for row in (db.query(EvidenceAssessment).filter(
+                EvidenceAssessment.campaign_id == c.id,
+                EvidenceAssessment.result_id.in_(chunk))
+                .order_by(__import__('sqlalchemy').case(
+                    (EvidenceAssessment.model_version.in_(['PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER']),1),
+                    else_=0).asc(),EvidenceAssessment.assessment_version.desc(),
+                          EvidenceAssessment.id.desc()).all()):
+            assessments.setdefault(row.result_id, row)
+        jobs.update({j.result_id:j for j in db.query(AIAssessmentJob).filter(
+            AIAssessmentJob.campaign_id == c.id, AIAssessmentJob.result_id.in_(chunk)).all()})
     totals = {"completed":0,"queued":0,"processing":0,"failed":0,"blocked":0,"stalled":0}
     # Jobs older than the automatic quarantine window are not proof of a live
     # provider request. Keep them untouched until an explicitly authorized resume.
@@ -221,11 +225,11 @@ def status(db, principal, campaign_id, run_id):
             "error":run.error_text or "", "budget":budget}
 
 
-def _scope_ids(db, principal, campaign_id, limit=500):
+def _scope_ids(db, principal, campaign_id, limit=None):
     """Select unassessed evidence throughout the project, not its latest 500 rows.
 
     Prefer dispatchable work and preserve blocked/ambiguous requests for status
-    review. Only one bounded list of IDs is passed to the durable worker.
+    review. The authorized ID snapshot is processed in bounded database batches.
     """
     from .models import SocialListeningResult
     from .socialcrawl import _result_in_scope
@@ -251,12 +255,12 @@ def _scope_ids(db, principal, campaign_id, limit=500):
             CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',incomplete)
         .order_by(case((dispatchable,0),else_=1),CampaignEvidence.id.asc()))
     if principal.get('geographic_scope')=='Nationwide':
-        return [rid for rid,_,_ in rows.limit(limit).all()]
+        return [rid for rid,_,_ in (rows.limit(limit) if limit is not None else rows).yield_per(500)]
     ids=[];scope={}
     for rid,run_id,_ in rows.yield_per(200):
         if run_id not in scope:scope[run_id]=_result_in_scope(db,principal,SimpleNamespace(run_id=run_id))
         if scope[run_id]:ids.append(rid)
-        if len(ids)>=limit:break
+        if limit is not None and len(ids)>=limit:break
     return ids
 
 
@@ -303,9 +307,11 @@ def start_all(db, principal, campaign_id, payload):
     else:
         ids = _scope_ids(db, principal, c.id)
     candidates = [rid for rid in ids if needs_full_assessment(_latest(db,c.id,rid))] if source_prefix else ids
-    jobs = {j.result_id:j for j in db.query(AIAssessmentJob).filter(
-        AIAssessmentJob.campaign_id == c.id,
-        AIAssessmentJob.result_id.in_(candidates)).all()} if candidates else {}
+    jobs = {}
+    for offset in range(0,len(candidates),500):
+        jobs.update({j.result_id:j for j in db.query(AIAssessmentJob).filter(
+            AIAssessmentJob.campaign_id == c.id,
+            AIAssessmentJob.result_id.in_(candidates[offset:offset+500])).all()})
     eligible = [rid for rid in candidates
                 if rid not in jobs or (jobs[rid].state == "PENDING" and jobs[rid].attempts<3)]
     budget = remaining_budget(db, c.id)
@@ -320,7 +326,7 @@ def start_all(db, principal, campaign_id, payload):
         executed_by=str(principal.get("id") or ""),
         result_count=len(candidates),credits_used=0,
         query_json=json.dumps({"campaign_id":c.id,"assessment_result_ids":candidates,
-                               "source":"ASSESS_ALL","source_batch_prefix":source_prefix,"cost_confirmed":True}))
+                               "source":"ASSESS_ALL","source_batch_prefix":source_prefix,"cost_confirmed":True,"full_collection":True}))
     db.add(run);db.flush()
     db.add(CampaignRun(campaign_id=c.id,social_listening_run_id=run.id,
                        triggered_by="AI_ASSESS_ALL"))
@@ -353,16 +359,12 @@ def execute_run(run_id):
         run.query_json = json.dumps(meta,ensure_ascii=False)
         if run.provider == "AI_ASSESS_ALL":
             run.status = "RUNNING"
-        for rid in ids:
-            previous = _latest(db,campaign_id,rid)
-            if not needs_full_assessment(previous):
-                continue
-            job = (db.query(AIAssessmentJob).filter_by(
-                campaign_id=campaign_id,result_id=rid).first())
-            if not job:
-                db.add(AIAssessmentJob(campaign_id=campaign_id,result_id=rid,
-                                       state="PENDING",attempts=0))
         db.commit()
+        # Only IDs already authorized by the run may enter the queue. Bulk
+        # insert is conflict-safe and never reopens previously claimed jobs.
+        from .assessment_job_reconcile import enqueue_scoped_jobs
+        for offset in range(0,len(ids),200):
+            enqueue_scoped_jobs(db,campaign_id,ids[offset:offset+200])
     except Exception:
         db.rollback()
         raise
@@ -370,29 +372,30 @@ def execute_run(run_id):
         db.close()
     attempted=0
     exit_reason="QUEUE_SCANNED"
-    for rid in ids:
-        db = SessionLocal()
+    # Load only authorized, never-sent work per chunk. The worker's atomic
+    # claim and protected request reservation remain the final authority.
+    for offset in range(0,len(ids),200):
+        db=SessionLocal()
         try:
-            previous = _latest(db,campaign_id,rid)
-            job = db.query(AIAssessmentJob).filter_by(
-                campaign_id=campaign_id,result_id=rid).first()
-            # No retry of a failed or ambiguous provider request.
-            if not needs_full_assessment(previous) or not job or job.state != "PENDING" or job.attempts>=3:
-                continue
-        finally:
-            db.close()
-        # Do not claim and exhaust pending jobs when the budget has been used.
-        # They remain PENDING for explicit, consented resumption later.
-        quota_db = SessionLocal()
-        try:
-            budget = remaining_budget(quota_db,campaign_id)
-        finally:
-            quota_db.close()
+            chunk=ids[offset:offset+200]
+            budget=remaining_budget(db,campaign_id)
+            from .assessment_job_reconcile import pending_campaign_job_links
+            eligible=[link.result_id for link in pending_campaign_job_links(db,campaign_id,limit=200,result_ids=chunk)]
+        finally:db.close()
+        if not eligible:continue
         if not budget["available"] or not budget["provider_ready"] or not budget["database_ready"] or not budget["per_run"] or attempted>=budget['per_run']:
             exit_reason="BUDGET_OR_CONFIGURATION_BLOCKED" if budget.get("blockers") else "PER_RUN_LIMIT_REACHED"
             break
-        attempted+=1
-        assess_pending_campaign(campaign_id,requested_limit=1,target_result_id=rid)
+        batch=eligible[:min(budget['available'],budget['per_run']-attempted)]
+        if not batch:break
+        outcome=assess_pending_campaign(campaign_id,requested_limit=len(batch),target_result_ids=batch)
+        if not isinstance(outcome,dict):
+            exit_reason="WORKER_BUSY_OR_UNAVAILABLE"
+            break
+        attempted+=int(outcome.get('attempted') or 0)
+        if outcome.get('provider_blocked'):
+            exit_reason="PROVIDER_OR_BUDGET_BLOCKED"
+            break
     db = SessionLocal()
     try:
         run=db.get(SocialListeningRun,int(run_id))

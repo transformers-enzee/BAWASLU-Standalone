@@ -64,7 +64,7 @@ def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
     db.commit()
     return max(0,int(result.rowcount or 0))
 
-def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
+def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT,result_ids=None):
     """Return only queued, claimable ordinary evidence, oldest first.
 
     Read-only. Unlike the former latest-300-link scan, this selects directly
@@ -86,8 +86,9 @@ def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
         .correlate(CampaignEvidence).scalar_subquery())
     unassessed=or_(EvidenceAssessment.id.is_(None),
         func.upper(func.coalesce(EvidenceAssessment.relevance_label,""))
-            .in_(["","UNASSESSED"]),
+            .notin_(["RELEVANT","HIGHLY_RELEVANT","IRRELEVANT","UNCERTAIN"]),
         func.upper(func.coalesce(EvidenceAssessment.model_version,"")).in_(_PRELIMINARY))
+    scoped=([CampaignEvidence.result_id.in_(result_ids)] if result_ids is not None else [])
     return (db.query(CampaignEvidence)
         .join(AIAssessmentJob,and_(
             AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,
@@ -97,5 +98,38 @@ def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
                 CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
                 AIAssessmentJob.state=="PENDING",
                 AIAssessmentJob.attempts<3,
-                unassessed)
+                unassessed,*scoped)
         .order_by(CampaignEvidence.id.asc()).limit(limit).all())
+
+
+def enqueue_scoped_jobs(db,campaign_id,result_ids):
+    """Queue authorized run IDs in bounded, conflict-safe batches, without billing."""
+    if not result_ids:return 0
+    if len(result_ids)>BATCH_LIMIT:raise ValueError("Scoped queue batch exceeds 200")
+    cid=int(campaign_id)
+    latest_id=(db.query(EvidenceAssessment.id).filter(
+        EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
+        EvidenceAssessment.result_id==CampaignEvidence.result_id)
+        .order_by(case((func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(_PRELIMINARY),1),else_=0).asc(),
+                  EvidenceAssessment.assessment_version.desc(),EvidenceAssessment.id.desc())
+        .limit(1).correlate(CampaignEvidence).scalar_subquery())
+    rows=(db.query(CampaignEvidence.result_id)
+        .outerjoin(EvidenceAssessment,EvidenceAssessment.id==latest_id)
+        .outerjoin(AIAssessmentJob,and_(AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,
+                                      AIAssessmentJob.result_id==CampaignEvidence.result_id))
+        .filter(CampaignEvidence.campaign_id==cid,CampaignEvidence.result_id.in_(result_ids),
+                CampaignEvidence.match_method!='WATCHLIST_ACCOUNT',AIAssessmentJob.id.is_(None),
+                or_(EvidenceAssessment.id.is_(None),
+                    func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(_PRELIMINARY),
+                    func.upper(func.coalesce(EvidenceAssessment.relevance_label,'')).notin_(['RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN']))).all())
+    if not rows:return 0
+    now=datetime.utcnow()
+    values=[dict(campaign_id=cid,result_id=rid,state='PENDING',attempts=0,last_error='',created_at=now,updated_at=now) for rid, in rows]
+    if db.bind.dialect.name=='postgresql':
+        from sqlalchemy.dialects.postgresql import insert
+    elif db.bind.dialect.name=='sqlite':
+        from sqlalchemy.dialects.sqlite import insert
+    else:raise RuntimeError('Conflict-safe database required')
+    result=db.execute(insert(AIAssessmentJob).values(values).on_conflict_do_nothing(index_elements=['campaign_id','result_id']))
+    db.commit()
+    return max(0,int(result.rowcount or 0))

@@ -34,7 +34,9 @@ jobs:
           python3 .github/scripts/playwright_scope.py
   backend-regression:
     needs: plan
-    # Backend regression remains mandatory, independent of browser scope.
+    # Staging pushes run the same full backend suite in the authoritative image workflow.
+    # PRs and manually requested regression retain an independent backend check.
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

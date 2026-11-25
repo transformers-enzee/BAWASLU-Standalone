@@ -1,0 +1,7 @@
+# v183.2 operational and release checks
+
+The automatic staging publisher runs full offline backend regression before packaging the runtime target. Browser QA still runs independently and must pass before Render deployment. The default Docker target continues to require its original backend test gate for manual builds. Runtime no longer copies the QA-only frontend source files. System/Python dependencies precede version metadata; cache export failure does not invalidate an otherwise successful build. Frontend build checks remain in the image build. Compare real CI wall-clock duration before claiming an improvement.
+
+Assess All now selects the complete authorized campaign backlog, uses bounded SQL batches and a scoped worker; already completed or uncertain provider calls are not retried. Existing configured daily/lifetime/per-run capacity and atomic reservations still apply. Recover stored provider runs before new crawling. Recovery is read-only at the provider and requires the unchanged search configuration. Existing staging startup protection remains unchanged: no automatic schema changes or unattended worker activation.
+
+Live acceptance: recover runs 42 and 43 through the authenticated campaign dashboard; then use Assess All on BAWASLU, Politik Uang and Bandung BAWASLU. Check saved results, queued and completed job counts, relevance and dashboard consistency. Do not replay failed/ambiguous paid calls. Scheduled paid monitoring remains disabled pending a durable scheduler and explicit campaign activation/configuration.

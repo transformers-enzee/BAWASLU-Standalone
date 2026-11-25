@@ -141,7 +141,10 @@ def heartbeat_stale(run,meta,now=None):
 
 
 def can_recover(run,meta,c):
-    return bool((run.status=='FAILED' or (run.status=='PARTIAL' and meta.get('export_incomplete')) or (run.status=='COMPLETED' and not meta.get('full_export_complete') and bool((meta.get('collection_diagnostics') or {}).get('candidate_limit_reached') or (meta.get('collection_diagnostics') or {}).get('matched_over_target'))) or heartbeat_stale(run,meta)) and c.status=='DRAFT'
+    diag=meta.get('collection_diagnostics') or {}
+    upstream=meta.get('provider_diagnostics') or {}
+    unscreened=type(upstream.get('kept')) is int and type(diag.get('considered_items')) is int and upstream['kept']>diag['considered_items']
+    return bool((run.status=='FAILED' or (run.status=='PARTIAL' and meta.get('export_incomplete')) or (run.status=='COMPLETED' and not meta.get('full_export_complete') and bool((meta.get('collection_diagnostics') or {}).get('candidate_limit_reached') or (meta.get('collection_diagnostics') or {}).get('matched_over_target') or unscreened)) or heartbeat_stale(run,meta)) and c.status=='DRAFT'
         and re.fullmatch(r'run_[A-Za-z0-9_-]+',str(run.provider_request_id or ''))
         and meta.get('search_snapshot')
         and meta.get('query_revision')==snapshot_signature(search_snapshot(c)))
@@ -670,7 +673,8 @@ def store(db,run,c,items,full_assessment=False,commit=True):
     meta['assessment_result_ids']=list(dict.fromkeys(prior_ids+accepted_ids)) if full_collection else accepted_ids
     if full_collection:
         from .models import AIAssessmentJob
-        pending=[rid for rid in accepted_ids if rid not in set(prior_ids)]
+        prior_set=set(prior_ids)
+        pending=[rid for rid in accepted_ids if rid not in prior_set]
         existing_jobs={j.result_id for j in db.query(AIAssessmentJob).filter(AIAssessmentJob.campaign_id==c.id,AIAssessmentJob.result_id.in_(pending)).all()} if pending else set()
         for rid in pending:
             if rid not in existing_jobs:db.add(AIAssessmentJob(campaign_id=c.id,result_id=rid,state='PENDING',attempts=0))

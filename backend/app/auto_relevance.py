@@ -177,7 +177,7 @@ def release_unbilled_claim(db,job,reanalysis=False):
     db.commit()
 
 
-def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False):
+def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False, target_result_ids=None):
     """Background task; each newly collected run processes at most configured AI requests."""
     if not os.getenv('OPENAI_API_KEY','').strip():
         log.info('AI screening skipped: OPENAI_API_KEY missing')
@@ -189,7 +189,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
     db=SessionLocal()
     try:
         campaign=db.get(MonitoringCampaign,int(campaign_id))
-        if not campaign:return
+        if not campaign or campaign.status=='DELETED':return
         # Automatic jobs require an explicit daily request ceiling.
         if requested_limit is None:
             # Reservations, not mutable job timestamps, are authoritative for automatic quotas.
@@ -200,7 +200,12 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
         phrases=db.query(IssueCategoryPhrase).filter(IssueCategoryPhrase.active==True,IssueCategoryPhrase.category_id.in_(list(category_names))).limit(400).all() if category_names else []
         taxonomy=active_issue_taxonomy(categories,phrases)
         active_gates=db.query(RelevanceGateQuestion).filter(RelevanceGateQuestion.active==True).order_by(RelevanceGateQuestion.id).limit(20).all()
-        if target_result_id is None:
+        if target_result_ids is not None:
+            if reanalysis or target_result_id is not None or len(target_result_ids)>200:
+                raise ValueError('Invalid scoped assessment batch')
+            from .assessment_job_reconcile import pending_campaign_job_links
+            links=pending_campaign_job_links(db,campaign.id,limit=200,result_ids=target_result_ids)
+        elif target_result_id is None:
             enqueue_campaign_evidence(campaign.id)
             if reanalysis:
                 # Preserve the existing explicit reanalysis path and its scope.
@@ -221,6 +226,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 CampaignEvidence.result_id==int(target_result_id),
                 CampaignEvidence.match_method!='WATCHLIST_ACCOUNT').limit(1).all()
         used=0
+        provider_blocked=False
         for link in links:
             if target_result_id is not None and link.result_id!=int(target_result_id):continue
             if used>=limit: break
@@ -259,6 +265,7 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
             # A requested_limit is NOT permission to bypass daily/lifetime caps.
             if not reserve_automatic_ai_request(db,campaign.id):
                 release_unbilled_claim(db,job,reanalysis=reanalysis)
+                provider_blocked=True
                 break
             used+=1
             payload={'campaign':{'name':campaign.name,'objective':campaign.description,'main_keywords':_arr(campaign.primary_keywords_json),'secondary_keywords':_arr(campaign.secondary_keywords_json),'excluded_keywords':_arr(campaign.excluded_keywords_json)},'source':{'text':(item.text_content or '')[:5000],'platform':item.platform,'author':item.author_name},'active_issue_categories':taxonomy,'relevance_gates':[{'id':q.id,'question':q.question,'required_answer':q.required_answer} for q in active_gates]}
@@ -385,19 +392,21 @@ def _assess_pending_campaign_locked(campaign_id, requested_limit=None, target_re
                 # Keep going on an isolated malformed result. Stop on quota,
                 # network or provider outage to avoid flooding paid requests.
                 if isinstance(exc,(httpx.TimeoutException,httpx.TransportError,httpx.HTTPStatusError)):
+                    provider_blocked=True
                     break
                 continue
+        return {'attempted':used,'provider_blocked':provider_blocked}
     finally:
         db.close()
 
 
-def assess_pending_campaign(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False):
+def assess_pending_campaign(campaign_id, requested_limit=None, target_result_id=None, reanalysis=False, target_result_ids=None):
     """Allow only one worker per campaign in each process. Multi-process locking is still required."""
     lock=_campaign_lock(campaign_id)
     if not lock.acquire(blocking=False):
         log.info('AI campaign %s already processing in this instance',campaign_id)
         return
     try:
-        return _assess_pending_campaign_locked(campaign_id,requested_limit,target_result_id,reanalysis)
+        return _assess_pending_campaign_locked(campaign_id,requested_limit,target_result_id,reanalysis,target_result_ids)
     finally:
         lock.release()

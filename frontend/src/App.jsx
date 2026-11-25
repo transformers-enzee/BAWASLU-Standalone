@@ -18,6 +18,7 @@ import Home from '@/pages/Home';
 import SmartRadar from '@/pages/SmartRadar';
 import SmartRadarQA from '@/pages/SmartRadarQA';
 import AssessmentQAWorkbench from '@/pages/AssessmentQAWorkbench';
+import AssessmentQADiagnostics from '@/pages/AssessmentQADiagnostics';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
@@ -122,6 +123,7 @@ const AuthenticatedApp = () => {
             <Route path="/administration" element={<Administration />} />
             <Route path="/administration/integration" element={<IntegrationReadiness />} />
             <Route path="/administration/assessment-qa" element={<AssessmentQAWorkbench />} />
+            <Route path="/administration/assessment-qa/diagnostics" element={<AssessmentQADiagnostics />} />
             <Route path="/administration/acceptance-review" element={<AcceptanceReview />} />
           </Route>
         </Route>

@@ -30,6 +30,7 @@ from .smart_radar_processing import router as smart_radar_processing_router
 from .smart_radar_synthesis import router as smart_radar_synthesis_router
 from .smart_radar_qa import router as smart_radar_qa_router
 from .intelligence_assessment_qa import router as intelligence_assessment_qa_router
+from .intelligence_assessment_live_qa import router as intelligence_assessment_live_qa_router
 from .smart_radar_calibration import router as smart_radar_calibration_router
 from .smart_radar_qa_v2 import router as smart_radar_qa_v2_router
 from .smart_radar_qa_tuning import router as smart_radar_qa_tuning_router
@@ -75,6 +76,7 @@ app.include_router(smart_radar_processing_router)
 app.include_router(smart_radar_synthesis_router)
 app.include_router(smart_radar_qa_router)
 app.include_router(intelligence_assessment_qa_router)
+app.include_router(intelligence_assessment_live_qa_router)
 app.include_router(smart_radar_calibration_router)
 app.include_router(smart_radar_qa_v2_router)
 app.include_router(smart_radar_qa_tuning_router)
@@ -167,7 +169,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','183.8'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','183.9'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

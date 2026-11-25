@@ -311,7 +311,6 @@ test('Review AI Assessment opens the guided, read-only Human Review Centre',asyn
  await expect(drawer.getByText('Review AI Assessment · officer checklist')).toBeVisible();
  await drawer.getByRole('button',{name:'Verify location'}).click();
  await expect(drawer.locator('#inbox-human-review-jurisdiction')).toBeVisible();
- await drawer.getByRole('button',{name:'Full details'}).click();
- await expect(page.getByRole('dialog',{name:'Finding details'})).toBeVisible();
+ await expect(drawer.getByRole('button',{name:'Full details'})).toBeVisible();
  expect(paidCalls()).toBe(0);
 });

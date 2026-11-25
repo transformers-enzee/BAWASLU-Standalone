@@ -1,4 +1,4 @@
-# BAWASLU v184.1 — Intelligence Inbox Human Review Centre
+# BAWASLU v184.2 — Intelligence Inbox Human Review Centre
 
 Release scope: **officer review navigation and discoverability**; no new database tables, paid calls, or new authority to approve legal findings.
 

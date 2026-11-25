@@ -17,6 +17,7 @@ import AccessGate from '@/components/intel/AccessGate';
 import Home from '@/pages/Home';
 import SmartRadar from '@/pages/SmartRadar';
 import SmartRadarQA from '@/pages/SmartRadarQA';
+import AssessmentQAWorkbench from '@/pages/AssessmentQAWorkbench';
 import Watchlist from '@/pages/Watchlist';
 import WatchlistProfile from '@/pages/WatchlistProfile';
 import WatchlistPosts from '@/pages/WatchlistPosts';
@@ -120,6 +121,7 @@ const AuthenticatedApp = () => {
           <Route element={<AccessGate permission="administration" />}>
             <Route path="/administration" element={<Administration />} />
             <Route path="/administration/integration" element={<IntegrationReadiness />} />
+            <Route path="/administration/assessment-qa" element={<AssessmentQAWorkbench />} />
             <Route path="/administration/acceptance-review" element={<AcceptanceReview />} />
           </Route>
         </Route>

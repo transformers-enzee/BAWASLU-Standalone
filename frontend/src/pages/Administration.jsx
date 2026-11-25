@@ -51,6 +51,12 @@ export default function Administration(){
     <p className="text-sm text-slate-600 mt-1">{T("Submit acceptance evidence references, request independent review, and inspect the audit history. Evidence review does not grant formal client or legal approval.","Daftarkan referensi bukti penerimaan, minta peninjauan independen, dan periksa riwayat audit. Peninjauan bukti tidak berarti persetujuan resmi klien atau hukum.")}</p>
     <Link className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm" to="/administration/acceptance-review">{T("Open Acceptance Review","Buka Tinjauan Penerimaan")}</Link>
   </section>}
+  {!window.__BAWASLU_DEMO_REPLICA__&&access.role==='National Administrator'&&access.geographic_scope==='Nationwide'&&access.permissions?.administration===true&&
+    <section className="rounded-xl border bg-white p-4" data-testid="assessment-qa-admin-link">
+      <h2 className="text-lg font-semibold">{T("AI Assessment Framework QA","QA Kerangka Penilaian AI")}</h2>
+      <p className="text-sm text-slate-600 mt-1">{T("Open the staging-only synthetic test workbench: eight scenarios, field comparison, and human override precedence. No paid AI calls or officer record changes.","Buka laboratorium pengujian sintetis khusus staging: delapan skenario, perbandingan atribut, dan prioritas koreksi petugas. Tanpa panggilan AI berbayar atau perubahan data petugas.")}</p>
+      <Link to="/administration/assessment-qa" className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm">{T("Open assessment QA workbench","Buka laboratorium QA penilaian")}</Link>
+    </section>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<DemoFeedbackAdmin/>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<RelevanceGateManager/>}
   <CategoryManager categories={categories} refresh={refresh} authorized={access.role==='National Administrator'&&access.permissions?.administration===true}/>

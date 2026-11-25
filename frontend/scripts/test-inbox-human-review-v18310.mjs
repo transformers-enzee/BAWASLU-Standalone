@@ -36,6 +36,6 @@ assert.ok(inbox.includes('reviewRationale.trim().length<10'), 'Existing rational
 assert.ok(inbox.includes('selected.assessment_version'), 'Existing version-aware review must remain');
 assert.ok(inbox.includes('acknowledgedReview.current'), 'Saved review state must not be overwritten by stale response');
 
-assert.ok(docker.includes('ARG BAWASLU_BUILD_VERSION=183.10'));
-assert.ok(main.includes("'build_version':os.getenv('BAWASLU_BUILD_VERSION','183.10')"));
+assert.ok(docker.includes('ARG BAWASLU_BUILD_VERSION=184.0'));
+assert.ok(main.includes("'build_version':os.getenv('BAWASLU_BUILD_VERSION','184.0')"));
 console.log('PASS v183.10: visible Human Review Centre, saved review guards, navigation and release identity');

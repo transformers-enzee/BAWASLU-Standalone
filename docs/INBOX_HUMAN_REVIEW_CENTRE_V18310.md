@@ -1,4 +1,4 @@
-# BAWASLU v183.10 — Intelligence Inbox Human Review Centre
+# BAWASLU v184.0 — Intelligence Inbox Human Review Centre
 
 Release scope: **officer review navigation and discoverability**; no new database tables, paid calls, or new authority to approve legal findings.
 
@@ -28,4 +28,4 @@ Release scope: **officer review navigation and discoverability**; no new databas
 This release does **not** implement a single transactional approval for all ten assessment groups, full training-label curation, formal institutional adjudication or automatic downstream recomputation for every corrected variable. Existing supported officer corrections and saving remain independent. The full Human Review v2 data workflow remains a later implementation stage.
 
 ## Build requirements
-The staging branch must pass full backend regression, frontend build and the new `frontend/scripts/test-inbox-human-review-v18310.mjs` gate before the immutable staging Docker image is handed off. Do not auto-deploy to Render.
+The staging branch must pass full backend regression, frontend build and the new `frontend/scripts/test-inbox-human-review-v1840.mjs` gate before the immutable staging Docker image is handed off. Do not auto-deploy to Render.

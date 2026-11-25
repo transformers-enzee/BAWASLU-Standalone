@@ -1,6 +1,7 @@
 import {useState,useRef,useEffect} from 'react';
 import {useOutletContext} from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import {canExpandSavedChats,savedChatsForDisplay} from '../lib/ai5SavedChats.js';
 import {ArrowRight,Paperclip,Link2,Trash2,Plus,BriefcaseBusiness,Download,FileText,Loader2,Sparkles,ShieldCheck,Globe2,RotateCcw,Save,Share2,Bookmark,Mail,MessageCircle,Copy,Check,X,Pencil,MessagesSquare,History,Search,ChevronDown,ChevronUp} from 'lucide-react';
 
 const MODES=[['WEB_ONLY','Web only','Public research; no saved SmartRadar records'],
@@ -539,21 +540,25 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
      </div>
     </div>
     <div className="flex items-center gap-2">
-     <button type="button" data-testid="ai5-saved-navigation"
-      onClick={()=>{setShowSaved(v=>!v);setSavedSearch('');refreshSaved().catch(()=>{})}}
-      className="intel-ghost inline-flex items-center gap-1.5 text-xs font-semibold">
-      {showSaved?'Show recent':'View all chats'} {showSaved?<ChevronUp size={14}/>:<ChevronDown size={14}/>}</button>
+     {!savedLoading&&!savedLoadError&&canExpandSavedChats(savedChats.length)&&
+      <button type="button" data-testid="ai5-saved-navigation"
+       aria-expanded={showSaved} aria-controls="ai5-saved-chat-list"
+       onClick={()=>{setShowSaved(v=>!v);setSavedSearch('');if(!showSaved)refreshSaved().catch(()=>{})}}
+       className="intel-ghost inline-flex items-center gap-1.5 text-xs font-semibold">
+       {showSaved?'Show recent':`View all chats (${savedChats.length})`}
+       {showSaved?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
+      </button>}
      <button type="button" onClick={()=>{setShowShares(v=>!v);refreshShares().catch(()=>{})}}
       className="intel-ghost inline-flex items-center gap-1.5 text-xs">
       <Share2 size={14}/> Shared links</button>
     </div>
    </div>
-   {showSaved&&savedChats.length>3&&<label className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-500">
+   {showSaved&&canExpandSavedChats(savedChats.length)&&<label className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-500">
      <Search size={16}/><input value={savedSearch} onChange={e=>setSavedSearch(e.target.value)}
       aria-label="Search saved chats" placeholder="Search your saved conversations"
       className="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-900 outline-none"/>
    </label>}
-   <div className="mt-3 space-y-2">
+   <div id="ai5-saved-chat-list" className="mt-3 space-y-2">
     {savedLoading&&<p role="status" className="p-3 text-xs text-slate-600">Loading your saved conversations…</p>}
     {savedLoadError&&<div role="alert" className="flex items-center gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
       {savedLoadError}<button type="button" className="font-semibold underline" onClick={()=>refreshSaved().catch(()=>{})}>Retry</button>
@@ -563,28 +568,29 @@ export default function AI5Assistant({workspace='OPERATIONAL'}){
       {!!messages.length&&<button type="button" className="intel-button text-xs" onClick={saveChat}>
        <Save size={14}/> Save current chat</button>}
      </div>}
-    {(showSaved?savedChats.filter(x=>x.title.toLowerCase().includes(savedSearch.toLowerCase())):savedChats.slice(0,3)).map(item=>
+    {savedChatsForDisplay(savedChats,showSaved,savedSearch).map(item=>
      <div key={item.id} data-testid="ai5-saved-chat-item" className={'flex items-center gap-2 rounded-lg border p-2 transition '+
-       (currentSavedId===item.id?'border-sky-300 bg-sky-50':'border-slate-100 bg-slate-50/60 hover:bg-slate-50')}>
+       (currentSavedId===item.id?'border-sky-500 bg-sky-50 ring-1 ring-sky-200':'border-slate-100 bg-slate-50/60 hover:bg-slate-50')}>
       <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 text-left"
-       onClick={()=>reopen(item.id)} disabled={processing||busy} aria-label={'Open saved chat '+item.title}>
+       onClick={()=>reopen(item.id)} disabled={processing||busy}
+       aria-current={currentSavedId===item.id?'true':undefined}
+       aria-label={'Open saved chat '+item.title}>
        <MessagesSquare size={17} className="shrink-0 text-slate-500"/>
        <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-[#173950]">{item.title}</span>
         <span className="block text-xs text-slate-500">{currentSavedId===item.id?'Current chat · ':''}
          Updated {new Date(item.updated_at).toLocaleString()}</span>
        </span>
-       {currentSavedId===item.id&&<span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-800"><Check size={13}/> Open</span>}
+       {currentSavedId===item.id&&<span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-800"><Check size={13}/> Current</span>}
       </button>
       <button type="button" className="rounded-md border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-100"
        aria-label={'Rename '+item.title} title="Rename chat" onClick={()=>renameChat(item)}><Pencil size={15}/></button>
       <button type="button" className="rounded-md border border-slate-200 bg-white p-2 text-slate-600 hover:bg-red-50"
        aria-label={'Delete '+item.title} title="Delete saved chat" onClick={()=>deleteChat(item)}><Trash2 size={15}/></button>
      </div>)}
-    {showSaved&&savedChats.length>0&&savedSearch.trim()&&!savedChats.some(x=>x.title.toLowerCase().includes(savedSearch.toLowerCase()))&&
+    {showSaved&&canExpandSavedChats(savedChats.length)&&savedSearch.trim()&&savedChatsForDisplay(savedChats,true,savedSearch).length===0&&
      <p className="p-3 text-xs text-slate-500">No saved chats match your search.</p>}
-    {!showSaved&&savedChats.length>3&&<button type="button" className="px-2 py-1 text-xs font-semibold text-[#173950] underline"
-     onClick={()=>setShowSaved(true)}>See all {savedChats.length} saved chats</button>}
+
    </div>
   </nav>
   {showShares&&<section aria-label="AI-5 Shared links" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">

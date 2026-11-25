@@ -71,6 +71,9 @@ jobs:
       - name: AI-5 Saved Chats user experience regression
         working-directory: frontend
         run: node scripts/test-ai5-saved-chats-ux-v1810.mjs
+      - name: AI-5 Saved Chats small-list navigation regression
+        working-directory: frontend
+        run: node scripts/test-ai5-saved-chat-toggle-v1812.mjs
       - name: Build frontend
         working-directory: frontend
         run: npm run build

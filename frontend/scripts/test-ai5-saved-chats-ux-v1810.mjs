@@ -24,8 +24,10 @@ assert.ok(!ai.includes('Saved Chats ({savedChats.length})'),
  'Do not show an asynchronously stale badge counter in the header');
 assert.ok(!ai.includes('{showSaved&&<nav'),
  'Saved-chat navigation must not depend on expanding a header button');
-assert.ok(ai.includes('savedChats.slice(0,3)'),
- 'Recent saved chat previews must be visible without extra clicks');
-assert.ok(ai.includes("savedChats.filter(x=>x.title.toLowerCase().includes(savedSearch.toLowerCase()))"),
- 'All saved chats need an accessible search filter');
+assert.ok(ai.includes('savedChatsForDisplay(savedChats,showSaved,savedSearch)'),
+ 'Recent saved chats must use the shared 3-item visibility rule');
+assert.ok(ai.includes('canExpandSavedChats(savedChats.length)'),
+ 'View-all and search must be available only for libraries above three');
+assert.ok(ai.includes('aria-current={currentSavedId===item.id'),
+ 'The current saved conversation must remain visibly and accessibly highlighted');
 console.log('PASS AI-5 v181.0 saved conversation visibility, discoverability, status and navigation UX');

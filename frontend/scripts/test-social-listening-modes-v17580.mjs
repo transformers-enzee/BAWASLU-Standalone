@@ -4,7 +4,7 @@ const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 const home=read('../src/components/intel/CampaignPanel.jsx');
 const posts=read('../src/components/intel/CapturedPostList.jsx');
 const parser=read('../src/lib/booleanPostSearch.mjs');
-// v175.81 replaces the v175.80 misplaced search workspace with a project editor mode.
+// Project Boolean editor remains in project creation; the newer saved-post search exposes standard/Boolean tabs in the campaign dashboard.
 assert.ok(!home.includes('data-testid="social-listening-module-modes"'));
 assert.ok(!home.includes('data-testid="social-listening-boolean-workspace"'));
 assert.ok(home.includes('data-testid="project-creation-search-modes"'));
@@ -18,7 +18,9 @@ assert.ok(home.includes('data-testid="project-boolean-expression"'));
 assert.ok(home.includes("set('search_mode','KEYWORDS')"));
 assert.ok(home.includes("set('search_mode','BOOLEAN')"));
 assert.ok(home.includes("initial={name:''")||home.includes("const initial={name:''"));
-assert.ok(home.includes('showModeTabs={false}'));
+assert.ok(home.includes('showModeTabs={true}'));
+assert.ok(posts.includes('data-testid="social-listening-search-modes"'));
+assert.ok(posts.includes('showModeTabs&&'));
 assert.ok(posts.includes("action:'campaignCapturedPosts'"));
 assert.ok(parser.includes('compileBooleanPostSearch(raw)'));
-console.log('PASS BAWASLU v175.81: Boolean search resides in project creation, not the module homepage');
+console.log('PASS BAWASLU: project creation modes and saved-post search tabs both remain available');

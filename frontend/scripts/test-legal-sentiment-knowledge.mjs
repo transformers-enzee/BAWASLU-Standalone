@@ -29,6 +29,7 @@ assert.ok(form.includes("useLanguage()")&&form.includes("language==='en'"),
 assert.ok(captured.includes("useLanguage()")&&captured.includes("isEnglish?'Negative':'Negatif'")&&
   captured.includes("t('All sentiments','Semua sentimen')"),
   'captured posts sentiment and filters follow current app language');
+assert.ok(captured.includes("t('All sentiments','Semua sentimen')")&&captured.includes("t('Highly relevant','Sangat relevan')")&&captured.includes("t('Location evidence','Bukti lokasi')")&&captured.includes('chipLabel(k)')&&captured.includes('filterValue(k,v)'), 'multi-select defaults, advanced status values and active chips follow the app language');
 assert.ok(inbox.includes("language==='en'?'Sentiment corrected by officer':'Sentimen dikoreksi petugas'"),
   'Inbox correction status is translated by app language');
 assert.ok(assistant.includes('AssistantKnowledgeLibrary'),'PDF library must be embedded in assistant');

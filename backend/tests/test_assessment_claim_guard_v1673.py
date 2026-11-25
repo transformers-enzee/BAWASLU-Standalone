@@ -66,3 +66,21 @@ def test_worker_requires_latest_classification_guard_before_quota_reservation():
     assert 'if (not reanalysis and already_relevant)' in worker
     assert worker.index('no_latest_relevance_classification(db)') < worker.index('reserve_automatic_ai_request(db,campaign.id)')
     assert worker.index('reserve_automatic_ai_request(db,campaign.id)') < worker.index('response=httpx.post(')
+
+
+def test_provider_preliminary_relevance_does_not_block_full_assessment():
+    e,db=fixture()
+    try:
+        provisional=make(db,10)
+        completed=make(db,11)
+        highly=make(db,12,['HIGHLY_RELEVANT'])
+        for rid in (10,11):
+            db.add(EvidenceAssessment(campaign_id=4,result_id=rid,assessment_version=2,
+                model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT'))
+        db.add(EvidenceAssessment(campaign_id=4,result_id=11,assessment_version=1,
+            model_version='HUMAN',relevance_label='RELEVANT'))
+        db.flush()
+        assert claim(db,provisional)==1
+        assert claim(db,completed)==0
+        assert claim(db,highly)==0
+    finally:db.close();e.dispose()

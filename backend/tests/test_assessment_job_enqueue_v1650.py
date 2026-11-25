@@ -99,3 +99,20 @@ def test_new_pending_jobs_populate_required_fields_without_server_defaults():
         assert job.created_at is not None and job.updated_at is not None
         assert enqueue_unassessed_campaign_jobs(db,12)==0
     finally:db.close();engine.dispose()
+
+
+def test_missing_preliminary_job_is_enqueued_without_reopening_real_assessment():
+    engine,db=fixture()
+    try:
+        link(db,1,10,'PRISM_DISCOVER')
+        link(db,1,11,'PRISM_DISCOVER')
+        for rid in (10,11):
+            db.add(EvidenceAssessment(campaign_id=1,result_id=rid,assessment_version=2,
+                model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT'))
+        db.add(EvidenceAssessment(campaign_id=1,result_id=11,assessment_version=1,
+            model_version='HUMAN',relevance_label='RELEVANT'))
+        db.flush()
+        assert enqueue_unassessed_campaign_jobs(db,1)==1
+        assert db.query(AIAssessmentJob).one().result_id==10
+        assert enqueue_unassessed_campaign_jobs(db,1)==0
+    finally:db.close();engine.dispose()

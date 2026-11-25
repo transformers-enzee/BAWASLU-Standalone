@@ -33,11 +33,11 @@ def _latest(db, campaign_id, result_id):
 
 
 def remaining_budget(db, campaign_id):
-    """Match the existing automatic reservation worker's hard ceilings."""
+    """Read explicitly configured request allowances; no embedded maximum."""
     from .models import AIBudgetReservation
     def cap(name, maximum):
         try:
-            return max(0, min(maximum, int(os.getenv(name, "0"))))
+            return max(0, int(os.getenv(name, "0")))
         except (TypeError, ValueError):
             return 0
     daily = cap("BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN", 1000)

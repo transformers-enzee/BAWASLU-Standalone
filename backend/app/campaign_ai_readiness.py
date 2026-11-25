@@ -12,7 +12,7 @@ def campaign_ai_worker_readiness(db,campaign_id,env=None):
     settings=os.environ if env is None else env
     cid=int(campaign_id)
     def cap(name, maximum):
-        try:return max(0,min(maximum,int(settings.get(name,'0'))))
+        try:return max(0,int(settings.get(name,'0')))
         except (TypeError,ValueError):return 0
     worker=str(settings.get('BAWASLU_AI_WORKER_ENABLED','false')).lower()=='true'
     enabled=str(settings.get('BAWASLU_AUTO_AI_SCREENING_ENABLED','false')).lower()=='true'
@@ -121,9 +121,9 @@ def campaign_manual_batch_preview(db,campaign_id,requested_limit,env=None):
         raise ValueError('Choose an integer batch size between 1 and 20')
     cid=int(campaign_id)
     try:
-        run_limit=max(0,min(50,int(settings.get('BAWASLU_AI_ASSESSMENTS_PER_RUN','12'))))
-        daily=max(0,min(1000,int(settings.get('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
-        lifetime=max(0,min(5000,int(settings.get('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0'))))
+        run_limit=max(0,int(settings.get('BAWASLU_AI_ASSESSMENTS_PER_RUN','12')))
+        daily=max(0,int(settings.get('BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN','0')))
+        lifetime=max(0,int(settings.get('BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN','0')))
     except (ValueError,TypeError):
         run_limit=daily=lifetime=0
     today=datetime.utcnow().strftime('%Y-%m-%d')

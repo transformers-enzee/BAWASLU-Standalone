@@ -5,10 +5,11 @@ already-guarded AI worker invokes its existing enqueue step. No provider call,
 no automatic retry of FAILED/COMPLETED jobs and no watchlist-account work.
 """
 from datetime import datetime
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, case
 from .models import CampaignEvidence, EvidenceAssessment, AIAssessmentJob
 
 BATCH_LIMIT=200
+_PRELIMINARY=('PRISM_PENDING_OPENAI','PRISM_OPENAI_TOPIC_CLASSIFIER')
 
 def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
     """Insert only missing job rows, oldest-first, in at most one batch.
@@ -24,7 +25,8 @@ def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
     latest_id=(db.query(EvidenceAssessment.id).filter(
         EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
         EvidenceAssessment.result_id==CampaignEvidence.result_id
-    ).order_by(EvidenceAssessment.assessment_version.desc(),
+    ).order_by(case((func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(_PRELIMINARY),1),else_=0).asc(),
+               EvidenceAssessment.assessment_version.desc(),
                EvidenceAssessment.id.desc()).limit(1)
       .correlate(CampaignEvidence).scalar_subquery())
     relevance=func.upper(func.coalesce(EvidenceAssessment.relevance_label,""))
@@ -36,7 +38,8 @@ def enqueue_unassessed_campaign_jobs(db,campaign_id,limit=BATCH_LIMIT):
         .filter(CampaignEvidence.campaign_id==cid,
                 CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
                 or_(EvidenceAssessment.id.is_(None),
-                    relevance.in_(["UNASSESSED",""])),
+                    relevance.in_(["UNASSESSED",""]),
+                    func.upper(func.coalesce(EvidenceAssessment.model_version,"")).in_(_PRELIMINARY)),
                 AIAssessmentJob.id.is_(None))
         .order_by(CampaignEvidence.id.asc()).limit(limit).all())
     ids=[int(rid) for (rid,) in candidate_rows]
@@ -77,12 +80,14 @@ def pending_campaign_job_links(db,campaign_id,limit=BATCH_LIMIT):
     latest_id=(db.query(EvidenceAssessment.id)
         .filter(EvidenceAssessment.campaign_id==CampaignEvidence.campaign_id,
                 EvidenceAssessment.result_id==CampaignEvidence.result_id)
-        .order_by(EvidenceAssessment.assessment_version.desc(),
+        .order_by(case((func.upper(func.coalesce(EvidenceAssessment.model_version,'')).in_(_PRELIMINARY),1),else_=0).asc(),
+                  EvidenceAssessment.assessment_version.desc(),
                   EvidenceAssessment.id.desc()).limit(1)
         .correlate(CampaignEvidence).scalar_subquery())
     unassessed=or_(EvidenceAssessment.id.is_(None),
         func.upper(func.coalesce(EvidenceAssessment.relevance_label,""))
-            .in_(["","UNASSESSED"]))
+            .in_(["","UNASSESSED"]),
+        func.upper(func.coalesce(EvidenceAssessment.model_version,"")).in_(_PRELIMINARY))
     return (db.query(CampaignEvidence)
         .join(AIAssessmentJob,and_(
             AIAssessmentJob.campaign_id==CampaignEvidence.campaign_id,

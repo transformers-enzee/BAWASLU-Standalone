@@ -121,3 +121,17 @@ def test_pending_queue_selector_never_reopens_superseded_or_failed_jobs():
         assert db.query(AIAssessmentJob).count()==5
     finally:
         db.close();engine.dispose()
+
+
+def test_pending_provider_preliminary_is_eligible_but_human_assessment_is_not():
+    engine,db=_setup()
+    try:
+        for rid in (10,11):
+            _link(db,4,rid,state='PENDING')
+            db.add(EvidenceAssessment(campaign_id=4,result_id=rid,assessment_version=2,
+                model_version='PRISM_PENDING_OPENAI',relevance_label='RELEVANT'))
+        db.add(EvidenceAssessment(campaign_id=4,result_id=11,assessment_version=1,
+            model_version='HUMAN',relevance_label='RELEVANT'))
+        db.flush()
+        assert [x.result_id for x in pending_campaign_job_links(db,4)]==[10]
+    finally:db.close();engine.dispose()

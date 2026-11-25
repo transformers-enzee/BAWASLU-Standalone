@@ -88,3 +88,23 @@ def test_worker_skips_missing_or_blank_content_before_claim():
     worker=(Path(__file__).parents[1]/'app'/'auto_relevance.py').read_text()
     assert "if not item or not (item.text_content or '').strip():continue" in worker
     assert worker.index("if not item or not (item.text_content or '').strip():continue") < worker.index("claimed=db.execute(update(AIAssessmentJob)")
+
+
+def test_configured_request_allowances_are_not_truncated_to_old_pilot_caps():
+    from app.activation_assessment import remaining_budget
+    from app.campaign_ai_readiness import campaign_manual_batch_preview
+    from unittest.mock import patch
+    e,db=fixture()
+    try:
+        env=settings(BAWASLU_AI_DAILY_REQUEST_LIMIT_PER_CAMPAIGN='6000',
+            BAWASLU_AI_LIFETIME_REQUEST_LIMIT_PER_CAMPAIGN='25000',
+            BAWASLU_AI_ASSESSMENTS_PER_RUN='800')
+        out=campaign_ai_worker_readiness(db,2,env)
+        assert (out['daily_request_limit'],out['lifetime_request_limit'],out['per_run_request_limit'])==(6000,25000,800)
+        manual=campaign_manual_batch_preview(db,2,10,env)
+        assert (manual['daily_request_limit'],manual['lifetime_request_limit'],manual['per_run_request_limit'])==(6000,25000,800)
+        with patch.dict('os.environ',env):
+            budget=remaining_budget(db,2)
+        assert (budget['daily_limit'],budget['lifetime_limit'],budget['per_run'])==(6000,25000,800)
+        assert not budget['database_ready']  # Never authorize paid calls in SQLite QA.
+    finally:db.close();e.dispose()

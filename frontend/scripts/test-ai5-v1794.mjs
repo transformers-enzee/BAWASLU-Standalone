@@ -50,8 +50,8 @@ for(const x of ['ai5-page','ai5-modes','ai5-use-bawaslu',
  'ai5-research-trail','ai5-response','AI-5 editable draft',
  "['pdf','docx','xlsx']"])
  have(ai,x);
-const dockerVersion=docker.match(/^ARG BAWASLU_BUILD_VERSION=([0-9]+\\.[0-9]+)$/m)?.[1];
-const mainVersion=main.match(/BAWASLU_BUILD_VERSION','([0-9]+\\.[0-9]+)'/)?.[1];
+const dockerVersion=docker.match(/^ARG BAWASLU_BUILD_VERSION=([0-9]+\.[0-9]+)$/m)?.[1];
+const mainVersion=main.match(/BAWASLU_BUILD_VERSION','([0-9]+\.[0-9]+)'/)?.[1];
 assert.ok(dockerVersion,'Missing versioned Docker build argument');
 assert.equal(mainVersion,dockerVersion,'Backend and Docker versions must match');
 have(docker,'tests/test_ai5_v1794.py');

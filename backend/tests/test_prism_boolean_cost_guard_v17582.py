@@ -278,14 +278,21 @@ def test_production_collection_uses_provider_estimate_without_fixed_cap(monkeypa
     monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
     def free(method,url,body=None,timeout=50):
         assert body['dry_run'] and 'max_credits' not in body
+        assert body['depth']=='deep' and body['limit']==5000
         return {'suggested_max_credits':987,'estimate':{'credits':{'max':987}}},{}
     monkeypatch.setattr(prism_discover,'call',free)
     preview=prism_discover.action(db,{},'campaignDiscoverPreview',{'production_collection':True},c.id)
     assert preview['credit_cap']==987 and preview['post_limit'] is None
-    result=prism_discover.action(db,{},'campaignDiscoverStart',{'production_collection':True,'confirm_cost':True,'signature':preview['signature']},c.id)
+    result=prism_discover.action(db,{},'campaignDiscoverStart',{'production_collection':True,'confirm_cost':True,'signature':preview['signature'],'confirmed_credit_estimate':preview['credit_cap']},c.id)
     run=db.get(SocialListeningRun,result['run_id'])
     meta=json.loads(run.query_json)
     assert meta['full_collection'] and meta['body']['max_credits']==987
+    assert meta['body']['limit']==5000 and meta['body']['depth']=='deep'
+    # Completed full exports reuse the same configuration identity, regardless of spending allowance.
+    run.status='COMPLETED';meta['watermark']='verified-watermark';meta['full_export_complete']=True
+    run.query_json=json.dumps(meta);db.commit()
+    next_body,_=prism_discover.body_for(db,c,production=True)
+    assert next_body['since_watermark']=='verified-watermark'
     db.close()
 
 
@@ -298,4 +305,34 @@ def test_quota_policy_is_optional_not_hardcoded(monkeypatch):
     assert state['monthly_remaining'] is None and state['storage_remaining'] is None
     monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','7000000')
     assert budget.snapshot(db)['monthly_limit']==7000000
+    db.close()
+
+
+def test_production_increased_estimate_requires_new_confirmation(monkeypatch):
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setattr(prism_discover,'campaign',lambda db,p,cid,write=False:c)
+    monkeypatch.setattr(prism_discover,'allowed',lambda p,c:True)
+    estimates=iter([700,900]);calls=[]
+    def free(method,url,body=None,timeout=50):
+        assert body['dry_run'] and 'max_credits' not in body
+        calls.append(body)
+        return {'suggested_max_credits':next(estimates)},{}
+    monkeypatch.setattr(prism_discover,'call',free)
+    preview=prism_discover.action(db,{},'campaignDiscoverPreview',{'production_collection':True},c.id)
+    with pytest.raises(ValueError,match='credit estimate changed'):
+        prism_discover.action(db,{},'campaignDiscoverStart',{'production_collection':True,'confirm_cost':True,'signature':preview['signature'],'confirmed_credit_estimate':700},c.id)
+    assert len(calls)==2 and db.query(SocialListeningRun).count()==0
+    db.close()
+
+
+def test_production_reservation_uses_requested_delivery_size(monkeypatch):
+    from app import prism_collection_budget as budget
+    db=SessionLocal();c=new_campaign(db)
+    monkeypatch.setenv('BAWASLU_MONTHLY_COLLECTION_POST_LIMIT','10000')
+    monkeypatch.setenv('BAWASLU_ACTIVE_SOURCE_STORAGE_LIMIT','10000')
+    run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',status='QUEUED',query_json=json.dumps({'full_collection':True,'body':{'limit':5000}}))
+    db.add(run);db.commit()
+    state=budget.snapshot(db)
+    assert state['monthly_reserved']==5000 and state['storage_reserved']==5000
+    assert state['monthly_remaining']==5000
     db.close()

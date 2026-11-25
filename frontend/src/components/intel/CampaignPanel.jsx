@@ -179,7 +179,7 @@ export default function CampaignPanel({campaignId=null}){
    if(discoverPreview.prior_collection_ack_required&&!window.confirm('A previous collection can be recovered or its charge is uncertain. Check the project dashboard first. Starting a new collection can incur additional charges. Continue?'))return;
    setDiscoverBusy(true);setDiscoverError('');
    try{const r=await base44.functions.invoke('socialListening',{action:'campaignDiscoverStart',id:discoverCampaign.id,
-      data:{confirm_cost:true,signature:discoverPreview.signature,production_collection:true,acknowledge_prior_collection:!!discoverPreview.prior_collection_ack_required}});setDiscoverRun({...r.data,stage:'COLLECTING'});
+      data:{confirm_cost:true,signature:discoverPreview.signature,production_collection:true,confirmed_credit_estimate:discoverPreview.credit_cap,acknowledge_prior_collection:!!discoverPreview.prior_collection_ack_required}});setDiscoverRun({...r.data,stage:'COLLECTING'});
       const saved={run_id:r.data.run_id,campaign_id:discoverCampaign.id};
       window.localStorage.setItem('bawaslu-active-discover-run',JSON.stringify(saved));
       setActivationSaved(saved)}

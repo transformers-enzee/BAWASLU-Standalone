@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 import config from '../playwright.config.js';
 
 const email='admin@bawaslu.local';
@@ -10,10 +10,26 @@ async function login(page){
  await page.getByRole('button',{name:/log in|masuk/i}).click();
  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
 }
-async function makeCampaign(request, name){
- const auth=await request.post('/api/auth/login',{data:{email,password}});
- expect(auth.ok()).toBeTruthy();
- const token=(await auth.json()).access_token;
+// Authenticate once per worker against the disposable local QA backend.
+// Never reuse a live environment's browser session or write credentials to disk.
+const test=base.extend({
+ localAdmin:[async({playwright},use)=>{
+  const origin=config.use.baseURL;
+  if(!config.webServer||!['127.0.0.1','localhost'].includes(new URL(origin).hostname))throw new Error('Social Listening fixture requires isolated local QA');
+  const api=await playwright.request.newContext({baseURL:origin});
+  try{
+   const auth=await api.post('/api/auth/login',{data:{email,password}});
+   expect(auth.ok()).toBeTruthy();
+   const token=(await auth.json()).access_token;
+   expect(token).toBeTruthy();
+   await use({origin,token});
+  }finally{await api.dispose();}
+ },{scope:'worker'}],
+ storageState:async({localAdmin},use)=>{
+  await use({cookies:[],origins:[{origin:localAdmin.origin,localStorage:[{name:'bawaslu_access_token',value:localAdmin.token}]}]});
+ }
+});
+async function makeCampaign(request, name, token){
  const created=await request.post('/api/functions/socialListening',{
   headers:{Authorization:'Bearer '+token},
   data:{action:'createCampaign',data:{
@@ -23,16 +39,15 @@ async function makeCampaign(request, name){
  expect(created.ok()).toBeTruthy();
  return {campaign:(await created.json()).campaign,token};
 }
-test('V3 Social Listening navigation shows campaigns, not retired Saved Searches or Review Queue',async({page})=>{
+base('V3 Social Listening navigation shows campaigns, not retired Saved Searches or Review Queue',async({page})=>{
  await login(page);
  await page.goto('/social-listening');
  await expect(page.getByRole('heading',{name:'Social Listening'})).toBeVisible();
  await expect(page.getByRole('button',{name:/create project/i})).toBeVisible();
  await expect(page.getByRole('button',{name:/saved searches|review queue|discover sources/i})).toHaveCount(0);
 });
-test('V3 campaign captured posts and candidate watchlist stay in the selected campaign',async({page,request})=>{
- const {campaign}=await makeCampaign(request,'QA Campaign tabs '+Date.now());
- await login(page);
+test('V3 campaign captured posts and candidate watchlist stay in the selected campaign',async({page,request,localAdmin})=>{
+ const {campaign}=await makeCampaign(request,'QA Campaign tabs '+Date.now(),localAdmin.token);
  await page.goto('/social-listening/campaigns/'+campaign.id);
  const sections=page.getByRole('navigation',{name:'Selected project sections'});
  await expect(sections.getByRole('button',{name:'Overview'})).toBeVisible();
@@ -41,17 +56,15 @@ test('V3 campaign captured posts and candidate watchlist stay in the selected ca
  await sections.getByRole('button',{name:'Candidate Watchlist'}).click();
  await expect(page.locator('iframe[src*="watchlist-v2_2.html"]')).toHaveCount(1);
 });
-test('V3 separate Discover is explicit and cannot silently execute on navigation',async({page,request})=>{
- await makeCampaign(request,'QA Discover guard '+Date.now());
+test('V3 separate Discover is explicit and cannot silently execute on navigation',async({page,request,localAdmin})=>{
+ await makeCampaign(request,'QA Discover guard '+Date.now(),localAdmin.token);
  const paid=[];page.on('request',r=>{if(/socialcrawl\.dev|api\.openai\.com/.test(r.url()))paid.push(r.url())});
- await login(page);
  await page.goto('/social-listening');
  await expect(page.getByRole('button',{name:/^activate$/i}).first()).toBeVisible();
  expect(paid).toEqual([]);
 });
 
 test('campaign editor uses seven fixed sources without legacy filters',async({page})=>{
- await login(page);
  await page.goto('/social-listening');
  await page.getByRole('button',{name:/create project/i}).click();
  const editor=page.getByRole('form',{name:'Project editor'});
@@ -65,5 +78,6 @@ test('campaign editor uses seven fixed sources without legacy filters',async({pa
 
 test('Social Listening onboarding has no redundant live monitoring notice', async ({page})=>{
  await page.goto('/social-listening');
+ await expect(page.getByRole('heading',{name:'Social Listening'})).toBeVisible();
  await expect(page.getByText('Live BAWASLU monitoring.',{exact:false})).toHaveCount(0);
 });

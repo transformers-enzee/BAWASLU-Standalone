@@ -15,6 +15,9 @@ from .models import MonitoringCampaign,CampaignRun,CampaignEvidence,SocialListen
 BASE='https://www.socialcrawl.dev/v1'
 CAP=100
 CANDIDATE_CAP=300
+# Provider documents up to 5,000 kept rows per group in background requests;
+# all kept posts remain readable even beyond the requested delivery size.
+PRODUCTION_DELIVERY_SIZE=5000
 MAPPING={'twitter-ai-search':'twitter','online_news':'news','instagram':'instagram',
          'twitter':'twitter','facebook':'facebook','youtube':'youtube','tiktok':'tiktok',
          'threads':'threads','reddit':'reddit'}
@@ -101,7 +104,9 @@ def body_for(db,c,max_credits=None,platform_mode=None,retrieval_strategy=None,pr
         if since>until:raise ValueError('Monitoring start date must not follow end date')
         params.pop('period')
         params.update(since=since.isoformat(),until=until.isoformat())
-    if production:params.pop('max_credits',None)
+    if production:
+        params.pop('max_credits',None)
+        params.update(limit=PRODUCTION_DELIVERY_SIZE,depth='deep')
     signature=snapshot_signature({'body':params,'configuration':search_snapshot(c)})
     prior=(db.query(SocialListeningRun).join(CampaignRun,CampaignRun.social_listening_run_id==SocialListeningRun.id)
         .filter(CampaignRun.campaign_id==c.id,SocialListeningRun.provider=='SOCIALCRAWL_PRISM',
@@ -432,11 +437,16 @@ def action(db,p,verb,data,cid):
         raise ValueError('Review the previous recoverable or uncertain collection and explicitly acknowledge the risk of additional charges before starting a new crawl')
     if production:
         info,_=call('POST',BASE+'/prism/discover',{**params,'dry_run':True})
-        params['max_credits']=estimated_credit_allowance(info)
+        allowance=estimated_credit_allowance(info)
+        confirmed=(data or {}).get('confirmed_credit_estimate')
+        if type(confirmed) is not int or confirmed<allowance:
+            raise ValueError('Provider credit estimate changed or was not confirmed; refresh the free preview before starting')
+        params['max_credits']=allowance
     collection_budget.lock(db)
     collection_budget.assert_capacity(db,params['limit'])
     snapshot=search_snapshot(c)
-    plan_body={k:v for k,v in params.items() if k!='since_watermark'}
+    # Preview and stored plan identity must agree even when credit estimates change.
+    plan_body={k:v for k,v in params.items() if k!='since_watermark' and not (production and k=='max_credits')}
     plan_signature=snapshot_signature({'body':plan_body,'configuration':snapshot})
     run=SocialListeningRun(provider='SOCIALCRAWL_PRISM',executed_by=str(p.get('id') or ''),
             query_json=json.dumps({'body':params,'signature':sig,'plan_signature':plan_signature,

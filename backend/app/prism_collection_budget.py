@@ -57,7 +57,10 @@ def snapshot(db,now=None,exclude_run_id=None):
         reported=provider.get('collected')
         known=type(reported) is int and reported>=0
         actual=max(nonnegative(reported),nonnegative(diag.get('raw_provider_items')),nonnegative(run.result_count))
-        reservation=min(300,max(100,nonnegative((meta.get('body') or {}).get('limit'))))
+        requested=nonnegative((meta.get('body') or {}).get('limit'))
+        # Production runs reserve their actual requested delivery size, not the legacy cap.
+        # Actual upstream collection may exceed the delivery size and is counted when reported.
+        reservation=max(100,requested) if meta.get('full_collection') else min(300,max(100,requested))
         active=run.status in ('QUEUED','RUNNING')
         uncertain=bool(meta.get('submission_uncertain'))
         if run.executed_at and run.executed_at>=month:

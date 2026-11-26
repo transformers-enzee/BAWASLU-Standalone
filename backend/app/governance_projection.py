@@ -49,7 +49,7 @@ def effective_assessment(assessment, corrections):
     }
 
 
-def source_snapshot_fingerprint(source, assessment, corrections):
+def source_snapshot_fingerprint(source, assessment, corrections, legacy_reviews=None):
     """Hash every source + assessment column and all correction revisions."""
     def columns(obj):
         if obj is None:
@@ -63,6 +63,8 @@ def source_snapshot_fingerprint(source, assessment, corrections):
         "assessment": columns(assessment),
         "corrections": [columns(c) for c in sorted(corrections, key=lambda c: (
             c.field, c.revision, c.id))],
+        "legacy_reviews": {str(key): columns(value)
+                           for key, value in sorted((legacy_reviews or {}).items())},
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

@@ -6,6 +6,7 @@ administrator explicitly enables governance integration after database QA.
 import os
 import json
 from collections import defaultdict
+from types import SimpleNamespace
 from sqlalchemy import tuple_
 from .models import GovernanceFieldCorrection, GovernanceInsight
 from .governance_projection import effective_assessment
@@ -29,8 +30,32 @@ def inbox_governance_annotations(db,records):
     grouped=defaultdict(list)
     for correction in rows:
         grouped[(correction.campaign_id,correction.result_id)].append(correction)
-    return {key:effective_assessment(None,grouped.get(key,[]))
-            for key in pairs if grouped.get(key)}
+    annotations={}
+    for record in records:
+        key=(int(record["campaign_id"]),int(record["id"]))
+        if not grouped.get(key):
+            continue
+        ai=SimpleNamespace(
+            id=None,
+            assessment_version=record.get("assessment_version"),
+            model_version=record.get("model_version"),
+            sentiment=record.get("ai_sentiment_original"),
+            relevance_label=record.get("relevance_label"),
+        )
+        annotation=effective_assessment(ai,grouped[key])
+        review=record.get("sentiment_correction")
+        legacy_label=(review or {}).get("sentiment")
+        governance=annotation["fields"]["sentiment"]
+        governance_label=governance.get("officer_value")
+        conflict=bool(legacy_label and governance_label and
+                      legacy_label.upper()!=governance_label.upper())
+        annotation["existing_officer_sentiment"]=legacy_label
+        annotation["officer_ledgers_conflict"]=conflict
+        annotation["requires_resolution"]=conflict
+        annotation["legacy_display_remains_authoritative"]=True
+        annotation["manual_resolution_required_before_unification"]=conflict
+        annotations[key]=annotation
+    return annotations
 
 def approved_command_annotations(db,p,campaigns,limit=15):
     """Only independently approved, current-source insight summaries; not legacy alerts."""

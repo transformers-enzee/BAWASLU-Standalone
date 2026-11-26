@@ -11,17 +11,20 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 from .access import allowed, has, profile
 from .auth import current_user
 from .db import get_db
 from .models import (User, MonitoringCampaign, CampaignEvidence,
                      SocialListeningResult, EvidenceAssessment,
-                     GovernanceFieldCorrection, GovernanceInsight)
+                     GovernanceFieldCorrection, GovernanceInsight,
+                     EvidenceReview)
 from .intelligence_contract import OVERRIDABLE_FIELDS
 from .human_governance_gates import information_gate, insight_publication_gate
 from .governance_projection import (effective_assessment, source_snapshot_fingerprint,
                                      MAX_CORRECTIONS_PER_SOURCE)
+from .governance_integration import active as governance_reads_active
 
 router = APIRouter(prefix="/api/governance", tags=["governance"])
 MAX_REFERENCES = 100
@@ -64,7 +67,21 @@ def _snapshot(db, p, campaign_id, ids):
         ).order_by(EvidenceAssessment.assessment_version.desc(),
                    EvidenceAssessment.id.desc()).first()
         corrections = _correction_rows(db, campaign_id, result_id)
-        pieces.append([result_id, source_snapshot_fingerprint(post, assessment, corrections)])
+        # Existing officer actions are still authoritative in the legacy Inbox.
+        # A subsequent legacy override/review must invalidate this snapshot.
+        from .officer_sentiment import OfficerSentimentCorrection
+        legacy_sentiment = (db.query(OfficerSentimentCorrection).filter_by(
+            campaign_id=campaign_id, result_id=result_id
+        ).order_by(OfficerSentimentCorrection.id.desc()).first())
+        evidence_review = None
+        if assessment is not None:
+            evidence_review=(db.query(EvidenceReview).filter_by(
+                assessment_id=assessment.id
+            ).order_by(EvidenceReview.id.desc()).first())
+        pieces.append([result_id, source_snapshot_fingerprint(
+            post, assessment, corrections,
+            {"officer_sentiment":legacy_sentiment, "evidence_review":evidence_review}
+        )])
     return hashlib.sha256(json.dumps(pieces, sort_keys=True).encode("utf-8")).hexdigest()
 
 def _correction_rows(db, campaign_id, result_id):
@@ -201,9 +218,10 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
         raise HTTPException(409,"Insight changed or already decided")
     if body.decision not in ("approve","reject"):
         raise HTTPException(422,"Invalid decision")
-    # Separate reviewer on consequential findings. Does not affect other officer roles.
-    if row.contains_high_impact_claims and row.proposer_id==user.id:
-        raise HTTPException(403,"High-impact insights require an independent approver")
+    # Human Gate 2 must be an independent decision, even for routine findings.
+    # High-impact findings also require the specialist validation guard below.
+    if row.proposer_id==user.id and body.decision=="approve":
+        raise HTTPException(403,"An independent officer must approve the insight")
     ids=json.loads(row.evidence_ids_json)
     fresh=_snapshot(db,p,row.campaign_id,ids)
     candidate={"state":"approved" if body.decision=="approve" else "rejected",
@@ -304,3 +322,84 @@ def approved_command_centre(campaign_id:int,user:User=Depends(current_user),
                       "published_by_legacy_dashboard":False})
     return {"insights":items,"stale_or_blocked_count":stale,
             "approved_only":True,"legacy_command_centre_unchanged":True}
+
+
+@router.get("/review-queue")
+def governance_review_queue(campaign_id:int,limit:int=20,
+                            user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Concise read-only officer work queue; zero AI calls or source mutations."""
+    if not governance_reads_active():
+        raise HTTPException(503,"Governance review queue is not enabled")
+    p=_grant(db,user,"view_intelligence")
+    _campaign(db,p,campaign_id)
+    if not 1<=limit<=50:
+        raise HTTPException(422,"Limit must be between 1 and 50")
+    rows=(db.query(GovernanceInsight).filter_by(campaign_id=campaign_id)
+          .order_by(GovernanceInsight.id.desc()).limit(limit).all())
+    cases=[]
+    for row in rows:
+        try:
+            ids=json.loads(row.evidence_ids_json)
+            if (not isinstance(ids,list) or not ids
+                or any(type(i) is not int or i<=0 for i in ids)):
+                raise ValueError("Invalid evidence references")
+            source_current=_snapshot(db,p,campaign_id,ids)==row.source_digest
+            verdict=_approved_row_gate(row,ids,source_current)
+            blockers=verdict["review_blockers"]
+        except (ValueError,TypeError,HTTPException):
+            source_current=False
+            blockers=["EVIDENCE_UNAVAILABLE_OR_OUT_OF_SCOPE"]
+        action=("REVIEW_FOR_APPROVAL" if row.state=="pending_approval" and source_current
+                else "REASSESS_SOURCE" if not source_current
+                else "NO_ACTION")
+        cases.append({
+            "id":row.id,"title":row.title,"state":row.state,
+            "revision":row.revision,"source_current":source_current,
+            "review_blockers":blockers,"next_action":action,
+            "can_approve":bool(action=="REVIEW_FOR_APPROVAL"
+                and has(p,"verify_evidence") and row.proposer_id!=user.id),
+            "independent_reviewer_required":True,
+        })
+    return {
+        "campaign_id":campaign_id,"cases":cases,
+        "awaiting_review":sum(1 for item in cases if item["next_action"]=="REVIEW_FOR_APPROVAL"),
+        "needs_reassessment":sum(1 for item in cases if item["next_action"]=="REASSESS_SOURCE"),
+        "read_only":True,"paid_provider_called":False,
+    }
+
+
+@router.get("/readiness")
+def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Administrators can inspect deployment prerequisites without enabling writes."""
+    _grant(db,user,"administration")
+    bind=db.get_bind()
+    inspector=inspect(bind)
+    expected=("governance_field_corrections","governance_insights")
+    present={name:inspector.has_table(name) for name in expected}
+    access_checked=False
+    protected=False
+    if bind.dialect.name=="postgresql" and all(present.values()):
+        records=db.execute(text(
+            "SELECT relname, relrowsecurity,"
+            " has_table_privilege('anon',oid,'SELECT') AS anon_read,"
+            " has_table_privilege('authenticated',oid,'SELECT') AS auth_read"
+            " FROM pg_class WHERE relname IN"
+            " ('governance_field_corrections','governance_insights')"
+        )).mappings().all()
+        access_checked=len(records)==len(expected)
+        protected=access_checked and all(
+            row["relrowsecurity"] and not row["anon_read"] and not row["auth_read"]
+            for row in records)
+    writes_enabled=os.getenv("BAWASLU_GOVERNANCE_WRITES_ENABLED","").lower() in ("1","true","yes")
+    reads_enabled=governance_reads_active()
+    return {
+        "schema_tables_present":present,
+        "table_access_verified":access_checked,
+        "rls_and_privileges_protected":protected,
+        "governance_reads_enabled":reads_enabled,
+        "governance_writes_enabled":writes_enabled,
+        "ready_for_controlled_staging_qa":all(present.values()) and protected,
+        "manual_qa_not_started":True,
+        "production_promotion_authorized":False,
+        "paid_provider_called":False,
+    }

@@ -515,3 +515,50 @@ def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_
         "production_promotion_authorized":False,
         "paid_provider_called":False,
     }
+
+@router.get("/qa/campaigns")
+def governance_qa_campaigns(user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Administrator-only list of campaigns scoped to current officer geography.
+
+    No raw social content, private account details, record mutations or AI calls.
+    """
+    _read_enabled()
+    p=_grant(db,user,"administration")
+    _grant(db,user,"view_intelligence")
+    campaigns=(db.query(MonitoringCampaign)
+               .order_by(MonitoringCampaign.id.desc()).limit(1000).all())
+    scoped=[{"id":row.id,"name":row.name,"province":row.province or "",
+             "jurisdiction_type":row.jurisdiction_type or ""}
+            for row in campaigns if allowed(p,row)]
+    return {
+        "campaigns":scoped[:80],
+        "available_count":len(scoped),
+        "truncated":len(scoped)>80 or len(campaigns)>=1000,
+        "read_only":True,"paid_provider_called":False,
+    }
+
+
+@router.get("/qa/campaign/{campaign_id}/summary")
+def governance_qa_campaign_summary(campaign_id:int,user:User=Depends(current_user),
+                                   db:Session=Depends(get_db)):
+    """Bounded officer QA report; always rechecks jurisdiction and source freshness."""
+    _read_enabled()
+    p=_grant(db,user,"administration")
+    _grant(db,user,"view_intelligence")
+    _campaign(db,p,campaign_id)
+    cases=governance_review_queue(campaign_id=campaign_id,limit=30,user=user,db=db)
+    counts={"pending_approval":0,"approved":0,"rejected":0,"other":0}
+    for case in cases["cases"]:
+        state=case["state"]
+        counts[state if state in counts else "other"]+=1
+    return {
+        "campaign_id":campaign_id,
+        "counts":counts,"sample_limited":True,"sample_limit":30,
+        "cases":cases["cases"],
+        "awaiting_review":cases["awaiting_review"],
+        "needs_reassessment":cases["needs_reassessment"],
+        "requires_conflict_resolution":sum(
+            1 for item in cases["cases"] if item["next_action"]=="RESOLVE_REVIEW_CONFLICT"),
+        "read_only":True,"paid_provider_called":False,
+        "manual_qa_authorized":False,
+    }

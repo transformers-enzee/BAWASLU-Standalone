@@ -57,6 +57,11 @@ export default function Administration(){
       <p className="text-sm text-slate-600 mt-1">{T("Open the staging-only synthetic test workbench: eight scenarios, field comparison, and human override precedence. No paid AI calls or officer record changes.","Buka laboratorium pengujian sintetis khusus staging: delapan skenario, perbandingan atribut, dan prioritas koreksi petugas. Tanpa panggilan AI berbayar atau perubahan data petugas.")}</p>
       <Link to="/administration/assessment-qa" className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm">{T("Open assessment QA workbench","Buka laboratorium QA penilaian")}</Link>
     </section>}
+  {!window.__BAWASLU_DEMO_REPLICA__&&access.permissions?.administration===true&&access.permissions?.view_intelligence===true&&<section className="rounded-xl border bg-white p-4" data-testid="governance-review-link">
+    <h2 className="text-lg font-semibold">{T("Human Review Controls","Kontrol Tinjauan Petugas")}</h2>
+    <p className="mt-1 text-sm text-slate-600">{T("View the readiness of officer corrections and insight approvals without changing any data.","Periksa kesiapan koreksi petugas dan persetujuan insight tanpa mengubah data.")}</p>
+    <Link to="/administration/governance-review" className="inline-block mt-3 px-4 py-2 rounded bg-slate-900 text-white text-sm">{T("Open review status","Buka status tinjauan")}</Link>
+  </section>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<DemoFeedbackAdmin/>}
   {access.role==='National Administrator'&&access.permissions?.administration===true&&<RelevanceGateManager/>}
   <CategoryManager categories={categories} refresh={refresh} authorized={access.role==='National Administrator'&&access.permissions?.administration===true}/>

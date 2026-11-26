@@ -46,6 +46,7 @@ const CampaignDashboardPage=()=>{const {id}=useParams();if(/^\/demo(?:\/|$)/.tes
 import Validation from '@/pages/Validation';
 import Administration from '@/pages/Administration';
 import IntegrationReadiness from '@/pages/IntegrationReadiness';
+import GovernanceReview from '@/pages/GovernanceReview';
 import AcceptanceReview from '@/pages/AcceptanceReview';
 import { LanguageProvider } from '@/lib/LanguageContext';
 import UiLanguageLayer from '@/lib/UiLanguageLayer';
@@ -122,6 +123,7 @@ const AuthenticatedApp = () => {
           <Route element={<AccessGate permission="administration" />}>
             <Route path="/administration" element={<Administration />} />
             <Route path="/administration/integration" element={<IntegrationReadiness />} />
+            <Route path="/administration/governance-review" element={<GovernanceReview />} />
             <Route path="/administration/assessment-qa" element={<AssessmentQAWorkbench />} />
             <Route path="/administration/assessment-qa/diagnostics" element={<AssessmentQADiagnostics />} />
             <Route path="/administration/acceptance-review" element={<AcceptanceReview />} />

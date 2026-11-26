@@ -76,6 +76,11 @@ export const base44 = {
       return request('/api/social-listening/external-import/preview?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});
     }
   },
+  governance:{
+    readiness:()=>request('/api/governance/readiness',{cache:'no-store'}),
+    qaCampaigns:()=>request('/api/governance/qa/campaigns',{cache:'no-store'}),
+    qaSummary:campaignId=>request('/api/governance/qa/campaign/'+encodeURIComponent(campaignId)+'/summary',{cache:'no-store'}),
+  },
   relevanceGates:{
     list:()=>request('/api/relevance-gates'),
     create:data=>request('/api/relevance-gates',{method:'POST',body:JSON.stringify(data)}),

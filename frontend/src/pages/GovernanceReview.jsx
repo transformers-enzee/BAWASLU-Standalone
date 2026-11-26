@@ -21,6 +21,8 @@ export default function GovernanceReview(){
   const refresh=useCallback(async()=>{
     if(!mayView)return;
     setError('');setLoading(true);setReport(null);
+    // Fail closed to an explicit load error: do not show stale campaign options.
+    setCampaigns([]);setTruncated(false);setSelected('');
     try{
       const ready=await base44.governance.readiness();
       setReadiness(ready);
@@ -64,7 +66,7 @@ export default function GovernanceReview(){
     </section>}
     {readiness?.governance_qa_reads_enabled&&<section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
       <div><h2 className="font-semibold">{T('Review cases by campaign','Kasus tinjauan per kampanye')}</h2><p className="text-xs text-slate-500">{T('Only campaigns within your authorized geographic scope are listed.','Hanya kampanye dalam wilayah kewenangan Anda yang ditampilkan.')}</p></div>
-      {campaigns.length>0?<label className="block text-sm font-medium">{T('Select campaign','Pilih kampanye')}<select className="mt-1 w-full border rounded-lg p-2 bg-white" value={selected} onChange={e=>setSelected(e.target.value)}>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name} · {c.province||T('Nationwide','Nasional')}</option>)}</select></label>:<p className="text-sm text-slate-600">{T('No authorized campaigns were found.','Tidak ada kampanye yang dapat diakses.')}</p>}
+      {!error&&campaigns.length>0?<label className="block text-sm font-medium">{T('Select campaign','Pilih kampanye')}<select className="mt-1 w-full border rounded-lg p-2 bg-white" value={selected} onChange={e=>setSelected(e.target.value)}>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name} · {c.province||T('Nationwide','Nasional')}</option>)}</select></label>:!error?<p className="text-sm text-slate-600">{T('No authorized campaigns were found.','Tidak ada kampanye yang dapat diakses.')}</p>:<p role="status" className="text-sm text-amber-800">{T('Campaigns could not be loaded. Check the error above and use Refresh status.','Kampanye tidak dapat dimuat. Periksa kesalahan di atas dan pilih Muat ulang status.')}</p>}
       {truncated&&<p className="text-sm text-amber-800">{T('Showing a bounded sample of campaigns.','Menampilkan sebagian kampanye.')}</p>}
       {report&&<><section className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3" data-testid="governance-information-qa">
         <div><h3 className="font-semibold text-slate-900">{T('Gate 1 · Information quality','Gate 1 · Kualitas informasi')}</h3>

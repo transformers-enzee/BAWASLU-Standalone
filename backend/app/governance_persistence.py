@@ -541,8 +541,11 @@ def governance_qa_campaigns(user:User=Depends(current_user),db:Session=Depends(g
     _grant(db,user,"view_intelligence")
     campaigns=(db.query(MonitoringCampaign)
                .order_by(MonitoringCampaign.id.desc()).limit(1000).all())
+    # The MonitoringCampaign model stores geographic scope as province and
+    # regency_city; it does not define jurisdiction_type. Avoid referencing
+    # attributes invented by QA-only response schemas.
     scoped=[{"id":row.id,"name":row.name,"province":row.province or "",
-             "jurisdiction_type":row.jurisdiction_type or ""}
+             "regency_city":row.regency_city or ""}
             for row in campaigns if allowed(p,row)]
     return {
         "campaigns":scoped[:80],

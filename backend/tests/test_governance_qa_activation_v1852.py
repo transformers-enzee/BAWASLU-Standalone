@@ -82,3 +82,36 @@ def test_frontend_uses_qa_only_flag():
     assert "governance_qa_reads_enabled" in page
     assert "governance_reads_enabled" not in page
     assert 'data-testid="governance-information-qa"' in page
+
+def test_real_campaign_model_has_no_jurisdiction_type_and_list_does_not_500(monkeypatch):
+    """Regression: real SQLAlchemy model previously raised AttributeError on row.jurisdiction_type."""
+    from app.models import MonitoringCampaign
+    import app.governance_persistence as governance
+    model=MonitoringCampaign(id=23,name="Election Campaign",province="Jawa Barat",regency_city="Bandung")
+    assert "jurisdiction_type" not in MonitoringCampaign.__mapper__.attrs.keys()
+    monkeypatch.setenv("BAWASLU_GOVERNANCE_QA_READ_ENABLED","true")
+    monkeypatch.setattr(governance,"_grant",lambda db,user,permission:{"id":"1","status":"Active"})
+    monkeypatch.setattr(governance,"allowed",lambda profile,row:True)
+    db=MagicMock()
+    db.query.return_value.order_by.return_value.limit.return_value.all.return_value=[model]
+    data=governance.governance_qa_campaigns(user=SimpleNamespace(id=1),db=db)
+    assert data["campaigns"]==[{"id":23,"name":"Election Campaign","province":"Jawa Barat","regency_city":"Bandung"}]
+    assert data["available_count"]==1
+    assert data["read_only"] is True
+    db.commit.assert_not_called()
+
+
+def test_campaign_list_never_reads_unmapped_jurisdiction_type():
+    from app.models import MonitoringCampaign
+    source=inspect.getsource(governance.governance_qa_campaigns)
+    assert "row.jurisdiction_type" not in source
+    for attr in ("id","name","province","regency_city"):
+        assert attr in MonitoringCampaign.__mapper__.attrs.keys()
+
+
+def test_ui_load_error_does_not_claim_no_authorized_campaigns():
+    from pathlib import Path
+    page=(Path(__file__).resolve().parents[2]/"frontend"/"src"/"pages"/"GovernanceReview.jsx").read_text()
+    assert 'setCampaigns([]);setTruncated(false);setSelected(\'\');' in page
+    assert '!error?<p className="text-sm text-slate-600">' in page
+    assert "Campaigns could not be loaded." in page

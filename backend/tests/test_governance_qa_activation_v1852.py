@@ -36,9 +36,10 @@ def test_admin_campaign_scopes_are_checked(monkeypatch):
     monkeypatch.setattr(governance,"_grant",lambda db,user,permission:{"id":"1","status":"Active"})
     monkeypatch.setattr(governance,"allowed",lambda profile,record:record.id==1)
     db=MagicMock()
+    from app.models import MonitoringCampaign
     db.query.return_value.order_by.return_value.limit.return_value.all.return_value=[
-        SimpleNamespace(id=1,name="Authorized",province="Region A",jurisdiction_type="Province"),
-        SimpleNamespace(id=2,name="Out of scope",province="Region B",jurisdiction_type="Province")]
+        MonitoringCampaign(id=1,name="Authorized",province="Region A",regency_city=""),
+        MonitoringCampaign(id=2,name="Out of scope",province="Region B",regency_city="")]
     result=governance.governance_qa_campaigns(user=SimpleNamespace(id=1),db=db)
     assert [r["id"] for r in result["campaigns"]]==[1]
     assert result["paid_provider_called"] is False

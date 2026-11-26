@@ -20,6 +20,8 @@ from .models import (User, MonitoringCampaign, CampaignEvidence,
                      GovernanceFieldCorrection, GovernanceInsight)
 from .intelligence_contract import OVERRIDABLE_FIELDS
 from .human_governance_gates import information_gate, insight_publication_gate
+from .governance_projection import (effective_assessment, source_snapshot_fingerprint,
+                                     MAX_CORRECTIONS_PER_SOURCE)
 
 router = APIRouter(prefix="/api/governance", tags=["governance"])
 MAX_REFERENCES = 100
@@ -61,15 +63,31 @@ def _snapshot(db, p, campaign_id, ids):
             campaign_id=campaign_id, result_id=result_id
         ).order_by(EvidenceAssessment.assessment_version.desc(),
                    EvidenceAssessment.id.desc()).first()
-        latest = db.query(GovernanceFieldCorrection).filter_by(
-            campaign_id=campaign_id, result_id=result_id
-        ).order_by(GovernanceFieldCorrection.id.desc()).first()
-        pieces.append([
-            result_id, post.content_fingerprint or "", post.canonical_url or "",
-            assessment.id if assessment else None,
-            latest.id if latest else None,
-        ])
+        corrections = _correction_rows(db, campaign_id, result_id)
+        pieces.append([result_id, source_snapshot_fingerprint(post, assessment, corrections)])
     return hashlib.sha256(json.dumps(pieces, sort_keys=True).encode("utf-8")).hexdigest()
+
+def _correction_rows(db, campaign_id, result_id):
+    rows = (db.query(GovernanceFieldCorrection)
+            .filter_by(campaign_id=campaign_id, result_id=result_id)
+            .order_by(GovernanceFieldCorrection.id.asc())
+            .limit(MAX_CORRECTIONS_PER_SOURCE + 1).all())
+    if len(rows) > MAX_CORRECTIONS_PER_SOURCE:
+        raise HTTPException(409, "Correction history exceeds bounded review limit")
+    return rows
+
+
+def _approved_row_gate(row, ids, current):
+    return insight_publication_gate({
+        "state": row.state, "approver_id": str(row.approver_id or ""),
+        "approved_revision": str(row.revision) if row.revision else "",
+        "finding_id": str(row.id), "evidence_refs": [str(x) for x in ids],
+        "analysis_scope": row.analysis_scope, "source_revision_current": current,
+        "claim_status": row.claim_status, "evidence_verified": row.evidence_verified,
+        "contains_high_impact_claims": row.contains_high_impact_claims,
+        "high_impact_reviewed": row.high_impact_reviewed,
+    })
+
 
 class CorrectionIn(BaseModel):
     campaign_id: int = Field(gt=0)
@@ -135,9 +153,7 @@ def list_overrides(campaign_id:int, result_id:int, user:User=Depends(current_use
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     _source(db,p,campaign_id,result_id)
-    rows=(db.query(GovernanceFieldCorrection).filter_by(
-        campaign_id=campaign_id,result_id=result_id)
-        .order_by(GovernanceFieldCorrection.id.asc()).limit(500).all())
+    rows=_correction_rows(db,campaign_id,result_id)
     return {"records":[{"field":r.field,"value":r.human_value,"reason":r.reason,
                         "reviewer_id":r.reviewer_id,"revision":r.revision,
                         "created_at":r.created_at.isoformat()} for r in rows],
@@ -148,8 +164,11 @@ def propose_insight(body: InsightIn, user:User=Depends(current_user), db:Session
     _enabled()
     p=_grant(db,user,"human_validation")
     _campaign(db,p,body.campaign_id)
-    if body.claim_status not in ("preliminary","verified"):
-        raise HTTPException(422,"Invalid claim status")
+    # Self-asserted evidence verification is never a trustworthy approval signal.
+    if body.claim_status != "preliminary" or body.evidence_verified or body.high_impact_reviewed:
+        raise HTTPException(422,"Verified claims require an independent evidence workflow")
+    if any(isinstance(x,bool) or x <= 0 for x in body.evidence_result_ids):
+        raise HTTPException(422,"Evidence references must be positive source IDs")
     digest=_snapshot(db,p,body.campaign_id,body.evidence_result_ids)
     row=GovernanceInsight(
         campaign_id=body.campaign_id,title=body.title.strip(),
@@ -188,11 +207,14 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
         "source_revision_current":fresh==row.source_digest,
         "claim_status":row.claim_status,"evidence_verified":row.evidence_verified,
         "contains_high_impact_claims":row.contains_high_impact_claims,
-        "high_impact_reviewed":row.high_impact_reviewed}
+        "high_impact_reviewed":bool(row.contains_high_impact_claims and
+                                    row.proposer_id!=user.id and body.decision=="approve")}
     verdict=insight_publication_gate(candidate)
     if body.decision=="approve" and not verdict["publish_allowed"]:
         raise HTTPException(409,{"review_blockers":verdict["review_blockers"]})
     row.state="approved" if body.decision=="approve" else "rejected"
+    row.high_impact_reviewed=bool(row.contains_high_impact_claims and
+                                  row.proposer_id!=user.id and body.decision=="approve")
     row.approver_id=user.id
     row.review_rationale=body.rationale.strip()
     row.reviewed_at=datetime.utcnow()
@@ -214,7 +236,65 @@ def list_insights(campaign_id:int,user:User=Depends(current_user),
     for row in rows:
         ids=json.loads(row.evidence_ids_json)
         current=_snapshot(db,p,campaign_id,ids)==row.source_digest
+        result=_approved_row_gate(row,ids,current)
         items.append({"id":row.id,"title":row.title,"state":row.state,
                       "revision":row.revision,"sources_current":current,
-                      "publication_eligible":row.state=="approved" and current})
+                      "publication_eligible":result["publish_allowed"],
+                      "review_blockers":result["review_blockers"]})
     return {"items":items,"legacy_command_centre_unchanged":True}
+
+
+@router.get("/information/effective/{campaign_id}/{result_id}")
+def effective_information(campaign_id:int,result_id:int,user:User=Depends(current_user),
+                          db:Session=Depends(get_db)):
+    """Officer-corrected field preview; legacy Inbox reads are not silently altered."""
+    _enabled()
+    p=_grant(db,user,"view_intelligence")
+    _campaign(db,p,campaign_id)
+    _source(db,p,campaign_id,result_id)
+    assessment=(db.query(EvidenceAssessment).filter_by(
+        campaign_id=campaign_id,result_id=result_id)
+        .order_by(EvidenceAssessment.assessment_version.desc(),
+                  EvidenceAssessment.id.desc()).first())
+    corrections=_correction_rows(db,campaign_id,result_id)
+    return {"campaign_id":campaign_id,"result_id":result_id,
+            **effective_assessment(assessment,corrections),
+            "legacy_inbox_unchanged":True}
+
+
+@router.get("/command-centre/approved")
+def approved_command_centre(campaign_id:int,user:User=Depends(current_user),
+                            db:Session=Depends(get_db)):
+    """Read-only, dynamically refreshed approved-only insight projection.
+
+    This endpoint does not overwrite the existing Command Centre. Any changed
+    source, AI assessment or officer correction removes an insight from the feed.
+    """
+    _enabled()
+    p=_grant(db,user,"view_intelligence")
+    _campaign(db,p,campaign_id)
+    rows=(db.query(GovernanceInsight).filter_by(
+        campaign_id=campaign_id,state="approved")
+        .order_by(GovernanceInsight.id.desc()).limit(30).all())
+    items=[]
+    stale=0
+    for row in rows:
+        try:
+            ids=json.loads(row.evidence_ids_json)
+            current=_snapshot(db,p,campaign_id,ids)==row.source_digest
+            result=_approved_row_gate(row,ids,current)
+        except (ValueError,TypeError,HTTPException):
+            stale+=1
+            continue
+        if not result["publish_allowed"]:
+            stale+=1
+            continue
+        items.append({"id":row.id,"campaign_id":campaign_id,
+                      "title":row.title,"claim_status":row.claim_status,
+                      "review_status":"OFFICER_APPROVED",
+                      "evidence_result_ids":ids,"analysis_scope":row.analysis_scope,
+                      "approver_id":row.approver_id,
+                      "reviewed_at":row.reviewed_at.isoformat() if row.reviewed_at else None,
+                      "published_by_legacy_dashboard":False})
+    return {"insights":items,"stale_or_blocked_count":stale,
+            "approved_only":True,"legacy_command_centre_unchanged":True}

@@ -552,3 +552,40 @@ class AssistantAcceptanceEvidenceEvent(Base):
     actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class GovernanceFieldCorrection(Base):
+    """Append-only field correction: original provider and AI rows are untouched."""
+    __tablename__='governance_field_corrections'
+    id: Mapped[int] = mapped_column(Integer,primary_key=True,autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'),nullable=False,index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey('social_listening_results.id'),nullable=False,index=True)
+    field: Mapped[str] = mapped_column(String(80),nullable=False)
+    human_value: Mapped[str] = mapped_column(String(300),nullable=False)
+    reason: Mapped[str] = mapped_column(Text,nullable=False)
+    reviewer_id: Mapped[int] = mapped_column(ForeignKey('users.id'),nullable=False)
+    revision: Mapped[int] = mapped_column(Integer,nullable=False)
+    status: Mapped[str] = mapped_column(String(24),nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow,nullable=False)
+    __table_args__=(UniqueConstraint('campaign_id','result_id','field','revision',name='uq_governance_field_revision'),)
+
+class GovernanceInsight(Base):
+    """Officer-submitted proposed insight; separate from existing Command Centre calculations."""
+    __tablename__='governance_insights'
+    id: Mapped[int] = mapped_column(Integer,primary_key=True,autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey('monitoring_campaigns.id'),nullable=False,index=True)
+    title: Mapped[str] = mapped_column(String(255),nullable=False)
+    evidence_ids_json: Mapped[str] = mapped_column(Text,nullable=False)
+    analysis_scope: Mapped[str] = mapped_column(String(180),nullable=False)
+    source_digest: Mapped[str] = mapped_column(String(64),nullable=False)
+    claim_status: Mapped[str] = mapped_column(String(24),nullable=False)
+    evidence_verified: Mapped[bool] = mapped_column(Boolean,default=False,nullable=False)
+    contains_high_impact_claims: Mapped[bool] = mapped_column(Boolean,default=False,nullable=False)
+    high_impact_reviewed: Mapped[bool] = mapped_column(Boolean,default=False,nullable=False)
+    state: Mapped[str] = mapped_column(String(32),nullable=False,index=True)
+    revision: Mapped[int] = mapped_column(Integer,default=1,nullable=False)
+    proposer_id: Mapped[int] = mapped_column(ForeignKey('users.id'),nullable=False)
+    approver_id: Mapped[int|None] = mapped_column(ForeignKey('users.id'),nullable=True)
+    review_rationale: Mapped[str] = mapped_column(Text,default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow,nullable=False)
+    reviewed_at: Mapped[datetime|None] = mapped_column(DateTime,nullable=True)

@@ -118,8 +118,14 @@ def submit_override(body: CorrectionIn, user: User=Depends(current_user), db: Se
     p = _grant(db, user, "human_validation")
     _campaign(db, p, body.campaign_id)
     post = _source(db, p, body.campaign_id, body.result_id)
-    if body.field not in OVERRIDABLE_FIELDS or body.field == "human_review_status":
-        raise HTTPException(422, "Field cannot be overridden")
+    # v184.7: only validated fields can affect effective-value reads.
+    # Other classifications stay in the existing specialized officer-review flows.
+    if body.field not in ("sentiment","relevance"):
+        raise HTTPException(422, "Use the supported sentiment or relevance field") 
+    if body.field=="sentiment" and body.human_value.strip().upper() not in ("POSITIVE","NEUTRAL","NEGATIVE"):
+        raise HTTPException(422, "Invalid sentiment value")
+    if body.field=="relevance" and body.human_value.strip().upper() not in ("RELEVANT","HIGHLY_RELEVANT","IRRELEVANT","UNCERTAIN"):
+        raise HTTPException(422, "Invalid election-relevance value")
     if not post.text_content and not post.canonical_url:
         raise HTTPException(422, "Missing original content and URL")
     # Serialize competing corrections on the existing source row; the original stays unchanged.
@@ -133,7 +139,7 @@ def submit_override(body: CorrectionIn, user: User=Depends(current_user), db: Se
         raise HTTPException(409, "Review revision changed; refresh before correcting")
     row = GovernanceFieldCorrection(
         campaign_id=body.campaign_id, result_id=body.result_id, field=body.field,
-        human_value=body.human_value.strip(), reason=body.reason.strip(),
+        human_value=body.human_value.strip().upper(), reason=body.reason.strip(),
         reviewer_id=user.id, revision=previous + 1,
         status="approved", created_at=datetime.utcnow())
     db.add(row)

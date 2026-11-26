@@ -580,6 +580,8 @@ def build_command_center(db,p,data=None):
             'detail':'No evidence-backed issue alert is available in the current authorized view. Check source coverage, assessments and review decisions before treating this as an absence of electoral issues.',
             'basis':'COVERAGE_STATUS'})
     action_intelligence=build_action_intelligence(alerts,manual_recent,p.get('geographic_scope'))
+    from .governance_integration import approved_command_annotations
+    approved_governance_insights=approved_command_annotations(db,p,campaigns)
     return {'period':{'preset':preset,'date_from':start,'date_to':end},
             'available_provinces':[{'name':_province_name(row['code']),'code':str(row['code'])} for row in PROVINCES] if p.get('geographic_scope')=='Nationwide' else [{'name':scope_label,'code':province_code_for(selected)}],
             'scope':{'label':scope_label,'geographic_scope':p.get('geographic_scope'),
@@ -592,6 +594,9 @@ def build_command_center(db,p,data=None):
                 'emerging_issues':None},
             'briefing':briefing,'focus_actions':focus,'attention_actions':attention[:4],
             'action_intelligence':action_intelligence,
+            'governance_approved_insights':approved_governance_insights,
+            'governance_insights_basis':'OFFICER_APPROVED_SOURCE_CURRENT_ONLY',
+            'governance_legacy_analytics_unchanged':True,
             'alerts':alerts[:10], 'latest_intelligence':recent,
             'activity':{'captured_mentions':len(captured_ids),
                         'newly_collected_mentions':newly_collected,

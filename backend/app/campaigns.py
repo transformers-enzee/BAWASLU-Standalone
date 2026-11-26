@@ -1392,6 +1392,16 @@ def campaign_action(db:Session,p,action,data,id=None):
                 row['sentiment_explanation']=correction.rationale
                 row['sentiment_correction']=correction_view(correction)
             row['can_correct_sentiment']=has(p,'edit_intelligence')
+        # v184.7: additive governance read metadata only. Existing legacy
+        # sentiment correction and relevance eligibility remain authoritative
+        # until unified correction precedence is validated end-to-end.
+        from .governance_integration import inbox_governance_annotations
+        review_metadata=inbox_governance_annotations(db,records)
+        for row in records:
+            value=review_metadata.get((int(row['campaign_id']),int(row['id'])))
+            if value is not None:
+                row['governance_effective_preview']=value
+                row['governance_legacy_fields_unchanged']=True
         return {'candidate_registry_diagnostics':candidate_registry_diagnostics,
                 'findings':records[:page_limit+1] if paged else records[:300],
                 'full_statistics':totals_summary if paged else None,

@@ -36,6 +36,10 @@ assert.ok(inbox.includes('reviewRationale.trim().length<10'), 'Existing rational
 assert.ok(inbox.includes('selected.assessment_version'), 'Existing version-aware review must remain');
 assert.ok(inbox.includes('acknowledgedReview.current'), 'Saved review state must not be overwritten by stale response');
 
-assert.ok(docker.includes('ARG BAWASLU_BUILD_VERSION=184.2'));
-assert.ok(main.includes("'build_version':os.getenv('BAWASLU_BUILD_VERSION','184.2')"));
+// Validate version parity without pinning the test to a previous release.
+const dockerVersion=docker.match(/^ARG BAWASLU_BUILD_VERSION=([0-9]+[.][0-9]+)$/m)?.[1];
+const backendVersion=main.match(/'build_version':os[.]getenv[(]'BAWASLU_BUILD_VERSION','([0-9]+[.][0-9]+)'[)]/)?.[1];
+assert.ok(dockerVersion,'Docker build version is required');
+assert.ok(backendVersion,'Backend fallback build version is required');
+assert.equal(backendVersion,dockerVersion,'Docker and backend versions must match');
 console.log('PASS v183.10: visible Human Review Centre, saved review guards, navigation and release identity');

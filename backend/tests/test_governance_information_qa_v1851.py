@@ -45,7 +45,7 @@ def test_sampling_query_excludes_watchlist_only_and_requires_source_scope():
     assert "_result_in_scope(db,officer_profile,posts[source_id])" in source
     assert "SCAN_LIMIT + 1" in source
     assert "not_population_totals" in source
-    assert "priority" in source
+    assert "balanced_review_sample" in source
 
 
 def test_gate1_qa_is_exposed_from_scoped_admin_campaign_summary():

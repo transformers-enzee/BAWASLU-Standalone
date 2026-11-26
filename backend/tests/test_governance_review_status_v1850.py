@@ -7,13 +7,13 @@ from fastapi import HTTPException
 from app.governance_persistence import governance_qa_campaigns,governance_qa_campaign_summary
 
 def test_admin_campaigns_api_fails_closed_when_read_flag_off(monkeypatch):
-    monkeypatch.delenv('BAWASLU_GOVERNANCE_INTEGRATION_ENABLED',raising=False)
+    monkeypatch.delenv('BAWASLU_GOVERNANCE_QA_READ_ENABLED',raising=False)
     with pytest.raises(HTTPException) as err:
         governance_qa_campaigns(user=SimpleNamespace(id=1),db=MagicMock())
     assert err.value.status_code==503
 
 def test_admin_summary_api_fails_closed_when_read_flag_off(monkeypatch):
-    monkeypatch.delenv('BAWASLU_GOVERNANCE_INTEGRATION_ENABLED',raising=False)
+    monkeypatch.delenv('BAWASLU_GOVERNANCE_QA_READ_ENABLED',raising=False)
     with pytest.raises(HTTPException) as err:
         governance_qa_campaign_summary(campaign_id=1,user=SimpleNamespace(id=1),db=MagicMock())
     assert err.value.status_code==503

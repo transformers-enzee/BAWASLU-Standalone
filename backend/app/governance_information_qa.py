@@ -67,6 +67,30 @@ def _latest_per_source(db, model, campaign_id, source_ids, id_key):
     }
 
 
+def balanced_review_sample(items, limit=DISPLAY_LIMIT):
+    """Round-robin coverage of unassessed, uncertain, excluded and relevant posts."""
+    action_order=("VERIFY_UNASSESSED","REVIEW_UNCERTAIN","SPOT_CHECK_EXCLUDED",
+                  "CHECK_RELEVANT_EVIDENCE","REVIEW_UNKNOWN_LABEL")
+    pools={action:[] for action in action_order}
+    for item in items:
+        pools.setdefault(item.get("action","REVIEW_UNKNOWN_LABEL"),[]).append(item)
+    indices={action:0 for action in pools}
+    selected=[]
+    while len(selected)<limit:
+        advanced=False
+        for action in action_order:
+            index=indices[action]
+            if index<len(pools[action]):
+                selected.append(pools[action][index])
+                indices[action]+=1
+                advanced=True
+                if len(selected)>=limit:
+                    break
+        if not advanced:
+            break
+    return selected
+
+
 def information_qa_sample(db, officer_profile, campaign_id):
     """Return a labeled recent-link sample, not complete campaign-wide metrics."""
     links = (
@@ -141,12 +165,8 @@ def information_qa_sample(db, officer_profile, campaign_id):
             **classification,
         })
     counts=Counter(item["category"] for item in all_items)
-    priority={"VERIFY_UNASSESSED":0,"REVIEW_UNCERTAIN":1,
-              "SPOT_CHECK_EXCLUDED":2,"REVIEW_UNKNOWN_LABEL":3,
-              "CHECK_RELEVANT_EVIDENCE":4}
-    # Original link order is newest first; stable priority ensures false-negative
-    # samples are visible instead of only already-relevant posts.
-    selected=sorted(all_items,key=lambda item:priority.get(item["action"],5))[:DISPLAY_LIMIT]
+    # Balanced across types, even when the bounded source sample is skewed.
+    selected=balanced_review_sample(all_items,DISPLAY_LIMIT)
     return {
         "scanned_count":len(all_items),
         "counts":{k:counts.get(k,0) for k in

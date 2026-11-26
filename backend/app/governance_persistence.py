@@ -34,9 +34,19 @@ def _enabled():
         raise HTTPException(503, "Governance persistence is disabled until schema verification")
 
 def _read_enabled():
-    """Permit read-only governance QA independently of mutation privileges."""
+    """The normal governance read endpoints remain separately gated."""
     if not governance_reads_active():
         raise HTTPException(503, "Governance read-only integration is not enabled")
+
+
+def _qa_read_mode():
+    """Administrator QA reads can be activated without changing live officer views."""
+    return os.getenv("BAWASLU_GOVERNANCE_QA_READ_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+
+def _qa_read_enabled():
+    if not _qa_read_mode():
+        raise HTTPException(503, "Administrator governance QA is not enabled")
 
 
 def _pilot_campaign_ids():
@@ -429,7 +439,9 @@ def governance_review_queue(campaign_id:int,limit:int=20,
                             user:User=Depends(current_user),db:Session=Depends(get_db)):
     """Concise read-only officer work queue; zero AI calls or source mutations."""
     if not governance_reads_active():
-        raise HTTPException(503,"Governance review queue is not enabled")
+        # QA-only mode permits this queue to administrators, never general users.
+        _qa_read_enabled()
+        _grant(db,user,"administration")
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     if not 1<=limit<=50:
@@ -498,6 +510,7 @@ def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_
             for row in records)
     writes_enabled=os.getenv("BAWASLU_GOVERNANCE_WRITES_ENABLED","").lower() in ("1","true","yes")
     reads_enabled=governance_reads_active()
+    qa_reads_enabled=_qa_read_mode()
     pilot_mode=os.getenv("BAWASLU_GOVERNANCE_PILOT_MODE","").strip().lower()=="staging"
     pilot_ids=_pilot_campaign_ids()
     return {
@@ -505,6 +518,7 @@ def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_
         "table_access_verified":access_checked,
         "rls_and_privileges_protected":protected,
         "governance_reads_enabled":reads_enabled,
+        "governance_qa_reads_enabled":qa_reads_enabled,
         "governance_writes_enabled":writes_enabled,
         "strict_pilot_mode_configured":pilot_mode,
         "allowlisted_pilot_campaign_count":len(pilot_ids),
@@ -522,7 +536,7 @@ def governance_qa_campaigns(user:User=Depends(current_user),db:Session=Depends(g
 
     No raw social content, private account details, record mutations or AI calls.
     """
-    _read_enabled()
+    _qa_read_enabled()
     p=_grant(db,user,"administration")
     _grant(db,user,"view_intelligence")
     campaigns=(db.query(MonitoringCampaign)
@@ -542,7 +556,7 @@ def governance_qa_campaigns(user:User=Depends(current_user),db:Session=Depends(g
 def governance_qa_campaign_summary(campaign_id:int,user:User=Depends(current_user),
                                    db:Session=Depends(get_db)):
     """Bounded officer QA report; always rechecks jurisdiction and source freshness."""
-    _read_enabled()
+    _qa_read_enabled()
     p=_grant(db,user,"administration")
     _grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)

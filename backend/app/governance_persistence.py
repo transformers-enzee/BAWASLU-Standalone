@@ -19,7 +19,7 @@ from .db import get_db
 from .models import (User, MonitoringCampaign, CampaignEvidence,
                      SocialListeningResult, EvidenceAssessment,
                      GovernanceFieldCorrection, GovernanceInsight,
-                     EvidenceReview)
+                     EvidenceReview, AuditEvent)
 from .intelligence_contract import OVERRIDABLE_FIELDS
 from .human_governance_gates import information_gate, insight_publication_gate
 from .governance_projection import (effective_assessment, source_snapshot_fingerprint,
@@ -32,6 +32,61 @@ MAX_REFERENCES = 100
 def _enabled():
     if os.getenv("BAWASLU_GOVERNANCE_WRITES_ENABLED", "").lower() not in ("1", "true", "yes"):
         raise HTTPException(503, "Governance persistence is disabled until schema verification")
+
+def _read_enabled():
+    """Permit read-only governance QA independently of mutation privileges."""
+    if not governance_reads_active():
+        raise HTTPException(503, "Governance read-only integration is not enabled")
+
+
+def _pilot_campaign_ids():
+    """Strict, bounded pilot allowlist; no wildcard or implicit all-campaign mode."""
+    raw=os.getenv("BAWASLU_GOVERNANCE_PILOT_CAMPAIGN_IDS","")
+    parts=[s.strip() for s in raw.split(",") if s.strip()]
+    if not parts or len(parts)>10 or any(not s.isdecimal() or int(s)<=0 for s in parts):
+        return set()
+    ids={int(s) for s in parts}
+    return ids if len(ids)==len(parts) else set()
+
+
+def _write_pilot(campaign_id):
+    """Fail closed even if someone mistakenly toggles only the write flag."""
+    _enabled()
+    if os.getenv("BAWASLU_GOVERNANCE_PILOT_MODE","").strip().lower()!="staging":
+        raise HTTPException(503,"Governance writes require explicit staging pilot mode")
+    if type(campaign_id) is not int or campaign_id not in _pilot_campaign_ids():
+        raise HTTPException(403,"Campaign is not authorized for governance pilot writes")
+
+
+def _append_governance_audit(db,p,subject_type,subject_id,action,changes):
+    """Append an audit event in the same transaction; do not commit separately."""
+    db.add(AuditEvent(
+        subject_type=subject_type,subject_id=str(subject_id),action=action,
+        actor_id=str(p.get("id","")),actor_name=str(p.get("name",""))[:255],
+        changes_json=json.dumps(changes,ensure_ascii=False,sort_keys=True),
+        occurred_at=datetime.utcnow().isoformat()+"Z",
+    ))
+
+
+def _sentiment_review_conflicts(db,campaign_id,ids):
+    """Compare latest approved governance sentiment with current officer truth."""
+    from .officer_sentiment import OfficerSentimentCorrection
+    conflicts=[]
+    for result_id in ids:
+        correction=(db.query(GovernanceFieldCorrection)
+                    .filter_by(campaign_id=campaign_id,result_id=result_id,
+                               field="sentiment",status="approved")
+                    .order_by(GovernanceFieldCorrection.revision.desc(),
+                              GovernanceFieldCorrection.id.desc()).first())
+        if correction is None:
+            continue
+        current=(db.query(OfficerSentimentCorrection)
+                 .filter_by(campaign_id=campaign_id,result_id=result_id)
+                 .order_by(OfficerSentimentCorrection.id.desc()).first())
+        if current is not None and str(current.sentiment).upper()!=str(correction.human_value).upper():
+            conflicts.append(result_id)
+    return conflicts
+
 
 def _grant(db, user, permission):
     p = profile(db, user)
@@ -46,8 +101,11 @@ def _campaign(db, p, campaign_id):
     return campaign
 
 def _source(db, p, campaign_id, result_id):
-    if not db.query(CampaignEvidence.id).filter_by(campaign_id=campaign_id, result_id=result_id).first():
-        raise HTTPException(404, "Source not linked to authorized campaign")
+    if not (db.query(CampaignEvidence.id)
+            .filter_by(campaign_id=campaign_id, result_id=result_id)
+            .filter(CampaignEvidence.match_method!="WATCHLIST_ACCOUNT")
+            .first()):
+        raise HTTPException(404,"Ordinary campaign evidence not available")
     result = db.get(SocialListeningResult, result_id)
     if not result:
         raise HTTPException(404, "Source unavailable")
@@ -131,7 +189,7 @@ class DecisionIn(BaseModel):
 
 @router.post("/information/overrides")
 def submit_override(body: CorrectionIn, user: User=Depends(current_user), db: Session=Depends(get_db)):
-    _enabled()
+    _write_pilot(body.campaign_id)
     p = _grant(db, user, "human_validation")
     _campaign(db, p, body.campaign_id)
     post = _source(db, p, body.campaign_id, body.result_id)
@@ -161,6 +219,14 @@ def submit_override(body: CorrectionIn, user: User=Depends(current_user), db: Se
         status="approved", created_at=datetime.utcnow())
     db.add(row)
     try:
+        db.flush()
+        _append_governance_audit(db,p,"GovernanceFieldCorrection",row.id,
+            "GOVERNANCE_FIELD_APPROVED",{
+                "campaign_id":body.campaign_id,"result_id":body.result_id,
+                "field":body.field,"previous_revision":previous,
+                "revision":row.revision,"new_officer_value":row.human_value,
+                "reason":row.reason,"original_source_preserved":True,
+            })
         db.commit()
         db.refresh(row)
     except IntegrityError:
@@ -172,7 +238,7 @@ def submit_override(body: CorrectionIn, user: User=Depends(current_user), db: Se
 @router.get("/information/overrides/{campaign_id}/{result_id}")
 def list_overrides(campaign_id:int, result_id:int, user:User=Depends(current_user),
                    db:Session=Depends(get_db)):
-    _enabled()
+    _read_enabled()
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     _source(db,p,campaign_id,result_id)
@@ -184,7 +250,7 @@ def list_overrides(campaign_id:int, result_id:int, user:User=Depends(current_use
 
 @router.post("/insights")
 def propose_insight(body: InsightIn, user:User=Depends(current_user), db:Session=Depends(get_db)):
-    _enabled()
+    _write_pilot(body.campaign_id)
     p=_grant(db,user,"human_validation")
     _campaign(db,p,body.campaign_id)
     # Self-asserted evidence verification is never a trustworthy approval signal.
@@ -202,7 +268,16 @@ def propose_insight(body: InsightIn, user:User=Depends(current_user), db:Session
         high_impact_reviewed=body.high_impact_reviewed,
         source_digest=digest, state="pending_approval", revision=1,
         proposer_id=user.id, created_at=datetime.utcnow())
-    db.add(row);db.commit();db.refresh(row)
+    db.add(row)
+    db.flush()
+    _append_governance_audit(db,p,"GovernanceInsight",row.id,
+        "GOVERNANCE_INSIGHT_PROPOSED",{
+            "campaign_id":body.campaign_id,"revision":row.revision,
+            "evidence_result_ids":body.evidence_result_ids,"analysis_scope":row.analysis_scope,
+            "state":"pending_approval","source_digest":digest,
+        })
+    db.commit()
+    db.refresh(row)
     return {"insight_id":row.id,"status":"pending_approval","published":False,
             "revision":row.revision}
 
@@ -214,6 +289,7 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
     row=db.query(GovernanceInsight).filter_by(id=insight_id).with_for_update().first()
     if not row:raise HTTPException(404,"Insight unavailable")
     _campaign(db,p,row.campaign_id)
+    _write_pilot(row.campaign_id)
     if row.revision!=body.expected_revision or row.state!="pending_approval":
         raise HTTPException(409,"Insight changed or already decided")
     if body.decision not in ("approve","reject"):
@@ -224,6 +300,13 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
         raise HTTPException(403,"An independent officer must approve the insight")
     ids=json.loads(row.evidence_ids_json)
     fresh=_snapshot(db,p,row.campaign_id,ids)
+    if body.decision=="approve":
+        conflicts=_sentiment_review_conflicts(db,row.campaign_id,ids)
+        if conflicts:
+            raise HTTPException(409,{
+                "review_blockers":["REVIEW_LEDGER_CONFLICT"],
+                "conflicting_source_ids":conflicts,
+            })
     candidate={"state":"approved" if body.decision=="approve" else "rejected",
         "approver_id":str(user.id),"approved_revision":str(row.revision),
         "finding_id":str(row.id),"evidence_refs":[str(x) for x in ids],
@@ -243,6 +326,13 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
     row.review_rationale=body.rationale.strip()
     row.reviewed_at=datetime.utcnow()
     row.revision+=1
+    _append_governance_audit(db,p,"GovernanceInsight",row.id,
+        "GOVERNANCE_INSIGHT_"+("APPROVED" if body.decision=="approve" else "REJECTED"),{
+            "campaign_id":row.campaign_id,"revision":row.revision,
+            "decision":body.decision,"rationale":row.review_rationale,
+            "evidence_result_ids":ids,"source_revision_current":fresh==row.source_digest,
+            "approver_independent":row.proposer_id!=user.id,
+        })
     db.commit()
     return {"insight_id":row.id,"state":row.state,
             "publication_eligible":body.decision=="approve",
@@ -251,20 +341,27 @@ def decide_insight(insight_id:int,body:DecisionIn,user:User=Depends(current_user
 @router.get("/insights")
 def list_insights(campaign_id:int,user:User=Depends(current_user),
                   db:Session=Depends(get_db)):
-    _enabled()
+    _read_enabled()
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     rows=(db.query(GovernanceInsight).filter_by(campaign_id=campaign_id)
           .order_by(GovernanceInsight.id.desc()).limit(100).all())
     items=[]
     for row in rows:
-        ids=json.loads(row.evidence_ids_json)
-        current=_snapshot(db,p,campaign_id,ids)==row.source_digest
-        result=_approved_row_gate(row,ids,current)
+        try:
+            ids=json.loads(row.evidence_ids_json)
+            current=_snapshot(db,p,campaign_id,ids)==row.source_digest
+            result=_approved_row_gate(row,ids,current)
+            blockers=list(result["review_blockers"])
+            if result["publish_allowed"] and _sentiment_review_conflicts(db,campaign_id,ids):
+                blockers.append("REVIEW_LEDGER_CONFLICT")
+        except (ValueError,TypeError,HTTPException):
+            current=False
+            blockers=["EVIDENCE_UNAVAILABLE_OR_OUT_OF_SCOPE"]
         items.append({"id":row.id,"title":row.title,"state":row.state,
                       "revision":row.revision,"sources_current":current,
-                      "publication_eligible":result["publish_allowed"],
-                      "review_blockers":result["review_blockers"]})
+                      "publication_eligible":not blockers,
+                      "review_blockers":blockers})
     return {"items":items,"legacy_command_centre_unchanged":True}
 
 
@@ -272,7 +369,7 @@ def list_insights(campaign_id:int,user:User=Depends(current_user),
 def effective_information(campaign_id:int,result_id:int,user:User=Depends(current_user),
                           db:Session=Depends(get_db)):
     """Officer-corrected field preview; legacy Inbox reads are not silently altered."""
-    _enabled()
+    _read_enabled()
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     _source(db,p,campaign_id,result_id)
@@ -294,7 +391,7 @@ def approved_command_centre(campaign_id:int,user:User=Depends(current_user),
     This endpoint does not overwrite the existing Command Centre. Any changed
     source, AI assessment or officer correction removes an insight from the feed.
     """
-    _enabled()
+    _read_enabled()
     p=_grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     rows=(db.query(GovernanceInsight).filter_by(
@@ -307,6 +404,9 @@ def approved_command_centre(campaign_id:int,user:User=Depends(current_user),
             ids=json.loads(row.evidence_ids_json)
             current=_snapshot(db,p,campaign_id,ids)==row.source_digest
             result=_approved_row_gate(row,ids,current)
+            if result["publish_allowed"] and _sentiment_review_conflicts(db,campaign_id,ids):
+                stale+=1
+                continue
         except (ValueError,TypeError,HTTPException):
             stale+=1
             continue
@@ -345,18 +445,22 @@ def governance_review_queue(campaign_id:int,limit:int=20,
                 raise ValueError("Invalid evidence references")
             source_current=_snapshot(db,p,campaign_id,ids)==row.source_digest
             verdict=_approved_row_gate(row,ids,source_current)
-            blockers=verdict["review_blockers"]
+            blockers=list(verdict["review_blockers"])
+            if source_current and _sentiment_review_conflicts(db,campaign_id,ids):
+                blockers.append("REVIEW_LEDGER_CONFLICT")
         except (ValueError,TypeError,HTTPException):
             source_current=False
             blockers=["EVIDENCE_UNAVAILABLE_OR_OUT_OF_SCOPE"]
-        action=("REVIEW_FOR_APPROVAL" if row.state=="pending_approval" and source_current
+        conflict="REVIEW_LEDGER_CONFLICT" in blockers
+        action=("RESOLVE_REVIEW_CONFLICT" if conflict
+                else "REVIEW_FOR_APPROVAL" if row.state=="pending_approval" and source_current
                 else "REASSESS_SOURCE" if not source_current
                 else "NO_ACTION")
         cases.append({
             "id":row.id,"title":row.title,"state":row.state,
             "revision":row.revision,"source_current":source_current,
             "review_blockers":blockers,"next_action":action,
-            "can_approve":bool(action=="REVIEW_FOR_APPROVAL"
+            "can_approve":bool(action=="REVIEW_FOR_APPROVAL" and not conflict
                 and has(p,"verify_evidence") and row.proposer_id!=user.id),
             "independent_reviewer_required":True,
         })
@@ -380,10 +484,12 @@ def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_
     protected=False
     if bind.dialect.name=="postgresql" and all(present.values()):
         records=db.execute(text(
-            "SELECT relname, relrowsecurity,"
-            " has_table_privilege('anon',oid,'SELECT') AS anon_read,"
-            " has_table_privilege('authenticated',oid,'SELECT') AS auth_read"
-            " FROM pg_class WHERE relname IN"
+            "SELECT c.relname, c.relrowsecurity,"
+            " has_table_privilege('anon',c.oid,'SELECT') AS anon_read,"
+            " has_table_privilege('authenticated',c.oid,'SELECT') AS auth_read"
+            " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"
+            " WHERE n.nspname='public' AND c.relkind='r'"
+            " AND c.relname IN"
             " ('governance_field_corrections','governance_insights')"
         )).mappings().all()
         access_checked=len(records)==len(expected)
@@ -392,12 +498,18 @@ def governance_readiness(user:User=Depends(current_user),db:Session=Depends(get_
             for row in records)
     writes_enabled=os.getenv("BAWASLU_GOVERNANCE_WRITES_ENABLED","").lower() in ("1","true","yes")
     reads_enabled=governance_reads_active()
+    pilot_mode=os.getenv("BAWASLU_GOVERNANCE_PILOT_MODE","").strip().lower()=="staging"
+    pilot_ids=_pilot_campaign_ids()
     return {
         "schema_tables_present":present,
         "table_access_verified":access_checked,
         "rls_and_privileges_protected":protected,
         "governance_reads_enabled":reads_enabled,
         "governance_writes_enabled":writes_enabled,
+        "strict_pilot_mode_configured":pilot_mode,
+        "allowlisted_pilot_campaign_count":len(pilot_ids),
+        "pilot_writes_ready":bool(writes_enabled and pilot_mode and pilot_ids
+                                   and all(present.values()) and protected),
         "ready_for_controlled_staging_qa":all(present.values()) and protected,
         "manual_qa_not_started":True,
         "production_promotion_authorized":False,

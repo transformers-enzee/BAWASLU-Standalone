@@ -547,12 +547,15 @@ def governance_qa_campaign_summary(campaign_id:int,user:User=Depends(current_use
     _grant(db,user,"view_intelligence")
     _campaign(db,p,campaign_id)
     cases=governance_review_queue(campaign_id=campaign_id,limit=30,user=user,db=db)
+    from .governance_information_qa import information_qa_sample
+    information=information_qa_sample(db,p,campaign_id)
     counts={"pending_approval":0,"approved":0,"rejected":0,"other":0}
     for case in cases["cases"]:
         state=case["state"]
         counts[state if state in counts else "other"]+=1
     return {
         "campaign_id":campaign_id,
+        "information_qa":information,
         "counts":counts,"sample_limited":True,"sample_limit":30,
         "cases":cases["cases"],
         "awaiting_review":cases["awaiting_review"],

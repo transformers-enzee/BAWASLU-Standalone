@@ -3,6 +3,7 @@ import {Link,useOutletContext} from 'react-router-dom';
 import {base44} from '@/api/base44Client';
 import {useLanguage} from '@/lib/LanguageContext';
 
+const infoActions={VERIFY_UNASSESSED:'Unassessed: verify election relevance',REVIEW_UNCERTAIN:'Uncertain: officer relevance check',SPOT_CHECK_EXCLUDED:'Excluded: sample possible false negative',REVIEW_UNKNOWN_LABEL:'Unknown label: investigate',CHECK_RELEVANT_EVIDENCE:'Relevant: spot-check assessment'};
 const btn='rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 const label={REVIEW_FOR_APPROVAL:'Needs independent officer review',REASSESS_SOURCE:'Source changed: reassessment needed',RESOLVE_REVIEW_CONFLICT:'Conflicting officer corrections',NO_ACTION:'No action'};
 export default function GovernanceReview(){
@@ -65,7 +66,25 @@ export default function GovernanceReview(){
       <div><h2 className="font-semibold">{T('Review cases by campaign','Kasus tinjauan per kampanye')}</h2><p className="text-xs text-slate-500">{T('Only campaigns within your authorized geographic scope are listed.','Hanya kampanye dalam wilayah kewenangan Anda yang ditampilkan.')}</p></div>
       {campaigns.length>0?<label className="block text-sm font-medium">{T('Select campaign','Pilih kampanye')}<select className="mt-1 w-full border rounded-lg p-2 bg-white" value={selected} onChange={e=>setSelected(e.target.value)}>{campaigns.map(c=><option key={c.id} value={c.id}>{c.name} · {c.province||T('Nationwide','Nasional')}</option>)}</select></label>:<p className="text-sm text-slate-600">{T('No authorized campaigns were found.','Tidak ada kampanye yang dapat diakses.')}</p>}
       {truncated&&<p className="text-sm text-amber-800">{T('Showing a bounded sample of campaigns.','Menampilkan sebagian kampanye.')}</p>}
-      {report&&<><div className="grid sm:grid-cols-3 gap-3 text-sm">
+      {report&&<><section className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3" data-testid="governance-information-qa">
+        <div><h3 className="font-semibold text-slate-900">{T('Gate 1 · Information quality','Gate 1 · Kualitas informasi')}</h3>
+          <p className="text-xs text-slate-600">{T('Recent authorized campaign evidence sample, including excluded and unassessed posts. These are sample counts—not campaign totals.','Sampel bukti kampanye terbaru yang diizinkan, termasuk unggahan yang dikecualikan dan belum dinilai. Angka ini adalah jumlah sampel, bukan total kampanye.')}</p></div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div><span className="text-slate-500">{T('Sources checked','Sumber diperiksa')}</span><strong className="block text-xl">{report.information_qa?.scanned_count||0}</strong></div>
+          <div><span className="text-slate-500">{T('Unassessed','Belum dinilai')}</span><strong className="block text-xl">{report.information_qa?.counts?.unassessed||0}</strong></div>
+          <div><span className="text-slate-500">{T('Excluded / uncertain','Dikecualikan / ragu')}</span><strong className="block text-xl">{report.information_qa?.counts?.excluded_or_uncertain||0}</strong></div>
+          <div><span className="text-slate-500">{T('Relevant','Relevan')}</span><strong className="block text-xl">{report.information_qa?.counts?.relevant||0}</strong></div>
+        </div>
+        {(report.information_qa?.items||[]).length>0?<div className="space-y-2">
+          {(report.information_qa?.items||[]).map(item=><div key={item.result_id} className="rounded-lg border bg-white px-3 py-2 text-xs space-y-1">
+            <div className="flex flex-wrap items-center justify-between gap-2"><strong>{item.platform||T('Social post','Unggahan sosial')} · #{item.result_id}</strong>
+              <Link className="font-semibold text-[#801b24] underline" to={'/inbox?campaign_id='+encodeURIComponent(item.campaign_id)+'&result_id='+encodeURIComponent(item.result_id)}>{T('Review in Inbox','Periksa di Inbox')}</Link></div>
+            <div>{infoActions[item.action]||item.action}</div>
+            <p className="text-slate-600">{T('AI relevance','Relevansi AI')}: {item.relevance} · {T('Sentiment basis','Dasar sentimen')}: {item.sentiment_basis} · {T('Officer review','Tinjauan petugas')}: {item.officer_review_decision||T('Not recorded','Belum tercatat')}</p>
+          </div>)}
+        </div>:<p className="text-xs text-slate-600">{T('No scoped campaign evidence found in the sample.','Tidak ditemukan bukti kampanye dalam sampel sesuai kewenangan.')}</p>}
+        <p className="text-xs text-slate-500">{T('Read-only · recent links only · watchlist-only records excluded · no paid AI calls.','Hanya-baca · hanya tautan terbaru · akun watchlist saja dikecualikan · tanpa panggilan AI berbayar.')}</p>
+      </section><div className="grid sm:grid-cols-3 gap-3 text-sm">
         <div><p className="text-slate-500">{T('Awaiting review','Menunggu tinjauan')}</p><p className="text-2xl font-semibold">{report.awaiting_review}</p></div>
         <div><p className="text-slate-500">{T('Evidence changed','Bukti berubah')}</p><p className="text-2xl font-semibold">{report.needs_reassessment}</p></div>
         <div><p className="text-slate-500">{T('Correction conflicts','Konflik koreksi')}</p><p className="text-2xl font-semibold">{report.requires_conflict_resolution}</p></div>

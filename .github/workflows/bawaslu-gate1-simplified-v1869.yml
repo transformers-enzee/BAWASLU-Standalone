@@ -1,4 +1,4 @@
-name: BAWASLU v187.6 evidence-aware Gate 1 QA
+name: BAWASLU v187.7 evidence-aware Gate 1 QA
 on:
   push:
     branches:

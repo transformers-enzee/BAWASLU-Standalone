@@ -443,7 +443,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
                 <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{original}</pre>
                 <p className="font-semibold mt-2">{T('Current effective','Nilai efektif')}</p>
                 <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{choice}</pre>
-              </details>
+              </details>}
               <p className="text-slate-500">{T('Value basis','Dasar nilai')}: {isLegacy?'Saved AI / officer correction':fields[field]?.basis||'Original saved'} · {fields[field]?.verification||'Unverified'}</p>
             </div>
             <label className="text-xs font-semibold block">{T('Correct value','Nilai yang benar')}

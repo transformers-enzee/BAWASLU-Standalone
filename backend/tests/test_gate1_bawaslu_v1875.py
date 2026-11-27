@@ -43,7 +43,9 @@ def test_allegation_requires_contextual_fields_and_never_guesses_a_value():
             "published_at":field(""),
             "evidence_quality":field("")}
     tasks=missing_tasks(fields,relevance="RELEVANT",sentiment="NEUTRAL")
-    assert {"incident_jurisdiction","incident_chronology","published_at","evidence_quality"} <= {x["field"] for x in tasks}
+    # A potential allegation alone does not establish an incident location,
+    # exact chronology, or evidence-quality label requiring officer entry.
+    assert tasks == []
     assert all(x["suggested_value"] is None for x in tasks)
     assert all(x["status"]=="NEEDS_OFFICER_VERIFICATION" for x in tasks)
     assert not {"candidate_names","engagement_shares","transcript"} & {x["field"] for x in tasks}

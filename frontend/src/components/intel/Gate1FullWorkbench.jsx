@@ -45,6 +45,59 @@ const READABLE={
   engagement_views:'Views',observed_handle:'Account handle',officer_notes:'Officer notes'
 };
 const pretty=(key)=>READABLE[key]||String(key||'').replaceAll('_',' ').replace(/\b\w/g, c=>c.toUpperCase());
+// Render nested saved signals as readable summaries; retain raw records in audit details.
+const parseSaved=(raw)=>{
+  if(Array.isArray(raw)||(raw&&typeof raw==='object'))return raw;
+  const s=String(raw??'').trim();
+  if(!s.startsWith('[')&&!s.startsWith('{'))return s;
+  try{return JSON.parse(s)}catch{return s}
+};
+const words=(v)=>{const s=String(v??'').replaceAll('_',' ').trim();return /^[A-Z0-9 -]+$/.test(s)?s.toLowerCase().replace(/\b\w/g,x=>x.toUpperCase()):s};
+const humanValue=(field,raw,max=0)=>{
+  const decoded=parseSaved(raw);
+  let output='';
+  const labelFrom=(item)=>{
+    if(typeof item==='string'||typeof item==='number')return words(item);
+    if(!item||typeof item!=='object')return '';
+    return words(item.category_name||item.name||item.candidate_name||item.candidate||
+      item.party_name||item.topic||item.label||item.title||item.value||item.summary||'');
+  };
+  if(field==='potential_issue_categories'&&Array.isArray(decoded)){
+    output=decoded.map(item=>{
+      if(typeof item!=='object'||!item)return labelFrom(item);
+      const parts=[labelFrom(item)||'Possible issue'];
+      if(item.signal_type)parts.push(words(item.signal_type));
+      if(item.time_context)parts.push('Time: '+words(item.time_context));
+      if(item.requires_human_verification===true)parts.push('Unverified — human check required');
+      return parts.join(' · ');
+    }).filter(Boolean).join('; ');
+  }else if(Array.isArray(decoded)){
+    output=decoded.map(labelFrom).filter(Boolean).join(', ');
+  }else if(decoded&&typeof decoded==='object'){
+    output=labelFrom(decoded)||'Structured source details (expand raw record)';
+  }else{
+    output=String(decoded??'').trim();
+  }
+  if(!output)return 'Not identified';
+  return max&&output.length>max?output.slice(0,max-1)+'…':output;
+};
+const evidenceExcerpt=(raw)=>{
+  const parsed=parseSaved(raw);
+  const items=Array.isArray(parsed)?parsed:[parsed];
+  const item=items.find(x=>x&&typeof x==='object'&&typeof x.evidence_quote==='string');
+  return item?item.evidence_quote.slice(0,280):'';
+};
+const isStructured=(v)=>{const s=String(v??'').trim();return s.startsWith('[')||s.startsWith('{')};
+const fieldHint=(field)=>({
+  incident_jurisdiction:'Province, regency or city of the alleged event — not the author profile location',
+  incident_chronology:'Event chronology supported by the source; do not guess an exact date',
+  potential_issue_categories:'Correct the preliminary issue category or allegation description — not a legal finding',
+  candidate_names:'People named in the source; a mention does not prove candidacy or involvement',
+  political_parties:'Political parties explicitly connected to the available evidence',
+  narrative:'Correct the main narrative shown in the evidence',
+  geographic_context:'Describe geographically relevant evidence; avoid inferring incident location',
+  review_priority:'Describe why this source needs attention or follow-up',
+})[field]||'Enter a supported correction; the original is preserved';
 const validUrl=(v)=>{try{const u=new URL(v);return ['https:','http:'].includes(u.protocol)&&Boolean(u.hostname)}catch{return false}};
 const usable=(v)=>{const s=String(v??'').trim();return Boolean(s)&&!['[]','{}','null','UNKNOWN','UNCLASSIFIED'].includes(s.toUpperCase())};
 const autoFieldReason=(field)=>'Automatically generated audit note: officer proposed changing '+pretty(field)+
@@ -108,7 +161,18 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     key==='sentiment'?String(detail?.ai_sentiment||''):
     String(fields[key]?.original??'');
   const groupSummary=(group)=>group.fields.map(k=>usable(effectiveValue(k))?
-    pretty(k)+': '+effectiveValue(k).slice(0,70):pretty(k)+': not identified').join(' · ');
+    pretty(k)+': '+humanValue(k,effectiveValue(k),95):
+    pretty(k)+': '+(k==='incident_jurisdiction'?'not established': 'not identified')).join(' · ');
+  const groupState=(id)=>view?.review_areas?.find(x=>x.id===id)?.state||'';
+  const stateLabel=(state)=>({
+    AVAILABLE:T('Available','Tersedia'),
+    NEEDS_COMPLETION:T('Needs completion','Perlu dilengkapi'),
+    NOT_ESTABLISHED:T('Not established','Belum diketahui'),
+    NOT_IDENTIFIED:T('Not identified (not necessarily missing)','Tidak teridentifikasi (belum tentu hilang)'),
+    CONTEXT_ONLY:T('Historical context only','Hanya konteks historis'),
+    NOT_ASSESSED:T('Not assessed; no automatic finding','Belum dinilai; bukan temuan otomatis'),
+  })[state]||'';
+
   const reportValue=errorField?String(fields[errorField]?.effective??''):'';
   const important=HIGH_IMPACT.has(field)||reviewLane==='source'||field==='incident_jurisdiction'||field==='incident_chronology';
   const choice=effectiveValue(field);
@@ -333,6 +397,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
                 onClick={()=>chooseGroup(group)} className={'rounded-lg border p-3 text-left text-xs space-y-1 '+(selectedGroup===group.id?'border-[#801b24] bg-red-50':'border-slate-200')}>
                 <span className="block font-semibold">{T(group.en,group.idLabel)}</span>
                 <span className="block text-slate-600 break-words">{groupSummary(group)}</span>
+                  {stateLabel(groupState(group.id))&&<span className="block text-slate-500">{stateLabel(groupState(group.id))}</span>}
               </button>)}
             </div>
             <details className="text-xs rounded-md border p-2" data-testid="gate1-other-review-areas">
@@ -343,6 +408,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
                   onClick={()=>chooseGroup(group)} className={'rounded-lg border p-3 text-left space-y-1 '+(selectedGroup===group.id?'border-[#801b24] bg-red-50':'border-slate-200')}>
                   <span className="block font-semibold">{T(group.en,group.idLabel)}</span>
                   <span className="block text-slate-600 break-words">{groupSummary(group)}</span>
+                  {stateLabel(groupState(group.id))&&<span className="block text-slate-500">{stateLabel(groupState(group.id))}</span>}
                 </button>)}
               </div>
             </details>
@@ -365,8 +431,19 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           </div>}
           {field&&<div className="space-y-2" data-testid="gate1-quick-editor">
             <div className="rounded-md bg-slate-50 p-2 text-xs space-y-1">
-              <p className="text-slate-500">{T('Original provider / AI value','Nilai sumber / AI asli')}: <strong className="break-words whitespace-pre-wrap">{usable(original)?original:T('Not available','Tidak tersedia')}</strong></p>
-              <p data-testid="gate1-current-effective-value">{T('Current effective value','Nilai efektif saat ini')}: <strong className="break-words whitespace-pre-wrap">{usable(choice)?choice:T('Not identified','Tidak teridentifikasi')}</strong></p>
+              <p className="text-slate-500">{T('Original provider / AI value','Nilai sumber / AI asli')}: <strong className="break-words whitespace-pre-wrap">{usable(original)?humanValue(field,original):T('Not available','Tidak tersedia')}</strong></p>
+              <p data-testid="gate1-current-effective-value">{T('Current effective value','Nilai efektif saat ini')}: <strong className="break-words whitespace-pre-wrap">{usable(choice)?humanValue(field,choice):T('Not identified','Tidak teridentifikasi')}</strong></p>
+              {field==='potential_issue_categories'&&<p className="text-amber-900">{T('Preliminary reported issue — not a confirmed electoral violation.','Isu yang dilaporkan bersifat awal — bukan pelanggaran pemilu yang terbukti.')}</p>}
+              {field==='candidate_names'&&<p className="text-slate-500">{T('A name appearing in a post does not confirm candidate status or involvement.','Nama yang disebut tidak membuktikan status kandidat atau keterlibatan.')}</p>}
+              {field==='incident_jurisdiction'&&<p className="text-slate-500">{T('Incident jurisdiction must be supported by event evidence, not an account location.','Wilayah kejadian harus didukung bukti peristiwa, bukan lokasi akun.')}</p>}
+              {field==='potential_issue_categories'&&evidenceExcerpt(choice)&&<details className="text-xs"><summary className="cursor-pointer">{T('Unverified source excerpt','Kutipan sumber belum terverifikasi')}</summary><p className="whitespace-pre-wrap break-words pt-1">{evidenceExcerpt(choice)}</p></details>}
+              {(isStructured(original)||isStructured(choice))&&<details className="text-xs" data-testid="gate1-raw-structured-evidence">
+                <summary className="cursor-pointer">{T('View full structured source values (audit)','Lihat nilai sumber terstruktur lengkap (audit)')}</summary>
+                <p className="font-semibold mt-2">{T('Original','Asli')}</p>
+                <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{original}</pre>
+                <p className="font-semibold mt-2">{T('Current effective','Nilai efektif')}</p>
+                <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{choice}</pre>
+              </details>
               <p className="text-slate-500">{T('Value basis','Dasar nilai')}: {isLegacy?'Saved AI / officer correction':fields[field]?.basis||'Original saved'} · {fields[field]?.verification||'Unverified'}</p>
             </div>
             <label className="text-xs font-semibold block">{T('Correct value','Nilai yang benar')}
@@ -375,9 +452,16 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
                 <option value="">{T('Select corrected value','Pilih nilai koreksi')}</option>
                 {CLASSIFICATIONS[field].map(x=><option key={x} value={x}>{pretty(x)}</option>)}
               </select>:
+              (field==='published_at'||field==='incident_date')?
+              <input type="date" className={INPUT} value={value} data-testid="gate1-quick-value"
+                onChange={e=>{setValue(e.target.value);setNoValue(false)}} disabled={noValue}/>:
+              field==='incident_jurisdiction'?
+              <input type="text" className={INPUT} value={value} data-testid="gate1-quick-value"
+                onChange={e=>{setValue(e.target.value);setNoValue(false)}} disabled={noValue}
+                placeholder={T('Province / regency / city of the incident','Provinsi / kabupaten / kota kejadian')}/>:
               <textarea className={INPUT} rows={LONG.has(field)?3:2} value={value}
                 onChange={e=>{setValue(e.target.value);setNoValue(false)}} disabled={noValue}
-                placeholder={T('Enter the corrected or missing information','Isi informasi yang benar atau hilang')}
+                placeholder={fieldHint(field)}
                 data-testid="gate1-quick-value"/>}
             </label>
             {!CLASSIFICATIONS[field]&&<label className="flex items-center gap-2 text-xs">
@@ -594,16 +678,28 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
             </div>
             {selectedMissing&&field&&<div className="rounded-lg border bg-slate-50 p-3 space-y-2" data-testid="gate1-complete-missing-field">
               <h5 className="font-semibold text-sm">{T('Complete','Lengkapi')}: {pretty(field)}</h5>
-              <p className="text-xs">{T('Original saved','Nilai asli tersimpan')}: <strong>{usable(original)?original:T('Not provided','Tidak tersedia')}</strong></p>
-              <p className="text-xs">{T('Current effective','Nilai efektif saat ini')}: <strong>{usable(choice)?choice:T('Missing','Hilang')}</strong></p>
+              <p className="text-xs">{T('Original saved','Nilai asli tersimpan')}: <strong>{usable(original)?humanValue(field,original):T('Not provided','Tidak tersedia')}</strong></p>
+              <p className="text-xs">{T('Current effective','Nilai efektif saat ini')}: <strong>{usable(choice)?humanValue(field,choice):T('Not established','Belum ditentukan')}</strong></p>
+              {(isStructured(original)||isStructured(choice))&&<details className="text-xs" data-testid="gate1-missing-raw-values">
+                <summary className="cursor-pointer">{T('View raw values','Lihat nilai mentah')}</summary>
+                <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{original}</pre>
+              </details>
               <label className="block text-xs font-semibold">{T('Provide verified information if available','Isi informasi berdasarkan bukti jika tersedia')}
                 {CLASSIFICATIONS[field]?<select className={INPUT} data-testid="gate1-missing-value"
                   value={value} onChange={e=>{setValue(e.target.value);setNoValue(false)}}>
                   <option value="">{T('Choose value','Pilih nilai')}</option>
                   {CLASSIFICATIONS[field].map(x=><option key={x} value={x}>{pretty(x)}</option>)}
-                </select>:<textarea data-testid="gate1-missing-value" className={INPUT} rows={2}
+                </select>:(field==='published_at'||field==='incident_date')?
+                <input type="date" data-testid="gate1-missing-value" className={INPUT}
+                  value={value} disabled={noValue} onChange={e=>{setValue(e.target.value);setNoValue(false)}}/>:
+                field==='incident_jurisdiction'?
+                <input type="text" data-testid="gate1-missing-value" className={INPUT}
                   value={value} disabled={noValue} onChange={e=>{setValue(e.target.value);setNoValue(false)}}
-                  placeholder={T('Missing information','Informasi yang hilang')}/>}
+                  placeholder={T('Incident province / regency / city (only if evidence supports it)',
+                    'Provinsi / kabupaten / kota kejadian (hanya jika ada bukti)')}/>:
+                <textarea data-testid="gate1-missing-value" className={INPUT} rows={2}
+                  value={value} disabled={noValue} onChange={e=>{setValue(e.target.value);setNoValue(false)}}
+                  placeholder={fieldHint(field)}/>}
               </label>
               {!isLegacy&&<label className="flex gap-2 text-xs items-center">
                 <input type="checkbox" checked={noValue} onChange={e=>{setNoValue(e.target.checked);setValue('')}}/>
@@ -634,8 +730,8 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
                 'Nilai yang diisi petugas dicatat dalam audit; sumber asli tetap disimpan. Perubahan penting mungkin memerlukan pemeriksaan independen.')}</p>
             </div>}
           </>:<p className="text-xs text-slate-600" data-testid="gate1-no-material-missing">
-            {T('No unresolved essential fields identified. Missing optional information is not an error.',
-              'Tidak ditemukan bidang penting yang belum lengkap. Informasi opsional yang kosong bukan kesalahan.')}
+            {T('No unresolved material gaps identified by saved-source checks. This does not mean allegations are verified.',
+              'Tidak ada kekurangan penting yang belum terselesaikan menurut pemeriksaan sumber tersimpan. Bukan berarti tuduhan sudah terverifikasi.')}
           </p>}
         </div>
       </>}

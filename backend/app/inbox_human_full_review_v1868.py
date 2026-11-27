@@ -319,7 +319,7 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
     return {"campaign_id":str(campaign_id),"result_id":str(result_id),
             "field_groups":{k:list(v) for k,v in FIELD_GROUPS.items()},
             "quality_hints":quality_hints(p["fields"],source),
-            "review_areas":review_framework(review_values),
+            "review_areas":review_framework(review_values,tasks),
             "missing_review_tasks":tasks,
             "review_summary":{"framework_dimensions":8,"attention_items":len(tasks),
                               "attention_basis":"saved-source-and-assessment-checks"},

@@ -1,4 +1,4 @@
-name: BAWASLU v187.5 contextual information-completion Gate 1 QA
+name: BAWASLU v187.6 evidence-aware Gate 1 QA
 on:
   push:
     branches:
@@ -45,4 +45,4 @@ jobs:
           BAWASLU_GATE1_QA_VIEWER_PASSWORD: "CI-Dummy-Viewer-Pass-1869-Only!"
           OPENAI_API_KEY: ""
           SOCIALCRAWL_API_KEY: ""
-        run: pytest -q tests/test_gate1_simplified_v1869.py tests/test_gate1_full_workbench_v1868.py tests/test_gate1_contextual_v1871.py tests/test_gate1_focused_v1874.py tests/test_gate1_bawaslu_v1875.py
+        run: pytest -q tests/test_gate1_simplified_v1869.py tests/test_gate1_full_workbench_v1868.py tests/test_gate1_contextual_v1871.py tests/test_gate1_focused_v1874.py tests/test_gate1_bawaslu_v1875.py tests/test_gate1_relevance_v1876.py

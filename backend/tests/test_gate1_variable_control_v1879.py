@@ -1,6 +1,6 @@
 """BAWASLU v187.9 - officer variable control UX and immutable QA contracts.
 
-Tests examine the actual pilot-mounted component, not the retained legacy
+Tests examine the actual pilot-mounted component, and the retained v1879 legacy
 workbench, and never write to a connected officer database.
 """
 from pathlib import Path
@@ -17,8 +17,8 @@ PARENT_PATH = ROOT / "frontend/src/components/intel/InboxHumanReview.jsx"
 
 def test_selected_pilot_mounts_direct_field_editor_not_decision_workbench():
     parent = PARENT_PATH.read_text()
-    assert "import Gate1VariableControlV1879 from './Gate1VariableControlV1879'" in parent
-    assert "<Gate1VariableControlV1879 campaignId={campaignId} detail={detail}" in parent
+    assert "import Gate1OfficerValuesV1880 from './Gate1OfficerValuesV1880'" in parent
+    assert "<Gate1OfficerValuesV1880 campaignId={campaignId} detail={detail}" in parent
     assert "(String(campaignId)==='9'&&detail.qa_audit_only)" in parent
     assert "gate1-extended-assessment-details" in parent
     assert "open={!realQaSelected}" in parent

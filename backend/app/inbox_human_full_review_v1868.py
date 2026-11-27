@@ -37,7 +37,7 @@ FIELD_GROUPS = {
         "engagement_likes", "engagement_comments", "engagement_shares", "engagement_views",
     ),
     "assessment": (
-        "candidate_names", "political_parties", "organizations", "topic_labels",
+        "information_type", "candidate_names", "political_parties", "organizations", "topic_labels",
         "public_concerns", "narrative", "potential_issue_categories",
         "incident_jurisdiction", "incident_chronology", "review_priority",
         "relevance_explanation", "sentiment_explanation", "geographic_context",
@@ -48,10 +48,10 @@ FIELD_GROUPS = {
     ),
 }
 FIELDS = frozenset(v for names in FIELD_GROUPS.values() for v in names)
-# Six officer review areas. Original provider fields and technical measurements
-# remain visible, but are not routine editable assessment variables.
+# Focused officer assessment variables; technical and source data remain available
+# for evidence inspection and authorized audited exceptions.
 ASSESSMENT_FIELDS = frozenset((
-    "relevance", "sentiment", "candidate_names", "political_parties",
+    "relevance", "sentiment", "information_type", "candidate_names", "political_parties",
     "topic_labels", "narrative", "potential_issue_categories", "evidence_quality",
     "organizations", "incident_jurisdiction", "incident_chronology",
     "public_concerns", "geographic_context", "verification_gaps", "review_priority",
@@ -69,7 +69,7 @@ COMPLETABLE_FIELDS = frozenset(("canonical_url","published_at","text_content",
 SENSITIVE = frozenset((
     "author_name", "observed_handle", "canonical_url", "text_content", "transcript",
     "translation", "candidate_names", "political_parties",
-    "organizations", "potential_issue_categories", "country", "province", "city",
+    "organizations", "potential_issue_categories", "information_type", "country", "province", "city",
     "incident_date", "geographic_context", "incident_jurisdiction", "incident_chronology",
 ))
 LONG_FIELDS = frozenset((
@@ -81,6 +81,10 @@ DATES = frozenset(("published_at","incident_date"))
 URL_FIELDS = frozenset(("canonical_url",))
 QUALITY_VALUES = frozenset(("COMPLETE","PARTIAL","MISSING","CONFLICTING","UNVERIFIABLE","DUPLICATE"))
 PROVIDER_VALUES = frozenset(("AVAILABLE","PARTIAL","API_FAILED","DELETED","ACCESS_RESTRICTED","NOT_RETURNED"))
+INFORMATION_TYPES = frozenset((
+    "POTENTIAL_ELECTORAL_VIOLATION", "CANDIDATE_ACTIVITY", "ELECTION_ADMINISTRATION",
+    "PUBLIC_CONCERN", "ELECTORAL_DISPUTE", "GENERAL_ELECTION_INTELLIGENCE", "OTHER",
+))
 VERIFICATIONS = frozenset(("UNVERIFIED","OFFICER_SUPPLIED","SOURCE_CONFIRMED"))
 REASONS = frozenset(("CORRECTED","SUPPLEMENTED","MISSING_PROVIDER","UNAVAILABLE"))
 MAX_BATCH = 15
@@ -165,6 +169,8 @@ def _value(field, raw):
     elif field in DATES and v:
         if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9:.-]{5,24}(Z|[+-][0-9:]{5})?)?", v):
             raise HTTPException(422, "Date/time must use ISO-like format")
+    elif field == "information_type" and v not in INFORMATION_TYPES:
+        raise HTTPException(422, "Unsupported information type")
     elif field == "evidence_quality" and v not in QUALITY_VALUES:
         raise HTTPException(422, "Unsupported evidence quality")
     elif field == "provider_fetch_status" and v not in PROVIDER_VALUES:

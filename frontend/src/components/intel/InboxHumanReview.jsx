@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
 import Gate1FullWorkbench from './Gate1FullWorkbench';
-import Gate1VariableControlV1879 from './Gate1VariableControlV1879';
+import Gate1OfficerValuesV1880 from './Gate1OfficerValuesV1880';
 import {useLanguage} from '@/lib/LanguageContext';
 
 const copy=(data)=>String(data||'');
@@ -418,7 +418,7 @@ export default function InboxHumanReview(){
             <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
           </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>)}
           {(String(campaignId)==='9'&&detail.qa_audit_only)?
-            <Gate1VariableControlV1879 campaignId={campaignId} detail={detail}
+            <Gate1OfficerValuesV1880 campaignId={campaignId} detail={detail}
               onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>:
             <Gate1FullWorkbench campaignId={campaignId} detail={detail}
               onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>}

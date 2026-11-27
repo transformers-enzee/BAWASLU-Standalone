@@ -26,14 +26,17 @@ export default function InboxHumanReview(){
   const [sample,setSample]=useState(null);
   const [category,setCategory]=useState('all');
   const [reviewStatus,setReviewStatus]=useState('all');
+  const [focus,setFocus]=useState('attention');
   const currentCampaign=useRef(initialCampaign);
   const currentSelectedId=useRef(initialSource);
   const currentCategory=useRef('all');
   const currentReviewStatus=useRef('all');
+  const currentFocus=useRef('attention');
   currentCampaign.current=campaignId;
   currentSelectedId.current=selectedId;
   currentCategory.current=category;
   currentReviewStatus.current=reviewStatus;
+  currentFocus.current=focus;
   const [nextCursor,setNextCursor]=useState(null);
   const [hasMore,setHasMore]=useState(false);
   const [loadingMore,setLoadingMore]=useState(false);
@@ -81,21 +84,21 @@ export default function InboxHumanReview(){
     let active=true;
     setSample(null);setNextCursor(null);setHasMore(false);
     setSampleLoading(true);setError('');
-    base44.inboxHumanReview.queue(campaignId,{category,reviewStatus}).then(r=>{
+    base44.inboxHumanReview.queue(campaignId,{category,reviewStatus,focus}).then(r=>{
       if(!active)return;
       setSample(r);setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
     }).catch(e=>{if(active){setSample(null);setError(e.message||'Review queue unavailable')}})
       .finally(()=>{if(active)setSampleLoading(false)});
     return ()=>{active=false};
-  },[campaignId,category,reviewStatus,version]);
+  },[campaignId,category,reviewStatus,focus,version]);
   async function loadMore(){
     if(!campaignId||!hasMore||!nextCursor||loadingMore||sampleLoading)return;
     setLoadingMore(true);setError('');
     try{
-      const cursor=nextCursor, activeCampaign=campaignId, activeCategory=category, activeStatus=reviewStatus;
-      const r=await base44.inboxHumanReview.queue(activeCampaign,{category:activeCategory,reviewStatus:activeStatus,cursor});
+      const cursor=nextCursor, activeCampaign=campaignId, activeCategory=category, activeStatus=reviewStatus, activeFocus=focus;
+      const r=await base44.inboxHumanReview.queue(activeCampaign,{category:activeCategory,reviewStatus:activeStatus,focus:activeFocus,cursor});
       // Navigation during an in-flight request must not append another campaign's records.
-      if(activeCampaign!==currentCampaign.current||activeCategory!==currentCategory.current||activeStatus!==currentReviewStatus.current)return;
+      if(activeCampaign!==currentCampaign.current||activeCategory!==currentCategory.current||activeStatus!==currentReviewStatus.current||activeFocus!==currentFocus.current)return;
       setSample(previous=>({...r,items:[...(previous?.items||[]),...(r.items||[])]}));
       setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
     }catch(e){setError(e.message||'Unable to load more sources')}
@@ -111,6 +114,12 @@ export default function InboxHumanReview(){
       .finally(()=>{if(active)setDetailLoading(false)});
     return ()=>{active=false};
   },[campaignId,selectedId,version]);
+  function changeFocus(next){
+    if(next===focus)return;
+    currentFocus.current=next;
+    currentCategory.current='all';currentReviewStatus.current='all';
+    setFocus(next);setCategory('all');setReviewStatus('all');
+  }
   function selectSource(id){
     currentSelectedId.current=String(id);
     setSelectedId(String(id));
@@ -299,6 +308,30 @@ export default function InboxHumanReview(){
           <p>{T('Pilot eligibility','Kelayakan pilot')}: <strong>{pilotStatus.ready_for_write_pilot?'ELIGIBLE FOR QA':'NOT READY · SAFE BLOCK'}</strong></p>
         </div>}
       </details>}
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label={T('Information queue view','Tampilan antrean informasi')}>
+        <button type="button" data-testid="gate1-focus-attention" aria-pressed={focus==='attention'}
+          onClick={()=>changeFocus('attention')}
+          className={'rounded-lg border py-2.5 px-3 text-sm font-semibold '+(focus==='attention'?
+            'border-[#801b24] bg-[#fff2f2] text-[#801b24]':'border-slate-200 bg-white text-slate-600')}>
+          {T('Needs Attention','Perlu Perhatian')}
+        </button>
+        <button type="button" data-testid="gate1-focus-all" aria-pressed={focus==='all'}
+          onClick={()=>changeFocus('all')}
+          className={'rounded-lg border py-2.5 px-3 text-sm font-semibold '+(focus==='all'?
+            'border-[#801b24] bg-[#fff2f2] text-[#801b24]':'border-slate-200 bg-white text-slate-600')}>
+          {T('All Information','Semua Informasi')}
+        </button>
+      </div>
+      <p className="text-xs text-slate-600" data-testid="gate1-focus-explainer">
+        {focus==='attention'?T('Only material uncertainty, evidence gaps, revalidation and selected quality samples. Other sources remain in All Information.',
+          'Hanya ketidakpastian penting, kekurangan bukti, validasi ulang dan sampel mutu terpilih. Data lainnya ada di Semua Informasi.'):
+          T('All eligible campaign evidence is available for inspection and authorized variable correction, even without AI flags.',
+            'Semua bukti kampanye yang berhak dapat diperiksa dan diperbaiki oleh petugas berwenang meskipun tanpa tanda AI.')}
+      </p>
+      <p className="text-xs text-slate-500">{T('Showing records in this view (loaded)','Data yang ditampilkan (dimuat)')}: <strong>{sample?.items?.length||0}</strong>{sample?.has_more?' · '+T('More available','Masih ada'):''}</p>
+      <details className="rounded-lg border border-slate-200 p-3 text-sm" data-testid="gate1-advanced-filters">
+        <summary className="cursor-pointer font-medium">{T('More filters & QA statistics','Filter & statistik QA lainnya')}</summary>
+      <div className="mt-3 space-y-3">
       <label className="block text-sm font-semibold">{T('Review category','Kategori tinjauan')}
         <select data-testid="gate1-category-filter" className="intel-input mt-1 w-full" value={category} onChange={e=>{currentCategory.current=e.target.value;setCategory(e.target.value)}}>
           <option value="all">{T('All ordinary evidence','Semua bukti biasa')}</option>
@@ -348,20 +381,26 @@ export default function InboxHumanReview(){
           <p className="text-xs text-slate-500">{T('This queue does not export data or trigger AI training.','Antrean ini tidak mengekspor data atau melatih AI.')}</p>
         </div>}
       </div>
+      </div>
+      </details>
     </section>
     {sampleLoading&&<p role="status">{T('Loading review queue…','Memuat antrean tinjauan…')}</p>}
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="intel-card p-4 space-y-2" aria-label="Human Review source queue">
-        <h3 className="font-bold">{T('Needs Human Review','Perlu Tinjauan Petugas')}</h3>
+        <h3 className="font-bold">{focus==='attention'?T('Needs Attention','Perlu Perhatian'):T('All Information','Semua Informasi')}</h3>
         {(sample?.items||[]).map(item=><button type="button" key={item.result_id}
           onClick={()=>selectSource(item.result_id)}
           className={'block w-full rounded-lg border p-3 text-left text-sm hover:bg-slate-50 '+(String(selectedId)===String(item.result_id)?'border-[#801b24] bg-red-50':'border-slate-200')}>
           <span className="font-semibold">{item.platform||'Social'} · #{item.result_id}</span>
-          <span className="block text-slate-600">{actionLabels[item.action]||item.action}</span>
+          {focus==='attention'&&item.attention_reasons?.length>0?
+            <span className="block text-slate-700">{item.attention_reasons.map(x=>x.label).join(' · ')}</span>:
+            <span className="block text-slate-600">{actionLabels[item.action]||item.action}</span>}
           <span className="block text-xs text-slate-500">{T('Current relevance','Relevansi saat ini')}: {item.relevance} ({item.relevance_basis||'SAVED_ASSESSMENT'})</span>
           {item.information_review_status&&<span className="block text-xs text-slate-500">{T('Information QA','QA informasi')}: {item.information_review_status}</span>}
         </button>)}
-        {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter. If all categories are empty, click Check staging pilot readiness to inspect linked-source counts.','Tidak ada bukti kampanye biasa yang cocok dengan filter ini. Jika semua kategori kosong, pilih Periksa kesiapan uji coba staging untuk melihat jumlah sumber tertaut.')}</p>}
+        {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{focus==='attention'?T('No material exceptions found in the searched records. Use All Information to inspect any eligible post.',
+  'Tidak ada masalah penting pada data yang telah dicari. Pilih Semua Informasi untuk memeriksa unggahan.'):
+  T('No eligible campaign evidence matches the current filters.','Tidak ada bukti kampanye yang cocok dengan filter saat ini.')}</p>}
         {hasMore&&<button data-testid="gate1-load-more" type="button" className="intel-ghost w-full text-sm" disabled={loadingMore||sampleLoading} onClick={loadMore}>{loadingMore?T('Loading more…','Memuat lagi…'):T('Load more evidence','Muat lebih banyak bukti')}</button>}
         {sample?.scan_limited&&<p className="text-xs text-amber-800">{T('Search continues on the next page; results are not complete yet.','Pencarian berlanjut pada halaman berikutnya; hasil belum lengkap.')}</p>}
       </section>

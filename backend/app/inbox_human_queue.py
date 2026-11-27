@@ -15,6 +15,7 @@ from .models import CampaignEvidence, EvidenceAssessment, EvidenceReview, Social
 from .officer_sentiment import OfficerSentimentCorrection
 from .socialcrawl import _result_in_scope
 from .inbox_gate_real_qa_v1867 import projection,reviewed_state,QA_ID
+from .inbox_gate1_attention_v1882 import attention_reasons
 from .inbox_gate_integrity import (
     GATE1_AUDIT_SUBJECT, STATUS_FILTERS, review_projection,
     review_status_matches, saved_relevance_basis,
@@ -108,6 +109,7 @@ def _classified_batch(db, officer, campaign_id, links):
                 label["relevance"]=effective
                 label["effective_sentiment"]=qa["effective_sentiment"]
                 label["sentiment_basis"]=qa["sentiment_basis"]
+        attention = attention_reasons(label, state, sources[sid], assessment, campaign_id)
         # Source digest is supplied only when opening evidence details;
         # the queue needs only review status, not an integrity token.
         state.pop("source_integrity_digest", None)
@@ -118,13 +120,15 @@ def _classified_batch(db, officer, campaign_id, links):
             "result_id": str(sid),
             "platform": sources[sid].platform or "",
             "published_at": sources[sid].published_at or "",
+            "requires_human_attention": bool(attention),
+            "attention_reasons": attention,
             **label,
         }
     return results
 
 
 def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE,
-                           cursor=None, category="all", review_status="all"):
+                           cursor=None, category="all", review_status="all", focus="all"):
     """Keyset pagination through ALL ordinary campaign links, not latest 120.
 
     Processing is capped per HTTP request for safety; a continuation cursor
@@ -136,6 +140,8 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
         raise HTTPException(422, "Unsupported review category")
     if review_status not in STATUS_FILTERS:
         raise HTTPException(422, "Unsupported information QA status")
+    if focus not in ("all", "attention"):
+        raise HTTPException(422, "Unsupported review focus")
     if not isinstance(page_size, int) or not 1 <= page_size <= MAX_PAGE_SIZE:
         raise HTTPException(422, "page_size must be between 1 and 100")
     if cursor is not None and (not isinstance(cursor, int) or cursor <= 0):
@@ -167,6 +173,8 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
                 continue
             if not review_status_matches(entry, review_status):
                 continue
+            if focus == "attention" and not entry.get("requires_human_attention", False):
+                continue
             selected.append(entry)
             if len(selected) >= page_size:
                 break
@@ -189,7 +197,9 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
     review_counts = Counter(item.get("information_review_status", "NEEDS_REVIEW") for item in selected)
     return {
         "campaign_id": str(campaign_id),
-        "queue_name": "NEEDS_HUMAN_REVIEW",
+        "queue_name": "NEEDS_ATTENTION" if focus == "attention" else "ALL_INFORMATION",
+        "filter_focus": focus,
+        "attention_is_not_review_status": True,
         "items": selected,
         "page_count": len(selected),
         "page_counts": {key: counts.get(key, 0) for key in

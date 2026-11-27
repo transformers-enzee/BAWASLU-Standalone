@@ -37,6 +37,11 @@ export default function InboxHumanReview(){
   const [error,setError]=useState('');
   const [actionBusy,setActionBusy]=useState(false);
   const [rationale,setRationale]=useState('');
+  const [correctionField,setCorrectionField]=useState('relevance');
+  const [correctionValue,setCorrectionValue]=useState('RELEVANT');
+  const [reviewDecision,setReviewDecision]=useState('NEEDS_REVIEW');
+  const [history,setHistory]=useState(null);
+  const [historyBusy,setHistoryBusy]=useState(false);
   const [success,setSuccess]=useState('');
   const [version,setVersion]=useState(0);
   useEffect(()=>{
@@ -90,30 +95,67 @@ export default function InboxHumanReview(){
   },[campaignId,selectedId,version]);
   function selectSource(id){
     setSelectedId(String(id));
-    setSuccess('');setRationale('');
+    setSuccess('');setRationale('');setHistory(null);
     const q=new URLSearchParams(window.location.search);
     q.set('gate1','1');q.set('campaign_id',String(campaignId));q.set('result_id',String(id));
     window.history.replaceState(null,'','/inbox?'+q.toString());
   }
   function chooseCampaign(id){
     currentCampaign.current=String(id);
-    setCampaignId(String(id));setSelectedId('');setDetail(null);setSuccess('');setRationale('');
+    setCampaignId(String(id));setSelectedId('');setDetail(null);setSuccess('');setRationale('');setHistory(null);
     const q=new URLSearchParams(window.location.search);
     q.set('gate1','1');q.set('campaign_id',String(id));q.delete('result_id');
     window.history.replaceState(null,'','/inbox?'+q.toString());
   }
-  async function correct(decision){
+  // The Gate 1 endpoint retains the versioned EvidenceAssessment model of
+  // campaignAssessmentCorrection, but has its own pilot and optimistic-lock gate.
+  async function correct(){
     if(!detail?.can_correct_relevance||actionBusy||rationale.trim().length<10)return;
-    if(!window.confirm(T('Save this human relevance correction with its audit trail?','Simpan koreksi relevansi petugas dengan jejak audit?')))return;
+    if(!window.confirm(T('Save this field correction and append an audit event?','Simpan koreksi bidang ini beserta jejak audit?')))return;
     setActionBusy(true);setError('');setSuccess('');
     try{
-      await base44.functions.invoke('socialListening',{
-        action:'campaignAssessmentCorrection',id:String(campaignId),
-        data:{result_id:String(detail.result_id),decision,rationale:rationale.trim()}
+      const expected_revision=correctionField==='relevance'?detail.relevance_revision:detail.sentiment_revision;
+      await base44.inboxHumanReview.correct(campaignId,detail.result_id,{
+        field:correctionField,value:correctionValue,expected_revision,reason:rationale.trim()
       });
-      setSuccess(T('Officer correction saved. Original source and earlier assessment preserved.','Koreksi petugas tersimpan. Sumber asli dan penilaian sebelumnya dipertahankan.'));
-      setRationale('');setVersion(v=>v+1);
+      setSuccess(T('Correction saved. Earlier versions remain available.','Koreksi tersimpan. Versi sebelumnya tetap tersedia.'));
+      setRationale('');setHistory(null);setVersion(v=>v+1);
     }catch(e){setError(e.message||'Unable to save correction')}
+    finally{setActionBusy(false)}
+  }
+  async function decide(){
+    if(!detail?.can_review_information||actionBusy||rationale.trim().length<10)return;
+    if(!window.confirm(T('Record this information review decision? This does not publish an insight.','Catat keputusan tinjauan informasi? Ini tidak menerbitkan insight.')))return;
+    setActionBusy(true);setError('');setSuccess('');
+    try{
+      await base44.inboxHumanReview.decide(campaignId,detail.result_id,{
+        status:reviewDecision,expected_revision:detail.information_review_revision,reason:rationale.trim()
+      });
+      setSuccess(T('Information review decision recorded.','Keputusan tinjauan informasi tercatat.'));
+      setRationale('');setHistory(null);setVersion(v=>v+1);
+    }catch(e){setError(e.message||'Unable to save review decision')}
+    finally{setActionBusy(false)}
+  }
+  async function openHistory(){
+    if(!campaignId||!selectedId||historyBusy)return;
+    setHistoryBusy(true);setError('');
+    try{setHistory(await base44.inboxHumanReview.history(campaignId,selectedId))}
+    catch(e){setError(e.message||'Review history unavailable')}
+    finally{setHistoryBusy(false)}
+  }
+  async function restore(field,targetRevision){
+    if(!detail?.can_correct_relevance||actionBusy||rationale.trim().length<10)return;
+    if(!window.confirm(T('Restore this historical value as a NEW audited correction?','Kembalikan nilai lama sebagai koreksi BARU yang diaudit?')))return;
+    setActionBusy(true);setError('');setSuccess('');
+    try{
+      await base44.inboxHumanReview.restore(campaignId,detail.result_id,{
+        field,target_revision:targetRevision,
+        expected_revision:field==='relevance'?detail.relevance_revision:detail.sentiment_revision,
+        reason:rationale.trim()
+      });
+      setSuccess(T('Historical value restored as a new revision.','Nilai lama dikembalikan sebagai revisi baru.'));
+      setRationale('');setHistory(null);setVersion(v=>v+1);
+    }catch(e){setError(e.message||'Could not restore historical value')}
     finally{setActionBusy(false)}
   }
   const counts=sample?.page_counts||{};
@@ -162,6 +204,7 @@ export default function InboxHumanReview(){
           <span className="font-semibold">{item.platform||'Social'} · #{item.result_id}</span>
           <span className="block text-slate-600">{actionLabels[item.action]||item.action}</span>
           <span className="block text-xs text-slate-500">{T('AI relevance','Relevansi AI')}: {item.relevance}</span>
+          {item.information_review_status&&<span className="block text-xs text-slate-500">{T('Information QA','QA informasi')}: {item.information_review_status}</span>}
         </button>)}
         {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter.','Tidak ada bukti kampanye biasa yang cocok.')}</p>}
         {hasMore&&<button data-testid="gate1-load-more" type="button" className="intel-ghost w-full text-sm" disabled={loadingMore||sampleLoading} onClick={loadMore}>{loadingMore?T('Loading more…','Memuat lagi…'):T('Load more evidence','Muat lebih banyak bukti')}</button>}
@@ -183,14 +226,53 @@ export default function InboxHumanReview(){
             <p><strong>{T('Effective sentiment','Sentimen efektif')}:</strong> {detail.effective_sentiment} ({detail.sentiment_basis})</p>
             <p><strong>{T('Assessment version','Versi penilaian')}:</strong> {detail.assessment_version??T('Not assessed','Belum dinilai')}</p>
             <p><strong>{T('Last officer review','Tinjauan petugas terakhir')}:</strong> {detail.officer_review_decision||T('Not recorded','Belum tercatat')}</p>
+            <p data-testid="gate1-information-status"><strong>{T('Information QA status','Status QA informasi')}:</strong> {detail.information_review_status} {detail.information_review_stale?'· '+T('Requires revalidation','Perlu validasi ulang'):''}</p>
+            {detail.information_review_reviewer_id&&<p className="text-xs text-slate-600">{T('Reviewer','Pemeriksa')}: {detail.information_review_reviewer_id} · {detail.information_review_at}</p>}
             {detail.relevance_explanation&&<p className="text-xs text-slate-600">{detail.relevance_explanation}</p>}
           </div>
-          {detail.can_correct_relevance?<div className="border-t pt-3 space-y-2">
-            <h4 className="font-semibold text-sm">{T('Officer relevance correction','Koreksi relevansi oleh petugas')}</h4>
-            <textarea className="intel-input w-full" rows={3} value={rationale} onChange={e=>setRationale(e.target.value)} placeholder={T('Reason for correction (at least 10 characters)','Alasan koreksi (minimal 10 karakter)')}/>
-            <div className="flex flex-wrap gap-2">{['RELEVANT','IRRELEVANT','UNCERTAIN'].map(decision=><button type="button" className="intel-ghost text-xs" disabled={actionBusy||rationale.trim().length<10} key={decision} onClick={()=>correct(decision)}>{T('Mark','Tandai')} {decision}</button>)}</div>
-            <p className="text-xs text-slate-500">{T('Uses the existing audited officer correction action. No automatic Command Centre publication or model training.','Menggunakan tindakan koreksi petugas yang sudah memiliki audit. Tidak otomatis diterbitkan atau digunakan untuk pelatihan model.')}</p>
+          {detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
+            <h4 className="font-semibold text-sm">{T('Officer information review & corrections','Tinjauan informasi & koreksi petugas')}</h4>
+            <p className="text-xs text-slate-500">{T('Field correction is not whole-record verification. No legal finding, AI training or Command Centre publication occurs automatically.','Koreksi satu bidang bukan verifikasi seluruh catatan. Tidak ada temuan hukum, pelatihan AI, atau publikasi otomatis.')}</p>
+            <textarea aria-label="Review reason" className="intel-input w-full" rows={3} value={rationale} onChange={e=>setRationale(e.target.value)} placeholder={T('Reason and supporting explanation (minimum 10 characters)','Alasan dan penjelasan pendukung (minimal 10 karakter)')}/>
+            {detail.can_correct_relevance&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="text-xs font-semibold">{T('Correct field','Bidang yang diperbaiki')}
+                <select className="intel-input w-full mt-1" value={correctionField} onChange={e=>{setCorrectionField(e.target.value);setCorrectionValue(e.target.value==='relevance'?'RELEVANT':'NEUTRAL')}}>
+                  <option value="relevance">{T('Election relevance','Relevansi pemilu')}</option>
+                  <option value="sentiment">{T('Sentiment','Sentimen')}</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold">{T('New value','Nilai baru')}
+                <select className="intel-input w-full mt-1" value={correctionValue} onChange={e=>setCorrectionValue(e.target.value)}>
+                  {(correctionField==='relevance'?['RELEVANT','HIGHLY_RELEVANT','IRRELEVANT','UNCERTAIN']:['POSITIVE','NEUTRAL','NEGATIVE']).map(v=><option value={v} key={v}>{v}</option>)}
+                </select>
+              </label>
+              <button type="button" data-testid="gate1-save-field-correction" className="intel-ghost text-xs" onClick={correct} disabled={actionBusy||rationale.trim().length<10}>{T('Save audited field correction','Simpan koreksi yang diaudit')}</button>
+            </div>}
+            <label className="text-xs font-semibold">{T('Information review decision','Keputusan tinjauan informasi')}
+              <select data-testid="gate1-review-decision" className="intel-input w-full mt-1" value={reviewDecision} onChange={e=>setReviewDecision(e.target.value)}>
+                {['NEEDS_REVIEW','OFFICER_VERIFIED','HELD','EXCLUDED'].map(v=><option value={v} key={v}>{v}</option>)}
+              </select>
+            </label>
+            <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
           </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>}
+          <div className="border-t pt-3 space-y-2" data-testid="gate1-audit-history">
+            <button type="button" className="intel-ghost text-xs" onClick={openHistory} disabled={historyBusy}>{historyBusy?T('Loading history…','Memuat riwayat…'):T('View review & correction history','Lihat riwayat tinjauan & koreksi')}</button>
+            {history&&<div className="rounded-lg border p-3 text-xs space-y-3">
+              <p className="text-slate-600">{T('Original records are retained. Restoring creates a new revision; enter a reason above first.','Catatan asli disimpan. Pemulihan membuat revisi baru; masukkan alasan di atas dahulu.')}</p>
+              <h5 className="font-semibold">{T('Relevance versions','Versi relevansi')}</h5>
+              {(history.relevance_history||[]).map(x=><div className="flex items-center justify-between gap-2" key={'relevance'+x.revision}>
+                <span>v{x.revision} · {x.value} · {x.model_version}</span>
+                {detail.can_correct_relevance&&x.revision!==detail.relevance_revision&&<button className="intel-ghost text-xs" type="button" disabled={actionBusy||rationale.trim().length<10} onClick={()=>restore('relevance',x.revision)}>{T('Restore','Pulihkan')}</button>}
+              </div>)}
+              <h5 className="font-semibold">{T('Sentiment corrections','Koreksi sentimen')}</h5>
+              {(history.sentiment_history||[]).map(x=><div className="flex items-center justify-between gap-2" key={'sentiment'+x.revision}>
+                <span>#{x.revision} · {x.value} · {T('Officer','Petugas')} {x.reviewer_id}</span>
+                {detail.can_correct_sentiment&&x.revision!==detail.sentiment_revision&&<button className="intel-ghost text-xs" type="button" disabled={actionBusy||rationale.trim().length<10} onClick={()=>restore('sentiment',x.revision)}>{T('Restore','Pulihkan')}</button>}
+              </div>)}
+              <h5 className="font-semibold">{T('Audit trail','Jejak audit')}</h5>
+              {(history.audit_history||[]).map(x=><p key={x.revision} className="break-words text-slate-600">#{x.revision} · {x.action} · {x.reviewer_id} · {x.created_at} · {x.reason||''}</p>)}
+            </div>}
+          </div>
           {success&&<p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{success}</p>}
         </>}
       </section>

@@ -81,6 +81,10 @@ export const base44 = {
     sample:campaignId=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/sample',{cache:'no-store'}),
     queue:(campaignId,{cursor=null,category='all',pageSize=40}={})=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/queue?'+new URLSearchParams({page_size:String(pageSize),category,...(cursor?{cursor:String(cursor)}:{})}),{cache:'no-store'}),
     source:(campaignId,resultId)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId),{cache:'no-store'}),
+    history:(campaignId,resultId)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/history',{cache:'no-store'}),
+    correct:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/corrections',{method:'POST',body:JSON.stringify(data)}),
+    restore:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/restore',{method:'POST',body:JSON.stringify(data)}),
+    decide:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/decision',{method:'POST',body:JSON.stringify(data)}),
   },
   governance:{
     readiness:()=>request('/api/governance/readiness',{cache:'no-store'}),

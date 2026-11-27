@@ -91,6 +91,11 @@ def test_frontend_routes_gate1_without_changing_standard_eligibility():
 
 def test_gate1_write_control_is_separate_from_existing_command_centre():
     source=inspect.getsource(lane.review_source)
-    assert '_editable(officer,campaign)' in source
+    from app.inbox_human_corrections import can_edit_gate1
+    control=inspect.getsource(can_edit_gate1)
+    assert 'can_edit_gate1(officer,campaign)' in source
     assert '_source(db,officer,campaign_id,result_id)' in source
-    assert '_write_enabled()' in source
+    assert '_write_enabled()' in control
+    assert 'BAWASLU_INBOX_GATE1_PILOT_MODE' in control
+    assert 'human_validation' in control
+    assert '_editable(profile, campaign)' in control

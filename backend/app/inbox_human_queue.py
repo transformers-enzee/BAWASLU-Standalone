@@ -5,13 +5,14 @@ Every returned source is linked to the authorized campaign and checked against
 the officer's geographic source scope. No population totals, mutations or AI calls.
 """
 from collections import Counter
+import json
 
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import defer
 
 from .governance_information_qa import _latest_per_source, classify_information
-from .models import CampaignEvidence, EvidenceAssessment, EvidenceReview, SocialListeningResult
+from .models import CampaignEvidence, EvidenceAssessment, EvidenceReview, SocialListeningResult, AuditEvent
 from .officer_sentiment import OfficerSentimentCorrection
 from .socialcrawl import _result_in_scope
 
@@ -61,6 +62,23 @@ def _classified_batch(db, officer, campaign_id, links):
             db.query(EvidenceReview).join(ranked, EvidenceReview.id == ranked.c.record_id)
             .filter(ranked.c.position == 1).all()
         }
+    # A single scoped audit query provides latest record-level QA states without
+    # per-post round trips. Stale decisions are flagged after any field change.
+    names = [f"{campaign_id}:{sid}" for sid in scoped]
+    ranked_decisions = (db.query(
+        AuditEvent.id.label("event_id"),
+        func.row_number().over(
+            partition_by=AuditEvent.subject_id,
+            order_by=AuditEvent.id.desc()
+        ).label("position"))
+        .filter(AuditEvent.subject_type == "Gate1InformationReview",
+                AuditEvent.action == "GATE1_INFORMATION_DECISION",
+                AuditEvent.subject_id.in_(names))
+        .subquery())
+    decision_rows = (db.query(AuditEvent)
+        .join(ranked_decisions, AuditEvent.id == ranked_decisions.c.event_id)
+        .filter(ranked_decisions.c.position == 1).all())
+    decision_by_source = {int(row.subject_id.split(":")[-1]): row for row in decision_rows}
     results = {}
     for sid in scoped:
         assessment = assessments.get(sid)
@@ -68,7 +86,23 @@ def _classified_batch(db, officer, campaign_id, links):
             assessment, sentiment.get(sid),
             reviews.get(assessment.id) if assessment else None
         )
+        decision = decision_by_source.get(sid)
+        state = "NEEDS_REVIEW"
+        stale = False
+        if decision:
+            try:
+                info = json.loads(decision.changes_json or "{}")
+            except (TypeError, ValueError):
+                info = {}
+            if not isinstance(info, dict):
+                info = {}
+            stale = (info.get("assessment_id") != (assessment.id if assessment else None)
+                     or info.get("sentiment_correction_id") !=
+                     (sentiment[sid].id if sid in sentiment else None))
+            state = "REVALIDATION_REQUIRED" if stale else info.get("status", "NEEDS_REVIEW")
         results[sid] = {
+            "information_review_status": state,
+            "information_review_stale": stale,
             "campaign_id": str(campaign_id),
             "result_id": str(sid),
             "platform": sources[sid].platform or "",

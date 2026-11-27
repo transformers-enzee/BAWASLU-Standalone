@@ -79,8 +79,10 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         review=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
                 .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
     classification=classify_information(assessment,sentiment,review)
-    from .campaigns import _editable
-    can_correct=bool(_write_enabled() and assessment is not None and _editable(officer,campaign))
+    from .inbox_human_corrections import can_edit_gate1, review_state_for_source
+    can_write=can_edit_gate1(officer,campaign)
+    can_correct=bool(can_write and assessment is not None)
+    state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment)
     original_text=source.text_content or ""
     return {
         "campaign_id":str(campaign_id),"campaign_name":campaign.name,
@@ -97,6 +99,11 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "sentiment_explanation":assessment.sentiment_explanation if assessment else "",
         **classification,
         "can_correct_relevance":can_correct,
+        "can_correct_sentiment":can_correct,
+        "can_review_information":can_write,
+        "relevance_revision":assessment.assessment_version if assessment else 0,
+        "sentiment_revision":sentiment.id if sentiment else 0,
+        **state,
         "read_only":not can_correct,
         "review_action_available":assessment is not None,
         "reason_if_not_actionable":(
@@ -106,6 +113,7 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
             if not can_correct else ""
         ),
         "legacy_correction_path":True,
+        "gate1_correction_audit_available":True,
         "original_source_preserved":True,
         "official_insight_approval_required":True,
         "paid_provider_called":False,

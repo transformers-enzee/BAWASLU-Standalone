@@ -158,8 +158,11 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         SocialListeningResult.provider==PILOT_QA_PROVIDER,
         SocialListeningResult.provider_result_id.like("GATE1-QA-%"),
     ).count())
-    linked_count=(db.query(CampaignEvidence.id).filter_by(
-        campaign_id=campaign_id,
+    # Match Gate 1's ordinary-evidence scope: watchlist-account-only links
+    # are intentionally excluded and must not veto a synthetic QA pilot.
+    linked_count=(db.query(CampaignEvidence.id).filter(
+        CampaignEvidence.campaign_id==campaign_id,
+        CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
     ).count())
     return {
         "campaign_id":str(campaign_id),

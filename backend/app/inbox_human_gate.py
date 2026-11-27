@@ -212,8 +212,9 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
 
 @router.get("/campaign/{campaign_id}/queue")
 def review_queue(campaign_id:int, page_size:int=40, cursor:int|None=None,
-                 category:str="all", review_status:str="all", focus:str="all",
-                 user:User=Depends(current_user), db:Session=Depends(get_db)):
+                 category:str="all", review_status:str="all",
+                 user:User=Depends(current_user), db:Session=Depends(get_db),
+                 focus:str="all"):
     """Full ordinary-evidence Gate 1 queue; read-only, cursor-paginated, scoped."""
     _read_enabled()
     officer=_grant(db,user,"view_intelligence")

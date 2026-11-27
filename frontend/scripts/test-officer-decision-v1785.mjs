@@ -14,10 +14,8 @@ const decide=read('../../backend/app/officer_action_v3/decisions.py');
 const docker=read('../../Dockerfile');
 for(const x of ['OfficerDecisionAssistant','/ai-assistant-v2-new','/management/ai-assistant-v2-new'])
  assert.ok(app.includes(x),'App route missing '+x);
-assert.ok(nav.includes("['/ai-assistant-v2-new','AI Assistant V2 · New'"));
-assert.ok(nav.includes("['/management/ai-assistant-v2-new','AI Assistant V2 · New'"));
-assert.ok(nav.indexOf("['/ai-assistant','AI Assistant'")<
-          nav.indexOf("['/ai-assistant-v2-new','AI Assistant V2 · New'"));
+assert.ok(nav.includes("'AI-5 Assistant'"),'AI-5 is the sole visible assistant');
+assert.ok(!nav.includes('AI Assistant V2 · New'),'Legacy AI V2 is hidden from navigation');
 for(const x of ['officer-v3-page','officer-v3-source-modes','officer-v3-result',
                 'officer-v3-research-trail','officer-v3-claims',
                 'officer-v3-actions','officer-v3-work-products','/api/officer-decision-ai/analyze',

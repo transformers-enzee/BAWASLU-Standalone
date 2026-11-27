@@ -277,3 +277,59 @@ def test_gate1_ux_separates_effective_from_ai_and_requires_fresh_tokens():
     assert "ai_baseline" in gate_source
     assert "saved_relevance_basis" in gate_source
     assert "source_integrity_digest" in gate_source or "review_state_for_source" in gate_source
+
+
+def test_write_rechecks_geographic_scope_after_source_lock(staging_db, monkeypatch):
+    db, user, posts, assessments = staging_db
+    # Initial API access is mocked to isolate the post-lock geography guard:
+    # a regional reviewer must never inherit nationwide access accidentally.
+    regional = {
+        **info_profile(), "geographic_scope": "Province",
+        "province": "Jawa Barat", "province_code": "32",
+    }
+    monkeypatch.setattr(
+        gate, "_authorize",
+        lambda db, user, cid, rid, write=False:
+            (regional, SimpleNamespace(id=90), db.get(SocialListeningResult, rid)),
+    )
+    with pytest.raises(HTTPException) as err:
+        gate.correct_field(
+            90,101,gate.FieldCorrectionIn(
+                field="relevance", value="IRRELEVANT", expected_revision=1,
+                expected_assessment_id=assessments[0].id,
+                expected_source_digest=source_integrity_digest(posts[0]),
+                reason="This source is not in the officer's assignment",
+            ), user=user, db=db,
+        )
+    assert err.value.status_code == 404
+    assert gate._latest_assessment(db,90,101).relevance_label == "RELEVANT"
+
+
+def test_administrator_read_only_pilot_preflight(staging_db, monkeypatch):
+    from app import inbox_human_gate as api
+    db, user, posts, assessments = staging_db
+    p = info_profile()
+    monkeypatch.setenv("BAWASLU_INBOX_GATE1_READ_ENABLED", "true")
+    monkeypatch.setenv("BAWASLU_INBOX_GATE1_WRITE_ENABLED", "false")
+    monkeypatch.delenv("BAWASLU_INBOX_GATE1_PILOT_CAMPAIGN_IDS", raising=False)
+    monkeypatch.setattr(api, "_grant", lambda db, u, permission: p)
+    monkeypatch.setattr(
+        api, "_campaign",
+        lambda db, p, cid: db.get(MonitoringCampaign, cid),
+    )
+    result = api.gate1_pilot_readiness(90, user=user, db=db)
+    assert result["campaign_id"] == "90"
+    assert result["correction_writes_enabled"] is False
+    assert result["ready_for_write_pilot"] is False
+    assert result["officer_can_edit_campaign"] is True
+    assert result["writes_triggered"] is False
+    assert result["source_ids_exposed"] is False
+    assert db.query(AuditEvent).count() == 0
+    monkeypatch.setattr(
+        api, "_grant",
+        lambda db,u,permission: (_ for _ in ()).throw(
+            HTTPException(403, "Administrator required")),
+    )
+    with pytest.raises(HTTPException) as denied:
+        api.gate1_pilot_readiness(90, user=user, db=db)
+    assert denied.value.status_code == 403

@@ -42,7 +42,7 @@ def profile():
     return {"id":"701", "name":"Officer QA", "status":"Active",
             "permissions":{"view_intelligence":True,"human_validation":True,
                            "edit_intelligence":True,"add_intelligence":True},
-            "role":"National Administrator"}
+            "role":"National Administrator", "geographic_scope":"Nationwide"}
 
 
 def test_write_denied_by_default_and_requires_pilot_allowlist(monkeypatch, seeded):

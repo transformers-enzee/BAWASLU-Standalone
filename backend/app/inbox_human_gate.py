@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .auth import current_user
 from .db import get_db
-from .access import allowed
+from .access import allowed, has
 from .models import (
     User, MonitoringCampaign, EvidenceAssessment, EvidenceReview
 )
@@ -129,6 +129,34 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "gate1_correction_audit_available":True,
         "original_source_preserved":True,
         "official_insight_approval_required":True,
+        "paid_provider_called":False,
+    }
+
+
+@router.get("/campaign/{campaign_id}/pilot-readiness")
+def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
+                          db:Session=Depends(get_db)):
+    """Administrator-only, read-only pilot preflight; never enables writes."""
+    _read_enabled()
+    officer=_grant(db,user,"administration")
+    if not has(officer,"view_intelligence"):
+        raise HTTPException(403,"Intelligence view permission required")
+    campaign=_campaign(db,officer,campaign_id)
+    from .inbox_human_corrections import can_edit_gate1, _allowlist
+    from .campaigns import _editable
+    return {
+        "campaign_id":str(campaign_id),
+        "human_review_read_enabled":True,
+        "correction_writes_enabled":_write_enabled(),
+        "staging_pilot_mode":os.getenv("BAWASLU_INBOX_GATE1_PILOT_MODE","").strip().lower()=="staging",
+        "campaign_allowlisted":campaign.id in _allowlist(),
+        "officer_has_human_validation":has(officer,"human_validation"),
+        "officer_has_edit_intelligence":has(officer,"edit_intelligence"),
+        "officer_can_edit_campaign":_editable(officer,campaign),
+        "ready_for_write_pilot":can_edit_gate1(officer,campaign),
+        "writes_triggered":False,
+        "source_ids_exposed":False,
+        "no_automatic_publication":True,
         "paid_provider_called":False,
     }
 

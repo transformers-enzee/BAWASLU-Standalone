@@ -64,6 +64,9 @@ test('real UI and HTTP: corrections, audit, restore, revalidation and no publica
   await expect(details).toContainText('Synthetic QA-only example');
   await expect(details).toContainText('Original AI relevance: IRRELEVANT');
   await expect(page.getByTestId('gate1-correction-workbench')).toBeVisible();
+  await page.getByTestId('gate1-gate2-readiness').getByRole('button').click();
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('BLOCKED');
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('CURRENT_GATE1_INFORMATION_REVIEW_REQUIRED');
 
   const before=await sourceSnapshot(request,headers,idsData.campaign_id,idsData.source_id);
   expect(before.effective_relevance).toBe('IRRELEVANT');
@@ -97,12 +100,42 @@ test('real UI and HTTP: corrections, audit, restore, revalidation and no publica
   await reason(page,'Verified the saved fictional information snapshot, not a legal allegation.');
   await page.getByTestId('gate1-save-review-decision').click();
   await expect(page.getByTestId('gate1-information-status')).toContainText('OFFICER_VERIFIED');
+  await page.getByTestId('gate1-gate2-readiness').getByRole('button').click();
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('CANDIDATE_FOR_INSIGHT_DRAFT');
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('No Command Centre publication');
+
+  // Admins may triage verified CURRENT corrections for offline evaluation only.
+  // This is an append-only governance disposition, NOT a model-training action.
+  await page.getByTestId('gate1-offline-feedback').getByRole('button',{name:/View correction feedback/}).click();
+  const neutralFeedback=page.getByTestId('gate1-feedback-item').filter({hasText:'NEGATIVE → NEUTRAL'});
+  await expect(neutralFeedback).toBeVisible();
+  await neutralFeedback.getByTestId('gate1-feedback-triage').getByRole('combobox')
+    .selectOption('ACCEPT_OFFLINE_EVALUATION');
+  await page.getByLabel('Offline feedback triage reason')
+    .last().fill('Fictional data was verified for offline evaluation only.');
+  await neutralFeedback.getByRole('button',{name:/Record audited offline decision/}).click();
+  await expect(page.getByText('Offline feedback triage saved. Model training remains disabled.')).toBeVisible();
+  await page.getByTestId('gate1-offline-feedback').getByRole('button',{name:/View correction feedback/}).click();
+  await expect(page.getByTestId('gate1-offline-feedback')).toContainText('ACCEPT_OFFLINE_EVALUATION');
 
   // New officer correction automatically invalidates the prior information QA decision.
   await page.getByLabel('New value').selectOption('POSITIVE');
   await reason(page,'A later fictional sentiment correction requires another review.');
   await page.getByTestId('gate1-save-field-correction').click();
   await expect(page.getByTestId('gate1-information-status')).toContainText('REVALIDATION_REQUIRED');
+  await page.getByTestId('gate1-gate2-readiness').getByRole('button').click();
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('BLOCKED');
+  await expect(page.getByTestId('gate1-gate2-packet')).toContainText('CURRENT_GATE1_INFORMATION_REVIEW_REQUIRED');
+  await page.getByTestId('gate1-offline-feedback').getByRole('button',{name:/View correction feedback/}).click();
+  const queueUrl='/api/inbox/human-review/campaign/'+idsData.campaign_id+
+    '/source/'+idsData.source_id+'/feedback';
+  const afterChange=await request.get(queueUrl,{headers});
+  expect(afterChange.ok()).toBeTruthy();
+  const feedbackAfter=await afterChange.json();
+  const approvedButStale=feedbackAfter.items.find(x=>x.triage_decision==='ACCEPT_OFFLINE_EVALUATION');
+  expect(approvedButStale).toBeDefined();
+  expect(approvedButStale.offline_evaluation_candidate).toBe(false);
+  expect(approvedButStale.training_triggered).toBe(false);
 
   await page.getByTestId('gate1-review-status-filter').selectOption('revalidation_required');
   await expect(queue.getByRole('button',{name:new RegExp('#'+idsData.source_id+'\\b')})).toBeVisible();
@@ -123,6 +156,14 @@ test('real UI and HTTP: corrections, audit, restore, revalidation and no publica
   expect(after.information_review_status).toBe('REVALIDATION_REQUIRED');
   expect(after.original_source_preserved).toBe(true);
   expect(after.official_insight_approval_required).toBe(true);
+  await page.getByTestId('gate1-feedback-queue').getByRole('button',{name:/View officer correction feedback queue/}).click();
+  await expect(page.getByTestId('gate1-feedback-queue')).toContainText('ACCEPT_OFFLINE_EVALUATION');
+  const governance=await request.get('/api/inbox/human-review/campaign/'+idsData.campaign_id+
+    '/source/'+idsData.source_id+'/gate2-readiness',{headers});
+  const readiness=await governance.json();
+  expect(governance.ok()).toBeTruthy();
+  expect(readiness.command_centre_published).toBe(false);
+  expect(readiness.proposed_insight_created).toBe(false);
   expect(outbound).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
@@ -135,6 +176,8 @@ test('read-only officer, operational campaign and watchlist evidence fail closed
   await queue.getByRole('button',{name:new RegExp('#'+data.source_id+'\\b')}).click();
   await expect(page.getByRole('region',{name:'Human Review evidence detail'})).toContainText('Synthetic QA-only example');
   await expect(page.getByTestId('gate1-correction-workbench')).toHaveCount(0);
+  await page.getByTestId('gate1-offline-feedback').getByRole('button',{name:/View correction feedback/}).click();
+  await expect(page.getByTestId('gate1-offline-feedback')).not.toContainText('Record audited offline decision');
   await page.getByTestId('gate1-check-pilot-readiness').click();
   await expect(page.getByRole('alert')).toContainText('Administrator access is required');
 

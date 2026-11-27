@@ -2,6 +2,7 @@
 
 This is a second independent read-only assertion after the real UI walkthrough.
 """
+import json
 import os
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.models import (
 )
 from app.officer_sentiment import OfficerSentimentCorrection
 from app import inbox_human_corrections as gate
+from app.inbox_human_handoff import FEEDBACK_SUBJECT
 from app.inbox_gate_integrity import source_integrity_digest
 from scripts.seed_gate1_ci_v1862 import assert_local_postgres
 
@@ -70,7 +72,16 @@ def verify():
             assert final_status["information_review_stale"]
             assert db.scalar(select(func.count()).select_from(IntelligenceItem))==0
             assert db.scalar(select(func.count()).select_from(CampaignFindingGroup))==0
-            assert db.scalar(select(func.count()).select_from(AuditEvent))==5
+            triages=db.scalars(select(AuditEvent).where(
+                AuditEvent.subject_type==FEEDBACK_SUBJECT,
+            )).all()
+            assert len(triages)==1
+            decision=json.loads(triages[0].changes_json)
+            assert decision["decision"]=="ACCEPT_OFFLINE_EVALUATION"
+            assert decision["training_approved"] is False
+            assert decision["training_triggered"] is False
+            assert decision["official_insight_published"] is False
+            assert db.scalar(select(func.count()).select_from(AuditEvent))==6
             assert db.scalar(select(func.count()).select_from(
                 EvidenceAssessment).where(EvidenceAssessment.campaign_id!=pilot.id)
             )==1

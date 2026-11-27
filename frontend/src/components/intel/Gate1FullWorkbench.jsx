@@ -683,7 +683,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
               {(isStructured(original)||isStructured(choice))&&<details className="text-xs" data-testid="gate1-missing-raw-values">
                 <summary className="cursor-pointer">{T('View raw values','Lihat nilai mentah')}</summary>
                 <pre className="whitespace-pre-wrap break-all max-h-40 overflow-auto">{original}</pre>
-              </details>
+              </details>}
               <label className="block text-xs font-semibold">{T('Provide verified information if available','Isi informasi berdasarkan bukti jika tersedia')}
                 {CLASSIFICATIONS[field]?<select className={INPUT} data-testid="gate1-missing-value"
                   value={value} onChange={e=>{setValue(e.target.value);setNoValue(false)}}>

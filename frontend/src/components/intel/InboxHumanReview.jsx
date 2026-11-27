@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
 import {useLanguage} from '@/lib/LanguageContext';
 
@@ -22,6 +22,14 @@ export default function InboxHumanReview(){
   const [campaignId,setCampaignId]=useState(initialCampaign);
   const [selectedId,setSelectedId]=useState(initialSource);
   const [sample,setSample]=useState(null);
+  const [category,setCategory]=useState('all');
+  const currentCampaign=useRef(initialCampaign);
+  const currentCategory=useRef('all');
+  currentCampaign.current=campaignId;
+  currentCategory.current=category;
+  const [nextCursor,setNextCursor]=useState(null);
+  const [hasMore,setHasMore]=useState(false);
+  const [loadingMore,setLoadingMore]=useState(false);
   const [detail,setDetail]=useState(null);
   const [loading,setLoading]=useState(true);
   const [sampleLoading,setSampleLoading]=useState(false);
@@ -46,14 +54,30 @@ export default function InboxHumanReview(){
     return ()=>{active=false};
   },[]);
   useEffect(()=>{
-    if(!campaignId){setSample(null);return}
+    if(!campaignId){setSample(null);setNextCursor(null);setHasMore(false);return}
     let active=true;
+    setSample(null);setNextCursor(null);setHasMore(false);
     setSampleLoading(true);setError('');
-    base44.inboxHumanReview.sample(campaignId).then(r=>{if(active)setSample(r)})
-      .catch(e=>{if(active){setSample(null);setError(e.message||'Review sample unavailable')}})
+    base44.inboxHumanReview.queue(campaignId,{category}).then(r=>{
+      if(!active)return;
+      setSample(r);setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
+    }).catch(e=>{if(active){setSample(null);setError(e.message||'Review queue unavailable')}})
       .finally(()=>{if(active)setSampleLoading(false)});
     return ()=>{active=false};
-  },[campaignId,version]);
+  },[campaignId,category,version]);
+  async function loadMore(){
+    if(!campaignId||!hasMore||!nextCursor||loadingMore||sampleLoading)return;
+    setLoadingMore(true);setError('');
+    try{
+      const cursor=nextCursor, activeCampaign=campaignId, activeCategory=category;
+      const r=await base44.inboxHumanReview.queue(activeCampaign,{category:activeCategory,cursor});
+      // Navigation during an in-flight request must not append another campaign's records.
+      if(activeCampaign!==currentCampaign.current||activeCategory!==currentCategory.current)return;
+      setSample(previous=>({...r,items:[...(previous?.items||[]),...(r.items||[])]}));
+      setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
+    }catch(e){setError(e.message||'Unable to load more sources')}
+    finally{setLoadingMore(false)}
+  }
   useEffect(()=>{
     if(!campaignId||!selectedId){setDetail(null);return}
     let active=true;
@@ -72,6 +96,7 @@ export default function InboxHumanReview(){
     window.history.replaceState(null,'','/inbox?'+q.toString());
   }
   function chooseCampaign(id){
+    currentCampaign.current=String(id);
     setCampaignId(String(id));setSelectedId('');setDetail(null);setSuccess('');setRationale('');
     const q=new URLSearchParams(window.location.search);
     q.set('gate1','1');q.set('campaign_id',String(id));q.delete('result_id');
@@ -91,7 +116,7 @@ export default function InboxHumanReview(){
     }catch(e){setError(e.message||'Unable to save correction')}
     finally{setActionBusy(false)}
   }
-  const counts=sample?.counts||{};
+  const counts=sample?.page_counts||{};
   return <div className="space-y-4" data-testid="inbox-human-gate1">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-xl font-bold text-slate-900">{T('Human Review · Gate 1','Tinjauan Petugas · Gate 1')}</h2>
@@ -109,13 +134,23 @@ export default function InboxHumanReview(){
       {loading&&<p role="status">{T('Loading authorized campaigns…','Memuat kampanye yang diizinkan…')}</p>}
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!error&&!loading&&campaigns.length===0&&<p>{T('No authorized campaigns.','Tidak ada kampanye yang diizinkan.')}</p>}
+      <label className="block text-sm font-semibold">{T('Review category','Kategori tinjauan')}
+        <select data-testid="gate1-category-filter" className="intel-input mt-1 w-full" value={category} onChange={e=>{currentCategory.current=e.target.value;setCategory(e.target.value)}}>
+          <option value="all">{T('All ordinary evidence','Semua bukti biasa')}</option>
+          <option value="unassessed">{T('Unassessed','Belum dinilai')}</option>
+          <option value="uncertain">{T('Uncertain','Tidak pasti')}</option>
+          <option value="excluded">{T('AI-excluded · false-negative checks','Dikecualikan AI · cek kelalaian')}</option>
+          <option value="relevant">{T('Relevant · sampled checks','Relevan · pemeriksaan')}</option>
+          <option value="other">{T('Unknown assessment labels','Label penilaian lain')}</option>
+        </select>
+      </label>
       {sample&&<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-        <p>{T('Sources checked','Sumber diperiksa')}: <strong>{sample.scanned_count}</strong></p>
-        <p>{T('Unassessed','Belum dinilai')}: <strong>{counts.unassessed||0}</strong></p>
-        <p>{T('Excluded / uncertain','Dikecualikan / ragu')}: <strong>{counts.excluded_or_uncertain||0}</strong></p>
-        <p>{T('Relevant','Relevan')}: <strong>{counts.relevant||0}</strong></p>
+        <p>{T('Loaded sources','Sumber dimuat')}: <strong>{sample.items?.length||0}</strong></p>
+        <p>{T('Unassessed (page)','Belum dinilai (halaman)')}: <strong>{counts.unassessed||0}</strong></p>
+        <p>{T('Excluded / uncertain (page)','Dikecualikan / ragu (halaman)')}: <strong>{counts.excluded_or_uncertain||0}</strong></p>
+        <p>{T('Relevant (page)','Relevan (halaman)')}: <strong>{counts.relevant||0}</strong></p>
       </div>}
-      <p className="text-xs text-slate-500">{T('Counts reflect a bounded recent authorized evidence sample, not all collected posts or a violation rate. Watchlist-only evidence excluded.','Hitungan mencerminkan sampel terbatas bukti terbaru sesuai kewenangan, bukan seluruh unggahan atau tingkat pelanggaran. Bukti khusus watchlist dikecualikan.')}</p>
+      <p className="text-xs text-slate-500">{T('Review queue is cursor-paginated across ordinary campaign evidence. Counts are for the current retrieved page, not population totals or a violation rate. Watchlist-only links are excluded.','Antrean tinjauan dibagi halaman untuk bukti kampanye biasa. Jumlah hanya untuk halaman yang dimuat, bukan seluruh data atau tingkat pelanggaran. Tautan khusus watchlist dikecualikan.')}</p>
     </section>
     {sampleLoading&&<p role="status">{T('Loading review queue…','Memuat antrean tinjauan…')}</p>}
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -128,7 +163,9 @@ export default function InboxHumanReview(){
           <span className="block text-slate-600">{actionLabels[item.action]||item.action}</span>
           <span className="block text-xs text-slate-500">{T('AI relevance','Relevansi AI')}: {item.relevance}</span>
         </button>)}
-        {!sampleLoading&&sample&&sample.items?.length===0&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence in this scoped sample.','Tidak ada bukti kampanye biasa dalam sampel ini.')}</p>}
+        {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter.','Tidak ada bukti kampanye biasa yang cocok.')}</p>}
+        {hasMore&&<button data-testid="gate1-load-more" type="button" className="intel-ghost w-full text-sm" disabled={loadingMore||sampleLoading} onClick={loadMore}>{loadingMore?T('Loading more…','Memuat lagi…'):T('Load more evidence','Muat lebih banyak bukti')}</button>}
+        {sample?.scan_limited&&<p className="text-xs text-amber-800">{T('Search continues on the next page; results are not complete yet.','Pencarian berlanjut pada halaman berikutnya; hasil belum lengkap.')}</p>}
       </section>
       <section className="intel-card p-4 space-y-3" aria-label="Human Review evidence detail">
         <h3 className="font-bold">{T('Original evidence & assessment','Bukti asli dan penilaian')}</h3>

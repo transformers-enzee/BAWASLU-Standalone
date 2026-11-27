@@ -16,6 +16,7 @@ from .models import (
 from .officer_sentiment import OfficerSentimentCorrection
 from .governance_persistence import _grant, _campaign, _source
 from .governance_information_qa import information_qa_sample, classify_information
+from .inbox_human_queue import paginated_review_queue
 
 router=APIRouter(prefix="/api/inbox/human-review",tags=["inbox-human-review"])
 
@@ -109,3 +110,13 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "official_insight_approval_required":True,
         "paid_provider_called":False,
     }
+
+
+@router.get("/campaign/{campaign_id}/queue")
+def review_queue(campaign_id:int, page_size:int=40, cursor:int|None=None, category:str="all",
+                 user:User=Depends(current_user), db:Session=Depends(get_db)):
+    """Full ordinary-evidence Gate 1 queue; read-only, cursor-paginated, scoped."""
+    _read_enabled()
+    officer=_grant(db,user,"view_intelligence")
+    _campaign(db,officer,campaign_id)
+    return paginated_review_queue(db,officer,campaign_id,page_size,cursor,category)

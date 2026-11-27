@@ -344,7 +344,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
               {sensitiveReason==='OTHER'&&<label className="text-xs block font-semibold">{T('Short explanation','Penjelasan singkat')}
                 <textarea className={INPUT} rows={2} value={note} onChange={e=>setNote(e.target.value)}
                   placeholder={T('Explain the different value','Jelaskan perbedaan nilai')}/>
-              </label>
+              </label>}
               <label className="text-xs block font-semibold">{T('Evidence link (when available)','Tautan bukti (jika tersedia)')}
                 <input className={INPUT} type="url" value={support} onChange={e=>setSupport(e.target.value)} placeholder="https://..."/>
               </label>

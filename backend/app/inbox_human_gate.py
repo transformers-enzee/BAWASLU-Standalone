@@ -175,6 +175,13 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         "officer_can_edit_campaign":_editable(officer,campaign),
         "pilot_campaign_draft_and_named":is_pilot_qa_campaign(campaign),
         "linked_source_count":linked_count,
+        "pilot_has_ordinary_evidence":linked_count > 0,
+        "pilot_empty_reason":(
+            "No ordinary evidence linked to this QA campaign; all filters will be empty."
+            if linked_count == 0 else None
+        ),
+        "fixture_seeding_on_shared_db_supported":False,
+        "isolated_qa_fixture_required":linked_count == 0,
         "synthetic_source_count":synthetic_count,
         "non_synthetic_link_count":linked_count-synthetic_count,
         "ready_for_write_pilot":bool(can_edit_gate1(officer,campaign)

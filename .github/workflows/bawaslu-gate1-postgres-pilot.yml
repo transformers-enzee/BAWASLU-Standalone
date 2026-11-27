@@ -45,7 +45,7 @@ jobs:
           BAWASLU_TEST_DATABASE_URL: "postgresql+psycopg://gate1qa:gate1qa-local-only@127.0.0.1:5432/bawaslu_gate1_pilot_ci"
           OPENAI_API_KEY: ""
           SOCIALCRAWL_API_KEY: ""
-        run: pytest -q tests/test_gate1_pilot_postgres_v1861.py
+        run: pytest -q tests/test_gate1_pilot_postgres_v1861.py tests/test_gate1_fixture_catalog_v1864.py
       - name: Confirm isolation policy
         run: |
           echo "Gate 1 pilot ran only on an ephemeral localhost PostgreSQL service."

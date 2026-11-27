@@ -281,6 +281,7 @@ export default function InboxHumanReview(){
         {pilotStatus&&<div className="space-y-1 text-xs" data-testid="gate1-pilot-readiness-report">
           <p>{T('Campaign status','Status kampanye')}: <strong>{pilotStatus.pilot_campaign_draft_and_named?'QA DRAFT':'NOT ELIGIBLE'}</strong></p>
           <p>{T('Synthetic linked sources','Sumber sintetis tertaut')}: <strong>{pilotStatus.synthetic_source_count}</strong></p>
+          {pilotStatus.linked_source_count===0&&<p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900" data-testid="gate1-empty-campaign-diagnosis">{T('This QA campaign has no linked evidence. Changing filters cannot reveal posts. Test fixtures must be provisioned in an isolated QA database; do not import fictional posts into the shared operational database.','Kampanye QA ini belum memiliki bukti tertaut. Mengganti filter tidak akan menampilkan unggahan. Data uji harus disiapkan di basis data QA terisolasi; jangan masukkan unggahan fiktif ke basis data operasional bersama.')}</p>}
           <p>{T('Non-synthetic links','Tautan non-sintetis')}: <strong>{pilotStatus.non_synthetic_link_count}</strong></p>
           <p>{T('Correction writes','Koreksi')}: <strong>{pilotStatus.correction_writes_enabled?'ENABLED':'DISABLED'}</strong></p>
           <p>{T('Pilot eligibility','Kelayakan pilot')}: <strong>{pilotStatus.ready_for_write_pilot?'ELIGIBLE FOR QA':'NOT READY · SAFE BLOCK'}</strong></p>
@@ -348,7 +349,7 @@ export default function InboxHumanReview(){
           <span className="block text-xs text-slate-500">{T('Current relevance','Relevansi saat ini')}: {item.relevance} ({item.relevance_basis||'SAVED_ASSESSMENT'})</span>
           {item.information_review_status&&<span className="block text-xs text-slate-500">{T('Information QA','QA informasi')}: {item.information_review_status}</span>}
         </button>)}
-        {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter.','Tidak ada bukti kampanye biasa yang cocok.')}</p>}
+        {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter. If all categories are empty, click Check staging pilot readiness to inspect linked-source counts.','Tidak ada bukti kampanye biasa yang cocok dengan filter ini. Jika semua kategori kosong, pilih Periksa kesiapan uji coba staging untuk melihat jumlah sumber tertaut.')}</p>}
         {hasMore&&<button data-testid="gate1-load-more" type="button" className="intel-ghost w-full text-sm" disabled={loadingMore||sampleLoading} onClick={loadMore}>{loadingMore?T('Loading more…','Memuat lagi…'):T('Load more evidence','Muat lebih banyak bukti')}</button>}
         {sample?.scan_limited&&<p className="text-xs text-amber-800">{T('Search continues on the next page; results are not complete yet.','Pencarian berlanjut pada halaman berikutnya; hasil belum lengkap.')}</p>}
       </section>

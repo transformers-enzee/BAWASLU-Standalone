@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
+from scripts.gate1_fixture_catalog_v1864 import QA_SCENARIOS
 from app.db import Base
 from app.models import (
     AccessGrant, CampaignEvidence, EvidenceAssessment, MonitoringCampaign,
@@ -105,7 +106,7 @@ def seed(output_path: Path):
             run = SocialListeningRun(
                 provider=PILOT_QA_PROVIDER,
                 query_json='{"fictional":true,"paid_requests":0}',
-                status="COMPLETED", credits_used=0, result_count=2,
+                status="COMPLETED", credits_used=0, result_count=3 + len(QA_SCENARIOS),
                 executed_by="ci-only",
             )
             db.add(run)
@@ -138,6 +139,23 @@ def seed(output_path: Path):
             )
             db.add_all([source, protected, watchlist])
             db.flush()
+            # Five additional fictional scenarios, never inserted into shared databases.
+            qa_rows = []
+            for key, label, sentiment, message in QA_SCENARIOS:
+                qa_rows.append(SocialListeningResult(
+                    run_id=run.id, provider=PILOT_QA_PROVIDER,
+                    provider_result_id=PILOT_QA_SOURCE_PREFIX+"FICTIONAL-1864-"+key,
+                    platform="facebook", content_type="post",
+                    canonical_url="https://example.invalid/gate1/fictional-"+key.lower(),
+                    author_name="Fictional CI QA Account", text_content=message,
+                    raw_payload_json=json.dumps({"fictional": True, "ci_only": True,
+                                                 "scenario": key}, sort_keys=True),
+                    geography_json="{}", source_identity_json='{"fictional":true}',
+                    content_fingerprint="ci-gate1-v1864-"+key.lower(),
+                    review_state="QA_ONLY",
+                ))
+            db.add_all(qa_rows)
+            db.flush()
             db.add_all([
                 CampaignEvidence(campaign_id=pilot.id, result_id=source.id,
                                  match_method="QA_SYNTHETIC"),
@@ -145,6 +163,11 @@ def seed(output_path: Path):
                                  match_method="WATCHLIST_ACCOUNT"),
                 CampaignEvidence(campaign_id=operational.id, result_id=protected.id,
                                  match_method="KEYWORD"),
+            ])
+            db.add_all([
+                CampaignEvidence(campaign_id=pilot.id, result_id=row.id,
+                                 match_method="QA_SYNTHETIC")
+                for row in qa_rows
             ])
             db.add_all([
                 EvidenceAssessment(
@@ -160,6 +183,15 @@ def seed(output_path: Path):
                     explanation="Fictional protected evidence.",
                 ),
             ])
+            # Deliberately omit an assessment for the UNASSESSED scenario.
+            for (key, label, sentiment, _message), row in zip(QA_SCENARIOS, qa_rows):
+                if label is not None:
+                    db.add(EvidenceAssessment(
+                        campaign_id=pilot.id, result_id=row.id,
+                        assessment_version=1, model_version="OFFLINE_FICTIONAL_QA",
+                        relevance_label=label, sentiment=sentiment,
+                        explanation="Fictional CI baseline, not a real AI evaluation.",
+                    ))
             db.commit()
             if pilot.id != 1:
                 raise SystemExit("REFUSED: unexpected CI campaign sequence")
@@ -169,6 +201,8 @@ def seed(output_path: Path):
                 "protected_campaign_id": operational.id,
                 "protected_source_id": protected.id,
                 "watchlist_source_id": watchlist.id,
+                "scenario_source_ids": {key: row.id for (key, *_), row in
+                                        zip(QA_SCENARIOS, qa_rows)},
             }
         output_path.write_text(json.dumps(metadata), encoding="utf-8")
         print("Created fictional Gate 1 pilot fixture in disposable localhost PostgreSQL.")

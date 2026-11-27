@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"]
 FULL_ACTION = "GATE1_QA_FULL_RECORD_ENRICHED"
 SECOND_ACTION = "GATE1_QA_SECOND_REVIEW"
 MANUAL_ACTION = "GATE1_QA_MANUAL_EVIDENCE"
+SOURCE_ERROR_ACTION = "GATE1_QA_SOURCE_ERROR_REPORTED"
 FIELD_GROUPS = {
     "source": (
         "platform", "content_type", "author_name", "observed_handle", "published_at",
@@ -45,6 +46,20 @@ FIELD_GROUPS = {
     ),
 }
 FIELDS = frozenset(v for names in FIELD_GROUPS.values() for v in names)
+# Six officer review areas. Original provider fields and technical measurements
+# remain visible, but are not routine editable assessment variables.
+ASSESSMENT_FIELDS = frozenset((
+    "relevance", "sentiment", "candidate_names", "political_parties",
+    "topic_labels", "narrative", "potential_issue_categories", "evidence_quality",
+))
+SOURCE_EXCEPTION_FIELDS = frozenset((
+    "platform", "content_type", "author_name", "observed_handle",
+    "published_at", "canonical_url", "text_content", "language",
+    "country", "province", "city", "location_basis", "incident_date",
+))
+# Includes video transcription, translation, engagement counts and diagnostics.
+TECHNICAL_READ_ONLY_FIELDS = FIELDS - ASSESSMENT_FIELDS - SOURCE_EXCEPTION_FIELDS
+REPORTABLE_FIELDS = SOURCE_EXCEPTION_FIELDS | TECHNICAL_READ_ONLY_FIELDS
 SENSITIVE = frozenset((
     "author_name", "observed_handle", "canonical_url", "text_content", "transcript",
     "translation", "candidate_names", "political_parties",
@@ -89,6 +104,13 @@ class SecondReviewIn(BaseModel):
     expected_assessment_id: int = Field(gt=0)
     status: str
     reason: str = Field(min_length=10, max_length=1500)
+
+
+class SourceErrorIn(BaseModel):
+    field: str = Field(min_length=2, max_length=100)
+    expected_assessment_id: int = Field(gt=0)
+    expected_source_digest: str = Field(min_length=64, max_length=64)
+    note: str = Field(default="", max_length=800)
 
 
 class ManualEvidenceIn(BaseModel):
@@ -284,6 +306,22 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
     return {"campaign_id":str(campaign_id),"result_id":str(result_id),
             "field_groups":{k:list(v) for k,v in FIELD_GROUPS.items()},
             "quality_hints":quality_hints(p["fields"],source),
+            "assessment_fields":sorted(ASSESSMENT_FIELDS),
+            "source_exception_fields":sorted(SOURCE_EXCEPTION_FIELDS),
+            "technical_read_only_fields":sorted(TECHNICAL_READ_ONLY_FIELDS),
+            "can_correct_source":bool(can_write and has(officer,"administration")
+                                      and isolated_source(db,campaign,source)),
+            "can_report_data_error":bool(can_write and isolated_source(db,campaign,source)),
+            "source_error_reports":[{
+                "id":e.id,"field":audit_payload(e).get("field"),
+                "at":e.occurred_at,"actor_id":e.actor_id,
+                "note":audit_payload(e).get("note",""),
+                "status":"REPORTED_UNVERIFIED",
+            } for e in (db.query(AuditEvent)
+                .filter_by(subject_type=GATE1_AUDIT_SUBJECT,
+                           subject_id=f"{campaign_id}:{result_id}",
+                           action=SOURCE_ERROR_ACTION)
+                .order_by(AuditEvent.id.desc()).limit(10).all())],
             **p,"can_edit":bool(can_write and isolated_source(db,campaign,source)),
             "can_secondary_review":secondary_allowed,
             "qa_audit_only":True,"original_source_preserved":True,
@@ -310,6 +348,10 @@ def save_full_review(campaign_id:int,result_id:int,body:FullReviewBatch,
         if field not in FIELDS or field in seen:
             raise HTTPException(422,"Unsupported or repeated field")
         seen.add(field)
+        # Source overrides and technical exceptions require administrative authority.
+        # Normal officers can still correct the AI assessment fields.
+        if field not in ASSESSMENT_FIELDS and not has(officer,"administration"):
+            raise HTTPException(403,"Source or technical correction requires an administrator")
         if entry.mode not in REASONS or entry.verification not in VERIFICATIONS:
             raise HTTPException(422,"Invalid correction mode or verification status")
         if entry.mode=="UNAVAILABLE" and entry.verification=="SOURCE_CONFIRMED":
@@ -346,6 +388,47 @@ def save_full_review(campaign_id:int,result_id:int,body:FullReviewBatch,
             "qa_audit_only":True,"original_source_preserved":True,
             "canonical_assessment_preserved":True,"automatic_publication":False,
             "automatic_training":False}
+
+
+@router.post("/campaign/{campaign_id}/source/{result_id}/source-error")
+def report_source_error(campaign_id:int,result_id:int,body:SourceErrorIn,
+                        user:User=Depends(current_user),db:Session=Depends(get_db)):
+    """Audit-only data-error report; does not override source or AI values."""
+    officer,campaign,source=_scope(db,user,campaign_id,result_id,True)
+    from .inbox_human_corrections import _lock_current_source, _latest_assessment
+    from .inbox_gate_real_qa_v1867 import isolated_source
+    if not isolated_source(db,campaign,source):
+        raise HTTPException(403,"Cannot report against shared operational evidence")
+    source=_lock_current_source(db,officer,source)
+    assessment=_latest_assessment(db,campaign_id,result_id)
+    if (assessment is None or assessment.id!=body.expected_assessment_id or
+        source_integrity_digest(source)!=body.expected_source_digest):
+        raise HTTPException(409,"Source or assessment changed; refresh")
+    field=body.field.strip()
+    if field not in REPORTABLE_FIELDS:
+        raise HTTPException(422,"Choose a source or technical field to report")
+    current=full_projection(db,campaign_id,result_id,assessment,source)
+    note=body.note.strip() or (
+        f"Officer flagged {field} for source verification; no value changed.")
+    event=AuditEvent(
+        subject_type=GATE1_AUDIT_SUBJECT,subject_id=f"{QA_ID}:{result_id}",
+        action=SOURCE_ERROR_ACTION,actor_id=str(user.id),
+        actor_name=str(officer.get("name") or "")[:255],
+        changes_json=json.dumps({
+            "campaign_id":QA_ID,"result_id":result_id,"field":field,
+            "saved_effective_value":current["fields"][field]["effective"],
+            "note":note,"status":"REPORTED_UNVERIFIED",
+            "assessment_id":assessment.id,
+            "source_integrity_digest":body.expected_source_digest,
+            "qa_audit_only":True,"original_source_preserved":True,
+            "official_intelligence_published":False,
+            "model_training_triggered":False,
+        },sort_keys=True,ensure_ascii=False),
+        occurred_at=datetime.now(timezone.utc).isoformat())
+    db.add(event);db.commit()
+    return {"saved":True,"report_id":event.id,"status":"REPORTED_UNVERIFIED",
+            "source_overridden":False,"qa_audit_only":True,
+            "automatic_publication":False}
 
 
 @router.post("/campaign/{campaign_id}/source/{result_id}/full-review/secondary")

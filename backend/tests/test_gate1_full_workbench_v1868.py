@@ -14,7 +14,7 @@ from app.inbox_human_corrections import decide_information,DecisionIn
 from app.inbox_human_full_review_v1868 import (
     FieldPatch, FullReviewBatch, SecondReviewIn, ManualEvidenceIn,
     FIELD_GROUPS,full_review,save_full_review,secondary_review,
-    manual_intake_create,manual_intake_list, _safe_url,
+    manual_intake_create,manual_intake_list, report_source_error, SourceErrorIn, _safe_url,
 )
 from app.inbox_human_handoff import gate2_handoff_preview,source_feedback
 from scripts.seed_gate1_render_qa_v1866 import ADMIN_EMAIL,VIEWER_EMAIL,bootstrap
@@ -74,6 +74,23 @@ def test_full_field_workbench_and_manual_intake(monkeypatch):
         assert snapshot["can_edit"] is True and snapshot["revision"]==0
         assert snapshot["fields"]["author_name"]["original"]=="Unverified API author"
         assert snapshot["fields"]["author_name"]["effective"]=="Unverified API author"
+        reported=report_source_error(9,sid,SourceErrorIn(
+            field="engagement_likes",expected_assessment_id=aid,
+            expected_source_digest=detail["source_integrity_digest"]),admin,db)
+        assert reported["saved"] and reported["status"]=="REPORTED_UNVERIFIED"
+        assert reported["source_overridden"] is False
+        reported_view=full_review(9,sid,admin,db)
+        assert reported_view["source_error_reports"][0]["field"]=="engagement_likes"
+        assert reported_view["revision"]==0
+        assert reported_view["can_correct_source"] is True
+        assert reported_view["can_report_data_error"] is True
+        with pytest.raises(HTTPException) as viewer_report:
+            report_source_error(9,sid,SourceErrorIn(
+                field="transcript",expected_assessment_id=aid,
+                expected_source_digest=detail["source_integrity_digest"]),viewer,db)
+        assert viewer_report.value.status_code==403
+        assert db.get(SocialListeningResult,sid).platform=="youtube"
+        assert db.get(EvidenceAssessment,aid).sentiment=="NEUTRAL"
         patches=[
             FieldPatch(field="author_name",value="Officer supplied author",
                        verification="SOURCE_CONFIRMED",evidence_url="https://example.invalid/author",

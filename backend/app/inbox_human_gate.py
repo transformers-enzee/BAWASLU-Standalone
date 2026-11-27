@@ -80,9 +80,19 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
                 .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
     classification=classify_information(assessment,sentiment,review)
     from .inbox_human_corrections import can_edit_gate1, review_state_for_source
+    from .inbox_gate_integrity import saved_relevance_basis
+    # Preserve a visible distinction between the original AI label and the
+    # current effective label after append-only officer correction.
+    ai_baseline=assessment
+    if assessment is not None and assessment.model_version=="HUMAN_OVERRIDE":
+        ai_baseline=(db.query(EvidenceAssessment)
+                     .filter_by(campaign_id=campaign_id,result_id=result_id)
+                     .filter(EvidenceAssessment.model_version!="HUMAN_OVERRIDE")
+                     .order_by(EvidenceAssessment.assessment_version.desc(),
+                               EvidenceAssessment.id.desc()).first())
     can_write=can_edit_gate1(officer,campaign)
     can_correct=bool(can_write and assessment is not None)
-    state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment)
+    state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment,source)
     original_text=source.text_content or ""
     return {
         "campaign_id":str(campaign_id),"campaign_name":campaign.name,
@@ -95,6 +105,9 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "assessment_id":assessment.id if assessment else None,
         "model_version":assessment.model_version if assessment else None,
         "assessment_version":assessment.assessment_version if assessment else None,
+        "original_ai_relevance":ai_baseline.relevance_label if ai_baseline else None,
+        "effective_relevance":assessment.relevance_label if assessment else "UNASSESSED",
+        "relevance_basis":saved_relevance_basis(assessment),
         "relevance_explanation":assessment.explanation if assessment else "",
         "sentiment_explanation":assessment.sentiment_explanation if assessment else "",
         **classification,
@@ -104,7 +117,7 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "relevance_revision":assessment.assessment_version if assessment else 0,
         "sentiment_revision":sentiment.id if sentiment else 0,
         **state,
-        "read_only":not can_correct,
+        "read_only":not can_write,
         "review_action_available":assessment is not None,
         "reason_if_not_actionable":(
             "A saved assessment is required before the existing officer correction workflow can be used."
@@ -121,10 +134,11 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
 
 
 @router.get("/campaign/{campaign_id}/queue")
-def review_queue(campaign_id:int, page_size:int=40, cursor:int|None=None, category:str="all",
+def review_queue(campaign_id:int, page_size:int=40, cursor:int|None=None,
+                 category:str="all", review_status:str="all",
                  user:User=Depends(current_user), db:Session=Depends(get_db)):
     """Full ordinary-evidence Gate 1 queue; read-only, cursor-paginated, scoped."""
     _read_enabled()
     officer=_grant(db,user,"view_intelligence")
     _campaign(db,officer,campaign_id)
-    return paginated_review_queue(db,officer,campaign_id,page_size,cursor,category)
+    return paginated_review_queue(db,officer,campaign_id,page_size,cursor,category,review_status)

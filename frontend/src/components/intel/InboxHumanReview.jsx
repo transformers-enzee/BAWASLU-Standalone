@@ -23,10 +23,13 @@ export default function InboxHumanReview(){
   const [selectedId,setSelectedId]=useState(initialSource);
   const [sample,setSample]=useState(null);
   const [category,setCategory]=useState('all');
+  const [reviewStatus,setReviewStatus]=useState('all');
   const currentCampaign=useRef(initialCampaign);
   const currentCategory=useRef('all');
+  const currentReviewStatus=useRef('all');
   currentCampaign.current=campaignId;
   currentCategory.current=category;
+  currentReviewStatus.current=reviewStatus;
   const [nextCursor,setNextCursor]=useState(null);
   const [hasMore,setHasMore]=useState(false);
   const [loadingMore,setLoadingMore]=useState(false);
@@ -63,21 +66,21 @@ export default function InboxHumanReview(){
     let active=true;
     setSample(null);setNextCursor(null);setHasMore(false);
     setSampleLoading(true);setError('');
-    base44.inboxHumanReview.queue(campaignId,{category}).then(r=>{
+    base44.inboxHumanReview.queue(campaignId,{category,reviewStatus}).then(r=>{
       if(!active)return;
       setSample(r);setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
     }).catch(e=>{if(active){setSample(null);setError(e.message||'Review queue unavailable')}})
       .finally(()=>{if(active)setSampleLoading(false)});
     return ()=>{active=false};
-  },[campaignId,category,version]);
+  },[campaignId,category,reviewStatus,version]);
   async function loadMore(){
     if(!campaignId||!hasMore||!nextCursor||loadingMore||sampleLoading)return;
     setLoadingMore(true);setError('');
     try{
-      const cursor=nextCursor, activeCampaign=campaignId, activeCategory=category;
-      const r=await base44.inboxHumanReview.queue(activeCampaign,{category:activeCategory,cursor});
+      const cursor=nextCursor, activeCampaign=campaignId, activeCategory=category, activeStatus=reviewStatus;
+      const r=await base44.inboxHumanReview.queue(activeCampaign,{category:activeCategory,reviewStatus:activeStatus,cursor});
       // Navigation during an in-flight request must not append another campaign's records.
-      if(activeCampaign!==currentCampaign.current||activeCategory!==currentCategory.current)return;
+      if(activeCampaign!==currentCampaign.current||activeCategory!==currentCategory.current||activeStatus!==currentReviewStatus.current)return;
       setSample(previous=>({...r,items:[...(previous?.items||[]),...(r.items||[])]}));
       setNextCursor(r.next_cursor||null);setHasMore(Boolean(r.has_more));
     }catch(e){setError(e.message||'Unable to load more sources')}
@@ -116,7 +119,9 @@ export default function InboxHumanReview(){
     try{
       const expected_revision=correctionField==='relevance'?detail.relevance_revision:detail.sentiment_revision;
       await base44.inboxHumanReview.correct(campaignId,detail.result_id,{
-        field:correctionField,value:correctionValue,expected_revision,reason:rationale.trim()
+        field:correctionField,value:correctionValue,expected_revision,
+        expected_assessment_id:detail.assessment_id,
+        expected_source_digest:detail.source_integrity_digest,reason:rationale.trim()
       });
       setSuccess(T('Correction saved. Earlier versions remain available.','Koreksi tersimpan. Versi sebelumnya tetap tersedia.'));
       setRationale('');setHistory(null);setVersion(v=>v+1);
@@ -129,7 +134,11 @@ export default function InboxHumanReview(){
     setActionBusy(true);setError('');setSuccess('');
     try{
       await base44.inboxHumanReview.decide(campaignId,detail.result_id,{
-        status:reviewDecision,expected_revision:detail.information_review_revision,reason:rationale.trim()
+        status:reviewDecision,expected_revision:detail.information_review_revision,
+        expected_assessment_id:detail.assessment_id,
+        expected_sentiment_revision:detail.sentiment_revision,
+        expected_source_digest:detail.source_integrity_digest,
+        reason:rationale.trim()
       });
       setSuccess(T('Information review decision recorded.','Keputusan tinjauan informasi tercatat.'));
       setRationale('');setHistory(null);setVersion(v=>v+1);
@@ -151,6 +160,8 @@ export default function InboxHumanReview(){
       await base44.inboxHumanReview.restore(campaignId,detail.result_id,{
         field,target_revision:targetRevision,
         expected_revision:field==='relevance'?detail.relevance_revision:detail.sentiment_revision,
+        expected_assessment_id:detail.assessment_id,
+        expected_source_digest:detail.source_integrity_digest,
         reason:rationale.trim()
       });
       setSuccess(T('Historical value restored as a new revision.','Nilai lama dikembalikan sebagai revisi baru.'));
@@ -158,7 +169,10 @@ export default function InboxHumanReview(){
     }catch(e){setError(e.message||'Could not restore historical value')}
     finally{setActionBusy(false)}
   }
-  const counts=sample?.page_counts||{};
+  // Indicators refer only to currently loaded, authorized review items.
+  const loaded=sample?.items||[];
+  const counts=loaded.reduce((acc,item)=>({...acc,[item.category]:(acc[item.category]||0)+1}),{});
+  const statusCounts=loaded.reduce((acc,item)=>({...acc,[item.information_review_status||'NEEDS_REVIEW']:(acc[item.information_review_status||'NEEDS_REVIEW']||0)+1}),{});
   return <div className="space-y-4" data-testid="inbox-human-gate1">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-xl font-bold text-slate-900">{T('Human Review · Gate 1','Tinjauan Petugas · Gate 1')}</h2>
@@ -188,11 +202,27 @@ export default function InboxHumanReview(){
       </label>
       {sample&&<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
         <p>{T('Loaded sources','Sumber dimuat')}: <strong>{sample.items?.length||0}</strong></p>
-        <p>{T('Unassessed (page)','Belum dinilai (halaman)')}: <strong>{counts.unassessed||0}</strong></p>
-        <p>{T('Excluded / uncertain (page)','Dikecualikan / ragu (halaman)')}: <strong>{counts.excluded_or_uncertain||0}</strong></p>
-        <p>{T('Relevant (page)','Relevan (halaman)')}: <strong>{counts.relevant||0}</strong></p>
+        <p>{T('Unassessed (loaded)','Belum dinilai (dimuat)')}: <strong>{counts.unassessed||0}</strong></p>
+        <p>{T('Excluded / uncertain (loaded)','Dikecualikan / ragu (dimuat)')}: <strong>{counts.excluded_or_uncertain||0}</strong></p>
+        <p>{T('Relevant (loaded)','Relevan (dimuat)')}: <strong>{counts.relevant||0}</strong></p>
       </div>}
-      <p className="text-xs text-slate-500">{T('Review queue is cursor-paginated across ordinary campaign evidence. Counts are for the current retrieved page, not population totals or a violation rate. Watchlist-only links are excluded.','Antrean tinjauan dibagi halaman untuk bukti kampanye biasa. Jumlah hanya untuk halaman yang dimuat, bukan seluruh data atau tingkat pelanggaran. Tautan khusus watchlist dikecualikan.')}</p>
+      <label className="block text-sm font-semibold">{T('Information QA status','Status QA informasi')}
+        <select data-testid="gate1-review-status-filter" className="intel-input mt-1 w-full" value={reviewStatus} onChange={e=>{currentReviewStatus.current=e.target.value;setReviewStatus(e.target.value)}}>
+          <option value="all">{T('All QA statuses','Semua status QA')}</option>
+          <option value="needs_review">{T('Needs review','Perlu ditinjau')}</option>
+          <option value="officer_verified">{T('Information reviewed','Informasi diperiksa petugas')}</option>
+          <option value="held">{T('Held for verification','Ditahan untuk verifikasi')}</option>
+          <option value="excluded">{T('Excluded by officer','Dikecualikan oleh petugas')}</option>
+          <option value="revalidation_required">{T('Needs revalidation','Perlu validasi ulang')}</option>
+        </select>
+      </label>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs rounded-lg border border-slate-200 p-3" data-testid="gate1-qa-coverage">
+        <p>{T('Needs review','Perlu ditinjau')}: <strong>{statusCounts.NEEDS_REVIEW||0}</strong></p>
+        <p>{T('Reviewed information','Informasi diperiksa')}: <strong>{statusCounts.OFFICER_VERIFIED||0}</strong></p>
+        <p>{T('Held / excluded','Ditahan / dikecualikan')}: <strong>{(statusCounts.HELD||0)+(statusCounts.EXCLUDED||0)}</strong></p>
+        <p>{T('Revalidation required','Perlu validasi ulang')}: <strong>{statusCounts.REVALIDATION_REQUIRED||0}</strong></p>
+      </div>
+      <p className="text-xs text-slate-500">{T('Counts reflect the currently loaded authorized evidence only—not the full campaign, AI accuracy, or a violation rate. Watchlist-only links are excluded.','Jumlah hanya berdasarkan bukti yang sudah dimuat dan diizinkan—bukan seluruh kampanye, akurasi AI, atau tingkat pelanggaran. Tautan khusus watchlist dikecualikan.')}</p>
     </section>
     {sampleLoading&&<p role="status">{T('Loading review queue…','Memuat antrean tinjauan…')}</p>}
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -203,7 +233,7 @@ export default function InboxHumanReview(){
           className={'block w-full rounded-lg border p-3 text-left text-sm hover:bg-slate-50 '+(String(selectedId)===String(item.result_id)?'border-[#801b24] bg-red-50':'border-slate-200')}>
           <span className="font-semibold">{item.platform||'Social'} · #{item.result_id}</span>
           <span className="block text-slate-600">{actionLabels[item.action]||item.action}</span>
-          <span className="block text-xs text-slate-500">{T('AI relevance','Relevansi AI')}: {item.relevance}</span>
+          <span className="block text-xs text-slate-500">{T('Current relevance','Relevansi saat ini')}: {item.relevance} ({item.relevance_basis||'SAVED_ASSESSMENT'})</span>
           {item.information_review_status&&<span className="block text-xs text-slate-500">{T('Information QA','QA informasi')}: {item.information_review_status}</span>}
         </button>)}
         {!sampleLoading&&sample&&sample.items?.length===0&&!hasMore&&<p className="text-sm text-slate-500">{T('No ordinary campaign evidence matches this filter.','Tidak ada bukti kampanye biasa yang cocok.')}</p>}
@@ -221,7 +251,8 @@ export default function InboxHumanReview(){
           {detail.content_truncated&&<p className="text-xs text-amber-800">{T('Text truncated. Check the original source.','Teks terpotong. Periksa sumber asli.')}</p>}
           {originalLink(detail.canonical_url)&&<a target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#801b24] underline" href={originalLink(detail.canonical_url)}>{T('Open original source','Buka sumber asli')}</a>}
           <div className="rounded-lg border border-slate-200 p-3 text-sm space-y-1">
-            <p><strong>{T('Saved relevance','Relevansi tersimpan')}:</strong> {detail.relevance}</p>
+            <p><strong>{T('Original AI relevance','Relevansi AI asli')}:</strong> {detail.original_ai_relevance||T('Not assessed','Belum dinilai')}</p>
+            <p><strong>{T('Effective relevance','Relevansi efektif')}:</strong> {detail.effective_relevance} ({detail.relevance_basis})</p>
             <p><strong>{T('AI sentiment','Sentimen AI')}:</strong> {detail.ai_sentiment}</p>
             <p><strong>{T('Effective sentiment','Sentimen efektif')}:</strong> {detail.effective_sentiment} ({detail.sentiment_basis})</p>
             <p><strong>{T('Assessment version','Versi penilaian')}:</strong> {detail.assessment_version??T('Not assessed','Belum dinilai')}</p>
@@ -232,7 +263,7 @@ export default function InboxHumanReview(){
           </div>
           {detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
             <h4 className="font-semibold text-sm">{T('Officer information review & corrections','Tinjauan informasi & koreksi petugas')}</h4>
-            <p className="text-xs text-slate-500">{T('Field correction is not whole-record verification. No legal finding, AI training or Command Centre publication occurs automatically.','Koreksi satu bidang bukan verifikasi seluruh catatan. Tidak ada temuan hukum, pelatihan AI, atau publikasi otomatis.')}</p>
+            <p className="text-xs text-slate-500">{T('Officer Verified means this saved INFORMATION snapshot was reviewed; it does not verify allegations or legal violations. Field corrections are not whole-record verification. No automatic AI training or Command Centre publication.','Terverifikasi Petugas berarti cuplikan INFORMASI ini telah ditinjau; bukan verifikasi tuduhan atau pelanggaran hukum. Koreksi satu bidang bukan verifikasi seluruh catatan. Tidak ada pelatihan AI atau publikasi otomatis.')}</p>
             <textarea aria-label="Review reason" className="intel-input w-full" rows={3} value={rationale} onChange={e=>setRationale(e.target.value)} placeholder={T('Reason and supporting explanation (minimum 10 characters)','Alasan dan penjelasan pendukung (minimal 10 karakter)')}/>
             {detail.can_correct_relevance&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label className="text-xs font-semibold">{T('Correct field','Bidang yang diperbaiki')}
@@ -265,6 +296,8 @@ export default function InboxHumanReview(){
                 {detail.can_correct_relevance&&x.revision!==detail.relevance_revision&&<button className="intel-ghost text-xs" type="button" disabled={actionBusy||rationale.trim().length<10} onClick={()=>restore('relevance',x.revision)}>{T('Restore','Pulihkan')}</button>}
               </div>)}
               <h5 className="font-semibold">{T('Sentiment corrections','Koreksi sentimen')}</h5>
+              {detail.can_correct_sentiment&&detail.sentiment_revision>0&&
+                <button className="intel-ghost text-xs" type="button" disabled={actionBusy||rationale.trim().length<10} onClick={()=>restore('sentiment',0)}>{T('Restore saved AI sentiment as new revision','Pulihkan sentimen AI tersimpan sebagai revisi baru')}</button>}
               {(history.sentiment_history||[]).map(x=><div className="flex items-center justify-between gap-2" key={'sentiment'+x.revision}>
                 <span>#{x.revision} · {x.value} · {T('Officer','Petugas')} {x.reviewer_id}</span>
                 {detail.can_correct_sentiment&&x.revision!==detail.sentiment_revision&&<button className="intel-ghost text-xs" type="button" disabled={actionBusy||rationale.trim().length<10} onClick={()=>restore('sentiment',x.revision)}>{T('Restore','Pulihkan')}</button>}

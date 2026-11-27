@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils &
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 # Version metadata must not invalidate system or Python dependencies.
-ARG BAWASLU_BUILD_VERSION=185.8
+ARG BAWASLU_BUILD_VERSION=185.9
 ARG BAWASLU_BUILD_COMMIT=unknown
 ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 COPY backend ./backend

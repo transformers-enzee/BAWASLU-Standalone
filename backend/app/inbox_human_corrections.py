@@ -20,12 +20,16 @@ from .models import AuditEvent, EvidenceAssessment, EvidenceReview, SocialListen
 from .officer_sentiment import OfficerSentimentCorrection
 from .governance_persistence import _grant, _campaign, _source
 from .inbox_human_gate import _read_enabled, _write_enabled
+from .inbox_gate_integrity import (
+    GATE1_AUDIT_SUBJECT, source_integrity_digest, review_projection, audit_payload,
+)
+from .socialcrawl import _result_in_scope
 
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 RELEVANCE = frozenset(("RELEVANT", "HIGHLY_RELEVANT", "IRRELEVANT", "UNCERTAIN"))
 SENTIMENT = frozenset(("POSITIVE", "NEUTRAL", "NEGATIVE"))
 STATES = frozenset(("OFFICER_VERIFIED", "NEEDS_REVIEW", "HELD", "EXCLUDED"))
-AUDIT_SUBJECT = "Gate1InformationReview"
+AUDIT_SUBJECT = GATE1_AUDIT_SUBJECT
 RELEVANCE_COPY = (
     "relevance_confidence", "sentiment", "sentiment_confidence", "sentiment_explanation",
     "sentiment_model", "candidate_signals_json", "geographic_signals_json",
@@ -38,6 +42,8 @@ class FieldCorrectionIn(BaseModel):
     field: str
     value: str
     expected_revision: int = Field(ge=0)
+    expected_assessment_id: int = Field(gt=0)
+    expected_source_digest: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=10, max_length=1500)
 
 
@@ -45,12 +51,17 @@ class RestoreIn(BaseModel):
     field: str
     target_revision: int = Field(ge=0)
     expected_revision: int = Field(ge=0)
+    expected_assessment_id: int = Field(gt=0)
+    expected_source_digest: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=10, max_length=1500)
 
 
 class DecisionIn(BaseModel):
     status: str
     expected_revision: int = Field(ge=0)
+    expected_assessment_id: int | None = None
+    expected_sentiment_revision: int = Field(ge=0)
+    expected_source_digest: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=10, max_length=1500)
 
 
@@ -107,34 +118,18 @@ def _latest_decision(db, campaign_id, result_id):
 
 
 def _payload(event):
-    try:
-        obj = json.loads(event.changes_json or "{}")
-        return obj if isinstance(obj, dict) else {}
-    except (ValueError, TypeError):
-        return {}
+    return audit_payload(event)
 
 
-def review_state_for_source(db, campaign_id, result_id, assessment=None, sentiment=None):
+def review_state_for_source(db, campaign_id, result_id, assessment=None, sentiment=None, source=None):
     event = _latest_decision(db, campaign_id, result_id)
-    if event is None:
-        return {"information_review_status": "NEEDS_REVIEW", "information_review_revision": 0,
-                "information_review_reviewer_id": None, "information_review_reason": None,
-                "information_review_at": None, "information_review_stale": False}
     if assessment is None:
         assessment = _latest_assessment(db, campaign_id, result_id)
     if sentiment is None:
         sentiment = _latest_sentiment(db, campaign_id, result_id)
-    data = _payload(event)
-    changed = (data.get("assessment_id") != (assessment.id if assessment else None)
-               or data.get("sentiment_correction_id") != (sentiment.id if sentiment else None))
-    return {
-        "information_review_status": "REVALIDATION_REQUIRED" if changed else data.get("status", "NEEDS_REVIEW"),
-        "information_review_revision": event.id,
-        "information_review_reviewer_id": event.actor_id,
-        "information_review_reason": data.get("reason"),
-        "information_review_at": event.occurred_at,
-        "information_review_stale": changed,
-    }
+    if source is None:
+        source = db.get(SocialListeningResult, result_id)
+    return review_projection(event, assessment, sentiment, source)
 
 
 def _write_audit(db, officer, campaign_id, result_id, action, changes):
@@ -163,8 +158,18 @@ def _refresh_views():
     invalidate_dashboard_cache()
 
 
+def _lock_current_source(db, officer, source):
+    """Refresh under a source-row lock before accepting any Gate 1 mutation."""
+    locked = (db.query(SocialListeningResult)
+              .filter_by(id=source.id).with_for_update().populate_existing().first())
+    if locked is None or not _result_in_scope(db, officer, locked):
+        raise HTTPException(404, "Source unavailable")
+    return locked
+
+
 def _apply_field(db, user, officer, source, campaign_id, field, value, expected_revision,
-                 reason, action="GATE1_FIELD_CORRECTED", restored_from=None):
+                 reason, action="GATE1_FIELD_CORRECTED", restored_from=None,
+                 expected_assessment_id=None, expected_source_digest=None):
     field = field.strip().lower()
     value = value.strip().upper()
     if field not in ("relevance", "sentiment"):
@@ -174,10 +179,14 @@ def _apply_field(db, user, officer, source, campaign_id, field, value, expected_
         raise HTTPException(422, "Invalid field value")
     # Serialize cooperating Gate 1 writers using an existing row lock, with
     # a separate optimistic revision check to reject stale browser submissions.
-    db.query(SocialListeningResult).filter_by(id=source.id).with_for_update().first()
+    source = _lock_current_source(db, officer, source)
+    if expected_source_digest is not None and source_integrity_digest(source) != expected_source_digest:
+        raise HTTPException(409, "Saved source changed; refresh before correcting")
     assessment = _latest_assessment(db, campaign_id, source.id)
     if assessment is None:
         raise HTTPException(422, "Saved assessment required before field correction")
+    if expected_assessment_id is not None and assessment.id != expected_assessment_id:
+        raise HTTPException(409, "Assessment changed; refresh before correcting")
     sentiment = _latest_sentiment(db, campaign_id, source.id)
     if field == "relevance":
         old_value = str(assessment.relevance_label or "UNASSESSED").upper()
@@ -219,6 +228,8 @@ def _apply_field(db, user, officer, source, campaign_id, field, value, expected_
         "old_effective_value": old_value, "new_effective_value": value,
         "previous_revision": previous, "revision": revision,
         "reviewer_id": str(user.id), "reason": reason,
+        "source_integrity_digest": source_integrity_digest(source),
+        "assessment_id_before_correction": assessment.id,
         "model_version": assessment.model_version, "review_status": "FIELD_CORRECTED",
         "correction_id": correction_id, "restored_from": restored_from,
     })
@@ -241,7 +252,9 @@ def correct_field(campaign_id: int, result_id: int, body: FieldCorrectionIn,
                   user: User=Depends(current_user), db: Session=Depends(get_db)):
     officer, campaign, source = _authorize(db, user, campaign_id, result_id, True)
     return _apply_field(db, user, officer, source, campaign_id,
-                        body.field, body.value, body.expected_revision, body.reason.strip())
+                        body.field, body.value, body.expected_revision, body.reason.strip(),
+                        expected_assessment_id=body.expected_assessment_id,
+                        expected_source_digest=body.expected_source_digest)
 
 
 @router.post("/campaign/{campaign_id}/source/{result_id}/restore")
@@ -270,6 +283,8 @@ def restore_field(campaign_id: int, result_id: int, body: RestoreIn,
     return _apply_field(
         db, user, officer, source, campaign_id, field, value, body.expected_revision,
         body.reason.strip(), action="GATE1_FIELD_RESTORED", restored_from=body.target_revision,
+        expected_assessment_id=body.expected_assessment_id,
+        expected_source_digest=body.expected_source_digest,
     )
 
 
@@ -280,22 +295,32 @@ def decide_information(campaign_id: int, result_id: int, body: DecisionIn,
     status = body.status.strip().upper()
     if status not in STATES:
         raise HTTPException(422, "Invalid information review decision")
-    db.query(SocialListeningResult).filter_by(id=source.id).with_for_update().first()
+    source = _lock_current_source(db, officer, source)
     latest = _latest_decision(db, campaign_id, result_id)
     current = latest.id if latest else 0
     if body.expected_revision != current:
         raise HTTPException(409, "Review decision changed; refresh")
     assessment = _latest_assessment(db, campaign_id, result_id)
     sentiment = _latest_sentiment(db, campaign_id, result_id)
-    if status == "OFFICER_VERIFIED" and (assessment is None or
-                                        not (source.text_content or source.canonical_url)):
-        raise HTTPException(422, "A saved assessment and source trace are required")
+    digest = source_integrity_digest(source)
+    if (body.expected_source_digest != digest
+            or body.expected_assessment_id != (assessment.id if assessment else None)
+            or body.expected_sentiment_revision != (sentiment.id if sentiment else 0)):
+        raise HTTPException(409, "Evidence changed since opening; refresh before review")
+    if status == "OFFICER_VERIFIED" and (
+        assessment is None
+        or str(assessment.relevance_label or "").upper() in ("", "UNASSESSED")
+        or assessment.model_version == "PRISM_PENDING_OPENAI"
+        or not (source.text_content or source.canonical_url)
+    ):
+        raise HTTPException(422, "A completed assessment and saved source trace are required")
     event = _write_audit(db, officer, campaign_id, result_id, "GATE1_INFORMATION_DECISION", {
         "status": status, "reason": body.reason.strip(),
         "previous_status": _payload(latest).get("status") if latest else None,
         "reviewer_id": str(user.id),
         "assessment_id": assessment.id if assessment else None,
         "sentiment_correction_id": sentiment.id if sentiment else None,
+        "source_integrity_digest": digest,
         "model_version": assessment.model_version if assessment else None,
         "information_only": True, "legal_claim_verified": False,
     })

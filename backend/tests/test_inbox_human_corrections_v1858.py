@@ -93,7 +93,9 @@ def test_field_correction_restore_and_audit_integrity(seeded):
     try:
         restored=gate.restore_field(
             300,801,gate.RestoreIn(field="relevance",target_revision=1,
-                                   expected_revision=2,reason="Restore original AI assessment for review"),
+                                   expected_revision=2,expected_assessment_id=changed["correction_id"],
+                                   expected_source_digest=gate.source_integrity_digest(source),
+                                   reason="Restore original AI assessment for review"),
             user=user,db=db)
         assert restored["revision"]==3
         assert gate._latest_assessment(db,300,801).relevance_label=="UNCERTAIN"
@@ -109,8 +111,11 @@ def test_review_decision_becomes_stale_after_new_correction(seeded, monkeypatch)
     db,user,campaign,source=seeded
     p=profile()
     monkeypatch.setattr(gate,"_authorize",lambda db,user,cid,rid,write=False:(p,campaign,source))
+    digest=gate.source_integrity_digest(source)
     result=gate.decide_information(
         300,801,gate.DecisionIn(status="OFFICER_VERIFIED",expected_revision=0,
+                               expected_assessment_id=900,expected_sentiment_revision=0,
+                               expected_source_digest=digest,
                                reason="Officer inspected original evidence and attribution"),
         user=user,db=db)
     assert result["legal_claim_verified"] is False
@@ -118,6 +123,8 @@ def test_review_decision_becomes_stale_after_new_correction(seeded, monkeypatch)
     with pytest.raises(HTTPException) as exc:
         gate.decide_information(
             300,801,gate.DecisionIn(status="EXCLUDED",expected_revision=0,
+                                   expected_assessment_id=900,expected_sentiment_revision=0,
+                                   expected_source_digest=digest,
                                    reason="Stale decision must be rejected"),user=user,db=db)
     assert exc.value.status_code==409
     gate._apply_field(db,user,p,source,300,"relevance","RELEVANT",1,
@@ -137,7 +144,9 @@ def test_scope_is_enforced_before_mutations(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         gate.correct_field(
             300,999,gate.FieldCorrectionIn(field="relevance",value="RELEVANT",
-                                            expected_revision=1,reason="Reviewer explanation"),
+                                            expected_revision=1,expected_assessment_id=900,
+                                            expected_source_digest="0"*64,
+                                            reason="Reviewer explanation"),
             user=SimpleNamespace(id=701),db=MagicMock())
     assert exc.value.status_code==404
 

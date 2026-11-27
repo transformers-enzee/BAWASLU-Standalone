@@ -5,7 +5,6 @@ Every returned source is linked to the authorized campaign and checked against
 the officer's geographic source scope. No population totals, mutations or AI calls.
 """
 from collections import Counter
-import json
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -15,6 +14,10 @@ from .governance_information_qa import _latest_per_source, classify_information
 from .models import CampaignEvidence, EvidenceAssessment, EvidenceReview, SocialListeningResult, AuditEvent
 from .officer_sentiment import OfficerSentimentCorrection
 from .socialcrawl import _result_in_scope
+from .inbox_gate_integrity import (
+    GATE1_AUDIT_SUBJECT, STATUS_FILTERS, review_projection,
+    review_status_matches, saved_relevance_basis,
+)
 
 DEFAULT_PAGE_SIZE = 40
 MAX_PAGE_SIZE = 100
@@ -71,7 +74,7 @@ def _classified_batch(db, officer, campaign_id, links):
             partition_by=AuditEvent.subject_id,
             order_by=AuditEvent.id.desc()
         ).label("position"))
-        .filter(AuditEvent.subject_type == "Gate1InformationReview",
+        .filter(AuditEvent.subject_type == GATE1_AUDIT_SUBJECT,
                 AuditEvent.action == "GATE1_INFORMATION_DECISION",
                 AuditEvent.subject_id.in_(names))
         .subquery())
@@ -86,23 +89,14 @@ def _classified_batch(db, officer, campaign_id, links):
             assessment, sentiment.get(sid),
             reviews.get(assessment.id) if assessment else None
         )
-        decision = decision_by_source.get(sid)
-        state = "NEEDS_REVIEW"
-        stale = False
-        if decision:
-            try:
-                info = json.loads(decision.changes_json or "{}")
-            except (TypeError, ValueError):
-                info = {}
-            if not isinstance(info, dict):
-                info = {}
-            stale = (info.get("assessment_id") != (assessment.id if assessment else None)
-                     or info.get("sentiment_correction_id") !=
-                     (sentiment[sid].id if sid in sentiment else None))
-            state = "REVALIDATION_REQUIRED" if stale else info.get("status", "NEEDS_REVIEW")
+        state = review_projection(decision_by_source.get(sid), assessment,
+                                  sentiment.get(sid), sources[sid])
+        # Source digest is supplied only when opening evidence details;
+        # the queue needs only review status, not an integrity token.
+        state.pop("source_integrity_digest", None)
         results[sid] = {
-            "information_review_status": state,
-            "information_review_stale": stale,
+            **state,
+            "relevance_basis": saved_relevance_basis(assessment),
             "campaign_id": str(campaign_id),
             "result_id": str(sid),
             "platform": sources[sid].platform or "",
@@ -113,7 +107,7 @@ def _classified_batch(db, officer, campaign_id, links):
 
 
 def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE,
-                           cursor=None, category="all"):
+                           cursor=None, category="all", review_status="all"):
     """Keyset pagination through ALL ordinary campaign links, not latest 120.
 
     Processing is capped per HTTP request for safety; a continuation cursor
@@ -123,6 +117,8 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
     """
     if category not in CATEGORIES:
         raise HTTPException(422, "Unsupported review category")
+    if review_status not in STATUS_FILTERS:
+        raise HTTPException(422, "Unsupported information QA status")
     if not isinstance(page_size, int) or not 1 <= page_size <= MAX_PAGE_SIZE:
         raise HTTPException(422, "page_size must be between 1 and 100")
     if cursor is not None and (not isinstance(cursor, int) or cursor <= 0):
@@ -152,6 +148,8 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
                 continue
             if category != "all" and entry["action"] not in CATEGORY_ACTIONS[category]:
                 continue
+            if not review_status_matches(entry, review_status):
+                continue
             selected.append(entry)
             if len(selected) >= page_size:
                 break
@@ -171,6 +169,7 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
             CampaignEvidence.id < position,
         ).first() is not None
     counts = Counter(item["category"] for item in selected)
+    review_counts = Counter(item.get("information_review_status", "NEEDS_REVIEW") for item in selected)
     return {
         "campaign_id": str(campaign_id),
         "queue_name": "NEEDS_HUMAN_REVIEW",
@@ -178,10 +177,14 @@ def paginated_review_queue(db, officer, campaign_id, page_size=DEFAULT_PAGE_SIZE
         "page_count": len(selected),
         "page_counts": {key: counts.get(key, 0) for key in
                         ("unassessed", "excluded_or_uncertain", "relevant", "other")},
+        "page_review_status_counts": {key: review_counts.get(key, 0) for key in
+                                    ("NEEDS_REVIEW", "OFFICER_VERIFIED", "HELD",
+                                     "EXCLUDED", "REVALIDATION_REQUIRED")},
         "next_cursor": str(position) if has_more else None,
         "has_more": has_more,
         "scan_limited": bool(has_more and scanned >= MAX_SCAN_PER_REQUEST),
         "filter_category": category,
+        "filter_review_status": review_status,
         "page_size": page_size,
         "count_is_page_only": True,
         "not_population_totals": True,

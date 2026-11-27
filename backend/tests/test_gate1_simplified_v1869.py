@@ -78,4 +78,7 @@ def test_original_source_and_review_publication_paths_unchanged():
     assert "OFFICER_VERIFIED" in corrections
     assert "Independent officer approval required" in corrections
     assert 'full_field_revision' in router
-    assert "source_integrity_digest" in router
+    # Digest validation is owned by the correction handler, not the read-only Inbox route.
+    assert "source_integrity_digest" in corrections
+    full=(ROOT/"backend/app/inbox_human_full_review_v1868.py").read_text()
+    assert "source_integrity_digest" in full

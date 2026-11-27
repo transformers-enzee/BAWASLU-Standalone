@@ -1,4 +1,4 @@
-name: BAWASLU v186.9 simplified officer Gate 1 QA
+name: BAWASLU v187.0 simplified officer Gate 1 QA
 on:
   push:
     branches:

@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
 import Gate1FullWorkbench from './Gate1FullWorkbench';
+import Gate1VariableControlV1879 from './Gate1VariableControlV1879';
 import {useLanguage} from '@/lib/LanguageContext';
 
 const copy=(data)=>String(data||'');
@@ -374,7 +375,11 @@ export default function InboxHumanReview(){
           <p className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm">{detail.text_content||T('No text saved.','Tidak ada teks tersimpan.')}</p>
           {detail.content_truncated&&<p className="text-xs text-amber-800">{T('Text truncated. Check the original source.','Teks terpotong. Periksa sumber asli.')}</p>}
           {originalLink(detail.canonical_url)&&<a target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[#801b24] underline" href={originalLink(detail.canonical_url)}>{T('Open original source','Buka sumber asli')}</a>}
-          <div className="rounded-lg border border-slate-200 p-3 text-sm space-y-1">
+          <details className="rounded-lg border border-slate-200 p-3 text-sm space-y-2"
+            open={!realQaSelected} data-testid="gate1-extended-assessment-details">
+            <summary className="font-medium text-xs cursor-pointer">{T('Original AI assessment & technical review status',
+              'Penilaian AI asli & status tinjauan teknis')}</summary>
+          <div className="space-y-1 pt-2">
             <p><strong>{T('Original AI relevance','Relevansi AI asli')}:</strong> {detail.original_ai_relevance||T('Not assessed','Belum dinilai')}</p>
             <p><strong>{T('Effective relevance','Relevansi efektif')}:</strong> {detail.effective_relevance} ({detail.relevance_basis})</p>
             <p><strong>{T('AI sentiment','Sentimen AI')}:</strong> {detail.ai_sentiment}</p>
@@ -385,6 +390,7 @@ export default function InboxHumanReview(){
             {detail.information_review_reviewer_id&&<p className="text-xs text-slate-600">{T('Reviewer','Pemeriksa')}: {detail.information_review_reviewer_id} · {detail.information_review_at}</p>}
             {detail.relevance_explanation&&<p className="text-xs text-slate-600">{detail.relevance_explanation}</p>}
           </div>
+          </details>
           {!(realQaSelected&&detail.qa_audit_only)&& (detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
             {detail.qa_audit_only&&<p data-testid="gate1-real-qa-safety" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">{T('QA ONLY — your override changes Human Gate 1 review views, not the saved AI assessment, original Social Listening data, or Command Centre.','KHUSUS QA — koreksi hanya mengubah tampilan Human Gate 1, bukan penilaian AI tersimpan, data Social Listening asli, atau Command Centre.')}</p>}
             <h4 className="font-semibold text-sm">{T('Officer information review & corrections','Tinjauan informasi & koreksi petugas')}</h4>
@@ -411,7 +417,11 @@ export default function InboxHumanReview(){
             </label>
             <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
           </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>)}
-          <Gate1FullWorkbench campaignId={campaignId} detail={detail} onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>
+          {(String(campaignId)==='9'&&detail.qa_audit_only)?
+            <Gate1VariableControlV1879 campaignId={campaignId} detail={detail}
+              onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>:
+            <Gate1FullWorkbench campaignId={campaignId} detail={detail}
+              onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>}
           {!realQaSelected&&<div data-testid="gate1-internal-qa-tools" className="border-t pt-3 space-y-2">
             <p className="text-xs font-semibold text-slate-500">{T('Internal QA diagnostics','Diagnostik QA internal')}</p>
           <details className="border-t pt-3 space-y-2" data-testid="gate1-gate2-readiness" open={!realQaSelected}>

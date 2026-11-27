@@ -50,9 +50,15 @@ test('authenticated read-only workspaces load without route errors or paid clien
 test('navigation exposes the four operational workspaces under officer permissions',async ({page})=>{
   await signIn(page);
   const nav=page.locator('nav');
-  for(const href of ['/smart-radar','/social-listening','/inbox','/ai-5']) {
+  for(const href of ['/smart-radar','/social-listening','/inbox']) {
     await expect(nav.locator('a[href="'+href+'"]').first()).toBeVisible();
   }
+  // Single AI-5 entry is role-aware: leadership uses Management AI-5,
+  // while operational officers use the Operational AI-5 route.
+  const assistant=nav.locator('a[href="/ai-5"], a[href="/management/ai-5"]');
+  await expect(assistant).toHaveCount(1);
+  await expect(assistant.first()).toBeVisible();
+  await expect(nav.locator('a[href="/ai-assistant"], a[href="/ai-4"]')).toHaveCount(0);
   await page.goto('/smart-radar');
   await expect(page.getByRole('button',{name:/Reports & Briefings|Laporan & Ringkasan/})).toBeVisible();
 });

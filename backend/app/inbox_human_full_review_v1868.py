@@ -20,6 +20,7 @@ from .governance_persistence import _campaign, _grant, _source
 from .inbox_gate_integrity import GATE1_AUDIT_SUBJECT, audit_payload, source_integrity_digest
 from .inbox_gate_real_qa_v1867 import QA_ID, is_qa_campaign
 from .models import AuditEvent, EvidenceAssessment, SocialListeningResult, User
+from .inbox_gate1_quality_hints_v1871 import quality_hints, KNOWN_PLATFORMS
 
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 
@@ -127,6 +128,10 @@ def _value(field, raw):
         if not re.fullmatch(r"[0-9]{1,14}", v):
             raise HTTPException(422, "Engagement must be a nonnegative whole number")
         v = str(int(v))
+    elif field == "platform" and v.lower() not in KNOWN_PLATFORMS:
+        raise HTTPException(422, "Use a supported platform rather than an account handle")
+    elif field in ("country", "province", "city") and (v.lower() in KNOWN_PLATFORMS or v.startswith("@")):
+        raise HTTPException(422, "Location cannot contain a platform or account handle")
     elif field in URL_FIELDS:
         v = _safe_url(v, required=True)
     elif field in DATES and v:
@@ -278,6 +283,7 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
                            and can_write and isolated_source(db,campaign,source))
     return {"campaign_id":str(campaign_id),"result_id":str(result_id),
             "field_groups":{k:list(v) for k,v in FIELD_GROUPS.items()},
+            "quality_hints":quality_hints(p["fields"],source),
             **p,"can_edit":bool(can_write and isolated_source(db,campaign,source)),
             "can_secondary_review":secondary_allowed,
             "qa_audit_only":True,"original_source_preserved":True,

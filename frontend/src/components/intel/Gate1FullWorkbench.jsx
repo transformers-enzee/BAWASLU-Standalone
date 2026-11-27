@@ -2,6 +2,10 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
 import {useLanguage} from '@/lib/LanguageContext';
 
+const MAIN_FIELDS=['relevance','sentiment','candidate_names','political_parties','topic_labels','potential_issue_categories','evidence_quality'];
+const CONTEXT_FIELDS=['platform','author_name','observed_handle','published_at','canonical_url','text_content','country','province','city','language','transcript','engagement_likes','engagement_comments','engagement_shares','engagement_views'];
+const SUPPORTED_PLATFORMS=['youtube','facebook','instagram','tiktok','x','other'];
+const platformForUrl=(value)=>{try{const h=new URL(value).hostname.toLowerCase();const domains={youtube:['youtube.com','youtu.be'],facebook:['facebook.com','fb.watch'],instagram:['instagram.com'],tiktok:['tiktok.com'],x:['x.com','twitter.com']};return Object.entries(domains).find(([,hosts])=>hosts.some(d=>h===d||h.endsWith('.'+d)))?.[0]||''}catch{return ''}};
 const CLASSIFICATIONS={
   relevance:['RELEVANT','HIGHLY_RELEVANT','UNCERTAIN','IRRELEVANT'],
   sentiment:['POSITIVE','NEUTRAL','NEGATIVE'],
@@ -63,6 +67,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const [view,setView]=useState(null);
   const [manualList,setManualList]=useState(null);
   const [field,setField]=useState('');
+  const [fieldFilter,setFieldFilter]=useState('priority');
   const [value,setValue]=useState('');
   const [noValue,setNoValue]=useState(false);
   const [note,setNote]=useState('');
@@ -70,6 +75,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const [sourceConfirmed,setSourceConfirmed]=useState(false);
   const [pending,setPending]=useState([]);
   const [manual,setManual]=useState(EMPTY_MANUAL);
+  const [sensitiveReason,setSensitiveReason]=useState('SOURCE_MISMATCH');
   const [reviewerReason,setReviewerReason]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -78,14 +84,17 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const lastSourceRef=useRef('');
 
   const fields=view?.fields||{};
-  const options=useMemo(()=>[
-    {title:T('AI classification','Klasifikasi AI'),items:['relevance','sentiment']},
-    ...Object.entries(view?.field_groups||{}).map(([key,items])=>({
-      title:({source:T('Post and source details','Rincian unggahan dan sumber'),
-        assessment:T('Topics, entities and narratives','Topik, entitas dan narasi'),
-        quality:T('Evidence completeness','Kelengkapan bukti')})[key]||key,items
-    }))
-  ],[view?.field_groups,language]);
+  const allFields=useMemo(()=>Array.from(new Set(['relevance','sentiment',...Object.values(view?.field_groups||{}).flat()])),[view?.field_groups]);
+  const missingFields=useMemo(()=>allFields.filter(key=>{
+    const val=key==='relevance'?detail?.effective_relevance:key==='sentiment'?detail?.effective_sentiment:fields[key]?.effective;
+    return !usable(val);
+  }),[allFields,detail?.effective_relevance,detail?.effective_sentiment,fields]);
+  const orderedFields=useMemo(()=>{
+    const group=fieldFilter==='missing'?missingFields:fieldFilter==='advanced'?allFields:
+      [...MAIN_FIELDS,...CONTEXT_FIELDS].filter(key=>allFields.includes(key));
+    return [...new Set(group)];
+  },[fieldFilter,missingFields,allFields]);
+  const options=useMemo(()=>[{title:T('Available correction fields','Bidang yang dapat dikoreksi'),items:orderedFields}],[orderedFields,language]);
   const important=HIGH_IMPACT.has(field);
   const choice=field==='relevance'?String(detail?.effective_relevance||''):
     field==='sentiment'?String(detail?.effective_sentiment||''):
@@ -93,13 +102,15 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const original=field==='relevance'?String(detail?.original_ai_relevance||''):
     field==='sentiment'?String(detail?.ai_sentiment||''):
     String(fields[field]?.original??'');
-  const issueHints=useMemo(()=>savedIssues(detail,view),[detail,view]);
+  const issueHints=useMemo(()=>[...(view?.quality_hints||[]).map(h=>({...h,message:h.message+(h.suggested_value?' Suggested: '+h.suggested_value+' (verify before use).':'')})),...savedIssues(detail,view)].slice(0,5),[detail,view]);
+  const reasonLabels={SOURCE_MISMATCH:'Source differs from saved value',WRONG_ATTRIBUTION:'Incorrect identity or location attribution',MISSING_CONTEXT:'Missing or incomplete source context',OTHER:'Other — officer explanation'};
+  const correctionReason=important?(sensitiveReason==='OTHER'?note.trim():reasonLabels[sensitiveReason]+(note.trim()?' — '+note.trim():'')):note.trim();
   const isLegacy=field==='relevance'||field==='sentiment';
   const changed=field&&((noValue?choice!=='':String(value).trim()!==choice)&&
     (noValue||String(value).trim().length>0));
   const canSubmit=view?.can_edit&&detail?.can_review_information&&changed&&!busy&&
     (!isLegacy||Boolean(detail?.assessment_id))&&
-    (!important||note.trim().length>=10)&&
+    (!important||correctionReason.length>=10)&&
     (!sourceConfirmed||validUrl(support))&&
     (!support.trim()||validUrl(support));
   const needsReview=view?.secondary_review_required&&view?.secondary_review?.status!=='APPROVED';
@@ -110,7 +121,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     let active=true;
     const sourceChanged=lastSourceRef.current!==String(detail.result_id);
     lastSourceRef.current=String(detail.result_id);
-    if(sourceChanged){setMode('review');setNotice('')}
+    if(sourceChanged){setMode('review');setNotice('');setFieldFilter('priority')}
     setField('');setValue('');setNoValue(false);setPending([]);setAdvanced(false);
     setNote('');setSupport('');setSourceConfirmed(false);setError('');setView(null);
     base44.inboxHumanReview.fullReview(campaignId,detail.result_id)
@@ -122,20 +133,22 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   useEffect(()=>{
     if(String(campaignId)!=='9'||mode!=='missing')return;
     let active=true;
+    const preferred=String(detail?.platform||'').toLowerCase();
+    if(SUPPORTED_PLATFORMS.includes(preferred))setManual(x=>({...x,platform:preferred}));
     base44.inboxHumanReview.manualIntake(campaignId)
       .then(x=>{if(active)setManualList(x)})
       .catch(e=>{if(active)setError(e.message||'Manual evidence unavailable')});
     return ()=>{active=false};
-  },[campaignId,mode]);
+  },[campaignId,mode,detail?.platform]);
 
   function selectField(key){
-    setField(key);setValue('');setNote('');setSupport('');setNoValue(false);
+    setField(key);setValue('');setNote('');setSensitiveReason('SOURCE_MISMATCH');setSupport('');setNoValue(false);
     setSourceConfirmed(false);setError('');setAdvanced(false);
   }
   function createPatch(){
     if(!field||!changed)return null;
     const clean=noValue?'':String(value).trim();
-    const explanation=note.trim().length>=10?note.trim():autoFieldReason(field);
+    const explanation=correctionReason.length>=10?correctionReason:autoFieldReason(field);
     return {field,value:clean,mode:noValue?'UNAVAILABLE':usable(choice)?'CORRECTED':'SUPPLEMENTED',
       verification:sourceConfirmed?'SOURCE_CONFIRMED':'UNVERIFIED',
       evidence_url:support.trim(),field_reason:explanation};
@@ -167,14 +180,14 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           expected_revision:fresh.field==='relevance'?detail.relevance_revision:detail.sentiment_revision,
           expected_assessment_id:detail.assessment_id,
           expected_source_digest:detail.source_integrity_digest,
-          reason:note.trim().length>=10?note.trim():autoFieldReason(fresh.field)
+          reason:correctionReason.length>=10?correctionReason:autoFieldReason(fresh.field)
         });
       }else{
         await base44.inboxHumanReview.saveFullReview(campaignId,detail.result_id,{
           fields:patches,expected_revision:view.revision,
           expected_assessment_id:detail.assessment_id,
           expected_source_digest:detail.source_integrity_digest,
-          reason:note.trim().length>=10?note.trim():autoBatchReason(patches.length)
+          reason:correctionReason.length>=10?correctionReason:autoBatchReason(patches.length)
         });
       }
       setPending([]);selectField('');
@@ -236,7 +249,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
         reason:manual.reason.trim().length>=10?manual.reason.trim():autoManualReason,
         evidence_url:''
       });
-      setManual(EMPTY_MANUAL);
+      setManual({...EMPTY_MANUAL,platform:SUPPORTED_PLATFORMS.includes(String(detail?.platform||'').toLowerCase())?String(detail.platform).toLowerCase():'other'});
       setManualList(await base44.inboxHumanReview.manualIntake(campaignId));
       setNotice(T('Missing evidence recorded as an unverified QA proposal; no import or publication.',
         'Bukti dicatat sebagai usulan QA belum terverifikasi; tidak diimpor atau diterbitkan.'));
@@ -262,7 +275,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
       </button>
       <button role="tab" aria-selected={mode==='missing'} className={'intel-ghost text-xs '+(mode==='missing'?'font-bold border-[#801b24]':'')}
         type="button" onClick={()=>{setMode('missing');setError('')}} data-testid="gate1-action-missing">
-        {T('Add Missing Evidence','Tambah Bukti yang Hilang')}
+        {T('Add Missing Post','Tambah Unggahan yang Hilang')}
       </button>
     </div>
 
@@ -278,17 +291,22 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           {issueHints.length?issueHints.map(i=><div key={i.field} className="flex items-start gap-2 text-xs">
             <span className="text-amber-700" aria-hidden="true">!</span>
             <div className="flex-1"><span>{i.message}</span></div>
-            {view.can_edit&&<button type="button" className="underline text-[#801b24]" onClick={()=>selectField(i.field)}>
+            {view.can_edit&&<button type="button" className="underline text-[#801b24]" onClick={()=>{setFieldFilter('advanced');selectField(i.field)}}>
               {T('Fix','Perbaiki')}</button>}
           </div>):<p className="text-xs text-slate-500">{T('No obvious missing values detected. You can still correct any field.',
             'Tidak ada nilai hilang yang jelas. Anda tetap dapat mengoreksi bidang apa pun.')}</p>}
         </div>
 
         {view.can_edit&&<div className="rounded-lg border p-3 space-y-2" data-testid="gate1-full-field-editor">
+          <div className="flex flex-wrap gap-2 text-xs" data-testid="gate1-field-filter">
+            {[['priority',T('Recommended fields','Bidang utama')],['missing',T('Missing values','Nilai hilang')],['advanced',T('All fields','Semua bidang')]].map(([id,label])=><button type="button" key={id} aria-pressed={fieldFilter===id}
+              className={'rounded-md border px-2 py-1 '+(fieldFilter===id?'border-[#801b24] font-semibold':'border-slate-200')} onClick={()=>{setFieldFilter(id);setField('')}}>{label}{id==='missing'?' ('+missingFields.length+')':''}</button>)}
+          </div>
           <label className="text-xs font-semibold block">{T('What needs correcting?','Apa yang perlu diperbaiki?')}
             <select className={INPUT} value={field} onChange={e=>selectField(e.target.value)}
               data-testid="gate1-quick-field-select">
               <option value="">{T('Choose any field (only when needed)','Pilih bidang jika perlu')}</option>
+              {orderedFields.length===0&&<option disabled>{T('No missing fields detected','Tidak ada bidang hilang terdeteksi')}</option>}
               {options.map(group=><optgroup key={group.title} label={group.title}>
                 {group.items.map(key=><option value={key} key={key}>{pretty(key)}</option>)}
               </optgroup>)}
@@ -296,8 +314,9 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           </label>
           {field&&<div className="space-y-2" data-testid="gate1-quick-editor">
             <div className="rounded-md bg-slate-50 p-2 text-xs space-y-1">
-              <p className="text-slate-500">{T('Saved original','Nilai asli tersimpan')}: <strong className="break-words">{usable(original)?original.slice(0,250):T('Not available','Tidak tersedia')}</strong></p>
-              <p>{T('Current QA value','Nilai QA saat ini')}: <strong className="break-words">{usable(choice)?choice.slice(0,250):T('Not identified','Tidak teridentifikasi')}</strong></p>
+              <p className="text-slate-500">{T('Original provider / AI value','Nilai sumber / AI asli')}: <strong className="break-words whitespace-pre-wrap">{usable(original)?original:T('Not available','Tidak tersedia')}</strong></p>
+              <p data-testid="gate1-current-effective-value">{T('Current effective value','Nilai efektif saat ini')}: <strong className="break-words whitespace-pre-wrap">{usable(choice)?choice:T('Not identified','Tidak teridentifikasi')}</strong></p>
+              <p className="text-slate-500">{T('Value basis','Dasar nilai')}: {isLegacy?'Saved AI / officer correction':fields[field]?.basis||'Original saved'} · {fields[field]?.verification||'Unverified'}</p>
             </div>
             <label className="text-xs font-semibold block">{T('Correct value','Nilai yang benar')}
               {CLASSIFICATIONS[field]?<select className={INPUT} value={value} onChange={e=>setValue(e.target.value)}
@@ -317,9 +336,14 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
             {important&&<div className="rounded-md border border-amber-200 bg-amber-50 p-2 space-y-2">
               <p className="text-xs text-amber-900">{T('Identity, location or other high-impact changes need a short explanation and a different officer’s approval.',
                 'Perubahan identitas, lokasi atau informasi penting perlu penjelasan singkat dan persetujuan petugas lain.')}</p>
-              <label className="text-xs block font-semibold">{T('Why is this different?','Mengapa berbeda?')}
+              <label className="text-xs block font-semibold">{T('Correction basis','Dasar koreksi')}
+                <select data-testid="gate1-sensitive-reason" className={INPUT} value={sensitiveReason} onChange={e=>setSensitiveReason(e.target.value)}>
+                  {Object.entries(reasonLabels).map(([key,label])=><option value={key} key={key}>{label}</option>)}
+                </select>
+              </label>
+              {sensitiveReason==='OTHER'&&<label className="text-xs block font-semibold">{T('Short explanation','Penjelasan singkat')}
                 <textarea className={INPUT} rows={2} value={note} onChange={e=>setNote(e.target.value)}
-                  placeholder={T('Briefly explain the supporting basis (10+ characters)','Jelaskan dasarnya secara singkat (10+ karakter)')}/>
+                  placeholder={T('Explain the different value','Jelaskan perbedaan nilai')}/>
               </label>
               <label className="text-xs block font-semibold">{T('Evidence link (when available)','Tautan bukti (jika tersedia)')}
                 <input className={INPUT} type="url" value={support} onChange={e=>setSupport(e.target.value)} placeholder="https://..."/>
@@ -425,15 +449,15 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
       </div>
       {view?.can_edit&&<div className="space-y-2">
         <label className="block text-xs font-semibold">{T('Link to the missing post','Tautan unggahan yang hilang')}
-          <input type="url" className={INPUT} value={manual.source_url} onChange={e=>setManual(x=>({...x,source_url:e.target.value}))} placeholder="https://..."/>
+          <input type="url" className={INPUT} value={manual.source_url} onChange={e=>{const inferred=platformForUrl(e.target.value);setManual(x=>({...x,source_url:e.target.value,platform:inferred||x.platform}))}} placeholder="https://..."/>
         </label>
         <label className="block text-xs font-semibold">{T('Text or description','Teks atau deskripsi')}
           <textarea className={INPUT} rows={3} value={manual.text_content} onChange={e=>setManual(x=>({...x,text_content:e.target.value}))}
             placeholder={T('Paste the missing post text or describe what you found','Tempel teks unggahan atau jelaskan yang ditemukan')}/>
         </label>
         <label className="block text-xs font-semibold">{T('Platform','Platform')}
-          <select className={INPUT} value={manual.platform} onChange={e=>setManual(x=>({...x,platform:e.target.value}))}>
-            {['youtube','facebook','instagram','tiktok','x','other'].map(p=><option key={p} value={p}>{pretty(p)}</option>)}
+          <select data-testid="gate1-missing-post-platform" className={INPUT} value={manual.platform} onChange={e=>setManual(x=>({...x,platform:e.target.value}))}>
+            {SUPPORTED_PLATFORMS.map(p=><option key={p} value={p}>{pretty(p)}</option>)}
           </select>
         </label>
         <details className="text-xs rounded-md bg-slate-50 p-2"><summary className="cursor-pointer">{T('More details (optional)','Rincian tambahan (opsional)')}</summary>

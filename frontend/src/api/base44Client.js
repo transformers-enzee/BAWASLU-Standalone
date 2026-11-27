@@ -90,6 +90,11 @@ export const base44 = {
     correct:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/corrections',{method:'POST',body:JSON.stringify(data)}),
     restore:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/restore',{method:'POST',body:JSON.stringify(data)}),
     decide:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/decision',{method:'POST',body:JSON.stringify(data)}),
+    fullReview:(campaignId,resultId)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/full-review',{cache:'no-store'}),
+    saveFullReview:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/full-review',{method:'POST',body:JSON.stringify(data)}),
+    secondFullReview:(campaignId,resultId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId)+'/full-review/secondary',{method:'POST',body:JSON.stringify(data)}),
+    manualIntake:campaignId=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/manual-intake',{cache:'no-store'}),
+    addManualIntake:(campaignId,data)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/manual-intake',{method:'POST',body:JSON.stringify(data)}),
   },
   governance:{
     readiness:()=>request('/api/governance/readiness',{cache:'no-store'}),

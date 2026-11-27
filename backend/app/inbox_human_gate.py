@@ -99,6 +99,8 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
     can_correct=bool(can_write and assessment is not None)
     state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment,source)
     qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
+    from .inbox_human_full_review_v1868 import full_projection
+    enrichment=full_projection(db,campaign_id,result_id,assessment,source) if is_qa_campaign(campaign) else None
     original_text=source.text_content or ""
     return {
         "campaign_id":str(campaign_id),"campaign_name":campaign.name,
@@ -120,6 +122,9 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "effective_sentiment":qa["effective_sentiment"] if is_qa_campaign(campaign) else classification["effective_sentiment"],
         "sentiment_basis":qa["sentiment_basis"] if is_qa_campaign(campaign) else classification["sentiment_basis"],
         "qa_audit_only":is_qa_campaign(campaign),
+        "full_field_revision":enrichment["revision"] if enrichment else 0,
+        "full_field_stale":enrichment["stale"] if enrichment else False,
+        "full_field_secondary_review":enrichment["secondary_review"]["status"] if enrichment else "NOT_REQUIRED",
         "can_correct_relevance":can_correct,
         "can_correct_sentiment":can_correct,
         "can_review_information":can_write,

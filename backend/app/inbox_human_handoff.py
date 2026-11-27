@@ -27,7 +27,8 @@ from .inbox_human_corrections import (
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 
 FEEDBACK_SUBJECT = "Gate1FeedbackDecision"
-CORRECTION_ACTIONS = QA_ACTIONS
+from .inbox_human_full_review_v1868 import FULL_ACTION, full_projection
+CORRECTION_ACTIONS = QA_ACTIONS + (FULL_ACTION,)
 TRIAGE = frozenset(("ACCEPT_OFFLINE_EVALUATION", "REJECT_OFFLINE_EVALUATION", "NEEDS_RECHECK"))
 MAX_FEEDBACK_SCAN = 200
 MAX_FEEDBACK_PAGE = 40
@@ -84,6 +85,11 @@ def _correction_current(payload, assessment, sentiment, source, db=None, campaig
     revision = payload.get("correction_id")
     if payload.get("qa_audit_only"):
         if db is None or campaign_id!=QA_ID:return False
+        if field=="enrichment":
+            f=full_projection(db,campaign_id,result_id,assessment,source)
+            return bool(revision and revision>0 and f["revision"]==revision and not f["stale"]
+                        and (not f["secondary_review_required"] or
+                             f["secondary_review"]["status"]=="APPROVED"))
         qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
         return bool(revision and revision>0
                     and qa.get(f"qa_{field}_event")==revision
@@ -288,6 +294,10 @@ def gate2_handoff_preview(campaign_id: int, result_id: int,
     if campaign_id==QA_ID:
         blockers.append("QA_CAMPAIGN_NOT_ELIGIBLE_FOR_PUBLICATION")
         if qa["qa_stale"]:blockers.append("QA_CORRECTION_REVALIDATION_REQUIRED")
+        full=full_projection(db,campaign_id,result_id,assessment,source)
+        if full["stale"]:blockers.append("QA_ENRICHMENT_STALE")
+        if full["secondary_review_required"] and full["secondary_review"]["status"]!="APPROVED":
+            blockers.append("QA_SECONDARY_REVIEW_REQUIRED")
     if assessment is None or label in ("", "UNASSESSED") or (
         assessment and assessment.model_version == "PRISM_PENDING_OPENAI"
     ):

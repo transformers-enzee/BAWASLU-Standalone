@@ -70,6 +70,7 @@ class DecisionIn(BaseModel):
     expected_sentiment_revision: int = Field(ge=0)
     expected_source_digest: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=10, max_length=1500)
+    expected_enrichment_revision: int = Field(default=0, ge=0)
 
 
 def _allowlist():
@@ -362,8 +363,15 @@ def decide_information(campaign_id: int, result_id: int, body: DecisionIn,
     ):
         raise HTTPException(422, "A completed assessment and saved source trace are required")
     qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
-    if is_qa_campaign(campaign) and qa["qa_stale"]:
-        raise HTTPException(409,"QA correction needs revalidation")
+    from .inbox_human_full_review_v1868 import full_projection
+    full=full_projection(db,campaign_id,result_id,assessment,source) if is_qa_campaign(campaign) else None
+    if is_qa_campaign(campaign) and (qa["qa_stale"] or full["stale"] or
+                                      body.expected_enrichment_revision!=full["revision"]):
+        raise HTTPException(409,"QA correction or enrichment snapshot changed; refresh")
+    if (is_qa_campaign(campaign) and status=="OFFICER_VERIFIED" and
+        full["secondary_review_required"] and
+        full["secondary_review"]["status"]!="APPROVED"):
+        raise HTTPException(422,"Independent officer approval required for sensitive QA changes")
     event = _write_audit(db, officer, campaign_id, result_id, "GATE1_INFORMATION_DECISION", {
         "status": status, "reason": body.reason.strip(),
         "previous_status": _payload(latest).get("status") if latest else None,
@@ -376,6 +384,7 @@ def decide_information(campaign_id: int, result_id: int, body: DecisionIn,
         "qa_audit_only":is_qa_campaign(campaign),
         "qa_relevance_event":qa["qa_relevance_event"],
         "qa_sentiment_event":qa["qa_sentiment_event"],
+        "qa_enrichment_revision":full["revision"] if full else 0,
     })
     db.commit()
     return {"saved": True, "status": status, "revision": event.id,

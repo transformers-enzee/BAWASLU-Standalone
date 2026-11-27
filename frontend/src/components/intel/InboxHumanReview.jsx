@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {base44} from '@/api/base44Client';
+import Gate1FullWorkbench from './Gate1FullWorkbench';
 import {useLanguage} from '@/lib/LanguageContext';
 
 const copy=(data)=>String(data||'');
@@ -152,6 +153,7 @@ export default function InboxHumanReview(){
         status:reviewDecision,expected_revision:detail.information_review_revision,
         expected_assessment_id:detail.assessment_id,
         expected_sentiment_revision:detail.sentiment_revision,
+        expected_enrichment_revision:detail.full_field_revision||0,
         expected_source_digest:detail.source_integrity_digest,
         reason:rationale.trim()
       });
@@ -401,6 +403,7 @@ export default function InboxHumanReview(){
             </label>
             <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
           </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>}
+          <Gate1FullWorkbench campaignId={campaignId} detail={detail} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>
           <div className="border-t pt-3 space-y-2" data-testid="gate1-gate2-readiness">
             <h4 className="font-semibold text-sm">{T('Human Gate 2 handoff readiness','Kesiapan alih tahap Human Gate 2')}</h4>
             <p className="text-xs text-slate-600">{T('Information is not an insight. This preview never creates, approves, or publishes an insight.','Informasi bukan insight. Pratinjau ini tidak membuat, menyetujui, atau menerbitkan insight.')}</p>

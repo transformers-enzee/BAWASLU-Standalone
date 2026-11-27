@@ -50,6 +50,7 @@ from .governance_persistence import router as governance_persistence_router
 from .inbox_human_gate import router as inbox_human_gate_router
 from .inbox_human_corrections import router as inbox_human_corrections_router
 from .inbox_human_handoff import router as inbox_human_handoff_router
+from .inbox_human_full_review_v1868 import router as inbox_human_full_review_router
 from .seed import seed
 
 app=FastAPI(title='BAWASLU Intelligence Standalone',version='0.1.0')
@@ -57,6 +58,7 @@ app.include_router(governance_persistence_router)
 app.include_router(inbox_human_gate_router)
 app.include_router(inbox_human_corrections_router)
 app.include_router(inbox_human_handoff_router)
+app.include_router(inbox_human_full_review_router)
 app.include_router(demo_feedback_router)
 app.include_router(casework_router)
 app.include_router(management_reporting_router)
@@ -177,7 +179,7 @@ class RegisterIn(BaseModel): email:str; password:str; full_name:str=''
 class FunctionIn(BaseModel): action:str; data:dict={}; id:str|None=None
 
 @app.get('/api/health')
-def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','186.7'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
+def health(): return {'ok':True,'product':'bawaslu','version':'0.1.0','build_version':os.getenv('BAWASLU_BUILD_VERSION','186.8'),'commit':os.getenv('BAWASLU_BUILD_COMMIT') or os.getenv('RENDER_GIT_COMMIT',''),'architecture_baseline':'NK Intelligence / GovIntel v0.27'}
 
 class GateIn(BaseModel):
     question:str

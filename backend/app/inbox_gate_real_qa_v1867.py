@@ -74,9 +74,14 @@ def reviewed_state(db,campaign_id,result_id,assessment,sentiment,source,state):
     e=_latest_decision(db,campaign_id,result_id)
     if e is None:return state
     p=audit_payload(e);o=projection(db,campaign_id,result_id,assessment,sentiment,source)
-    if (o["qa_stale"] or
+    from .inbox_human_full_review_v1868 import full_projection
+    enrichment=full_projection(db,campaign_id,result_id,assessment,source)
+    if (o["qa_stale"] or enrichment["stale"] or
         p.get("qa_relevance_event")!=o["qa_relevance_event"] or
-        p.get("qa_sentiment_event")!=o["qa_sentiment_event"]):
+        p.get("qa_sentiment_event")!=o["qa_sentiment_event"] or
+        p.get("qa_enrichment_revision",0)!=enrichment["revision"] or
+        (enrichment["secondary_review_required"] and
+         enrichment["secondary_review"]["status"]!="APPROVED")):
         return {**state,"information_review_status":"REVALIDATION_REQUIRED",
                 "information_review_stale":True}
     return state

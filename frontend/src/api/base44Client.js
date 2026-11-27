@@ -76,6 +76,11 @@ export const base44 = {
       return request('/api/social-listening/external-import/preview?campaign_id='+encodeURIComponent(campaignId),{method:'POST',body:form});
     }
   },
+  inboxHumanReview:{
+    campaigns:()=>request('/api/inbox/human-review/campaigns',{cache:'no-store'}),
+    sample:campaignId=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/sample',{cache:'no-store'}),
+    source:(campaignId,resultId)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId),{cache:'no-store'}),
+  },
   governance:{
     readiness:()=>request('/api/governance/readiness',{cache:'no-store'}),
     qaCampaigns:()=>request('/api/governance/qa/campaigns',{cache:'no-store'}),

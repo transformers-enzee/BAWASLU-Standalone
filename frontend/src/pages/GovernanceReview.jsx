@@ -80,7 +80,7 @@ export default function GovernanceReview(){
         {(report.information_qa?.items||[]).length>0?<div className="space-y-2">
           {(report.information_qa?.items||[]).map(item=><div key={item.result_id} className="rounded-lg border bg-white px-3 py-2 text-xs space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2"><strong>{item.platform||T('Social post','Unggahan sosial')} · #{item.result_id}</strong>
-              <Link className="font-semibold text-[#801b24] underline" to={'/inbox?campaign_id='+encodeURIComponent(item.campaign_id)+'&result_id='+encodeURIComponent(item.result_id)}>{T('Review in Inbox','Periksa di Inbox')}</Link></div>
+              <Link className="font-semibold text-[#801b24] underline" to={'/inbox?gate1=1&campaign_id='+encodeURIComponent(item.campaign_id)+'&result_id='+encodeURIComponent(item.result_id)}>{T('Review in Inbox','Periksa di Inbox')}</Link></div>
             <div>{infoActions[item.action]||item.action}</div>
             <p className="text-slate-600">{T('AI relevance','Relevansi AI')}: {item.relevance} · {T('Sentiment basis','Dasar sentimen')}: {item.sentiment_basis} · {T('Officer review','Tinjauan petugas')}: {item.officer_review_decision||T('Not recorded','Belum tercatat')}</p>
           </div>)}

@@ -10,6 +10,7 @@ import IntelligenceTable from '@/components/intel/IntelligenceTable';
 import { PRIORITIES, Notice } from '@/components/intel/Fields';
 import { useLanguage } from '@/lib/LanguageContext';
 import { deduplicateInboxEvidence } from '@/lib/inboxExactDedup';
+import InboxHumanReview from '@/components/intel/InboxHumanReview';
 
 const platformLabel=value=>({youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',facebook:'Facebook',threads:'Threads',x:'X',twitter:'X',reddit:'Reddit',linkedin:'LinkedIn'}[String(value||'').toLowerCase()]||String(value||'Unknown'));
 const safeOriginalUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}};
@@ -496,6 +497,10 @@ const [sortDate,setSortDate]=useState('newest'),[dateFrom,setDateFrom]=useState(
  };
  const reviewState=item=>item.flag_review_status==='FLAG_DISMISSED'?{label:'Dismissed · reviewed',cls:'text-slate-600'}:item.flag_review_status==='FLAG_CONFIRMED'?{label:'Flag confirmed · preliminary',cls:'text-amber-800'}:item.flag_review_status==='FURTHER_INVESTIGATION'?{label:'Further investigation',cls:'text-orange-700'}:(item.is_flagged??((item.potential_issues||[]).length>0))?{label:'Awaiting human review',cls:'text-amber-700'}:null;
  return <section className="space-y-4" aria-label="AI intelligence findings">
+  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3" data-testid="inbox-human-gate1-entry">
+    <div><strong className="text-sm">Human Review · Gate 1</strong><p className="text-xs text-slate-600">Review unassessed, uncertain and excluded election posts alongside ordinary Inbox evidence.</p></div>
+    <a className="intel-ghost text-sm font-semibold" href={'/inbox?gate1=1'+(campaign?'&campaign_id='+encodeURIComponent(campaign):'')}>Open Needs Human Review</a>
+  </div>
   <div data-testid="jurisdiction-review-toolbar" className="rounded-lg border border-slate-200 bg-white p-3 text-xs space-y-2">
    <div className="flex flex-wrap items-center justify-between gap-2">
     <p><strong>Jurisdiction officer review</strong> · Open a saved campaign evidence queue without first opening a post.</p>
@@ -865,7 +870,7 @@ const triagePending=x=>{const t=x.triage_review||x.triage_review_status||{};cons
 
 function initialFilters(){const q=new URLSearchParams(window.location.search),f={};for(const key of ['entity','verification_status','review_status','priority','province','regency_city','platform','evidence_type','reviewer','source_type','supervision_signal','date','search']){const value=q.get(key);if(value)f[key]=value}if(q.get('view'))f.view=q.get('view');return f}
 
-export default function Inbox(){
+function StandardInbox(){
  const {t,label,language}=useLanguage();
  const demo=/^\/demo(?:\/|$)/.test(window.location.pathname)||Boolean(window.__BAWASLU_DEMO_REPLICA__);
  const [caseworkRequest,setCaseworkRequest]=useState(()=>{
@@ -951,4 +956,12 @@ export default function Inbox(){
  {(activeFilters.length>0||f.view)&&<div className="flex flex-wrap items-center gap-2">{f.view&&<span className="rounded-full bg-[#eaf4f7] px-3 py-1 text-xs font-semibold text-[#176e8e]">{t('view')}: {currentView}</span>}{activeFilters.map(([key,value])=><button key={key} type="button" onClick={()=>clearOne(key)} className="rounded-full bg-[#f5f7f9] px-3 py-1 text-xs text-[#536d80] hover:bg-[#edf2f5]">{labelForKey[key]||key}: {label(value)} ×</button>)}<button className="text-xs font-semibold text-[#126b8b]" onClick={()=>setF({})}>{t('clear_all_filters')}</button></div>}</div>
  {new URLSearchParams(window.location.search).get('jurisdiction')==='pending'&&<p role="status" className="text-sm">{t('submitted_jurisdiction')}</p>}
  {loading?<p className="text-sm text-[#77899b]">{t('loading_intelligence')}</p>:error?null:<IntelligenceTable items={sorted}/>}</div></details></div>;
+}
+
+// Gate 1 is a dedicated, officer-facing lane inside /inbox. Unlike the
+// standard feed, it can retrieve authorized excluded/unassessed evidence.
+export default function Inbox(){
+ const params=new URLSearchParams(window.location.search);
+ if(params.get('gate1')==='1')return <InboxHumanReview/>;
+ return <StandardInbox/>;
 }

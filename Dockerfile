@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils &
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 # Version metadata must not invalidate system or Python dependencies.
-ARG BAWASLU_BUILD_VERSION=186.5
+ARG BAWASLU_BUILD_VERSION=186.6
 ARG BAWASLU_BUILD_COMMIT=unknown
 ENV BAWASLU_BUILD_VERSION=${BAWASLU_BUILD_VERSION} BAWASLU_BUILD_COMMIT=${BAWASLU_BUILD_COMMIT}
 COPY backend ./backend
@@ -56,7 +56,7 @@ WORKDIR /app/backend
 EXPOSE 8000
 # Shared Supabase protection: no automatic schema or record mutations on image startup.
 ENV BAWASLU_STARTUP_READ_ONLY=1
-CMD ["sh","-c","if [ \"${BAWASLU_STARTUP_READ_ONLY:-1}\" != \"1\" ]; then alembic upgrade head || exit 1; fi; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh","-c","if [ \"${BAWASLU_GATE1_QA_BOOTSTRAP:-}\" = \"YES\" ]; then python -m scripts.seed_gate1_render_qa_v1866 || exit 1; elif [ \"${BAWASLU_STARTUP_READ_ONLY:-1}\" != \"1\" ]; then alembic upgrade head || exit 1; fi; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
 # Default target remains verified for manual/fallback Docker builds.
 FROM runtime AS verified

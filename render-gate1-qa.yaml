@@ -1,0 +1,39 @@
+# BAWASLU v186.6 - separate, free, isolated Gate 1 QA web service.
+# Existing 'bawaslu-standalone-staging' and operational Supabase remain unchanged.
+# Uses the EXISTING separately created Render Postgres named below.
+services:
+  - type: web
+    name: bawaslu-gate1-qa-sandbox
+    runtime: image
+    image:
+      url: ghcr.io/transformers-enzee/bawaslu-standalone:staging-186.6
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bawaslu-gate1-isolated-qa-db
+          property: connectionString
+      - key: BAWASLU_GATE1_QA_BOOTSTRAP
+        value: "YES"
+      - key: BAWASLU_GATE1_QA_ISOLATED
+        value: "YES"
+      - key: BAWASLU_GATE1_QA_ADMIN_PASSWORD
+        generateValue: true
+      - key: BAWASLU_GATE1_QA_VIEWER_PASSWORD
+        generateValue: true
+      - key: BAWASLU_STARTUP_READ_ONLY
+        value: "1"
+      - key: BAWASLU_INBOX_GATE1_READ_ENABLED
+        value: "true"
+      - key: BAWASLU_INBOX_GATE1_WRITE_ENABLED
+        value: "true"
+      - key: BAWASLU_INBOX_GATE1_PILOT_MODE
+        value: "staging"
+      - key: BAWASLU_INBOX_GATE1_PILOT_CAMPAIGN_IDS
+        value: "1"
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: SOCIALCRAWL_API_KEY
+        value: ""

@@ -118,6 +118,13 @@ export default function InboxHumanReview(){
     q.set('gate1','1');q.set('campaign_id',String(campaignId));q.set('result_id',String(id));
     window.history.replaceState(null,'','/inbox?'+q.toString());
   }
+  function nextReviewSource(){
+    const items=sample?.items||[];
+    const index=items.findIndex(item=>String(item.result_id)===String(selectedId));
+    if(index<0||index>=items.length-1)return false;
+    selectSource(items[index+1].result_id);
+    return true;
+  }
   function chooseCampaign(id){
     currentCampaign.current=String(id);currentSelectedId.current='';
     setCampaignId(String(id));setSelectedId('');setDetail(null);setSuccess('');setRationale('');setHistory(null);
@@ -274,7 +281,8 @@ export default function InboxHumanReview(){
       {loading&&<p role="status">{T('Loading authorized campaigns…','Memuat kampanye yang diizinkan…')}</p>}
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!error&&!loading&&campaigns.length===0&&<p>{T('No authorized campaigns.','Tidak ada kampanye yang diizinkan.')}</p>}
-      {qaCampaignSelected&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm" data-testid="gate1-qa-pilot-preflight">
+      {qaCampaignSelected&&<details className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm" data-testid="gate1-qa-pilot-preflight" open={!realQaSelected}>
+        <summary className="text-xs font-semibold cursor-pointer">{realQaSelected?T('Pilot safeguards & readiness (optional)','Pengamanan & kesiapan pilot (opsional)'):T('QA pilot safeguards','Pengamanan pilot QA')}</summary>
         <h3 className="font-semibold">{realQaSelected?T('Politik Uang · officer override QA','Politik Uang · QA koreksi petugas'):T('Synthetic QA write-pilot preflight','Pemeriksaan kesiapan pilot QA sintetis')}</h3>
         <p className="text-xs text-slate-600">{realQaSelected?T('Existing campaign evidence is for controlled QA only. Officer overrides are stored as separate audit events; original evidence and saved AI assessments are unchanged. No publication or AI training.','Bukti kampanye yang ada hanya untuk QA. Koreksi petugas dicatat terpisah; bukti asli dan penilaian AI tidak berubah. Tanpa publikasi atau pelatihan AI.'):T('This read-only check cannot enable correction writes or create test evidence. The QA campaign must remain a draft and all pilot posts must be synthetic.','Pemeriksaan hanya-baca ini tidak dapat mengaktifkan koreksi atau membuat bukti uji. Kampanye QA harus tetap draf dan semua unggahan harus sintetis.')}</p>
         <button type="button" data-testid="gate1-check-pilot-readiness" className="intel-ghost text-xs" onClick={checkPilotReadiness} disabled={pilotBusy}>
@@ -289,7 +297,7 @@ export default function InboxHumanReview(){
           <p>{T('Correction writes','Koreksi')}: <strong>{pilotStatus.correction_writes_enabled?'ENABLED':'DISABLED'}</strong></p>
           <p>{T('Pilot eligibility','Kelayakan pilot')}: <strong>{pilotStatus.ready_for_write_pilot?'ELIGIBLE FOR QA':'NOT READY · SAFE BLOCK'}</strong></p>
         </div>}
-      </div>}
+      </details>}
       <label className="block text-sm font-semibold">{T('Review category','Kategori tinjauan')}
         <select data-testid="gate1-category-filter" className="intel-input mt-1 w-full" value={category} onChange={e=>{currentCategory.current=e.target.value;setCategory(e.target.value)}}>
           <option value="all">{T('All ordinary evidence','Semua bukti biasa')}</option>
@@ -377,7 +385,7 @@ export default function InboxHumanReview(){
             {detail.information_review_reviewer_id&&<p className="text-xs text-slate-600">{T('Reviewer','Pemeriksa')}: {detail.information_review_reviewer_id} · {detail.information_review_at}</p>}
             {detail.relevance_explanation&&<p className="text-xs text-slate-600">{detail.relevance_explanation}</p>}
           </div>
-          {detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
+          {!(realQaSelected&&detail.qa_audit_only)&& (detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
             {detail.qa_audit_only&&<p data-testid="gate1-real-qa-safety" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">{T('QA ONLY — your override changes Human Gate 1 review views, not the saved AI assessment, original Social Listening data, or Command Centre.','KHUSUS QA — koreksi hanya mengubah tampilan Human Gate 1, bukan penilaian AI tersimpan, data Social Listening asli, atau Command Centre.')}</p>}
             <h4 className="font-semibold text-sm">{T('Officer information review & corrections','Tinjauan informasi & koreksi petugas')}</h4>
             <p className="text-xs text-slate-500">{T('Officer Verified means this saved INFORMATION snapshot was reviewed; it does not verify allegations or legal violations. Field corrections are not whole-record verification. No automatic AI training or Command Centre publication.','Terverifikasi Petugas berarti cuplikan INFORMASI ini telah ditinjau; bukan verifikasi tuduhan atau pelanggaran hukum. Koreksi satu bidang bukan verifikasi seluruh catatan. Tidak ada pelatihan AI atau publikasi otomatis.')}</p>
@@ -402,9 +410,10 @@ export default function InboxHumanReview(){
               </select>
             </label>
             <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
-          </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>}
-          <Gate1FullWorkbench campaignId={campaignId} detail={detail} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>
-          <div className="border-t pt-3 space-y-2" data-testid="gate1-gate2-readiness">
+          </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>)}
+          <Gate1FullWorkbench campaignId={campaignId} detail={detail} onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>
+          <details className="border-t pt-3 space-y-2" data-testid="gate1-gate2-readiness" open={!realQaSelected}>
+            <summary className="cursor-pointer text-xs font-semibold">{T('Advanced: Insight handoff checks','Lanjutan: pemeriksaan alih tahap insight')}</summary>
             <h4 className="font-semibold text-sm">{T('Human Gate 2 handoff readiness','Kesiapan alih tahap Human Gate 2')}</h4>
             <p className="text-xs text-slate-600">{T('Information is not an insight. This preview never creates, approves, or publishes an insight.','Informasi bukan insight. Pratinjau ini tidak membuat, menyetujui, atau menerbitkan insight.')}</p>
             <button className="intel-ghost text-xs" type="button" disabled={handoffBusy} onClick={openGate2Readiness}>{handoffBusy?T('Checking…','Memeriksa…'):T('Check insight-draft readiness','Periksa kesiapan draf insight')}</button>
@@ -414,8 +423,9 @@ export default function InboxHumanReview(){
               {handoff.review_blockers?.length>0&&<p><strong>{T('Blockers','Hambatan')}:</strong> {handoff.review_blockers.join(' · ')}</p>}
               <p className="text-slate-600">{T('Preliminary only. Independent Gate 2 approval is always required. No Command Centre publication.','Hanya pendahuluan. Persetujuan Human Gate 2 secara independen selalu diperlukan. Tidak ada publikasi ke Command Centre.')}</p>
             </div>}
-          </div>
-          <div className="border-t pt-3 space-y-2" data-testid="gate1-offline-feedback">
+          </details>
+          <details className="border-t pt-3 space-y-2" data-testid="gate1-offline-feedback" open={!realQaSelected}>
+            <summary className="cursor-pointer text-xs font-semibold">{T('Advanced: Offline AI evaluation','Lanjutan: evaluasi AI offline')}</summary>
             <h4 className="font-semibold text-sm">{T('Officer feedback for future AI evaluation','Umpan balik petugas untuk evaluasi AI mendatang')}</h4>
             <p className="text-xs text-slate-600">{T('Officer corrections can be reviewed offline; they do not train or update the AI automatically.','Koreksi petugas dapat ditinjau secara offline; tidak melatih atau memperbarui AI secara otomatis.')}</p>
             <button className="intel-ghost text-xs" type="button" disabled={feedbackBusy} onClick={openFeedback}>{feedbackBusy?T('Loading…','Memuat…'):T('View correction feedback','Lihat umpan balik koreksi')}</button>
@@ -440,8 +450,9 @@ export default function InboxHumanReview(){
               {feedback.items?.length===0&&<p className="text-xs text-slate-500">{T('No officer corrections have been recorded for this evidence.','Belum ada koreksi petugas untuk bukti ini.')}</p>}
               <p className="text-xs text-slate-500">{T('Gate 3 must separately govern any later model-learning process. Training remains disabled.','Gate 3 harus mengatur proses pembelajaran model terpisah. Pelatihan tetap nonaktif.')}</p>
             </div>}
-          </div>
-          <div className="border-t pt-3 space-y-2" data-testid="gate1-audit-history">
+          </details>
+          <details className="border-t pt-3 space-y-2" data-testid="gate1-audit-history" open={!realQaSelected}>
+            <summary className="cursor-pointer text-xs font-semibold">{T('Advanced: Full correction history','Lanjutan: riwayat koreksi lengkap')}</summary>
             <button type="button" className="intel-ghost text-xs" onClick={openHistory} disabled={historyBusy}>{historyBusy?T('Loading history…','Memuat riwayat…'):T('View review & correction history','Lihat riwayat tinjauan & koreksi')}</button>
             {history&&<div className="rounded-lg border p-3 text-xs space-y-3">
               <p className="text-slate-600">{T('Original records are retained. Restoring creates a new revision; enter a reason above first.','Catatan asli disimpan. Pemulihan membuat revisi baru; masukkan alasan di atas dahulu.')}</p>
@@ -460,7 +471,7 @@ export default function InboxHumanReview(){
               <h5 className="font-semibold">{T('Audit trail','Jejak audit')}</h5>
               {(history.audit_history||[]).map(x=><p key={x.revision} className="break-words text-slate-600">#{x.revision} · {x.action} · {x.reviewer_id} · {x.created_at} · {x.reason||''}</p>)}
             </div>}
-          </div>
+          </details>
           {success&&<p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{success}</p>}
         </>}
       </section>

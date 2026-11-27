@@ -268,9 +268,18 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
     p=full_projection(db,campaign_id,result_id,a,source)
     can_write=can_edit_gate1(officer,campaign)
     from .inbox_gate_real_qa_v1867 import isolated_source
+    from .access import has
+    latest=_recent(db,campaign_id,result_id)
+    distinct_reviewer=bool(latest and str(latest[0].actor_id)!=str(user.id))
+    secondary_allowed=bool(p["secondary_review_required"]
+                           and distinct_reviewer
+                           and has(officer,"administration")
+                           and has(officer,"human_validation")
+                           and can_write and isolated_source(db,campaign,source))
     return {"campaign_id":str(campaign_id),"result_id":str(result_id),
             "field_groups":{k:list(v) for k,v in FIELD_GROUPS.items()},
             **p,"can_edit":bool(can_write and isolated_source(db,campaign,source)),
+            "can_secondary_review":secondary_allowed,
             "qa_audit_only":True,"original_source_preserved":True,
             "no_publication":True,"no_model_training":True}
 

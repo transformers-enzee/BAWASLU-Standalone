@@ -96,6 +96,8 @@ def test_full_field_workbench_and_manual_intake(monkeypatch):
         assert after["fields"]["author_name"]["effective"]=="Officer supplied author"
         assert after["fields"]["transcript"]["verification"]=="OFFICER_SUPPLIED"
         assert after["secondary_review"]["status"]=="PENDING"
+        assert after["can_secondary_review"] is False
+        assert full_review(9,sid,reviewer,db)["can_secondary_review"] is True
         assert db.get(SocialListeningResult,sid).author_name=="Unverified API author"
         assert db.get(EvidenceAssessment,aid).relevance_label=="RELEVANT"
         assert db.scalar(select(func.count()).select_from(SocialListeningResult))==before_source
@@ -131,6 +133,7 @@ def test_full_field_workbench_and_manual_intake(monkeypatch):
             status="APPROVED",reason="Independently checked fictional author metadata"),reviewer,db)
         assert reviewed["saved"] and reviewed["status"]=="APPROVED"
         assert full_review(9,sid,admin,db)["secondary_review"]["status"]=="APPROVED"
+        assert full_review(9,sid,admin,db)["can_secondary_review"] is False
         assert decide_information(9,sid,decision,admin,db)["saved"]
         assert review_source(9,sid,admin,db)["information_review_status"]=="OFFICER_VERIFIED"
         feedback=source_feedback(9,sid,admin,db)

@@ -12,10 +12,12 @@ const exportFile=read('../../backend/app/ai5/export.py');
 const main=read('../../backend/app/main.py');
 const docker=read('../../Dockerfile');
 const have=(s,token)=>assert.ok(s.includes(token),'Missing contract: '+token);
-for(const p of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4','/ai-5',
-                '/management/assistant','/management/ai-assistant',
-                '/management/ai-assistant-v2-new','/management/ai-4','/management/ai-5'])
- have(nav,"'"+p+"'");
+for(const p of ['/ai-5','/management/ai-5'])have(nav,"'"+p+"'");
+assert.equal(nav.split("'AI-5 Assistant'").length-1,1,'Only AI-5 should be advertised in navigation');
+for(const old of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4'])
+ assert.ok(!nav.includes("['"+old+"'"),'Legacy assistant cannot clutter sidebar: '+old);
+for(const old of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4'])
+ have(app,'path="'+old+'"');
 have(app,'path="/ai-5" element={<AI5Assistant workspace="OPERATIONAL" />}');
 have(app,'path="/management/ai-5" element={<AI5Assistant workspace="MANAGEMENT" />}');
 have(app,'path="/ai-4" element={<AI4Assistant workspace="OPERATIONAL" />}');

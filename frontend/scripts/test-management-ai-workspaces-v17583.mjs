@@ -17,11 +17,13 @@ for(const path of [
  'path="/assistant" element={<IntelligenceAssistant workspace="OPERATIONS" />}',
 ])assert.ok(app.includes(path),'Management and operations route missing: '+path);
 for(const field of [
- 'data-testid="management-workspace-navigation"',
- 'data-testid="operations-workspace-navigation"',
- "['/management','Management Home'",
- "['/assistant','intelligence_assistant'",
-])assert.ok(nav.includes(field),'Workspace navigation missing: '+field);
+ 'data-testid="unified-workspace-navigation"',
+ "leadership?'/management':'/'",
+ "leadership?'/management/ai-5':'/ai-5'",
+ "'AI-5 Assistant'",
+])assert.ok(nav.includes(field),'Role-aware unified navigation missing: '+field);
+assert.ok(!nav.includes('data-testid="management-workspace-navigation"'));
+assert.ok(!nav.includes('data-testid="operations-workspace-navigation"'));
 for(const field of [
  'data-testid="management-workspace-home"',
  'data-testid="executive-brief"',

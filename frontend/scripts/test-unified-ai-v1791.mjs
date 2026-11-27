@@ -42,11 +42,12 @@ has(ai,'owner_role','Action plan owner roles');
 has(ai,'"store":False','No provider persistence');
 has(app,'path="/ai-assistant" element={<UnifiedAIAssistant workspace="OPERATIONAL" />} />');
 has(app,'path="/management/ai-assistant" element={<UnifiedAIAssistant workspace="MANAGEMENT" />} />');
-assert.ok(!nav.includes('retired.has(path)'),'No earlier assistant should be hidden from the sidebar');
+assert.ok(nav.includes("'AI-5 Assistant'"),'One visible AI-5 entry required');
+assert.ok(!nav.includes("AI-4 · AI Assistant"),'Legacy assistants hidden from officer navigation');
 for(const route of ['/assistant','/ai-assistant-v2-new','/ai-4',
                     '/management/assistant','/management/ai-assistant-v2-new','/management/ai-4'])
- has(nav,"'"+route+"'","Preserve previous assistant route in navigation: "+route);
-has(home,'/management/ai-assistant','Executive brief links to management AI');
+ has(app,'path="'+route+'"','Legacy bookmarks must still resolve: '+route);
+has(home,'/management/ai-5','Management research now opens AI-5');
 for(const feature of ['unified-ai-page','unified-research-trail','unified-finding',
   'unified-action','unified-ai-draft','WEB_ONLY','WEB_SMARTRADAR','SMARTRADAR_ONLY',
   'Controlled officer walkthrough','SOCIAL-740','SOCIAL-1160','Copy','Turn into email'])

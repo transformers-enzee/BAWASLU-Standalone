@@ -15,12 +15,12 @@ has(app,'path="/ai-4" element={<AI4Assistant workspace="OPERATIONAL" />}');
 has(app,'path="/management/ai-4" element={<AI4Assistant workspace="MANAGEMENT" />}');
 has(app,'path="/ai-assistant" element={<UnifiedAIAssistant workspace="OPERATIONAL" />}');
 has(app,'path="/management/ai-assistant" element={<UnifiedAIAssistant workspace="MANAGEMENT" />}');
-has(nav,"['/ai-4','AI-4 · AI Assistant (New)'");
-has(nav,"['/management/ai-4','AI-4 · AI Assistant (New)'");
+has(nav,"leadership?'/management/ai-5':'/ai-5'");
+assert.ok(!nav.includes("AI-4 · AI Assistant"),'AI-4 is a retained legacy route, not a menu item');
 for(const route of ['/assistant','/ai-assistant','/ai-assistant-v2-new',
                     '/management/assistant','/management/ai-assistant',
                     '/management/ai-assistant-v2-new'])
- has(nav,"'"+route+"'");
+ has(app,'path="'+route+'"');
 has(main,'app.include_router(ai4_router)');
 has(main,'app.include_router(unified_ai_router)');
 has(api,'router=APIRouter(prefix="/api/ai-4"');

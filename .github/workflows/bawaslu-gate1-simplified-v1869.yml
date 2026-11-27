@@ -1,4 +1,4 @@
-name: BAWASLU v188.2 attention queue and unified AI-5 navigation QA
+name: BAWASLU v188.3 unified AI-5 and attention queue QA
 on:
   push:
     branches:

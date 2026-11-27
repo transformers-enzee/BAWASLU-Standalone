@@ -66,9 +66,9 @@ export default function ManagementHome(){
      </>}
      <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">Data basis: {snapshot.data_basis}; distinct linked sources: {number(metrics.unique_linked_sources)}; period count completeness: {snapshot.counts_complete_for_window?'complete for this scoped window':'not confirmed'}. Location breakdown uses verified casework location only.</p>
      <div className="flex flex-wrap gap-2">
-      <Link to="/management/ai-assistant?q=Prepare%20a%20neutral%20executive%20summary%20of%20authorized%20election-oversight%20records%20with%20citations%20and%20uncertainties" className="intel-button"><Search size={16}/> Research with AI <ArrowRight size={15}/></Link>
-      <Link to="/ai-assistant" className="intel-ghost">Operational AI Assistant</Link>
-      <Link to="/management/ai-assistant" className="intel-ghost">Management AI Assistant · Research / Strategy / Drafting</Link>
+      <Link to="/management/ai-5?q=Prepare%20a%20neutral%20executive%20summary%20of%20authorized%20election-oversight%20records%20with%20citations%20and%20uncertainties" className="intel-button"><Search size={16}/> Research with AI-5 <ArrowRight size={15}/></Link>
+      
+      
      </div>
     </article>
     <aside className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">

@@ -60,6 +60,6 @@ def test_ui_has_direct_inbox_evidence_link_and_no_mutating_gate1_button():
     frontend=Path(__file__).resolve().parents[2]/"frontend"/"src"/"pages"/"GovernanceReview.jsx"
     source=frontend.read_text()
     assert 'data-testid="governance-information-qa"' in source
-    assert "'/inbox?campaign_id='" in source
+    assert "'/inbox?gate1=1&campaign_id='" in source
     assert "encodeURIComponent(item.result_id)" in source
     assert "SPOT_CHECK_EXCLUDED" in source

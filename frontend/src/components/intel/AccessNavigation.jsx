@@ -36,7 +36,7 @@ export default function AccessNavigation({access,user,build}){
     <div className="flex items-center gap-3 border-b border-white/10 px-5 h-[76px]">
       <img src="/bawaslu-emblem.svg" alt="BAWASLU emblem" className="h-10 w-10 shrink-0 object-contain"/>
       <div><div className="font-bold text-[15px] leading-tight tracking-wide">BAWASLU</div>
-        <div className="text-[10px] uppercase tracking-[.19em] text-[#f1d9d6]">SMART RADAR</div></div>
+        <div className="text-[10px] uppercase tracking-[.19em] text-[#f1d9d6]">COMMAND CENTRE</div></div>
     </div>
     <div className="px-4 pt-6 pb-2 text-[10px] font-bold uppercase tracking-[.18em] text-[#dfaaa9]"
       data-testid="unified-workspace-navigation">{language==='id'?'Ruang Kerja':'Workspace'}</div>

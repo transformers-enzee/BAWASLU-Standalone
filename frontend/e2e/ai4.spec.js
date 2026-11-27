@@ -36,21 +36,17 @@ function reply(workspace='OPERATIONAL',attachment=false){
       url:'',published_at:'',reason:'Officer-supplied test excerpt'}]:[])]},
   synthesis_status:'COMPLETE',human_review_required:true,actions_executed:false}
 }
-test('AI-4 and old AI Assistant remain separate navigation entries',async({page})=>{
- await login(page);
- const op=page.getByRole('navigation',{name:'Operational workspace'});
- const mgmt=page.getByRole('navigation',{name:'Management workspace'});
- for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4']){
-  await expect(op.locator('a[href="'+href+'"]')).toBeVisible();
- }
- for(const href of ['/management/assistant','/management/ai-assistant',
-                    '/management/ai-assistant-v2-new','/management/ai-4']){
-  await expect(mgmt.locator('a[href="'+href+'"]')).toBeVisible();
- }
- await page.goto('/ai-4');
- await expect(page.getByTestId('ai4-page')).toContainText('AI Assistant (New)');
- await page.goto('/ai-assistant');
- await expect(page.getByTestId('unified-ai-page')).toBeVisible();
+test('AI-5 is the only advertised assistant while AI-4 bookmarks still work',async({page})=>{
+  await login(page);
+  const nav=page.getByRole('navigation',{name:'BAWASLU workspace'});
+  await expect(nav.locator('a[href="/management/ai-5"]')).toBeVisible();
+  for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4']){
+    await expect(nav.locator('a[href="'+href+'"]')).toHaveCount(0);
+  }
+  await page.goto('/ai-4');
+  await expect(page.getByTestId('ai4-page')).toContainText('AI Assistant (New)');
+  await page.goto('/ai-assistant');
+  await expect(page.getByTestId('unified-ai-page')).toBeVisible();
 });
 test('AI-4 Web only presents source-linked officer guidance and expandable trace',async({page})=>{
  const calls=[];

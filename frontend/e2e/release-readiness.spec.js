@@ -11,13 +11,11 @@ test('release navigation exposes every completed administrator module',async({pa
   for(const name of modules){
     await expect(nav.getByRole('link',{name:new RegExp('^'+name+'$','i')})).toBeVisible();
   }
-  await expect(nav.locator('a[href="/management/ai-assistant"]')).toBeVisible();
-  await expect(nav.locator('a[href="/ai-assistant"]')).toBeVisible();
-  // Existing assistant versions must remain visible; AI-4 is additive only.
+  await expect(nav.locator('a[href="/management/ai-5"]')).toBeVisible();
   for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4',
                       '/management/assistant','/management/ai-assistant',
                       '/management/ai-assistant-v2-new','/management/ai-4']){
-    await expect(nav.locator('a[href="'+href+'"]')).toBeVisible();
+    await expect(nav.locator('a[href="'+href+'"]')).toHaveCount(0);
   }
   await expect(nav.getByRole('link',{name:/^Watchlist$/i})).toHaveCount(0);
   await expect(nav.getByRole('link',{name:/^Add Intelligence$/i})).toHaveCount(0);

@@ -50,6 +50,7 @@ test('real UI and HTTP: corrections, audit, restore, revalidation and no publica
   const headers=await login(page,'gate1-ci-admin@example.invalid');
   const route='/inbox?gate1=1&campaign_id='+idsData.campaign_id;
   await page.goto(route);
+  await page.getByTestId('gate1-focus-all').click();
   await expect(page.getByTestId('gate1-qa-pilot-preflight')).toBeVisible();
   await page.getByTestId('gate1-check-pilot-readiness').click();
   await expect(page.getByTestId('gate1-pilot-readiness-report')).toContainText('ELIGIBLE FOR QA');
@@ -137,6 +138,7 @@ test('real UI and HTTP: corrections, audit, restore, revalidation and no publica
   expect(approvedButStale.offline_evaluation_candidate).toBe(false);
   expect(approvedButStale.training_triggered).toBe(false);
 
+  await page.getByTestId('gate1-advanced-filters').locator('summary').click();
   await page.getByTestId('gate1-review-status-filter').selectOption('revalidation_required');
   await expect(queue.getByRole('button',{name:new RegExp('#'+idsData.source_id+'\\b')})).toBeVisible();
   await page.getByTestId('gate1-review-status-filter').selectOption('all');
@@ -172,6 +174,7 @@ test('read-only officer, operational campaign and watchlist evidence fail closed
   const data=ids();
   const headers=await login(page,'gate1-ci-viewer@example.invalid');
   await page.goto('/inbox?gate1=1&campaign_id='+data.campaign_id);
+  await page.getByTestId('gate1-focus-all').click();
   const queue=page.getByRole('region',{name:'Human Review source queue'});
   await queue.getByRole('button',{name:new RegExp('#'+data.source_id+'\\b')}).click();
   await expect(page.getByRole('region',{name:'Human Review evidence detail'})).toContainText('Synthetic QA-only example');

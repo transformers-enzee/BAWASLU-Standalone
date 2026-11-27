@@ -55,15 +55,12 @@ test('all previous assistants remain visible and independently reachable alongsi
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(mocked)});
  });
  await login(page);
- const nav=page.locator('nav[aria-label="Operational workspace"]');
- const legacy=nav.locator('a[href="/assistant"]');
- const previous=nav.locator('a[href="/ai-assistant"]');
- const fresh=nav.locator('a[href="/ai-assistant-v2-new"]');
- await expect(legacy).toBeVisible();
- await expect(previous).toBeVisible();
- await expect(fresh).toBeVisible();
- await expect(nav.locator('a[href="/ai-4"]')).toBeVisible();
- await fresh.click();
+ const nav=page.getByRole('navigation',{name:'BAWASLU workspace'});
+ await expect(nav.locator('a[href="/management/ai-5"]')).toBeVisible();
+ for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4']){
+  await expect(nav.locator('a[href="'+href+'"]')).toHaveCount(0);
+ }
+ await page.goto('/ai-assistant-v2-new');
  await expect(page.getByTestId('officer-v3-page')).toBeVisible();
  const choose=page.getByTestId('officer-v3-source-modes');
  await expect(choose.getByRole('button',{name:/Public web only/})).toHaveAttribute('aria-pressed','true');

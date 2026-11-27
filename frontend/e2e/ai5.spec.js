@@ -24,22 +24,18 @@ function answer(mode='GENERAL_RESEARCH',draft=false){
    synthesis_status:'COMPLETE',actions_executed:false};
 }
 
-test('AI-5 is additive: all earlier assistants are still visible',async({page})=>{
- await page.goto('/');
-
- for(const route of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4','/ai-5']){
-  await expect(page.getByRole('navigation',{name:'Operational workspace'}).locator('a[href="'+route+'"]')).toBeVisible();
- }
- for(const route of ['/management/assistant','/management/ai-assistant',
-                      '/management/ai-assistant-v2-new','/management/ai-4','/management/ai-5']){
-  await expect(page.getByRole('navigation',{name:'Management workspace'}).locator('a[href="'+route+'"]')).toBeVisible();
- }
- await page.goto('/ai-5');
- await expect(page.getByTestId('ai5-page')).toContainText('AI-5 Assistant');
- await page.goto('/ai-4');
- await expect(page.getByTestId('ai4-page')).toBeVisible();
+test('single AI-5 navigation preserves bookmarked legacy assistant routes',async({page})=>{
+  await page.goto('/');
+  const nav=page.getByRole('navigation',{name:'BAWASLU workspace'});
+  await expect(nav.locator('a[href="/management/ai-5"]')).toBeVisible();
+  for(const href of ['/assistant','/ai-assistant','/ai-assistant-v2-new','/ai-4']){
+    await expect(nav.locator('a[href="'+href+'"]')).toHaveCount(0);
+  }
+  await page.goto('/ai-5');
+  await expect(page.getByTestId('ai5-page')).toContainText('AI-5 Assistant');
+  await page.goto('/ai-4');
+  await expect(page.getByTestId('ai4-page')).toBeVisible();
 });
-
 test('Open-ended multi-topic conversation changes direction and toggles BAWASLU mode',async({page})=>{
  const requests=[];
  await page.route('**/api/ai-5/chat',route=>{

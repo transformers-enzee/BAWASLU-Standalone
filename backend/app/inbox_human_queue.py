@@ -14,6 +14,7 @@ from .governance_information_qa import _latest_per_source, classify_information
 from .models import CampaignEvidence, EvidenceAssessment, EvidenceReview, SocialListeningResult, AuditEvent
 from .officer_sentiment import OfficerSentimentCorrection
 from .socialcrawl import _result_in_scope
+from .inbox_gate_real_qa_v1867 import projection,reviewed_state,QA_ID
 from .inbox_gate_integrity import (
     GATE1_AUDIT_SUBJECT, STATUS_FILTERS, review_projection,
     review_status_matches, saved_relevance_basis,
@@ -91,12 +92,28 @@ def _classified_batch(db, officer, campaign_id, links):
         )
         state = review_projection(decision_by_source.get(sid), assessment,
                                   sentiment.get(sid), sources[sid])
+        qa=None
+        if campaign_id==QA_ID:
+            state=reviewed_state(db,campaign_id,sid,assessment,sentiment.get(sid),sources[sid],state)
+            qa=projection(db,campaign_id,sid,assessment,sentiment.get(sid),sources[sid])
+            if assessment is not None and not qa["qa_stale"]:
+                mapping={
+                    "RELEVANT":("relevant","CHECK_RELEVANT_EVIDENCE"),
+                    "HIGHLY_RELEVANT":("relevant","CHECK_RELEVANT_EVIDENCE"),
+                    "UNCERTAIN":("excluded_or_uncertain","REVIEW_UNCERTAIN"),
+                    "IRRELEVANT":("excluded_or_uncertain","SPOT_CHECK_EXCLUDED"),
+                }
+                effective=qa["effective_relevance"]
+                label["category"],label["action"]=mapping.get(effective,(label["category"],label["action"]))
+                label["relevance"]=effective
+                label["effective_sentiment"]=qa["effective_sentiment"]
+                label["sentiment_basis"]=qa["sentiment_basis"]
         # Source digest is supplied only when opening evidence details;
         # the queue needs only review status, not an integrity token.
         state.pop("source_integrity_digest", None)
         results[sid] = {
             **state,
-            "relevance_basis": saved_relevance_basis(assessment),
+            "relevance_basis": qa["relevance_basis"] if qa is not None else saved_relevance_basis(assessment),
             "campaign_id": str(campaign_id),
             "result_id": str(sid),
             "platform": sources[sid].platform or "",

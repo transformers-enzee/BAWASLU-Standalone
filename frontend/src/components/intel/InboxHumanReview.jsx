@@ -197,7 +197,8 @@ export default function InboxHumanReview(){
     } finally {setPilotBusy(false)}
   }
   const selectedCampaign=campaigns.find(c=>String(c.id)===String(campaignId));
-  const qaCampaignSelected=selectedCampaign?.name==='BAWASLU Gate 1 QA Pilot';
+  const qaCampaignSelected=['BAWASLU Gate 1 QA Pilot','Politik Uang'].includes(selectedCampaign?.name);
+  const realQaSelected=String(campaignId)==='9'&&selectedCampaign?.name==='Politik Uang';
   async function openGate2Readiness(){
     if(!campaignId||!detail||handoffBusy)return;
     const key=String(detail.result_id), campaign=String(campaignId);
@@ -272,17 +273,17 @@ export default function InboxHumanReview(){
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!error&&!loading&&campaigns.length===0&&<p>{T('No authorized campaigns.','Tidak ada kampanye yang diizinkan.')}</p>}
       {qaCampaignSelected&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm" data-testid="gate1-qa-pilot-preflight">
-        <h3 className="font-semibold">{T('Synthetic QA write-pilot preflight','Pemeriksaan kesiapan pilot QA sintetis')}</h3>
-        <p className="text-xs text-slate-600">{T('This read-only check cannot enable correction writes or create test evidence. The QA campaign must remain a draft and all pilot posts must be synthetic.','Pemeriksaan hanya-baca ini tidak dapat mengaktifkan koreksi atau membuat bukti uji. Kampanye QA harus tetap draf dan semua unggahan harus sintetis.')}</p>
+        <h3 className="font-semibold">{realQaSelected?T('Politik Uang · officer override QA','Politik Uang · QA koreksi petugas'):T('Synthetic QA write-pilot preflight','Pemeriksaan kesiapan pilot QA sintetis')}</h3>
+        <p className="text-xs text-slate-600">{realQaSelected?T('Existing campaign evidence is for controlled QA only. Officer overrides are stored as separate audit events; original evidence and saved AI assessments are unchanged. No publication or AI training.','Bukti kampanye yang ada hanya untuk QA. Koreksi petugas dicatat terpisah; bukti asli dan penilaian AI tidak berubah. Tanpa publikasi atau pelatihan AI.'):T('This read-only check cannot enable correction writes or create test evidence. The QA campaign must remain a draft and all pilot posts must be synthetic.','Pemeriksaan hanya-baca ini tidak dapat mengaktifkan koreksi atau membuat bukti uji. Kampanye QA harus tetap draf dan semua unggahan harus sintetis.')}</p>
         <button type="button" data-testid="gate1-check-pilot-readiness" className="intel-ghost text-xs" onClick={checkPilotReadiness} disabled={pilotBusy}>
           {pilotBusy?T('Checking pilot readiness…','Memeriksa kesiapan pilot…'):T('Check staging pilot readiness','Periksa kesiapan pilot staging')}
         </button>
         {pilotError&&<p role="alert" className="text-red-700 text-xs">{pilotError}</p>}
         {pilotStatus&&<div className="space-y-1 text-xs" data-testid="gate1-pilot-readiness-report">
           <p>{T('Campaign status','Status kampanye')}: <strong>{pilotStatus.pilot_campaign_draft_and_named?'QA DRAFT':'NOT ELIGIBLE'}</strong></p>
-          <p>{T('Synthetic linked sources','Sumber sintetis tertaut')}: <strong>{pilotStatus.synthetic_source_count}</strong></p>
+          <p>{realQaSelected?T('Real evidence for QA','Bukti nyata untuk QA'):T('Synthetic linked sources','Sumber sintetis tertaut')}: <strong>{realQaSelected?pilotStatus.qa_real_evidence_count:pilotStatus.synthetic_source_count}</strong></p>
           {pilotStatus.linked_source_count===0&&<p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900" data-testid="gate1-empty-campaign-diagnosis">{T('This QA campaign has no linked evidence. Changing filters cannot reveal posts. Test fixtures must be provisioned in an isolated QA database; do not import fictional posts into the shared operational database.','Kampanye QA ini belum memiliki bukti tertaut. Mengganti filter tidak akan menampilkan unggahan. Data uji harus disiapkan di basis data QA terisolasi; jangan masukkan unggahan fiktif ke basis data operasional bersama.')}</p>}
-          <p>{T('Non-synthetic links','Tautan non-sintetis')}: <strong>{pilotStatus.non_synthetic_link_count}</strong></p>
+          {!realQaSelected&&<p>{T('Non-synthetic links','Tautan non-sintetis')}: <strong>{pilotStatus.non_synthetic_link_count}</strong></p>}
           <p>{T('Correction writes','Koreksi')}: <strong>{pilotStatus.correction_writes_enabled?'ENABLED':'DISABLED'}</strong></p>
           <p>{T('Pilot eligibility','Kelayakan pilot')}: <strong>{pilotStatus.ready_for_write_pilot?'ELIGIBLE FOR QA':'NOT READY · SAFE BLOCK'}</strong></p>
         </div>}
@@ -375,6 +376,7 @@ export default function InboxHumanReview(){
             {detail.relevance_explanation&&<p className="text-xs text-slate-600">{detail.relevance_explanation}</p>}
           </div>
           {detail.can_review_information?<div className="border-t pt-3 space-y-3" data-testid="gate1-correction-workbench">
+            {detail.qa_audit_only&&<p data-testid="gate1-real-qa-safety" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">{T('QA ONLY — your override changes Human Gate 1 review views, not the saved AI assessment, original Social Listening data, or Command Centre.','KHUSUS QA — koreksi hanya mengubah tampilan Human Gate 1, bukan penilaian AI tersimpan, data Social Listening asli, atau Command Centre.')}</p>}
             <h4 className="font-semibold text-sm">{T('Officer information review & corrections','Tinjauan informasi & koreksi petugas')}</h4>
             <p className="text-xs text-slate-500">{T('Officer Verified means this saved INFORMATION snapshot was reviewed; it does not verify allegations or legal violations. Field corrections are not whole-record verification. No automatic AI training or Command Centre publication.','Terverifikasi Petugas berarti cuplikan INFORMASI ini telah ditinjau; bukan verifikasi tuduhan atau pelanggaran hukum. Koreksi satu bidang bukan verifikasi seluruh catatan. Tidak ada pelatihan AI atau publikasi otomatis.')}</p>
             <textarea aria-label="Review reason" className="intel-input w-full" rows={3} value={rationale} onChange={e=>setRationale(e.target.value)} placeholder={T('Reason and supporting explanation (minimum 10 characters)','Alasan dan penjelasan pendukung (minimal 10 karakter)')}/>

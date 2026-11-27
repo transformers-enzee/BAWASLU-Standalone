@@ -18,6 +18,7 @@ from .models import AuditEvent, EvidenceAssessment, SocialListeningResult, User
 from .governance_persistence import _campaign, _grant, _source
 from .inbox_gate_integrity import GATE1_AUDIT_SUBJECT, audit_payload, review_projection, source_integrity_digest
 from .inbox_human_gate import _read_enabled
+from .inbox_gate_real_qa_v1867 import (QA_ID,QA_ACTIONS,projection,reviewed_state,is_qa_campaign)
 from .inbox_human_corrections import (
     _latest_assessment, _latest_sentiment, _latest_decision, _lock_current_source,
     _authorize, can_edit_gate1, is_pilot_qa_source,
@@ -26,7 +27,7 @@ from .inbox_human_corrections import (
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 
 FEEDBACK_SUBJECT = "Gate1FeedbackDecision"
-CORRECTION_ACTIONS = ("GATE1_FIELD_CORRECTED", "GATE1_FIELD_RESTORED")
+CORRECTION_ACTIONS = QA_ACTIONS
 TRIAGE = frozenset(("ACCEPT_OFFLINE_EVALUATION", "REJECT_OFFLINE_EVALUATION", "NEEDS_RECHECK"))
 MAX_FEEDBACK_SCAN = 200
 MAX_FEEDBACK_PAGE = 40
@@ -59,6 +60,8 @@ def _feedback_event(db, campaign_id, result_id, event_id):
             and row.action in CORRECTION_ACTIONS):
         raise HTTPException(404, "Correction feedback unavailable")
     payload = audit_payload(row)
+    if payload.get("qa_audit_only"):
+        payload["correction_id"]=row.id
     if payload.get("campaign_id") != campaign_id or payload.get("result_id") != result_id:
         raise HTTPException(404, "Correction feedback unavailable")
     return row, payload
@@ -69,15 +72,22 @@ def _review_current(db, campaign_id, result_id, source, assessment=None, sentime
         assessment = _latest_assessment(db, campaign_id, result_id)
     if sentiment is None:
         sentiment = _latest_sentiment(db, campaign_id, result_id)
-    return review_projection(
+    state=review_projection(
         _latest_decision(db, campaign_id, result_id),
         assessment, sentiment, source,
     )
+    return reviewed_state(db,campaign_id,result_id,assessment,sentiment,source,state)
 
 
-def _correction_current(payload, assessment, sentiment, source):
+def _correction_current(payload, assessment, sentiment, source, db=None, campaign_id=None, result_id=None):
     field = payload.get("field_name")
     revision = payload.get("correction_id")
+    if payload.get("qa_audit_only"):
+        if db is None or campaign_id!=QA_ID:return False
+        qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
+        return bool(revision and revision>0
+                    and qa.get(f"qa_{field}_event")==revision
+                    and not qa["qa_stale"])
     if field == "relevance":
         current = assessment is not None and assessment.id == revision
     elif field == "sentiment":
@@ -90,10 +100,12 @@ def _correction_current(payload, assessment, sentiment, source):
 
 def _feedback_view(db, campaign_id, result_id, event, source, assessment=None, sentiment=None):
     payload = audit_payload(event)
+    if payload.get("qa_audit_only"):
+        payload["correction_id"]=event.id
     assessment = assessment or _latest_assessment(db, campaign_id, result_id)
     sentiment = sentiment or _latest_sentiment(db, campaign_id, result_id)
     review = _review_current(db, campaign_id, result_id, source, assessment, sentiment)
-    current = _correction_current(payload, assessment, sentiment, source)
+    current = _correction_current(payload, assessment, sentiment, source, db,campaign_id,result_id)
     triage = _latest_triage(db, campaign_id, result_id, event.id)
     decision = audit_payload(triage) if triage else {}
     # An approved feedback example becomes stale after a later field/source
@@ -128,7 +140,7 @@ def _can_triage(officer, campaign, source):
     return bool(has(officer, "administration")
                 and has(officer, "human_validation")
                 and can_edit_gate1(officer, campaign)
-                and is_pilot_qa_source(source))
+                and (is_pilot_qa_source(source) or is_qa_campaign(campaign)))
 
 
 @router.get("/campaign/{campaign_id}/source/{result_id}/feedback")
@@ -225,7 +237,7 @@ def triage_feedback(campaign_id: int, result_id: int, body: FeedbackTriageIn,
     if (latest.id if latest else 0) != body.expected_decision_revision:
         raise HTTPException(409, "Offline feedback triage changed; refresh")
     if decision == "ACCEPT_OFFLINE_EVALUATION":
-        if not _correction_current(payload, assessment, sentiment, source):
+        if not _correction_current(payload, assessment, sentiment, source, db,campaign_id,result_id):
             raise HTTPException(409, "Correction is no longer effective; recheck before acceptance")
         review = _review_current(db, campaign_id, result_id, source, assessment, sentiment)
         if review["information_review_status"] != "OFFICER_VERIFIED":
@@ -270,8 +282,12 @@ def gate2_handoff_preview(campaign_id: int, result_id: int,
     assessment = _latest_assessment(db, campaign_id, result_id)
     sentiment = _latest_sentiment(db, campaign_id, result_id)
     review = _review_current(db, campaign_id, result_id, source, assessment, sentiment)
-    label = str(assessment.relevance_label or "UNASSESSED").upper() if assessment else "UNASSESSED"
+    qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
+    label=str(qa["effective_relevance"] or "UNASSESSED").upper()
     blockers = []
+    if campaign_id==QA_ID:
+        blockers.append("QA_CAMPAIGN_NOT_ELIGIBLE_FOR_PUBLICATION")
+        if qa["qa_stale"]:blockers.append("QA_CORRECTION_REVALIDATION_REQUIRED")
     if assessment is None or label in ("", "UNASSESSED") or (
         assessment and assessment.model_version == "PRISM_PENDING_OPENAI"
     ):
@@ -291,8 +307,7 @@ def gate2_handoff_preview(campaign_id: int, result_id: int,
         "result_id": str(result_id),
         "gate1_review_status": review["information_review_status"],
         "effective_relevance": label,
-        "effective_sentiment": sentiment.sentiment if sentiment else (
-            assessment.sentiment if assessment else "UNKNOWN"),
+        "effective_sentiment":qa["effective_sentiment"],
         "assessment_id": assessment.id if assessment else None,
         "assessment_version": assessment.assessment_version if assessment else None,
         "officer_sentiment_revision": sentiment.id if sentiment else 0,

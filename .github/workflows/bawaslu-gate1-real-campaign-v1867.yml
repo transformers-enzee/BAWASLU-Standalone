@@ -1,0 +1,53 @@
+name: BAWASLU v186.7 Politk Uang audit-only Gate 1 QA
+
+on:
+  push:
+    branches:
+      - architecture-v2-foundation-20261015
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-campaign-audit-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: bawaslu_gate1_isolated_qa_db
+          POSTGRES_USER: bawaslu_gate1_isolated_qa_db_user
+          POSTGRES_PASSWORD: qa-ci-ephemeral-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bawaslu_gate1_isolated_qa_db_user -d bawaslu_gate1_isolated_qa_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: Campaign 9 audited correction, authorization, freshness, Gate 2 publication block
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: postgresql+psycopg://bawaslu_gate1_isolated_qa_db_user:qa-ci-ephemeral-only@127.0.0.1:5432/bawaslu_gate1_isolated_qa_db
+          BAWASLU_ALLOW_ISOLATED_DB_TEST: "YES"
+          BAWASLU_GATE1_QA_BOOTSTRAP: "YES"
+          BAWASLU_GATE1_QA_ISOLATED: "YES"
+          BAWASLU_STARTUP_READ_ONLY: "1"
+          BAWASLU_GATE1_QA_ADMIN_PASSWORD: "CI-Only-Dummy-Admin-Pass-1867!"
+          BAWASLU_GATE1_QA_VIEWER_PASSWORD: "CI-Only-Dummy-Viewer-Pass-1867!"
+          OPENAI_API_KEY: ""
+          SOCIALCRAWL_API_KEY: ""
+        run: pytest -q tests/test_gate1_real_campaign_v1867.py
+      - name: Assert offline-only data handling
+        run: echo "Disposable localhost PostgreSQL only; no shared Supabase writes, no provider requests."

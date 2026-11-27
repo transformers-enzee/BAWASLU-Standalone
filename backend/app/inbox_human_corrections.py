@@ -24,6 +24,8 @@ from .inbox_gate_integrity import (
     GATE1_AUDIT_SUBJECT, source_integrity_digest, review_projection, audit_payload,
 )
 from .socialcrawl import _result_in_scope
+from .inbox_gate_real_qa_v1867 import (is_qa_campaign,qa_write_opt_in,isolated_source,
+    projection,reviewed_state,save as save_qa,history as qa_history,restore_value)
 
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 RELEVANCE = frozenset(("RELEVANT", "HIGHLY_RELEVANT", "IRRELEVANT", "UNCERTAIN"))
@@ -98,7 +100,7 @@ def can_edit_gate1(profile, campaign):
     from .campaigns import _editable
     return bool(_write_enabled()
                 and os.getenv("BAWASLU_INBOX_GATE1_PILOT_MODE", "").lower() == "staging"
-                and is_pilot_qa_campaign(campaign)
+                and (is_pilot_qa_campaign(campaign) or qa_write_opt_in(campaign))
                 and campaign.id in _allowlist()
                 and has(profile, "human_validation")
                 and has(profile, "edit_intelligence")
@@ -112,8 +114,9 @@ def _authorize(db, user, campaign_id, result_id, write=False):
     source = _source(db, officer, campaign_id, result_id)
     if write and not can_edit_gate1(officer, campaign):
         raise HTTPException(403, "Human Gate 1 pilot correction authorization required")
-    if write and not is_pilot_qa_source(source):
-        raise HTTPException(403, "Pilot writes are limited to explicitly synthetic QA evidence")
+    if write and not ((is_pilot_qa_campaign(campaign) and is_pilot_qa_source(source))
+                      or (qa_write_opt_in(campaign) and isolated_source(db,campaign,source))):
+        raise HTTPException(403,"Gate 1 writes restricted to unshared QA evidence")
     return officer, campaign, source
 
 
@@ -153,7 +156,8 @@ def review_state_for_source(db, campaign_id, result_id, assessment=None, sentime
         sentiment = _latest_sentiment(db, campaign_id, result_id)
     if source is None:
         source = db.get(SocialListeningResult, result_id)
-    return review_projection(event, assessment, sentiment, source)
+    state=review_projection(event, assessment, sentiment, source)
+    return reviewed_state(db,campaign_id,result_id,assessment,sentiment,source,state)
 
 
 def _write_audit(db, officer, campaign_id, result_id, action, changes):
@@ -275,6 +279,14 @@ def _apply_field(db, user, officer, source, campaign_id, field, value, expected_
 def correct_field(campaign_id: int, result_id: int, body: FieldCorrectionIn,
                   user: User=Depends(current_user), db: Session=Depends(get_db)):
     officer, campaign, source = _authorize(db, user, campaign_id, result_id, True)
+    if is_qa_campaign(campaign):
+        source=_lock_current_source(db,officer,source)
+        return save_qa(db,user,officer,campaign_id,source,
+                       _latest_assessment(db,campaign_id,result_id),
+                       _latest_sentiment(db,campaign_id,result_id),
+                       body.field.strip().lower(),body.value.strip().upper(),
+                       body.expected_revision,body.expected_assessment_id,
+                       body.expected_source_digest,body.reason.strip())
     return _apply_field(db, user, officer, source, campaign_id,
                         body.field, body.value, body.expected_revision, body.reason.strip(),
                         expected_assessment_id=body.expected_assessment_id,
@@ -286,6 +298,17 @@ def restore_field(campaign_id: int, result_id: int, body: RestoreIn,
                   user: User=Depends(current_user), db: Session=Depends(get_db)):
     officer, campaign, source = _authorize(db, user, campaign_id, result_id, True)
     field = body.field.strip().lower()
+    if is_qa_campaign(campaign):
+        source=_lock_current_source(db,officer,source)
+        a=_latest_assessment(db,campaign_id,result_id)
+        s=_latest_sentiment(db,campaign_id,result_id)
+        value=restore_value(db,campaign_id,result_id,a,field,body.target_revision)
+        if not value:
+            raise HTTPException(404,"Historical QA value not found")
+        return save_qa(db,user,officer,campaign_id,source,a,s,
+                       field,value.strip().upper(),body.expected_revision,
+                       body.expected_assessment_id,body.expected_source_digest,
+                       body.reason.strip(),restored_from=body.target_revision)
     if field == "relevance":
         old = (db.query(EvidenceAssessment)
                .filter_by(campaign_id=campaign_id, result_id=result_id,
@@ -338,6 +361,9 @@ def decide_information(campaign_id: int, result_id: int, body: DecisionIn,
         or not (source.text_content or source.canonical_url)
     ):
         raise HTTPException(422, "A completed assessment and saved source trace are required")
+    qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
+    if is_qa_campaign(campaign) and qa["qa_stale"]:
+        raise HTTPException(409,"QA correction needs revalidation")
     event = _write_audit(db, officer, campaign_id, result_id, "GATE1_INFORMATION_DECISION", {
         "status": status, "reason": body.reason.strip(),
         "previous_status": _payload(latest).get("status") if latest else None,
@@ -347,6 +373,9 @@ def decide_information(campaign_id: int, result_id: int, body: DecisionIn,
         "source_integrity_digest": digest,
         "model_version": assessment.model_version if assessment else None,
         "information_only": True, "legal_claim_verified": False,
+        "qa_audit_only":is_qa_campaign(campaign),
+        "qa_relevance_event":qa["qa_relevance_event"],
+        "qa_sentiment_event":qa["qa_sentiment_event"],
     })
     db.commit()
     return {"saved": True, "status": status, "revision": event.id,
@@ -368,12 +397,13 @@ def correction_history(campaign_id: int, result_id: int,
     events = (db.query(AuditEvent)
               .filter_by(subject_type=AUDIT_SUBJECT, subject_id=f"{campaign_id}:{result_id}")
               .order_by(AuditEvent.id.desc()).limit(80).all())
+    qa_rel,qa_sent=qa_history(db,campaign_id,result_id)
     return {
-        "relevance_history": [{
+        "relevance_history": qa_rel + [{
             "revision": row.assessment_version, "value": row.relevance_label,
             "model_version": row.model_version, "created_at": row.created_at.isoformat() if row.created_at else None,
         } for row in assessments],
-        "sentiment_history": [{
+        "sentiment_history": qa_sent + [{
             "revision": row.id, "value": row.sentiment, "reviewer_id": str(row.actor_id),
             "reason": row.rationale, "created_at": row.created_at.isoformat() if row.created_at else None,
         } for row in sentiments],

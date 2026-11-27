@@ -17,6 +17,7 @@ from .officer_sentiment import OfficerSentimentCorrection
 from .governance_persistence import _grant, _campaign, _source
 from .governance_information_qa import information_qa_sample, classify_information
 from .inbox_human_queue import paginated_review_queue
+from .inbox_gate_real_qa_v1867 import (is_qa_campaign,isolated_source,projection)
 
 router=APIRouter(prefix="/api/inbox/human-review",tags=["inbox-human-review"])
 
@@ -92,9 +93,12 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
                      .filter(EvidenceAssessment.model_version!="HUMAN_OVERRIDE")
                      .order_by(EvidenceAssessment.assessment_version.desc(),
                                EvidenceAssessment.id.desc()).first())
-    can_write=bool(can_edit_gate1(officer,campaign) and is_pilot_qa_source(source))
+    can_write=bool(can_edit_gate1(officer,campaign) and
+                   (is_pilot_qa_source(source) and not is_qa_campaign(campaign)
+                    or isolated_source(db,campaign,source)))
     can_correct=bool(can_write and assessment is not None)
     state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment,source)
+    qa=projection(db,campaign_id,result_id,assessment,sentiment,source)
     original_text=source.text_content or ""
     return {
         "campaign_id":str(campaign_id),"campaign_name":campaign.name,
@@ -108,16 +112,19 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         "model_version":assessment.model_version if assessment else None,
         "assessment_version":assessment.assessment_version if assessment else None,
         "original_ai_relevance":ai_baseline.relevance_label if ai_baseline else None,
-        "effective_relevance":assessment.relevance_label if assessment else "UNASSESSED",
-        "relevance_basis":saved_relevance_basis(assessment),
+        "effective_relevance":qa["effective_relevance"],
+        "relevance_basis":qa["relevance_basis"] if is_qa_campaign(campaign) else saved_relevance_basis(assessment),
         "relevance_explanation":assessment.explanation if assessment else "",
         "sentiment_explanation":assessment.sentiment_explanation if assessment else "",
         **classification,
+        "effective_sentiment":qa["effective_sentiment"] if is_qa_campaign(campaign) else classification["effective_sentiment"],
+        "sentiment_basis":qa["sentiment_basis"] if is_qa_campaign(campaign) else classification["sentiment_basis"],
+        "qa_audit_only":is_qa_campaign(campaign),
         "can_correct_relevance":can_correct,
         "can_correct_sentiment":can_correct,
         "can_review_information":can_write,
-        "relevance_revision":assessment.assessment_version if assessment else 0,
-        "sentiment_revision":sentiment.id if sentiment else 0,
+        "relevance_revision":qa["relevance_revision"],
+        "sentiment_revision":qa["sentiment_revision"],
         **state,
         "read_only":not can_write,
         "review_action_available":assessment is not None,
@@ -148,6 +155,7 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         can_edit_gate1, is_pilot_qa_campaign, PILOT_QA_PROVIDER, _allowlist,
     )
     from .campaigns import _editable
+    from .inbox_gate_real_qa_v1867 import is_qa_campaign
     from .models import CampaignEvidence, SocialListeningResult
     synthetic_count=(db.query(CampaignEvidence.id).join(
         SocialListeningResult,
@@ -173,7 +181,9 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         "officer_has_human_validation":has(officer,"human_validation"),
         "officer_has_edit_intelligence":has(officer,"edit_intelligence"),
         "officer_can_edit_campaign":_editable(officer,campaign),
-        "pilot_campaign_draft_and_named":is_pilot_qa_campaign(campaign),
+        "pilot_campaign_draft_and_named":is_pilot_qa_campaign(campaign) or is_qa_campaign(campaign),
+        "qa_pilot_type":"REAL_AUDIT_ONLY" if is_qa_campaign(campaign) else "SYNTHETIC",
+        "qa_real_evidence_count":linked_count-synthetic_count if is_qa_campaign(campaign) else 0,
         "linked_source_count":linked_count,
         "pilot_has_ordinary_evidence":linked_count > 0,
         "pilot_empty_reason":(
@@ -185,8 +195,9 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         "synthetic_source_count":synthetic_count,
         "non_synthetic_link_count":linked_count-synthetic_count,
         "ready_for_write_pilot":bool(can_edit_gate1(officer,campaign)
-                                      and synthetic_count>0
-                                      and linked_count==synthetic_count),
+                                      and ((synthetic_count>0 and linked_count==synthetic_count)
+                                           or (is_qa_campaign(campaign) and linked_count>0))),
+        "qa_overrides_affect_canonical_ai":False if is_qa_campaign(campaign) else None,
         "writes_triggered":False,
         "source_ids_exposed":False,
         "no_automatic_publication":True,

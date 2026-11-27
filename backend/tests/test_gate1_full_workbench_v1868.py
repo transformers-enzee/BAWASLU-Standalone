@@ -72,6 +72,9 @@ def test_full_field_workbench_and_manual_intake(monkeypatch):
         snapshot=full_review(9,sid,admin,db)
         assert len(FIELD_GROUPS)==3
         assert snapshot["can_edit"] is True and snapshot["revision"]==0
+        assert len(snapshot["review_areas"])==8
+        assert snapshot["can_complete_missing"] is True
+        assert snapshot["review_summary"]["framework_dimensions"]==8
         assert snapshot["fields"]["author_name"]["original"]=="Unverified API author"
         assert snapshot["fields"]["author_name"]["effective"]=="Unverified API author"
         reported=report_source_error(9,sid,SourceErrorIn(

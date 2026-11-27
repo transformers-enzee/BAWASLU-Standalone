@@ -21,6 +21,7 @@ from .inbox_gate_integrity import GATE1_AUDIT_SUBJECT, audit_payload, source_int
 from .inbox_gate_real_qa_v1867 import QA_ID, is_qa_campaign
 from .models import AuditEvent, EvidenceAssessment, SocialListeningResult, User
 from .inbox_gate1_quality_hints_v1871 import quality_hints, KNOWN_PLATFORMS
+from .inbox_gate1_review_plan_v1875 import missing_tasks, review_framework
 
 router = APIRouter(prefix="/api/inbox/human-review", tags=["inbox-human-review"])
 
@@ -38,6 +39,7 @@ FIELD_GROUPS = {
     "assessment": (
         "candidate_names", "political_parties", "organizations", "topic_labels",
         "public_concerns", "narrative", "potential_issue_categories",
+        "incident_jurisdiction", "incident_chronology", "review_priority",
         "relevance_explanation", "sentiment_explanation", "geographic_context",
     ),
     "quality": (
@@ -51,6 +53,8 @@ FIELDS = frozenset(v for names in FIELD_GROUPS.values() for v in names)
 ASSESSMENT_FIELDS = frozenset((
     "relevance", "sentiment", "candidate_names", "political_parties",
     "topic_labels", "narrative", "potential_issue_categories", "evidence_quality",
+    "organizations", "incident_jurisdiction", "incident_chronology",
+    "public_concerns", "geographic_context", "verification_gaps", "review_priority",
 ))
 SOURCE_EXCEPTION_FIELDS = frozenset((
     "platform", "content_type", "author_name", "observed_handle",
@@ -60,11 +64,13 @@ SOURCE_EXCEPTION_FIELDS = frozenset((
 # Includes video transcription, translation, engagement counts and diagnostics.
 TECHNICAL_READ_ONLY_FIELDS = FIELDS - ASSESSMENT_FIELDS - SOURCE_EXCEPTION_FIELDS
 REPORTABLE_FIELDS = SOURCE_EXCEPTION_FIELDS | TECHNICAL_READ_ONLY_FIELDS
+COMPLETABLE_FIELDS = frozenset(("canonical_url","published_at","text_content",
+    "author_name","incident_date","country","province","city","language"))
 SENSITIVE = frozenset((
     "author_name", "observed_handle", "canonical_url", "text_content", "transcript",
     "translation", "candidate_names", "political_parties",
     "organizations", "potential_issue_categories", "country", "province", "city",
-    "incident_date", "geographic_context",
+    "incident_date", "geographic_context", "incident_jurisdiction", "incident_chronology",
 ))
 LONG_FIELDS = frozenset((
     "text_content", "transcript", "translation", "narrative", "officer_notes",
@@ -227,7 +233,7 @@ def full_projection(db,campaign_id,result_id,assessment,source):
     """Current effective audit-only fields plus per-field provenance and history."""
     baseline={field:_baseline(field,source,assessment) for field in FIELDS}
     data={field:{"original":value,"effective":value,"basis":"ORIGINAL_SAVED",
-                 "verification":"UNVERIFIED","event_id":0,"evidence_url":""}
+                 "verification":"UNVERIFIED","event_id":0,"evidence_url":"","mode":"ORIGINAL"}
           for field,value in baseline.items()}
     out={"revision":0,"fields":data,"history":[],"stale":False,
          "secondary_review_required":False,
@@ -254,6 +260,7 @@ def full_projection(db,campaign_id,result_id,assessment,source):
                     "effective":patch.get("value",""),"basis":"QA_OFFICER_ENRICHMENT",
                     "verification":patch.get("verification","UNVERIFIED"),
                     "event_id":event.id,"evidence_url":patch.get("evidence_url",""),
+                     "mode":patch.get("mode","CORRECTED"),
                 })
         out["history"].append({
             "revision":event.id,"actor_id":event.actor_id,"at":event.occurred_at,
@@ -298,6 +305,12 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
     from .access import has
     latest=_recent(db,campaign_id,result_id)
     distinct_reviewer=bool(latest and str(latest[0].actor_id)!=str(user.id))
+    review_values={**p["fields"],
+                   "relevance":{"effective":str(getattr(a,"relevance_label","") or "")},
+                   "sentiment":{"effective":str(getattr(a,"sentiment","") or "")}}
+    tasks=missing_tasks(review_values,
+         relevance=getattr(a,"relevance_label","") if a else "",
+         sentiment=getattr(a,"sentiment","") if a else "")
     secondary_allowed=bool(p["secondary_review_required"]
                            and distinct_reviewer
                            and has(officer,"administration")
@@ -306,12 +319,18 @@ def full_review(campaign_id:int,result_id:int,user:User=Depends(current_user),db
     return {"campaign_id":str(campaign_id),"result_id":str(result_id),
             "field_groups":{k:list(v) for k,v in FIELD_GROUPS.items()},
             "quality_hints":quality_hints(p["fields"],source),
+            "review_areas":review_framework(review_values),
+            "missing_review_tasks":tasks,
+            "review_summary":{"framework_dimensions":8,"attention_items":len(tasks),
+                              "attention_basis":"saved-source-and-assessment-checks"},
+            "completable_fields":sorted(COMPLETABLE_FIELDS),
             "assessment_fields":sorted(ASSESSMENT_FIELDS),
             "source_exception_fields":sorted(SOURCE_EXCEPTION_FIELDS),
             "technical_read_only_fields":sorted(TECHNICAL_READ_ONLY_FIELDS),
             "can_correct_source":bool(can_write and has(officer,"administration")
                                       and isolated_source(db,campaign,source)),
             "can_report_data_error":bool(can_write and isolated_source(db,campaign,source)),
+            "can_complete_missing":bool(can_write and isolated_source(db,campaign,source)),
             "source_error_reports":[{
                 "id":e.id,"field":audit_payload(e).get("field"),
                 "at":e.occurred_at,"actor_id":e.actor_id,
@@ -348,10 +367,16 @@ def save_full_review(campaign_id:int,result_id:int,body:FullReviewBatch,
         if field not in FIELDS or field in seen:
             raise HTTPException(422,"Unsupported or repeated field")
         seen.add(field)
-        # Source overrides and technical exceptions require administrative authority.
-        # Normal officers can still correct the AI assessment fields.
+        # Ordinary officers can complete an actually missing source value, but
+        # cannot replace a present provider value or modify technical metrics.
         if field not in ASSESSMENT_FIELDS and not has(officer,"administration"):
-            raise HTTPException(403,"Source or technical correction requires an administrator")
+            if field not in COMPLETABLE_FIELDS:
+                raise HTTPException(403,"Technical/source replacement requires an administrator")
+            prior=old["fields"][field]
+            if (str(prior["original"] or "").strip() or
+                str(prior["effective"] or "").strip() or
+                entry.mode not in ("SUPPLEMENTED","UNAVAILABLE")):
+                raise HTTPException(403,"Only absent source values may be supplemented by officers")
         if entry.mode not in REASONS or entry.verification not in VERIFICATIONS:
             raise HTTPException(422,"Invalid correction mode or verification status")
         if entry.mode=="UNAVAILABLE" and entry.verification=="SOURCE_CONFIRMED":
@@ -360,7 +385,9 @@ def save_full_review(campaign_id:int,result_id:int,body:FullReviewBatch,
         url=_safe_url(entry.evidence_url)
         if entry.verification=="SOURCE_CONFIRMED" and not url:
             raise HTTPException(422,"Source-confirmed fields require a supporting reference")
-        if old["fields"][field]["effective"]==new:
+        if old["fields"][field]["effective"]==new and not (
+            entry.mode=="UNAVAILABLE"
+            and not new and old["fields"][field].get("mode")!="UNAVAILABLE"):
             raise HTTPException(422,f"No change to {field}")
         patches.append({
             "field":field,"value":new,"previous":old["fields"][field]["effective"],

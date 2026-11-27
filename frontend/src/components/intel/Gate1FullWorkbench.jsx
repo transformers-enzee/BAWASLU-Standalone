@@ -4,12 +4,14 @@ import {useLanguage} from '@/lib/LanguageContext';
 
 // Keep all source/technical data available for inspection, not routine modification.
 const ASSESSMENT_GROUPS=[
-  {id:'relevance',en:'Election relevance',idLabel:'Relevansi pemilu',fields:['relevance']},
-  {id:'sentiment',en:'Sentiment',idLabel:'Sentimen',fields:['sentiment']},
-  {id:'entities',en:'Candidates / parties',idLabel:'Kandidat / partai',fields:['candidate_names','political_parties']},
-  {id:'narrative',en:'Topics / narrative',idLabel:'Topik / narasi',fields:['topic_labels','narrative']},
-  {id:'issue',en:'Potential election issue',idLabel:'Potensi isu pemilu',fields:['potential_issue_categories']},
-  {id:'quality',en:'Evidence quality',idLabel:'Kualitas bukti',fields:['evidence_quality']},
+  {id:'violation',en:'Potential violations',idLabel:'Potensi pelanggaran',priority:'P1',fields:['potential_issue_categories']},
+  {id:'actors',en:'Candidates & involved parties',idLabel:'Kandidat & pihak terkait',priority:'P1',fields:['candidate_names','political_parties','organizations']},
+  {id:'jurisdiction',en:'Incident jurisdiction',idLabel:'Wilayah kejadian',priority:'P1',fields:['incident_jurisdiction','geographic_context']},
+  {id:'relevance',en:'Election relevance',idLabel:'Relevansi pemilu',priority:'P2',fields:['relevance']},
+  {id:'verification',en:'Evidence verification',idLabel:'Verifikasi bukti',priority:'P2',fields:['evidence_quality','verification_gaps']},
+  {id:'timeline',en:'Incident & timeline',idLabel:'Kejadian & kronologi',priority:'P2',fields:['incident_chronology']},
+  {id:'narrative',en:'Public narrative & issues',idLabel:'Narasi & isu publik',priority:'P2',fields:['topic_labels','narrative','public_concerns','sentiment']},
+  {id:'attention',en:'Attention & follow-up',idLabel:'Perhatian & tindak lanjut',priority:'P2',fields:['review_priority']},
 ];
 const ASSESSMENT_FIELDS=ASSESSMENT_GROUPS.flatMap(g=>g.fields);
 const SOURCE_EXCEPTION_FIELDS=['platform','content_type','author_name','observed_handle','published_at',
@@ -53,9 +55,7 @@ const autoDecisionReason=(status)=>status==='OFFICER_VERIFIED'?
   'Officer explicitly confirmed review of the saved information snapshot for Gate 1 QA only; not legal verification.':
   status==='HELD'?'Officer chose to hold this information pending further source and context verification.':
   'Officer chose to exclude this information from the Gate 1 QA review; not a legal finding.';
-const autoManualReason='Officer submitted a missing-source proposal for QA review. Provider retrieval is not asserted and this remains unverified.';
 const INPUT='intel-input mt-1 w-full';
-const EMPTY_MANUAL={platform:'other',text_content:'',source_url:'',author_name:'',reason:''};
 
 function savedIssues(detail,view){
   // Only surface meaningful review gaps: absent candidate or location is not
@@ -63,7 +63,7 @@ function savedIssues(detail,view){
   const issues=[];
   const add=(field,message)=>{if(!issues.some(i=>i.field===field))issues.push({field,message})};
   if(!usable(detail?.canonical_url))add('canonical_url','Original source link is unavailable. Confirm evidence provenance.');
-  if(!usable(detail?.published_at))add('published_at','Publication date is unavailable. Confirm if chronology matters.');
+  // Publication dates are only elevated if the contextual missing-data planner finds relevance.
   if(!usable(detail?.text_content)&&!usable(view?.fields?.transcript?.effective))
     add('text_content','Neither post text nor a transcript is available for contextual review.');
   if(['UNCLASSIFIED','UNKNOWN','UNASSESSED'].includes(String(detail?.ai_sentiment||'').toUpperCase())
@@ -77,9 +77,9 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const T=(en,id)=>language==='id'?id:en;
   const [mode,setMode]=useState('review');
   const [view,setView]=useState(null);
-  const [manualList,setManualList]=useState(null);
   const [field,setField]=useState('');
   const [selectedGroup,setSelectedGroup]=useState('');
+  const [selectedMissing,setSelectedMissing]=useState('');
   const [reviewLane,setReviewLane]=useState('assessment');
   const [sourceErrorOpen,setSourceErrorOpen]=useState(false);
   const [errorField,setErrorField]=useState('');
@@ -90,7 +90,6 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
   const [support,setSupport]=useState('');
   const [sourceConfirmed,setSourceConfirmed]=useState(false);
   const [pending,setPending]=useState([]);
-  const [manual,setManual]=useState(EMPTY_MANUAL);
   const [sensitiveReason,setSensitiveReason]=useState('SOURCE_MISMATCH');
   const [reviewerReason,setReviewerReason]=useState('');
   const [reportBusy,setReportBusy]=useState(false);
@@ -110,34 +109,37 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     String(fields[key]?.original??'');
   const groupSummary=(group)=>group.fields.map(k=>usable(effectiveValue(k))?
     pretty(k)+': '+effectiveValue(k).slice(0,70):pretty(k)+': not identified').join(' · ');
-  const reportableFields=[...SOURCE_EXCEPTION_FIELDS,...TECHNICAL_READ_ONLY_FIELDS];
   const reportValue=errorField?String(fields[errorField]?.effective??''):'';
-  const important=HIGH_IMPACT.has(field)||reviewLane==='source';
+  const important=HIGH_IMPACT.has(field)||reviewLane==='source'||field==='incident_jurisdiction'||field==='incident_chronology';
   const choice=effectiveValue(field);
   const original=originalValue(field);
   const issueHints=useMemo(()=>[...(view?.quality_hints||[]).map(h=>({...h,message:h.message+(h.suggested_value?' Suggested: '+h.suggested_value+' (verify before use).':'')})),...savedIssues(detail,view)].slice(0,5),[detail,view]);
   const reasonLabels={SOURCE_MISMATCH:'Source differs from saved value',WRONG_ATTRIBUTION:'Incorrect identity or location attribution',MISSING_CONTEXT:'Missing or incomplete source context',OTHER:'Other — officer explanation'};
   const correctionReason=important?(sensitiveReason==='OTHER'?note.trim():reasonLabels[sensitiveReason]+(note.trim()?' — '+note.trim():'')):note.trim();
   const isLegacy=field==='relevance'||field==='sentiment';
-  const changed=field&&((noValue?choice!=='':String(value).trim()!==choice)&&
-    (noValue||String(value).trim().length>0));
+  const changed=field&&(noValue?
+    (!isLegacy&&view?.fields?.[field]?.mode!=='UNAVAILABLE'):
+    (String(value).trim()!==choice&&String(value).trim().length>0));
   const allowedField=reviewLane==='source'?
     (view?.can_correct_source&&SOURCE_EXCEPTION_FIELDS.includes(field)):
-    ASSESSMENT_FIELDS.includes(field);
+    reviewLane==='missing'?
+      (view?.can_complete_missing&&view?.missing_review_tasks?.some(t=>t.field===field)):
+      ASSESSMENT_FIELDS.includes(field);
   const canSubmit=view?.can_edit&&allowedField&&detail?.can_review_information&&changed&&!busy&&
     (!isLegacy||Boolean(detail?.assessment_id))&&
     (!important||correctionReason.length>=10)&&
     (!sourceConfirmed||validUrl(support))&&
     (!support.trim()||validUrl(support));
   const needsReview=view?.secondary_review_required&&view?.secondary_review?.status!=='APPROVED';
-  const blockedApproval=needsReview||view?.stale||detail?.full_field_stale;
+  const materialGaps=(view?.missing_review_tasks||[]).some(x=>x.priority==='P1');
+  const blockedApproval=needsReview||view?.stale||detail?.full_field_stale||materialGaps;
 
   useEffect(()=>{
     if(String(campaignId)!=='9'||!detail?.result_id){setView(null);return}
     let active=true;
     const sourceChanged=lastSourceRef.current!==String(detail.result_id);
     lastSourceRef.current=String(detail.result_id);
-    if(sourceChanged){setMode('review');setNotice('');setSelectedGroup('');setReviewLane('assessment');setSourceErrorOpen(false);setErrorField('');setErrorNote('')}
+    if(sourceChanged){setMode('review');setNotice('');setSelectedGroup('');setSelectedMissing('');setReviewLane('assessment');setSourceErrorOpen(false);setErrorField('');setErrorNote('')}
     setField('');setValue('');setNoValue(false);setPending([]);setAdvanced(false);
     setNote('');setSupport('');setSourceConfirmed(false);setError('');setView(null);
     base44.inboxHumanReview.fullReview(campaignId,detail.result_id)
@@ -145,17 +147,6 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
       .catch(e=>{if(active)setError(e.message||'Review details unavailable')});
     return ()=>{active=false};
   },[campaignId,detail?.result_id,detail?.assessment_id,detail?.source_integrity_digest,detail?.full_field_revision]);
-
-  useEffect(()=>{
-    if(String(campaignId)!=='9'||mode!=='missing')return;
-    let active=true;
-    const preferred=String(detail?.platform||'').toLowerCase();
-    if(SUPPORTED_PLATFORMS.includes(preferred))setManual(x=>({...x,platform:preferred}));
-    base44.inboxHumanReview.manualIntake(campaignId)
-      .then(x=>{if(active)setManualList(x)})
-      .catch(e=>{if(active)setError(e.message||'Manual evidence unavailable')});
-    return ()=>{active=false};
-  },[campaignId,mode,detail?.platform]);
 
   function selectField(key){
     setField(key);setValue('');setNote('');setSensitiveReason('SOURCE_MISMATCH');setSupport('');setNoValue(false);
@@ -190,12 +181,17 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     setReviewLane('source');setSelectedGroup('');setSourceErrorOpen(false);
     selectField(errorField);
   }
+  function chooseMissing(task){
+    setSelectedMissing(task.field);setReviewLane('missing');setMode('missing');
+    selectField(task.field);
+    setSensitiveReason('MISSING_CONTEXT');
+  }
   function createPatch(){
     if(!field||!changed)return null;
     const clean=noValue?'':String(value).trim();
     const explanation=correctionReason.length>=10?correctionReason:autoFieldReason(field);
     return {field,value:clean,mode:noValue?'UNAVAILABLE':usable(choice)?'CORRECTED':'SUPPLEMENTED',
-      verification:sourceConfirmed?'SOURCE_CONFIRMED':'UNVERIFIED',
+      verification:noValue?'UNVERIFIED':reviewLane==='missing'?'OFFICER_SUPPLIED':sourceConfirmed?'SOURCE_CONFIRMED':'UNVERIFIED',
       evidence_url:support.trim(),field_reason:explanation};
   }
   function addAnother(){
@@ -235,7 +231,7 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           reason:correctionReason.length>=10?correctionReason:autoBatchReason(patches.length)
         });
       }
-      setPending([]);selectField('');setSelectedGroup('');setReviewLane('assessment');
+      setPending([]);selectField('');setSelectedGroup('');setSelectedMissing('');setReviewLane('assessment');
       setNotice(T('Saved in QA history. Original provider and AI values remain unchanged.',
         'Disimpan dalam riwayat QA. Data sumber dan AI asli tidak berubah.'));
       onSaved?.();
@@ -283,25 +279,6 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     }catch(e){setError(e.message||'Independent review unavailable')}
     finally{setBusy(false)}
   }
-  async function saveMissing(){
-    if(busy||manual.text_content.trim().length<10||!validUrl(manual.source_url))return;
-    setBusy(true);setError('');setNotice('');
-    try{
-      await base44.inboxHumanReview.addManualIntake(campaignId,{
-        platform:manual.platform,title:manual.text_content.trim().slice(0,100),
-        text_content:manual.text_content.trim(),source_url:manual.source_url.trim(),
-        author_name:manual.author_name.trim(),observed_at:'',
-        reason:manual.reason.trim().length>=10?manual.reason.trim():autoManualReason,
-        evidence_url:''
-      });
-      setManual({...EMPTY_MANUAL,platform:SUPPORTED_PLATFORMS.includes(String(detail?.platform||'').toLowerCase())?String(detail.platform).toLowerCase():'other'});
-      setManualList(await base44.inboxHumanReview.manualIntake(campaignId));
-      setNotice(T('Missing evidence recorded as an unverified QA proposal; no import or publication.',
-        'Bukti dicatat sebagai usulan QA belum terverifikasi; tidak diimpor atau diterbitkan.'));
-    }catch(e){setError(e.message||'Unable to record missing evidence')}
-    finally{setBusy(false)}
-  }
-
   if(String(campaignId)!=='9'||!detail?.qa_audit_only)return null;
   return <section className="border-t pt-3 space-y-3" data-testid="gate1-full-field-workbench">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -319,8 +296,8 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
         {T('Review & Correct','Tinjau & Koreksi')}
       </button>
       <button role="tab" aria-selected={mode==='missing'} className={'intel-ghost text-xs '+(mode==='missing'?'font-bold border-[#801b24]':'')}
-        type="button" onClick={()=>{setMode('missing');setError('')}} data-testid="gate1-action-missing">
-        {T('Add Missing Post','Tambah Unggahan yang Hilang')}
+        type="button" onClick={()=>{setMode('missing');setReviewLane('missing');setSelectedMissing('');selectField('');setError('')}} data-testid="gate1-action-missing">
+        {T('Complete Missing Data','Lengkapi Data yang Hilang')}
       </button>
     </div>
 
@@ -340,8 +317,8 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
               const group=ASSESSMENT_GROUPS.find(g=>g.fields.includes(i.field));
               if(group){chooseGroup(group);selectField(i.field)}else beginSourceError(i.field);
             }}>{T('Review','Periksa')}</button>}
-          </div>):<p className="text-xs text-slate-500">{T('No obvious missing values detected. You can still correct any field.',
-            'Tidak ada nilai hilang yang jelas. Anda tetap dapat mengoreksi bidang apa pun.')}</p>}
+          </div>):<p className="text-xs text-slate-500">{T('No obvious inconsistencies detected. You can still review assessments or report data errors.',
+            'Tidak ditemukan ketidaksesuaian yang jelas. Anda tetap dapat meninjau penilaian atau melaporkan kesalahan data.')}</p>}
         </div>
 
         {view.can_edit&&<div className="rounded-lg border p-3 space-y-3" data-testid="gate1-full-field-editor">
@@ -349,17 +326,26 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
             <h5 className="font-semibold text-sm">{T('What needs correcting?','Apa yang perlu diperbaiki?')}</h5>
             <p className="text-xs text-slate-500">{T('Select one assessment area only when the AI interpretation is incorrect. The saved values remain visible.',
               'Pilih bidang penilaian hanya jika hasil AI salah. Nilai tersimpan tetap terlihat.')}</p>
+            <p className="text-xs font-medium">{T('Main priorities: violations, involved parties, incident jurisdiction','Prioritas utama: pelanggaran, pihak terkait, wilayah kejadian')}</p>
             <div className="grid gap-2 sm:grid-cols-2" data-testid="gate1-field-filter">
-              {ASSESSMENT_GROUPS.map(group=><button key={group.id} type="button"
-                aria-pressed={selectedGroup===group.id}
-                data-testid={'gate1-review-group-'+group.id}
-                onClick={()=>chooseGroup(group)}
-                className={'rounded-lg border p-3 text-left text-xs space-y-1 hover:bg-slate-50 '+
-                  (selectedGroup===group.id?'border-[#801b24] bg-red-50':'border-slate-200')}>
+              {ASSESSMENT_GROUPS.filter(group=>group.priority==='P1').map(group=><button key={group.id} type="button"
+                aria-pressed={selectedGroup===group.id} data-testid={'gate1-review-group-'+group.id}
+                onClick={()=>chooseGroup(group)} className={'rounded-lg border p-3 text-left text-xs space-y-1 '+(selectedGroup===group.id?'border-[#801b24] bg-red-50':'border-slate-200')}>
                 <span className="block font-semibold">{T(group.en,group.idLabel)}</span>
                 <span className="block text-slate-600 break-words">{groupSummary(group)}</span>
               </button>)}
             </div>
+            <details className="text-xs rounded-md border p-2" data-testid="gate1-other-review-areas">
+              <summary className="font-medium cursor-pointer">{T('Other relevant information (5 areas)','Informasi terkait lainnya (5 bidang)')}</summary>
+              <div className="grid gap-2 sm:grid-cols-2 pt-2">
+                {ASSESSMENT_GROUPS.filter(group=>group.priority==='P2').map(group=><button key={group.id} type="button"
+                  aria-pressed={selectedGroup===group.id} data-testid={'gate1-review-group-'+group.id}
+                  onClick={()=>chooseGroup(group)} className={'rounded-lg border p-3 text-left space-y-1 '+(selectedGroup===group.id?'border-[#801b24] bg-red-50':'border-slate-200')}>
+                  <span className="block font-semibold">{T(group.en,group.idLabel)}</span>
+                  <span className="block text-slate-600 break-words">{groupSummary(group)}</span>
+                </button>)}
+              </div>
+            </details>
             <p className="text-xs text-slate-500">{T('Missing values are reviewed only when relevant. No candidate or location is not automatically an error.',
               'Nilai yang tidak ada diperiksa hanya jika relevan. Tidak adanya kandidat atau lokasi bukan otomatis kesalahan.')}</p>
             {selectedGroup&&<label className="text-xs font-semibold block">{T('Selected assessment field','Bidang penilaian yang dipilih')}
@@ -458,7 +444,10 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
           </div>}
         </div>}
 
-        <div className="rounded-lg border p-3 space-y-2" data-testid="gate1-report-data-error">
+        <details className="rounded-lg border p-3 space-y-2" data-testid="gate1-report-data-error">
+          <summary className="text-xs font-semibold cursor-pointer">{T('Source or technical data incorrect? · Report Data Error',
+            'Data sumber atau teknis salah? · Laporkan kesalahan data')}</summary>
+          <div className="pt-2">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div>
               <h5 className="font-semibold text-sm">{T('Source data incorrect?','Data sumber salah?')}</h5>
@@ -514,7 +503,8 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
               #{report.id} · {pretty(report.field)} · {report.status} · {report.note}
             </p>)}
           </details>}
-        </div>
+          </div>
+        </details>
 
         {view.secondary_review_required&&<div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2"
           data-testid="gate1-secondary-review">
@@ -534,16 +524,16 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
 
         {view.can_edit&&<div className="rounded-lg border p-3 space-y-2" data-testid="gate1-quick-decision">
           <h5 className="text-sm font-semibold">{T('Finished checking this post?','Selesai memeriksa unggahan ini?')}</h5>
-          <p className="text-xs text-slate-500">{T('Approve means you reviewed the saved information—not that any allegation is legally verified.',
-            'Persetujuan berarti informasi telah ditinjau, bukan verifikasi tuduhan hukum.')}</p>
+          <p className="text-xs text-slate-500">{T('This records an information review, not a legal finding. Unresolved priority gaps require completion or a hold.',
+            'Ini mencatat tinjauan informasi, bukan putusan hukum. Kekurangan penting perlu dilengkapi atau ditunda.')}</p>
           {detail.information_review_status!=='OFFICER_VERIFIED'&&<div className="flex gap-2 flex-wrap">
             <button className="intel-ghost text-xs" type="button" disabled={busy||blockedApproval||pending.length>0||(field&&changed)}
               data-testid="gate1-one-click-approve" onClick={()=>decide('OFFICER_VERIFIED',true)}>
-              {T('Looks correct · Approve & Next','Sudah benar · Setujui & Berikutnya')}</button>
+              {T('Looks Correct · Next','Sudah Benar · Berikutnya')}</button>
             <button className="intel-ghost text-xs" type="button" disabled={busy||pending.length>0||(field&&changed)}
               onClick={()=>decide('HELD',true)}>{T('Hold for verification','Tunda untuk verifikasi')}</button>
           </div>}
-          <details className="text-xs"><summary className="cursor-pointer text-slate-600">{T('Exclude or change review decision','Kecualikan atau ubah keputusan')}</summary>
+          <details className="text-xs"><summary className="cursor-pointer text-slate-600">{T('Authorized: Exclude or change review decision','Berwenang: kecualikan atau ubah keputusan')}</summary>
             <div className="pt-2 space-y-2">
               <textarea className={INPUT} rows={2} value={note} onChange={e=>setNote(e.target.value)}
                 placeholder={T('Reason for exclusion (required)','Alasan pengecualian (wajib)')}/>
@@ -556,8 +546,8 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
         <details className="text-xs rounded-lg border p-3" data-testid="gate1-effective-field-list">
           <summary className="cursor-pointer font-medium">{T('View all values and audit history','Lihat semua nilai dan riwayat audit')}</summary>
           <div className="space-y-3 pt-2" data-testid="gate1-full-audit-history">
-            <p>{T('All fields are available for inspection. Only the six review areas are routinely editable. Original evidence is retained.',
-              'Semua bidang dapat diperiksa. Hanya enam bidang penilaian rutin yang dapat dikoreksi. Bukti asli tetap disimpan.')}</p>
+            <p>{T('All fields are available for inspection. Only the eight review areas are routinely editable. Original evidence is retained.',
+              'Semua bidang dapat diperiksa. Hanya delapan bidang penilaian rutin yang dapat dikoreksi. Bukti asli tetap disimpan.')}</p>
             <details data-testid="gate1-readonly-source">
               <summary className="cursor-pointer font-medium">{T('Source evidence — read-only','Bukti sumber — hanya baca')}</summary>
               {SOURCE_EXCEPTION_FIELDS.map(key=><div key={key} className="border-t py-2 break-words">
@@ -587,46 +577,70 @@ export default function Gate1FullWorkbench({campaignId,detail,onSaved,onNext}){
     </div>}
 
     {mode==='missing'&&<div className="space-y-3" data-testid="gate1-manual-intake">
-      <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
-        {T('For a post the provider did not return. Saved as an UNVERIFIED officer proposal, not a Social Listening record or published intelligence.',
-          'Untuk unggahan yang tidak diambil penyedia. Disimpan sebagai usulan petugas BELUM TERVERIFIKASI, bukan data Social Listening atau intelijen terbit.')}
-      </div>
-      {view?.can_edit&&<div className="space-y-2">
-        <label className="block text-xs font-semibold">{T('Link to the missing post','Tautan unggahan yang hilang')}
-          <input type="url" className={INPUT} value={manual.source_url} onChange={e=>{const inferred=platformForUrl(e.target.value);setManual(x=>({...x,source_url:e.target.value,platform:inferred||x.platform}))}} placeholder="https://..."/>
-        </label>
-        <label className="block text-xs font-semibold">{T('Text or description','Teks atau deskripsi')}
-          <textarea className={INPUT} rows={3} value={manual.text_content} onChange={e=>setManual(x=>({...x,text_content:e.target.value}))}
-            placeholder={T('Paste the missing post text or describe what you found','Tempel teks unggahan atau jelaskan yang ditemukan')}/>
-        </label>
-        <label className="block text-xs font-semibold">{T('Platform','Platform')}
-          <select data-testid="gate1-missing-post-platform" className={INPUT} value={manual.platform} onChange={e=>setManual(x=>({...x,platform:e.target.value}))}>
-            {SUPPORTED_PLATFORMS.map(p=><option key={p} value={p}>{pretty(p)}</option>)}
-          </select>
-        </label>
-        <details className="text-xs rounded-md bg-slate-50 p-2"><summary className="cursor-pointer">{T('More details (optional)','Rincian tambahan (opsional)')}</summary>
-          <div className="space-y-2 pt-2">
-            <label className="block">{T('Author or account','Penulis atau akun')}
-              <input className={INPUT} value={manual.author_name} onChange={e=>setManual(x=>({...x,author_name:e.target.value}))}/>
-            </label>
-            <label className="block">{T('Why was it missed?','Mengapa tidak terambil?')}
-              <textarea rows={2} className={INPUT} value={manual.reason} onChange={e=>setManual(x=>({...x,reason:e.target.value}))}/>
-            </label>
-          </div>
-        </details>
-        <button type="button" className="intel-ghost text-xs" onClick={saveMissing}
-          data-testid="gate1-save-missing-evidence"
-          disabled={busy||!validUrl(manual.source_url)||manual.text_content.trim().length<10}>
-          {T('Save unverified proposal','Simpan usulan belum terverifikasi')}</button>
-      </div>}
-      <details className="rounded-md border p-3 text-xs">
-        <summary className="cursor-pointer">{T('Previous missing-source proposals','Usulan sumber hilang sebelumnya')} ({manualList?.items?.length||0})</summary>
-        {(manualList?.items||[]).map(x=><p className="border-t pt-2 mt-2" key={x.id}>
-          #{x.id} · {x.title} · QA_UNVERIFIED · {x.officer_id}
-        </p>)}
-      </details>
+      {!view?<p role="status" className="text-xs">{T('Loading existing record…','Memuat catatan yang ada…')}</p>:<>
+        <div className="rounded-lg border p-3 space-y-2" data-testid="gate1-missing-existing-record">
+          <h5 className="font-semibold text-sm">{T('Complete missing values in this record','Lengkapi nilai yang hilang dalam catatan ini')} #{detail.result_id}</h5>
+          <p className="text-xs text-slate-600">{T('Automated checks only surface missing values important to this source. No new post will be created.',
+            'Pemeriksaan otomatis hanya menampilkan nilai hilang yang penting. Tidak ada unggahan baru yang dibuat.')}</p>
+          <p className="text-xs">{T('Unresolved items','Item belum terselesaikan')}: <strong>{view.missing_review_tasks?.length||0}</strong></p>
+          {view.missing_review_tasks?.length>0?<>
+            <div className="space-y-2" data-testid="gate1-contextual-missing-tasks">
+              {view.missing_review_tasks.map(task=><button type="button" key={task.field}
+                onClick={()=>chooseMissing(task)} aria-pressed={selectedMissing===task.field}
+                className={'w-full text-left border rounded-lg p-3 space-y-1 text-xs '+(selectedMissing===task.field?'border-[#801b24] bg-red-50':'border-slate-200')}>
+                <span className="block font-semibold">{pretty(task.field)} · {task.priority==='P1'?T('High attention','Perhatian tinggi'):T('Contextual check','Pemeriksaan sesuai konteks')}</span>
+                <span className="block text-slate-600">{task.reason}</span>
+              </button>)}
+            </div>
+            {selectedMissing&&field&&<div className="rounded-lg border bg-slate-50 p-3 space-y-2" data-testid="gate1-complete-missing-field">
+              <h5 className="font-semibold text-sm">{T('Complete','Lengkapi')}: {pretty(field)}</h5>
+              <p className="text-xs">{T('Original saved','Nilai asli tersimpan')}: <strong>{usable(original)?original:T('Not provided','Tidak tersedia')}</strong></p>
+              <p className="text-xs">{T('Current effective','Nilai efektif saat ini')}: <strong>{usable(choice)?choice:T('Missing','Hilang')}</strong></p>
+              <label className="block text-xs font-semibold">{T('Provide verified information if available','Isi informasi berdasarkan bukti jika tersedia')}
+                {CLASSIFICATIONS[field]?<select className={INPUT} data-testid="gate1-missing-value"
+                  value={value} onChange={e=>{setValue(e.target.value);setNoValue(false)}}>
+                  <option value="">{T('Choose value','Pilih nilai')}</option>
+                  {CLASSIFICATIONS[field].map(x=><option key={x} value={x}>{pretty(x)}</option>)}
+                </select>:<textarea data-testid="gate1-missing-value" className={INPUT} rows={2}
+                  value={value} disabled={noValue} onChange={e=>{setValue(e.target.value);setNoValue(false)}}
+                  placeholder={T('Missing information','Informasi yang hilang')}/>}
+              </label>
+              {!isLegacy&&<label className="flex gap-2 text-xs items-center">
+                <input type="checkbox" checked={noValue} onChange={e=>{setNoValue(e.target.checked);setValue('')}}/>
+                {T('Cannot verify / information unavailable','Tidak dapat diverifikasi / informasi tidak tersedia')}
+              </label>}
+              {important&&<label className="block text-xs font-semibold">{T('Reason for completing this field','Alasan melengkapi bidang')}
+                <select className={INPUT} value={sensitiveReason} onChange={e=>setSensitiveReason(e.target.value)}>
+                  {Object.entries(reasonLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>}
+              {important&&sensitiveReason==='OTHER'&&<textarea className={INPUT} value={note} onChange={e=>setNote(e.target.value)} rows={2}
+                placeholder={T('Short supporting explanation','Penjelasan pendukung singkat')}/>}
+              <details className="text-xs">
+                <summary className="cursor-pointer">{T('Source link (optional)','Tautan sumber (opsional)')}</summary>
+                <input type="url" className={INPUT} value={support} onChange={e=>setSupport(e.target.value)} placeholder="https://..."/>
+                {support&&<label className="flex gap-2 items-center mt-2"><input type="checkbox" checked={sourceConfirmed} onChange={e=>setSourceConfirmed(e.target.checked)}/>
+                  {T('I verified against this source','Saya sudah memeriksa sumber ini')}</label>}
+              </details>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-missing-evidence"
+                  onClick={()=>saveCorrections(false)} disabled={!canSubmit||view.stale}>
+                  {T('Save missing value','Simpan nilai yang hilang')}
+                </button>
+                <button type="button" className="intel-ghost text-xs" onClick={()=>saveCorrections(true)}
+                  disabled={!canSubmit||view.stale}>{T('Save & Next','Simpan & Berikutnya')}</button>
+              </div>
+              <p className="text-xs text-slate-500">{T('Officer-supplied values are audited; original source data is retained. Significant changes may need independent review.',
+                'Nilai yang diisi petugas dicatat dalam audit; sumber asli tetap disimpan. Perubahan penting mungkin memerlukan pemeriksaan independen.')}</p>
+            </div>}
+          </>:<p className="text-xs text-slate-600" data-testid="gate1-no-material-missing">
+            {T('No unresolved essential fields identified. Missing optional information is not an error.',
+              'Tidak ditemukan bidang penting yang belum lengkap. Informasi opsional yang kosong bukan kesalahan.')}
+          </p>}
+        </div>
+      </>}
     </div>}
-    <p className="text-xs text-slate-500">{T('QA corrections do not train models, change canonical data or publish to Command Centre.',
-      'Koreksi QA tidak melatih model, mengubah data asli, atau menerbitkan ke Command Centre.')}</p>
+    <p className="text-xs text-slate-500">{T('Review changes are recorded separately. Original source evidence is retained.',
+      'Perubahan tinjauan dicatat terpisah. Bukti sumber asli tetap disimpan.')}</p>
   </section>;
 }

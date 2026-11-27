@@ -49,10 +49,10 @@ def test_replacement_validation_rejects_handle_platform_or_platform_geo():
 def test_contextual_workbench_and_governance_contracts():
     ui = (ROOT / "frontend/src/components/intel/Gate1FullWorkbench.jsx").read_text()
     for name in ("gate1-current-effective-value", "gate1-field-filter",
-                 "gate1-sensitive-reason", "gate1-missing-post-platform",
-                 "Missing values", "All fields", "Add Missing Post"):
+                 "gate1-sensitive-reason", "gate1-complete-missing-field",
+                 "Complete Missing Data", "gate1-no-material-missing"):
         assert name in ui
-    assert "platformForUrl" in ui
+    assert "gate1-contextual-missing-tasks" in ui
     assert "correctionReason" in ui
     assert "View all values and audit history" in ui
     assert "gate1-secondary-review" in ui

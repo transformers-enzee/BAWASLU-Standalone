@@ -13,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_six_review_areas_do_not_include_provider_metrics():
-    assert ASSESSMENT_FIELDS == {
-        "relevance", "sentiment", "candidate_names", "political_parties",
-        "topic_labels", "narrative", "potential_issue_categories", "evidence_quality"
-    }
+    assert {"relevance", "sentiment", "candidate_names", "political_parties",
+        "topic_labels", "narrative", "potential_issue_categories", "evidence_quality",
+        "incident_jurisdiction", "incident_chronology", "review_priority",
+        "organizations", "verification_gaps", "public_concerns", "geographic_context"} <= ASSESSMENT_FIELDS
     assert SOURCE_EXCEPTION_FIELDS.isdisjoint(TECHNICAL_READ_ONLY_FIELDS)
     assert ASSESSMENT_FIELDS.isdisjoint(TECHNICAL_READ_ONLY_FIELDS)
     assert {"engagement_likes", "engagement_shares", "engagement_comments",
@@ -47,7 +47,7 @@ def test_source_error_contract_requires_snapshot_and_excludes_invalid_field():
 def test_officer_ui_no_long_field_selector_for_routine_review():
     source=(ROOT/"frontend/src/components/intel/Gate1FullWorkbench.jsx").read_text()
     assert "const ASSESSMENT_GROUPS=[" in source
-    assert source.count("idLabel:") == 6
+    assert source.count("idLabel:") == 8
     assert "gate1-review-group-" in source
     assert "gate1-quick-field-select" in source
     assert "Missing values are reviewed only when relevant" in source

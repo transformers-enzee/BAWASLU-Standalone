@@ -24,7 +24,7 @@ def test_two_action_interface_and_inline_field_editing():
         assert name in source, name
     assert "savedIssues(detail,view)" in source
     assert "Automatic saved-data checks, not confirmed errors" in source
-    assert "not a Social Listening record" in source
+    assert "No new post will be created" in source
     assert "sourceConfirmed?'SOURCE_CONFIRMED':'UNVERIFIED'" in source
     assert "autoFieldReason" in source
     assert "System-generated QA audit note" in source

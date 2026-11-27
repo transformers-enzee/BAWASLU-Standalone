@@ -412,6 +412,8 @@ export default function InboxHumanReview(){
             <button type="button" className="intel-ghost text-xs" data-testid="gate1-save-review-decision" disabled={actionBusy||rationale.trim().length<10} onClick={decide}>{T('Record information QA decision','Catat keputusan QA informasi')}</button>
           </div>:<p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.reason_if_not_actionable||T('Read-only. Officer corrections are not enabled.','Hanya-baca. Koreksi belum diaktifkan.')}</p>)}
           <Gate1FullWorkbench campaignId={campaignId} detail={detail} onNext={nextReviewSource} onSaved={()=>{setHandoff(null);setFeedback(null);setFeedbackQueue(null);setHistory(null);setVersion(v=>v+1)}}/>
+          {!realQaSelected&&<div data-testid="gate1-internal-qa-tools" className="border-t pt-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-500">{T('Internal QA diagnostics','Diagnostik QA internal')}</p>
           <details className="border-t pt-3 space-y-2" data-testid="gate1-gate2-readiness" open={!realQaSelected}>
             <summary className="cursor-pointer text-xs font-semibold">{T('Advanced: Insight handoff checks','Lanjutan: pemeriksaan alih tahap insight')}</summary>
             <h4 className="font-semibold text-sm">{T('Human Gate 2 handoff readiness','Kesiapan alih tahap Human Gate 2')}</h4>
@@ -472,6 +474,7 @@ export default function InboxHumanReview(){
               {(history.audit_history||[]).map(x=><p key={x.revision} className="break-words text-slate-600">#{x.revision} · {x.action} · {x.reviewer_id} · {x.created_at} · {x.reason||''}</p>)}
             </div>}
           </details>
+          </div>}
           {success&&<p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{success}</p>}
         </>}
       </section>

@@ -9,8 +9,9 @@ const client=read('src/api/base44Client.js'),snapshotSrc=read('src/demo/homeRada
 assert.ok(app.includes('<Route path="/" element={<IntelligenceOverview />} />'));
 assert.ok(!app.includes('path="/guide"'),'Interactive guide route must be removed');
 assert.ok(app.includes('<Route path="/smart-radar" element={<SmartRadar />} />'));
-assert.ok(nav.includes("['/','home',HomeIcon,'view_intelligence']"));
-assert.ok(nav.includes("['/smart-radar','Command Centre',LayoutDashboard,'view_intelligence']"));
+assert.ok(nav.includes("leadership?'/management':'/'"),'Role-aware Home is present for every officer');
+assert.ok(nav.includes("['/smart-radar',language==='id'?'Pusat Komando':'Command Centre'"),'Command Centre remains accessible');
+assert.ok(nav.includes("'AI-5 Assistant'"),'Only the AI-5 entry is displayed');
 assert.ok(demoNav.includes("item('/',Home"));
 assert.ok(!demoNav.includes("item('/guide',BookOpen"),'Interactive guide sidebar link must be removed');
 assert.ok(client.includes("dashboard:()=>request('/api/smart-radar/dashboard')"));

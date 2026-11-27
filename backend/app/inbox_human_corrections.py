@@ -30,6 +30,11 @@ RELEVANCE = frozenset(("RELEVANT", "HIGHLY_RELEVANT", "IRRELEVANT", "UNCERTAIN")
 SENTIMENT = frozenset(("POSITIVE", "NEUTRAL", "NEGATIVE"))
 STATES = frozenset(("OFFICER_VERIFIED", "NEEDS_REVIEW", "HELD", "EXCLUDED"))
 AUDIT_SUBJECT = GATE1_AUDIT_SUBJECT
+# v186.1 staging-only write pilot: a campaign allowlist is not sufficient
+# protection when staging and operational services may share a database.
+PILOT_QA_CAMPAIGN_NAME = "BAWASLU Gate 1 QA Pilot"
+PILOT_QA_PROVIDER = "GATE1_QA_SYNTHETIC"
+PILOT_QA_SOURCE_PREFIX = "GATE1-QA-"
 RELEVANCE_COPY = (
     "relevance_confidence", "sentiment", "sentiment_confidence", "sentiment_explanation",
     "sentiment_model", "candidate_signals_json", "geographic_signals_json",
@@ -73,10 +78,27 @@ def _allowlist():
     return result if len(result) == len(parts) else set()
 
 
+def is_pilot_qa_campaign(campaign):
+    return bool(
+        getattr(campaign, "name", "") == PILOT_QA_CAMPAIGN_NAME
+        and getattr(campaign, "status", None) == "DRAFT"
+    )
+
+
+def is_pilot_qa_source(source):
+    return bool(
+        getattr(source, "provider", None) == PILOT_QA_PROVIDER
+        and str(getattr(source, "provider_result_id", "") or "").startswith(
+            PILOT_QA_SOURCE_PREFIX
+        )
+    )
+
+
 def can_edit_gate1(profile, campaign):
     from .campaigns import _editable
     return bool(_write_enabled()
                 and os.getenv("BAWASLU_INBOX_GATE1_PILOT_MODE", "").lower() == "staging"
+                and is_pilot_qa_campaign(campaign)
                 and campaign.id in _allowlist()
                 and has(profile, "human_validation")
                 and has(profile, "edit_intelligence")
@@ -90,6 +112,8 @@ def _authorize(db, user, campaign_id, result_id, write=False):
     source = _source(db, officer, campaign_id, result_id)
     if write and not can_edit_gate1(officer, campaign):
         raise HTTPException(403, "Human Gate 1 pilot correction authorization required")
+    if write and not is_pilot_qa_source(source):
+        raise HTTPException(403, "Pilot writes are limited to explicitly synthetic QA evidence")
     return officer, campaign, source
 
 

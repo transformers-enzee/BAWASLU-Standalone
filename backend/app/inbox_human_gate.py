@@ -79,7 +79,9 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
         review=(db.query(EvidenceReview).filter_by(assessment_id=assessment.id)
                 .order_by(EvidenceReview.created_at.desc(),EvidenceReview.id.desc()).first())
     classification=classify_information(assessment,sentiment,review)
-    from .inbox_human_corrections import can_edit_gate1, review_state_for_source
+    from .inbox_human_corrections import (
+        can_edit_gate1, is_pilot_qa_source, review_state_for_source,
+    )
     from .inbox_gate_integrity import saved_relevance_basis
     # Preserve a visible distinction between the original AI label and the
     # current effective label after append-only officer correction.
@@ -90,7 +92,7 @@ def review_source(campaign_id:int,result_id:int,user:User=Depends(current_user),
                      .filter(EvidenceAssessment.model_version!="HUMAN_OVERRIDE")
                      .order_by(EvidenceAssessment.assessment_version.desc(),
                                EvidenceAssessment.id.desc()).first())
-    can_write=can_edit_gate1(officer,campaign)
+    can_write=bool(can_edit_gate1(officer,campaign) and is_pilot_qa_source(source))
     can_correct=bool(can_write and assessment is not None)
     state=review_state_for_source(db,campaign_id,result_id,assessment,sentiment,source)
     original_text=source.text_content or ""
@@ -142,8 +144,23 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
     if not has(officer,"view_intelligence"):
         raise HTTPException(403,"Intelligence view permission required")
     campaign=_campaign(db,officer,campaign_id)
-    from .inbox_human_corrections import can_edit_gate1, _allowlist
+    from .inbox_human_corrections import (
+        can_edit_gate1, is_pilot_qa_campaign, PILOT_QA_PROVIDER, _allowlist,
+    )
     from .campaigns import _editable
+    from .models import CampaignEvidence, SocialListeningResult
+    synthetic_count=(db.query(CampaignEvidence.id).join(
+        SocialListeningResult,
+        SocialListeningResult.id==CampaignEvidence.result_id,
+    ).filter(
+        CampaignEvidence.campaign_id==campaign_id,
+        CampaignEvidence.match_method!="WATCHLIST_ACCOUNT",
+        SocialListeningResult.provider==PILOT_QA_PROVIDER,
+        SocialListeningResult.provider_result_id.like("GATE1-QA-%"),
+    ).count())
+    linked_count=(db.query(CampaignEvidence.id).filter_by(
+        campaign_id=campaign_id,
+    ).count())
     return {
         "campaign_id":str(campaign_id),
         "human_review_read_enabled":True,
@@ -153,7 +170,13 @@ def gate1_pilot_readiness(campaign_id:int,user:User=Depends(current_user),
         "officer_has_human_validation":has(officer,"human_validation"),
         "officer_has_edit_intelligence":has(officer,"edit_intelligence"),
         "officer_can_edit_campaign":_editable(officer,campaign),
-        "ready_for_write_pilot":can_edit_gate1(officer,campaign),
+        "pilot_campaign_draft_and_named":is_pilot_qa_campaign(campaign),
+        "linked_source_count":linked_count,
+        "synthetic_source_count":synthetic_count,
+        "non_synthetic_link_count":linked_count-synthetic_count,
+        "ready_for_write_pilot":bool(can_edit_gate1(officer,campaign)
+                                      and synthetic_count>0
+                                      and linked_count==synthetic_count),
         "writes_triggered":False,
         "source_ids_exposed":False,
         "no_automatic_publication":True,

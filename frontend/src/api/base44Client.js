@@ -78,6 +78,7 @@ export const base44 = {
   },
   inboxHumanReview:{
     campaigns:()=>request('/api/inbox/human-review/campaigns',{cache:'no-store'}),
+    pilotReadiness:campaignId=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/pilot-readiness',{cache:'no-store'}),
     sample:campaignId=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/sample',{cache:'no-store'}),
     queue:(campaignId,{cursor=null,category='all',reviewStatus='all',pageSize=40}={})=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/queue?'+new URLSearchParams({page_size:String(pageSize),category,review_status:reviewStatus,...(cursor?{cursor:String(cursor)}:{})}),{cache:'no-store'}),
     source:(campaignId,resultId)=>request('/api/inbox/human-review/campaign/'+encodeURIComponent(campaignId)+'/source/'+encodeURIComponent(resultId),{cache:'no-store'}),

@@ -45,6 +45,9 @@ export default function InboxHumanReview(){
   const [reviewDecision,setReviewDecision]=useState('NEEDS_REVIEW');
   const [history,setHistory]=useState(null);
   const [historyBusy,setHistoryBusy]=useState(false);
+  const [pilotStatus,setPilotStatus]=useState(null);
+  const [pilotBusy,setPilotBusy]=useState(false);
+  const [pilotError,setPilotError]=useState('');
   const [success,setSuccess]=useState('');
   const [version,setVersion]=useState(0);
   useEffect(()=>{
@@ -106,6 +109,7 @@ export default function InboxHumanReview(){
   function chooseCampaign(id){
     currentCampaign.current=String(id);
     setCampaignId(String(id));setSelectedId('');setDetail(null);setSuccess('');setRationale('');setHistory(null);
+    setPilotStatus(null);setPilotError('');
     const q=new URLSearchParams(window.location.search);
     q.set('gate1','1');q.set('campaign_id',String(id));q.delete('result_id');
     window.history.replaceState(null,'','/inbox?'+q.toString());
@@ -169,6 +173,20 @@ export default function InboxHumanReview(){
     }catch(e){setError(e.message||'Could not restore historical value')}
     finally{setActionBusy(false)}
   }
+  async function checkPilotReadiness(){
+    if(!campaignId||pilotBusy)return;
+    const requestCampaign=campaignId;
+    setPilotBusy(true);setPilotStatus(null);setPilotError('');
+    try {
+      const result=await base44.inboxHumanReview.pilotReadiness(requestCampaign);
+      if(requestCampaign===currentCampaign.current)setPilotStatus(result);
+    } catch(e) {
+      if(requestCampaign===currentCampaign.current)
+        setPilotError(T('Administrator access is required to check pilot readiness.','Akses administrator diperlukan untuk memeriksa kesiapan pilot.'));
+    } finally {setPilotBusy(false)}
+  }
+  const selectedCampaign=campaigns.find(c=>String(c.id)===String(campaignId));
+  const qaCampaignSelected=selectedCampaign?.name==='BAWASLU Gate 1 QA Pilot';
   // Indicators refer only to currently loaded, authorized review items.
   const loaded=sample?.items||[];
   const counts=loaded.reduce((acc,item)=>({...acc,[item.category]:(acc[item.category]||0)+1}),{});
@@ -190,6 +208,21 @@ export default function InboxHumanReview(){
       {loading&&<p role="status">{T('Loading authorized campaigns…','Memuat kampanye yang diizinkan…')}</p>}
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!error&&!loading&&campaigns.length===0&&<p>{T('No authorized campaigns.','Tidak ada kampanye yang diizinkan.')}</p>}
+      {qaCampaignSelected&&<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm" data-testid="gate1-qa-pilot-preflight">
+        <h3 className="font-semibold">{T('Synthetic QA write-pilot preflight','Pemeriksaan kesiapan pilot QA sintetis')}</h3>
+        <p className="text-xs text-slate-600">{T('This read-only check cannot enable correction writes or create test evidence. The QA campaign must remain a draft and all pilot posts must be synthetic.','Pemeriksaan hanya-baca ini tidak dapat mengaktifkan koreksi atau membuat bukti uji. Kampanye QA harus tetap draf dan semua unggahan harus sintetis.')}</p>
+        <button type="button" data-testid="gate1-check-pilot-readiness" className="intel-ghost text-xs" onClick={checkPilotReadiness} disabled={pilotBusy}>
+          {pilotBusy?T('Checking pilot readiness…','Memeriksa kesiapan pilot…'):T('Check staging pilot readiness','Periksa kesiapan pilot staging')}
+        </button>
+        {pilotError&&<p role="alert" className="text-red-700 text-xs">{pilotError}</p>}
+        {pilotStatus&&<div className="space-y-1 text-xs" data-testid="gate1-pilot-readiness-report">
+          <p>{T('Campaign status','Status kampanye')}: <strong>{pilotStatus.pilot_campaign_draft_and_named?'QA DRAFT':'NOT ELIGIBLE'}</strong></p>
+          <p>{T('Synthetic linked sources','Sumber sintetis tertaut')}: <strong>{pilotStatus.synthetic_source_count}</strong></p>
+          <p>{T('Non-synthetic links','Tautan non-sintetis')}: <strong>{pilotStatus.non_synthetic_link_count}</strong></p>
+          <p>{T('Correction writes','Koreksi')}: <strong>{pilotStatus.correction_writes_enabled?'ENABLED':'DISABLED'}</strong></p>
+          <p>{T('Pilot eligibility','Kelayakan pilot')}: <strong>{pilotStatus.ready_for_write_pilot?'ELIGIBLE FOR QA':'NOT READY · SAFE BLOCK'}</strong></p>
+        </div>}
+      </div>}
       <label className="block text-sm font-semibold">{T('Review category','Kategori tinjauan')}
         <select data-testid="gate1-category-filter" className="intel-input mt-1 w-full" value={category} onChange={e=>{currentCategory.current=e.target.value;setCategory(e.target.value)}}>
           <option value="all">{T('All ordinary evidence','Semua bukti biasa')}</option>

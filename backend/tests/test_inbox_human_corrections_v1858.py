@@ -24,9 +24,11 @@ def seeded(monkeypatch):
     Base.metadata.create_all(engine)
     db = Session(engine)
     user = User(id=701, email="qa-officer@example.invalid", password_hash="hash", full_name="Officer QA")
-    campaign = MonitoringCampaign(id=300, name="Election QA", status="ACTIVE", created_by="701")
+    campaign = MonitoringCampaign(id=300, name="BAWASLU Gate 1 QA Pilot", status="DRAFT", created_by="701")
     source = SocialListeningResult(id=801, run_id=1, text_content="A saved election discussion",
-                                   platform="facebook", raw_payload_json='{"Message":"unchanged"}')
+                                   platform="facebook", provider="GATE1_QA_SYNTHETIC",
+                                   provider_result_id="GATE1-QA-OFFLINE-TEST-801",
+                                   raw_payload_json='{"Message":"unchanged"}')
     assessment = EvidenceAssessment(
         id=900, campaign_id=300, result_id=801, assessment_version=1,
         model_version="AI_BASE", relevance_label="UNCERTAIN", sentiment="NEGATIVE",
@@ -58,6 +60,13 @@ def test_write_denied_by_default_and_requires_pilot_allowlist(monkeypatch, seede
     assert gate.can_edit_gate1(p,campaign) is False
     monkeypatch.setenv("BAWASLU_INBOX_GATE1_PILOT_CAMPAIGN_IDS","999")
     assert gate.can_edit_gate1(p,campaign) is False
+    monkeypatch.setenv("BAWASLU_INBOX_GATE1_PILOT_CAMPAIGN_IDS","300")
+    campaign.name="Non-QA operational campaign"
+    assert gate.can_edit_gate1(p,campaign) is False
+    campaign.name="BAWASLU Gate 1 QA Pilot"
+    campaign.status="ACTIVE"
+    assert gate.can_edit_gate1(p,campaign) is False
+    campaign.status="DRAFT"
     monkeypatch.setenv("BAWASLU_INBOX_GATE1_PILOT_CAMPAIGN_IDS","300")
     monkeypatch.setenv("BAWASLU_INBOX_GATE1_PILOT_MODE","production")
     assert gate.can_edit_gate1(p,campaign) is False

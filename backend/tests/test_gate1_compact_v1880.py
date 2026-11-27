@@ -65,15 +65,18 @@ def test_provider_technical_fields_read_only_until_authorized_override():
     assert "gate1-all-values-search" in ui
     assert "adminOverride" in ui
     assert "view?.can_correct_source&&adminOverride" in ui
-    assert "if(!adminOverride&&sourceKeys.includes(key))return false;" in ui
+    assert "if(!adminOverride&&sourceKeys.includes(key))return canCompleteImportantSource(key);" in ui
     assert "if(!adminOverride&&ROUTINE_HIDE.has(key))return false;" in ui
-    assert "SOURCE_SUMMARY.map(k=>row(k,{readOnly:!adminOverride}))" in ui
+    assert "SOURCE_SUMMARY.map(k=>row(k,{readOnly:!adminOverride&&!canCompleteImportantSource(k)}))" in ui
     for f in ("engagement_likes","engagement_shares","engagement_views",
               "relevance_explanation","sentiment_explanation","missing_data",
               "duplicate_reference","provider_fetch_status","officer_notes"):
         assert "'"+f+"'" in ui
     assert "ROUTINE_HIDE" in ui
     assert "gate1-data-error-report" in ui
+    assert "const canCompleteImportantSource=" in ui
+    assert "taskKeys.has(key)" in ui
+    assert "filteredSourceKeys.filter(k=>!SOURCE_SUMMARY.includes(k)).map(k=>row(k,{readOnly:!adminOverride&&!canCompleteImportantSource(k)}))" in ui
     assert "reportDataError(" in ui
     assert "Original evidence is preserved" in ui
 
@@ -81,6 +84,8 @@ def test_provider_technical_fields_read_only_until_authorized_override():
 def test_structured_geography_and_dates_are_readable_without_source_mutation():
     ui=NEW.read_text()
     assert "const formatGeo=" in ui
+    assert "rawConfidence!==''" in ui
+    assert "Number(rawConfidence)<=1" in ui
     assert "const formatDate=" in ui
     assert "'Indonesia'" in ui
     assert "confidence" in ui

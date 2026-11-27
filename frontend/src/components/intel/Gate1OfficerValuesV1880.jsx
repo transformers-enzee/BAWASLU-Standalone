@@ -93,12 +93,13 @@ const formatGeo=(raw)=>{
   const source=typeof json==='object'&&json&&!Array.isArray(json)?json:null;
   const match=(key)=>text.match(new RegExp("[\\\"']"+key+"[\\\"']\\s*:\\s*[\\\"']?([^\\\"',}]+)","i"))?.[1]?.trim()||'';
   const code=(source?.value||match('value'));
-  const confidence=source?.confidence??Number(match('confidence'));
+  const rawConfidence=source?.confidence??match('confidence');
   const from=source?.source||match('source');
   if(!code)return '';
   const name=code==='ID'?'Indonesia':code;
-  const pct=Number.isFinite(Number(confidence))&&String(confidence)!==''?
-    ' · '+Math.round(Number(confidence)*100)+'% confidence':'';
+  const pct=rawConfidence!==''&&rawConfidence!==null&&rawConfidence!==undefined&&
+    Number.isFinite(Number(rawConfidence))&&Number(rawConfidence)>=0&&Number(rawConfidence)<=1?
+    ' · '+Math.round(Number(rawConfidence)*100)+'% confidence':'';
   return name+(from?' · '+from:'')+pct;
 };
 
@@ -165,18 +166,19 @@ export default function Gate1OfficerValuesV1880({campaignId,detail,onSaved,onNex
   const taskKeys=new Set((view?.missing_review_tasks||[]).map(x=>x.field));
   const hintedKeys=new Set((view?.quality_hints||[]).map(x=>x.field));
   const canEditBase=!!(view?.can_edit&&detail?.can_review_information&&!view?.stale);
+  const canCompleteImportantSource=(key)=>!!(view?.can_complete_missing&&taskKeys.has(key)&&
+    (view?.completable_fields||[]).includes(key)&&
+    !present(original(key))&&!present(current(key)));
   const canEdit=(key)=>{
     if(!canEditBase)return false;
     if((key==='relevance'||key==='sentiment')&&!detail?.can_correct_relevance)return false;
     if((view?.assessment_fields||[]).includes(key))return true;
     // Source/provider and technical fields are inspection-only unless the officer
     // deliberately opens the advanced exception path.
-    if(!adminOverride&&sourceKeys.includes(key))return false;
+    if(!adminOverride&&sourceKeys.includes(key))return canCompleteImportantSource(key);
     if(!adminOverride&&ROUTINE_HIDE.has(key))return false;
     if(view?.can_correct_source&&adminOverride)return true;
-    return !!(adminOverride&&view?.can_complete_missing&&
-      (view?.completable_fields||[]).includes(key)&&
-      !present(original(key))&&!present(current(key)));
+    return canCompleteImportantSource(key);
   };
   const selectedCurrent=field?current(field):'';
   const highImpact=SENSITIVE.has(field);
@@ -457,13 +459,13 @@ export default function Gate1OfficerValuesV1880({campaignId,detail,onSaved,onNex
         <div className="pt-2 space-y-2">
           <p className="text-xs text-slate-500">{T('Provider values are read-only by default. Original evidence is preserved.',
             'Nilai penyedia hanya-baca secara bawaan. Bukti asli tetap tersimpan.')}</p>
-          {SOURCE_SUMMARY.map(k=>row(k,{readOnly:!adminOverride}))}
+          {SOURCE_SUMMARY.map(k=>row(k,{readOnly:!adminOverride&&!canCompleteImportantSource(k)}))}
           <details className="border-t border-slate-100 pt-2 text-xs" data-testid="gate1-provider-metadata">
             <summary className="cursor-pointer">{T('Other source & technical metadata','Metadata sumber dan teknis lainnya')}</summary>
             <div className="pt-2 space-y-2">
               <input className={INPUT} value={search} onChange={e=>setSearch(e.target.value)}
                 data-testid="gate1-all-values-search" placeholder={T('Search source fields','Cari bidang sumber')}/>
-              {filteredSourceKeys.filter(k=>!SOURCE_SUMMARY.includes(k)).map(k=>row(k,{readOnly:!adminOverride}))}
+              {filteredSourceKeys.filter(k=>!SOURCE_SUMMARY.includes(k)).map(k=>row(k,{readOnly:!adminOverride&&!canCompleteImportantSource(k)}))}
               {filteredSourceKeys.filter(k=>!SOURCE_SUMMARY.includes(k)).length===0&&
                 <p className="text-slate-500">{T('No matching fields','Tidak ada bidang yang cocok')}</p>}
             </div>
